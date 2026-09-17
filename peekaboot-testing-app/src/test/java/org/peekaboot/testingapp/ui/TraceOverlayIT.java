@@ -1232,7 +1232,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .tag("jdbc.row-count", "8")
                 .build());
         traceStore.addLog(new LogCapturedEvent(
-                traceId, "query", Instant.EPOCH.plusMillis(6), "INFO", "fixture", "found 8 orders", "main"));
+                traceId, "query", Instant.EPOCH.plusMillis(6), "INFO", "fixture", "found 8 orders", "main", null));
         return traceId;
     }
 

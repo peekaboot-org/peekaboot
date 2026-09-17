@@ -24,13 +24,20 @@ public class PersonController {
      * The index and the persons page are the same page. {@code ?error=true} makes the handler
      * log an ERROR without failing, so one request produces a trace whose logs sit on two
      * spans: this line and the one PersonQueryService writes inside its own observed span.
+     *
+     * <p>The ERROR carries a real throwable - a fixture, never thrown - so this is the one
+     * deterministic request in the app that gives the Logs tab's stack-trace capture and
+     * folding something genuine to prove itself against. Nothing about the request's own
+     * outcome changes: it still returns 200 and logs exactly one ERROR line.
      */
     @GetMapping({"/", "/persons"})
     public String persons(@RequestParam(name = "error", defaultValue = "false") boolean error, Model model) {
 
         model.addAttribute("persons", personQueryService.findAll());
         if (error) {
-            log.error("An error occurred while trying to find all persons");
+            log.error(
+                    "An error occurred while trying to find all persons",
+                    new IllegalStateException("person directory is unreachable"));
         }
         return "persons";
     }

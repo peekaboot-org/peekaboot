@@ -2,14 +2,24 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.tracing.Span;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.domain.features.Features;
+import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
+import org.peekaboot.backend.service.TraceInsightsService;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -152,6 +162,61 @@ class PeekabootAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
+                });
+    }
+
+    /**
+     * PeekabootAutoConfiguration resolves {@code peekaboot.stack-trace.fold} for the trace
+     * store's own folding the same way {@code ErrorPageAutoConfiguration} does for the error
+     * page: off must empty the exclusion list rather than leave it unread, so no frame is ever
+     * hidden regardless of what {@code peekaboot.stack-trace.exclude} names. Drives a real
+     * captured log through the actual bean rather than asserting on construction alone, since a
+     * bean existing proves nothing about what reached its constructor.
+     */
+    @Test
+    void honoursTheFoldSwitchForCapturedLogs() {
+        new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class))
+                .withPropertyValues(
+                        "peekaboot.enabled=true",
+                        "peekaboot.stack-trace.fold=false",
+                        "peekaboot.stack-trace.exclude=com.acme.vendor")
+                .run(context -> {
+                    TraceStore traceStore = context.getBean(TraceStore.class);
+                    traceStore.addSpan(new SpanData(
+                            "t1",
+                            "s1",
+                            null,
+                            "GET /x",
+                            Span.Kind.SERVER,
+                            Instant.EPOCH,
+                            Instant.EPOCH.plusMillis(100),
+                            Duration.ofMillis(100),
+                            Map.of(),
+                            List.of(),
+                            null,
+                            null,
+                            null,
+                            1L));
+                    traceStore.addLog(
+                            new LogCapturedEvent(
+                                    "t1",
+                                    "s1",
+                                    Instant.EPOCH,
+                                    "ERROR",
+                                    "TestLogger",
+                                    "boom",
+                                    "main",
+                                    "java.lang.IllegalStateException: boom\n\tat com.acme.vendor.Client.call(Client.java:42)\n"));
+
+                    TraceInsightsService service = context.getBean(TraceInsightsService.class);
+                    TraceLog log =
+                            service.getTraceInsights("t1").orElseThrow().logs().getFirst();
+
+                    assertThat(log.hiddenFrames())
+                            .as("fold=false must empty the exclusion list, not just leave it unread")
+                            .isEmpty();
                 });
     }
 

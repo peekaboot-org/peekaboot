@@ -123,4 +123,63 @@ class PeekabootLogbackAppenderTest {
 
         assertThat(captured).isEmpty();
     }
+
+    @Test
+    @DisplayName("carries the stack trace of a logged throwable")
+    void carriesTheStackTraceOfALoggedThrowable() {
+        MDC.put("traceId", TRACE_ID);
+
+        logger.error("gateway call failed", new IllegalStateException("gateway unreachable"));
+
+        assertThat(captured.getFirst().stackTrace())
+                .contains("java.lang.IllegalStateException: gateway unreachable")
+                .contains("\tat ");
+    }
+
+    @Test
+    @DisplayName("carries no trace for a log without a throwable")
+    void carriesNoTraceForALogWithoutAThrowable() {
+        MDC.put("traceId", TRACE_ID);
+
+        logger.error("no throwable here");
+
+        assertThat(captured.getFirst().stackTrace()).isNull();
+    }
+
+    @Test
+    @DisplayName("passes an ordinary trace through untouched")
+    void anOrdinaryTraceIsNotTruncated() {
+        MDC.put("traceId", TRACE_ID);
+
+        logger.error("gateway call failed", new IllegalStateException("gateway unreachable"));
+
+        String stackTrace = captured.getFirst().stackTrace();
+        assertThat(stackTrace.lines().count()).isLessThan(1000);
+        assertThat(stackTrace).doesNotContain("omitted");
+    }
+
+    /**
+     * A StackOverflowError's own trace routinely runs to 1024 frames; this stands in for one
+     * without actually triggering a real overflow.
+     */
+    @Test
+    @DisplayName("caps an over-long trace at 1000 lines and says how many were dropped")
+    void capsAnOverLongTraceAndMarksWhatWasDropped() {
+        MDC.put("traceId", TRACE_ID);
+        IllegalStateException deep = new IllegalStateException("too deep");
+        StackTraceElement[] frames = new StackTraceElement[1500];
+        for (int i = 0; i < frames.length; i++) {
+            frames[i] = new StackTraceElement("com.example.Recursor", "recurse", "Recursor.java", i);
+        }
+        deep.setStackTrace(frames);
+
+        logger.error("recursion blew the stack", deep);
+
+        // one header line + 1500 frame lines = 1501, capped to 1000 kept lines plus a marker
+        List<String> lines = captured.getFirst().stackTrace().lines().toList();
+        assertThat(lines).hasSize(1001);
+        assertThat(lines.getFirst()).contains("IllegalStateException: too deep");
+        assertThat(lines.get(999)).startsWith("\tat com.example.Recursor.recurse");
+        assertThat(lines.getLast()).contains("501").contains("omitted");
+    }
 }

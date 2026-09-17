@@ -27,6 +27,7 @@ import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.Spans;
 import org.peekaboot.backend.testsupport.TraceStores;
@@ -197,6 +198,74 @@ class TraceInsightsServiceTest {
         assertThat(result.get().logs().get(0).message()).isEqualTo("Test log message from trace");
         assertThat(result.get().logs().get(0).level()).isEqualTo("INFO");
         assertThat(result.get().logs().get(0).loggerName()).isEqualTo("TestLogger");
+    }
+
+    @Test
+    void aLogWithoutAThrowableCarriesNoStackTraceOrRanges() {
+        addTrace("trace1", 100, false);
+        store.addLog(
+                log("trace1").inSpan("span-trace1").saying("no trouble here").build());
+
+        TraceLog result =
+                service.getTraceInsights("trace1").orElseThrow().logs().getFirst();
+
+        assertThat(result.stackTrace()).isNull();
+        assertThat(result.hiddenFrames()).isEmpty();
+        assertThat(result.applicationFrames()).isEmpty();
+    }
+
+    /**
+     * The service resolves its own exclusions and application packages once at construction, the
+     * same way the error page does; this pins that wiring rather than {@link
+     * org.peekaboot.backend.stacktrace.StackTraceFolding}'s own folding rules.
+     *
+     * <p>The fixture's first line ends in a lone {@code \r}, which {@code String.lines()} (what
+     * folding splits on) treats as a line terminator but JavaScript's {@code split('\n')} (what
+     * the browser splits on) does not - and the expected value is written out literally rather
+     * than re-deriving it with the same {@code String.join("\n", ...)} expression the
+     * implementation runs, so this pins the stated reason for that join instead of restating it.
+     */
+    @Test
+    void aLogWithAThrowableCarriesItsFoldedStackTrace() {
+        String trace = "java.lang.IllegalStateException: boom\r"
+                + "\tat org.peekaboot.app.Thing.method(Thing.java:10)\n"
+                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)\n";
+        TraceInsightsService folding = newService(store, List.of("org.springframework"), List.of("org.peekaboot.app"));
+        addTrace("trace1", 100, false);
+        store.addLog(log("trace1").inSpan("span-trace1").withStackTrace(trace).build());
+
+        TraceLog result =
+                folding.getTraceInsights("trace1").orElseThrow().logs().getFirst();
+
+        assertThat(result.stackTrace()).isEqualTo("""
+                        java.lang.IllegalStateException: boom
+                        \tat org.peekaboot.app.Thing.method(Thing.java:10)
+                        \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)""");
+        assertThat(result.applicationFrames()).containsExactly(new StackTraceFolding.Range(1, 2));
+        assertThat(result.hiddenFrames()).containsExactly(new StackTraceFolding.Range(2, 3));
+    }
+
+    /**
+     * The span tree only ever shows a log count, never a log's content, so the copy it holds
+     * must not carry the trace a second time next to the details list's own copy.
+     */
+    @Test
+    void theSpanAttachedCopyCarriesNoStackTraceWhileTheDetailsCopyDoes() {
+        String trace = "java.lang.IllegalStateException: boom\n\tat org.peekaboot.app.Thing.method(Thing.java:10)\n";
+        TraceInsightsService folding = newService(store, List.of(), List.of("org.peekaboot.app"));
+        addTrace("trace1", 100, false);
+        store.addLog(log("trace1").inSpan("span-trace1").withStackTrace(trace).build());
+
+        TraceTree tree = folding.getTraceInsights("trace1").orElseThrow();
+        TraceLog detailsCopy = tree.logs().getFirst();
+        TraceLog spanCopy = tree.rootSpan().logs().getFirst();
+
+        assertThat(detailsCopy.stackTrace()).isNotNull();
+        assertThat(detailsCopy.applicationFrames()).isNotEmpty();
+        assertThat(spanCopy.stackTrace()).isNull();
+        assertThat(spanCopy.hiddenFrames()).isEmpty();
+        assertThat(spanCopy.applicationFrames()).isEmpty();
+        assertThat(spanCopy.message()).isEqualTo(detailsCopy.message());
     }
 
     @Test
@@ -628,7 +697,13 @@ class TraceInsightsServiceTest {
     }
 
     private TraceInsightsService newService(TraceStore store) {
-        return new TraceInsightsService(store, traceTreeMapper, issueDetector, queryExtractor);
+        return newService(store, List.of(), List.of());
+    }
+
+    private TraceInsightsService newService(
+            TraceStore store, List<String> exclusions, List<String> applicationPackages) {
+        return new TraceInsightsService(
+                store, traceTreeMapper, issueDetector, queryExtractor, exclusions, applicationPackages);
     }
 
     /** A single SERVER root span of the given duration. */

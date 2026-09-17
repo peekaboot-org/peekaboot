@@ -44,6 +44,16 @@ class TraceApiClient {
     /** The trace carries at least one captured log; see {@link #awaitTrace(Supplier, Predicate)}. */
     static final Predicate<JsonNode> LOG_CAPTURED = trace -> !trace.path("logs").isEmpty();
 
+    /**
+     * The trace carries a log with a stack trace on it. Narrower than {@link #LOG_CAPTURED}:
+     * {@code /?error=true} logs an INFO before its ERROR, so under the appender-detach race
+     * documented on {@link LogCaptureIT} a retry could otherwise stop on the INFO alone and
+     * never reach the one log a stack-trace assertion needs.
+     */
+    static final Predicate<JsonNode> STACK_TRACE_CAPTURED = trace -> trace.path("logs")
+            .valueStream()
+            .anyMatch(log -> !log.path("stackTrace").isNull());
+
     private static final Logger log = LoggerFactory.getLogger(TraceApiClient.class);
 
     /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */

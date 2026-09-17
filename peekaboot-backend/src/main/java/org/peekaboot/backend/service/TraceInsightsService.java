@@ -23,6 +23,8 @@ import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.stacktrace.StackTraceFolding;
+import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -54,16 +56,28 @@ public class TraceInsightsService {
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
     private final QueryExtractor queryExtractor;
+    private final List<String> exclusions;
+    private final List<String> applicationPackages;
 
+    /**
+     * {@code exclusions} and {@code applicationPackages} are kept in the same order
+     * {@link StackTraceFolding#fold} takes them, so a reader can't swap two adjacent
+     * same-typed parameters and have it silently compile as marking framework frames
+     * application code.
+     */
     public TraceInsightsService(
             @Nullable TraceStore traceStore,
             TraceTreeMapper traceTreeMapper,
             IssueDetector issueDetector,
-            QueryExtractor queryExtractor) {
+            QueryExtractor queryExtractor,
+            List<String> exclusions,
+            List<String> applicationPackages) {
         this.traceStore = traceStore;
         this.traceTreeMapper = traceTreeMapper;
         this.issueDetector = issueDetector;
         this.queryExtractor = queryExtractor;
+        this.exclusions = List.copyOf(exclusions);
+        this.applicationPackages = List.copyOf(applicationPackages);
     }
 
     /**
@@ -250,15 +264,8 @@ public class TraceInsightsService {
 
     private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
         List<LogCapturedEvent> capturedLogs = bundle.logs();
-        List<TraceLog> logs = capturedLogs.stream()
-                .map(e -> new TraceLog(
-                        bundle.resolveSpanId(e.spanId()),
-                        e.timestamp(),
-                        e.level(),
-                        e.loggerName(),
-                        e.message(),
-                        e.threadName()))
-                .toList();
+        List<TraceLog> logs =
+                capturedLogs.stream().map(e -> toTraceLog(bundle, e)).toList();
 
         RequestCompletedEvent reqEvent = bundle.request();
         HttpExchange httpExchange = reqEvent != null ? HttpExchange.from(reqEvent) : null;
@@ -266,6 +273,40 @@ public class TraceInsightsService {
         return tree.withRootSpan(attachLogsToSpan(tree.rootSpan(), groupLogsBySpan(logs)), tree.slow())
                 .withSummary(withLogs(tree.summary(), capturedLogs))
                 .withDetails(httpExchange, logs, queries);
+    }
+
+    /**
+     * Folding happens here rather than at capture: the full trace stays on the event, and these
+     * ranges are only the rendering hint the browser needs so it classifies nothing itself.
+     */
+    private TraceLog toTraceLog(TraceDataBundle bundle, LogCapturedEvent e) {
+        if (e.stackTrace() == null) {
+            return new TraceLog(
+                    bundle.resolveSpanId(e.spanId()),
+                    e.timestamp(),
+                    e.level(),
+                    e.loggerName(),
+                    e.message(),
+                    e.threadName(),
+                    null,
+                    List.of(),
+                    List.of());
+        }
+        FoldedTrace folded = StackTraceFolding.fold(e.stackTrace(), exclusions, applicationPackages);
+        // The ranges index into folded.lines(), not the raw captured string: String.lines() splits
+        // on a lone \r where the browser's split('\n') would not, so sending anything else back
+        // would leave the two disagreeing about which line a given index names.
+        String wireStackTrace = String.join("\n", folded.lines());
+        return new TraceLog(
+                bundle.resolveSpanId(e.spanId()),
+                e.timestamp(),
+                e.level(),
+                e.loggerName(),
+                e.message(),
+                e.threadName(),
+                wireStackTrace,
+                folded.hidden(),
+                folded.applicationFrames());
     }
 
     /** Logs by the span they were emitted in; a log with no span id belongs to the flat list only. */
@@ -279,6 +320,12 @@ public class TraceInsightsService {
         return logsBySpan;
     }
 
+    /**
+     * The span tree's own copies carry no stack trace: the frontend's spans tab only ever
+     * counts a span's logs, never reads their content, so shipping the trace here a second
+     * time - once here, once in the flat details list - would double it on the wire for
+     * nothing.
+     */
     private SpanNode attachLogsToSpan(SpanNode span, Map<String, List<TraceLog>> logsBySpan) {
         if (span == null) {
             return null;
@@ -288,6 +335,9 @@ public class TraceInsightsService {
                 .toList();
         List<TraceLog> spanLogs = logsBySpan.get(span.spanId());
         SpanNode withChildren = span.withChildren(children);
-        return spanLogs == null ? withChildren : withChildren.withLogs(spanLogs);
+        return spanLogs == null
+                ? withChildren
+                : withChildren.withLogs(
+                        spanLogs.stream().map(TraceLog::withoutStackTrace).toList());
     }
 }

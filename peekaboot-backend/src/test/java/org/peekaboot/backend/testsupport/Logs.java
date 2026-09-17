@@ -23,6 +23,7 @@ public final class Logs {
         private String level = "INFO";
         private String loggerName = "TestLogger";
         private String message = "message";
+        private String stackTrace;
 
         private LogBuilder(String traceId) {
             this.traceId = traceId;
@@ -54,8 +55,14 @@ public final class Logs {
             return this;
         }
 
+        /** {@code null} (the default) for a log that carried no throwable. */
+        public LogBuilder withStackTrace(String stackTrace) {
+            this.stackTrace = stackTrace;
+            return this;
+        }
+
         public LogCapturedEvent build() {
-            return new LogCapturedEvent(traceId, spanId, timestamp, level, loggerName, message, "main");
+            return new LogCapturedEvent(traceId, spanId, timestamp, level, loggerName, message, "main", stackTrace);
         }
     }
 }

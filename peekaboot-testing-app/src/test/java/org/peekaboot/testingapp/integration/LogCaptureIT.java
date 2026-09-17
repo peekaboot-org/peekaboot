@@ -61,6 +61,31 @@ class LogCaptureIT {
     }
 
     /**
+     * The Logs tab can only fold a trace it was given; this pins the boundary end to end,
+     * ranges included - not just that some text arrived, but that the range naming
+     * {@code PersonController}'s own frame as the application's own points at the right line.
+     */
+    @Test
+    void theCapturedErrorCarriesItsStackTrace() {
+        JsonNode trace = traces.awaitTrace(() -> traces.get("/?error=true"), TraceApiClient.STACK_TRACE_CAPTURED);
+
+        JsonNode withTrace = trace.path("logs")
+                .valueStream()
+                .filter(log -> !log.path("stackTrace").isNull())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no captured log carried a stack trace"));
+        String[] lines = withTrace.path("stackTrace").asString().split("\n");
+        assertThat(lines).anySatisfy(line -> assertThat(line).contains("\tat "));
+
+        JsonNode applicationFrames = withTrace.path("applicationFrames");
+        assertThat(applicationFrames.size())
+                .as("PersonController.persons is on the trace, and it is the testing app's own code")
+                .isEqualTo(1);
+        int start = applicationFrames.get(0).path("start").asInt();
+        assertThat(lines[start]).contains("PersonController.persons");
+    }
+
+    /**
      * A request that logs nothing at ERROR must not report an error count - guards the
      * assertion above against passing on any trace that merely happens to hold an error.
      */

@@ -9,7 +9,6 @@ import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.peekaboot.backend.stacktrace.ExclusionPatterns;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.boot.autoconfigure.condition.ConditionMessage;
 import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -61,11 +60,6 @@ import org.springframework.web.servlet.View;
 @EnableConfigurationProperties(PeekabootProperties.class)
 public class ErrorPageAutoConfiguration {
 
-    /** The application's own packages, so its frames can be told from the framework's; empty where none are registered. */
-    private static List<String> applicationPackages(BeanFactory beanFactory) {
-        return AutoConfigurationPackages.has(beanFactory) ? AutoConfigurationPackages.get(beanFactory) : List.of();
-    }
-
     private static PeekabootErrorView errorView(
             ErrorAttributes errorAttributes,
             BeanFactory beanFactory,
@@ -75,7 +69,7 @@ public class ErrorPageAutoConfiguration {
                 properties.getStackTrace().getExclude(), environment.getProperty("logging.exception-conversion-word"));
         return new PeekabootErrorView(
                 errorAttributes,
-                applicationPackages(beanFactory),
+                ApplicationPackages.resolve(beanFactory),
                 exclusions,
                 properties.getStackTrace().isFold());
     }
