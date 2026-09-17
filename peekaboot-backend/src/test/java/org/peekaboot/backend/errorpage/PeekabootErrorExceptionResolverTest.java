@@ -23,7 +23,8 @@ import org.springframework.web.servlet.ModelAndView;
  */
 class PeekabootErrorExceptionResolverTest {
 
-    private final PeekabootErrorView view = new PeekabootErrorView(new DefaultErrorAttributes(), List.of());
+    private final PeekabootErrorView view =
+            new PeekabootErrorView(new DefaultErrorAttributes(), List.of(), List.of(), false);
 
     private final PeekabootErrorExceptionResolver resolver = new PeekabootErrorExceptionResolver(view);
 

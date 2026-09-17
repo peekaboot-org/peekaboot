@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.Response;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -46,5 +47,32 @@ class ErrorPageIT extends PlaywrightTestBase {
         assertThat((String)
                         overlay.evaluate("root => root.querySelector('#pk-tab-content .pk-badge').textContent.trim()"))
                 .contains("500");
+    }
+
+    /** The per-run disclosures work with no script at all; this proves the global control on top of them. */
+    @Test
+    void theRevealControlOpensEveryHiddenRun() {
+        page.navigate(baseUrl + "/boom");
+        assertThat(page.locator("details.pk-error__hidden").first().isVisible()).isTrue();
+
+        page.click(".pk-error__reveal");
+
+        assertThat(page.locator("details.pk-error__hidden[open]").count())
+                .isEqualTo(page.locator("details.pk-error__hidden").count());
+    }
+
+    /** A host with script-src 'self' drops the inline copy; the linked one still arms the control. */
+    @Test
+    void theRevealControlSurvivesAScriptSrcSelfPolicy() {
+        serveWithCsp("**/boom", "script-src 'self'");
+
+        Response navigation = page.navigate(baseUrl + "/boom");
+
+        assertThat(navigation.headers())
+                .as("the policy reached the document under test")
+                .containsEntry("content-security-policy", "script-src 'self'");
+        page.click(".pk-error__reveal");
+
+        assertThat(page.locator("details.pk-error__hidden[open]").count()).isGreaterThan(0);
     }
 }

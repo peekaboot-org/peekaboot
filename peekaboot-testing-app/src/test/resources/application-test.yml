@@ -39,6 +39,10 @@ peekaboot:
   # deployment, so ErrorPageIT needs it turned on explicitly.
   error-page:
     enabled: true
+  # Folding is detected off the same way; ErrorPageIT and AccessibilitySweepIT need /boom to
+  # actually fold a run of framework frames, not just render the page.
+  stack-trace:
+    fold: true
   insights:
     config-location: classpath:insights-test-panels.yml
     levels:

@@ -77,6 +77,12 @@
     overflow-wrap: break-word;
 }
 
+/* .pk-error__detail is a column flex container, so align-items: stretch would otherwise
+   make this the widest control on the page - the same reason .pk-error__status sets it. */
+.pk-error__reveal {
+    align-self: flex-start;
+}
+
 /* The trace scrolls sideways instead of wrapping: a wrapped frame line loses the column
    alignment that makes the application's own frames findable at a glance. */
 .pk-error__frames {

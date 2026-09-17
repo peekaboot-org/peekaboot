@@ -3,6 +3,8 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import jakarta.servlet.RequestDispatcher;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
@@ -15,6 +17,8 @@ import org.springframework.boot.webmvc.autoconfigure.error.ErrorViewResolver;
 import org.springframework.boot.webmvc.error.ErrorAttributes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.view.BeanNameViewResolver;
@@ -46,6 +50,72 @@ class ErrorPageAutoConfigurationTest {
             assertThat(context).hasSingleBean(BeanNameViewResolver.class);
             assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
         });
+    }
+
+    /**
+     * A PeekabootErrorView bean existing proves nothing about what reached its constructor -
+     * a typo in either property key would silently fall back to the built-in exclusion list
+     * forever, with every other test here still green. Renders the page for real and checks
+     * a frame that only the explicit property, not the default list, would fold.
+     */
+    @Test
+    void resolvesTheExclusionListFromThePeekabootProperty() throws Exception {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        "peekaboot.stack-trace.fold=true",
+                        "peekaboot.stack-trace.exclude=com.acme.vendor")
+                .run(context -> {
+                    View view = context.getBean("error", View.class);
+
+                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/error");
+                    request.setServletPath("/error");
+                    request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
+                    request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/boom");
+                    request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exceptionWithVendorFrame());
+                    MockHttpServletResponse response = new MockHttpServletResponse();
+
+                    view.render(Map.of(), request, response);
+
+                    assertThat(response.getContentAsString()).contains("pk-error__hidden");
+                });
+    }
+
+    /**
+     * The sibling of the previous test: {@code ExclusionPatterns.resolve} reads
+     * {@code logging.exception-conversion-word} whenever {@code peekaboot.stack-trace.exclude}
+     * is unset, and nothing else here pins that the key {@code ErrorPageAutoConfiguration} reads
+     * is spelled correctly - a typo would fall back to the built-in list forever, silently,
+     * exactly like a typo in the other property would.
+     */
+    @Test
+    void resolvesTheExclusionListFromTheConversionWordWhereNoExplicitListIsSet() throws Exception {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        "peekaboot.stack-trace.fold=true",
+                        "logging.exception-conversion-word=%wEx{full, com.acme.vendor}")
+                .run(context -> {
+                    View view = context.getBean("error", View.class);
+
+                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/error");
+                    request.setServletPath("/error");
+                    request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
+                    request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/boom");
+                    request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exceptionWithVendorFrame());
+                    MockHttpServletResponse response = new MockHttpServletResponse();
+
+                    view.render(Map.of(), request, response);
+
+                    assertThat(response.getContentAsString()).contains("pk-error__hidden");
+                });
+    }
+
+    private static Throwable exceptionWithVendorFrame() {
+        IllegalStateException exception = new IllegalStateException("boom");
+        exception.setStackTrace(
+                new StackTraceElement[] {new StackTraceElement("com.acme.vendor.Client", "call", "Client.java", 42)});
+        return exception;
     }
 
     /**

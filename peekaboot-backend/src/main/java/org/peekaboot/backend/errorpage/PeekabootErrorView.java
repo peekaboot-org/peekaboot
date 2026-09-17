@@ -4,11 +4,14 @@ import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.ui.InlinedStylesheets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.error.ErrorAttributeOptions;
 import org.springframework.boot.webmvc.error.ErrorAttributes;
 import org.springframework.web.context.request.ServletWebRequest;
@@ -32,6 +35,8 @@ import org.springframework.web.util.HtmlUtils;
  * {@code server.servlet.context-path} too.
  */
 public class PeekabootErrorView implements View {
+
+    private static final Logger log = LoggerFactory.getLogger(PeekabootErrorView.class);
 
     /**
      * Every sheet the page loads, in cascade order, relative to the base path: the three shared
@@ -59,6 +64,7 @@ public class PeekabootErrorView implements View {
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <title>{{STATUS}} {{REASON}}</title>
                 <script src="{{BASE}}/ui/assets/theme-boot.js"></script>
+            {{REVEAL_SCRIPT_TAGS}}
                 <style>{{CSS}}</style>
             {{LINKS}}
             </head>
@@ -82,6 +88,7 @@ public class PeekabootErrorView implements View {
                     <section class="pk-error__detail">
                         <h2 class="pk-error__exception">{{EXCEPTION}}</h2>
                         <p class="pk-error__message">{{MESSAGE}}</p>
+                        {{REVEAL}}
                         <pre class="pk-error__frames" tabindex="0" aria-label="Stack trace">{{FRAMES}}</pre>
                     </section>
             """;
@@ -93,23 +100,61 @@ public class PeekabootErrorView implements View {
                     </section>
             """;
 
-    /** {@link #TEMPLATE} with the stylesheets already in place; only the per-request values remain. */
+    /** Rendered only where folding actually hid something - a control that reveals nothing must not appear. */
+    private static final String REVEAL_CONTROL = """
+                        <button type="button" class="pk-btn pk-btn--small pk-error__reveal" aria-pressed="false">Show full stack trace</button>
+            """;
+
+    /** Shipped inline as well as linked; see the class comment on why one channel is not enough. */
+    private static final String REVEAL_SCRIPT =
+            readResource(PeekabootPaths.CLASSPATH_ROOT + "/ui/error-page/reveal.js");
+
+    /**
+     * Both copies of the script, in the template's head region: linked for a host behind an
+     * authorization gate that refuses the inline copy, inline for a host whose
+     * Content-Security-Policy refuses the linked one. Emitted only where this request's
+     * folding actually hid something - the same rule {@link #REVEAL_CONTROL} follows, since a
+     * script that only wires up a button which is not on the page has nothing to do.
+     * {@link #REVEAL_SCRIPT} is empty where the classpath resource is unreadable, which empties
+     * the inline tag's body; the linked tag is still emitted and simply points at a URL that
+     * 404s. Either way the control never arms, which is the same degradation a blocked script
+     * produces - the per-run disclosures still work with no script at all. Still carries its
+     * own {@code {{BASE}}} token unresolved: {@link #render} substitutes this constant into the
+     * page after the generic base-path pass has already run, so it resolves that token itself.
+     */
+    private static final String REVEAL_SCRIPT_TAGS = "    <script src=\"" + InlinedStylesheets.BASE_TOKEN
+            + "/ui/error-page/reveal.js\"></script>\n" + "    <script>" + REVEAL_SCRIPT + "</script>";
+
+    /** {@link #TEMPLATE} with the stylesheets already in place; only the per-request and per-instance values remain. */
     private static final String PAGE =
             TEMPLATE.replace("{{CSS}}", STYLESHEETS.css()).replace("{{LINKS}}", STYLESHEETS.links());
+
+    /** {@link #detail}'s section markup, and whether folding actually hid something in it. */
+    private record Detail(String html, boolean revealsSomething) {}
 
     private final ErrorAttributes errorAttributes;
 
     private final List<String> applicationPackages;
+
+    private final List<String> exclusions;
+
+    private final boolean fold;
 
     /**
      * @param errorAttributes the application's own, so this page and its error responses
      *     describe the same failure
      * @param applicationPackages the packages {@code AutoConfigurationPackages} registered,
      *     which is what marks a frame as the application's own; empty where none are
+     * @param exclusions the frames folding hides, resolved by {@code ExclusionPatterns}
+     * @param fold whether framework frames fold behind a disclosure at all; {@code false}
+     *     renders exactly what shipped before folding existed
      */
-    public PeekabootErrorView(ErrorAttributes errorAttributes, List<String> applicationPackages) {
+    public PeekabootErrorView(
+            ErrorAttributes errorAttributes, List<String> applicationPackages, List<String> exclusions, boolean fold) {
         this.errorAttributes = errorAttributes;
         this.applicationPackages = List.copyOf(applicationPackages);
+        this.exclusions = List.copyOf(exclusions);
+        this.fold = fold;
     }
 
     @Override
@@ -128,30 +173,55 @@ public class PeekabootErrorView implements View {
     }
 
     /**
-     * The page for one failure. {@code {{DETAIL}}} is filled in last: it is the one value built
-     * from a trace and a message, and nothing may be left for a later replacement to find in it.
+     * The page for one failure. {@code {{DETAIL}}} and then {@code {{REVEAL_SCRIPT_TAGS}}} are
+     * filled in last, in that order: {@code {{DETAIL}}} is the one value built from a trace and
+     * a message, and {@code {{REVEAL_SCRIPT_TAGS}}} carries reveal.js's own bytes verbatim -
+     * nothing may be left for a later replacement to find in either, or a value meant for one
+     * placeholder could be rewritten as if it were another.
      *
      * @param method the failing request's method, or {@code null} to leave it off the request line
      */
     String render(String basePath, String method, Map<String, Object> attributes) {
-        return PAGE.replace(InlinedStylesheets.BASE_TOKEN, basePath)
+        Detail detail = detail(attributes);
+        String withoutScript = PAGE.replace(InlinedStylesheets.BASE_TOKEN, basePath)
                 .replace("{{STATUS_VARIANT}}", statusVariant(attributes))
                 .replace("{{STATUS}}", escape(attributes.get("status")))
                 .replace("{{REASON}}", escape(attributes.get("error")))
                 .replace("{{METHOD}}", escape(method))
                 .replace("{{PATH}}", escape(attributes.get("path")))
-                .replace("{{DETAIL}}", detail(attributes));
+                .replace("{{DETAIL}}", detail.html());
+        String scriptTags = detail.revealsSomething() ? REVEAL_SCRIPT_TAGS : "";
+        return withoutScript.replace(
+                "{{REVEAL_SCRIPT_TAGS}}", scriptTags.replace(InlinedStylesheets.BASE_TOKEN, basePath));
     }
 
-    private String detail(Map<String, Object> attributes) {
+    private Detail detail(Map<String, Object> attributes) {
         Object trace = attributes.get("trace");
         if (trace == null) {
-            return MESSAGE_DETAIL.replace("{{MESSAGE}}", escape(attributes.get("message")));
+            return new Detail(MESSAGE_DETAIL.replace("{{MESSAGE}}", escape(attributes.get("message"))), false);
         }
-        return EXCEPTION_DETAIL
+        String frames = StackTraceHtml.render(trace.toString(), applicationPackages, exclusions, fold);
+        boolean revealsSomething = fold && frames.contains("pk-error__hidden");
+        String html = EXCEPTION_DETAIL
                 .replace("{{EXCEPTION}}", escape(attributes.get("exception")))
                 .replace("{{MESSAGE}}", escape(attributes.get("message")))
-                .replace("{{FRAMES}}", StackTraceHtml.render(trace.toString(), applicationPackages, List.of(), false));
+                .replace("{{REVEAL}}", revealsSomething ? REVEAL_CONTROL : "")
+                .replace("{{FRAMES}}", frames);
+        return new Detail(html, revealsSomething);
+    }
+
+    /** An unreadable script leaves the per-run disclosures working - the same degradation a blocked script produces. */
+    private static String readResource(String path) {
+        try (InputStream in = PeekabootErrorView.class.getResourceAsStream(path)) {
+            if (in == null) {
+                log.warn("resource {} not found on the classpath", path);
+                return "";
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.warn("Failed to read resource {}: {}", path, e.getMessage());
+            return "";
+        }
     }
 
     /** A client error recedes beside a server error, the two tiers every Peekaboot surface shows a status in. */

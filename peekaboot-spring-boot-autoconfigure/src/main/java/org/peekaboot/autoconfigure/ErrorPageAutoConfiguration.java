@@ -3,8 +3,10 @@ package org.peekaboot.autoconfigure;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
+import org.peekaboot.backend.stacktrace.ExclusionPatterns;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
@@ -17,6 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.autoconfigure.condition.SpringBootCondition;
 import org.springframework.boot.autoconfigure.template.TemplateAvailabilityProvider;
 import org.springframework.boot.autoconfigure.template.TemplateAvailabilityProviders;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorViewResolver;
 import org.springframework.boot.webmvc.error.ErrorAttributes;
@@ -24,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.DispatcherServlet;
@@ -54,6 +58,7 @@ import org.springframework.web.servlet.View;
 @ConditionalOnClass({DispatcherServlet.class, ErrorAttributes.class})
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED)
+@EnableConfigurationProperties(PeekabootProperties.class)
 public class ErrorPageAutoConfiguration {
 
     /** The application's own packages, so its frames can be told from the framework's; empty where none are registered. */
@@ -61,8 +66,18 @@ public class ErrorPageAutoConfiguration {
         return AutoConfigurationPackages.has(beanFactory) ? AutoConfigurationPackages.get(beanFactory) : List.of();
     }
 
-    private static PeekabootErrorView errorView(ErrorAttributes errorAttributes, BeanFactory beanFactory) {
-        return new PeekabootErrorView(errorAttributes, applicationPackages(beanFactory));
+    private static PeekabootErrorView errorView(
+            ErrorAttributes errorAttributes,
+            BeanFactory beanFactory,
+            PeekabootProperties properties,
+            Environment environment) {
+        List<String> exclusions = ExclusionPatterns.resolve(
+                properties.getStackTrace().getExclude(), environment.getProperty("logging.exception-conversion-word"));
+        return new PeekabootErrorView(
+                errorAttributes,
+                applicationPackages(beanFactory),
+                exclusions,
+                properties.getStackTrace().isFold());
     }
 
     @Bean(name = "error")
@@ -73,22 +88,32 @@ public class ErrorPageAutoConfiguration {
             matchIfMissing = true)
     @ConditionalOnBooleanProperty(name = "spring.web.error.whitelabel.enabled", matchIfMissing = true)
     @Conditional(ErrorPageAutoConfiguration.ErrorTemplateMissingCondition.class)
-    public View peekabootErrorView(ErrorAttributes errorAttributes, BeanFactory beanFactory) {
-        return errorView(errorAttributes, beanFactory);
+    public View peekabootErrorView(
+            ErrorAttributes errorAttributes,
+            BeanFactory beanFactory,
+            PeekabootProperties properties,
+            Environment environment) {
+        return errorView(errorAttributes, beanFactory, properties, environment);
     }
 
     @Bean
     @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_OVERRIDE)
     public PeekabootErrorViewResolver peekabootErrorViewResolver(
-            ErrorAttributes errorAttributes, BeanFactory beanFactory) {
-        return new PeekabootErrorViewResolver(errorView(errorAttributes, beanFactory));
+            ErrorAttributes errorAttributes,
+            BeanFactory beanFactory,
+            PeekabootProperties properties,
+            Environment environment) {
+        return new PeekabootErrorViewResolver(errorView(errorAttributes, beanFactory, properties, environment));
     }
 
     @Bean
     @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_OVERRIDE)
     public PeekabootErrorExceptionResolver peekabootErrorExceptionResolver(
-            ErrorAttributes errorAttributes, BeanFactory beanFactory) {
-        return new PeekabootErrorExceptionResolver(errorView(errorAttributes, beanFactory));
+            ErrorAttributes errorAttributes,
+            BeanFactory beanFactory,
+            PeekabootProperties properties,
+            Environment environment) {
+        return new PeekabootErrorExceptionResolver(errorView(errorAttributes, beanFactory, properties, environment));
     }
 
     /**

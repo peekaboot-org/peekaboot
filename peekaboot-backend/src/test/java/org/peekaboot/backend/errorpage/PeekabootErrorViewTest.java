@@ -3,10 +3,14 @@ package org.peekaboot.backend.errorpage;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.servlet.RequestDispatcher;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -19,7 +23,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class PeekabootErrorViewTest {
 
     private final PeekabootErrorView view =
-            new PeekabootErrorView(new DefaultErrorAttributes(), List.of("com.example"));
+            new PeekabootErrorView(new DefaultErrorAttributes(), List.of("com.example"), List.of(), false);
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -181,5 +185,130 @@ class PeekabootErrorViewTest {
         view.render(Map.of(), request, response);
 
         assertThat(response.getContentAsString()).contains("peekaboot.error-page.enabled=false");
+    }
+
+    @Test
+    void offersOneControlThatOpensEveryHiddenRun() {
+        String page = render(view(List.of("org.springframework"), true));
+
+        assertThat(page)
+                .contains("class=\"pk-btn pk-btn--small pk-error__reveal\"")
+                .contains("aria-pressed=\"false\"")
+                .contains("ui/error-page/reveal.js");
+    }
+
+    /**
+     * Inline for a host that forbids the fetch, linked for one that forbids inline script.
+     * Asserted against the resource's own bytes, read off the classpath the same way
+     * {@code PeekabootErrorView} reads them, rather than against a marker string in the
+     * source: a {@code containsPattern} on the source text cannot tell a script that runs
+     * from one that merely mentions the right words in a comment.
+     */
+    @Test
+    void shipsTheRevealScriptThroughBothChannels() throws IOException {
+        String page = render(view(List.of("org.springframework"), true));
+
+        assertThat(page).contains("<script>" + revealScript() + "</script>");
+        assertThat(page).contains("<script src=\"/peekaboot/ui/error-page/reveal.js\"></script>");
+    }
+
+    /**
+     * Asserted against the button's own markup, not the bare class name: error-page.css'
+     * {@code .pk-error__reveal} selector is inlined into every page's {@code <style>} block
+     * regardless of whether the button renders, so the bare string appears there too.
+     */
+    @Test
+    void offersNoControlWithFoldingOff() {
+        String page = render(view(List.of("org.springframework"), false));
+
+        assertThat(page)
+                .doesNotContain("class=\"pk-btn pk-btn--small pk-error__reveal\"")
+                .doesNotContain("reveal.js");
+    }
+
+    /** Folding can be on and still hide nothing - an exclusion list that matches no frame is the same as fold=false here. */
+    @Test
+    void offersNoControlWhereFoldingHidesNothing() {
+        String page = render(view(List.of("no.such.package"), true));
+
+        assertThat(page)
+                .doesNotContain("class=\"pk-btn pk-btn--small pk-error__reveal\"")
+                .doesNotContain("reveal.js");
+    }
+
+    /**
+     * {@code {{REVEAL_SCRIPT_TAGS}}} is substituted last, against a page that already carries
+     * the trace - and the trace's own first line repeats the exception's message, which is
+     * exactly the kind of request-influenced text that could spell that placeholder.
+     * {@code StackTraceHtml} neutralises a double brace for this reason; this pins the whole
+     * path end to end, the way {@link #neutralisesAPlaceholderLookingPathSoItCannotReopenAReplacement()}
+     * pins it for the request path.
+     */
+    @Test
+    void doesNotReopenTheScriptPlaceholderFromAPlaceholderLookingMessage() {
+        String page = render(view(List.of("org.springframework"), true), exceptionSpellingTheScriptPlaceholder());
+
+        assertThat(page)
+                .doesNotContain("{{REVEAL_SCRIPT_TAGS}}")
+                .contains("&#123;&#123;REVEAL_SCRIPT_TAGS}}")
+                .containsOnlyOnce("<script>")
+                .containsOnlyOnce("<script src=\"/peekaboot/ui/error-page/reveal.js\">");
+    }
+
+    private static Throwable exceptionSpellingTheScriptPlaceholder() {
+        IllegalStateException exception = new IllegalStateException("{{REVEAL_SCRIPT_TAGS}}");
+        exception.setStackTrace(new StackTraceElement[] {
+            new StackTraceElement("com.example.Widget", "process", "Widget.java", 10),
+            new StackTraceElement(
+                    "org.springframework.web.servlet.DispatcherServlet", "doDispatch", "DispatcherServlet.java", 1234)
+        });
+        return exception;
+    }
+
+    private static String revealScript() throws IOException {
+        try (InputStream in = PeekabootErrorViewTest.class.getResourceAsStream(
+                PeekabootPaths.CLASSPATH_ROOT + "/ui/error-page/reveal.js")) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private PeekabootErrorView view(List<String> exclusions, boolean fold) {
+        return new PeekabootErrorView(new DefaultErrorAttributes(), List.of("com.example"), exclusions, fold);
+    }
+
+    /**
+     * Renders {@code view} for a request whose exception carries a synthetic trace of one
+     * application frame and a run of framework frames - real enough to fold, without depending
+     * on whatever frames the JUnit runner itself happens to be on the stack with.
+     */
+    private String render(PeekabootErrorView view) {
+        return render(view, exceptionWithFrameworkFrames());
+    }
+
+    private String render(PeekabootErrorView view, Throwable exception) {
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/error");
+        req.setServletPath("/error");
+        req.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
+        req.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/boom");
+        req.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        try {
+            view.render(Map.of(), req, res);
+            return res.getContentAsString();
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    private static Throwable exceptionWithFrameworkFrames() {
+        IllegalStateException exception = new IllegalStateException("boom");
+        exception.setStackTrace(new StackTraceElement[] {
+            new StackTraceElement("com.example.Widget", "process", "Widget.java", 10),
+            new StackTraceElement(
+                    "org.springframework.web.servlet.DispatcherServlet", "doDispatch", "DispatcherServlet.java", 1234),
+            new StackTraceElement(
+                    "org.springframework.web.servlet.FrameworkServlet", "processRequest", "FrameworkServlet.java", 1000)
+        });
+        return exception;
     }
 }
