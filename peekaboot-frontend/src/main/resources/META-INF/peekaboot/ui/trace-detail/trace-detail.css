@@ -228,10 +228,13 @@
    invisible, so the ring takes the fill's own ink. */
 .pk-logs-filter-span-clear:focus-visible { outline-color: var(--pk-on-primary); }
 
-/* Logs tab row, one per trace log entry (see renderLogRows in tabs/logs.js). */
-.pk-log { display: flex; gap: var(--pk-space-md); padding: 6px var(--pk-space-md); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); border-bottom: 1px solid var(--pk-bg-alt); }
+/* Logs tab row, one per trace log entry (see renderLogRows in tabs/logs.js). Column
+   direction so an entry with a stack trace stacks it below the metadata line rather than
+   squeezing it in as a fifth flex item; the line itself stays row/nowrap below. */
+.pk-log { display: flex; flex-direction: column; padding: 6px var(--pk-space-md); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); border-bottom: 1px solid var(--pk-bg-alt); }
 .pk-log:hover { background: var(--pk-bg-alt); }
 .pk-log--hidden { display: none; }
+.pk-log__row { display: flex; gap: var(--pk-space-md); }
 .pk-log__time { color: var(--pk-text-muted); white-space: nowrap; width: 90px; }
 /* Name button (filters to the span) stacked over its copyable full id; the span tree keeps
    ids off its rows and in each span's details panel. */
@@ -258,6 +261,18 @@
 .pk-log__level--warn { color: var(--pk-warning-text); }
 .pk-log__level--error { color: var(--pk-danger); }
 .pk-log__message { flex: 1; word-break: break-word; }
+
+/* The trace a log entry carried (tabs/logs.js's traceBlock), rendered only when
+   log.stackTrace is present. align-self keeps the toggle from stretching to the row's
+   full width under .pk-log's column flex. */
+.pk-log__reveal { align-self: flex-start; margin-top: var(--pk-space-xs); }
+.pk-log__trace { margin: var(--pk-space-xs) 0 0; overflow-x: auto; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); line-height: 1.6; }
+.pk-log__frame { display: block; color: var(--pk-text-muted); }
+.pk-log__frame--app { color: var(--pk-text-strong); font-weight: 600; }
+.pk-log__hidden { display: block; }
+.pk-log__hidden-summary { display: block; cursor: pointer; color: var(--pk-text-muted); font-style: italic; padding-left: 2ch; }
+.pk-log__hidden-summary:hover { color: var(--pk-text); }
+.pk-log__hidden[open] .pk-log__hidden-summary { color: var(--pk-text); }
 
 /* Cross-link jump target (trace-detail.js's jumpToElement): briefly tinted and
    ring-marked - design tokens only, visible in both themes - so the eye lands where

@@ -757,6 +757,90 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(focusedRowSpanId).isEqualTo(spanId);
     }
 
+    /**
+     * The ERROR log fixture's throwable carries framework frames the exclusion list folds
+     * away, so the trace renders with at least one hidden run collapsed behind a
+     * {@code <details>} and at least one application frame highlighted - proof the browser
+     * is rendering the ranges Task 6 put on the wire, not inventing its own classification.
+     * Playwright locators pierce the overlay's shadow root, so {@code page.locator} reaches
+     * straight in the way {@code AccessibilityIT} already does for other log-row elements.
+     *
+     * <p>The counts above are a coarse smoke test; the real pin is the last assertion -
+     * every {@code .pk-log__frame} rendered inside {@code .pk-log__trace}, read off in
+     * document order and compared line for line against the trace's own {@code stackTrace}
+     * field. A walk that loses track of where a hidden run ends - rendering its frames once
+     * inside the {@code <details>} and again as loose frames below it - or one that drops a
+     * line still satisfies the counts above, but not an exact, in-order, no-duplicates
+     * comparison against every line the server actually sent. There are no JS unit tests in
+     * this project, so this is the only thing standing between a broken walk and a shipped
+     * regression.
+     *
+     * <p>What this cannot pin: whether a frame's {@code applicationFrame} flag was read off
+     * the right index inside a hidden run (e.g. {@code app.has(j)} mistyped as a captured
+     * {@code app.has(i)}). {@link org.peekaboot.backend.stacktrace.StackTraceFolding#fold}
+     * guarantees the two can never disagree - an application frame always closes the hidden
+     * run it would otherwise extend, so no index inside {@code [run.start, run.endExclusive)}
+     * is ever also an application-frame index, on any real trace. Verified empirically: with
+     * that one substitution made by hand, this test - text content, order, and the counts
+     * above - stayed green, because the substitution reads as always-false either way. Text
+     * content alone cannot distinguish the two expressions; only a fixture that violated the
+     * server's own invariant could, and the server cannot produce one.
+     */
+    @Test
+    void aLoggedErrorShowsItsTraceWithFrameworkFramesFolded() {
+        String traceId = openPageThatLogsAnError();
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+
+        assertThat(page.locator(".pk-log__trace details.pk-log__hidden").count())
+                .isGreaterThan(0);
+        assertThat(page.locator(".pk-log__trace .pk-log__frame--app").count()).isGreaterThan(0);
+
+        String stackTrace = capturedStackTrace(traceId);
+        @SuppressWarnings("unchecked")
+        List<String> renderedFrames = (List<String>) overlay.evaluate(
+                "root => [...root.querySelectorAll('.pk-log__trace .pk-log__frame')].map(el => el.textContent)");
+        assertThat(renderedFrames).containsExactlyElementsOf(List.of(stackTrace.split("\n", -1)));
+    }
+
+    /** The trace's own {@code stackTrace} field, joined back the way the server sent it. */
+    private String capturedStackTrace(String traceId) {
+        JsonNode trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+        return trace.path("logs")
+                .valueStream()
+                .filter(log -> !log.path("stackTrace").isNull())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no captured log carried a stack trace"))
+                .path("stackTrace")
+                .asString();
+    }
+
+    /**
+     * Each row whose trace actually hid something gets exactly one reveal control - the
+     * scoping rule {@code revealControl(pre)} implements by closing over that row's own
+     * {@code <pre>} rather than querying the document. Clicking the control then opens
+     * every hidden run inside that trace. The fixture here only ever produces one row with
+     * a throwable, so this cannot show a click leaving a DIFFERENT row's trace alone; what
+     * it does pin is the invariant the implementation actually promises - exactly one
+     * control per qualifying row - which holds however many such rows the fixture grows to.
+     */
+    @Test
+    void theLogTraceRevealControlOpensEveryHiddenRun() {
+        openPageThatLogsAnError();
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.waitFor(".pk-log__reveal");
+
+        int rowsWithHiddenRuns = (int) (Integer) overlay.evaluate("root => [...root.querySelectorAll('.pk-log')]"
+                + ".filter(row => row.querySelector('details.pk-log__hidden')).length");
+        assertThat(page.locator(".pk-log__reveal").count()).isEqualTo(rowsWithHiddenRuns);
+
+        page.click(".pk-log__reveal");
+
+        assertThat(page.locator(".pk-log__trace details.pk-log__hidden[open]").count())
+                .isEqualTo(page.locator(".pk-log__trace details.pk-log__hidden").count());
+    }
+
     /** The query span lands after the response, so the overlay is opened once the store serves it. */
     @Test
     void queriesTabListsTheJdbcQueryFromThePersonsPage() {
