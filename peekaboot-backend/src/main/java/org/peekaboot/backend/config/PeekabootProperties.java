@@ -1,5 +1,6 @@
 package org.peekaboot.backend.config;
 
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "peekaboot")
@@ -34,6 +35,8 @@ public class PeekabootProperties {
     private Security security = new Security();
 
     private ErrorPage errorPage = new ErrorPage();
+
+    private StackTrace stackTrace = new StackTrace();
 
     public boolean isEnabled() {
         return enabled;
@@ -89,6 +92,14 @@ public class PeekabootProperties {
 
     public void setErrorPage(ErrorPage errorPage) {
         this.errorPage = errorPage;
+    }
+
+    public StackTrace getStackTrace() {
+        return stackTrace;
+    }
+
+    public void setStackTrace(StackTrace stackTrace) {
+        this.stackTrace = stackTrace;
     }
 
     /**
@@ -229,6 +240,41 @@ public class PeekabootProperties {
 
         public void setOverride(boolean override) {
             this.override = override;
+        }
+    }
+
+    /**
+     * How Peekaboot renders a stack trace, on the error page and in captured logs alike. Folding
+     * decides only what is shown first: the whole trace is always present and one control reveals
+     * it.
+     */
+    public static class StackTrace {
+
+        /** Hides frames matching {@code exclude} behind a disclosure. Defaulted from the launch context like {@code peekaboot.enabled}. */
+        private boolean fold = false;
+
+        /**
+         * Frames to hide, matched as a substring of the whole frame line the way Logback matches
+         * the exclusions in {@code logging.exception-conversion-word}. Setting this replaces the
+         * resolved list; left unset, the exclusions from that conversion word apply, and failing
+         * that a built-in list of reflection, container and framework packages.
+         */
+        private List<String> exclude = List.of();
+
+        public boolean isFold() {
+            return fold;
+        }
+
+        public void setFold(boolean fold) {
+            this.fold = fold;
+        }
+
+        public List<String> getExclude() {
+            return exclude;
+        }
+
+        public void setExclude(List<String> exclude) {
+            this.exclude = exclude;
         }
     }
 }

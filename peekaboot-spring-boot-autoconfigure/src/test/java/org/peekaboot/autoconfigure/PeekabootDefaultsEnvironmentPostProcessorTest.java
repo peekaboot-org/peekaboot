@@ -273,7 +273,8 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         PeekabootPropertyKeys.STORAGE_ENABLED,
                         PeekabootPropertyKeys.SECURITY_ENABLED,
                         PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED,
-                        PeekabootPropertyKeys.ERROR_PAGE_ENABLED);
+                        PeekabootPropertyKeys.ERROR_PAGE_ENABLED,
+                        PeekabootPropertyKeys.STACK_TRACE_FOLD);
         assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isNull();
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
@@ -398,6 +399,19 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         assertThat(environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, Boolean.class))
                 .isTrue();
+    }
+
+    /** Folding follows the launch context like the surfaces it applies to. */
+    @Test
+    void foldingFollowsTheLaunchContext() {
+        MockEnvironment localDev = new MockEnvironment();
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(localDev, servletApplication());
+        assertThat(localDev.getProperty(PeekabootPropertyKeys.STACK_TRACE_FOLD)).isEqualTo("true");
+
+        MockEnvironment deployment = new MockEnvironment();
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(deployment, servletApplication());
+        assertThat(deployment.getProperty(PeekabootPropertyKeys.STACK_TRACE_FOLD))
+                .isEqualTo("false");
     }
 
     /**
