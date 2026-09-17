@@ -32,38 +32,57 @@ public final class StackTraceFolding {
      * split('\n')} agrees with these indices, rather than trusting a second language to split a
      * trace the same way {@link String#lines()} does.
      *
-     * <p>{@code hidden} is ascending, disjoint, and every range is non-empty - {@code
-     * endExclusive > start} always holds, since a consumer that walks the ranges in line order
-     * and jumps straight to a match's {@code endExclusive} would sit at the same index forever
-     * on an empty one. A consumer relies on that order: it walks {@code hidden} once, front to
-     * back, alongside {@code lines}, rather than searching it for the range starting at each
-     * index.
+     * <p>Both {@code hidden} and {@code applicationFrames} are ascending, disjoint, and every
+     * range is non-empty - {@code endExclusive > start} always holds, since a consumer that
+     * walks the ranges in line order and jumps straight to a match's {@code endExclusive}
+     * would sit at the same index forever on an empty one. A consumer relies on that order: it
+     * walks each list once, front to back, alongside {@code lines}, rather than searching it
+     * for the range starting at each index. Consecutive application frames merge into one
+     * range the same way a run of hidden ones does - both consumers flatten ranges to an index
+     * set before rendering, so a merged range costs them nothing and a trace that is nothing
+     * but application frames does not turn into one singleton range per line.
      */
     public record FoldedTrace(List<String> lines, List<Range> hidden, List<Range> applicationFrames) {}
 
     public static FoldedTrace fold(String trace, List<String> exclusions, List<String> applicationPackages) {
         List<String> lines = trace.lines().toList();
-        List<Range> hidden = new ArrayList<>();
-        List<Range> application = new ArrayList<>();
-        int hiddenRunStart = -1;
+        RunBuilder hidden = new RunBuilder();
+        RunBuilder application = new RunBuilder();
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-            boolean applicationFrame = isFrame(line) && isApplicationFrame(line, applicationPackages);
-            if (applicationFrame) {
-                application.add(new Range(i, i + 1));
-            }
-            if (isFrame(line) && !applicationFrame && matchesAny(line, exclusions)) {
-                hiddenRunStart = hiddenRunStart < 0 ? i : hiddenRunStart;
-            } else if (hiddenRunStart >= 0) {
-                hidden.add(new Range(hiddenRunStart, i));
-                hiddenRunStart = -1;
+            boolean frame = isFrame(line);
+            boolean applicationFrame = frame && isApplicationFrame(line, applicationPackages);
+            application.mark(i, applicationFrame);
+            hidden.mark(i, frame && !applicationFrame && matchesAny(line, exclusions));
+        }
+        return new FoldedTrace(lines, hidden.finish(lines.size()), application.finish(lines.size()));
+    }
+
+    /** Turns a per-line yes/no into runs, merging adjacent marks the way both consumers want them. */
+    private static final class RunBuilder {
+        private final List<Range> ranges = new ArrayList<>();
+        private int start = -1;
+
+        void mark(int index, boolean inRun) {
+            if (inRun) {
+                start = start < 0 ? index : start;
+            } else {
+                close(index);
             }
         }
-        if (hiddenRunStart >= 0) {
-            hidden.add(new Range(hiddenRunStart, lines.size()));
+
+        List<Range> finish(int totalLines) {
+            close(totalLines);
+            return List.copyOf(ranges);
         }
-        return new FoldedTrace(lines, List.copyOf(hidden), List.copyOf(application));
+
+        private void close(int endExclusive) {
+            if (start >= 0) {
+                ranges.add(new Range(start, endExclusive));
+                start = -1;
+            }
+        }
     }
 
     private static boolean isFrame(String line) {

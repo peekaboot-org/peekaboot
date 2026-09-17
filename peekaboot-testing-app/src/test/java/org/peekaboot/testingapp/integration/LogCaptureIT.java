@@ -79,7 +79,7 @@ class LogCaptureIT {
 
         JsonNode applicationFrames = withTrace.path("applicationFrames");
         assertThat(applicationFrames.size())
-                .as("PersonController.persons is on the trace, and it is the testing app's own code")
+                .as("PersonController.persons sits in the one contiguous run of application frames")
                 .isEqualTo(1);
         int start = applicationFrames.get(0).path("start").asInt();
         assertThat(lines[start]).contains("PersonController.persons");

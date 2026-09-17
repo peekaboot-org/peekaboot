@@ -200,4 +200,15 @@ class StackTraceFoldingTest {
 
         assertThat(folded.hidden()).isEmpty();
     }
+
+    /** A 1000-line all-application trace must not cost one singleton range per line. */
+    @Test
+    void mergesConsecutiveApplicationFramesIntoOneRange() {
+        FoldedTrace folded = StackTraceFolding.fold("""
+                \tat com.example.orders.OrderService.a(OrderService.java:1)
+                \tat com.example.orders.OrderService.b(OrderService.java:2)
+                \tat com.example.orders.OrderService.c(OrderService.java:3)""", List.of(), APP);
+
+        assertThat(folded.applicationFrames()).containsExactly(new StackTraceFolding.Range(0, 3));
+    }
 }
