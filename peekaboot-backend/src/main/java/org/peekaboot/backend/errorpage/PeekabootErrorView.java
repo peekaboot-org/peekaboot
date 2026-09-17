@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.stacktrace.StackTraceFolding;
+import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
 import org.peekaboot.backend.ui.InlinedStylesheets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,26 +136,31 @@ public class PeekabootErrorView implements View {
 
     private final ErrorAttributes errorAttributes;
 
-    private final List<String> applicationPackages;
-
     private final List<String> exclusions;
+
+    private final List<String> applicationPackages;
 
     private final boolean fold;
 
     /**
+     * {@code exclusions} and {@code applicationPackages} are kept in the same order
+     * {@link StackTraceFolding#fold} takes them, so a reader can't swap two adjacent
+     * same-typed parameters and have it silently compile as marking framework frames
+     * application code.
+     *
      * @param errorAttributes the application's own, so this page and its error responses
      *     describe the same failure
+     * @param exclusions the frames folding hides, resolved by {@code ExclusionPatterns}
      * @param applicationPackages the packages {@code AutoConfigurationPackages} registered,
      *     which is what marks a frame as the application's own; empty where none are
-     * @param exclusions the frames folding hides, resolved by {@code ExclusionPatterns}
      * @param fold whether framework frames fold behind a disclosure at all; {@code false}
      *     renders exactly what shipped before folding existed
      */
     public PeekabootErrorView(
-            ErrorAttributes errorAttributes, List<String> applicationPackages, List<String> exclusions, boolean fold) {
+            ErrorAttributes errorAttributes, List<String> exclusions, List<String> applicationPackages, boolean fold) {
         this.errorAttributes = errorAttributes;
-        this.applicationPackages = List.copyOf(applicationPackages);
         this.exclusions = List.copyOf(exclusions);
+        this.applicationPackages = List.copyOf(applicationPackages);
         this.fold = fold;
     }
 
@@ -200,13 +207,14 @@ public class PeekabootErrorView implements View {
         if (trace == null) {
             return new Detail(MESSAGE_DETAIL.replace("{{MESSAGE}}", escape(attributes.get("message"))), false);
         }
-        String frames = StackTraceHtml.render(trace.toString(), applicationPackages, exclusions, fold);
-        boolean revealsSomething = fold && frames.contains("pk-error__hidden");
+        FoldedTrace folded =
+                StackTraceFolding.fold(trace.toString(), fold ? exclusions : List.of(), applicationPackages);
+        boolean revealsSomething = !folded.hidden().isEmpty();
         String html = EXCEPTION_DETAIL
                 .replace("{{EXCEPTION}}", escape(attributes.get("exception")))
                 .replace("{{MESSAGE}}", escape(attributes.get("message")))
                 .replace("{{REVEAL}}", revealsSomething ? REVEAL_CONTROL : "")
-                .replace("{{FRAMES}}", frames);
+                .replace("{{FRAMES}}", StackTraceHtml.render(folded));
         return new Detail(html, revealsSomething);
     }
 

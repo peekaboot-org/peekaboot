@@ -69,8 +69,8 @@ public class ErrorPageAutoConfiguration {
                 properties.getStackTrace().getExclude(), environment.getProperty("logging.exception-conversion-word"));
         return new PeekabootErrorView(
                 errorAttributes,
-                ApplicationPackages.resolve(beanFactory),
                 exclusions,
+                ApplicationPackages.resolve(beanFactory),
                 properties.getStackTrace().isFold());
     }
 

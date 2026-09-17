@@ -23,7 +23,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class PeekabootErrorViewTest {
 
     private final PeekabootErrorView view =
-            new PeekabootErrorView(new DefaultErrorAttributes(), List.of("com.example"), List.of(), false);
+            new PeekabootErrorView(new DefaultErrorAttributes(), List.of(), List.of("com.example"), false);
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -237,6 +237,30 @@ class PeekabootErrorViewTest {
     }
 
     /**
+     * The control's presence has to come from the folding's own answer, not a search for its
+     * CSS class name in the rendered markup - an exception message spelling that literal class
+     * would otherwise ship the control and both script tags on a page with nothing to reveal.
+     */
+    @Test
+    void offersNoControlWhenTheMessageSpellsTheHiddenRunsOwnClassName() {
+        String page = render(view(List.of("no.such.package"), true), exceptionSpellingTheHiddenRunClass());
+
+        assertThat(page)
+                .doesNotContain("class=\"pk-btn pk-btn--small pk-error__reveal\"")
+                .doesNotContain("reveal.js");
+    }
+
+    private static Throwable exceptionSpellingTheHiddenRunClass() {
+        IllegalStateException exception = new IllegalStateException("pk-error__hidden");
+        exception.setStackTrace(new StackTraceElement[] {
+            new StackTraceElement("com.example.Widget", "process", "Widget.java", 10),
+            new StackTraceElement(
+                    "org.springframework.web.servlet.DispatcherServlet", "doDispatch", "DispatcherServlet.java", 1234)
+        });
+        return exception;
+    }
+
+    /**
      * {@code {{REVEAL_SCRIPT_TAGS}}} is substituted last, against a page that already carries
      * the trace - and the trace's own first line repeats the exception's message, which is
      * exactly the kind of request-influenced text that could spell that placeholder.
@@ -273,7 +297,7 @@ class PeekabootErrorViewTest {
     }
 
     private PeekabootErrorView view(List<String> exclusions, boolean fold) {
-        return new PeekabootErrorView(new DefaultErrorAttributes(), List.of("com.example"), exclusions, fold);
+        return new PeekabootErrorView(new DefaultErrorAttributes(), exclusions, List.of("com.example"), fold);
     }
 
     /**

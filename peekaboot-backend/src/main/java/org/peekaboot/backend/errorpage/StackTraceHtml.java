@@ -5,7 +5,6 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.springframework.web.util.HtmlUtils;
@@ -13,8 +12,8 @@ import org.springframework.web.util.HtmlUtils;
 /**
  * A stack trace as markup: every line of it, escaped, each one carrying whether it is a frame
  * in the application's own code. A trace is forty framework frames around the two that
- * matter, and the page exists so a developer finds those two without reading the rest - folding
- * the excluded runs behind a disclosure when {@code fold} asks for it.
+ * matter, and the page exists so a developer finds those two without reading the rest - the
+ * runs the folding hid go behind a disclosure.
  */
 final class StackTraceHtml {
 
@@ -24,9 +23,8 @@ final class StackTraceHtml {
 
     private StackTraceHtml() {}
 
-    /** The trace as printStackTrace wrote it, application frames marked and excluded runs folded away. */
-    static String render(String trace, List<String> applicationPackages, List<String> exclusions, boolean fold) {
-        FoldedTrace folded = StackTraceFolding.fold(trace, fold ? exclusions : List.of(), applicationPackages);
+    /** The trace as printStackTrace wrote it, application frames marked and hidden runs behind a disclosure. */
+    static String render(FoldedTrace folded) {
         List<String> lines = folded.lines();
         Set<Integer> applicationFrames = expand(folded.applicationFrames());
         Deque<Range> hidden = new ArrayDeque<>(folded.hidden());

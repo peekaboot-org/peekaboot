@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.stacktrace.StackTraceFolding;
 
 /**
  * The trace is rendered as Throwable.printStackTrace writes it - causes, suppressed
@@ -26,7 +27,7 @@ class StackTraceHtmlTest {
 
     @Test
     void marksFramesInTheApplicationsOwnPackages() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), List.of(), false);
+        String html = render(TRACE, List.of(), List.of("com.example"));
 
         assertThat(html)
                 .contains("<span class=\"pk-error__frame pk-error__frame--app\">"
@@ -35,7 +36,7 @@ class StackTraceHtmlTest {
 
     @Test
     void leavesEveryOtherFrameMuted() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), List.of(), false);
+        String html = render(TRACE, List.of(), List.of("com.example"));
 
         assertThat(html)
                 .contains(
@@ -45,7 +46,7 @@ class StackTraceHtmlTest {
 
     @Test
     void keepsTheCauseChainAndItsElidedFrameCount() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), List.of(), false);
+        String html = render(TRACE, List.of(), List.of("com.example"));
 
         assertThat(html)
                 .contains("Caused by: java.net.ConnectException: Connection refused")
@@ -58,8 +59,8 @@ class StackTraceHtmlTest {
      */
     @Test
     void marksAnApplicationFrameBehindItsClassLoaderName() {
-        String html = StackTraceHtml.render(
-                "\tat app//com.example.orders.Gateway.call(Gateway.java:17)", List.of("com.example"), List.of(), false);
+        String html =
+                render("\tat app//com.example.orders.Gateway.call(Gateway.java:17)", List.of(), List.of("com.example"));
 
         assertThat(html).contains("pk-error__frame--app");
     }
@@ -67,8 +68,7 @@ class StackTraceHtmlTest {
     /** An exception message carries whatever the request carried. */
     @Test
     void escapesMarkupInTheTrace() {
-        String html = StackTraceHtml.render(
-                "java.lang.IllegalStateException: <script>alert(1)</script>", List.of(), List.of(), false);
+        String html = render("java.lang.IllegalStateException: <script>alert(1)</script>", List.of(), List.of());
 
         assertThat(html).doesNotContain("<script>").contains("&lt;script&gt;");
     }
@@ -80,8 +80,7 @@ class StackTraceHtmlTest {
      */
     @Test
     void neutralisesAPlaceholderLookingMessageInTheTrace() {
-        String html = StackTraceHtml.render(
-                "java.lang.IllegalStateException: {{REVEAL_SCRIPT_TAGS}}", List.of(), List.of(), false);
+        String html = render("java.lang.IllegalStateException: {{REVEAL_SCRIPT_TAGS}}", List.of(), List.of());
 
         assertThat(html).doesNotContain("{{REVEAL_SCRIPT_TAGS}}").contains("&#123;&#123;REVEAL_SCRIPT_TAGS}}");
     }
@@ -89,14 +88,14 @@ class StackTraceHtmlTest {
     /** No packages registered - a plain context - classifies nothing rather than everything. */
     @Test
     void marksNoFrameWithoutApplicationPackages() {
-        String html = StackTraceHtml.render(TRACE, List.of(), List.of(), false);
+        String html = render(TRACE, List.of(), List.of());
 
         assertThat(html).doesNotContain("pk-error__frame--app");
     }
 
     @Test
     void wrapsAHiddenRunInADisclosureNamingItsSize() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), EXCLUDED, true);
+        String html = render(TRACE, EXCLUDED, List.of("com.example"));
 
         assertThat(html)
                 .contains("<details class=\"pk-error__hidden\">")
@@ -106,14 +105,14 @@ class StackTraceHtmlTest {
     /** Hidden frames stay in the document so a reader can open them, and so ErrorPageIT can count them. */
     @Test
     void keepsHiddenFramesInTheMarkup() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), EXCLUDED, true);
+        String html = render(TRACE, EXCLUDED, List.of("com.example"));
 
         assertThat(html).contains("DispatcherServlet.doDispatch(DispatcherServlet.java:1089)");
     }
 
     @Test
-    void rendersEveryFrameInlineWithFoldingOff() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), EXCLUDED, false);
+    void rendersEveryFrameInlineWithNothingExcluded() {
+        String html = render(TRACE, List.of(), List.of("com.example"));
 
         assertThat(html).doesNotContain("<details").doesNotContain("pk-error__hidden");
     }
@@ -126,7 +125,7 @@ class StackTraceHtmlTest {
      */
     @Test
     void rendersTheWholeTraceWithTheHiddenRunInPlaceAndInOrder() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), EXCLUDED, true);
+        String html = render(TRACE, EXCLUDED, List.of("com.example"));
 
         assertThat(html)
                 .isEqualTo(
@@ -146,10 +145,10 @@ class StackTraceHtmlTest {
                                 + "<span class=\"pk-error__frame\">\t... 12 more</span>");
     }
 
-    /** The fold-off counterpart to {@link #rendersTheWholeTraceWithTheHiddenRunInPlaceAndInOrder()}. */
+    /** The nothing-excluded counterpart to {@link #rendersTheWholeTraceWithTheHiddenRunInPlaceAndInOrder()}. */
     @Test
-    void rendersTheWholeTraceInlineAndInOrderWithFoldingOff() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), EXCLUDED, false);
+    void rendersTheWholeTraceInlineAndInOrderWithNothingExcluded() {
+        String html = render(TRACE, List.of(), List.of("com.example"));
 
         assertThat(html)
                 .isEqualTo(
@@ -168,7 +167,7 @@ class StackTraceHtmlTest {
 
     @Test
     void neverFoldsTheApplicationsOwnFrame() {
-        String html = StackTraceHtml.render(TRACE, List.of("com.example"), List.of("com.example"), true);
+        String html = render(TRACE, List.of("com.example"), List.of("com.example"));
 
         assertThat(html).doesNotContain("<details");
     }
@@ -176,19 +175,20 @@ class StackTraceHtmlTest {
     /** One frame reads better than "1 frames". */
     @Test
     void namesASingleHiddenFrameInTheSingular() {
-        String html = StackTraceHtml.render("\tat org.springframework.A.a(A.java:1)", List.of(), EXCLUDED, true);
+        String html = render("\tat org.springframework.A.a(A.java:1)", EXCLUDED, List.of());
 
         assertThat(html).contains(">1 frame hidden<");
     }
 
     @Test
     void namesSeveralHiddenFramesInThePlural() {
-        String html = StackTraceHtml.render(
-                "\tat org.springframework.A.a(A.java:1)\n\tat org.springframework.B.b(B.java:2)",
-                List.of(),
-                EXCLUDED,
-                true);
+        String html = render(
+                "\tat org.springframework.A.a(A.java:1)\n\tat org.springframework.B.b(B.java:2)", EXCLUDED, List.of());
 
         assertThat(html).contains(">2 frames hidden<");
+    }
+
+    private static String render(String trace, List<String> exclusions, List<String> applicationPackages) {
+        return StackTraceHtml.render(StackTraceFolding.fold(trace, exclusions, applicationPackages));
     }
 }
