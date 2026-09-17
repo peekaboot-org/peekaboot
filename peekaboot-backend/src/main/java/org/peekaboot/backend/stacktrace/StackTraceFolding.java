@@ -12,8 +12,14 @@ import java.util.List;
  */
 public final class StackTraceFolding {
 
-    /** How printStackTrace writes a frame; anything else is a header, a cause or an elision. */
-    private static final String FRAME_PREFIX = "\tat ";
+    /**
+     * How printStackTrace writes a frame; anything else is a header, a cause or an elision.
+     * A suppressed exception nests under an extra tab per level - {@code
+     * ThrowableProxyUtil.recursiveAppend} does the same on the log path - so a frame is any
+     * tab-led line that starts {@code "at "} once its own leading tabs are gone, not
+     * specifically one tab.
+     */
+    private static final String FRAME_MARKER = "at ";
 
     private StackTraceFolding() {}
 
@@ -61,7 +67,7 @@ public final class StackTraceFolding {
     }
 
     private static boolean isFrame(String line) {
-        return line.startsWith(FRAME_PREFIX);
+        return line.startsWith("\t") && line.stripLeading().startsWith(FRAME_MARKER);
     }
 
     private static boolean matchesAny(String line, List<String> exclusions) {
@@ -69,7 +75,7 @@ public final class StackTraceFolding {
     }
 
     private static boolean isApplicationFrame(String line, List<String> applicationPackages) {
-        String className = className(line.substring(FRAME_PREFIX.length()));
+        String className = className(line.stripLeading().substring(FRAME_MARKER.length()));
         return applicationPackages.stream().anyMatch(each -> className.startsWith(each + "."));
     }
 

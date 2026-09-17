@@ -142,4 +142,62 @@ class StackTraceFoldingTest {
 
         assertThat(folded.lines()).containsExactly("a", "b", "c");
     }
+
+    /**
+     * Both the JDK and Logback indent a suppressed exception's own frames with an extra tab -
+     * {@code recursiveAppend} nests one deeper than the enclosing trace - so the try-with-
+     * resources close-failure shape needs its own fixture rather than a single leading tab.
+     */
+    private static final String SUPPRESSED_TRACE = """
+            java.lang.IllegalStateException: gateway unreachable
+            \tat com.example.orders.OrderService.reconcile(OrderService.java:42)
+            \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)
+            \tSuppressed: java.io.IOException: close failed
+            \t\tat org.apache.catalina.connector.OutputBuffer.close(OutputBuffer.java:296)
+            \t\tat com.example.orders.Gateway.close(Gateway.java:20)
+            \t\t... 3 more
+            \tat com.example.orders.OrderService.<init>(OrderService.java:10)
+            """;
+
+    /** The whole suppressed block was invisible to the classifier before frames widened past one leading tab. */
+    @Test
+    void hidesFramesInsideASuppressedExceptionBlock() {
+        FoldedTrace folded = StackTraceFolding.fold(SUPPRESSED_TRACE, EXCLUSIONS, APP);
+
+        assertThat(folded.hidden())
+                .containsExactly(new StackTraceFolding.Range(2, 3), new StackTraceFolding.Range(4, 5));
+    }
+
+    /** The application frame nested inside a suppressed block is marked, and stays out of the hidden runs either side of it. */
+    @Test
+    void marksAnApplicationFrameInsideASuppressedExceptionBlock() {
+        FoldedTrace folded = StackTraceFolding.fold(SUPPRESSED_TRACE, EXCLUSIONS, APP);
+
+        assertThat(folded.applicationFrames())
+                .containsExactly(
+                        new StackTraceFolding.Range(1, 2),
+                        new StackTraceFolding.Range(5, 6),
+                        new StackTraceFolding.Range(7, 8));
+        assertThat(folded.hidden()).noneMatch(range -> range.start() <= 5 && 5 < range.endExclusive());
+    }
+
+    /**
+     * {@code Suppressed:} is tab-led but does not start {@code at }; {@code Caused by:} is not
+     * tab-led; the two elision spellings - {@code printStackTrace}'s {@code ... N more} and the
+     * log path's {@code ... N common frames omitted} - are tab-led but do not start {@code at }
+     * either. None becomes a frame under the widened predicate.
+     */
+    @Test
+    void neverTreatsSuppressedCauseOrEitherElisionSpellingAsAFrame() {
+        FoldedTrace folded = StackTraceFolding.fold(
+                """
+                java.lang.IllegalStateException: gateway unreachable
+                \tSuppressed: java.io.IOException: close failed
+                \t\t... 3 more
+                Caused by: java.net.ConnectException: refused
+                \t... 12 common frames omitted
+                """, List.of("Suppressed", "more", "Caused by", "common frames omitted"), List.of());
+
+        assertThat(folded.hidden()).isEmpty();
+    }
 }
