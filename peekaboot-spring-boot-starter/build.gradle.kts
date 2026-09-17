@@ -14,8 +14,8 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-opentelemetry")
     // Query capture - see the pom for why both, and what a host that instruments its own
     // DataSource does instead.
-    api("net.ttddyy.observation:datasource-micrometer-spring-boot:2.2.1")
-    api("net.ttddyy.observation:datasource-micrometer-opentelemetry:2.2.1")
+    api("net.ttddyy.observation:datasource-micrometer-spring-boot:2.3.0")
+    api("net.ttddyy.observation:datasource-micrometer-opentelemetry:2.3.0")
 }
 
 // The servlet stack and the connection pool are compileOnly in the modules that use them,
