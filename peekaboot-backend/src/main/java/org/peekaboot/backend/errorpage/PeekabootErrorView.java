@@ -151,7 +151,7 @@ public class PeekabootErrorView implements View {
         return EXCEPTION_DETAIL
                 .replace("{{EXCEPTION}}", escape(attributes.get("exception")))
                 .replace("{{MESSAGE}}", escape(attributes.get("message")))
-                .replace("{{FRAMES}}", StackTraceHtml.render(trace.toString(), applicationPackages));
+                .replace("{{FRAMES}}", StackTraceHtml.render(trace.toString(), applicationPackages, List.of(), false));
     }
 
     /** A client error recedes beside a server error, the two tiers every Peekaboot surface shows a status in. */

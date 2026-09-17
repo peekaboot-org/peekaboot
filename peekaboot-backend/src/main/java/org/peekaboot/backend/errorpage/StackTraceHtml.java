@@ -1,20 +1,22 @@
 package org.peekaboot.backend.errorpage;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Set;
+import org.peekaboot.backend.stacktrace.StackTraceFolding;
+import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
+import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.springframework.web.util.HtmlUtils;
 
 /**
  * A stack trace as markup: every line of it, escaped, each one carrying whether it is a frame
  * in the application's own code. A trace is forty framework frames around the two that
- * matter, and the page exists so a developer finds those two without reading the rest.
+ * matter, and the page exists so a developer finds those two without reading the rest - folding
+ * the excluded runs behind a disclosure when {@code fold} asks for it.
  */
 final class StackTraceHtml {
-
-    /** How {@code Throwable.printStackTrace} writes a frame line; anything else is a header, a cause or an elision. */
-    private static final String FRAME_PREFIX = "\tat ";
-
-    private static final String CLASS_LOADER_SEPARATOR = "//";
 
     private static final String FRAME = "pk-error__frame";
 
@@ -22,30 +24,50 @@ final class StackTraceHtml {
 
     private StackTraceHtml() {}
 
-    /** The trace as printStackTrace wrote it, line by line, with the application's own frames marked. */
-    static String render(String trace, List<String> applicationPackages) {
-        return trace.lines()
-                .map(line -> "<span class=\"" + frameClass(line, applicationPackages) + "\">"
-                        + HtmlUtils.htmlEscape(line) + "</span>")
-                .collect(Collectors.joining("\n"));
-    }
+    /** The trace as printStackTrace wrote it, application frames marked and excluded runs folded away. */
+    static String render(String trace, List<String> applicationPackages, List<String> exclusions, boolean fold) {
+        FoldedTrace folded = StackTraceFolding.fold(trace, fold ? exclusions : List.of(), applicationPackages);
+        List<String> lines = folded.lines();
+        Set<Integer> applicationFrames = expand(folded.applicationFrames());
+        Deque<Range> hidden = new ArrayDeque<>(folded.hidden());
 
-    private static String frameClass(String line, List<String> applicationPackages) {
-        if (!line.startsWith(FRAME_PREFIX)) {
-            return FRAME;
+        StringBuilder html = new StringBuilder();
+        for (int i = 0; i < lines.size(); ) {
+            if (!hidden.isEmpty() && hidden.peek().start() == i) {
+                Range run = hidden.poll();
+                html.append(disclosure(lines, run, applicationFrames));
+                i = run.endExclusive();
+            } else {
+                html.append(span(lines.get(i), applicationFrames.contains(i))).append('\n');
+                i++;
+            }
         }
-        String className = className(line.substring(FRAME_PREFIX.length()));
-        boolean ownCode = applicationPackages.stream().anyMatch(each -> className.startsWith(each + "."));
-        return ownCode ? APPLICATION_FRAME : FRAME;
+        return html.toString().stripTrailing();
     }
 
-    /**
-     * A frame spells its class-loader name ahead of the class whenever that loader has one -
-     * Boot's launcher and the devtools restart loader both do. A module name is spelled with a
-     * single slash instead, which no application package starts behind.
-     */
-    private static String className(String frame) {
-        int classLoader = frame.indexOf(CLASS_LOADER_SEPARATOR);
-        return classLoader < 0 ? frame : frame.substring(classLoader + CLASS_LOADER_SEPARATOR.length());
+    private static String disclosure(List<String> lines, Range run, Set<Integer> applicationFrames) {
+        int count = run.endExclusive() - run.start();
+        StringBuilder frames = new StringBuilder();
+        for (int i = run.start(); i < run.endExclusive(); i++) {
+            frames.append(span(lines.get(i), applicationFrames.contains(i))).append('\n');
+        }
+        return "<details class=\"pk-error__hidden\"><summary class=\"pk-error__hidden-summary\">"
+                + count + (count == 1 ? " frame" : " frames") + " hidden</summary>"
+                + frames.toString().stripTrailing() + "</details>\n";
+    }
+
+    private static String span(String line, boolean applicationFrame) {
+        return "<span class=\"" + (applicationFrame ? APPLICATION_FRAME : FRAME) + "\">" + HtmlUtils.htmlEscape(line)
+                + "</span>";
+    }
+
+    private static Set<Integer> expand(List<Range> ranges) {
+        Set<Integer> indexes = new HashSet<>();
+        ranges.forEach(range -> {
+            for (int i = range.start(); i < range.endExclusive(); i++) {
+                indexes.add(i);
+            }
+        });
+        return indexes;
     }
 }

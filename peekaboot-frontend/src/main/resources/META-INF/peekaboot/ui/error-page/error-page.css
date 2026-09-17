@@ -101,6 +101,13 @@
     font-weight: 600;
 }
 
+/* A run of framework frames, closed until the reader asks. The row is a control inside a
+   <pre> that scrolls sideways, and it keeps the native disclosure marker so it reads as one. */
+.pk-error__hidden { display: block; }
+.pk-error__hidden-summary { cursor: pointer; color: var(--pk-text-muted); font-style: italic; padding-left: 2ch; }
+.pk-error__hidden-summary:hover { color: var(--pk-text); }
+.pk-error__hidden[open] .pk-error__hidden-summary { color: var(--pk-text); }
+
 .pk-error__footer {
     display: flex;
     align-items: center;

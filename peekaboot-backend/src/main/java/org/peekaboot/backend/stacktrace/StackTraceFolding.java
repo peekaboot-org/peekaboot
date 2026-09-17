@@ -25,6 +25,13 @@ public final class StackTraceFolding {
      * caller that sends it back joined with {@code "\n"} guarantees the browser's own {@code
      * split('\n')} agrees with these indices, rather than trusting a second language to split a
      * trace the same way {@link String#lines()} does.
+     *
+     * <p>{@code hidden} is ascending, disjoint, and every range is non-empty - {@code
+     * endExclusive > start} always holds, since a consumer that walks the ranges in line order
+     * and jumps straight to a match's {@code endExclusive} would sit at the same index forever
+     * on an empty one. A consumer relies on that order: it walks {@code hidden} once, front to
+     * back, alongside {@code lines}, rather than searching it for the range starting at each
+     * index.
      */
     public record FoldedTrace(List<String> lines, List<Range> hidden, List<Range> applicationFrames) {}
 
