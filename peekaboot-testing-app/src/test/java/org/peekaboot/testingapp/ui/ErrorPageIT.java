@@ -49,7 +49,12 @@ class ErrorPageIT extends PlaywrightTestBase {
                 .contains("500");
     }
 
-    /** The per-run disclosures work with no script at all; this proves the global control on top of them. */
+    /**
+     * The per-run disclosures work with no script at all; this proves the global control on
+     * top of them - opening every run on the first click, and, since {@code open} is
+     * recomputed from {@code aria-pressed} on every click, closing every run again on the
+     * second.
+     */
     @Test
     void theRevealControlOpensEveryHiddenRun() {
         page.navigate(baseUrl + "/boom");
@@ -59,6 +64,14 @@ class ErrorPageIT extends PlaywrightTestBase {
 
         assertThat(page.locator("details.pk-error__hidden[open]").count())
                 .isEqualTo(page.locator("details.pk-error__hidden").count());
+        assertThat(page.getAttribute(".pk-error__reveal", "aria-pressed")).isEqualTo("true");
+        assertThat(page.textContent(".pk-error__reveal")).isEqualTo("Hide framework frames");
+
+        page.click(".pk-error__reveal");
+
+        assertThat(page.locator("details.pk-error__hidden[open]").count()).isEqualTo(0);
+        assertThat(page.getAttribute(".pk-error__reveal", "aria-pressed")).isEqualTo("false");
+        assertThat(page.textContent(".pk-error__reveal")).isEqualTo("Show full stack trace");
     }
 
     /** A host with script-src 'self' drops the inline copy; the linked one still arms the control. */

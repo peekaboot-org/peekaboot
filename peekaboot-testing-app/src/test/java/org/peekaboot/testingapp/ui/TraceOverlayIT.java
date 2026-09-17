@@ -819,10 +819,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * Each row whose trace actually hid something gets exactly one reveal control - the
      * scoping rule {@code revealControl(pre)} implements by closing over that row's own
      * {@code <pre>} rather than querying the document. Clicking the control then opens
-     * every hidden run inside that trace. The fixture here only ever produces one row with
-     * a throwable, so this cannot show a click leaving a DIFFERENT row's trace alone; what
-     * it does pin is the invariant the implementation actually promises - exactly one
-     * control per qualifying row - which holds however many such rows the fixture grows to.
+     * every hidden run inside that trace, and - since {@code open} is recomputed from
+     * {@code aria-pressed} on every click - a second click closes every run again. The
+     * fixture here only ever produces one row with a throwable, so this cannot show a click
+     * leaving a DIFFERENT row's trace alone; what it does pin is the invariant the
+     * implementation actually promises - exactly one control per qualifying row - which
+     * holds however many such rows the fixture grows to.
      */
     @Test
     void theLogTraceRevealControlOpensEveryHiddenRun() {
@@ -839,6 +841,15 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         assertThat(page.locator(".pk-log__trace details.pk-log__hidden[open]").count())
                 .isEqualTo(page.locator(".pk-log__trace details.pk-log__hidden").count());
+        assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("true");
+        assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Hide framework frames");
+
+        page.click(".pk-log__reveal");
+
+        assertThat(page.locator(".pk-log__trace details.pk-log__hidden[open]").count())
+                .isEqualTo(0);
+        assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("false");
+        assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
     }
 
     /** The query span lands after the response, so the overlay is opened once the store serves it. */
