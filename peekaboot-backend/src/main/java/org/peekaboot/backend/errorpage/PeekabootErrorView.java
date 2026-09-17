@@ -110,9 +110,9 @@ public class PeekabootErrorView implements View {
             readResource(PeekabootPaths.CLASSPATH_ROOT + "/ui/error-page/reveal.js");
 
     /**
-     * Both copies of the script, in the template's head region: linked for a host behind an
-     * authorization gate that refuses the inline copy, inline for a host whose
-     * Content-Security-Policy refuses the linked one. Emitted only where this request's
+     * Both copies of the script, in the template's head region: linked for a host whose
+     * Content-Security-Policy refuses the inline copy, inline for a host behind an
+     * authorization gate that refuses the linked one. Emitted only where this request's
      * folding actually hid something - the same rule {@link #REVEAL_CONTROL} follows, since a
      * script that only wires up a button which is not on the page has nothing to do.
      * {@link #REVEAL_SCRIPT} is empty where the classpath resource is unreadable, which empties

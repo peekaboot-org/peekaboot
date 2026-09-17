@@ -526,6 +526,61 @@ toolbar the same way any other HTML response does, because `DevToolbarFilter` is
 the `ERROR` dispatch as well as `REQUEST` (see *Servlet Filters*). The bar reports the request
 that failed, never the dispatch that rendered the page.
 
+### Stack Traces
+
+One classifier, `StackTraceFolding.fold`, decides which frames fold away on both surfaces a
+trace reaches: `StackTraceHtml` renders it into the error page's `<pre>`, and
+`TraceInsightsService.toTraceLog` renders it into the wire `TraceLog` the Logs tab consumes.
+Both callers pass it the same `exclusions` and `applicationPackages`; neither surface
+classifies anything of its own.
+
+A frame hides when its whole line contains one of the exclusion patterns as a substring - the
+same test Logback's `%wEx` conversion word applies, not a prefix and not a regex. That is why a
+marker like `ByCGLIB` works as a pattern: it need not anchor to a package boundary, only appear
+somewhere in the line a CGLIB-generated proxy class leaves behind.
+
+`ExclusionPatterns.resolve` picks the list once, from the first source that carries an opinion.
+An explicit `peekaboot.stack-trace.exclude` wins when it is a non-empty list, and replaces the
+built-in list rather than adding to it; an empty list there is not an opinion, and falls
+through the same as leaving the property unset. `logging.exception-conversion-word` comes next.
+A `%wEx{...}` block that names nothing past its leading depth - `%wEx{full}` alone, say - is
+itself an opinion, "exclude nothing," so resolution stops there with an empty list and folding
+hides nothing; `ExclusionPatternsTest` pins `resolve(List.of(), "%wEx{full}")` at empty for
+exactly this reason. A conversion word carrying no `%wEx{...}` block at all carries no opinion,
+and falls through instead to `ExclusionPatterns.DEFAULT`, a built-in list of reflection,
+container, web-framework, template-engine and driver/proxy packages.
+
+`StackTraceFolding.fold` decides `isApplicationFrame` before it ever tests a frame against the
+exclusion list, using `ApplicationPackages.resolve`, so an application frame is never hidden
+even where its line would otherwise match a pattern. What is highlighted and what is hidden
+come from separate inputs and never merge. Non-frame lines - the exception header,
+`Caused by:`, `Suppressed:`, `... N more` - never enter a hidden run either, since only a line
+starting `\tat ` is a candidate.
+
+Folding is a render-time decision. `PeekabootLogbackAppender` captures a throwable's full trace
+unfolded, capped at 1000 lines with a `... N lines omitted` marker so a `StackOverflowError`'s
+1024-frame trace can't dominate retention; `TraceInsightsService` runs
+`StackTraceFolding.fold` over that stored trace on every read, and `PeekabootErrorView` runs it
+fresh on every request. The full trace is therefore always present on the wire.
+
+`peekaboot.stack-trace.fold=false` produces an empty result on both surfaces, by two different
+mechanisms. `TraceInsightsService` never sees the flag itself. `PeekabootAutoConfiguration`'s
+bean method computes `fold ? exclusions : List.of()` once, at wiring time, so a disabled fold
+hands the service an already-empty exclusion list, and `hiddenFrames` comes back empty from
+asking the same question with nothing to match. `fold` reaches the error page as a real
+parameter instead - `StackTraceHtml.render` takes it and applies that same
+`fold ? exclusions : List.of()` internally, and `PeekabootErrorView.detail` branches on it
+again to decide whether the reveal control renders at all. Either way the error page ends up
+rendering every frame inline. The browser classifies nothing on either surface; `logs.js`
+renders the ranges it is given, the same way `StackTraceHtml` does server-side.
+
+The error page's reveal script ships twice, inline in a `<script>` tag and linked via
+`<script src>`, for the same reason its CSS does (see *Error Page*). A strict `script-src`
+drops the inline copy, and an authorization gate in front of `/peekaboot/**` drops the linked
+one.
+Either copy only opens every folded `<details>` at once; the per-run disclosures are native
+HTML and work with no script running at all.
+
 ## peekaboot-frontend
 
 Static resources served from `/peekaboot/ui/`, backing four UI surfaces that share one design
@@ -582,7 +637,7 @@ hooks that run before or outside the application context are registered in
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`, and the default property values |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled`, `peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold`, and the default property values |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
@@ -667,9 +722,10 @@ toolbar keys on the same local-development detection as `peekaboot.enabled`, not
 `peekaboot.enabled`'s resolved value, so turning Peekaboot on deliberately in a shared
 environment does not inject the toolbar into every page as a side effect.
 
-`peekaboot.error-page.enabled` is the fourth switch this detection derives, alongside
-`peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled` (see *Persisted
-state*): on for a detected local run, off otherwise, with an explicit setting always winning.
+`peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold` are the fourth and fifth
+switches this detection derives, alongside `peekaboot.enabled`, `peekaboot.dev-toolbar` and
+`peekaboot.storage.enabled` (see *Persisted state*): on for a detected local run, off
+otherwise, with an explicit setting always winning.
 
 `LocalDevDetector` starts from the heuristics Spring Boot DevTools itself uses and adds two
 signals of its own, checked in order:
@@ -762,16 +818,17 @@ exists Peekaboot folds its entries into it, underneath the application's own, so
 `SpringApplicationBuilder.properties("peekaboot.enabled=false")` wins like any other setting.
 Where it does not, Peekaboot's four named sources are appended last, in this order:
 `peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
-`peekabootDevToolbarDefaults`. `peekabootDetection` is where all four launch-context-detected
-switches land - `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled` and
-`peekaboot.error-page.enabled` - since none of them needs a yml resource of its own (see
-*Conditional Loading*). `PeekabootDefaultsRegistrationTest` pins both halves.
+`peekabootDevToolbarDefaults`. `peekabootDetection` is where all five launch-context-detected
+switches land - `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled`,
+`peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold` - since none of them needs a
+yml resource of its own (see *Conditional Loading*). `PeekabootDefaultsRegistrationTest` pins
+both halves.
 
 ### Automatic Dashboard Security
 
-`peekaboot.security.enabled` follows the same idiom as the other four launch-context switches:
+`peekaboot.security.enabled` follows the same idiom as the other five launch-context switches:
 `PeekabootDefaultsEnvironmentPostProcessor` publishes a detected default at lowest precedence,
-and any explicit setting wins over it. Unlike the other four the default does not follow
+and any explicit setting wins over it. Unlike the other five the default does not follow
 `LOCAL_DEV`; it is `true` on a `DEPLOYMENT` launch and `false` on both `LOCAL_DEV` and `TEST`,
 the third value `LocalDevDetector.LaunchKind` grows for this. `TEST` is matched against
 `SKIPPED_STACK_ELEMENTS` before the local-dev checks run at all, not folded into them: several
