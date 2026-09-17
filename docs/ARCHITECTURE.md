@@ -551,11 +551,15 @@ and falls through instead to `ExclusionPatterns.DEFAULT`, a built-in list of ref
 container, web-framework, template-engine and driver/proxy packages.
 
 `StackTraceFolding.fold` decides `isApplicationFrame` before it ever tests a frame against the
-exclusion list, using `ApplicationPackages.resolve`, so an application frame is never hidden
-even where its line would otherwise match a pattern. What is highlighted and what is hidden
-come from separate inputs and never merge. Non-frame lines - the exception header,
-`Caused by:`, `Suppressed:`, `... N more` - never enter a hidden run either, since only a line
-starting `\tat ` is a candidate.
+exclusion list, against the `applicationPackages` list its caller passes in - `StackTraceFolding`
+lives in `peekaboot-backend` and takes that list as a parameter, so it cannot reference
+`ApplicationPackages`, which resolves it and lives in the autoconfigure module - so an
+application frame is never hidden even where its line would otherwise match a pattern. What is
+highlighted and what is hidden come from separate inputs and never merge. Non-frame lines - the
+exception header, `Caused by:`, `Suppressed:`, and an elision (`... N more` from
+`printStackTrace`, `... N common frames omitted` from the log path) - never enter a hidden run
+either, since only a tab-led line that starts `at ` once its own leading tabs are gone is a
+candidate.
 
 Folding is a render-time decision. `PeekabootLogbackAppender` captures a throwable's full trace
 unfolded, capped at 1000 lines with a `... N lines omitted` marker so a `StackOverflowError`'s
