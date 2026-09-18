@@ -22,6 +22,7 @@ import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
+import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -443,12 +444,7 @@ class TraceTreeMapperTest {
     @Test
     void theSpanSummaryExcludesAsyncSpansFromTheSummedDuration() {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = span("async")
-                .parent("root")
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
-                .at(40, 240_000)
-                .build();
+        var async = asyncEntry("async", "root", 40, 240_000);
 
         var traceData = TraceDatas.of("trace1", root, async);
 
@@ -475,6 +471,84 @@ class TraceTreeMapperTest {
 
         assertThat(result.summary().spans().errorCount()).isEqualTo(1);
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
+    }
+
+    @Test
+    void mapsAnAsyncSubtreeAsATreeOfItsOwn() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
+        var async = asyncEntry("async", "root", 40, 240_000);
+        var deep = span("deep").parent("async").at(100, 200_000).build();
+
+        var traceData = TraceDatas.of("trace1", root, async, deep);
+
+        TraceTree result = mapper.mapSubtree(traceData, "async");
+
+        assertThat(result.subtree()).isEqualTo(new SubtreeView("async", true));
+        assertThat(result.rootSpan().spanId()).isEqualTo("async");
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.ASYNC_TASK);
+        assertThat(result.rootOperation()).isEqualTo(AsyncTaskMarker.CONTEXTUAL_NAME);
+        assertThat(result.startTimeMs()).isEqualTo(40);
+        assertThat(result.durationMs()).isEqualTo(240_000);
+    }
+
+    /**
+     * A child outliving its parent is the ordering the whole feature exists for, so the
+     * subtree's window cannot be the entry span's own duration.
+     */
+    @Test
+    void theSubtreeWindowCoversAChildThatOutlivesItsParent() {
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 50).build();
+        var async = asyncEntry("async", "root", 40, 1_000);
+        var deep =
+                span("deep").named("deep-op").parent("async").at(100, 240_000).build();
+
+        var traceData = TraceDatas.of("trace1", root, async, deep);
+
+        TraceTree result = mapper.mapSubtree(traceData, "async");
+
+        assertThat(result.startTimeMs()).isEqualTo(40);
+        assertThat(result.durationMs()).isEqualTo(240_060);
+    }
+
+    /** An orphan has no parent in the trace, so there is no enclosing trace to link back to. */
+    @Test
+    void anOrphanedAsyncSubtreeIsNotEnclosedByAStoredTrace() {
+        var async = asyncEntry("async", "evicted", 0, 3_700);
+
+        var traceData = TraceDatas.of("trace1", async);
+
+        TraceTree result = mapper.mapSubtree(traceData, "async");
+
+        assertThat(result.subtree()).isEqualTo(new SubtreeView("async", false));
+    }
+
+    @Test
+    void aWholeTraceMappingCarriesNoSubtreeView() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
+
+        var traceData = TraceDatas.of("trace1", root);
+
+        assertThat(mapper.map(traceData).subtree()).isNull();
+    }
+
+    @Test
+    void marksAnAsyncEntrySpanInTheTree() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
+        var async = asyncEntry("async", "root", 40, 1_000);
+        var deep = span("deep").parent("async").at(50, 900).build();
+
+        var traceData = TraceDatas.of("trace1", root, async, deep);
+
+        SpanNode rootNode = mapper.map(traceData).rootSpan();
+
+        assertThat(rootNode.asyncEntry()).isFalse();
+        assertThat(rootNode.children()).singleElement().satisfies(entry -> {
+            assertThat(entry.asyncEntry()).isTrue();
+            assertThat(entry.children())
+                    .singleElement()
+                    .satisfies(child -> assertThat(child.asyncEntry()).isFalse());
+        });
     }
 
     @Test
@@ -1090,5 +1164,14 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().children())
                 .extracting(SpanNode::spanId, SpanNode::rowCount)
                 .containsExactly(tuple("q1", 10L), tuple("rs", null), tuple("q2", null), tuple("rs2", null));
+    }
+
+    private static SpanData asyncEntry(String spanId, String parentId, long startOffsetMs, long durationMs) {
+        return span(spanId)
+                .parent(parentId)
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .at(startOffsetMs, durationMs)
+                .build();
     }
 }

@@ -3,6 +3,7 @@ package org.peekaboot.backend.testsupport;
 import java.util.List;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
@@ -28,6 +29,7 @@ public final class TraceTrees {
         private RootActionType rootActionType = RootActionType.UNKNOWN;
         private final TraceTabSummary summary;
         private boolean truncated;
+        private SubtreeView subtree;
 
         private Builder(SpanNode rootSpan) {
             this.rootSpan = rootSpan;
@@ -53,6 +55,11 @@ public final class TraceTrees {
             return this;
         }
 
+        public Builder subtree(SubtreeView subtree) {
+            this.subtree = subtree;
+            return this;
+        }
+
         public TraceTree build() {
             return new TraceTree(
                     traceId,
@@ -67,6 +74,7 @@ public final class TraceTrees {
                     null,
                     List.of(),
                     List.of(),
+                    subtree,
                     truncated);
         }
 

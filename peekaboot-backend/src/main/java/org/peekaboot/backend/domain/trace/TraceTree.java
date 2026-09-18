@@ -26,6 +26,7 @@ public record TraceTree(
         HttpExchange httpExchange,
         List<TraceLog> logs,
         List<QueryInfo> queries,
+        SubtreeView subtree,
         boolean truncated) {
 
     /** The span tree replaced, together with the badge judged from it. */
@@ -43,6 +44,7 @@ public record TraceTree(
                 httpExchange,
                 logs,
                 queries,
+                subtree,
                 truncated);
     }
 
@@ -60,6 +62,7 @@ public record TraceTree(
                 httpExchange,
                 logs,
                 queries,
+                subtree,
                 truncated);
     }
 
@@ -78,6 +81,26 @@ public record TraceTree(
                 newHttpExchange,
                 newLogs,
                 newQueries,
+                subtree,
+                truncated);
+    }
+
+    /** The view narrowed to one subtree, or widened back to the whole trace with {@code null}. */
+    public TraceTree withSubtree(SubtreeView newSubtree) {
+        return new TraceTree(
+                traceId,
+                startTimeMs,
+                durationMs,
+                status,
+                slow,
+                rootActionType,
+                rootOperation,
+                rootSpan,
+                summary,
+                httpExchange,
+                logs,
+                queries,
+                newSubtree,
                 truncated);
     }
 }

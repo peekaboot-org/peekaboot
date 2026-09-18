@@ -13,6 +13,7 @@ import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
+import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
@@ -47,6 +48,7 @@ public class TraceTreeMapper {
                     null,
                     List.of(),
                     List.of(),
+                    null,
                     traceData.truncated());
         }
 
@@ -65,7 +67,8 @@ public class TraceTreeMapper {
         TraceTabSummary summary = calculateSummary(spans, rootSpanData, traceData.asyncSpanIds());
         TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
 
-        SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, RowCounts.byQuerySpanId(spans));
+        SpanNode rootSpan = buildSpanTree(
+                rootSpanData, childrenByParentId, RowCounts.byQuerySpanId(spans), traceData.asyncSpanIds(), false);
 
         long startTimeMs = traceData.startTime() != null ? traceData.startTime().toEpochMilli() : 0L;
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
@@ -85,7 +88,78 @@ public class TraceTreeMapper {
                 null,
                 List.of(),
                 List.of(),
+                null,
                 traceData.truncated());
+    }
+
+    /**
+     * The same trace seen from one of its spans: the tree rooted there, timed by that
+     * subtree's own window rather than the trace's, and classified from that span. What the
+     * listing's async rows and the {@code ?root=} deep link both render.
+     */
+    public TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId) {
+        TraceTree whole = map(traceData);
+        SpanNode subtreeRoot = findNode(whole.rootSpan(), subtreeRootSpanId);
+        if (subtreeRoot == null) {
+            return whole;
+        }
+        SpanData subtreeRootData = traceData.spans().stream()
+                .filter(span -> subtreeRootSpanId.equals(span.spanId()))
+                .findFirst()
+                .orElse(null);
+        boolean enclosed = subtreeRootData != null
+                && subtreeRootData.parentId() != null
+                && traceData.spans().stream().anyMatch(span -> span.spanId().equals(subtreeRootData.parentId()));
+
+        return new TraceTree(
+                traceData.traceId(),
+                subtreeRoot.startTimeMs(),
+                subtreeWindowMs(subtreeRoot),
+                whole.status(),
+                whole.slow(),
+                detectRootActionType(subtreeRootData),
+                subtreeRoot.name(),
+                subtreeRoot,
+                whole.summary(),
+                whole.httpExchange(),
+                whole.logs(),
+                whole.queries(),
+                new SubtreeView(subtreeRootSpanId, enclosed),
+                traceData.truncated());
+    }
+
+    private static SpanNode findNode(SpanNode node, String spanId) {
+        if (node == null) {
+            return null;
+        }
+        if (spanId.equals(node.spanId())) {
+            return node;
+        }
+        for (SpanNode child : node.children()) {
+            SpanNode found = findNode(child, spanId);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The subtree's own wall-clock window. Not the root span's duration: a child can outlive
+     * its parent, which is the ordering that makes this whole feature necessary.
+     */
+    private static long subtreeWindowMs(SpanNode root) {
+        long start = root.startTimeMs();
+        long end = latestEndMs(root, root.startTimeMs() + root.durationMs());
+        return Math.max(end - start, 0);
+    }
+
+    private static long latestEndMs(SpanNode node, long latest) {
+        long end = Math.max(latest, node.startTimeMs() + node.durationMs());
+        for (SpanNode child : node.children()) {
+            end = latestEndMs(child, end);
+        }
+        return end;
     }
 
     private void attachOrphansToRoot(
@@ -228,15 +302,20 @@ public class TraceTreeMapper {
     }
 
     private SpanNode buildSpanTree(
-            SpanData spanData, Map<String, List<SpanData>> childrenByParentId, Map<String, Long> rowCounts) {
+            SpanData spanData,
+            Map<String, List<SpanData>> childrenByParentId,
+            Map<String, Long> rowCounts,
+            Set<String> asyncSpanIds,
+            boolean parentIsAsync) {
         if (spanData == null) {
             return null;
         }
 
+        boolean isAsync = asyncSpanIds.contains(spanData.spanId());
         List<SpanData> childSpans = childrenByParentId.getOrDefault(spanData.spanId(), List.of());
         List<SpanNode> children = childSpans.stream()
                 .sorted(Comparator.comparing(SpanData::startTime, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(child -> buildSpanTree(child, childrenByParentId, rowCounts))
+                .map(child -> buildSpanTree(child, childrenByParentId, rowCounts, asyncSpanIds, isAsync))
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
@@ -259,7 +338,8 @@ public class TraceTreeMapper {
                 spanData.remoteServiceName(),
                 queryText(spanData),
                 rowCounts.get(spanData.spanId()),
-                null);
+                null,
+                isAsync && !parentIsAsync);
     }
 
     /**

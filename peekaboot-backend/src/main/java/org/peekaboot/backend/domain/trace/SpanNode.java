@@ -21,7 +21,8 @@ public record SpanNode(
         String remoteServiceName,
         String query,
         Long rowCount,
-        List<TraceLog> logs) {
+        List<TraceLog> logs,
+        boolean asyncEntry) {
 
     /** Absent collections normalise to empty here, so no reader of a mapped span has to guard for null. */
     public SpanNode {
@@ -50,7 +51,8 @@ public record SpanNode(
                 remoteServiceName,
                 query,
                 rowCount,
-                newLogs);
+                newLogs,
+                asyncEntry);
     }
 
     public SpanNode withChildren(List<SpanNode> newChildren) {
@@ -71,7 +73,8 @@ public record SpanNode(
                 remoteServiceName,
                 query,
                 rowCount,
-                logs);
+                logs,
+                asyncEntry);
     }
 
     /** The issues judged for this span, with the children the same judgement already ran over. */
@@ -93,6 +96,7 @@ public record SpanNode(
                 remoteServiceName,
                 query,
                 rowCount,
-                logs);
+                logs,
+                asyncEntry);
     }
 }

@@ -41,6 +41,7 @@ public final class SpanNodes {
         private String query;
         private Long rowCount;
         private List<TraceLog> logs;
+        private boolean asyncEntry;
 
         private Builder(String spanId) {
             this.spanId = spanId;
@@ -122,6 +123,11 @@ public final class SpanNodes {
             return this;
         }
 
+        public Builder asyncEntry(boolean asyncEntry) {
+            this.asyncEntry = asyncEntry;
+            return this;
+        }
+
         public SpanNode build() {
             return new SpanNode(
                     spanId,
@@ -140,7 +146,8 @@ public final class SpanNodes {
                     remoteServiceName,
                     query,
                     rowCount,
-                    logs);
+                    logs,
+                    asyncEntry);
         }
     }
 }
