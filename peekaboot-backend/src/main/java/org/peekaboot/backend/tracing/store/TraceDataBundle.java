@@ -7,10 +7,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
@@ -56,6 +59,13 @@ public class TraceDataBundle {
     private boolean hasErrorSpan;
     private Instant minSpanStart;
     private Instant maxSpanEnd;
+    // Async-subtree signals, maintained span by span like the classification signals above.
+    // asyncSpanIds is transitive membership; the sync marks are the same high-water values as
+    // minSpanStart/maxSpanEnd over non-async spans only, because TraceData.duration must stay
+    // the number the Slow bucket admitted the trace by even after eviction.
+    private final Set<String> asyncSpanIds = new HashSet<>();
+    private Instant minSyncStart;
+    private Instant maxSyncEnd;
     private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
@@ -120,6 +130,76 @@ public class TraceDataBundle {
                     .computeIfAbsent(span.parentId(), k -> new ArrayList<>())
                     .add(span.spanId());
         }
+        recordAsyncMembership(span);
+    }
+
+    /**
+     * Places the arriving span inside or outside an async subtree and folds it into the
+     * synchronous window accordingly. A marked span forces a rebuild: spans are stored
+     * child-before-parent (see the class Javadoc), so its already-stored descendants have been
+     * counting as synchronous until now.
+     */
+    private void recordAsyncMembership(SpanData span) {
+        if (isAsyncMarked(span)) {
+            rebuildAsyncMembership();
+            return;
+        }
+        String parentId = resolve(span.parentId());
+        if (parentId != null && asyncSpanIds.contains(parentId)) {
+            asyncSpanIds.add(span.spanId());
+            return;
+        }
+        foldIntoSyncWindow(span);
+    }
+
+    /**
+     * Recomputes transitive membership and the synchronous marks over the stored spans. Runs
+     * once per async task rather than per span. Walks parents rather than
+     * {@link #childrenByParentId} because that index is keyed on the raw parent id, while
+     * membership has to follow {@link #resolve} through the duplicate redirects.
+     */
+    private void rebuildAsyncMembership() {
+        asyncSpanIds.clear();
+        for (SpanData stored : spansById.values()) {
+            if (isAsyncMarked(stored)) {
+                asyncSpanIds.add(stored.spanId());
+            }
+        }
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (SpanData stored : spansById.values()) {
+                if (asyncSpanIds.contains(stored.spanId())) {
+                    continue;
+                }
+                String parentId = resolve(stored.parentId());
+                if (parentId != null && asyncSpanIds.contains(parentId)) {
+                    asyncSpanIds.add(stored.spanId());
+                    grew = true;
+                }
+            }
+        }
+        minSyncStart = null;
+        maxSyncEnd = null;
+        for (SpanData stored : spansById.values()) {
+            if (!asyncSpanIds.contains(stored.spanId())) {
+                foldIntoSyncWindow(stored);
+            }
+        }
+    }
+
+    private void foldIntoSyncWindow(SpanData span) {
+        if (span.startTime() != null
+                && (minSyncStart == null || span.startTime().isBefore(minSyncStart))) {
+            minSyncStart = span.startTime();
+        }
+        if (span.endTime() != null && (maxSyncEnd == null || span.endTime().isAfter(maxSyncEnd))) {
+            maxSyncEnd = span.endTime();
+        }
+    }
+
+    private static boolean isAsyncMarked(SpanData span) {
+        return span.tags() != null && span.tags().containsKey(AsyncTaskMarker.TAG_KEY);
     }
 
     /**
@@ -205,6 +285,7 @@ public class TraceDataBundle {
             removeFromParentIndex(evicted);
             childrenByParentId.remove(evicted.spanId());
             pruneRedirectsPointingAt(evicted.spanId());
+            asyncSpanIds.remove(evicted.spanId());
         }
     }
 
@@ -353,6 +434,57 @@ public class TraceDataBundle {
     public Duration spanWindow() {
         synchronized (spansLock) {
             return minSpanStart == null || maxSpanEnd == null ? null : Duration.between(minSpanStart, maxSpanEnd);
+        }
+    }
+
+    /**
+     * The window the trace's non-async spans have covered - the duration the listing, the
+     * detail header and the Slow classification all read, so background work a caller never
+     * waited for does not lengthen the work that triggered it. Falls back to
+     * {@link #spanWindow()} for a bundle whose every span is async, where that work is the
+     * whole trace and its own duration is the honest answer.
+     */
+    public Duration synchronousWindow() {
+        synchronized (spansLock) {
+            if (minSyncStart == null || maxSyncEnd == null) {
+                return spanWindow();
+            }
+            return Duration.between(minSyncStart, maxSyncEnd);
+        }
+    }
+
+    /** Whether any stored span belongs to an async subtree; the cheap short-circuit for readers. */
+    public boolean hasAsyncSpans() {
+        synchronized (spansLock) {
+            return !asyncSpanIds.isEmpty();
+        }
+    }
+
+    /**
+     * The spans that start an async subtree: an async span whose resolved parent is not itself
+     * async. Read off the maintained set, with no tree walk, and returning the spans rather
+     * than their ids so the trace listing can classify a row without snapshotting the bundle.
+     */
+    public List<SpanData> asyncEntrySpans() {
+        synchronized (spansLock) {
+            List<SpanData> entries = new ArrayList<>();
+            for (SpanData stored : spansById.values()) {
+                if (!asyncSpanIds.contains(stored.spanId())) {
+                    continue;
+                }
+                String parentId = resolve(stored.parentId());
+                if (parentId == null || !asyncSpanIds.contains(parentId)) {
+                    entries.add(stored);
+                }
+            }
+            return entries;
+        }
+    }
+
+    /** Transitive async-subtree membership, for the mapper to summarise and shape a tree by. */
+    public Set<String> asyncSpanIds() {
+        synchronized (spansLock) {
+            return Set.copyOf(asyncSpanIds);
         }
     }
 

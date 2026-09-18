@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Logs.log;
+import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
@@ -13,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
 class TraceDataBundleTest {
@@ -312,6 +314,144 @@ class TraceDataBundleTest {
     }
 
     @Test
+    void theSynchronousWindowMatchesTheSpanWindowWithoutAsyncSpans() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        bundle.addSpan(plainSpan("child", "root", 10, 20), 500);
+
+        assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
+        assertThat(bundle.hasAsyncSpans()).isFalse();
+    }
+
+    /**
+     * The point of the feature: background work a caller never waited for must not lengthen
+     * the work that triggered it.
+     */
+    @Test
+    void theSynchronousWindowExcludesAnAsyncSubtree() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        bundle.addSpan(asyncSpan("async", "root", 40, 240_000), 500);
+
+        assertThat(bundle.spanWindow()).isEqualTo(Duration.ofMillis(240_040));
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    /**
+     * Spans are stored child-before-parent, so a descendant of an async span counts as
+     * synchronous until its marked parent arrives and the rebuild reclassifies it.
+     */
+    @Test
+    void anAsyncSubtreesDescendantsAreExcludedEvenWhenTheyArriveFirst() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("deep", "async", 100, 239_000), 500);
+        bundle.addSpan(asyncSpan("async", "root", 40, 240_000), 500);
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    @Test
+    void theSynchronousWindowFallsBackToTheSpanWindowForAPurelyAsyncBundle() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(asyncSpan("async", "gone", 0, 3_700), 500);
+
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(3_700));
+    }
+
+    @Test
+    void asyncEntrySpansNamesTheSubtreeRootAndNotItsDescendants() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 500);
+        bundle.addSpan(plainSpan("deep", "async", 50, 900), 500);
+
+        assertThat(bundle.asyncEntrySpans()).extracting(SpanData::spanId).containsExactly("async");
+        assertThat(bundle.asyncSpanIds()).containsExactlyInAnyOrder("async", "deep");
+    }
+
+    /**
+     * Async work dispatched from inside async work is genuinely nested, so the inner span is
+     * part of the outer subtree rather than an entry of its own.
+     */
+    @Test
+    void nestedAsyncWorkYieldsOnlyTheOuterEntry() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        bundle.addSpan(asyncSpan("outer", "root", 40, 2_000), 500);
+        bundle.addSpan(asyncSpan("inner", "outer", 100, 1_000), 500);
+
+        assertThat(bundle.asyncEntrySpans()).extracting(SpanData::spanId).containsExactly("outer");
+    }
+
+    /**
+     * TraceData.duration is the number the Slow bucket admitted the trace by, and eviction
+     * must not lower it - the same invariant
+     * snapshotReportsTheWindowTheSlowBucketAdmittedEvenAfterEviction pins for the full window.
+     */
+    @Test
+    void theSynchronousWindowSurvivesSpanEviction() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("root", null, 0, 50), 2);
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 2);
+        bundle.addSpan(plainSpan("later", "root", 20, 10), 2);
+
+        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    /**
+     * A span's stated parentId can point at a JDBC span already folded away as a duplicate by
+     * the time async membership is computed, so ancestry must go through
+     * {@code TraceDataBundle#resolve} rather than the raw id: skipping it loses membership for
+     * any subtree hanging off a deduplicated span, and deduplicated JDBC spans are exactly what
+     * an enrichment task produces.
+     */
+    @Test
+    void asyncMembershipFollowsResolveThroughAFoldedAwayDuplicateAncestor() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        SpanData leaf = plainSpan("leaf", "dup", 100_000, 5_000);
+        SpanData duplicate =
+                jdbcDuplicate("dup", "real", "SELECT 1").at(150, 100).build();
+        SpanData real =
+                jdbcQuery("real", "SELECT 1").parent("async").at(100, 50).build();
+        SpanData async = asyncSpan("async", "root", 40, 10_000);
+        SpanData root = plainSpan("root", null, 0, 50);
+
+        // child-before-parent, the real export order: leaf, then its stated parent (the
+        // duplicate), then the real span the duplicate folds into, then async, then root
+        bundle.addSpan(leaf, 500);
+        bundle.addSpan(duplicate, 500);
+        bundle.addSpan(real, 500);
+        bundle.addSpan(async, 500);
+        bundle.addSpan(root, 500);
+
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    /**
+     * The growth pass only reaches spans exactly one hop below an id already known to be
+     * async, so a descendant two hops down needs the loop to run twice. Storing leaf before
+     * mid - the real export order - is what forces that: on the first pass mid is not yet
+     * marked when leaf is checked, so a single pass would miss leaf and leave it synchronous.
+     */
+    @Test
+    void rebuildAsyncMembershipNeedsMoreThanOnePassForATwoHopDescendant() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        SpanData leaf = plainSpan("leaf", "mid", 20, 40_000);
+        SpanData mid = plainSpan("mid", "async", 10, 50_000);
+        SpanData async = asyncSpan("async", "root", 5, 100_000);
+        SpanData root = plainSpan("root", null, 0, 20);
+
+        bundle.addSpan(leaf, 500);
+        bundle.addSpan(mid, 500);
+        bundle.addSpan(async, 500);
+        bundle.addSpan(root, 500);
+
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(20));
+    }
+
+    @Test
     void addLogTrimsOldestBeyondLimit() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         for (int i = 1; i <= 5; i++) {
@@ -351,6 +491,33 @@ class TraceDataBundleTest {
                 .named("span-" + spanId)
                 .at(0, 10)
                 .order(creationOrder)
+                .build();
+    }
+
+    /**
+     * A span carrying Peekaboot's async marker - what AsyncTaskDecorator's observation exports
+     * as. Tagged with its own span id under {@code THREAD_TAG_KEY} so two async spans in the
+     * same test are never tag-for-tag identical: {@link SpanDuplicateMatcher} would otherwise
+     * fold a nested async span into its outer parent as a JDBC-duplicate artifact, which is not
+     * the shape these tests are exercising.
+     */
+    private SpanData asyncSpan(String spanId, String parentId, long startOffsetMs, long durationMs) {
+        return span(spanId)
+                .parent(parentId)
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .tag(AsyncTaskMarker.THREAD_TAG_KEY, spanId)
+                .at(startOffsetMs, durationMs)
+                .build();
+    }
+
+    /** Named after its own span id, so a plain span parented under another plain span is never
+     * name-and-tag identical to it and mistaken for a {@link SpanDuplicateMatcher} artifact. */
+    private SpanData plainSpan(String spanId, String parentId, long startOffsetMs, long durationMs) {
+        return span(spanId)
+                .parent(parentId)
+                .named(spanId)
+                .at(startOffsetMs, durationMs)
                 .build();
     }
 }
