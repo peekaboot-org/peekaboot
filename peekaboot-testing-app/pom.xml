@@ -44,7 +44,7 @@
              to chromium-only, the tag on tests whose subject is Chromium's own behaviour. -->
         <peekaboot.it.excludedTags />
         <!-- A property, not an inline version: the CI workflows key their browser cache on it. -->
-        <playwright.version>1.62.0</playwright.version>
+        <playwright.version>1.63.0</playwright.version>
         <!-- Not a published artifact: it exists to host the sample app and its UI tests.
              This module does not inherit peekaboot-parent, so the peekaboot-release
              profile - and with it central-publishing-maven-plugin - never applies here:
