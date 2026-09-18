@@ -434,6 +434,49 @@ class TraceTreeMapperTest {
                         tuple("q2", null));
     }
 
+    /**
+     * The summed duration follows the same rule as the trace window: on a parent trace it
+     * describes synchronous work, because the caller never waited for the rest. The span and
+     * error counts still cover everything, so a failure in background work keeps the trace's
+     * status consistent with its place in the Errors bucket.
+     */
+    @Test
+    void theSpanSummaryExcludesAsyncSpansFromTheSummedDuration() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
+        var async = span("async")
+                .parent("root")
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .at(40, 240_000)
+                .build();
+
+        var traceData = TraceDatas.of("trace1", root, async);
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.summary().spans().totalDurationMs()).isEqualTo(50);
+        assertThat(result.summary().spans().count()).isEqualTo(2);
+    }
+
+    @Test
+    void anErrorInAsyncWorkStillCountsTowardsTheTraceStatus() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
+        var async = span("async")
+                .parent("root")
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .error("boom", "java.lang.RuntimeException")
+                .at(40, 1_000)
+                .build();
+
+        var traceData = TraceDatas.of("trace1", root, async);
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.summary().spans().errorCount()).isEqualTo(1);
+        assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
+    }
+
     @Test
     void countsErrors() {
         var root =

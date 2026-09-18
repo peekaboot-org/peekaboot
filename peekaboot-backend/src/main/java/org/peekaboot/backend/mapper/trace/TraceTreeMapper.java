@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
@@ -61,7 +62,7 @@ public class TraceTreeMapper {
         // exported) under the root so they don't silently vanish from the tree
         attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
 
-        TraceTabSummary summary = calculateSummary(spans, rootSpanData);
+        TraceTabSummary summary = calculateSummary(spans, rootSpanData, traceData.asyncSpanIds());
         TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, RowCounts.byQuerySpanId(spans));
@@ -296,7 +297,7 @@ public class TraceTreeMapper {
         return DbSpans.isQuery(spanData) ? maskingEngine.maskValue(DbSpans.sql(spanData)) : null;
     }
 
-    private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
+    private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData, Set<String> asyncSpanIds) {
         int dbQueryCount = 0;
         long dbTotalDurationMs = 0L;
         int errorCount = 0;
@@ -307,7 +308,13 @@ public class TraceTreeMapper {
                 errorCount++;
             }
             long durationMs = span.durationMs();
-            totalDurationMs += durationMs;
+            // Excluded from the sum for the same reason async work is excluded from the trace
+            // window: the caller never waited for it. The counts above and below still cover
+            // every span - error-bucket admission reads any erroring span, so dropping one here
+            // would show a trace as OK while it sat in the Errors bucket.
+            if (!asyncSpanIds.contains(span.spanId())) {
+                totalDurationMs += durationMs;
+            }
             if (DbSpans.isQuery(span)) {
                 dbQueryCount++;
                 dbTotalDurationMs += durationMs;
