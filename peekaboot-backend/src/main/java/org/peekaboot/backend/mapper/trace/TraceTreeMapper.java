@@ -94,8 +94,10 @@ public class TraceTreeMapper {
 
     /**
      * The same trace seen from one of its spans: the tree rooted there, timed by that
-     * subtree's own window rather than the trace's, and classified from that span. What the
-     * listing's async rows and the {@code ?root=} deep link both render.
+     * subtree's own window rather than the trace's, classified from that span, and
+     * summarised over that subtree's own spans rather than the whole trace's - see
+     * {@link #subtreeSummary}. What the listing's async rows and the {@code ?root=} deep
+     * link both render.
      */
     public TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId) {
         TraceTree whole = map(traceData);
@@ -110,7 +112,6 @@ public class TraceTreeMapper {
         boolean enclosed = subtreeRootData != null
                 && subtreeRootData.parentId() != null
                 && traceData.spans().stream().anyMatch(span -> span.spanId().equals(subtreeRootData.parentId()));
-
         return new TraceTree(
                 traceData.traceId(),
                 subtreeRoot.startTimeMs(),
@@ -120,12 +121,60 @@ public class TraceTreeMapper {
                 detectRootActionType(subtreeRootData),
                 subtreeRoot.name(),
                 subtreeRoot,
-                whole.summary(),
+                subtreeSummary(subtreeRoot),
                 whole.httpExchange(),
                 whole.logs(),
                 whole.queries(),
                 new SubtreeView(subtreeRootSpanId, enclosed),
                 traceData.truncated());
+    }
+
+    /**
+     * The subtree's own span, error and query figures - not the enclosing trace's, so a row
+     * rooted at an async entry reports what that entry point's own work did. Unlike
+     * {@link #calculateSummary}, nothing here is excluded for being async: every span in a
+     * subtree rooted at an async entry is async-marked or a descendant of one, so that
+     * exclusion would report zero. The one exclusion that still applies is a nested async
+     * entry - a node whose {@link SpanNode#asyncEntry()} is set and which isn't the
+     * subtree's own root - together with everything under it, since that work is reachable
+     * as a subtree of its own and must not be counted twice. No request part: a subtree is
+     * not a request.
+     */
+    private static TraceTabSummary subtreeSummary(SpanNode subtreeRoot) {
+        SubtreeTotals totals = new SubtreeTotals();
+        accumulateSubtree(subtreeRoot, true, totals);
+        return new TraceTabSummary(
+                null,
+                new TraceTabSummary.SpansSummary(totals.spanCount, totals.totalDurationMs, totals.errorCount),
+                new TraceTabSummary.QueriesSummary(totals.queryCount, totals.queryDurationMs),
+                new TraceTabSummary.LogsSummary(0, 0, 0));
+    }
+
+    private static void accumulateSubtree(SpanNode node, boolean isSubtreeRoot, SubtreeTotals totals) {
+        if (!isSubtreeRoot && node.asyncEntry()) {
+            return;
+        }
+        totals.spanCount++;
+        if (node.status() == SpanStatus.ERROR) {
+            totals.errorCount++;
+        }
+        totals.totalDurationMs += node.durationMs();
+        if (DbSpans.isQuery(node)) {
+            totals.queryCount++;
+            totals.queryDurationMs += node.durationMs();
+        }
+        for (SpanNode child : node.children()) {
+            accumulateSubtree(child, false, totals);
+        }
+    }
+
+    /** Mutable running totals for {@link #accumulateSubtree}, folded into a {@link TraceTabSummary} once complete. */
+    private static final class SubtreeTotals {
+        int spanCount;
+        long totalDurationMs;
+        int errorCount;
+        int queryCount;
+        long queryDurationMs;
     }
 
     private static SpanNode findNode(SpanNode node, String spanId) {

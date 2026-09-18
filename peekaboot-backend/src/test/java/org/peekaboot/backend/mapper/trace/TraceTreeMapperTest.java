@@ -511,6 +511,47 @@ class TraceTreeMapperTest {
         assertThat(result.durationMs()).isEqualTo(240_060);
     }
 
+    /**
+     * A row rooted at an async entry reports what that entry point's own work did, not what
+     * the enclosing trace's spans add up to.
+     */
+    @Test
+    void mapSubtreeSummarisesTheSubtreeNotTheEnclosingTrace() {
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 50).build();
+        var async = asyncEntry("async", "root", 40, 1_000);
+        var deep = span("deep").named("deep-op").parent("async").at(50, 900).build();
+
+        var traceData = TraceDatas.of("trace1", root, async, deep);
+
+        TraceTree result = mapper.mapSubtree(traceData, "async");
+
+        assertThat(result.summary().spans().count()).isEqualTo(2);
+        assertThat(result.summary().spans().totalDurationMs()).isEqualTo(1_900);
+    }
+
+    /**
+     * A nested async entry - reachable through the {@code ?root=} deep link as a descendant
+     * of some other, non-async span - is a subtree of its own and must not be double-counted
+     * here.
+     */
+    @Test
+    void mapSubtreeExcludesANestedAsyncEntryFromItsFigures() {
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 500).build();
+        var middle =
+                span("middle").named("middle-op").parent("root").at(10, 400).build();
+        var async = asyncEntry("async", "middle", 50, 5_000);
+        var deep = span("deep").named("deep-op").parent("async").at(100, 4_000).build();
+
+        var traceData = TraceDatas.of("trace1", root, middle, async, deep);
+
+        TraceTree result = mapper.mapSubtree(traceData, "middle");
+
+        assertThat(result.summary().spans().count()).isEqualTo(1);
+        assertThat(result.summary().spans().totalDurationMs()).isEqualTo(400);
+    }
+
     /** An orphan has no parent in the trace, so there is no enclosing trace to link back to. */
     @Test
     void anOrphanedAsyncSubtreeIsNotEnclosedByAStoredTrace() {

@@ -13,12 +13,15 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.HttpRequest;
 import org.peekaboot.backend.domain.trace.IssueType;
+import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
@@ -692,6 +695,82 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::truncated).containsExactly(true);
     }
 
+    @Test
+    void anAsyncEntryIsListedBesideTheTraceThatTriggeredIt() {
+        addTraceWithAsyncWork("http1", 50, 240_000);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+
+        assertThat(response.traces())
+                .extracting(TraceTree::rootActionType, TraceTree::durationMs)
+                .containsExactlyInAnyOrder(
+                        tuple(RootActionType.HTTP_REQUEST, 50L), tuple(RootActionType.ASYNC_TASK, 240_000L));
+    }
+
+    @Test
+    void anAsyncRowNamesTheSpanItIsRootedAtAndItsEnclosingTrace() {
+        addTraceWithAsyncWork("http1", 50, 1_000);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "async_task", null);
+
+        assertThat(response.traces()).singleElement().satisfies(row -> {
+            assertThat(row.traceId()).isEqualTo("http1");
+            assertThat(row.subtree()).isEqualTo(new SubtreeView("async-http1", true));
+        });
+    }
+
+    @Test
+    void aTypeFilterSelectsRowsRatherThanTraces() {
+        addTraceWithAsyncWork("http1", 50, 1_000);
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "http_request", null)
+                        .traces())
+                .extracting(TraceTree::rootActionType)
+                .containsExactly(RootActionType.HTTP_REQUEST);
+        assertThat(service.getInsights(10, TraceBucket.ALL, "async_task", null).traces())
+                .extracting(TraceTree::rootActionType)
+                .containsExactly(RootActionType.ASYNC_TASK);
+    }
+
+    /**
+     * Background work that really ran is not a phantom awaiting its root, so it is listed -
+     * unlike an excluded request's leftover fragment, which disappears on its own.
+     */
+    @Test
+    void orphanedAsyncWorkIsListedWhereAnExcludedFragmentIsNot() {
+        addOrphanedAsyncWork("async1", 3_700);
+        addExcludedRequestFragment("fragment1");
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
+                .extracting(TraceTree::traceId)
+                .containsExactly("async1");
+    }
+
+    @Test
+    void theLimitCountsRowsNotTraces() {
+        addTraceWithAsyncWork("http1", 50, 1_000);
+
+        assertThat(service.getInsights(1, TraceBucket.ALL, "*", null).traces()).hasSize(1);
+        assertThat(service.getInsights(2, TraceBucket.ALL, "*", null).traces()).hasSize(2);
+    }
+
+    /**
+     * A trace with two matching async rows must not outweigh the one trace it is: the
+     * filtered count describes traces, so it stays a subset of the unfiltered total beside
+     * it rather than a row count that can exceed it. Requesting SLOW - rather than the
+     * bucket the two async rows actually land in - also forces the recursive passes over
+     * ALL and ERRORS, not just the short-circuit for the requested bucket.
+     */
+    @Test
+    void filteredBucketCountsCountDistinctTracesNotRows() {
+        addTraceWithTwoAsyncTasks("http1", 1_500);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.SLOW, "async_task", null);
+
+        assertThat(response.traces()).hasSize(2);
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 1));
+    }
+
     private static SpanData rootSpanWithoutTags(String traceId, String spanId, String name) {
         return span(spanId).in(traceId).named(name).build();
     }
@@ -742,6 +821,56 @@ class TraceInsightsServiceTest {
         store.addSpan(jdbcConnection("span-fragment-" + traceId)
                 .in(traceId)
                 .parent("root-span-never-exported")
+                .build());
+    }
+
+    /** An HTTP request that dispatched background work which outlived it. */
+    private void addTraceWithAsyncWork(String traceId, long requestMs, long asyncMs) {
+        store.addSpan(
+                rootSpan(traceId, "test-operation", Span.Kind.SERVER, requestMs).build());
+        store.addSpan(span("async-" + traceId)
+                .in(traceId)
+                .parent("span-" + traceId)
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .at(requestMs - 10, asyncMs)
+                .build());
+    }
+
+    /**
+     * A request slow enough to land in the SLOW bucket on its own synchronous work, which
+     * dispatched two independent background tasks - so a type filter matching only the
+     * async rows has two rows to count against the one trace they both belong to.
+     */
+    private void addTraceWithTwoAsyncTasks(String traceId, long requestMs) {
+        store.addSpan(
+                rootSpan(traceId, "test-operation", Span.Kind.SERVER, requestMs).build());
+        store.addSpan(span("async-a-" + traceId)
+                .in(traceId)
+                .parent("span-" + traceId)
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .tag("async.id", "a")
+                .at(requestMs - 10, 240_000)
+                .build());
+        store.addSpan(span("async-b-" + traceId)
+                .in(traceId)
+                .parent("span-" + traceId)
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .tag("async.id", "b")
+                .at(requestMs - 10, 5_000)
+                .build());
+    }
+
+    /** Background work whose triggering trace was evicted before it arrived. */
+    private void addOrphanedAsyncWork(String traceId, long asyncMs) {
+        store.addSpan(span("async-" + traceId)
+                .in(traceId)
+                .parent("gone")
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .at(0, asyncMs)
                 .build());
     }
 

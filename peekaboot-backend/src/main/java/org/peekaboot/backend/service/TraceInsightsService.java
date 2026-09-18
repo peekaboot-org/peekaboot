@@ -1,6 +1,5 @@
 package org.peekaboot.backend.service;
 
-import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -23,11 +22,11 @@ import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
@@ -103,11 +102,12 @@ public class TraceInsightsService {
         Set<RootActionType> actionTypeFilter = parseRootActionTypes(rootActionType);
         final String operationFilter = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
-        // filtered on the root span alone; only the returned page is mapped (and masked)
-        List<TraceDataBundle> matches = matchingBundles(bucket, actionTypeFilter, operationFilter);
+        // filtered on each row's root span alone; only the returned page is mapped (and masked)
+        List<RowSource> matches =
+                RowSources.matching(traceStore, traceTreeMapper, bucket, actionTypeFilter, operationFilter);
         List<TraceTree> traceTrees = matches.stream()
                 .limit(limit)
-                .map(this::mapBundle)
+                .map(this::mapRow)
                 .map(issueDetector::detectIssues)
                 .toList();
 
@@ -118,11 +118,11 @@ public class TraceInsightsService {
 
         BucketCounts filteredBucketCounts = null;
         if (!actionTypeFilter.isEmpty() || operationFilter != null) {
-            // the requested bucket's matches are already in hand; the other two need a pass each
+            // the requested bucket's rows are already in hand; the other two need a pass each
             filteredBucketCounts = new BucketCounts(
-                    countMatching(TraceBucket.ALL, bucket, matches, actionTypeFilter, operationFilter),
-                    countMatching(TraceBucket.ERRORS, bucket, matches, actionTypeFilter, operationFilter),
-                    countMatching(TraceBucket.SLOW, bucket, matches, actionTypeFilter, operationFilter));
+                    countMatchingTraces(TraceBucket.ALL, bucket, matches, actionTypeFilter, operationFilter),
+                    countMatchingTraces(TraceBucket.ERRORS, bucket, matches, actionTypeFilter, operationFilter),
+                    countMatchingTraces(TraceBucket.SLOW, bucket, matches, actionTypeFilter, operationFilter));
         }
 
         return new TraceInsightsResponse(traceTrees, bucketCounts, filteredBucketCounts);
@@ -152,19 +152,12 @@ public class TraceInsightsService {
         return types.isEmpty() ? DEFAULT_VIEW_TYPES : types;
     }
 
-    /** The bucket's bundles that pass the root-level filters, newest first - nothing mapped or masked yet. */
-    private List<TraceDataBundle> matchingBundles(
-            TraceBucket bucket, Set<RootActionType> actionTypes, String rootOperation) {
-        if (traceStore == null) {
-            return List.of();
-        }
-        return traceStore.getTraces(bucket, Integer.MAX_VALUE).stream()
-                .filter(bundle -> matchesFilters(bundle, actionTypes, rootOperation))
-                .toList();
-    }
-
-    private TraceTree mapBundle(TraceDataBundle bundle) {
-        return withLogsSummary(traceTreeMapper.map(bundle.snapshot()), bundle.logs());
+    private TraceTree mapRow(RowSource row) {
+        TraceData traceData = row.bundle().snapshot();
+        TraceTree tree = row.subtreeRootSpanId() == null
+                ? traceTreeMapper.map(traceData)
+                : traceTreeMapper.mapSubtree(traceData, row.subtreeRootSpanId());
+        return withLogsSummary(tree, row.bundle().logs());
     }
 
     /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */
@@ -183,69 +176,20 @@ public class TraceInsightsService {
     }
 
     /**
-     * Classifies a bundle for filtering from its root span alone: action type and
-     * operation come straight off {@link TraceTreeMapper}'s root-span logic, so the
-     * verdict matches what mapping the full tree would say - without copying, building or
-     * masking a tree for bundles the response will never carry.
+     * The bucket's badge count for an active filter: distinct traces, not rows, so it stays
+     * comparable to the unfiltered count beside it - a trace with two matching async rows
+     * must not outweigh the one trace it is.
      */
-    private boolean matchesFilters(TraceDataBundle bundle, Set<RootActionType> actionTypes, String rootOperation) {
-        SpanData root = bundle.rootSpan();
-        return !isIncompleteFragment(root) && matchesRootFilters(root, actionTypes, rootOperation);
-    }
-
-    /**
-     * The two root-level filters. An empty type set and a null operation each filter
-     * nothing away, and short-circuit before the classification a wildcard has no use for.
-     */
-    private boolean matchesRootFilters(SpanData root, Set<RootActionType> actionTypes, String rootOperation) {
-        return (actionTypes.isEmpty() || actionTypes.contains(traceTreeMapper.detectRootActionType(root)))
-                && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null, rootOperation));
-    }
-
-    /**
-     * Whether the bundle holds a piece of a trace rather than a trace of its own.
-     * {@link TraceDataBundle#rootSpan()} answers with the first span whose parent it does
-     * not hold, so a root still carrying a parent id is one whose real parent never
-     * arrived.
-     *
-     * <p>For a SERVER root that is an inbound request continuing a caller's trace: this
-     * application's work starts there and the trace is its own, so it stays listed. For
-     * anything else it is a fragment - a request on an excluded prefix (Peekaboot's own,
-     * the actuator's) has its root span skipped, which leaves whatever it did meanwhile,
-     * typically the connection it acquired, stored alone under that trace id until the
-     * skipped root reaches the exporter and discards it. Listing it in the meantime puts a
-     * phantom entry in front of the user that disappears again on its own.
-     */
-    private static boolean isIncompleteFragment(SpanData root) {
-        return root != null && root.parentId() != null && root.kind() != Span.Kind.SERVER;
-    }
-
-    private int countMatching(
+    private int countMatchingTraces(
             TraceBucket bucket,
             TraceBucket requested,
-            List<TraceDataBundle> requestedMatches,
+            List<RowSource> requestedMatches,
             Set<RootActionType> actionTypes,
             String rootOperation) {
-        return bucket == requested
-                ? requestedMatches.size()
-                : matchingBundles(bucket, actionTypes, rootOperation).size();
-    }
-
-    /** The chip sends a substring of the operation name, so a partial, case-insensitive match is the contract. */
-    private boolean matchesRootOperation(String rootOperationName, String rootOperation) {
-        if (rootOperationName == null) {
-            return false;
-        }
-        String operation = rootOperationName.toLowerCase(Locale.ROOT);
-        String filter = rootOperation.toLowerCase(Locale.ROOT);
-        if (operation.contains(filter)) {
-            return true;
-        }
-        // Scheduled task targets are fully qualified (package.Class.method) while span
-        // names use the bean name ("task class.method") - also match on the Class.method suffix
-        String[] segments = filter.split("\\.", -1);
-        return segments.length > 2
-                && operation.contains(segments[segments.length - 2] + "." + segments[segments.length - 1]);
+        List<RowSource> rows = bucket == requested
+                ? requestedMatches
+                : RowSources.matching(traceStore, traceTreeMapper, bucket, actionTypes, rootOperation);
+        return (int) rows.stream().map(row -> row.bundle().traceId()).distinct().count();
     }
 
     public Optional<TraceTree> getTraceInsights(String traceId) {
