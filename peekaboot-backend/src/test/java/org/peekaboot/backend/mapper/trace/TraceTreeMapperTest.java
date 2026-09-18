@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
@@ -766,6 +767,60 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(traceData);
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
+    }
+
+    @Test
+    void detectsAsyncTaskRootActionTypeFromPeekabootsOwnMarker() {
+        // The shape AsyncTaskDecorator produces: no Span.Kind, because a plain
+        // Observation.Context is not a Sender/Receiver-style context, plus the marker key.
+        var rootSpan = span("root")
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .at(0, 100)
+                .tags(Map.of(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE))
+                .build();
+
+        var traceData = TraceDatas.of("trace1", rootSpan);
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.ASYNC_TASK);
+    }
+
+    /**
+     * Peekaboot sets the marker itself, so it is the more specific signal wherever it appears.
+     * The combination should be unreachable - guard 2 in AsyncTaskDecorator keeps the decorator
+     * off scheduled tasks - and the integration test in Task 4 is what fails if it stops being.
+     */
+    @Test
+    void theAsyncMarkerOutranksTheScheduledTaskTagPair() {
+        var rootSpan = span("root")
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .at(0, 100)
+                .tags(Map.of(
+                        AsyncTaskMarker.TAG_KEY,
+                        AsyncTaskMarker.TAG_VALUE,
+                        "code.function",
+                        "enrich",
+                        "code.namespace",
+                        "org.example.Enricher"))
+                .build();
+
+        var traceData = TraceDatas.of("trace1", rootSpan);
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.ASYNC_TASK);
+    }
+
+    @Test
+    void aSpanWithoutTheAsyncMarkerIsStillInternal() {
+        var rootSpan = span("root").named("some-operation").at(0, 100).build();
+
+        var traceData = TraceDatas.of("trace1", rootSpan);
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.INTERNAL);
     }
 
     /**

@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;
@@ -150,6 +151,12 @@ public class TraceTreeMapper {
      */
     private static RootActionType detectNonServerActionType(
             Span.Kind kind, String name, String parentId, Map<String, String> tags) {
+        // Peekaboot's own marker, so unambiguous - unlike the third-party tag families below,
+        // which infer from someone else's convention. First for that reason, and because the
+        // entry span carries no Span.Kind and would otherwise fall to the null-kind catch-all.
+        if (tags.containsKey(AsyncTaskMarker.TAG_KEY)) {
+            return RootActionType.ASYNC_TASK;
+        }
         // Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
         // @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
         // Sender/Receiver-style contexts), so this can't be pre-empted by the CLIENT-kind

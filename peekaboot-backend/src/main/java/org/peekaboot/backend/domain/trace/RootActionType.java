@@ -12,6 +12,7 @@ public enum RootActionType {
     RPC_CALL,
     DATABASE,
     CONNECTION_POOL,
+    ASYNC_TASK,
     INTERNAL,
     UNKNOWN
 }
