@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -480,7 +481,7 @@ class TraceTreeMapperTest {
 
     @Test
     void mapsAnEmptyTraceToARootlessTree() {
-        var traceData = new TraceData("trace1", null, null, null, List.of(), false);
+        var traceData = new TraceData("trace1", null, null, null, List.of(), Set.of(), false);
 
         TraceTree result = mapper.map(traceData);
 
@@ -509,8 +510,8 @@ class TraceTreeMapperTest {
                 .kind(Span.Kind.SERVER)
                 .at(0, 100)
                 .build();
-        var traceData =
-                new TraceData("trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, List.of(listed), false);
+        var traceData = new TraceData(
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, List.of(listed), Set.of(), false);
 
         TraceTree result = mapper.map(traceData);
 
@@ -558,8 +559,8 @@ class TraceTreeMapperTest {
                 .kind(Span.Kind.SERVER)
                 .at(0, 100)
                 .build();
-        var truncated =
-                new TraceData("trace1", Instant.EPOCH, Duration.ofMillis(100), singleSpan, List.of(singleSpan), true);
+        var truncated = new TraceData(
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), singleSpan, List.of(singleSpan), Set.of(), true);
 
         TraceTree result = mapper.map(truncated);
 
@@ -568,7 +569,7 @@ class TraceTreeMapperTest {
 
     @Test
     void carriesTheTruncatedFlagEvenForAnEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, List.of(), true);
+        var traceData = new TraceData("trace1", null, null, null, List.of(), Set.of(), true);
 
         TraceTree result = mapper.map(traceData);
 

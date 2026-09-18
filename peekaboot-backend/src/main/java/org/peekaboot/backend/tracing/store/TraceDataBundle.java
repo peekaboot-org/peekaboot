@@ -362,7 +362,14 @@ public class TraceDataBundle {
                             .sorted(Comparator.comparingLong(SpanData::creationOrder))
                             .toList();
             // the root is one of the resolved copies, so the mapper's equality skip finds it in the list
-            return new TraceData(traceId, minSpanStart, spanWindow(), rootOf(spans), spans, truncated);
+            return new TraceData(
+                    traceId,
+                    minSpanStart,
+                    synchronousWindow(),
+                    rootOf(spans),
+                    spans,
+                    Set.copyOf(asyncSpanIds),
+                    truncated);
         }
     }
 

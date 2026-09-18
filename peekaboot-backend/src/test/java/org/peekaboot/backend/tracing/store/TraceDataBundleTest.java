@@ -270,6 +270,17 @@ class TraceDataBundleTest {
     }
 
     @Test
+    void snapshotReportsTheSynchronousWindowAsTheDuration() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        bundle.addSpan(asyncSpan("async", "root", 40, 240_000), 500);
+
+        TraceData snapshot = bundle.snapshot();
+
+        assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    @Test
     void snapshotCarriesTheRootSpanTheBundleChose() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         bundle.addSpan(createSpan("child", 1, "parent"), 10);

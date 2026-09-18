@@ -147,7 +147,7 @@ public class InMemoryTraceStore implements TraceStore {
     }
 
     private boolean isSlow(TraceDataBundle bundle) {
-        Duration window = bundle.spanWindow();
+        Duration window = bundle.synchronousWindow();
         return window != null && window.toMillis() >= slowTraceThresholdMs;
     }
 

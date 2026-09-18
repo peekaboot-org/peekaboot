@@ -8,6 +8,7 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -300,7 +301,7 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldHandleTraceWithEmptySpans() {
-        var traceData = new TraceData("trace1", null, null, null, List.of(), false);
+        var traceData = new TraceData("trace1", null, null, null, List.of(), Set.of(), false);
         List<QueryInfo> queries = extractor.extract(traceData);
         assertThat(queries).isEmpty();
     }

@@ -132,6 +132,19 @@ class AsyncTraceCaptureIT {
         assertThat(asyncSpan.path("tags").path(AsyncTaskMarker.THREAD_TAG_KEY).asString(""))
                 .as("the thread tag is what tells a reader of the trace which thread ran the work")
                 .isNotBlank();
+
+        // The request's root span is the outermost span the caller waited for, so "the trace's
+        // duration is that span's duration" is the same claim as "the background work is
+        // excluded" - and unlike a fixed bound in milliseconds it stays true however long a
+        // loaded machine takes to serve the request.
+        assertThat(trace.path("durationMs").asLong())
+                .as(
+                        "the feature's headline claim, against real instrumentation: the request "
+                                + "answered while the task was still running, so the trace reports "
+                                + "the request's own span rather than the window that also holds "
+                                + "the %dms the background work went on for",
+                        asyncSpan.path("durationMs").asLong())
+                .isEqualTo(trace.path("rootSpan").path("durationMs").asLong());
     }
 
     /**
