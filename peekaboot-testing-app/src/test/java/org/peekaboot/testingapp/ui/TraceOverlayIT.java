@@ -25,9 +25,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
@@ -1734,5 +1737,71 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').getAttribute('aria-label')"))
                 .isEqualTo("Event: exception");
         assertThat(overlay.text(".pk-gantt-event-tooltip")).isEqualTo("exception");
+    }
+
+    /**
+     * Task 10: the listing row for an async subtree, and its link back to the enclosing
+     * trace. /orders/enrich dispatches {@code EnrichmentService.enrich} on a task executor
+     * with the testing app's context propagation on (see {@code AsyncTraceCaptureIT}, the
+     * only other test that drives this endpoint), so the store ends up with one bundle
+     * carrying both the request's own root span and the async entry span - and
+     * {@code TraceInsightsService.rowsOf} lists the two as separate rows sharing one
+     * trace id.
+     */
+    @Test
+    void anAsyncRowLinksToItsEnclosingTraceAndOpensItsOwnSubtree() {
+        String traceId = triggerOrderEnrichment();
+        awaitTrace(traceId, asyncSpanCapturedPredicate());
+
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTraceRowCount(traceId, 2);
+
+        Locator asyncRow = page.locator(Dashboard.traceItem(traceId) + "[data-subtree-root-span-id]");
+        String asyncSpanId = asyncRow.getAttribute("data-subtree-root-span-id");
+
+        assertThat(asyncRow.locator(".pk-trace-item__icon").getAttribute("aria-label"))
+                .as("the async row's icon carries root-actions.js's ASYNC_TASK label")
+                .isEqualTo("Async Task");
+
+        Locator enclosingLink = asyncRow.locator(".pk-trace-item__enclosing-link");
+        assertThat(enclosingLink.getAttribute("aria-label"))
+                .as("the link back names the enclosing trace, distinct from the SCHEDULED_JOB "
+                        + "row's own scheduler link")
+                .isEqualTo("View the trace this ran under");
+
+        dashboard.openListedTrace(Dashboard.asyncTraceItem(traceId, asyncSpanId), traceId);
+
+        assertThat(overlay.selectedTab()).isEqualTo("spans");
+        assertThat(page.url())
+                .as("the async row's open button lands on the Spans tab scoped to its own "
+                        + "subtree, not the whole trace")
+                .contains("#traces/" + traceId + "/spans?root=" + asyncSpanId);
+    }
+
+    /** Same pattern TraceApiClient.traceIdOf reads Server-Timing with - duplicated here since that class is package-private to integration. */
+    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
+
+    /**
+     * Fires the endpoint {@code AsyncTraceCaptureIT} uses to dispatch {@code @Async}
+     * enrichment under the request's own trace, and returns that trace's id read off the
+     * response's Server-Timing header - the endpoint answers plain text with no toolbar to
+     * read a trace id from.
+     */
+    private String triggerOrderEnrichment() {
+        Response response = page.navigate(baseUrl + "/orders/enrich");
+        String serverTiming = response.headerValue("Server-Timing");
+        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
+        if (!matcher.find()) {
+            throw new AssertionError("Server-Timing must carry the trace id: " + serverTiming);
+        }
+        return matcher.group(1);
+    }
+
+    /** A JS trace predicate: some span in the tree is the async entry span the decorator raises. */
+    private static String asyncSpanCapturedPredicate() {
+        return "trace => { const hasAsyncSpan = span => !span ? false : span.name === '"
+                + AsyncTaskMarker.CONTEXTUAL_NAME
+                + "' || (span.children || []).some(hasAsyncSpan); return hasAsyncSpan(trace.rootSpan); }";
     }
 }

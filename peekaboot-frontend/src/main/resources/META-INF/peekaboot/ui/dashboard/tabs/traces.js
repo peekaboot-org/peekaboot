@@ -283,6 +283,10 @@ function renderTraceItem(trace, context) {
     const item = document.createElement('div');
     item.className = 'pk-trace-item';
     if (trace.traceId) item.dataset.traceId = trace.traceId;
+    // An async row shares its trace's id with that trace's own whole-trace row (one bundle,
+    // several listing rows) - the subtree's root span id is what tells the two apart in the
+    // DOM, for anything, tests included, that needs to address one specific row.
+    if (trace.subtree?.rootSpanId) item.dataset.subtreeRootSpanId = trace.subtree.rootSpanId;
 
     const actionType = trace.rootActionType || 'UNKNOWN';
     const hasErrors = trace.status === 'HAS_ERRORS';
@@ -299,7 +303,7 @@ function renderTraceItem(trace, context) {
     openBtn.className = 'pk-unbutton pk-trace-item__open';
     openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
     if (trace.traceId) {
-        openBtn.addEventListener('click', () => context.openTrace(trace.traceId));
+        openBtn.addEventListener('click', () => context.openTrace(trace.traceId, trace.subtree?.rootSpanId));
     }
 
     const body = document.createElement('div');
@@ -309,6 +313,7 @@ function renderTraceItem(trace, context) {
     header.appendChild(body);
 
     if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink());
+    if (trace.subtree?.enclosedByStoredTrace) header.appendChild(renderEnclosingTraceLink(trace.traceId));
 
     item.appendChild(header);
     return item;
@@ -363,6 +368,15 @@ function renderSchedulerLink() {
         label: 'View Scheduled Tasks',
         icon: '\u{1F551}',
         className: 'pk-trace-item__scheduler-link'
+    });
+}
+
+/** "This ran under a bigger trace" - a sibling of the open button, for the same reason the scheduler link is. */
+function renderEnclosingTraceLink(traceId) {
+    return iconLink(buildAppHash({tab: 'traces', detail: traceId}), {
+        label: 'View the trace this ran under',
+        icon: '\u{2934}',
+        className: 'pk-trace-item__enclosing-link'
     });
 }
 

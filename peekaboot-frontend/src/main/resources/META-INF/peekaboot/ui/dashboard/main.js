@@ -12,7 +12,7 @@ import {tabStrip} from '../shared/components.js';
 import {bindTheme, applyTheme, storeTheme} from '../shared/theme.js';
 import {readSetting, writeSetting, readLocaleSetting, LOCALE_STORAGE_KEY} from '../shared/storage.js';
 import {formatDateTimeWith} from '../shared/format.js';
-import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
+import {parseAppHash, buildAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
 import {openTraceDetail, closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
 import * as insights from './tabs/insights.js';
@@ -78,6 +78,16 @@ function handleHashChange() {
 }
 
 /**
+ * The full identity of what the overlay is showing - not just the trace id. One trace id
+ * can now open two different targets: the whole trace, or one async row's own subtree at
+ * "#traces/<id>/spans?root=<spanId>". Reuses buildAppHash so this is exactly the hash such
+ * a target would occupy.
+ */
+function overlayTargetKey(traceId, subview, params) {
+    return buildAppHash({tab: 'traces', detail: traceId, subview, params});
+}
+
+/**
  * The {initial, update} urlState object openTraceDetail expects: what the overlay
  * restores at open time, and how its own tab switches and filter changes are written
  * back to the hash.
@@ -85,7 +95,14 @@ function handleHashChange() {
 function buildTraceUrlState(traceId, subview = null, params = {}) {
     return {
         initial: {subview, params},
-        update: (subview, params) => replaceAppHash({tab: 'traces', detail: traceId, subview, params})
+        update: (subview, params) => {
+            replaceAppHash({tab: 'traces', detail: traceId, subview, params});
+            // Keeps the host's target stamp in step with in-overlay navigation (tab
+            // switches, filter changes), so expandTraceById's re-open guard below still
+            // recognizes this as "already showing" after the reader moves around inside it.
+            const overlay = document.getElementById('peekaboot-trace-overlay');
+            if (overlay) overlay.dataset.traceTarget = overlayTargetKey(traceId, subview, params);
+        }
     };
 }
 
@@ -96,10 +113,13 @@ function expandTraceById(traceId, subview = null, params = {}) {
         return;
     }
 
-    // Already open for this trace (a Back/Forward step that only changed subview/params,
-    // or a click-to-open that already ran) - re-opening would tear the overlay down and
-    // rebuild it for nothing. The host's own data-trace-id is the one source of truth.
-    if (document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === traceId) return;
+    // Already open for exactly this target - id, subview and params alike (a Back/Forward
+    // step that only changed one of those, or a click-to-open that already ran) - re-opening
+    // would tear the overlay down and rebuild it for nothing. Comparing the id alone would
+    // treat an async row's own-subtree URL as "the same" as its trace's whole-trace URL and
+    // silently no-op the second click. The host's own dataset is the one source of truth.
+    if (document.getElementById('peekaboot-trace-overlay')?.dataset.traceTarget
+            === overlayTargetKey(traceId, subview, params)) return;
 
     const {locale: currentLocale, timeZone, features: currentFeatures} = currentContext();
     openTraceDetail(traceId, {
@@ -114,12 +134,22 @@ function expandTraceById(traceId, subview = null, params = {}) {
             if (tab === 'traces' && detail === traceId) pushAppHash({tab: 'traces'});
         }
     });
+    // openTraceDetail() builds and appends the host synchronously (the fetch it kicks off
+    // is the only async part), so the freshly created host is there to stamp.
+    document.getElementById('peekaboot-trace-overlay').dataset.traceTarget = overlayTargetKey(traceId, subview, params);
 }
 
-/** Passed to the traces tab as context.openTrace: its click-to-open path, on the same overlay wiring a deep link uses. */
-function openTrace(traceId) {
-    pushAppHash({tab: 'traces', detail: traceId});
-    expandTraceById(traceId);
+/**
+ * Passed to the traces tab as context.openTrace: its click-to-open path, on the same
+ * overlay wiring a deep link uses. subtreeRootSpanId is present only for an async row,
+ * which opens scoped to its own subtree - the Spans tab, rooted there - rather than the
+ * whole trace.
+ */
+function openTrace(traceId, subtreeRootSpanId) {
+    const subview = subtreeRootSpanId ? 'spans' : null;
+    const params = subtreeRootSpanId ? {root: subtreeRootSpanId} : {};
+    pushAppHash({tab: 'traces', detail: traceId, subview, params});
+    expandTraceById(traceId, subview, params);
 }
 
 // --- Tab strip ----------------------------------------------------------------------

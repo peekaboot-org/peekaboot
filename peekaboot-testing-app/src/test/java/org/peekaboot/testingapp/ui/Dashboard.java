@@ -82,8 +82,25 @@ final class Dashboard {
         return TRACE_ITEM + "[data-trace-id='" + traceId + "']";
     }
 
+    /**
+     * The listed row of one trace's own async subtree, rooted at {@code subtreeRootSpanId}.
+     * A trace with an async subtree lists two rows sharing the same trace id (traces.js's
+     * task 10 brief), and Playwright's strict mode refuses to click or read through a
+     * locator that resolves to both - this selector picks the one row out.
+     */
+    static String asyncTraceItem(String traceId, String subtreeRootSpanId) {
+        return traceItem(traceId) + "[data-subtree-root-span-id='" + subtreeRootSpanId + "']";
+    }
+
     void awaitListedTrace(String traceId) {
         page.waitForSelector(traceItem(traceId));
+    }
+
+    /** Waits until exactly {@code count} rows are listed for {@code traceId} - see {@link #asyncTraceItem}. */
+    void awaitListedTraceRowCount(String traceId, int count) {
+        page.waitForFunction(
+                "([selector, expected]) => document.querySelectorAll(selector).length === expected",
+                List.of(traceItem(traceId), count));
     }
 
     /**
@@ -92,7 +109,15 @@ final class Dashboard {
      * focus, so a click or a Tab before that has nothing to land on.
      */
     void openListedTrace(String traceId) {
-        page.click(traceItem(traceId) + " .pk-trace-item__open");
+        openListedTrace(traceItem(traceId), traceId);
+    }
+
+    /**
+     * {@link #openListedTrace(String)}, through a specific row rather than the trace's own -
+     * see {@link #asyncTraceItem} for the trace id two rows can share.
+     */
+    void openListedTrace(String rowSelector, String traceId) {
+        page.click(rowSelector + " .pk-trace-item__open");
         TraceOverlay overlay = new TraceOverlay(page);
         overlay.awaitTrace(traceId);
         overlay.waitFor(".pk-tab");
