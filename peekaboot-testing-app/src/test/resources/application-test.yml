@@ -28,6 +28,12 @@ spring:
     compose:
       enabled: false
   task:
+    # The consuming application's own choice, never Peekaboot's: without it an @Async
+    # dispatch carries no observation across the hand-off, and AsyncTraceCaptureIT has no
+    # async span to assert about. Peekaboot must not set this for its consumers - it changes
+    # what every one of their tasks inherits.
+    execution:
+      propagate-context: true
     scheduling:
       pool:
         size: 1

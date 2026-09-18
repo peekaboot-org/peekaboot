@@ -915,7 +915,8 @@ toolbar itself only needs a `Tracer` bean and is injected with either bridge (se
 
 ### Handler and View Spans
 
-`TracingHandlerInterceptor` is the only instrumentation Peekaboot adds to the request path. It
+`TracingHandlerInterceptor` is the only instrumentation Peekaboot adds to the request path;
+`AsyncTaskDecorator` adds the only instrumentation outside it (see *Async Task Spans* below). It
 raises two Micrometer observations, so every exporter the application has configured sees them,
 not just Peekaboot's:
 
@@ -954,6 +955,47 @@ shape. Nesting is strictly LIFO on one thread, which is what lets a plain stack 
 where the exclusion prefixes reach the interceptor. That configurer's
 `@ConditionalOnMissingBean` matches by *name*, not by type: a type check on `WebMvcConfigurer`
 would let any of the application's own configurers back the registration off.
+
+### Async Task Spans
+
+`AsyncTaskDecorator` is a `TaskDecorator`, registered by `AsyncInstrumentationAutoConfiguration`.
+It raises one observation when a task crosses a thread hand-off through Spring's task executors:
+
+| Observation | Raised in | Tags |
+|-------------|-----------|------|
+| `peekaboot.async.task` | the decorated `Runnable`, on the executor thread | `peekaboot.async` (low cardinality, always `true`), `peekaboot.async.thread` (high cardinality: the executor thread's name) |
+
+Its contextual name is `async task`, not the observation name, for the same reason the view
+observation above isn't its own row title.
+
+Two guards, for two different failure modes. The decorator observes only when the submitting
+thread already has an observation open; a task with nothing to continue would start a rootless
+span rather than extend a trace. And it recognizes the two shapes the scheduling paths hand a
+decorator - a `RunnableScheduledFuture` from `ThreadPoolTaskScheduler`'s `decorateTask` hook, a
+`DelegatingErrorHandlingRunnable` from `SimpleAsyncTaskScheduler` - and returns those unwrapped:
+one `TaskDecorator` bean serves both the executor and the scheduler builders, and without that
+check Peekaboot's span would parent Spring's own `tasks.scheduled.execution` observation, turning
+every scheduled job into an async task.
+
+`AsyncInstrumentationAutoConfiguration` registers the bean as `peekabootAsyncTaskDecorator`, and
+its `@ConditionalOnMissingBean` matches that name, not the `TaskDecorator` type - the same reason
+`tracingInterceptorConfigurer` above matches by name. `ContextPropagatingTaskDecorator`, which
+Boot registers when an application sets `spring.task.execution.propagate-context=true`, is
+itself a `TaskDecorator` bean; a type-based condition would treat it as already satisfying the
+condition and back Peekaboot's decorator off in exactly the configuration this feature exists to
+serve. Peekaboot never sets that property itself.
+
+Both decorators can therefore coexist, folded by Boot into one `CompositeTaskDecorator`. The
+fold makes the list's first element innermost, and `ObjectProvider.orderedStream()` sorts
+ascending, so the lowest order ends up innermost - closest to the task. `ContextPropagatingTaskDecorator`
+declares no order and sorts last, at `Ordered.LOWEST_PRECEDENCE`. Peekaboot's decorator carries
+an explicit `@Order(Ordered.LOWEST_PRECEDENCE - 1000)`, placing it just inside that: the trace
+context is restored before Peekaboot's span opens, and an application decorator with an ordinary
+explicit order still runs inside Peekaboot's observation.
+
+The same decorator bean pool backs both `ThreadPoolTaskExecutorBuilder` and the scheduler
+builders, which is why the scheduled-execution guard matters even for an application that never
+calls `@Async` directly: Peekaboot's decorator is wired into the scheduler regardless.
 
 ### Micrometer Tracer Integration
 

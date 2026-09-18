@@ -8,6 +8,9 @@ public class PeekabootTracingProperties {
     /** Whether the in-memory trace store is created at all. */
     private boolean enabled = true;
 
+    /** Whether Peekaboot observes tasks handed to Spring's task executors; on unless set to false. */
+    private boolean async = true;
+
     /** Maximum number of traces held in the All bucket, oldest evicted first. */
     private int maxTraces = 1000;
 
@@ -32,6 +35,14 @@ public class PeekabootTracingProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isAsync() {
+        return async;
+    }
+
+    public void setAsync(boolean async) {
+        this.async = async;
     }
 
     public int getMaxTraces() {

@@ -7,6 +7,7 @@ org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration
 org.peekaboot.autoconfigure.DevToolbarAutoConfiguration
 org.peekaboot.autoconfigure.ErrorPageAutoConfiguration
 org.peekaboot.autoconfigure.TracingInterceptorAutoConfiguration
+org.peekaboot.autoconfigure.AsyncInstrumentationAutoConfiguration
 org.peekaboot.autoconfigure.InsightsAutoConfiguration
 org.peekaboot.autoconfigure.ActuatorSourcesAutoConfiguration
 org.peekaboot.autoconfigure.PeekabootSecurityAutoConfiguration

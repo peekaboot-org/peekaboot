@@ -18,6 +18,9 @@ final class PeekabootPropertyKeys {
     /** The tracing-feature switch; on unless set to false. */
     static final String TRACING_ENABLED = "peekaboot.tracing.enabled";
 
+    /** The async-instrumentation switch; on unless set to false. */
+    static final String TRACING_ASYNC = "peekaboot.tracing.async";
+
     /** The insights-feature switch; on unless set to false. */
     static final String INSIGHTS_ENABLED = "peekaboot.insights.enabled";
 

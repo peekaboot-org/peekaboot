@@ -168,14 +168,11 @@ class OrderTraceCaptureIT {
                         + "has nothing to show")
                 .isGreaterThanOrEqualTo(1000L);
 
-        List<String> spanNames = new ArrayList<>();
-        collectSpanNames(trace.path("rootSpan"), spanNames);
-
-        assertThat(spanNames)
+        assertThat(SpanTree.names(trace))
                 .as(
                         "the report's three stages must each show up as their own span, or the "
                                 + "Slow bucket trace is just one opaque span again - spans seen: %s",
-                        spanNames)
+                        SpanTree.names(trace))
                 .contains("order.report.load-lines", "order.report.price-lines", "order.report.apply-discounts");
     }
 
@@ -197,7 +194,7 @@ class OrderTraceCaptureIT {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(spanNames(trace))
+        assertThat(SpanTree.names(trace))
                 .as("the outbound customer lookup must appear as its own span, or the demo "
                         + "trace shows only in-process work and the span tree looks flat")
                 .anySatisfy(name -> assertThat(name).contains("/api/person/"));
@@ -213,7 +210,7 @@ class OrderTraceCaptureIT {
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a POST handled by a controller must be classified as an HTTP request")
                 .isEqualTo("HTTP_REQUEST");
-        assertThat(spanNames(trace))
+        assertThat(SpanTree.names(trace))
                 .as("the order-placed listener runs inside the request, so its span belongs to this trace")
                 .contains("order.placed");
     }
@@ -229,7 +226,7 @@ class OrderTraceCaptureIT {
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(spanNames(trace))
+        assertThat(SpanTree.names(trace))
                 .as("spans of the POST trace")
                 .filteredOn("connection"::equals)
                 .hasSize(1);
@@ -284,18 +281,5 @@ class OrderTraceCaptureIT {
                 .body(order)
                 .retrieve()
                 .toEntity(String.class);
-    }
-
-    private static List<String> spanNames(JsonNode trace) {
-        List<String> names = new ArrayList<>();
-        collectSpanNames(trace.path("rootSpan"), names);
-        return names;
-    }
-
-    private static void collectSpanNames(JsonNode span, List<String> out) {
-        out.add(span.path("name").asString(""));
-        for (JsonNode child : span.path("children")) {
-            collectSpanNames(child, out);
-        }
     }
 }
