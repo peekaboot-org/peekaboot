@@ -13,7 +13,8 @@ design system:
   render its whitelabel page: the failing request, the exception and its stack trace. No
   script of its own.
 
-No build step. Plain ES modules and CSS, served as-is.
+No build step. Plain ES modules and CSS, served as-is. They are linted, though: see
+[Linting](#linting).
 
 ```
 META-INF/peekaboot/ui/
@@ -38,6 +39,37 @@ The Insights tab charts with [uPlot](https://github.com/leeoniya/uPlot), vendore
 `vendor/uplot/` (MIT, version pinned in `VERSION`) and the one exception to "plain ES
 modules". `insights-chart.js` injects the script and stylesheet the first time a chart has
 to be drawn, so a dashboard that never opens the tab never loads it.
+
+## Linting
+
+`mvn verify` and `gradlew check` run ESLint, stylelint and html-validate over this tree on
+a Node the build downloads and pins. To run one by hand:
+
+```bash
+npm ci && npm run lint:js     # or lint:css, lint:html
+```
+
+Four things about the setup are deliberate and easy to undo by accident.
+
+The tool configs sit here, beside `package.json`, not in the repo-root `config/` directory
+where `checkstyle.xml` and the rest live. All three tools resolve their plugin packages
+relative to their own config file, so a config in `config/` would look for them in
+`config/node_modules`.
+
+`eslint.config.mjs` lints this tree as ES modules and names the three exceptions -
+`assets/theme-boot.js`, `dashboard/boot-recovery.js` and `error-page/reveal.js` - which a
+plain `<script>` tag loads. Add a file that a `<script>` tag loads and it belongs in that
+list; leave it out and an `import` in it lints clean and throws in the browser.
+
+`js-defined-css-tokens.json` registers `--pk-gantt-depth`, the one custom property that
+JavaScript sets (`trace-detail/tabs/spans.js`) and CSS reads. stylelint cannot see a
+`setProperty` call, so the three rules using that token report as unknown without it. Any
+new token on that side of the contract goes in the same file.
+
+`package.json` denies `unrs-resolver`'s postinstall script. It is a fallback for platforms
+whose prebuilt binding is missing; the binding installs as a normal optional dependency
+here, and npm 11 blocks the script by default anyway. Denying it explicitly is what stops
+npm warning about it on every build.
 
 ## The three shared layers
 
@@ -601,7 +633,7 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
    module gets the fetched payload, so this is the only wiring the file needs.
 3. In `dashboard/index.html`, add the strip button and the content panel by hand. `TABS`
    drives *rendering*; this markup is static:
-   - `<button class="pk-tab" role="tab" id="<id>-tab-btn" data-tab="<id>" aria-controls="<id>-tab" aria-selected="false">Display Name</button>`
+   - `<button type="button" class="pk-tab" role="tab" id="<id>-tab-btn" data-tab="<id>" aria-controls="<id>-tab" aria-selected="false">Display Name</button>`
      inside `#main-tabs` (add `hidden` to the class list if the tab is meant to start
      hidden pending `isAvailable`).
    - `<section class="pk-tab-panel" id="<id>-tab" role="tabpanel" aria-labelledby="<id>-tab-btn">...</section>`

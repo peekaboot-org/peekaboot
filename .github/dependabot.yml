@@ -28,3 +28,11 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+  # The frontend lint gate's toolchain. package.json lives in the module, not at the repo
+  # root, so the directory has to be named - the same reason the composite action's pins
+  # need theirs above. No auto-merge exclusion: unlike the gradle ecosystem, CI does build
+  # these, so a bump that breaks a rule goes red before the merge job would touch it.
+  - package-ecosystem: "npm"
+    directory: "/peekaboot-frontend"
+    schedule:
+      interval: "daily"

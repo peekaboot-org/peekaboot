@@ -25,4 +25,5 @@ dependencies {
     implementation("net.ltgt.gradle:gradle-errorprone-plugin:5.1.1")
     implementation("org.springframework.boot:spring-boot-gradle-plugin:$springBootVersion")
     implementation("com.gorylenko.gradle-git-properties:gradle-git-properties:4.0.1")
+    implementation("com.github.node-gradle:gradle-node-plugin:7.1.0")
 }

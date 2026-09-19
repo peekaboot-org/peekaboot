@@ -13,6 +13,21 @@
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Peekaboot Frontend - Embedded web UI resources</description>
 
+    <properties>
+        <!-- The Node the build downloads, never the machine's: a system install gives a
+             different minor version on every host, and "passes here, fails there" is worse
+             than no gate. The same literal appears in build.gradle.kts, which wants it
+             without the "v" - BuildVersionLockstepTest compares the two. No ecosystem
+             watches a Node pin, so this one moves by hand. -->
+        <peekaboot.node.version>24.21.0</peekaboot.node.version>
+        <!-- The one switch that turns the frontend lint gate off, in the shape of the root
+             POM's jacoco.skip. The plugin's own skip.npm/skip.installnodenpm cannot be used
+             alongside a <skip> element, take two flags to also suppress the download, and
+             are unnamespaced. CI's snapshot-install step sets this, because the verify that
+             follows runs the gate for real. -->
+        <peekaboot.frontend.lint.skip>false</peekaboot.frontend.lint.skip>
+    </properties>
+
     <build>
         <resources>
             <resource>
@@ -38,6 +53,83 @@
                         <configuration>
                             <classifier>javadoc</classifier>
                             <classesDirectory>${project.build.directory}/apidocs</classesDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- The frontend lint gate: ESLint, stylelint and html-validate over the ES
+                 modules, stylesheets and page under src/main/resources. It lives here and
+                 not in the root POM because the root <plugins> block is inherited by every
+                 module that parents to peekaboot-parent, and npm ci in a module without a
+                 package.json fails outright - a root gate would need a skip in four modules
+                 to enable it in one. Three executions rather than one chained script so a
+                 failure names the tool that spoke, the way checkstyle-check and pmd-check
+                 do, and so `mvn frontend:npm@lint-css` re-runs just that one.
+                 Ordering inside the phase follows declaration order, which Maven guarantees
+                 for several executions of the same plugin. -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>2.0.2</version>
+                <configuration>
+                    <!-- Without this the plugin falls back to workingDirectory and unpacks
+                         Node into the module source tree. -->
+                    <installDirectory>${project.build.directory}</installDirectory>
+                    <skip>${peekaboot.frontend.lint.skip}</skip>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-node-and-npm</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                        <configuration>
+                            <!-- npmVersion defaults to the npm inside this tarball, so the
+                                 one pin fixes both. -->
+                            <nodeVersion>v${peekaboot.node.version}</nodeVersion>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-ci</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <!-- ci, not install: the lockfile is the pin, and install would
+                                 rewrite it from inside a build. -->
+                            <arguments>ci</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>lint-js</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run lint:js</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>lint-css</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run lint:css</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>lint-html</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run lint:html</arguments>
                         </configuration>
                     </execution>
                 </executions>

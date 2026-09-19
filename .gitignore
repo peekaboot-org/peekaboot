@@ -22,3 +22,7 @@ buildNumber.properties
 release-notes.md
 unreleased-notes.md
 releases.json
+
+# npm installs the frontend lint toolchain here; both build systems share the directory,
+# and it sits under neither target/ nor build/
+node_modules/

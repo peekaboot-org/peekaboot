@@ -64,6 +64,16 @@ runs:
         key: playwright-${{ runner.os }}-${{ inputs.browsers }}-${{ steps.playwright.outputs.version }}
         restore-keys: playwright-${{ runner.os }}-${{ inputs.browsers }}-
 
+    # The frontend lint gate's npm packages. The Node distribution itself needs no entry:
+    # frontend-maven-plugin caches the tarball as a Maven artifact, which setup-java's
+    # maven cache above already covers. Keyed on the lockfile, the only input npm ci reads.
+    - name: Cache npm packages
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles('peekaboot-frontend/package-lock.json') }}
+        restore-keys: npm-${{ runner.os }}-
+
     # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
     # download happening to work mid-test-run. Two steps, not one: see BUILD.md, CI.
     # The gates are skipped here because the workflow's `verify` runs every one of them.
@@ -72,7 +82,7 @@ runs:
       run: >
         ./mvnw --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
         -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true
-        -Dmaven.javadoc.skip=true -Dmaven.source.skip=true
+        -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Dpeekaboot.frontend.lint.skip=true
 
     # classpathScope=test is required because the playwright dependency is test-scoped;
     # without it exec:java can't find com.microsoft.playwright.CLI.

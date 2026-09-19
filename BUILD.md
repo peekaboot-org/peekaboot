@@ -2,8 +2,9 @@
 
 Maven is the system of record. One reactor. Static-analysis tools, dependency and output
 checks and a coverage floor run as gates across the build lifecycle (see
-[Quality gates](#quality-gates)). No Node toolchain, no codegen beyond annotation
-processing.
+[Quality gates](#quality-gates)). No codegen beyond annotation processing. One module,
+`peekaboot-frontend`, downloads a pinned Node to lint its JS, CSS and HTML; nothing else
+in the build needs it and nothing uses the machine's own Node.
 
 A parallel Gradle build covers the same modules, tests and gates (see
 [the Gradle build](#the-parallel-gradle-build) below). CI runs Maven only, so every Maven
@@ -159,7 +160,10 @@ version from that BOM, as Maven does.
 
 Every other shared literal is written on both sides and has to change on both: Error
 Prone, palantir, the ratchet SHA, Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors,
-Playwright, springdoc and the testing-app's direct dependencies. Dependabot watches the
+Playwright, springdoc, the testing-app's direct dependencies, and the frontend gate's two:
+the pinned Node version and `npm ci`. The frontend's *lint tool* versions are not on that
+list - they live once in `peekaboot-frontend/package.json`, which both builds install from,
+so there is nothing to drift. Dependabot watches the
 `gradle` ecosystem next to `maven`, so bumps arrive as paired PRs. The Gradle half is never
 auto-merged, because nothing in CI would build it; check it against the merged Maven bump
 by hand.
@@ -218,13 +222,22 @@ worth having on both sides.
 | Bug patterns, bytecode | `verify` | `spotbugs-maven-plugin` | `config/spotbugs-exclude.xml` | main classes |
 | Complexity metrics | `verify` | `maven-checkstyle-plugin` (checkstyle) | `config/checkstyle.xml` | main only |
 | Code smells | `verify` | `maven-pmd-plugin` (PMD) | `config/pmd-ruleset.xml` | main Java |
+| Frontend lint | `verify` | `frontend-maven-plugin` (ESLint, stylelint, html-validate) | `eslint.config.mjs`, `stylelint.config.mjs`, `.htmlvalidate.json` in `peekaboot-frontend/` | that module's JS, CSS and HTML, `vendor/` excluded |
 | Coverage floor | `verify` | `jacoco-maven-plugin` | inline in `peekaboot-coverage/pom.xml` | all measured classes, reactor-wide |
 | Dependency upper bounds | `validate` | `maven-enforcer-plugin` | inline in the parent POM | every module's resolved closure |
 | Optional-dependency leaks | `validate` | `maven-enforcer-plugin` | inline in `peekaboot-spring-boot-starter/pom.xml` | the starter's transitive closure |
 | Configuration metadata present | `process-classes` | `maven-enforcer-plugin` | inline in `peekaboot-backend/pom.xml` | `peekaboot-backend/target/classes` |
 
 Each gate's plugin and tool version is pinned in the root `pom.xml`, and again in
-`buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` for the Gradle build.
+`buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` for the Gradle build. The
+frontend gate is the exception on both counts: it is declared in `peekaboot-frontend`'s own
+POM and build script, because the root `<plugins>` block reaches modules that have no
+`package.json` for `npm ci` to read, and its tool versions live in that module's
+`package.json` and lockfile, which both build systems install from.
+
+`-Dpeekaboot.frontend.lint.skip=true` turns the frontend gate off. It is the switch CI's
+snapshot-install step uses; `-DskipTests` and `-Dmaven.test.skip` do not reach it, because
+frontend-maven-plugin honours those only in the `test` and `integration-test` phases.
 
 Each config file explains its own exclusions; the short version:
 
@@ -246,11 +259,18 @@ Each config file explains its own exclusions; the short version:
   collaborators, `@ConfigurationProperties` accessors and framework contracts. No store or
   service leaks a live collection. `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped to
   `ContainerRuntime$Signals`, the only class that raises it.
-- **Nothing lints the frontend's JS or CSS.** PMD's `pmd-javascript` module is not an
+- **The frontend gate** runs ESLint, stylelint and html-validate from
+  `peekaboot-frontend/package.json`. It went in after a missing `import` passed every other
+  gate and surfaced as 26 Playwright timeouts. PMD's `pmd-javascript` module was never an
   option: its Rhino parser throws `NullPointerException` on the destructuring the frontend
-  uses throughout, and fails outright on the files carrying it. A real JS linter means
-  ESLint and therefore a Node toolchain, which this build deliberately does not have. An
-  open decision, not an oversight.
+  uses throughout. Three things about it are load-bearing rather than taste. ESLint runs
+  the frontend's modules under `sourceType: "module"`, without which an unimported
+  identifier reads as a possible implicit global and `no-undef` says nothing; the three
+  files a `<script>` tag loads without `type="module"` are listed and linted as scripts.
+  `vendor/` is excluded because uplot's minified bundle reports seven errors of its own.
+  And `--pk-gantt-depth`, the one custom property JavaScript sets rather than CSS, is
+  registered in `js-defined-css-tokens.json`, because stylelint cannot see a `setProperty`
+  call and reports the three rules that read it as unknown without it.
 
 Config paths resolve through `${maven.multiModuleProjectDirectory}`, which Maven sets to
 the directory holding `.mvn/`. That makes them work from the repo root and from inside a
@@ -392,8 +412,10 @@ root `action.yml` only.
 The steps the build workflows share, as a composite action: JDK 25 (temurin) with the
 Maven cache, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
 `playwright.version` property and the engines asked for (a browser build changes with
-Playwright, not with any other dependency), the reactor's SNAPSHOTs installed, then those
-browsers installed. The `browsers` input names them and defaults to `chromium`, which
+Playwright, not with any other dependency), `~/.npm` cached on the frontend lockfile's
+hash, the reactor's SNAPSHOTs installed, then those browsers installed. The Node
+distribution needs no cache entry of its own: frontend-maven-plugin fetches it as a Maven
+artifact, which `setup-java`'s cache already covers. The `browsers` input names them and defaults to `chromium`, which
 leaves the push build as it was; `with-deps` adds `--with-deps`, the flag that apt-installs
 the engines' system libraries and wants passwordless sudo. The checkout
 stays in each workflow: a local action resolves from the runner's workspace, so it cannot
@@ -405,9 +427,9 @@ The Chromium install is split into two steps on purpose. `exec:java` ignores `-p
 when combined with `-am`: it runs the goal against every upstream reactor module too and
 fails on the first one without Playwright on its classpath. So the reactor's SNAPSHOTs are
 installed first (`-pl peekaboot-testing-app -am install -Dmaven.test.skip=true`, with the
-static-analysis gates and the sources/javadoc jars skipped because the `verify` that
-follows runs them all anyway), and the plain `exec:java` call resolves against the local
-repo afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
+static-analysis gates, the frontend lint gate and the sources/javadoc jars skipped because
+the `verify` that follows runs them all anyway), and the plain `exec:java` call resolves
+against the local repo afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
 `pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
 invocation resolves whatever is latest that day.
 

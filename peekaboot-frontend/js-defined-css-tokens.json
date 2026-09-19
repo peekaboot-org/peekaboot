@@ -1,0 +1,6 @@
+{
+  "//": "Custom properties the JavaScript sets and the CSS reads. stylelint cannot see a setProperty call, so every token on this side of the JS/CSS contract is registered here by hand or it reports as unknown. The values are placeholders; only the names are read.",
+  "custom-properties": {
+    "--pk-gantt-depth": "0"
+  }
+}

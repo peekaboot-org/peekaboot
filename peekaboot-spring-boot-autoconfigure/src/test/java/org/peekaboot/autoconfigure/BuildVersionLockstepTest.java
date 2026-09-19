@@ -198,6 +198,8 @@ class BuildVersionLockstepTest {
         Path coverageScript = root.resolve("peekaboot-coverage/build.gradle.kts");
         Path appPom = root.resolve("peekaboot-testing-app/pom.xml");
         Path appScript = root.resolve("peekaboot-testing-app/build.gradle.kts");
+        Path frontendPom = root.resolve("peekaboot-frontend/pom.xml");
+        Path frontendScript = root.resolve("peekaboot-frontend/build.gradle.kts");
         return Stream.of(
                 row(
                         "Error Prone",
@@ -270,7 +272,21 @@ class BuildVersionLockstepTest {
                         appPom,
                         "<peekaboot.it.threads>([^<]+)</peekaboot.it.threads>",
                         root.resolve("gradle.properties"),
-                        "peekaboot.it.threads=(.+)"));
+                        "peekaboot.it.threads=(.+)"),
+                row(
+                        "the pinned Node runtime",
+                        frontendPom,
+                        "<peekaboot.node.version>([^<]+)</peekaboot.node.version>",
+                        frontendScript,
+                        "node \\{[\\s\\S]*?version = \"([^\"]+)\""),
+                // A Gradle side that drifted back to npm's default `install` would stay green while
+                // resolving outside the lockfile, and could lint on different tool versions than CI.
+                row(
+                        "the npm install command",
+                        frontendPom,
+                        "<id>npm-ci</id>[\\s\\S]*?<arguments>([^<]+)</arguments>",
+                        frontendScript,
+                        "npmInstallCommand = \"([^\"]+)\""));
     }
 
     private static Arguments row(
