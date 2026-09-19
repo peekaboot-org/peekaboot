@@ -33,11 +33,6 @@ jobs:
           .github/release-notes/check-commit-subjects.sh . \
             "${{ github.event.before }}" "${{ github.event.after }}"
 
-      # Ahead of the step that uses it, so a wrong version is a failure here rather than a
-      # snapshot published under a coordinate nobody meant.
-      - name: snapshot-version-tests
-        run: .github/snapshot-publish/test/run.sh
-
       # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build
         uses: ./.github/actions/prepare-build
@@ -47,18 +42,12 @@ jobs:
           server-password: MAVEN_PASSWORD
 
       # After prepare-build, because setup-java keys its Maven cache on the poms' contents:
-      # rewriting them first would miss that cache on every branch but dev.
+      # rewriting them first would miss that cache on every branch but dev. Shared with the
+      # osslabz repos, which is why the integration branch is an input rather than assumed.
       - name: set-snapshot-version
-        env:
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          version="$(.github/snapshot-publish/branch-version.sh pom.xml "$BRANCH")"
-          # versions:set rewrites project.build.outputTimestamp unless told not to, which
-          # would put this run's clock where the reproducible-build instant belongs.
-          ./mvnw --batch-mode versions:set -DnewVersion="$version" \
-            -DprocessAllModules=true -DgenerateBackupPoms=false \
-            -DupdateBuildOutputTimestampPolicy=never
-          echo "publishing $version"
+        uses: osslabz/github-actions/snapshot-version@c3c3d673a352ab5c69e80dccb7f5391595bf4429 # v1.0.0
+        with:
+          default-branch: dev
 
       # peekaboot-publish carries central-publishing-maven-plugin, which routes a -SNAPSHOT to
       # Central's snapshot repository by itself. The signature stays behind in

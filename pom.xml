@@ -286,15 +286,6 @@
                     <artifactId>maven-dependency-plugin</artifactId>
                     <version>3.11.0</version>
                 </plugin>
-                <!-- No execution binds this: build-on-push.yml invokes versions:set by
-                     prefix to give a branch's snapshot a version of its own. Pinned for
-                     the same reason the testing-app pins exec-maven-plugin - an unpinned
-                     prefix invocation resolves whatever is latest that day. -->
-                <plugin>
-                    <groupId>org.codehaus.mojo</groupId>
-                    <artifactId>versions-maven-plugin</artifactId>
-                    <version>2.22.0</version>
-                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>

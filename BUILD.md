@@ -436,8 +436,8 @@ invocation resolves whatever is latest that day.
 
 ### `build-on-push.yml`
 
-Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet, the
-snapshot-version tests, `prepare-build`, the branch's snapshot version, then
+Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet,
+`prepare-build`, the branch's snapshot version, then
 `./mvnw --batch-mode clean deploy -P peekaboot-publish`. After the build it
 installs git-cliff, runs the release-notes tests, gates the pushed commit subjects and
 writes the pending notes into the run summary. The job keeps `contents: read`: publishing
@@ -519,12 +519,15 @@ dev                          0.2.1-SNAPSHOT
 feat/async-instrumentation   0.2.1-feat-async-instrumentation-SNAPSHOT
 ```
 
-`.github/snapshot-publish/branch-version.sh` derives that version and `versions:set` applies
-it to the reactor for the length of the run; the poms in git never carry it. That rewrite
-also needs `-DupdateBuildOutputTimestampPolicy=never`, or the plugin replaces
-`project.build.outputTimestamp` with the run's own clock and the build stops being
-reproducible. `.github/snapshot-publish/test/run.sh` covers the derivation and runs in the
-same workflow, ahead of the step that uses it.
+The `snapshot-version` action in
+[osslabz/github-actions](https://github.com/osslabz/github-actions) derives that version and
+applies it to the reactor for the length of the run; the poms in git never carry it. The same
+action runs in the osslabz repositories, which is why the integration branch is an input
+rather than assumed - most of them settle on `dev`, `bitcoin-commons` and `lnd-rest-client` on
+`main`. It owns its own tests and the `versions:set` invocation, including the
+`-DupdateBuildOutputTimestampPolicy=never` without which the plugin puts the run's own clock
+where the reproducible-build instant belongs, and it names `versions-maven-plugin` in full so
+this pom pins nothing for it.
 
 `peekaboot-publish` holds `central-publishing-maven-plugin` and nothing else, which is the
 whole mechanism: the plugin reads the version and routes a `-SNAPSHOT` to the snapshot
