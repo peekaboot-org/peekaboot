@@ -33,12 +33,43 @@ jobs:
           .github/release-notes/check-commit-subjects.sh . \
             "${{ github.event.before }}" "${{ github.event.after }}"
 
+      # Ahead of the step that uses it, so a wrong version is a failure here rather than a
+      # snapshot published under a coordinate nobody meant.
+      - name: snapshot-version-tests
+        run: .github/snapshot-publish/test/run.sh
+
       # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build
         uses: ./.github/actions/prepare-build
+        with:
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
 
-      - name: maven-build-verify
-        run: ./mvnw --batch-mode clean verify
+      # After prepare-build, because setup-java keys its Maven cache on the poms' contents:
+      # rewriting them first would miss that cache on every branch but dev.
+      - name: set-snapshot-version
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          version="$(.github/snapshot-publish/branch-version.sh pom.xml "$BRANCH")"
+          # versions:set rewrites project.build.outputTimestamp unless told not to, which
+          # would put this run's clock where the reproducible-build instant belongs.
+          ./mvnw --batch-mode versions:set -DnewVersion="$version" \
+            -DprocessAllModules=true -DgenerateBackupPoms=false \
+            -DupdateBuildOutputTimestampPolicy=never
+          echo "publishing $version"
+
+      # peekaboot-publish carries central-publishing-maven-plugin, which routes a -SNAPSHOT to
+      # Central's snapshot repository by itself. The signature stays behind in
+      # peekaboot-release: Central validates a release and takes a snapshot as it comes.
+      # Dependabot's runs reach no repository secrets, so they verify what the others publish.
+      - name: maven-build-publish
+        env:
+          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+          MAVEN_GOAL: ${{ github.actor == 'dependabot[bot]' && 'verify' || 'deploy' }}
+        run: ./mvnw --batch-mode clean "$MAVEN_GOAL" -P peekaboot-publish
 
       - name: install-git-cliff
         uses: ./.github/actions/install-git-cliff

@@ -185,8 +185,8 @@ pins, where Gradle's highest-wins takes the newer one springdoc asks for and pul
 `aopalliance` besides. Acceptable for an unpublished sample app, and the first thing to
 reconcile if the Gradle build is ever promoted.
 
-Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-release`
-profile, publishing, and CI wiring. Nor the dependency check, which guards a Maven
+Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-publish`
+and `peekaboot-release` profiles, and the CI wiring around them. Nor the dependency check, which guards a Maven
 resolution behaviour Gradle does not have. Gradle takes the highest requested version, so
 it cannot settle a transitive below what a dependent asked for.
 
@@ -419,9 +419,10 @@ artifact, which `setup-java`'s cache already covers. The `browsers` input names 
 leaves the push build as it was; `with-deps` adds `--with-deps`, the flag that apt-installs
 the engines' system libraries and wants passwordless sudo. The checkout
 stays in each workflow: a local action resolves from the runner's workspace, so it cannot
-run before the checkout that puts it there. Its inputs hand the release workflow's Central
-server id, credential variable names and GPG key on to `setup-java`; the build workflow
-passes none and gets `setup-java`'s defaults.
+run before the checkout that puts it there. Its inputs hand a server id and credential
+variable names on to `setup-java`, and the release workflow's GPG key with them.
+`build-on-push` and `release` both name the `central` server, because both publish; only
+the release signs. `cross-browser` passes none and gets `setup-java`'s defaults.
 
 The Chromium install is split into two steps on purpose. `exec:java` ignores `-pl` scoping
 when combined with `-am`: it runs the goal against every upstream reactor module too and
@@ -435,11 +436,16 @@ invocation resolves whatever is latest that day.
 
 ### `build-on-push.yml`
 
-Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet,
-`prepare-build`, then `./mvnw --batch-mode clean verify`. After the build it installs
-git-cliff, runs the release-notes tests, gates the pushed commit subjects and writes the
-pending notes into the run summary. The job keeps `contents: read`; none of those steps
-write anything. See [Release notes](#release-notes).
+Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet, the
+snapshot-version tests, `prepare-build`, the branch's snapshot version, then
+`./mvnw --batch-mode clean deploy -P peekaboot-publish`. After the build it
+installs git-cliff, runs the release-notes tests, gates the pushed commit subjects and
+writes the pending notes into the run summary. The job keeps `contents: read`: publishing
+authenticates to Central with the same secrets the release uses, not with `GITHUB_TOKEN`.
+See [Snapshots](#snapshots) and [Release notes](#release-notes).
+
+Dependabot's runs reach no repository secrets at all, so `github.actor` picks `verify` in
+place of `deploy` and they check what every other branch publishes.
 
 ### `draft-release-notes.yml`
 
@@ -500,10 +506,65 @@ and the repository admin role, both `bypass_mode: always`, so those two rules bi
 merge button rather than the owner. Nothing requires a status check on `dev`; see
 [Releasing](#releasing) for why one cannot coexist with an automated release.
 
+## Snapshots
+
+Every push to a branch other than `main` publishes the reactor to Central's snapshot
+repository, so a downstream project can build against unreleased work. `dev` publishes the
+plain version out of the root pom; every other branch folds its name into it, because all
+branches carry the same version and a single coordinate would leave only the last push
+standing.
+
+```
+dev                          0.2.1-SNAPSHOT
+feat/async-instrumentation   0.2.1-feat-async-instrumentation-SNAPSHOT
+```
+
+`.github/snapshot-publish/branch-version.sh` derives that version and `versions:set` applies
+it to the reactor for the length of the run; the poms in git never carry it. That rewrite
+also needs `-DupdateBuildOutputTimestampPolicy=never`, or the plugin replaces
+`project.build.outputTimestamp` with the run's own clock and the build stops being
+reproducible. `.github/snapshot-publish/test/run.sh` covers the derivation and runs in the
+same workflow, ahead of the step that uses it.
+
+`peekaboot-publish` holds `central-publishing-maven-plugin` and nothing else, which is the
+whole mechanism: the plugin reads the version and routes a `-SNAPSHOT` to the snapshot
+repository by itself. The signature stays behind in `peekaboot-release`, because Central
+validates a release and takes a snapshot as it comes. A release activates both.
+
+What lands is what a release lands, jar, sources and javadoc alike: the plugin publishes
+every attached artifact, and the source and javadoc jars are attached by the main build
+rather than by a profile. The module set matches too - `peekaboot-test-support` and
+`peekaboot-coverage` carry `skipPublishing`, `peekaboot-testing-app` carries
+`maven.deploy.skip`.
+
+Consuming a snapshot needs the repository declared, where a release needs nothing:
+
+```xml
+<repository>
+    <id>central-portal-snapshots</id>
+    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    <releases><enabled>false</enabled></releases>
+    <snapshots><enabled>true</enabled></snapshots>
+</repository>
+```
+
+```kotlin
+repositories {
+    maven { url = uri("https://central.sonatype.com/repository/maven-snapshots/") }
+    mavenCentral()
+}
+```
+
+Reading it is anonymous. Central expires a snapshot around 90 days after it lands, and the
+namespace has to have snapshots switched on in the Portal before the first deploy will be
+accepted - a one-off toggle on `org.peekaboot` under Namespaces, with no API behind it.
+
 ## Releasing
 
-Everything release-specific sits in the `peekaboot-release` profile; a normal build never
-signs or publishes anything. Releases start by hand: run the `release` workflow from the
+Signing and the release mechanics sit in the `peekaboot-release` profile, publishing itself in
+`peekaboot-publish`; a release activates both, and the push build activates publishing alone
+(see [Snapshots](#snapshots)). A local build activates neither profile nor a `deploy` goal, so
+it never signs or publishes anything. Releases start by hand: run the `release` workflow from the
 Actions tab with `dev` selected, and it fails immediately if dispatched from anything else.
 Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does:
 
@@ -547,14 +608,18 @@ The site repo follows the same branch model as this one: `dev` is where commits 
 `main` is fast-forwarded onto them, which is what triggers the Pages rebuild. Its tag is the
 same bare `x.y.z` as the app's, so a site commit can be traced to the release it shipped with.
 
-The profile adds `maven-release-plugin`, which the workflow drives with an explicit
+`peekaboot-release` adds `maven-release-plugin`, which the workflow drives with an explicit
 `-DreleaseVersion`; see [How the next version is chosen](#how-the-next-version-is-chosen).
 Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
-GPG-signs with `raphael@peekaboot.org` and publishes through
-`central-publishing-maven-plugin`, which runs with `autoPublish=true` /
-`waitUntil=published`, so the job does not go green until the artifacts are live on
-Central. Flipping the pair to `false`/`validated` rehearses an upload instead: the run
-stops at a validated deployment awaiting a manual publish in the Portal.
+GPG-signs with `raphael@peekaboot.org`. `releaseProfiles` names both profiles, because the
+fork `release:perform` starts is what runs `deploy` and it needs the publishing plugin as
+well as the signature.
+
+`peekaboot-publish` contributes `central-publishing-maven-plugin`, which on a release runs
+with `autoPublish=true` / `waitUntil=published`, so the job does not go green until the
+artifacts are live on Central. Flipping the pair to `false`/`validated` rehearses an upload
+instead: the run stops at a validated deployment awaiting a manual publish in the Portal.
+Neither setting reaches the snapshot path, which never calls the Portal.
 
 The sources and javadoc jars are *not* release-only. Both are attached on every build of
 the published modules, and javadoc runs with `doclint` at `all,-missing` and fails on an
