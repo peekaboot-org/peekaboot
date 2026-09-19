@@ -245,7 +245,7 @@
 .pk-component-grid__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pk-success); }
 .pk-component-grid__dot--down { background: var(--pk-danger); }
 .pk-component-grid__dot--unknown { background: var(--pk-warning-text); }
-.pk-component-grid__details { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); word-break: break-word; white-space: pre-line; }
+.pk-component-grid__details { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); overflow-wrap: anywhere; white-space: pre-line; }
 
 /* DataSources */
 .pk-datasources__toggle { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
@@ -373,7 +373,7 @@
 .pk-task__target-row { margin-top: var(--pk-space-sm); }
 .pk-task__target { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 /* Same tint as .pk-error-banner, for the same AA-contrast reason (see there). */
-.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: var(--pk-danger-tint, rgba(210, 31, 31, 0.04)); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); word-break: break-word; }
+.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: var(--pk-danger-tint, rgba(210, 31, 31, 0.04)); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); overflow-wrap: anywhere; }
 .pk-task__exception-label { font-weight: 600; color: var(--pk-danger); }
 @media (max-width: 767px) {
     .pk-task__row { flex-direction: column; align-items: flex-start; gap: var(--pk-space-sm); }

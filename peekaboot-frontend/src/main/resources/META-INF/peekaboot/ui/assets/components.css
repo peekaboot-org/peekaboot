@@ -154,13 +154,13 @@
     font-family: var(--pk-font-mono);
     font-size: var(--pk-text-xs);
     color: var(--pk-text-strong);
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 .pk-kv__value {
     font-size: var(--pk-text-xs);
     color: var(--pk-text-muted);
     text-align: right;
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 .pk-kv__value--mono      { font-family: var(--pk-font-mono); }
 

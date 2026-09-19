@@ -260,7 +260,7 @@
 .pk-log__level--info { color: var(--pk-info-text); }
 .pk-log__level--warn { color: var(--pk-warning-text); }
 .pk-log__level--error { color: var(--pk-danger); }
-.pk-log__message { flex: 1; word-break: break-word; }
+.pk-log__message { flex: 1; overflow-wrap: anywhere; }
 
 /* The trace a log entry carried (tabs/logs.js's traceBlock), rendered only when
    log.stackTrace is present. align-self keeps the toggle from stretching to the row's
