@@ -206,7 +206,7 @@ function render(content, trace, urlState, display) {
         className: 'pk-overlay',
         attrs: {role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pk-overlay-title', tabindex: '-1'}
     }, el('div', {className: 'pk-overlay__container'},
-        header(trace, display),
+        header(trace),
         el('div', {className: 'pk-tabs'}),
         el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content'}})));
     content.replaceChildren(container);
@@ -221,7 +221,7 @@ function render(content, trace, urlState, display) {
     container.focus();
 }
 
-function header(trace, display) {
+function header(trace) {
     const rootSpan = trace.rootSpan || {};
     const httpExchange = trace.httpExchange || {};
     const req = httpExchange.request || {};
