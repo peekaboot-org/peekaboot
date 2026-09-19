@@ -1779,6 +1779,145 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .contains("#traces/" + traceId + "/spans?root=" + asyncSpanId);
     }
 
+    /**
+     * Task 11: an async subtree renders collapsed by default - its own toggle starts
+     * {@code aria-expanded="false"} with its descendants hidden - while a sibling
+     * synchronous span stays visible, and the entry itself carries a visible "background"
+     * marker. The entry's own bar stays on the trace's basis, so it sits where the task was
+     * dispatched - 100ms into a 1000ms trace, 50ms wide - and its share of the column reads
+     * against the same denominator as its synchronous sibling's. Only its children are
+     * re-based, against the subtree's own 220ms window (100 to 320). The fixture's
+     * grandchild ends well after its async parent's own declared end (100+50=150ms vs
+     * 120+200=320ms): a fixture where the child ends before the parent cannot tell a correct
+     * subtree walk from one that merely reads the entry's own duration, since both would
+     * answer the same number - the trap {@code subtreeWindowMs} exists for, and the one its
+     * Java twin in {@code TraceTreeMapper} was already caught by once. Reading that 50ms
+     * duration as the basis instead would put the grandchild's bar 40% of the way in, against
+     * the 9.1% asserted below.
+     */
+    @Test
+    void anAsyncSubtreeCollapsesByDefaultAndRebasesAgainstItsOwnWindow() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 1000, startTimeMs: 0, rootSpan: {spanId: 'root', name: 'root', children: [
+                    {spanId: 'a', name: 'async task', asyncEntry: true, startTimeMs: 100, durationMs: 50, children: [
+                        {spanId: 'g', name: 'grandchild', startTimeMs: 120, durationMs: 200}]},
+                    {spanId: 's', name: 'sibling', startTimeMs: 600, durationMs: 50}]}});
+                const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
+                const hidden = id => entry(id).style.display === 'none';
+                const bar = id => entry(id).querySelector('.pk-gantt-bar');
+                const pct = value => Number(parseFloat(value)).toFixed(1);
+                return [
+                    entry('a').querySelector('.pk-gantt-toggle').getAttribute('aria-expanded'),
+                    hidden('g'),
+                    hidden('s'),
+                    entry('a').querySelector('.pk-span-async-chip')?.textContent ?? null,
+                    entry('a').querySelector('.pk-span-async-chip')?.getAttribute('aria-hidden'),
+                    entry('a').querySelector('.pk-gantt-name__toggle').getAttribute('aria-label'),
+                    pct(bar('a').style.left), pct(bar('a').style.width),
+                    pct(bar('g').style.left), pct(bar('g').style.width)
+                ];
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<Object> subtreeFacts = (List<Object>) facts;
+        assertThat(subtreeFacts)
+                .containsExactly(
+                        "false",
+                        true,
+                        false,
+                        "background",
+                        "true",
+                        "async task, internal span, background work",
+                        "10.0",
+                        "5.0",
+                        "9.1",
+                        "90.9");
+    }
+
+    /**
+     * Task 11's other half, on the same fixture: {@code ?root=<spanId>} scopes the tab to
+     * one subtree, on that subtree's own basis. Two things this guards: the default-collapse
+     * pass must not collapse the very entry the scoped view is rendering - skipped as the
+     * tab's own first entry - or the isolated view would open on nothing; and the trace's
+     * other spans (the enclosing root and the sibling) must not appear at all.
+     */
+    @Test
+    void scopingToAnAsyncEntryRendersOnlyThatSubtreeExpanded() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const trace = {durationMs: 1000, startTimeMs: 0, rootSpan: {spanId: 'root', name: 'root', children: [
+                    {spanId: 'a', name: 'async task', asyncEntry: true, startTimeMs: 100, durationMs: 50, children: [
+                        {spanId: 'g', name: 'grandchild', startTimeMs: 120, durationMs: 200}]},
+                    {spanId: 's', name: 'sibling', startTimeMs: 600, durationMs: 50}]}};
+                const container = document.createElement('div');
+                m.render(container, trace, {filters: {root: 'a'}});
+                const rows = [...container.querySelectorAll('.pk-gantt-row')].map(row => row.dataset.spanId);
+                const gEntry = container.querySelector('.pk-gantt-row[data-span-id="g"]').closest('.pk-gantt-span');
+                return [rows.join(','), container.querySelector('.pk-gantt-toggle').getAttribute('aria-expanded'), gEntry.style.display];
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<Object> scopedFacts = (List<Object>) facts;
+        assertThat(scopedFacts).containsExactly("a,g", "true", "");
+    }
+
+    /**
+     * Task 11's URL half, on a real captured async subtree from the same endpoint Task 10's
+     * row links to: the {@code ?root=<spanId>} deep link that row's own open button lands
+     * on scopes the Spans tab to that span alone - its enclosing request root and
+     * spring.handler are excluded - and it carries the "background" marker end to end from
+     * the real backend. Then pins {@code url-state.js}'s documented rule rather than
+     * fighting it (see spans.js's own module doc): switching tabs scopes params to the tab
+     * that restored them, so a round trip through another tab must widen the Spans tab back
+     * to the full tree, and the param must leave the URL with it.
+     */
+    @Test
+    void deepLinkedRootParamScopesTheSpansTabAndIsClearedByATabRoundTrip() {
+        String traceId = triggerOrderEnrichment();
+        awaitTrace(traceId, asyncSpanCapturedPredicate());
+
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTraceRowCount(traceId, 2);
+        Locator asyncRow = page.locator(Dashboard.traceItem(traceId) + "[data-subtree-root-span-id]");
+        String asyncSpanId = asyncRow.getAttribute("data-subtree-root-span-id");
+
+        dashboard.openListedTrace(Dashboard.asyncTraceItem(traceId, asyncSpanId), traceId);
+        overlay.waitFor("#pk-gantt-rows");
+
+        assertThat(page.url())
+                .as("the async row's own open button lands here - Task 10's own pin")
+                .contains("#traces/" + traceId + "/spans?root=" + asyncSpanId);
+        assertThat(visibleGanttRowCount())
+                .as("scoped to the async entry alone; its enclosing request root and spring.handler are excluded")
+                .isEqualTo(1);
+        assertThat((String)
+                        overlay.evaluate("root => root.querySelector('#pk-gantt-rows .pk-gantt-row').dataset.spanId"))
+                .isEqualTo(asyncSpanId);
+        assertThat((String) overlay.evaluate("root => root.querySelector('.pk-span-async-chip')?.textContent ?? null"))
+                .as("the real backend's asyncEntry flag reaches the rendered chip")
+                .isEqualTo("background");
+
+        overlay.openTab("queries");
+        overlay.openTab("spans");
+        overlay.waitFor("#pk-gantt-rows");
+
+        assertThat(visibleGanttRowCount())
+                .as("a tab round-trip clears the tab's own params, widening back to the full tree")
+                .isGreaterThan(1);
+        assertThat(page.url()).as("the param is gone from the URL too").doesNotContain("root=");
+    }
+
+    /** The number of span rows currently rendered in the Spans tab's gantt, scoped or not. */
+    private int visibleGanttRowCount() {
+        return ((Number) overlay.evaluate("root => root.querySelectorAll('#pk-gantt-rows .pk-gantt-row').length"))
+                .intValue();
+    }
+
     /** Same pattern TraceApiClient.traceIdOf reads Server-Timing with - duplicated here since that class is package-private to integration. */
     private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 

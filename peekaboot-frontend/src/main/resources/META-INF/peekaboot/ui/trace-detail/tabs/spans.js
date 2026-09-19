@@ -25,9 +25,13 @@ import {copyableId} from '../../shared/copyable.js';
 const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
 
 export function render(container, trace, context = {}) {
+    // "?root=<spanId>" narrows the tab to one subtree. Scoped to this tab like every other
+    // tab's params, so a tab round-trip widens it back out again (see url-state.js).
+    const scopedRoot = context.filters?.root ? findSpan(trace.rootSpan, context.filters.root) : null;
+    const rootSpan = scopedRoot || trace.rootSpan;
     // the 1 keeps a zero-length trace from dividing by zero in every position below
-    const totalDuration = trace.durationMs || 1;
-    const traceStart = trace.startTimeMs || 0;
+    const totalDuration = (scopedRoot ? subtreeWindowMs(scopedRoot) : trace.durationMs) || 1;
+    const traceStart = (scopedRoot ? scopedRoot.startTimeMs : trace.startTimeMs) || 0;
     // the origin is where the trace starts, not a duration anyone measured, so it is
     // spelled out rather than run through formatDurationMs - which calls 0 "<1ms"
     const ticks = ['0ms', ...[0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p))];
@@ -35,13 +39,24 @@ export function render(container, trace, context = {}) {
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
     const allDetailsToggle = button({className: 'pk-btn pk-btn--small pk-gantt-all-details', text: 'Show all details'});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
-        el('div', {className: 'pk-gantt-toolbar'}, kindLegend(trace.rootSpan), allDetailsToggle),
+        el('div', {className: 'pk-gantt-toolbar'}, kindLegend(rootSpan), allDetailsToggle),
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick})))),
         entries));
 
-    renderSpanEntries(entries, trace.rootSpan, 0, traceStart, totalDuration, context.locale);
+    renderSpanEntries(entries, rootSpan, 0, traceStart, totalDuration, context.locale);
+
+    // Collapsed by default: the subtree's work is not what the caller waited for, so it
+    // starts out of the way. Reuses the subtree toggle rather than a second mechanism.
+    // Skips the tab's own first entry: when "?root=" scopes the tab to the async entry
+    // itself, that entry is what is being rendered, and collapsing it would open the
+    // isolated view on nothing.
+    const firstEntry = entries.firstElementChild;
+    entries.querySelectorAll('.pk-gantt-span--async .pk-gantt-toggle').forEach(toggle => {
+        if (toggle.closest('.pk-gantt-span') === firstEntry) return;
+        if (toggle.getAttribute('aria-expanded') === 'true') toggleSubtree(toggle);
+    });
 
     allDetailsToggle.addEventListener('click', () => {
         const open = !allDetailsOpen(entries);
@@ -124,6 +139,28 @@ function nextOutsideSubtree(entry) {
     return next;
 }
 
+function findSpan(span, spanId) {
+    if (!span) return null;
+    if (span.spanId === spanId) return span;
+    for (const child of span.children || []) {
+        const found = findSpan(child, spanId);
+        if (found) return found;
+    }
+    return null;
+}
+
+/** A subtree's own wall-clock window: a child can outlive its parent, which is why this exists. */
+function subtreeWindowMs(span) {
+    const end = latestEndMs(span, span.startTimeMs + (span.durationMs || 0));
+    return Math.max(end - span.startTimeMs, 0);
+}
+
+function latestEndMs(span, latest) {
+    let end = Math.max(latest, span.startTimeMs + (span.durationMs || 0));
+    for (const child of span.children || []) end = latestEndMs(child, end);
+    return end;
+}
+
 function spanKind(span) {
     const kind = (span.kind || 'internal').toLowerCase();
     return Object.hasOwn(KIND_LABELS, kind) ? kind : 'internal';
@@ -156,7 +193,7 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, lo
     // accessible name - reads this one flag rather than re-deriving it.
     const hasError = span.status === 'ERROR';
 
-    const entry = el('div', {className: `pk-gantt-span pk-gantt-kind--${kind}`});
+    const entry = el('div', {className: `pk-gantt-span pk-gantt-kind--${kind}${span.asyncEntry ? ' pk-gantt-span--async' : ''}`});
     entry.dataset.depth = depth;
     entry.style.setProperty('--pk-gantt-depth', depth);
 
@@ -169,8 +206,14 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, lo
     entry.append(row, detailsPanel(span, kind, detailsId));
     container.appendChild(entry);
 
+    // An async subtree is excluded from the trace's duration, so measuring its children
+    // against that duration would put them off the end of the chart. They get their own
+    // basis - the entry row itself keeps the trace's, or its bar would claim a start time
+    // it does not have and report a share its siblings' column cannot be read against.
+    const childrenStart = span.asyncEntry ? span.startTimeMs : traceStart;
+    const childrenDuration = span.asyncEntry ? (subtreeWindowMs(span) || 1) : totalDuration;
     (span.children || []).forEach(child =>
-        renderSpanEntries(container, child, depth + 1, traceStart, totalDuration, locale));
+        renderSpanEntries(container, child, depth + 1, childrenStart, childrenDuration, locale));
 }
 
 function nameCell(span, kind, detailsId, hasError, locale) {
@@ -189,12 +232,21 @@ function nameCell(span, kind, detailsId, hasError, locale) {
         attrs: {
             'aria-expanded': 'false',
             'aria-controls': detailsId,
-            'aria-label': `${name}, ${kind} span${hasError ? ', error' : ''}`
+            'aria-label': `${name}, ${kind} span${hasError ? ', error' : ''}${span.asyncEntry ? ', background work' : ''}`
         }
     }, kindDot(), el('span', {className: 'pk-gantt-name__text', text: name})));
     // aria-hidden: the name button's accessible name above already ends in ", error".
     if (hasError) {
         cell.append(el('span', {className: 'pk-span-error-chip', text: 'error', attrs: {'aria-hidden': 'true'}}));
+    }
+    // aria-hidden: the name button's accessible name above already ends in ", background work".
+    if (span.asyncEntry) {
+        cell.append(el('span', {
+            className: 'pk-span-async-chip',
+            text: 'background',
+            title: 'Background work, excluded from this trace’s duration',
+            attrs: {'aria-hidden': 'true'}
+        }));
     }
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
     // span.query, and the row count of the result-set span it paired to this one (RowCounts)
@@ -215,9 +267,12 @@ function nameCell(span, kind, detailsId, hasError, locale) {
 function track(span, traceStart, totalDuration, hasError) {
     const spanStart = span.startTimeMs || traceStart;
     const spanDuration = span.durationMs || 0;
-    const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
+    // Clipped to the track at both ends: an async entry's own bar is measured against a trace
+    // duration its work is excluded from, so it can start or end past the right edge, and a bar
+    // drawn outside the track claims a place the chart cannot show.
+    const left = Math.min(Math.max(((spanStart - traceStart) / totalDuration) * 100, 0), 100);
     // the 0.5% floor only keeps the bar itself visible; the duration cell reports the raw share
-    const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
+    const width = Math.max(Math.min((spanDuration / totalDuration) * 100, 100 - left), 0.5);
 
     const element = document.createElement('div');
     element.className = 'pk-gantt-track';
