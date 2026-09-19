@@ -77,8 +77,9 @@ cd peekaboot-testing-app && mvn spring-boot:run   # the sample app on :8093; nee
 ```
 
 The gates `mvn verify` enforces are the static-analysis tools (Spotless, Error Prone,
-SpotBugs, Checkstyle, PMD), the dependency and output checks, and the reactor-wide JaCoCo
-coverage floor in `peekaboot-coverage`. Local builds format your sources for you; run
+SpotBugs, Checkstyle, PMD), the frontend's linters (ESLint, stylelint and html-validate,
+on a Node the build downloads), the dependency and output checks, and the reactor-wide
+JaCoCo coverage floor in `peekaboot-coverage`. Local builds format your sources for you; run
 `mvn spotless:apply` to do it by hand. A parallel Gradle build (`./gradlew build`) covers
 the same modules, tests and gates, but Maven is the system of record and the only thing CI
 runs, so a change to one has to be mirrored in the other.
