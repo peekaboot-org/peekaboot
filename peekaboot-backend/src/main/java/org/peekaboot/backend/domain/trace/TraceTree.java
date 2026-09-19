@@ -84,23 +84,4 @@ public record TraceTree(
                 subtree,
                 truncated);
     }
-
-    /** The view narrowed to one subtree, or widened back to the whole trace with {@code null}. */
-    public TraceTree withSubtree(SubtreeView newSubtree) {
-        return new TraceTree(
-                traceId,
-                startTimeMs,
-                durationMs,
-                status,
-                slow,
-                rootActionType,
-                rootOperation,
-                rootSpan,
-                summary,
-                httpExchange,
-                logs,
-                queries,
-                newSubtree,
-                truncated);
-    }
 }

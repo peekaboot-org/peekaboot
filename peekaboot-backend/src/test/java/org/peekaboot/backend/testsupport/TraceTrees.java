@@ -55,11 +55,6 @@ public final class TraceTrees {
             return this;
         }
 
-        public Builder subtree(SubtreeView subtree) {
-            this.subtree = subtree;
-            return this;
-        }
-
         public TraceTree build() {
             return new TraceTree(
                     traceId,

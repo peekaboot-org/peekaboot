@@ -123,11 +123,6 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder asyncEntry(boolean asyncEntry) {
-            this.asyncEntry = asyncEntry;
-            return this;
-        }
-
         public SpanNode build() {
             return new SpanNode(
                     spanId,
