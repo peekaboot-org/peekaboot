@@ -94,10 +94,10 @@ public class TraceTreeMapper {
 
     /**
      * The same trace seen from one of its spans: the tree rooted there, timed by that
-     * subtree's own window rather than the trace's, classified from that span, and
-     * summarised over that subtree's own spans rather than the whole trace's - see
-     * {@link #subtreeSummary}. What the listing's async rows and the {@code ?root=} deep
-     * link both render.
+     * subtree's own window rather than the trace's, classified from that span, summarised
+     * over that subtree's own spans rather than the whole trace's - see
+     * {@link #subtreeSummary} - and ended OK or in error by those same spans. What the
+     * listing's async rows and the {@code ?root=} deep link both render.
      */
     public TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId) {
         TraceTree whole = map(traceData);
@@ -112,16 +112,21 @@ public class TraceTreeMapper {
         boolean enclosed = subtreeRootData != null
                 && subtreeRootData.parentId() != null
                 && traceData.spans().stream().anyMatch(span -> span.spanId().equals(subtreeRootData.parentId()));
+        TraceTabSummary summary = subtreeSummary(subtreeRoot);
+        // the subtree's own errors, not the enclosing trace's: background work that succeeded
+        // must not wear the ERROR badge of the request that dispatched it, which would also
+        // pre-empt the row's own SLOW verdict
+        TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
         return new TraceTree(
                 traceData.traceId(),
                 subtreeRoot.startTimeMs(),
                 subtreeWindowMs(subtreeRoot),
-                whole.status(),
+                status,
                 whole.slow(),
                 detectRootActionType(subtreeRootData),
                 subtreeRoot.name(),
                 subtreeRoot,
-                subtreeSummary(subtreeRoot),
+                summary,
                 whole.httpExchange(),
                 whole.logs(),
                 whole.queries(),

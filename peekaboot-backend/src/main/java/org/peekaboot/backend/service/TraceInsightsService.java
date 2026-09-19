@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -154,10 +155,33 @@ public class TraceInsightsService {
 
     private TraceTree mapRow(RowSource row) {
         TraceData traceData = row.bundle().snapshot();
-        TraceTree tree = row.subtreeRootSpanId() == null
-                ? traceTreeMapper.map(traceData)
-                : traceTreeMapper.mapSubtree(traceData, row.subtreeRootSpanId());
-        return withLogsSummary(tree, row.bundle().logs());
+        if (row.subtreeRootSpanId() == null) {
+            return withLogsSummary(traceTreeMapper.map(traceData), row.bundle().logs());
+        }
+        TraceTree subtree = traceTreeMapper.mapSubtree(traceData, row.subtreeRootSpanId());
+        return withLogsSummary(subtree, logsWithin(subtree.rootSpan(), row.bundle()));
+    }
+
+    /**
+     * The logs emitted inside one subtree's own spans. A subtree row reports the work it
+     * contains, so the enclosing request's log count - and the error badge that count puts on
+     * the row - are not its to show. Resolved through the bundle for the same reason the
+     * detail's logs are: a log's MDC span id may name a span folded away since.
+     */
+    private static List<LogCapturedEvent> logsWithin(SpanNode subtreeRoot, TraceDataBundle bundle) {
+        Set<String> spanIds = new HashSet<>();
+        collectSpanIds(subtreeRoot, spanIds);
+        return bundle.logs().stream()
+                .filter(log -> log.spanId() != null && spanIds.contains(bundle.resolveSpanId(log.spanId())))
+                .toList();
+    }
+
+    private static void collectSpanIds(SpanNode node, Set<String> spanIds) {
+        if (node == null) {
+            return;
+        }
+        spanIds.add(node.spanId());
+        node.children().forEach(child -> collectSpanIds(child, spanIds));
     }
 
     /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */

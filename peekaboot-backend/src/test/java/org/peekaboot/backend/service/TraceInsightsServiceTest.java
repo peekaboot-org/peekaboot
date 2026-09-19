@@ -24,6 +24,7 @@ import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceLog;
+import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
@@ -720,6 +721,38 @@ class TraceInsightsServiceTest {
     }
 
     @Test
+    void anAsyncRowCountsOnlyTheLogsEmittedInsideItsOwnSubtree() {
+        addTraceWithAsyncWork("http1", 50, 1_000);
+        store.addLog(log("http1")
+                .inSpan("span-http1")
+                .at("ERROR")
+                .saying("the request failed")
+                .build());
+        store.addLog(log("http1").inSpan("async-http1").saying("enriching").build());
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+
+        assertThat(response.traces())
+                .extracting(TraceTree::rootActionType, tree -> tree.summary().logs())
+                .containsExactlyInAnyOrder(
+                        tuple(RootActionType.HTTP_REQUEST, new TraceTabSummary.LogsSummary(2, 1, 0)),
+                        tuple(RootActionType.ASYNC_TASK, new TraceTabSummary.LogsSummary(1, 0, 0)));
+    }
+
+    @Test
+    void anAsyncRowEndsOkWhenOnlyTheRequestThatDispatchedItFailed() {
+        addFailedRequestWithAsyncWork("http1", 50, 1_000);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+
+        assertThat(response.traces())
+                .extracting(TraceTree::rootActionType, TraceTree::status)
+                .containsExactlyInAnyOrder(
+                        tuple(RootActionType.HTTP_REQUEST, TraceStatus.HAS_ERRORS),
+                        tuple(RootActionType.ASYNC_TASK, TraceStatus.OK));
+    }
+
+    @Test
     void aTypeFilterSelectsRowsRatherThanTraces() {
         addTraceWithAsyncWork("http1", 50, 1_000);
 
@@ -828,13 +861,26 @@ class TraceInsightsServiceTest {
     private void addTraceWithAsyncWork(String traceId, long requestMs, long asyncMs) {
         store.addSpan(
                 rootSpan(traceId, "test-operation", Span.Kind.SERVER, requestMs).build());
-        store.addSpan(span("async-" + traceId)
+        store.addSpan(asyncTaskSpan(traceId, requestMs, asyncMs));
+    }
+
+    /** The same hand-off, from a request that then failed while the background work did not. */
+    private void addFailedRequestWithAsyncWork(String traceId, long requestMs, long asyncMs) {
+        store.addSpan(rootSpan(traceId, "test-operation", Span.Kind.SERVER, requestMs)
+                .error("Test error", "TestException")
+                .build());
+        store.addSpan(asyncTaskSpan(traceId, requestMs, asyncMs));
+    }
+
+    /** The span Peekaboot's decorator exports for one task, dispatched 10ms before the request ended. */
+    private static SpanData asyncTaskSpan(String traceId, long requestMs, long asyncMs) {
+        return span("async-" + traceId)
                 .in(traceId)
                 .parent("span-" + traceId)
                 .named(AsyncTaskMarker.CONTEXTUAL_NAME)
                 .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .at(requestMs - 10, asyncMs)
-                .build());
+                .build();
     }
 
     /**
