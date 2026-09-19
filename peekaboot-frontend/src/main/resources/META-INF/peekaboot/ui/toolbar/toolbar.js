@@ -222,7 +222,7 @@ function installServerTimingInterceptor(basePath, onRequest) {
         let path;
         try {
             path = new URL(url, window.location.origin).pathname;
-        } catch (e) {
+        } catch {
             path = url;
         }
 

@@ -10,7 +10,7 @@
  */
 (function () {
     var stored = null;
-    try { stored = localStorage.getItem('peekaboot-theme'); } catch (e) { /* storage blocked */ }
+    try { stored = localStorage.getItem('peekaboot-theme'); } catch { /* storage blocked */ }
     var theme = stored === 'light' || stored === 'dark'
         ? stored
         : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');

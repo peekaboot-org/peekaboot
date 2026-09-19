@@ -35,13 +35,13 @@
         var markedAt = sessionStorage.getItem(RETRY_MARKER);
         alreadyRetried = markedAt !== null && Date.now() - Number(markedAt) < RETRY_WINDOW_MS;
         sessionStorage.removeItem(RETRY_MARKER);
-    } catch (e) { /* storage blocked */ }
+    } catch { /* storage blocked */ }
 
     function markRetry() {
         try {
             sessionStorage.setItem(RETRY_MARKER, String(Date.now()));
             return true;
-        } catch (e) {
+        } catch {
             return false;
         }
     }
