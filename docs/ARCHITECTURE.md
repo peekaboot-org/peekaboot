@@ -997,6 +997,9 @@ The same decorator bean pool backs both `ThreadPoolTaskExecutorBuilder` and the 
 builders, which is why the scheduled-execution guard matters even for an application that never
 calls `@Async` directly: Peekaboot's decorator is wired into the scheduler regardless.
 
+Keeping the work under a marked span out of its trace's timings is the store's half of this
+feature, in *Async Subtree Timing* below.
+
 ### Micrometer Tracer Integration
 
 On the request path (`RequestCaptureFilter` and `DevToolbarFilter`) Peekaboot reads the trace
@@ -1091,6 +1094,50 @@ arrive after its own parent, which the `BatchSpanProcessor`'s child-before-paren
 forbids. Adding a third service-identifier key, or making `SpanDuplicateMatcher.isDuplicate`
 non-transitive, brings it within reach. The answer to that is a few lines in `TraceDataBundle`,
 never a second deduplication pass beside the write-time one.
+
+### Async Subtree Timing
+
+Background work must not lengthen the trace that triggered it, so `TraceDataBundle` keeps two
+pairs of high-water marks rather than one. `minSpanStart`/`maxSpanEnd` stay the true window over
+every span ever stored. `minSyncStart`/`maxSyncEnd` cover only the spans outside an async
+subtree, and `synchronousWindow()` is an O(1) read off that second pair. It falls back to
+`spanWindow()` for a bundle whose every span is async - an orphaned task, where the background
+work is the whole trace and its own duration is the honest answer.
+
+`snapshot()` passes `synchronousWindow()` as `TraceData.duration`, so the listing, the detail
+header and the waterfall denominator in `trace-detail/tabs/spans.js` all read it, and
+`InMemoryTraceStore` admits to the Slow bucket by the same method. Both pairs are high-water
+under eviction, for the reason `TraceData.duration`'s Javadoc states: the duration shown has to
+be the number the Slow bucket admitted the trace by, even once the span cap has dropped the
+earliest spans. A window recomputed at read time would shrink as spans are evicted, and
+admission would then disagree with what the row says.
+
+`TraceTabSummary.SpansSummary.totalDurationMs`, the sum of per-span durations rather than a
+window, excludes async spans too. `count`, `errorCount` and the query figures deliberately still
+cover every span: Errors-bucket admission reads the bundle's own error signal, which any span
+sets, so a trace whose only failure was a background task would read OK while sitting in the
+Errors bucket.
+
+Membership is `asyncSpanIds`, maintained span by span in `store()`. An arriving span joins the
+set when its resolved parent is already in it, and folds into the synchronous marks otherwise. A
+*marked* span instead triggers `rebuildAsyncMembership`, which recomputes membership over the
+stored spans and rebuilds the synchronous marks from scratch. That rebuild is what corrects the
+export order: spans are stored child-before-parent, so a marked span's descendants have been
+counting as synchronous until it turns up. It costs one pass per async task, and nothing at all
+for a trace with no marked span. `asyncEntrySpans()` reads the subtree entry points off the same
+set - a marked span whose resolved parent is not itself async - which is what keeps the listing
+pass off a tree walk.
+
+Ancestry resolves parents through `resolve(...)`, the redirect table span deduplication leaves
+behind, exactly as `rootOf` does. A span hanging off a deduplicated span names a parent id that is no
+longer stored, so skipping the redirect would leave it outside the subtree it belongs to and back
+in the synchronous window.
+
+The trade-off is truncation. Eviction drops evicted ids from `asyncSpanIds` and never lowers the
+marks, so a rebuild over a span set that no longer holds the marked entry span stops recognising
+that subtree, and its retained descendants fold back into the synchronous window. The `truncated`
+flag already says the data is partial, and 500 spans ahead of the async entry point is well
+outside the case this serves.
 
 ### Query Extraction
 

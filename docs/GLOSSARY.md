@@ -11,8 +11,8 @@ term twice and letting the two copies drift.
 There is no `Trace` class. A trace is a `traceId` and whatever is filed under it, in three
 shapes: `TraceDataBundle` while the store is writing, `TraceData` when the bundle is read back
 in one go (`TraceDataBundle.snapshot()`: the spans flat and creation-ordered, the root, the
-window and the truncated flag), and `TraceTree` once mapped for the UI. Only
-the third leaves the process. What lands in the store is on the site:
+window, the async membership and the truncated flag), and `TraceTree` once mapped for the UI.
+Only the third leaves the process. What lands in the store is on the site:
 [what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured).
 
 ### Span
@@ -47,6 +47,16 @@ id and is not SERVER-kind, which is a different suppression from the default vie
 As a filter it is `TraceInsightsService.matchesRootOperation`, a case-insensitive substring
 match with a `Class.method` suffix fallback so a fully-qualified scheduled-task target still
 matches a bean-name span name.
+
+### Async Subtree
+A span carrying the marker tag `AsyncTaskMarker.TAG_KEY` (`peekaboot.async`), plus every
+descendant of it. `TraceDataBundle.asyncSpanIds` holds that membership transitively;
+`asyncEntrySpans()` returns the entry points alone, a marked span whose resolved parent is not
+itself async. An entry point classifies as `RootActionType.ASYNC_TASK`, gets a listing row of
+its own carrying `TraceTree.subtree` as a `SubtreeView(rootSpanId, enclosedByStoredTrace)`, and
+is flagged on the tree as `SpanNode.asyncEntry`, which is what the Spans tab collapses and
+re-bases by. What a reader sees:
+[background work](https://www.peekaboot.org/docs/traces/#background-work).
 
 ### Trace Status and Span Status
 `TraceStatus {OK, HAS_ERRORS}` on the trace, `SpanStatus {OK, ERROR}` on each span, both
@@ -98,6 +108,14 @@ silently. A new mirrored vocabulary belongs there too.
 correlated logs, the request metadata, the `truncated` flag and the parent-redirect table left
 behind by span deduplication. It is never serialised. `TraceData` is the flat, creation-ordered
 view of its spans that the mappers consume.
+
+### Synchronous Window
+`TraceDataBundle.synchronousWindow()`, the high-water window over the spans outside any async
+subtree, held in `minSyncStart`/`maxSyncEnd` beside the full-window pair
+`minSpanStart`/`maxSpanEnd`. `snapshot()` carries it as `TraceData.duration`, so a trace's
+duration in the listing, the detail header, the waterfall denominator and Slow-bucket admission
+is this number rather than `spanWindow()`. The two agree for every trace with no async span. The
+maintenance rules are in *Async Subtree Timing* in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ### Insights rings
 The Insights tab's history is ring buffers, not a time-series database. Per series,
