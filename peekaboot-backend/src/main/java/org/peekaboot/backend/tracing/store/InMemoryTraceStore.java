@@ -127,17 +127,24 @@ public class InMemoryTraceStore implements TraceStore {
         }
     }
 
+    /**
+     * Bucket membership after the arriving span. The Errors bucket is add-only - a failure
+     * that happened stays one - but the Slow bucket cannot be: the synchronous window a trace
+     * was admitted by can fall. A child of an async entry arrives before the entry itself
+     * does (see {@link TraceDataBundle}), counts as synchronous until then, and can push the
+     * window past the threshold on background work alone; the entry's arrival rebuilds
+     * membership and the window returns to what the caller waited for. Without the removal
+     * below the Slow bucket would keep listing that trace beside a duration disagreeing with
+     * the one it was admitted by.
+     */
     private void classify(TraceDataBundle bundle) {
-        boolean inErrors = errorTraces.containsKey(bundle.traceId());
-        boolean inSlow = slowTraces.containsKey(bundle.traceId());
-        if (inErrors && inSlow) {
-            return;
-        }
-        if (!inErrors && hasError(bundle)) {
+        if (!errorTraces.containsKey(bundle.traceId()) && hasError(bundle)) {
             errorTraces.putIfAbsent(bundle.traceId(), bundle);
         }
-        if (!inSlow && isSlow(bundle)) {
+        if (isSlow(bundle)) {
             slowTraces.putIfAbsent(bundle.traceId(), bundle);
+        } else {
+            slowTraces.remove(bundle.traceId());
         }
     }
 

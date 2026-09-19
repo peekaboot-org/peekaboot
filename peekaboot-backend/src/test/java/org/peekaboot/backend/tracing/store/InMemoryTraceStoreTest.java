@@ -229,6 +229,40 @@ class InMemoryTraceStoreTest {
                 .containsExactly("t1");
     }
 
+    /**
+     * The arrival order production really produces: a child of an async entry ends - and so
+     * exports - before the entry it hangs under, and while that entry is missing nothing can
+     * tell the child from synchronous work. Its window admits the trace to the Slow bucket,
+     * and the entry's arrival takes the window back down to what the caller waited for, so
+     * admission has to be reconsidered rather than only ever granted.
+     */
+    @Test
+    void aTraceAdmittedByAnAsyncChildLeavesTheSlowBucketOnceItsEntryArrives() {
+        InMemoryTraceStore store = storeWithSlowThreshold(1_000);
+        store.addSpan(span("root")
+                .in("t1")
+                .named("GET /orders")
+                .at(START, Duration.ofMillis(50))
+                .build());
+        store.addSpan(span("child")
+                .in("t1")
+                .parent("async")
+                .named("enrich order")
+                .at(START.plusMillis(100), Duration.ofSeconds(239))
+                .build());
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
+                .as("with its parent still missing, the child counts as work the caller waited for")
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+
+        store.addSpan(asyncSpan("t1", "root", START.plusMillis(40), Duration.ofMinutes(4)));
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
+        assertThat(store.getTrace("t1").orElseThrow().snapshot().duration())
+                .as("and the duration the listing reports agrees with the bucket it is no longer in")
+                .isEqualTo(Duration.ofMillis(50));
+    }
+
     @Test
     void classificationIsIdempotent() {
         storage.addSpan(errorSpan("t1"));
