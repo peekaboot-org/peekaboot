@@ -39,7 +39,7 @@
                          accessible name otherwise falls to the glyph inside it ("↻",
                          "❚❚", "☾"), because text content outranks title. main.js keeps
                          the labels of the three stateful ones in step with their icon. -->
-                    <button class="pk-btn pk-btn--small" id="timezone-toggle" title="Toggle timezone"
+                    <button type="button" class="pk-btn pk-btn--small" id="timezone-toggle" title="Toggle timezone"
                             aria-label="Timezone: browser. Switch to server timezone">
                         <span id="timezone-icon" aria-hidden="true">&#127760;</span>
                         <span id="timezone-label">Browser</span>
@@ -51,13 +51,13 @@
                         <option value="fr-FR">FR</option>
                         <option value="es-ES">ES</option>
                     </select>
-                    <button class="pk-btn pk-btn--icon" id="refresh-btn" title="Refresh now" aria-label="Refresh now">
+                    <button type="button" class="pk-btn pk-btn--icon" id="refresh-btn" title="Refresh now" aria-label="Refresh now">
                         <span id="refresh-icon" aria-hidden="true">&#8635;</span>
                     </button>
-                    <button class="pk-btn pk-btn--icon" id="pause-btn" title="Pause auto-refresh" aria-label="Pause auto-refresh">
+                    <button type="button" class="pk-btn pk-btn--icon" id="pause-btn" title="Pause auto-refresh" aria-label="Pause auto-refresh">
                         <span id="pause-icon" aria-hidden="true">&#10074;&#10074;</span>
                     </button>
-                    <button class="pk-btn pk-btn--icon" id="theme-toggle" title="Toggle theme" aria-label="Switch to dark theme">
+                    <button type="button" class="pk-btn pk-btn--icon" id="theme-toggle" title="Toggle theme" aria-label="Switch to dark theme">
                         <span id="theme-icon" aria-hidden="true"></span>
                     </button>
                 </div>
@@ -68,16 +68,16 @@
     <main class="pk-container">
         <nav aria-label="Dashboard sections">
         <div class="pk-tabs" id="main-tabs" role="tablist">
-            <button class="pk-tab" role="tab" id="overview-tab-btn" data-tab="overview" aria-controls="overview-tab" aria-selected="true">Overview</button>
-            <button class="pk-tab hidden" role="tab" id="insights-tab-btn" data-tab="insights" aria-controls="insights-tab" aria-selected="false">Insights</button>
-            <button class="pk-tab" role="tab" id="lifecycle-tab-btn" data-tab="lifecycle" aria-controls="lifecycle-tab" aria-selected="false">Lifecycle</button>
-            <button class="pk-tab hidden" role="tab" id="traces-tab-btn" data-tab="traces" aria-controls="traces-tab" aria-selected="false">Traces</button>
-            <button class="pk-tab hidden" role="tab" id="meters-tab-btn" data-tab="meters" aria-controls="meters-tab" aria-selected="false">Meters</button>
-            <button class="pk-tab" role="tab" id="environment-tab-btn" data-tab="environment" aria-controls="environment-tab" aria-selected="false">Environment</button>
-            <button class="pk-tab hidden" role="tab" id="flyway-tab-btn" data-tab="flyway" aria-controls="flyway-tab" aria-selected="false">Flyway</button>
-            <button class="pk-tab hidden" role="tab" id="loggers-tab-btn" data-tab="loggers" aria-controls="loggers-tab" aria-selected="false">Loggers</button>
-            <button class="pk-tab hidden" role="tab" id="config-tab-btn" data-tab="config" aria-controls="config-tab" aria-selected="false">Config</button>
-            <button class="pk-tab hidden" role="tab" id="scheduled-tasks-tab-btn" data-tab="scheduled-tasks" aria-controls="scheduled-tasks-tab" aria-selected="false">Scheduled Tasks</button>
+            <button type="button" class="pk-tab" role="tab" id="overview-tab-btn" data-tab="overview" aria-controls="overview-tab" aria-selected="true">Overview</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="insights-tab-btn" data-tab="insights" aria-controls="insights-tab" aria-selected="false">Insights</button>
+            <button type="button" class="pk-tab" role="tab" id="lifecycle-tab-btn" data-tab="lifecycle" aria-controls="lifecycle-tab" aria-selected="false">Lifecycle</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="traces-tab-btn" data-tab="traces" aria-controls="traces-tab" aria-selected="false">Traces</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="meters-tab-btn" data-tab="meters" aria-controls="meters-tab" aria-selected="false">Meters</button>
+            <button type="button" class="pk-tab" role="tab" id="environment-tab-btn" data-tab="environment" aria-controls="environment-tab" aria-selected="false">Environment</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="flyway-tab-btn" data-tab="flyway" aria-controls="flyway-tab" aria-selected="false">Flyway</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="loggers-tab-btn" data-tab="loggers" aria-controls="loggers-tab" aria-selected="false">Loggers</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="config-tab-btn" data-tab="config" aria-controls="config-tab" aria-selected="false">Config</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="scheduled-tasks-tab-btn" data-tab="scheduled-tasks" aria-controls="scheduled-tasks-tab" aria-selected="false">Scheduled Tasks</button>
         </div>
         </nav>
 
@@ -93,7 +93,7 @@
              un-hides and a screen-reader user is left on silently stale data. -->
         <div id="error" class="pk-error-banner hidden" role="alert">
             <span class="message"></span>
-            <button class="pk-unbutton pk-icon-btn pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
+            <button type="button" class="pk-unbutton pk-icon-btn pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
         </div>
 
         <!-- Overview Tab -->
@@ -203,14 +203,14 @@
             <!-- filled by traces.js's loadingBlock() -->
             <div id="traces-loading" class="hidden"></div>
             <div id="traces-bucket" class="pk-filter-row">
-                <button class="pk-btn pk-btn--bucket" data-bucket="all" aria-pressed="true">All</button>
-                <button class="pk-btn pk-btn--bucket" data-bucket="errors" aria-pressed="false">Errors</button>
-                <button class="pk-btn pk-btn--bucket" data-bucket="slow" aria-pressed="false">Slow</button>
+                <button type="button" class="pk-btn pk-btn--bucket" data-bucket="all" aria-pressed="true">All</button>
+                <button type="button" class="pk-btn pk-btn--bucket" data-bucket="errors" aria-pressed="false">Errors</button>
+                <button type="button" class="pk-btn pk-btn--bucket" data-bucket="slow" aria-pressed="false">Slow</button>
             </div>
             <div id="traces-filter" class="pk-filter-row">
                 <span class="pk-filter-row__label pk-label">Filter by type:</span>
                 <!-- checkbox per ROOT_ACTION_TYPES entry, injected by traces.js -->
-                <button id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
+                <button type="button" id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
             </div>
             <div id="traces-active-filter" class="pk-filter-banner hidden">
                 <span class="pk-filter-banner__text"></span>
