@@ -45,7 +45,7 @@ jobs:
       # rewriting them first would miss that cache on every branch but dev. Shared with the
       # osslabz repos, which is why the integration branch is an input rather than assumed.
       - name: set-snapshot-version
-        uses: osslabz/github-actions/snapshot-version@c3c3d673a352ab5c69e80dccb7f5391595bf4429 # v1.0.0
+        uses: osslabz/github-actions/snapshot-version@v1
         with:
           default-branch: dev
 
