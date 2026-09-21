@@ -456,8 +456,8 @@ See [Releasing](#releasing).
 
 ### `dependabot-pr-auto-merge.yml`
 
-Approves a Dependabot PR targeting `dev`, waits for its build with `gh pr checks --watch
---fail-fast`, and rebase-merges it once green. It waits itself rather than using
+Approves a Dependabot PR targeting `dev`, waits for the `build-on-push` run of its head commit
+with `gh run watch`, and rebase-merges it once green. It waits itself rather than using
 `gh pr merge --auto`, which only arms when a branch rule holds the pull request open; `dev`
 carries no such rule, for the reason under [Releasing](#releasing). A red or cancelled build
 leaves the pull request open for a human. Three kinds wait for a human anyway: semver-major
