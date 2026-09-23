@@ -31,7 +31,7 @@ class StackTraceHtmlTest {
 
         assertThat(html)
                 .contains("<span class=\"pk-error__frame pk-error__frame--app\">"
-                        + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)</span>");
+                        + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)\n</span>");
     }
 
     @Test
@@ -41,7 +41,7 @@ class StackTraceHtmlTest {
         assertThat(html)
                 .contains(
                         "<span class=\"pk-error__frame\">"
-                                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)</span>");
+                                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)\n</span>");
     }
 
     @Test
@@ -129,20 +129,20 @@ class StackTraceHtmlTest {
 
         assertThat(html)
                 .isEqualTo(
-                        "<span class=\"pk-error__frame\">java.lang.IllegalStateException: gateway unreachable</span>\n"
+                        "<span class=\"pk-error__frame\">java.lang.IllegalStateException: gateway unreachable\n</span>"
                                 + "<span class=\"pk-error__frame pk-error__frame--app\">"
-                                + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)</span>\n"
+                                + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)\n</span>"
                                 + "<details class=\"pk-error__hidden\">"
                                 + "<summary class=\"pk-error__hidden-summary\">2 frames hidden</summary>"
                                 + "<span class=\"pk-error__frame\">"
-                                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)</span>\n"
+                                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)\n</span>"
                                 + "<span class=\"pk-error__frame\">"
-                                + "\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)</span>"
-                                + "</details>\n"
-                                + "<span class=\"pk-error__frame\">Caused by: java.net.ConnectException: Connection refused</span>\n"
+                                + "\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)\n</span>"
+                                + "</details>"
+                                + "<span class=\"pk-error__frame\">Caused by: java.net.ConnectException: Connection refused\n</span>"
                                 + "<span class=\"pk-error__frame pk-error__frame--app\">"
-                                + "\tat com.example.orders.Gateway.call(Gateway.java:17)</span>\n"
-                                + "<span class=\"pk-error__frame\">\t... 12 more</span>");
+                                + "\tat com.example.orders.Gateway.call(Gateway.java:17)\n</span>"
+                                + "<span class=\"pk-error__frame\">\t... 12 more\n</span>");
     }
 
     /** The nothing-excluded counterpart to {@link #rendersTheWholeTraceWithTheHiddenRunInPlaceAndInOrder()}. */
@@ -152,17 +152,17 @@ class StackTraceHtmlTest {
 
         assertThat(html)
                 .isEqualTo(
-                        "<span class=\"pk-error__frame\">java.lang.IllegalStateException: gateway unreachable</span>\n"
+                        "<span class=\"pk-error__frame\">java.lang.IllegalStateException: gateway unreachable\n</span>"
                                 + "<span class=\"pk-error__frame pk-error__frame--app\">"
-                                + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)</span>\n"
+                                + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)\n</span>"
                                 + "<span class=\"pk-error__frame\">"
-                                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)</span>\n"
+                                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)\n</span>"
                                 + "<span class=\"pk-error__frame\">"
-                                + "\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)</span>\n"
-                                + "<span class=\"pk-error__frame\">Caused by: java.net.ConnectException: Connection refused</span>\n"
+                                + "\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)\n</span>"
+                                + "<span class=\"pk-error__frame\">Caused by: java.net.ConnectException: Connection refused\n</span>"
                                 + "<span class=\"pk-error__frame pk-error__frame--app\">"
-                                + "\tat com.example.orders.Gateway.call(Gateway.java:17)</span>\n"
-                                + "<span class=\"pk-error__frame\">\t... 12 more</span>");
+                                + "\tat com.example.orders.Gateway.call(Gateway.java:17)\n</span>"
+                                + "<span class=\"pk-error__frame\">\t... 12 more\n</span>");
     }
 
     @Test

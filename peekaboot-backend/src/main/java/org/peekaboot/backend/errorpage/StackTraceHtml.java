@@ -36,26 +36,27 @@ final class StackTraceHtml {
                 html.append(disclosure(lines, run, applicationFrames));
                 i = run.endExclusive();
             } else {
-                html.append(span(lines.get(i), applicationFrames.contains(i))).append('\n');
+                html.append(span(lines.get(i), applicationFrames.contains(i)));
                 i++;
             }
         }
-        return html.toString().stripTrailing();
+        return html.toString();
     }
 
     private static String disclosure(List<String> lines, Range run, Set<Integer> applicationFrames) {
         int count = run.endExclusive() - run.start();
         StringBuilder frames = new StringBuilder();
         for (int i = run.start(); i < run.endExclusive(); i++) {
-            frames.append(span(lines.get(i), applicationFrames.contains(i))).append('\n');
+            frames.append(span(lines.get(i), applicationFrames.contains(i)));
         }
         return "<details class=\"pk-error__hidden\"><summary class=\"pk-error__hidden-summary\">"
                 + count + (count == 1 ? " frame" : " frames") + " hidden</summary>"
-                + frames.toString().stripTrailing() + "</details>\n";
+                + frames + "</details>";
     }
 
     private static String span(String line, boolean applicationFrame) {
-        return "<span class=\"" + (applicationFrame ? APPLICATION_FRAME : FRAME) + "\">" + escape(line) + "</span>";
+        // A line break between the <pre>'s block-level rows renders as an empty line, so each row carries its own.
+        return "<span class=\"" + (applicationFrame ? APPLICATION_FRAME : FRAME) + "\">" + escape(line) + "\n</span>";
     }
 
     /**
