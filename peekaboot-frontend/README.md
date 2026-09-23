@@ -238,7 +238,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `fonts.js` | `registerBundledFonts(basePath)`. Adds the bundled Geist faces to the document a shadow-rooted surface renders into, which an `@font-face` rule cannot reach. Idempotent, and a no-op on the dashboard, which declares them in `tokens.css`. See *The bundled webfont* above. |
 | `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatDateTimeWith(value, options, display)` (the two above are it with a fixed option set; a caller with its own set passes the whole set, never a delta), `formatNumber(n, {locale})`, `formatCount(n, singular, {plural, locale})`, `formatPlainValue`, `formatMetricValue(value, unit, {locale})`, `formatTileValue`, and `METRIC_UNITS`/`TILE_FORMATS`, the wire words of the backend's `Unit` and `TileFormat` enums (pinned by `SharedModuleIT`, as is `insights-chart.js`'s `CHART_TYPES`). Every count is grouped in the `locale` a caller passes - the dashboard's setting - or the browser's own when it is undefined. |
 | `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
-| `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL`, the fallback for the backend's masked-value literal (`Features.maskLiteral`, `"******"`), used only by the surfaces that never load `/api/features` (the dev toolbar and the overlay it opens). |
+| `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL`, the fallback for the backend's masked-value literal (`Features.maskLiteral`, `"******"`), used only by the surfaces that never load `/api/features` (the dev toolbar and the overlay it opens). The trace overlay's Request tab is the only reader of either: it marks a header as masked when its value equals `features.maskLiteral`, or this copy when no features were loaded. |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)`, the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend does not decide what is sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel`. The icon and label map for a trace's root action type (HTTP request, scheduled job, and so on). |
 | `self-fetching-tab.js` | `selfFetchingTab({fetch, reconcile, loading, renderResult, renderError})`. The shell of a dashboard tab whose data comes from its own endpoint instead of the shared payload: the one place for the active-tab guard (a background render skips the round trip), supersession (a `null` from `api.js` renders nothing) and the error path. `traces.js`, `lifecycle.js`, the Overview tab's tile row and `filteredGroupTab`'s `fetchData` path are built on it. Exposes `render`, `refetch()` for a control the tab wires itself, and the latest render's `container()`/`context()`. |
@@ -255,7 +255,8 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 Every dashboard view is addressable: `#<tab>[/<detail>[/<subview>]][?<params>]`
 (`shared/url-state.js`). Structural segments (tab, detail) push a history entry. Subview
 and params are written with `replaceState`, so a filter keystroke or an overlay tab switch
-never adds a Back stop. Opening a URL restores the state below; changing that state
+never adds a Back stop. Closing the trace overlay pushes a bare `#traces`, so Back reopens
+the trace and a reload does not. Opening a URL restores the state below; changing that state
 rewrites the URL in place. `shared/url-filter.js` holds the "URL vs. current state"
 direction rule every tab applies: a tab-strip click's own bare hash push must not clear a
 filter, a hand-edited bare hash must.
@@ -275,7 +276,8 @@ filter, a hand-edited bare hash must.
 | `#config` | `q` | The text filter. |
 | `#scheduled-tasks` | none | No filter. Group expansion is deliberately not URL state, on any tab. |
 
-Theme, locale and timezone are per-browser settings (`localStorage`), never URL state. A
+Theme, locale and timezone are per-browser settings (`localStorage` keys `peekaboot-theme`,
+`peekaboot-locale` and `peekaboot-use-server-tz`), never URL state. A
 shared link must not impose the sender's display preferences on the reader. An invalid
 param value (unknown bucket, root action type, level, log level, page, checkbox flag or
 panel override) falls back to its default instead of reaching the backend or filtering

@@ -409,7 +409,26 @@ constructors, and Boot's `Sanitizer` still runs them regardless of `Show.ALWAYS`
 A host `SanitizingFunction` bean still masks a value before Peekaboot sees it.
 Short of that, what decides whether a value reaches the dashboard unmasked is
 `MaskingEngine` alone, gated by `peekaboot.enable-unmasking` and the request's
-`unmask` parameter (`PeekabootController.resolveUnmask`).
+`unmask` parameter (`PeekabootController.resolveUnmask`). Spring Boot 4.1 registers no
+`SanitizingFunction` of its own, and with `Show.ALWAYS` its `Sanitizer` returns every
+value no function changed, so without a host bean Boot masks nothing on this path.
+
+`MaskingRules` is the data behind `MaskingEngine`, and its Javadoc carries the reasons.
+The ones a change is most likely to undo:
+
+- The exact, case-sensitive key `PWD` is exempt. It is the shell's working directory, set
+  in every developer's `systemEnvironment`. Lower-case `pwd` still masks, since that is how
+  a SQL Server JDBC URL or a login form names a password.
+- Bare `key` and bare `certificate` are not rules. They would mask
+  `server.ssl.key-store`, `server.ssl.certificate` and `spring.jpa.key-generator`, which
+  are paths or settings. Key material is caught by the PEM value pattern.
+- A key whose last token is `uri` or `url` skips both word lists, so an OAuth2 provider's
+  `token-uri` stays readable. `SPRING_SANITIZER_KEY_PATTERNS` still apply, and the value
+  patterns still catch a credential inside the URL.
+- `sig` is a rule for Azure SAS's abbreviated `?sig=` signature parameter.
+- `cookie` and `set-cookie` match only as the whole key, so
+  `server.servlet.session.cookie.*` stays readable.
+- There is no entropy-based detection. A git SHA, a UUID or a base64 asset would trip it.
 
 The endpoint objects `ActuatorSourcesAutoConfiguration` builds are not beans. A
 second bean carrying `@Endpoint(id = "env")` would collide with the application's
@@ -693,6 +712,10 @@ consumer of the starter can be without them.
 controllers, services and actuator wiring, all as explicit `@Bean` methods whose names yield
 the class-derived bean names `ServerUrlResolver`'s dashboard check relies on. It needs the
 servlet guard because `PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type.
+`PeekabootWebConfig` is also the only thing that serves the UI bundle. The bundle lives at
+`classpath:/META-INF/peekaboot/ui/`, outside every static location Boot serves by default,
+and its resource handler exists only while `peekaboot.enabled` is `true`. With Peekaboot off
+nothing under `/peekaboot/**` answers, the assets included.
 
 That guard prevents dead beans, not a crash. Without it a WebFlux or non-web application with
 `peekaboot.enabled=true` would register the controller, services and mappers with nothing
@@ -753,9 +776,13 @@ signals of its own, checked in order:
 4. Those three hold for *every* exploded-classpath launch, so two more signals decide
    (`LocalDevDetector.LaunchSignals`, read from the JVM and the host, injectable in tests).
    `java.class.path` must contain a build tool's output directory, and
-   `ContainerRuntime.current()` must report `NONE`. The site names the accepted directory
-   suffixes and the four container markers under
-   [what counts as a local run](https://www.peekaboot.org/docs/configuration/#local-run).
+   `ContainerRuntime.current()` must report `NONE`. An entry counts as an output directory
+   when, with backslashes turned to slashes and a trailing slash dropped, it ends in
+   `/target/classes`, `/build/classes/{java,kotlin,groovy,scala}/main` or `/bin/main`, or
+   contains IntelliJ's `/out/production/`. `ContainerRuntime.detect` checks its markers in
+   this order and stops at the first hit: a `KUBERNETES_SERVICE_HOST` environment variable,
+   `/.dockerenv`, `/run/.containerenv`, then `/proc/1/cgroup` naming `docker`, `kubepods` or
+   `containerd`. A cgroup file that is missing or cannot be read counts as no container.
    A jar's `Class-Path` manifest attribute counts as part of the class path, resolved
    relative to the jar, because IntelliJ's "JAR manifest" command-line shortening leaves one
    temp jar on `java.class.path` and moves every real entry into its manifest. An IDE,
@@ -966,7 +993,10 @@ It raises one observation when a task crosses a thread hand-off through Spring's
 | `peekaboot.async.task` | the decorated `Runnable`, on the executor thread | `peekaboot.async` (low cardinality, always `true`), `peekaboot.async.thread` (high cardinality: the executor thread's name) |
 
 Its contextual name is `async task`, not the observation name, for the same reason the view
-observation above isn't its own row title.
+observation above isn't its own row title. Every async entry span carries that same name
+because a `TaskDecorator` receives an opaque `Runnable`: the method behind it cannot be
+recovered. A telling name has to come from the application, through
+`@Observed(contextualName = "...")` on the method, which then shows as a child span.
 
 Two guards, for two different failure modes. The decorator observes only when the submitting
 thread already has an observation open; a task with nothing to continue would start a rootless
@@ -1067,6 +1097,14 @@ the threshold that put it there. `truncated` travels on the snapshot rather than
 from the span list: the list is already deduplicated and already capped, so nothing in it can
 say whether real spans were dropped.
 
+`InMemoryTraceStore` opens a bundle on the first span, log line or `RequestCompletedEvent` it
+sees for a trace id. The request usually comes first: `RequestCaptureFilter` publishes it as the
+response finishes, while spans wait for the exporter's batch. So
+`GET /peekaboot/api/traces/{traceId}/insights` for a request just served can answer `200` with
+`rootSpan: null` and an empty summary. A `404` means the store has never seen the id. The
+toolbar's fetch schedule treats a null root like a `404` and tries again (see *The collapsed
+bar's trace fetch schedule* in [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md)).
+
 ### Span Deduplication
 
 Deduplication runs primarily on write, in `TraceDataBundle.addSpan`. As each span arrives,
@@ -1159,7 +1197,7 @@ are one number; `TraceTreeMapperTest` pins the equality.
 `QueryExtractor` builds each trace's `queries` list from those spans, independently of the span
 tree's own names, one entry per query span. A span whose instrumentation recorded no statement
 is listed with `sql: null`. `DbSpans.sql` checks tags in priority order. The site states the
-outcome under [the trace view](https://www.peekaboot.org/docs/dev-toolbar/#the-trace-view);
+outcome under [the trace view](https://www.peekaboot.org/docs/traces/#the-trace-view);
 the order and the reasons are here:
 
 1. `db.query.text`, the current OpenTelemetry semantic convention, emitted by
@@ -1336,7 +1374,7 @@ webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
 1. **No external dependencies for tracing**: works without Zipkin, Jaeger or other collectors
 2. **Micrometer-based**: Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
 3. **Spring events**: `ApplicationEventPublisher` instead of a custom event bus
-4. **Bucketed storage**: three insertion-ordered maps, each capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so a qualifying trace outlives its own eviction from All. [www.peekaboot.org/docs/traces](https://www.peekaboot.org/docs/traces/) has the bucket sizing, the slow-trace threshold and the `bucket=all|errors|slow` filter
+4. **Bucketed storage**: three insertion-ordered maps, each capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so a qualifying trace outlives its own eviction from All. [Traces](https://www.peekaboot.org/docs/traces/#the-three-buckets) has the bucket sizing and the slow-trace threshold, [HTTP API](https://www.peekaboot.org/docs/api/#trace-list) the `bucket=all|errors|slow` filter
 5. **Actuator not web-exposed**: all data read in-process from endpoint instances Peekaboot constructs itself, except `HealthEndpoint`, which is borrowed from the application; `PeekabootEndpointExposureOutcomeContributor` makes only that borrowed bean available without `management.endpoints.web.exposure` (see *In-Process Actuator Invocation*)
 6. **Plain bounded maps for storage**: memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library
 7. **Shadow DOM**: the toolbar cannot interfere with the host application

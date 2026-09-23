@@ -34,8 +34,30 @@ without a copy so the list filters can classify a bundle without building a tree
 `RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
 assigns one from the root span's kind and tag prefixes - and, for CONNECTION_POOL alone, its
 fixed contextual name. Labels and icons live only in the frontend's `shared/root-actions.js`,
-keyed by constant name. The priority rules and their gotchas are on the site:
-[root action type](https://www.peekaboot.org/docs/traces/#root-action-type).
+keyed by constant name. A reader's view of the types is on the site:
+[trace types](https://www.peekaboot.org/docs/traces/#root-action-type).
+
+The first rule that matches wins:
+
+1. `MESSAGE_CONSUMER`: CONSUMER kind, or any `messaging.*` tag on a span that is not PRODUCER.
+   A producer root carries the same tags as a consumer, so the tags alone do not say which way
+   the message went.
+2. SERVER kind: `HTTP_REQUEST` for any `http.*` tag or the unprefixed `method` and `uri` pair,
+   else `RPC_CALL` for any `rpc.*` tag, else `HTTP_REQUEST` again as the likeliest inbound call.
+3. `ASYNC_TASK`: the `peekaboot.async` marker tag. It comes before the null-kind catch-all
+   because the entry span carries no kind.
+4. `SCHEDULED_JOB`: both `code.function` and `code.namespace`. Only Spring's
+   `DefaultScheduledTaskObservationConvention` sets that pair, so only a `@Scheduled` method
+   fired by Spring's scheduler matches. Quartz or a plain `ScheduledExecutorService` falls
+   through to `INTERNAL` or whatever else its tags match.
+5. `DATABASE`: CLIENT kind with any `db.*` tag.
+6. `CONNECTION_POOL`: CLIENT kind, no parent id, the name `connection` and any
+   `jdbc.datasource.*` tag. The parent check matters: a request on an excluded prefix has its
+   root span skipped, so a connection acquired while serving it becomes the stored trace's
+   apparent root while still carrying a parent id.
+7. `INTERNAL`: no kind. Micrometer has no INTERNAL constant.
+8. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
+   lands here on purpose: it is an outbound call whose caller has not been exported.
 
 `CONNECTION_POOL` is the one constant `TraceInsightsService.DEFAULT_VIEW_TYPES` leaves out, so a
 listing request naming no type gets every other type. `rootActionType=*` asks for the store as
@@ -124,6 +146,11 @@ level. `AggregateStats` is one aggregated window: `min, max, avg, median, p90, p
 `samples` count. The API and the SSE events see the seven; `samples` stays internal and is what
 the next roll-up weights its average by. A missing tick is stored as `NaN` (level 0) or
 `AggregateStats.EMPTY` (higher levels) and serialises as JSON `null`, so a gap stays a gap.
+
+`SeriesSampler` looks its meters up in the registry on every tick, not once at startup, because
+Micrometer registers meters lazily. `http.server.requests` does not exist before the first
+request, and a new URI adds a tag combination later still. A series whose meters never resolve
+still costs a lookup per tick.
 
 Overview's stat tiles bypass all of it. `TileTracker` holds one `volatile double` per tile and
 samples on read.
