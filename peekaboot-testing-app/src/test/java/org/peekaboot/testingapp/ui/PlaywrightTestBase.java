@@ -6,6 +6,7 @@ import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.impl.TargetClosedError;
 import com.microsoft.playwright.options.ColorScheme;
@@ -16,11 +17,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.extension.TestWatcher;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.testingapp.TestingApp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +48,15 @@ abstract class PlaywrightTestBase {
      * synchronously during the request.
      */
     protected static final String ROOT_SPAN_EXPORTED = "trace => trace.rootActionType === 'HTTP_REQUEST'";
+
+    /** A JS predicate on the trace JSON: some span in the tree is the async entry span the decorator raises. */
+    protected static final String ASYNC_SPAN_CAPTURED =
+            "trace => { const hasAsyncSpan = span => !span ? false : span.name === '"
+                    + AsyncTaskMarker.CONTEXTUAL_NAME
+                    + "' || (span.children || []).some(hasAsyncSpan); return hasAsyncSpan(trace.rootSpan); }";
+
+    /** Same pattern TraceApiClient.traceIdOf reads Server-Timing with - duplicated here since that class is package-private to integration. */
+    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final int API_TIMEOUT_MS = 15_000;
@@ -356,6 +369,22 @@ abstract class PlaywrightTestBase {
             }
         }
         return false;
+    }
+
+    /**
+     * Fires the endpoint {@code AsyncTraceCaptureIT} uses to dispatch {@code @Async}
+     * enrichment under the request's own trace, and returns that trace's id read off the
+     * response's Server-Timing header - the endpoint answers plain text with no toolbar to
+     * read a trace id from.
+     */
+    protected String triggerOrderEnrichment() {
+        Response response = page.navigate(baseUrl + "/orders/enrich");
+        String serverTiming = response.headerValue("Server-Timing");
+        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
+        if (!matcher.find()) {
+            throw new AssertionError("Server-Timing must carry the trace id: " + serverTiming);
+        }
+        return matcher.group(1);
     }
 
     /**

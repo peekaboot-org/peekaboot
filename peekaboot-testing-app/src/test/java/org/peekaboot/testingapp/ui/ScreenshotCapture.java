@@ -155,6 +155,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
      */
     private String flagshipTraceId;
 
+    /** The traceId of the /orders/enrich request whose {@code @Async} task {@link #generateTraffic()} dispatched. */
+    private String asyncTraceId;
+
     @TempDir
     static Path storageDir;
 
@@ -180,6 +183,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         for (String theme : themes) {
             captureDashboardTabs(outputDir, theme);
             captureToolbar(outputDir, theme);
+            captureErrorPage(outputDir, theme);
         }
         // last on purpose: everything above is history for the Insights ring to chart
         // (see MIN_INSIGHTS_SAMPLES), and the traffic it generated is what the HTTP and
@@ -206,7 +210,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
             }
             names.add("trace-detail-" + theme);
             names.add("trace-detail-queries-" + theme);
+            names.add("trace-detail-async-" + theme);
             names.add("toolbar-collapsed-" + theme);
+            names.add("error-page-" + theme);
         }
         return names;
     }
@@ -264,6 +270,14 @@ class ScreenshotCapture extends PlaywrightTestBase {
         overlay.openTab("queries");
         overlay.waitFor(".pk-query-item");
         shoot(outputDir, "trace-detail-queries-" + theme);
+
+        // The whole trace rather than the async row's own ?root= subtree view: the shot is
+        // about the task sitting under the request that dispatched it and outlasting it.
+        page.evaluate("id => { window.location.hash = '#traces/' + id; }", asyncTraceId);
+        overlay.awaitTrace(asyncTraceId);
+        overlay.awaitLoaded();
+        overlay.waitFor(".pk-span-async-chip");
+        shoot(outputDir, "trace-detail-async-" + theme);
     }
 
     /**
@@ -388,6 +402,20 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private void captureToolbar(Path outputDir, String theme) {
         newThemedPage(theme);
         page.navigate(baseUrl + "/orders");
+        awaitToolbarSettled();
+        shoot(outputDir, "toolbar-collapsed-" + theme);
+    }
+
+    /** Peekaboot's error page for the always-failing /boom, with the bar for that request at its foot. */
+    private void captureErrorPage(Path outputDir, String theme) {
+        newThemedPage(theme);
+        page.navigate(baseUrl + "/boom");
+        page.waitForSelector(".pk-error");
+        awaitToolbarSettled();
+        shoot(outputDir, "error-page-" + theme);
+    }
+
+    private void awaitToolbarSettled() {
         page.waitForSelector("#peekaboot-toolbar-host");
         // The bar shows a "loading" placeholder in its metrics area while it fetches the
         // request's own trace insights; wait for that to resolve so the screenshot shows
@@ -396,7 +424,6 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // The bar's faces are registered with display: swap, so a shot taken before they land
         // publishes the system font to peekaboot.org.
         Fonts.awaitReady(page);
-        shoot(outputDir, "toolbar-collapsed-" + theme);
     }
 
     private void newThemedPage(String theme) {
@@ -417,8 +444,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
     /**
      * Gives the Traces tab a real mix to list - an ordinary request, a slow report, a
-     * failing request and, last, the deliberately heavy N+1 /orders trace that
-     * peekaboot.tracing.max-spans-per-trace exists to keep intact. Its traceId is read
+     * failing request, a request that hands work to an {@code @Async} task (listed as two
+     * rows, the request and the task) and, last, the deliberately heavy N+1 /orders trace
+     * that peekaboot.tracing.max-spans-per-trace exists to keep intact. Its traceId is read
      * straight from that response's own toolbar payload, the same JSON the toolbar itself
      * renders from, so {@link #flagshipTraceId} names the real trace regardless of what
      * else the dashboard's own tabs cause to be captured afterward.
@@ -427,6 +455,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         page.navigate(baseUrl + "/persons");
         page.navigate(baseUrl + "/api/orders/1/report");
         page.navigate(baseUrl + "/boom");
+        asyncTraceId = triggerOrderEnrichment();
         page.navigate(baseUrl + "/orders");
         flagshipTraceId = (String) page.evaluate(
                 "() => JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent).traceId");
@@ -437,5 +466,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // The toolbar payload above is read the instant the response committed; the
         // /orders trace's ~80+ spans arrive at the store asynchronously afterward.
         awaitTrace(flagshipTraceId, ROOT_SPAN_EXPORTED);
+        // the task outlives its request, so its span reaches the store after the request's
+        awaitTrace(asyncTraceId, ASYNC_SPAN_CAPTURED);
     }
 }

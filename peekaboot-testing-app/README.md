@@ -121,13 +121,13 @@ WebKit does not start without those libraries.
 ## Screenshot capture (`ScreenshotCapture`)
 
 `src/test/java/.../ui/ScreenshotCapture.java` photographs every dashboard tab, the
-trace-detail overlay and the dev toolbar, in both light and dark themes, for the
-peekaboot.org website. It is a tool, not a test (its one assertion is that a file was
-written for each of the canonical names below), and is deliberately not named `*Test`, so
-surefire's default includes never pick it up and a normal `mvn test` never runs it or
-touches Docker. It is Maven-only. The Gradle build has no task that includes it, because
-Gradle's `--tests` filter cannot widen the `*Test`/`*IT` includes the way surefire's
-`-Dtest` does.
+trace-detail overlay, the dev toolbar and Peekaboot's error page, in both light and dark
+themes, for the peekaboot.org website. It is a tool, not a test (its one assertion is that
+a file was written for each of the canonical names below), and is deliberately not named
+`*Test`, so surefire's default includes never pick it up and a normal `mvn test` never
+runs it or touches Docker. It is Maven-only. The Gradle build has no task that includes
+it, because Gradle's `--tests` filter cannot widen the `*Test`/`*IT` includes the way
+surefire's `-Dtest` does.
 
 ```bash
 mvn -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
@@ -154,7 +154,8 @@ to take a few minutes.
 
 The output directory is required (the tool refuses to guess) and is created if missing. A
 successful run writes every surface in light and dark: one shot per dashboard tab, the
-trace-detail overlay's Spans and Queries views, the collapsed toolbar, and a revealed
+trace-detail overlay's Spans and Queries views, the Spans view of a request that hands work
+to an `@Async` task, the collapsed toolbar, the error page for `/boom`, and a revealed
 counterpart of the Environment and Config tab shots. The revealed pair shows the
 `spring.datasource.password` fixture after the "Show secrets" control is clicked. See
 `ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment for exactly which group that
@@ -181,7 +182,8 @@ The tool's file names are canonical and follow the dashboard's own tab ids:
 `dashboard-<tab>-<theme>.png` (`overview`, `insights`, `lifecycle`, `traces`, `meters`,
 `environment`, `flyway`, `loggers`, `config`, `scheduled-tasks`),
 `dashboard-<environment|config>-revealed-<theme>.png`, `trace-detail-<theme>.png`,
-`trace-detail-queries-<theme>.png` and `toolbar-collapsed-<theme>.png`. The website's
+`trace-detail-queries-<theme>.png`, `trace-detail-async-<theme>.png`,
+`toolbar-collapsed-<theme>.png` and `error-page-<theme>.png`. The website's
 `assets/img/screenshots/` carries these names verbatim. When a tab id changes here, the
 site's files and `<img>` references are renamed to match, never the other way around.
 

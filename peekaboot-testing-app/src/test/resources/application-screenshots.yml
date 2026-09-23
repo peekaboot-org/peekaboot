@@ -36,6 +36,10 @@ spring:
       skip:
         in-tests: false
   task:
+    # As in application-test.yml: without it the @Async enrichment task becomes a trace of
+    # its own instead of a span under the /orders/enrich request that dispatched it.
+    execution:
+      propagate-context: true
     scheduling:
       pool:
         size: 1
@@ -49,6 +53,12 @@ peekaboot:
   # systemProperties/systemEnvironment, see MASKED_GROUP_HEADER_SELECTOR's doc comment)
   # for what makes that safe to publish.
   enable-unmasking: true
+  # Both detected off for a test launch (see application-test.yml); on here so the error page
+  # is served for /boom and folds its framework frames the way a developer's local run does.
+  error-page:
+    enabled: true
+  stack-trace:
+    fold: true
 
 management:
   endpoint:

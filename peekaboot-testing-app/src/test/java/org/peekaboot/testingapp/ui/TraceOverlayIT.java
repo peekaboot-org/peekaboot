@@ -25,12 +25,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
@@ -1751,7 +1748,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void anAsyncRowLinksToItsEnclosingTraceAndOpensItsOwnSubtree() {
         String traceId = triggerOrderEnrichment();
-        awaitTrace(traceId, asyncSpanCapturedPredicate());
+        awaitTrace(traceId, ASYNC_SPAN_CAPTURED);
 
         openDashboard();
         dashboard.openTracesTab();
@@ -1878,7 +1875,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void deepLinkedRootParamScopesTheSpansTabAndIsClearedByATabRoundTrip() {
         String traceId = triggerOrderEnrichment();
-        awaitTrace(traceId, asyncSpanCapturedPredicate());
+        awaitTrace(traceId, ASYNC_SPAN_CAPTURED);
 
         openDashboard();
         dashboard.openTracesTab();
@@ -1916,31 +1913,5 @@ class TraceOverlayIT extends PlaywrightTestBase {
     private int visibleGanttRowCount() {
         return ((Number) overlay.evaluate("root => root.querySelectorAll('#pk-gantt-rows .pk-gantt-row').length"))
                 .intValue();
-    }
-
-    /** Same pattern TraceApiClient.traceIdOf reads Server-Timing with - duplicated here since that class is package-private to integration. */
-    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
-
-    /**
-     * Fires the endpoint {@code AsyncTraceCaptureIT} uses to dispatch {@code @Async}
-     * enrichment under the request's own trace, and returns that trace's id read off the
-     * response's Server-Timing header - the endpoint answers plain text with no toolbar to
-     * read a trace id from.
-     */
-    private String triggerOrderEnrichment() {
-        Response response = page.navigate(baseUrl + "/orders/enrich");
-        String serverTiming = response.headerValue("Server-Timing");
-        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
-        if (!matcher.find()) {
-            throw new AssertionError("Server-Timing must carry the trace id: " + serverTiming);
-        }
-        return matcher.group(1);
-    }
-
-    /** A JS trace predicate: some span in the tree is the async entry span the decorator raises. */
-    private static String asyncSpanCapturedPredicate() {
-        return "trace => { const hasAsyncSpan = span => !span ? false : span.name === '"
-                + AsyncTaskMarker.CONTEXTUAL_NAME
-                + "' || (span.children || []).some(hasAsyncSpan); return hasAsyncSpan(trace.rootSpan); }";
     }
 }
