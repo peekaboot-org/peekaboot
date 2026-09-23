@@ -7,8 +7,19 @@
 
 # Peekaboot
 
+> [!WARNING]
+> Peekaboot is beta software and may expose security-relevant settings. Use it at your own risk.
+
 Embedded application introspection for Spring Boot. Health, config, migrations, logs,
 schedules, metrics and traces in one dashboard, with no external infrastructure.
+
+## Why Peekaboot?
+
+Peek, because that's what it does — a look inside a running application. Boot, because that's
+where it lives. And peek-a-boo, because that's how it behaves: add one dependency and your app's
+internals are suddenly there; package the jar and they're gone again.
+
+In short: Peekaboot lets you peek inside your Spring Boot application while it runs.
 
 ## Quick start
 
@@ -49,10 +60,19 @@ Full docs live at [www.peekaboot.org](https://www.peekaboot.org).
 
 | Page | |
 | --- | --- |
-| [Quick start](https://www.peekaboot.org/docs/quick-start/) | The dependency, the first run, and what Peekaboot needs from your app |
-| [Configuration](https://www.peekaboot.org/docs/configuration/) | Every `peekaboot.*` property, grouped by prefix, with its default |
-| [Security](https://www.peekaboot.org/docs/security/) | What Peekaboot exposes when it's on, and how to lock it down |
+| [Quick start](https://www.peekaboot.org/docs/quick-start/) | Add the starter, run your app, open the toolbar and the dashboard |
+| [Do I want this in production?](https://www.peekaboot.org/docs/in-production/) | What Peekaboot changes while it is on, what it costs, and how to keep it out of a production build |
+| [Dev toolbar](https://www.peekaboot.org/docs/dev-toolbar/) | A bar at the bottom of every HTML page your app renders, with the request, its trace and its logs |
 | [The dashboard](https://www.peekaboot.org/docs/dashboard/) | A tour of every tab |
+| [Traces](https://www.peekaboot.org/docs/traces/) | The last thousand requests, jobs and messages, with their spans, SQL and logs |
+| [Insights](https://www.peekaboot.org/docs/insights/) | Live charts over the Micrometer meters your app already publishes |
+| [Configuration](https://www.peekaboot.org/docs/configuration/) | Every `peekaboot.*` property, grouped by prefix, with its default |
+| [HTTP API](https://www.peekaboot.org/docs/api/) | The JSON endpoints under `/peekaboot/api` that the dashboard and the toolbar read |
+| [Security](https://www.peekaboot.org/docs/security/) | What Peekaboot exposes when it's on, and how to lock it down |
+| [Troubleshooting](https://www.peekaboot.org/docs/troubleshooting/) | Symptoms, their causes and the fix |
+| [Releases](https://www.peekaboot.org/releases/) | Every release, with its breaking changes, features and fixes |
+| [Acknowledgements](https://www.peekaboot.org/docs/acknowledgements/) | The projects Peekaboot builds on and borrows from |
+| [Contributing](https://www.peekaboot.org/docs/contributing/) | Where the contributor documentation lives |
 
 ## Working on Peekaboot
 
