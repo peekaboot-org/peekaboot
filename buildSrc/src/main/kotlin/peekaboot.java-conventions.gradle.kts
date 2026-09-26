@@ -137,7 +137,6 @@ tasks.matching { it.name.matches(Regex("(checkstyle|pmd|spotbugs)Test")) }
     .configureEach { enabled = false }
 
 spotless {
-    ratchetFrom("e05e0f97c3ab75a43bf493a8f841df74f4b648f1")
     java {
         palantirJavaFormat("2.97.0")
     }

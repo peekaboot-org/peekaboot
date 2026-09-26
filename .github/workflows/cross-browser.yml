@@ -32,9 +32,6 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # full history: the spotless ratchet resolves a fixed base commit
-          fetch-depth: 0
 
       # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build

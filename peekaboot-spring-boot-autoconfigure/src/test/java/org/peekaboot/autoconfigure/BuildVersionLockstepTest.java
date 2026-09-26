@@ -214,12 +214,6 @@ class BuildVersionLockstepTest {
                         conventions,
                         "palantirJavaFormat\\(\"([^\"]+)\"\\)"),
                 row(
-                        "the Spotless ratchet commit",
-                        pom,
-                        "<spotless.ratchetFrom>([^<]+)</spotless.ratchetFrom>",
-                        conventions,
-                        "ratchetFrom\\(\"([^\"]+)\"\\)"),
-                row(
                         "Checkstyle",
                         pom,
                         "<artifactId>checkstyle</artifactId>\\s*<version>([^<]+)</version>",

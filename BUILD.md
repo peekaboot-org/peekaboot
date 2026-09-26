@@ -159,7 +159,7 @@ cannot group the two ecosystems into one pull request. Mockito's agent jar takes
 version from that BOM, as Maven does.
 
 Every other shared literal is written on both sides and has to change on both: Error
-Prone, palantir, the ratchet SHA, Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors,
+Prone, palantir, Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors,
 Playwright, springdoc, the testing-app's direct dependencies, and the frontend gate's two:
 the pinned Node version and `npm ci`. The frontend's *lint tool* versions are not on that
 list - they live once in `peekaboot-frontend/package.json`, which both builds install from,
@@ -217,7 +217,7 @@ worth having on both sides.
 
 | Gate | Phase | Plugin (tool) | Config | Scope |
 | --- | --- | --- | --- | --- |
-| Formatting | `verify` | `spotless-maven-plugin` (palantir-java-format) | inline in the POM | Java, ratcheted (below) |
+| Formatting | `verify` | `spotless-maven-plugin` (palantir-java-format) | inline in the POM | Java |
 | Bug patterns, compile-time | `compile` | `error_prone_core` via the compiler plugin | defaults | main + test |
 | Bug patterns, bytecode | `verify` | `spotbugs-maven-plugin` | `config/spotbugs-exclude.xml` | main classes |
 | Complexity metrics | `verify` | `maven-checkstyle-plugin` (checkstyle) | `config/checkstyle.xml` | main only |
@@ -348,19 +348,14 @@ Three deliberate things about that module:
 The aggregate HTML report lands at
 `peekaboot-coverage/target/site/jacoco-aggregate/index.html`. Nothing publishes it.
 
-### The Spotless ratchet
+### Spotless
 
-`ratchetFrom` is pinned to commit `e05e0f97`, the last commit before Spotless landed. Only
-files whose content differs from that commit are formatted and checked; untouched legacy
-files are left alone. Two consequences:
-
-- **A shallow clone breaks the build.** The ratchet has to resolve that commit. CI uses
-  `fetch-depth: 0` for exactly this.
-- **Local builds rewrite your working tree.** The `spotless-apply-local` profile is active
-  whenever `env.CI` is unset and runs `spotless:apply` at `process-sources`, so
-  `spotless:check` can never surprise you at `verify`. On CI (`CI=true` on GitHub Actions)
-  the profile is off and unformatted code fails the build instead of being silently fixed
-  inside a sandbox that never pushes the result back. Set `CI=1` locally to reproduce that.
+Spotless formats and checks every Java file. Local builds rewrite your working tree: the
+`spotless-apply-local` profile is active whenever `env.CI` is unset and runs
+`spotless:apply` at `process-sources`, so `spotless:check` can never surprise you at
+`verify`. On CI (`CI=true` on GitHub Actions) the profile is off and unformatted code fails
+the build instead of being silently fixed inside a sandbox that never pushes the result
+back. Set `CI=1` locally to reproduce that.
 
 ## Tests
 
@@ -439,7 +434,7 @@ invocation resolves whatever is latest that day.
 
 ### `build-on-push.yml`
 
-Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet,
+Runs on every branch except `main`: checkout with `fetch-depth: 0` for the subject gate and git-cliff,
 `prepare-build`, the branch's snapshot version, then
 `./mvnw --batch-mode clean deploy -P peekaboot-publish`. After the build it
 installs git-cliff, runs the release-notes tests, gates the pushed commit subjects and

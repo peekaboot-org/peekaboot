@@ -21,7 +21,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # full history: the spotless ratchet resolves a fixed base commit
+          # full history: the subject gate and git-cliff read commits back to the previous tag
           fetch-depth: 0
 
       # A push that creates a branch reports the zero SHA as `before`, and the gate then

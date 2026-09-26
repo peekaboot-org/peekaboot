@@ -40,10 +40,6 @@
         <jacoco.skip>false</jacoco.skip>
         <!-- Empty default so @{jacocoArgLine} still resolves when JaCoCo is skipped. -->
         <jacocoArgLine />
-
-        <!-- Spotless ratchets from this commit: only files changed since it are
-             formatted and checked. -->
-        <spotless.ratchetFrom>e05e0f97c3ab75a43bf493a8f841df74f4b648f1</spotless.ratchetFrom>
     </properties>
 
     <licenses>
@@ -409,7 +405,6 @@
                 <artifactId>spotless-maven-plugin</artifactId>
                 <version>3.10.2</version>
                 <configuration>
-                    <ratchetFrom>${spotless.ratchetFrom}</ratchetFrom>
                     <java>
                         <palantirJavaFormat>
                             <version>2.97.0</version>
