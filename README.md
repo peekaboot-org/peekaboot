@@ -27,7 +27,7 @@ In short: Peekaboot lets you peek inside your Spring Boot application while it r
 <dependency>
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-spring-boot-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
