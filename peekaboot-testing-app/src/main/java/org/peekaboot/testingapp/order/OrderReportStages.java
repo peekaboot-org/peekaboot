@@ -23,14 +23,12 @@ public class OrderReportStages {
         this.orderLineRepository = orderLineRepository;
     }
 
-
     @Observed(name = "order.report.load-lines", contextualName = "order.report.load-lines")
     List<OrderLine> loadLines(long orderId) {
 
         pause(400);
         return orderLineRepository.findByOrderId(orderId);
     }
-
 
     @Observed(name = "order.report.price-lines", contextualName = "order.report.price-lines")
     BigDecimal priceLines(List<OrderLine> lines) {
@@ -41,14 +39,12 @@ public class OrderReportStages {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-
     @Observed(name = "order.report.apply-discounts", contextualName = "order.report.apply-discounts")
     BigDecimal applyDiscounts(BigDecimal total) {
 
         pause(400);
         return total.multiply(new BigDecimal("0.95"));
     }
-
 
     /** Stands in for work this demo does not actually do. */
     private void pause(long millis) {

@@ -10,5 +10,4 @@ public record OrderSummary(
         Instant placedAt,
         int lineCount,
         BigDecimal total,
-        String customerName) {
-}
+        String customerName) {}

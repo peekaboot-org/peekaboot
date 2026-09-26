@@ -7,5 +7,4 @@ import jakarta.validation.constraints.NotNull;
 public record NewOrder(
         @NotNull Long customerId,
         @NotBlank String sku,
-        @Min(1) int quantity) {
-}
+        @Min(1) int quantity) {}

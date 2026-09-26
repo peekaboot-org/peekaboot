@@ -17,13 +17,11 @@ public class LocalPortSupplier {
 
     private volatile int port;
 
-
     @EventListener
     public void onWebServerReady(WebServerInitializedEvent event) {
 
         this.port = event.getWebServer().getPort();
     }
-
 
     public int port() {
 
