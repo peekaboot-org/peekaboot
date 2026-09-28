@@ -300,6 +300,8 @@
 /* Traces controls - the bucket buttons row and the type filter checkbox row share this
    layout, hence one shared class rather than two near-identical rules. */
 .pk-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+/* a label and the controls it names wrap as one unit, set apart from the controls before it */
+.pk-filter-row__group { display: inline-flex; align-items: center; gap: var(--pk-space-sm); margin-left: var(--pk-space-md); }
 .pk-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); margin-bottom: var(--pk-space-md); font-size: var(--pk-text-sm); color: var(--pk-text-muted); }
 
 /* Trace list item */

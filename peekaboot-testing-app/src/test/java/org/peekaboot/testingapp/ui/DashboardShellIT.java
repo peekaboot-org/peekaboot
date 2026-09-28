@@ -157,7 +157,20 @@ class DashboardShellIT extends PlaywrightTestBase {
         page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
 
         assertThat(page.isVisible("#traces-active-filter")).isFalse();
-        assertThat(page.locator("#traces-filter input:checked").count()).isZero();
+        assertThat(page.locator("#traces-filter input[name='type']:checked").count())
+                .isZero();
+        assertThat(page.url()).endsWith("#traces");
+    }
+
+    /** Connection Pool is an exclusion now, not a type chip, so a link naming it as a type falls back the same way. */
+    @Test
+    void aTracesDeepLinkNamingConnectionPoolAsATypeFallsBackToTheDefaultFilter() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=CONNECTION_POOL");
+        page.waitForSelector("#traces-tab.active");
+        page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
+
+        assertThat(page.isVisible("#traces-active-filter")).isFalse();
+        assertThat(page.isChecked("#traces-filter-exclude-pool")).isTrue();
         assertThat(page.url()).endsWith("#traces");
     }
 
@@ -170,7 +183,7 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         @SuppressWarnings("unchecked")
         List<String> checked = (List<String>) page.evaluate(
-                "() => [...document.querySelectorAll('#traces-filter input:checked')].map(cb => cb.value)");
+                "() => [...document.querySelectorAll('#traces-filter input[name=type]:checked')].map(cb => cb.value)");
         assertThat(checked).containsExactly("SCHEDULED_JOB");
         assertThat(page.url()).endsWith("#traces?type=SCHEDULED_JOB");
     }

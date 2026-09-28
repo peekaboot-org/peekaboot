@@ -209,8 +209,12 @@
             </div>
             <div id="traces-filter" class="pk-filter-row">
                 <span class="pk-filter-row__label pk-label">Filter by type:</span>
-                <!-- checkbox per ROOT_ACTION_TYPES entry, injected by traces.js -->
-                <button type="button" id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
+                <!-- checkbox per selectable ROOT_ACTION_TYPES entry, injected by traces.js -->
+                <span id="traces-filter-excluded" class="pk-filter-row__group">
+                    <span class="pk-filter-row__label pk-label">Excluded:</span>
+                    <!-- the excludable type's checkbox, injected by traces.js -->
+                </span>
+                <button type="button" id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Back to the default view">Clear filter</button>
             </div>
             <div id="traces-active-filter" class="pk-filter-banner hidden">
                 <span class="pk-filter-banner__text"></span>

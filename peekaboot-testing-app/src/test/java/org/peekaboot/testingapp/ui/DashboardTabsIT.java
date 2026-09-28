@@ -13,6 +13,8 @@ import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
 import java.math.BigDecimal;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -59,6 +61,16 @@ class DashboardTabsIT extends PlaywrightTestBase {
     private TraceStore traceStore;
 
     private static final Pattern TRACES_PAGE_SIZE_PARAM = Pattern.compile("[?&]limit=(\\d+)");
+
+    private static final Pattern ROOT_ACTION_TYPE_PARAM = Pattern.compile("[?&]rootActionType=([^&]*)");
+
+    /** A root action type's own chip in the traces filter row, as opposed to the exclusion box beside them. */
+    private static final String TRACE_TYPE_CHIP = "#traces-filter input[name='type']";
+
+    private static final String CONNECTION_POOL_EXCLUSION = "#traces-filter-exclude-pool";
+
+    private static final String CONNECTION_POOL_ROW_ICON =
+            "#traces-list .pk-trace-item__icon[aria-label='Connection Pool']";
 
     /** Mirrors the limit traces.js sends with every listing request. */
     private static final int TRACES_PAGE_SIZE = 50;
@@ -917,7 +929,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .isEqualTo("true");
 
         Object checkedTypesRaw = page.evaluate(
-                "() => [...document.querySelectorAll('#traces-filter input:checked')].map(cb => cb.value)");
+                "() => [...document.querySelectorAll('#traces-filter input[name=type]:checked')].map(cb => cb.value)");
         @SuppressWarnings("unchecked")
         List<String> checkedTypes = (List<String>) checkedTypesRaw;
         assertThat(checkedTypes).containsExactly("SCHEDULED_JOB");
@@ -1107,18 +1119,18 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");
 
         assertThat(page.textContent("#traces-active-filter")).contains("Type:").contains("Target:");
-        assertThat(page.isChecked("#traces-filter input[value='SCHEDULED_JOB']"))
-                .isTrue();
+        assertThat(page.isChecked(TRACE_TYPE_CHIP + "[value='SCHEDULED_JOB']")).isTrue();
     }
 
     /**
-     * Connection-pool traces sit in the store but not in the default view: with no type in
-     * the URL, traces.js names none in its request either and the backend answers with the
-     * default view. Selecting the type's own chip reveals them and lands in the URL
-     * (#traces?type=CONNECTION_POOL), so the revealed view stays shareable.
+     * Connection-pool traces sit in the store but not in the default view: with the
+     * exclusion ticked and no type chosen, traces.js names no type in its request and the
+     * backend answers with the default view. Pool maintenance has no type chip of its own;
+     * unticking its exclusion asks for every type and lands in the URL, so the revealed
+     * view stays shareable.
      */
     @Test
-    void connectionPoolTracesAreHiddenByDefaultAndRevealedByTheirChip() throws SQLException {
+    void connectionPoolTracesAreExcludedByDefaultAndRevealedByUntickingTheirExclusion() throws SQLException {
         // What HikariCP maintenance does: acquire a pooled connection outside any traced
         // work, yielding a standalone CONNECTION_POOL trace.
         try (Connection connection = dataSource.getConnection()) {
@@ -1132,18 +1144,75 @@ class DashboardTabsIT extends PlaywrightTestBase {
         Response defaultResponse = page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"),
                 () -> page.click(Dashboard.tabButton("traces")));
-        assertThat(defaultResponse.url()).doesNotContain("rootActionType");
+        assertThat(rootActionTypeOf(defaultResponse)).isNull();
         dashboard.awaitListedTrace(httpTraceId);
-        assertThat(page.locator("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']")
-                        .count())
+        assertThat(page.locator(CONNECTION_POOL_ROW_ICON).count()).isZero();
+        assertThat(page.isChecked(CONNECTION_POOL_EXCLUSION)).isTrue();
+        assertThat(page.locator(TRACE_TYPE_CHIP + "[value='CONNECTION_POOL']").count())
                 .isZero();
 
-        page.waitForResponse(
-                response -> response.url().contains("rootActionType=CONNECTION_POOL"),
-                () -> page.check("#traces-filter input[value='CONNECTION_POOL']"));
+        Response revealedResponse = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"),
+                () -> page.uncheck(CONNECTION_POOL_EXCLUSION));
 
-        assertThat(page.url()).endsWith("#traces?type=CONNECTION_POOL");
-        page.waitForSelector("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']");
+        assertThat(rootActionTypeOf(revealedResponse)).isEqualTo("*");
+        assertThat(page.url()).endsWith("#traces?excluded=none");
+        page.waitForSelector(CONNECTION_POOL_ROW_ICON);
+    }
+
+    /**
+     * With a type chosen, unticking the exclusion adds pool traces to that type rather than
+     * replacing it, and Clear filter restores the exclusion along with everything else.
+     */
+    @Test
+    void untickingTheConnectionPoolExclusionAddsItToTheChosenTypes() {
+        openDashboard();
+        page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"),
+                () -> page.click(Dashboard.tabButton("traces")));
+        page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"),
+                () -> page.check(TRACE_TYPE_CHIP + "[value='HTTP_REQUEST']"));
+
+        Response combinedResponse = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"),
+                () -> page.uncheck(CONNECTION_POOL_EXCLUSION));
+
+        assertThat(rootActionTypeOf(combinedResponse)).isEqualTo("HTTP_REQUEST,CONNECTION_POOL");
+        assertThat(page.url()).endsWith("#traces?type=HTTP_REQUEST&excluded=none");
+        // the banner follows the rendered response, which lands after the response itself
+        page.waitForFunction(
+                "() => document.querySelector('#traces-active-filter').textContent.includes('Connection Pool included')");
+        assertThat(page.textContent("#traces-active-filter"))
+                .contains("Type: HTTP Request")
+                .contains("Connection Pool included");
+
+        Response clearedResponse = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"), () -> page.click("#traces-filter-clear"));
+
+        assertThat(rootActionTypeOf(clearedResponse)).isNull();
+        assertThat(page.isChecked(CONNECTION_POOL_EXCLUSION)).isTrue();
+        assertThat(page.isChecked(TRACE_TYPE_CHIP + "[value='HTTP_REQUEST']")).isFalse();
+        assertThat(page.url()).endsWith("#traces");
+    }
+
+    /** A shared link with the exclusion lifted arrives with the box unticked and every type asked for. */
+    @Test
+    void deepLinkRestoresTheLiftedConnectionPoolExclusion() {
+        Response listing = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"),
+                () -> page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?excluded=none"));
+
+        assertThat(rootActionTypeOf(listing)).isEqualTo("*");
+        page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");
+        assertThat(page.isChecked(CONNECTION_POOL_EXCLUSION)).isFalse();
+        assertThat(page.url()).endsWith("#traces?excluded=none");
+    }
+
+    /** The type names traces.js asked the listing endpoint for, or null when it named none. */
+    private static String rootActionTypeOf(Response listing) {
+        Matcher matcher = ROOT_ACTION_TYPE_PARAM.matcher(listing.url());
+        return matcher.find() ? URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8) : null;
     }
 
     /** The page size traces.js asked the listing endpoint for. */

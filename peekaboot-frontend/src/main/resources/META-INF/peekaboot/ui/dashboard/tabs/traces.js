@@ -20,10 +20,17 @@ import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'traces';
 
-// Empty set means no type in the request, which the backend answers with its default
-// view - every type except the routine pool maintenance it keeps out. Every chip,
-// including Connection Pool's, then works like any other type's.
+// Routine pool maintenance has no type chip: it is excluded by default through its own
+// checkbox, which adds it to whatever the chips select once unticked.
+const EXCLUDABLE_TYPE = 'CONNECTION_POOL';
+const SELECTABLE_TYPES = ROOT_ACTION_TYPES.filter(type => type !== EXCLUDABLE_TYPE);
+const TYPE_CHIPS = '#traces-filter input[name="type"]';
+const EXCLUSION_LIFTED = 'none';
+
+// Empty set with the exclusion in place means no type in the request, which the backend
+// answers with its default view - every type except the excludable one.
 let selectedRootActionTypes = new Set();
+let connectionPoolExcluded = true;
 let currentRootOperationFilter = null;
 let currentBucket = 'all';
 
@@ -71,13 +78,13 @@ export function render(container, data, context) {
 function reconcileWithUrl(container, context) {
     if (parseAppHash().detail) return;
 
-    reconcileFilterWithUrl(context, ['bucket', 'type', 'op'], {
+    reconcileFilterWithUrl(context, ['bucket', 'type', 'op', 'excluded'], {
         seed: params => {
             seedFromUrl(container, params);
             // corrects a bogus or non-canonical value in the URL to the state that actually restored
             writeUrlParams();
         },
-        hasNonDefaultState: () => currentBucket !== 'all' || selectedRootActionTypes.size > 0 || Boolean(currentRootOperationFilter),
+        hasNonDefaultState: () => currentBucket !== 'all' || isUserFiltered(),
         writeBack: writeUrlParams
     });
 }
@@ -96,24 +103,36 @@ function seedFromUrl(container, params) {
     const urlBucket = Object.keys(BUCKET_EMPTY_MESSAGES).includes(params.bucket) ? params.bucket : 'all';
     const urlTypes = (params.type ? params.type.split(',') : [])
         .map(type => type.toUpperCase())
-        .filter(type => ROOT_ACTION_TYPES.includes(type));
+        .filter(type => SELECTABLE_TYPES.includes(type));
     const urlOp = params.op || null;
+    const urlPoolExcluded = params.excluded !== EXCLUSION_LIFTED;
 
     const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
     const urlTypesJoined = [...urlTypes].sort().join(',');
-    if (urlBucket === currentBucket && urlTypesJoined === currentTypesJoined && urlOp === currentRootOperationFilter) {
+    if (urlBucket === currentBucket && urlTypesJoined === currentTypesJoined && urlOp === currentRootOperationFilter
+        && urlPoolExcluded === connectionPoolExcluded) {
         return;
     }
 
     currentBucket = urlBucket;
     selectedRootActionTypes = new Set(urlTypes);
     currentRootOperationFilter = urlOp;
+    connectionPoolExcluded = urlPoolExcluded;
 
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn =>
         btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket)));
-    container.querySelectorAll('#traces-filter input').forEach(cb => {
+    syncFilterCheckboxes(container);
+}
+
+function syncFilterCheckboxes(container) {
+    container.querySelectorAll(TYPE_CHIPS).forEach(cb => {
         cb.checked = selectedRootActionTypes.has(cb.value);
     });
+    container.querySelector('#traces-filter-exclude-pool').checked = connectionPoolExcluded;
+}
+
+function isUserFiltered() {
+    return selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null || !connectionPoolExcluded;
 }
 
 /**
@@ -125,6 +144,7 @@ function writeUrlParams() {
     if (currentBucket !== 'all') params.bucket = currentBucket;
     if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
     if (currentRootOperationFilter) params.op = currentRootOperationFilter;
+    if (!connectionPoolExcluded) params.excluded = EXCLUSION_LIFTED;
     tab.context().setUrlParams(params);
 }
 
@@ -132,9 +152,18 @@ function writeUrlParams() {
 function requestParams() {
     const params = {limit: 50};
     if (currentBucket !== 'all') params.bucket = currentBucket;
-    if (selectedRootActionTypes.size > 0) params.rootActionType = Array.from(selectedRootActionTypes).join(',');
+    const rootActionType = requestedRootActionType();
+    if (rootActionType) params.rootActionType = rootActionType;
     if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
     return params;
+}
+
+/** Null asks for the backend's default view, '*' for every type. */
+function requestedRootActionType() {
+    if (connectionPoolExcluded) {
+        return selectedRootActionTypes.size > 0 ? Array.from(selectedRootActionTypes).join(',') : null;
+    }
+    return selectedRootActionTypes.size > 0 ? [...selectedRootActionTypes, EXCLUDABLE_TYPE].join(',') : '*';
 }
 
 function wireControls(container) {
@@ -168,31 +197,48 @@ function wireControls(container) {
  */
 function renderTypeFilterCheckboxes(container) {
     const filterEl = container.querySelector('#traces-filter');
-    const clearBtn = filterEl.querySelector('#traces-filter-clear');
+    const excludedGroup = filterEl.querySelector('#traces-filter-excluded');
 
-    ROOT_ACTION_TYPES.forEach(type => {
-        const checkboxLabel = document.createElement('label');
-        checkboxLabel.className = 'pk-checkbox-label';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.value = type;
-        checkbox.addEventListener('change', () => {
+    SELECTABLE_TYPES.forEach(type => {
+        const checkbox = filterCheckbox(type, () => {
             if (checkbox.checked) selectedRootActionTypes.add(type);
             else selectedRootActionTypes.delete(type);
-            writeUrlParams();
-            tab.refetch();
         });
-
-        checkboxLabel.append(checkbox, document.createTextNode(' ' + rootActionLabel(type)));
-        filterEl.insertBefore(checkboxLabel, clearBtn);
+        checkbox.name = 'type';
+        filterEl.insertBefore(checkbox.parentElement, excludedGroup);
     });
+
+    const exclusion = filterCheckbox(EXCLUDABLE_TYPE, () => {
+        connectionPoolExcluded = exclusion.checked;
+    });
+    exclusion.id = 'traces-filter-exclude-pool';
+    exclusion.checked = connectionPoolExcluded;
+    excludedGroup.append(exclusion.parentElement);
+}
+
+/** A labelled checkbox that applies its change to the filter state, then refetches. */
+function filterCheckbox(type, applyChange) {
+    const checkboxLabel = document.createElement('label');
+    checkboxLabel.className = 'pk-checkbox-label';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = type;
+    checkbox.addEventListener('change', () => {
+        applyChange();
+        writeUrlParams();
+        tab.refetch();
+    });
+
+    checkboxLabel.append(checkbox, document.createTextNode(' ' + rootActionLabel(type)));
+    return checkbox;
 }
 
 function resetFilter() {
     selectedRootActionTypes.clear();
     currentRootOperationFilter = null;
-    tab.container().querySelectorAll('#traces-filter input').forEach(cb => { cb.checked = false; });
+    connectionPoolExcluded = true;
+    syncFilterCheckboxes(tab.container());
     writeUrlParams();
     tab.refetch();
 }
@@ -205,7 +251,7 @@ function resetFilter() {
  */
 function updateBucketCounts(container, counts, filteredCounts, locale) {
     if (!counts) return;
-    const userFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
+    const userFiltered = isUserFiltered();
     const grouped = n => formatNumber(n, {locale});
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
         const bucket = btn.dataset.bucket;
@@ -238,8 +284,7 @@ function renderList(container, result, context) {
 
     const traces = result?.traces;
     if (!traces || traces.length === 0) {
-        const isFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
-        noTracesEl.querySelector('p').textContent = isFiltered
+        noTracesEl.querySelector('p').textContent = isUserFiltered()
             ? 'No traces match the selected filters'
             : BUCKET_EMPTY_MESSAGES[currentBucket];
         noTracesEl.classList.remove('hidden');
@@ -256,21 +301,19 @@ function updateFilterIndicator(container) {
     const clearBtn = container.querySelector('#traces-filter-clear');
     if (!filterBanner || !filterText) return;
 
-    const isTypeFiltered = selectedRootActionTypes.size > 0;
-    const isOperationFiltered = currentRootOperationFilter !== null;
-    const isFiltered = isTypeFiltered || isOperationFiltered;
-
-    if (isFiltered) {
-        let filterDescription = '';
-        if (isTypeFiltered) {
+    if (isUserFiltered()) {
+        const filterParts = [];
+        if (selectedRootActionTypes.size > 0) {
             const activeFilters = Array.from(selectedRootActionTypes).map(type => rootActionLabel(type)).join(', ');
-            filterDescription = `Type: ${activeFilters}`;
+            filterParts.push(`Type: ${activeFilters}`);
         }
-        if (isOperationFiltered) {
-            const operationLabel = currentRootOperationFilter.split('.').pop();
-            filterDescription += filterDescription ? ` | Target: ${operationLabel}` : `Target: ${operationLabel}`;
+        if (currentRootOperationFilter !== null) {
+            filterParts.push(`Target: ${currentRootOperationFilter.split('.').pop()}`);
         }
-        filterText.textContent = `Filtering: ${filterDescription}`;
+        if (!connectionPoolExcluded) {
+            filterParts.push(`${rootActionLabel(EXCLUDABLE_TYPE)} included`);
+        }
+        filterText.textContent = `Filtering: ${filterParts.join(' | ')}`;
         filterBanner.classList.remove('hidden');
         if (clearBtn) clearBtn.classList.remove('hidden');
     } else {
