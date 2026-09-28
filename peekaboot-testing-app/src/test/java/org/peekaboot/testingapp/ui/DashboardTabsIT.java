@@ -10,6 +10,7 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.options.AriaRole;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
 import java.math.BigDecimal;
@@ -1184,7 +1185,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForFunction(
                 "() => document.querySelector('#traces-active-filter').textContent.includes('Connection Pool included')");
         assertThat(page.textContent("#traces-active-filter"))
-                .contains("Type: HTTP Request")
+                .contains("Type: HTTP |")
                 .contains("Connection Pool included");
 
         Response clearedResponse = page.waitForResponse(
@@ -1207,6 +1208,52 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");
         assertThat(page.isChecked(CONNECTION_POOL_EXCLUSION)).isFalse();
         assertThat(page.url()).endsWith("#traces?excluded=none");
+    }
+
+    /** Each chip shows its type's icon, kept out of the accessible name its label already gives. */
+    @Test
+    void traceFilterChipsShowTheirTypeIcon() {
+        String httpIcon = (String) importModule("shared/root-actions.js", "m.rootActionIcon('HTTP_REQUEST')");
+        String poolIcon = (String) importModule("shared/root-actions.js", "m.rootActionIcon('CONNECTION_POOL')");
+
+        openDashboard();
+        dashboard.openTab("traces");
+        page.waitForSelector(CONNECTION_POOL_EXCLUSION);
+
+        assertThat(page.textContent(
+                        "#traces-filter label:has(input[name='type'][value='HTTP_REQUEST']) [aria-hidden='true']"))
+                .isEqualTo(httpIcon);
+        assertThat(page.textContent("#traces-filter label:has(" + CONNECTION_POOL_EXCLUSION + ") [aria-hidden='true']"))
+                .isEqualTo(poolIcon);
+        assertThat(page.getByRole(
+                                AriaRole.CHECKBOX,
+                                new Page.GetByRoleOptions().setName("HTTP").setExact(true))
+                        .count())
+                .isOne();
+    }
+
+    /**
+     * Every type chip and the exclusion share one line on a desktop viewport. Clear filter
+     * sits in the active-filter banner instead, which is what leaves the row room.
+     */
+    @Test
+    void traceFilterRowFitsOneLineOnADesktopViewport() {
+        page.setViewportSize(1280, 900);
+        openDashboard();
+        dashboard.openTab("traces");
+        page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"),
+                () -> page.check(TRACE_TYPE_CHIP + "[value='HTTP_REQUEST']"));
+        page.waitForSelector("#traces-active-filter:not(.hidden) #traces-filter-clear");
+
+        @SuppressWarnings("unchecked")
+        List<Number> bottoms = (List<Number>) page.evaluate("() => [...document.querySelectorAll("
+                + "'#traces-filter > :not(.hidden), #traces-filter-excluded > *')]"
+                + ".map(el => el.getBoundingClientRect().bottom)");
+        double firstBottom = bottoms.getFirst().doubleValue();
+        assertThat(bottoms)
+                .as("every control's bottom edge on the first control's line")
+                .allSatisfy(bottom -> assertThat(bottom.doubleValue()).isLessThan(firstBottom + 12));
     }
 
     /** The type names traces.js asked the listing endpoint for, or null when it named none. */

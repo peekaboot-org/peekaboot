@@ -323,7 +323,7 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void rootActionsExposeADistinctPlainCharacterIconPerType() {
         assertThat(evalModule("root-actions.js", "m.rootActionLabel('SCHEDULED_JOB')"))
-                .isEqualTo("Scheduled Job");
+                .isEqualTo("Scheduled");
         assertThat(evalModule("root-actions.js", "m.rootActionLabel('NOPE')")).isEqualTo("Unknown");
 
         @SuppressWarnings("unchecked")

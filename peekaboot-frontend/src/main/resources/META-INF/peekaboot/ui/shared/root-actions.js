@@ -1,8 +1,8 @@
 /** Icons are literal characters so callers can assign them with textContent. */
 const ROOT_ACTIONS = {
-    HTTP_REQUEST:     {icon: '\u{1F310}', label: 'HTTP Request'},
-    SCHEDULED_JOB:    {icon: '\u{1F551}', label: 'Scheduled Job'},
-    MESSAGE_CONSUMER: {icon: '\u{1F4E9}', label: 'Message Consumer'},
+    HTTP_REQUEST:     {icon: '\u{1F310}', label: 'HTTP'},
+    SCHEDULED_JOB:    {icon: '\u{1F551}', label: 'Scheduled'},
+    MESSAGE_CONSUMER: {icon: '\u{1F4E9}', label: 'Messaging'},
     RPC_CALL:         {icon: '\u{1F517}', label: 'RPC Call'},
     DATABASE:         {icon: '\u{1F5C2}', label: 'Database'},
     CONNECTION_POOL:  {icon: '\u{1F50C}', label: 'Connection Pool'},

@@ -1068,7 +1068,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(methodText)
                 .as("no HTTP method exists for a scheduled job, so the header must fall back to "
                         + "the root-action label rather than a fake method")
-                .isEqualTo("Scheduled Job");
+                .isEqualTo("Scheduled");
 
         String metaText = overlay.text(".pk-overlay__meta").toLowerCase(Locale.ROOT);
         assertThat(metaText)

@@ -230,7 +230,14 @@ function filterCheckbox(type, applyChange) {
         tab.refetch();
     });
 
-    checkboxLabel.append(checkbox, document.createTextNode(' ' + rootActionLabel(type)));
+    // one flex item, so the icon sits a space from its label rather than a flex gap
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = rootActionIcon(type);
+    const text = document.createElement('span');
+    text.append(icon, ' ' + rootActionLabel(type));
+
+    checkboxLabel.append(checkbox, text);
     return checkbox;
 }
 
@@ -298,7 +305,6 @@ function renderList(container, result, context) {
 function updateFilterIndicator(container) {
     const filterBanner = container.querySelector('#traces-active-filter');
     const filterText = filterBanner?.querySelector('.pk-filter-banner__text');
-    const clearBtn = container.querySelector('#traces-filter-clear');
     if (!filterBanner || !filterText) return;
 
     if (isUserFiltered()) {
@@ -315,10 +321,8 @@ function updateFilterIndicator(container) {
         }
         filterText.textContent = `Filtering: ${filterParts.join(' | ')}`;
         filterBanner.classList.remove('hidden');
-        if (clearBtn) clearBtn.classList.remove('hidden');
     } else {
         filterBanner.classList.add('hidden');
-        if (clearBtn) clearBtn.classList.add('hidden');
     }
 }
 
