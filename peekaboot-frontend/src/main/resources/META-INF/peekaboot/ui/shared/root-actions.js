@@ -7,7 +7,6 @@ const ROOT_ACTIONS = {
     DATABASE:         {icon: '\u{1F5C2}', label: 'Database'},
     CONNECTION_POOL:  {icon: '\u{1F50C}', label: 'Connection Pool'},
     ASYNC_TASK:       {icon: '\u{26A1}', label: 'Async Task'},
-    INTERNAL:         {icon: '⚙',    label: 'Internal'},
     UNKNOWN:          {icon: '❓',    label: 'Unknown'}
 };
 

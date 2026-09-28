@@ -282,15 +282,14 @@ public class TraceTreeMapper {
             Span.Kind kind, String name, String parentId, Map<String, String> tags) {
         // Peekaboot's own marker, so unambiguous - unlike the third-party tag families below,
         // which infer from someone else's convention. First for that reason, and because the
-        // entry span carries no Span.Kind and would otherwise fall to the null-kind catch-all.
+        // entry span carries no Span.Kind and would otherwise fall through to UNKNOWN.
         if (tags.containsKey(AsyncTaskMarker.TAG_KEY)) {
             return RootActionType.ASYNC_TASK;
         }
         // Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
         // @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
         // Sender/Receiver-style contexts), so this can't be pre-empted by the CLIENT-kind
-        // branch below it, and it must run before the null-kind catch-all that would
-        // otherwise swallow it.
+        // branch below it, and without it the run would fall through to UNKNOWN.
         if (hasScheduledTaskTags(tags)) {
             return RootActionType.SCHEDULED_JOB;
         }
@@ -316,11 +315,6 @@ public class TraceTreeMapper {
                 && "connection".equals(name)
                 && hasTagPrefix(tags, "jdbc.datasource.")) {
             return RootActionType.CONNECTION_POOL;
-        }
-        // null kind -> INTERNAL (Micrometer's Span.Kind enum has no INTERNAL value;
-        // internal spans are represented by null kind)
-        if (kind == null) {
-            return RootActionType.INTERNAL;
         }
         return RootActionType.UNKNOWN;
     }

@@ -843,11 +843,11 @@ class TraceTreeMapperTest {
                 Arguments.of(Span.Kind.CONSUMER, rpc, RootActionType.MESSAGE_CONSUMER),
                 Arguments.of(Span.Kind.CONSUMER, messaging, RootActionType.MESSAGE_CONSUMER),
                 Arguments.of(Span.Kind.CONSUMER, db, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(null, none, RootActionType.INTERNAL),
-                Arguments.of(null, http, RootActionType.INTERNAL),
-                Arguments.of(null, rpc, RootActionType.INTERNAL),
+                Arguments.of(null, none, RootActionType.UNKNOWN),
+                Arguments.of(null, http, RootActionType.UNKNOWN),
+                Arguments.of(null, rpc, RootActionType.UNKNOWN),
                 Arguments.of(null, messaging, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(null, db, RootActionType.INTERNAL));
+                Arguments.of(null, db, RootActionType.UNKNOWN));
     }
 
     @Test
@@ -902,7 +902,7 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.INTERNAL);
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
     @Test
@@ -972,14 +972,14 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void aSpanWithoutTheAsyncMarkerIsStillInternal() {
+    void aSpanWithoutTheAsyncMarkerIsUnknown() {
         var rootSpan = span("root").named("some-operation").at(0, 100).build();
 
         var traceData = TraceDatas.of("trace1", rootSpan);
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.INTERNAL);
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
     /**

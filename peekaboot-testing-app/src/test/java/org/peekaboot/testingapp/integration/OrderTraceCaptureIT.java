@@ -251,7 +251,7 @@ class OrderTraceCaptureIT {
                 .as("a direct call carries none of Spring's scheduled-task tags, so its "
                         + "root span must not be misclassified as SCHEDULED_JOB just because "
                         + "its name contains \"job\"")
-                .isEqualTo("INTERNAL");
+                .isEqualTo("UNKNOWN");
     }
 
     /**

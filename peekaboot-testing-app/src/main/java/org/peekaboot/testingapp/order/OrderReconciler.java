@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  * scheduled-task observation becomes the root span and carries the
  * {@code code.function}/{@code code.namespace} tags the classifier reads. A direct call to
  * {@link #reconcileOrders()} makes this method's own {@code @Observed} span the root, which
- * classifies {@code INTERNAL}.
+ * classifies {@code UNKNOWN}.
  */
 @Component
 public class OrderReconciler {

@@ -13,6 +13,5 @@ public enum RootActionType {
     DATABASE,
     CONNECTION_POOL,
     ASYNC_TASK,
-    INTERNAL,
     UNKNOWN
 }

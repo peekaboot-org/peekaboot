@@ -49,14 +49,13 @@ The first rule that matches wins:
 4. `SCHEDULED_JOB`: both `code.function` and `code.namespace`. Only Spring's
    `DefaultScheduledTaskObservationConvention` sets that pair, so only a `@Scheduled` method
    fired by Spring's scheduler matches. Quartz or a plain `ScheduledExecutorService` falls
-   through to `INTERNAL` or whatever else its tags match.
+   through to `UNKNOWN` or whatever else its tags match.
 5. `DATABASE`: CLIENT kind with any `db.*` tag.
 6. `CONNECTION_POOL`: CLIENT kind, no parent id, the name `connection` and any
    `jdbc.datasource.*` tag. The parent check matters: a request on an excluded prefix has its
    root span skipped, so a connection acquired while serving it becomes the stored trace's
    apparent root while still carrying a parent id.
-7. `INTERNAL`: no kind. Micrometer has no INTERNAL constant.
-8. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
+7. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
    lands here on purpose: it is an outbound call whose caller has not been exported.
 
 `CONNECTION_POOL` is the one constant `TraceInsightsService.DEFAULT_VIEW_TYPES` leaves out, so a
