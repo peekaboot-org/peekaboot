@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.domain.features.Features;
+import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
@@ -23,6 +24,7 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.test.context.FilteredClassLoader;
+import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -175,30 +177,11 @@ class PeekabootAutoConfigurationTest {
      */
     @Test
     void honoursTheFoldSwitchForCapturedLogs() {
-        new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class))
-                .withPropertyValues(
-                        "peekaboot.enabled=true",
-                        "peekaboot.stack-trace.fold=false",
-                        "peekaboot.stack-trace.exclude=com.acme.vendor")
+        tracingRunner()
+                .withPropertyValues("peekaboot.stack-trace.fold=false", "peekaboot.stack-trace.exclude=com.acme.vendor")
                 .run(context -> {
                     TraceStore traceStore = context.getBean(TraceStore.class);
-                    traceStore.addSpan(new SpanData(
-                            "t1",
-                            "s1",
-                            null,
-                            "GET /x",
-                            Span.Kind.SERVER,
-                            Instant.EPOCH,
-                            Instant.EPOCH.plusMillis(100),
-                            Duration.ofMillis(100),
-                            Map.of(),
-                            List.of(),
-                            null,
-                            null,
-                            null,
-                            1L));
+                    addRootSpan(traceStore);
                     traceStore.addLog(
                             new LogCapturedEvent(
                                     "t1",
@@ -218,6 +201,76 @@ class PeekabootAutoConfigurationTest {
                             .as("fold=false must empty the exclusion list, not just leave it unread")
                             .isEmpty();
                 });
+    }
+
+    /** Drives a captured query through the real TraceInsightsService: a bean existing proves nothing about what reached the mappers. */
+    @Test
+    void formatsCapturedQueriesWhenHibernateIsPresent() {
+        tracingRunner()
+                .run(context ->
+                        assertThat(capturedStatement(context).formatted()).isEqualTo("    select\n        1"));
+    }
+
+    @Test
+    void servesQueriesUnformattedWithoutHibernate() {
+        tracingRunner()
+                .withClassLoader(new FilteredClassLoader("org.hibernate"))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(capturedStatement(context)).isEqualTo(new SqlStatement("select 1", null, List.of()));
+                });
+    }
+
+    private static WebApplicationContextRunner tracingRunner() {
+        return new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true");
+    }
+
+    private static SqlStatement capturedStatement(AssertableWebApplicationContext context) {
+        TraceStore traceStore = context.getBean(TraceStore.class);
+        addRootSpan(traceStore);
+        traceStore.addSpan(new SpanData(
+                "t1",
+                "q1",
+                "s1",
+                "SELECT",
+                Span.Kind.CLIENT,
+                Instant.EPOCH.plusMillis(10),
+                Instant.EPOCH.plusMillis(20),
+                Duration.ofMillis(10),
+                Map.of("db.query.text", "select 1"),
+                List.of(),
+                null,
+                null,
+                null,
+                2L));
+        return context.getBean(TraceInsightsService.class)
+                .getTraceInsights("t1")
+                .orElseThrow()
+                .queries()
+                .getFirst()
+                .statement();
+    }
+
+    /** The SERVER root {@code t1}/{@code s1} a captured span or log hangs off. */
+    private static void addRootSpan(TraceStore traceStore) {
+        traceStore.addSpan(new SpanData(
+                "t1",
+                "s1",
+                null,
+                "GET /x",
+                Span.Kind.SERVER,
+                Instant.EPOCH,
+                Instant.EPOCH.plusMillis(100),
+                Duration.ofMillis(100),
+                Map.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                1L));
     }
 
     /**

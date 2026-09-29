@@ -1203,7 +1203,7 @@ are one number; `TraceTreeMapperTest` pins the equality.
 
 `QueryExtractor` builds each trace's `queries` list from those spans, independently of the span
 tree's own names, one entry per query span. A span whose instrumentation recorded no statement
-is listed with `sql: null`. `DbSpans.sql` checks tags in priority order. The site states the
+is listed with `statement: null`. `DbSpans.sql` checks tags in priority order. The site states the
 outcome under [the trace view](https://www.peekaboot.org/docs/traces/#the-trace-view);
 the order and the reasons are here:
 
@@ -1214,15 +1214,22 @@ the order and the reasons are here:
 3. `jdbc.query[N]` (datasource-proxy/Micrometer)
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
-The same masked text is put on the span itself as `SpanNode.query`, which is what a query
-span's details panel in the Spans tab shows, and the three statement tags it was read from are
-dropped from `SpanNode.tags` rather than served a second time beside it. A datasource-proxy
-result-set span's `jdbc.row-count` tag is served parsed as `SpanNode.rowCount` (null when it
-does not parse) - on the query span it belongs to, not on the result-set span that recorded it.
-`RowCounts` pairs the two by creation order, the result set recorded after a query and before
-the next one, and both `TraceTreeMapper` and `QueryExtractor` read that one pairing, so a query
-reports the same count in the Spans tab and the Queries tab. The result-set span keeps its raw
-tag and nothing else. The Spans tab therefore reads facts the backend decided instead of
+`SqlStatements` builds one `SqlStatement` per query span for both `TraceTreeMapper` (`SpanNode.query`)
+and `QueryExtractor` (`QueryInfo.statement`), so the two tabs show the same statement. `text` is the
+masked SQL. `formatted` is the raw SQL laid out by `HibernateSqlFormatter` (Hibernate's `format_sql`
+style, `FormatStyle.BASIC`, each statement of a batch on its own) and then masked.
+
+`formatted` is null without Hibernate on the classpath, the formatter bean's condition, and when the
+formatter throws, which `BasicFormatterImpl` does on unbalanced closing parentheses. `parameters` are
+the masked literals of `peekaboot.query.parameters`, empty when the tag is absent or malformed.
+Formatting runs before masking so masking sees the values it sees in the raw text.
+
+The statement tags and the parameters tag are dropped from `SpanNode.tags` rather than served a
+second time beside the statement. A datasource-proxy result-set span's `jdbc.row-count` tag is
+served parsed as `SpanNode.rowCount` (null when it does not parse), on the query span it belongs to.
+`RowCounts` pairs the two by creation order, and both mappers read that one pairing.
+
+The Spans tab therefore reads facts the backend decided instead of
 re-deriving them from tag and span names. `DbSpans.system` mirrors this priority for
 `db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Masking is
 value-patterns only, not column-aware literal masking (`MaskingRules.VALUE_PATTERNS` carries
@@ -1265,7 +1272,7 @@ store, and ride along on any OTLP export.
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) renders `span.name`, OpenTelemetry's own span-name summary, for
 example `SELECT customer_order`. The Queries tab (`trace-detail/tabs/queries.js`) renders
-`query.sql`, which is where the tag `DbSpans.sql` picks actually shows up. The overlay opens on
+`query.statement.text`, which is where the tag `DbSpans.sql` picks actually shows up. The overlay opens on
 Spans by default (`trace-detail.js`'s `initial: 'spans'`), and `ScreenshotCapture` photographs
 both, so `trace-detail-queries-*` is the shipped image demonstrating `QueryExtractor`'s output.
 

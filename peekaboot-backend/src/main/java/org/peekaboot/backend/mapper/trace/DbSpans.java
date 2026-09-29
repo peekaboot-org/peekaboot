@@ -31,6 +31,9 @@ public final class DbSpans {
      */
     public static final String PARAMETERS_TAG = "peekaboot.query.parameters";
 
+    /** How {@link #sql} joins the statements of a batch. */
+    static final String STATEMENT_SEPARATOR = ";\n";
+
     private static final String RESULT_SET_SPAN_NAME = "result-set";
     private static final String ROW_COUNT_TAG = "jdbc.row-count";
 
@@ -50,11 +53,12 @@ public final class DbSpans {
         return span.query() != null || isQuery(span.kind(), span.tags());
     }
 
-    /** The tags {@link #sql} reads the statement from; served once as {@code SpanNode.query}, not again as a tag. */
+    /** The tags {@link #sql} reads the statement from, and the parameters tag; served once as {@code SpanNode.query}, not again as tags. */
     public static boolean isStatementTag(String key) {
         return "db.query.text".equals(key)
                 || "db.statement".equals(key)
-                || BATCH_STATEMENT_TAG.matcher(key).matches();
+                || BATCH_STATEMENT_TAG.matcher(key).matches()
+                || PARAMETERS_TAG.equals(key);
     }
 
     /** datasource-proxy's result-set span: the one that carries the row count of the query before it. */
@@ -120,7 +124,7 @@ public final class DbSpans {
                 byIndex.put(Integer.parseInt(matcher.group(1)), entry.getValue());
             }
         }
-        return byIndex.isEmpty() ? null : String.join(";\n", byIndex.values());
+        return byIndex.isEmpty() ? null : String.join(STATEMENT_SEPARATOR, byIndex.values());
     }
 
     private static boolean isSqlShaped(String name) {

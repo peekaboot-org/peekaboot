@@ -4,7 +4,7 @@ import java.time.Instant;
 
 public record QueryInfo(
         String spanId,
-        String sql,
+        SqlStatement statement,
         String dbSystem,
         long durationMs,
         Instant timestamp,

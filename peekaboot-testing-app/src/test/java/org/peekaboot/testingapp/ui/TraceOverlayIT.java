@@ -923,8 +923,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
         Object labels = importModule("trace-detail/tabs/queries.js", """
             (() => {
                 const queries = [
-                    {sql: 'SELECT 1', durationMs: 49, dbSystem: 'h2', rowCount: 1},
-                    {sql: 'SELECT 2', durationMs: 50, dbSystem: 'h2', rowCount: 1}
+                    {statement: {text: 'SELECT 1', formatted: null, parameters: []}, durationMs: 49, dbSystem: 'h2', rowCount: 1},
+                    {statement: {text: 'SELECT 2', formatted: null, parameters: []}, durationMs: 50, dbSystem: 'h2', rowCount: 1}
                 ];
                 const fallback = document.createElement('div');
                 m.render(fallback, {queries});
@@ -1393,7 +1393,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
                 const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
                 return [
-                    rowCountOf({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query: 'select * from orders'}),
+                    rowCountOf({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query: {text: 'select * from orders', formatted: null, parameters: []}}),
                     rowCountOf({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}),
                     rowCountOf({spanId: 'f', name: 'SELECT big', rowCount: 12345}, 'de-DE'),
                     errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),

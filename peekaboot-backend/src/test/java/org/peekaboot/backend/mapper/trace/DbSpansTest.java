@@ -5,8 +5,10 @@ import static org.peekaboot.backend.testsupport.SpanNodes.node;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.SqlStatement;
 
 class DbSpansTest {
 
@@ -138,7 +140,7 @@ class DbSpansTest {
         assertThat(DbSpans.isQuery(node("s1")
                         .kind(Span.Kind.CLIENT)
                         .tags(Map.of("jdbc.datasource.name", "primary"))
-                        .query("SELECT 1")
+                        .query(new SqlStatement("SELECT 1", null, List.of()))
                         .build()))
                 .isTrue();
     }
@@ -170,5 +172,6 @@ class DbSpansTest {
         assertThat(DbSpans.isStatementTag("jdbc.query[3]")).isTrue();
         assertThat(DbSpans.isStatementTag("db.system")).isFalse();
         assertThat(DbSpans.isStatementTag("jdbc.row-count")).isFalse();
+        assertThat(DbSpans.isStatementTag(DbSpans.PARAMETERS_TAG)).isTrue();
     }
 }

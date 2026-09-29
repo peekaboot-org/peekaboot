@@ -48,4 +48,6 @@ dependencies {
     // database metadata path against an auto-configured DataSource
     testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
     testImplementation("com.h2database:h2")
+    // the SQL formatter's condition, proven with Hibernate present and filtered away
+    testImplementation("org.hibernate.orm:hibernate-core")
 }

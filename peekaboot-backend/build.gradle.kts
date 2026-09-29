@@ -22,6 +22,7 @@ dependencies {
     compileOnly("org.springframework.security:spring-security-core")
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("com.zaxxer:HikariCP")
+    compileOnly("org.hibernate.orm:hibernate-core")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
 
     // The toolbar shell inlines stylesheets that ship in peekaboot-frontend, read off

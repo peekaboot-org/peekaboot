@@ -10,10 +10,11 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 public class QueryExtractor {
 
-    private final MaskingEngine maskingEngine;
+    private final SqlStatements sqlStatements;
 
-    public QueryExtractor(MaskingEngine maskingEngine) {
-        this.maskingEngine = maskingEngine;
+    /** {@code sqlFormatter} is null when none is available; statements then carry no formatted SQL. */
+    public QueryExtractor(MaskingEngine maskingEngine, SqlFormatter sqlFormatter) {
+        this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
     }
 
     public List<QueryInfo> extract(TraceData traceData) {
@@ -26,14 +27,12 @@ public class QueryExtractor {
     }
 
     private QueryInfo extractQuery(SpanData span, Long rowCount) {
-        // value patterns only (MaskingEngine.maskValue), not column-aware literal masking
-        String sql = maskingEngine.maskValue(DbSpans.sql(span));
-
         String dbSystem = DbSpans.system(span.tags());
 
         Instant timestamp = span.startTime();
         long creationOrder = span.creationOrder();
 
-        return new QueryInfo(span.spanId(), sql, dbSystem, span.durationMs(), timestamp, rowCount, creationOrder);
+        return new QueryInfo(
+                span.spanId(), sqlStatements.of(span), dbSystem, span.durationMs(), timestamp, rowCount, creationOrder);
     }
 }

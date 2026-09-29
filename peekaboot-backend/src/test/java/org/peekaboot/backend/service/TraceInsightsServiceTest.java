@@ -51,9 +51,9 @@ class TraceInsightsServiceTest {
     @BeforeEach
     void setUp() {
         store = TraceStores.withDefaults();
-        traceTreeMapper = new TraceTreeMapper(new MaskingEngine());
+        traceTreeMapper = new TraceTreeMapper(new MaskingEngine(), null);
         issueDetector = new IssueDetector(new UiTracingProperties());
-        queryExtractor = new QueryExtractor(new MaskingEngine());
+        queryExtractor = new QueryExtractor(new MaskingEngine(), null);
         service = newService(store);
     }
 
@@ -338,7 +338,7 @@ class TraceInsightsServiceTest {
         Optional<TraceTree> result = service.getTraceInsights("trace1");
         assertThat(result).isPresent();
         assertThat(result.get().queries()).hasSize(1);
-        assertThat(result.get().queries().get(0).sql()).isEqualTo("SELECT * FROM users WHERE id = ?");
+        assertThat(result.get().queries().get(0).statement().text()).isEqualTo("SELECT * FROM users WHERE id = ?");
         assertThat(result.get().queries().get(0).dbSystem()).isEqualTo("postgresql");
         assertThat(result.get().queries().get(0).durationMs()).isEqualTo(50L);
     }
@@ -666,8 +666,8 @@ class TraceInsightsServiceTest {
                 .isEqualTo(withoutDup.summary().spans().count());
         assertThat(withDup.rootSpan().children()).hasSize(1);
         assertThat(withDup.queries()).hasSize(1);
-        assertThat(withDup.queries().get(0).sql())
-                .isEqualTo(withoutDup.queries().get(0).sql());
+        assertThat(withDup.queries().get(0).statement().text())
+                .isEqualTo(withoutDup.queries().get(0).statement().text());
     }
 
     @Test

@@ -26,10 +26,13 @@ public class TraceTreeMapper {
 
     private final MaskingEngine maskingEngine;
     private final TagMasker tagMasker;
+    private final SqlStatements sqlStatements;
 
-    public TraceTreeMapper(MaskingEngine maskingEngine) {
+    /** {@code sqlFormatter} is null when none is available; query statements then carry no formatted SQL. */
+    public TraceTreeMapper(MaskingEngine maskingEngine, SqlFormatter sqlFormatter) {
         this.maskingEngine = maskingEngine;
         this.tagMasker = new TagMasker(maskingEngine);
+        this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
     }
 
     /** Builds the {@link TraceTree} for a captured trace. */
@@ -384,7 +387,7 @@ public class TraceTreeMapper {
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
                 spanData.remoteServiceName(),
-                queryText(spanData),
+                sqlStatements.of(spanData),
                 rowCounts.get(spanData.spanId()),
                 null,
                 isAsync && !parentIsAsync);
@@ -394,9 +397,9 @@ public class TraceTreeMapper {
      * Every tag stays on its own span, masked - http.url etc. may carry a credential the
      * key name alone can't catch. A span's errorMessage and query text are masked the same
      * way: an exception message can echo back the failing request's URL. The statement
-     * tags are the exception: the statement is served once, masked, as the span's
-     * {@code query}, and shipping the raw tag beside it would say it twice. That holds
-     * only on a query span, the one shape {@code query} is populated for.
+     * tags and the parameters tag are the exception: both are served once, masked, as the
+     * span's {@code query}, and shipping the raw tag beside it would say it twice. That
+     * holds only on a query span, the one shape {@code query} is populated for.
      */
     private Map<String, String> maskedTags(SpanData spanData) {
         if (spanData.tags() == null) {
@@ -419,10 +422,6 @@ public class TraceTreeMapper {
         return spanData.events().stream()
                 .map(e -> new SpanEvent(e.name(), e.timestamp()))
                 .toList();
-    }
-
-    private String queryText(SpanData spanData) {
-        return DbSpans.isQuery(spanData) ? maskingEngine.maskValue(DbSpans.sql(spanData)) : null;
     }
 
     private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData, Set<String> asyncSpanIds) {

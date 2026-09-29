@@ -52,7 +52,10 @@
 `Spans.span(id)` builds a `SpanData` with neutral defaults, alongside the `query` preset for a
 JDBC-shaped query span, `resultSet(id, rowCount)` for the row-count span datasource-proxy
 exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair and
-`jdbcConnection` for the pool acquisition datasource-micrometer exports.
+`jdbcConnection` for the pool acquisition datasource-micrometer exports. A query fixture's bind
+parameters are its `DbSpans.PARAMETERS_TAG` tag, in the JSON `QueryParameterObservationFilter`
+writes (`.tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")`); `SpanNodes.node(id).query(...)` takes the
+mapped `SqlStatement`.
 `TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
 `snapshot()`, so a mapper test gets the root and ordering the store would hand it.
 `SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the

@@ -19,7 +19,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 class QueryExtractorTest {
 
-    private final QueryExtractor extractor = new QueryExtractor(new MaskingEngine());
+    private final QueryExtractor extractor = new QueryExtractor(new MaskingEngine(), null);
 
     @Test
     void extract_shouldFindQueryWithDbStatementTag() {
@@ -35,7 +35,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extractor.extract(traceData);
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users WHERE id = ?");
+        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM users WHERE id = ?");
         assertThat(queries.get(0).dbSystem()).isEqualTo("postgresql");
         assertThat(queries.get(0).durationMs()).isEqualTo(100);
     }
@@ -52,7 +52,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extractor.extract(traceData);
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql()).isEqualTo("INSERT INTO orders (user_id) VALUES (?)");
+        assertThat(queries.get(0).statement().text()).isEqualTo("INSERT INTO orders (user_id) VALUES (?)");
         assertThat(queries.get(0).dbSystem()).isEqualTo("orders_db");
     }
 
@@ -71,7 +71,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", batchSpan));
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql())
+        assertThat(queries.get(0).statement().text())
                 .isEqualTo("INSERT INTO t VALUES (0);\nINSERT INTO t VALUES (2);\nINSERT INTO t VALUES (10)");
     }
 
@@ -91,7 +91,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extractor.extract(traceData);
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM products");
+        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM products");
     }
 
     @Test
@@ -134,7 +134,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extractor.extract(traceData);
 
         assertThat(queries).hasSize(2);
-        assertThat(queries.get(0).sql()).isEqualTo("UPDATE users SET active = true");
+        assertThat(queries.get(0).statement().text()).isEqualTo("UPDATE users SET active = true");
         assertThat(queries.get(0).rowCount()).isNull();
         assertThat(queries.get(1).rowCount()).isEqualTo(42L);
     }
@@ -160,9 +160,9 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extractor.extract(traceData);
 
         assertThat(queries).hasSize(2);
-        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users");
+        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM users");
         assertThat(queries.get(0).rowCount()).isEqualTo(10L);
-        assertThat(queries.get(1).sql()).isEqualTo("SELECT * FROM orders");
+        assertThat(queries.get(1).statement().text()).isEqualTo("SELECT * FROM orders");
         assertThat(queries.get(1).rowCount()).isEqualTo(25L);
     }
 
@@ -236,14 +236,14 @@ class QueryExtractorTest {
      * summary counts it and the Queries tab lists it, with nothing to show for its text.
      */
     @Test
-    void extract_shouldListAQuerySpanWithoutAStatementWithNullSql() {
+    void extract_shouldListAQuerySpanWithoutAStatementWithNullStatement() {
         var querySpan =
                 query("span1").tags(Map.of("db.system", "postgresql")).order(10).build();
 
         List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.getFirst().sql()).isNull();
+        assertThat(queries.getFirst().statement()).isNull();
         assertThat(queries.getFirst().dbSystem()).isEqualTo("postgresql");
     }
 
@@ -279,9 +279,9 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extractor.extract(traceData);
 
         assertThat(queries).hasSize(3);
-        assertThat(queries.get(0).sql()).isEqualTo("SELECT 1");
-        assertThat(queries.get(1).sql()).isEqualTo("SELECT 2");
-        assertThat(queries.get(2).sql()).isEqualTo("SELECT 3");
+        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT 1");
+        assertThat(queries.get(1).statement().text()).isEqualTo("SELECT 2");
+        assertThat(queries.get(2).statement().text()).isEqualTo("SELECT 3");
     }
 
     @Test
@@ -347,7 +347,7 @@ class QueryExtractorTest {
 
         List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
 
-        assertThat(queries).extracting(QueryInfo::sql).containsExactly(expected);
+        assertThat(queries).extracting(q -> q.statement().text()).containsExactly(expected);
     }
 
     @Test

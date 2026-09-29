@@ -343,7 +343,7 @@ function errorSection(span) {
 function querySection(span) {
     if (!span.query) return null;
     return el('div', {className: 'pk-span-details__query'},
-        el('pre', {className: 'pk-code-block', text: span.query}),
+        el('pre', {className: 'pk-code-block', text: span.query.text}),
         button({
             className: 'pk-btn pk-btn--small pk-span-query-link', text: 'Show in Queries tab',
             attrs: {'data-span-id': span.spanId}

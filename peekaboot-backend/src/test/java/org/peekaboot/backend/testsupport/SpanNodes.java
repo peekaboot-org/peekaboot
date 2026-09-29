@@ -7,6 +7,7 @@ import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
+import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.domain.trace.TraceLog;
 
 /**
@@ -38,7 +39,7 @@ public final class SpanNodes {
         private String errorMessage;
         private String errorClass;
         private String remoteServiceName;
-        private String query;
+        private SqlStatement query;
         private Long rowCount;
         private List<TraceLog> logs;
         private boolean asyncEntry;
@@ -108,7 +109,7 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder query(String query) {
+        public Builder query(SqlStatement query) {
             this.query = query;
             return this;
         }

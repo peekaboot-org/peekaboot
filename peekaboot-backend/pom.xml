@@ -61,6 +61,13 @@
             <artifactId>HikariCP</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- compile-only: HibernateSqlFormatter, which the auto-configuration creates only
+             when the host application brings Hibernate -->
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Micrometer -->
         <dependency>

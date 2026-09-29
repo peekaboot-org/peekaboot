@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.tracing.Span;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.mapper.trace.DbSpans;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,9 +112,38 @@ class RequestAndQueryMaskingIT {
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("queries")).hasSize(1);
-        String sql = trace.path("queries").get(0).path("sql").asString();
+        String sql = trace.path("queries").get(0).path("statement").path("text").asString();
         assertThat(sql)
                 .isEqualTo("INSERT INTO webhooks (callback_url) VALUES "
                         + "('https://******@internal.example.com/callback')");
+    }
+
+    /** A bind value is masked by the same value rules as the SQL around it. */
+    @Test
+    void aCredentialShapedBindParameterComesBackMaskedFromTheTraceInsightsApi() {
+        String traceId = "masking-test-params-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("GET /masking-test/params-fixture")
+                .kind(Span.Kind.SERVER)
+                .at(0, 50)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "db")
+                .parent("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(5, 15)
+                .tag("db.system", "h2")
+                .tag("db.statement", "INSERT INTO tokens (value) VALUES (?)")
+                .tag(DbSpans.PARAMETERS_TAG, "[[\"'ghp_" + "a".repeat(36) + "'\"]]")
+                .build());
+
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        assertThat(trace.path("queries")
+                        .get(0)
+                        .path("statement")
+                        .path("parameters")
+                        .toString())
+                .isEqualTo("[[\"'******'\"]]");
     }
 }

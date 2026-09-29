@@ -19,6 +19,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
+import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
@@ -32,7 +33,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 class TraceTreeMapperTest {
 
-    private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine());
+    private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine(), null);
 
     @Test
     void buildsATreeFromFlatSpans() {
@@ -392,7 +393,7 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
         int queriesListed =
-                new QueryExtractor(new MaskingEngine()).extract(traceData).size();
+                new QueryExtractor(new MaskingEngine(), null).extract(traceData).size();
         long queryNodes =
                 result.rootSpan().children().stream().filter(DbSpans::isQuery).count();
 
@@ -428,7 +429,7 @@ class TraceTreeMapperTest {
 
         assertThat(result.rootSpan().query()).isNull();
         assertThat(result.rootSpan().children())
-                .extracting(SpanNode::spanId, SpanNode::query)
+                .extracting(SpanNode::spanId, TraceTreeMapperTest::statementText)
                 .containsExactly(
                         tuple("conn", null),
                         tuple("q1", "INSERT INTO hooks VALUES ('https://******@example.com/x')"),
@@ -1132,7 +1133,7 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(TraceDatas.of("trace1", root, otelQuery, proxyQuery));
 
         assertThat(result.rootSpan().children())
-                .extracting(SpanNode::spanId, SpanNode::tags, SpanNode::query)
+                .extracting(SpanNode::spanId, SpanNode::tags, TraceTreeMapperTest::statementText)
                 .containsExactly(
                         tuple("q1", Map.of("db.system.name", "h2"), "select * from orders"),
                         tuple("q2", Map.of("jdbc.datasource.name", "primary"), "select * from lines"));
@@ -1159,8 +1160,51 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(TraceDatas.of("trace1", root, internal));
 
         assertThat(result.rootSpan().children())
-                .extracting(SpanNode::tags, SpanNode::query)
+                .extracting(SpanNode::tags, TraceTreeMapperTest::statementText)
                 .containsExactly(tuple(Map.of("db.statement", "select * from orders"), null));
+    }
+
+    /** Both views build their statement through SqlStatements, so a query reads the same in the Spans and the Queries tab. */
+    @Test
+    void theSpanTreeAndTheQueriesListCarryTheSameStatement() {
+        TraceData traceData = personLookupTrace();
+        SqlFormatter formatter = new HibernateSqlFormatter();
+
+        SpanNode node = new TraceTreeMapper(new MaskingEngine(), formatter)
+                .map(traceData)
+                .rootSpan()
+                .children()
+                .getFirst();
+        QueryInfo listed = new QueryExtractor(new MaskingEngine(), formatter)
+                .extract(traceData)
+                .getFirst();
+
+        assertThat(node.query()).isEqualTo(listed.statement());
+        assertThat(node.query().formatted()).isNotNull();
+        assertThat(node.query().parameters()).containsExactly(List.of("42"));
+    }
+
+    @Test
+    void servesTheParametersTagInsideTheStatementNotBesideIt() {
+        SpanNode node = mapper.map(personLookupTrace()).rootSpan().children().getFirst();
+
+        assertThat(node.tags()).doesNotContainKey(DbSpans.PARAMETERS_TAG);
+        assertThat(node.query().parameters()).containsExactly(List.of("42"));
+    }
+
+    /** A request whose one query bound 42. */
+    private static TraceData personLookupTrace() {
+        var root = span("root")
+                .named("GET /persons/42")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build();
+        var lookup = jdbcQuery("q1", "select p.email from person p where p.id=?")
+                .parent("root")
+                .at(10, 20)
+                .tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")
+                .build();
+        return TraceDatas.of("trace1", root, lookup);
     }
 
     /**
@@ -1214,5 +1258,9 @@ class TraceTreeMapperTest {
                 .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .at(startOffsetMs, durationMs)
                 .build();
+    }
+
+    private static String statementText(SpanNode node) {
+        return node.query() == null ? null : node.query().text();
     }
 }

@@ -19,7 +19,7 @@ public record SpanNode(
         String errorMessage,
         String errorClass,
         String remoteServiceName,
-        String query,
+        SqlStatement query,
         Long rowCount,
         List<TraceLog> logs,
         boolean asyncEntry) {

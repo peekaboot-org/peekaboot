@@ -20,8 +20,8 @@ dependencies {
     api("net.ttddyy.observation:datasource-micrometer-opentelemetry:$datasourceMicrometerVersion")
 }
 
-// The servlet stack and the connection pool are compileOnly in the modules that use them,
-// so the host application supplies them and the auto-configuration conditions stay
+// The servlet stack, the connection pool and the ORM are compileOnly in the modules that use
+// them, so the host application supplies them and the auto-configuration conditions stay
 // meaningful. Handing a consumer one of them would fire those conditions in an application
 // that never asked for it. Mirrors the Maven enforcer rule on this module.
 val bannedFromConsumers = setOf(
@@ -29,10 +29,11 @@ val bannedFromConsumers = setOf(
     "org.springframework:spring-webmvc",
     "org.springframework.boot:spring-boot-web-server",
     "com.zaxxer:HikariCP",
+    "org.hibernate.orm:hibernate-core",
 )
 
 val checkOptionalDependencyContract = tasks.register("checkOptionalDependencyContract") {
-    description = "Fails if the starter would hand a consumer a servlet stack or a connection pool."
+    description = "Fails if the starter would hand a consumer a servlet stack, a connection pool or an ORM."
     group = "verification"
     val resolved = configurations.runtimeClasspath.map { conf ->
         conf.incoming.artifacts.artifacts.mapNotNull {

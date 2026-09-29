@@ -10,8 +10,10 @@ import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
+import org.peekaboot.backend.mapper.trace.HibernateSqlFormatter;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
+import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.ActuatorInsightsService;
@@ -32,6 +34,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 /**
@@ -81,8 +84,8 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TraceTreeMapper traceTreeMapper(MaskingEngine maskingEngine) {
-        return new TraceTreeMapper(maskingEngine);
+    public TraceTreeMapper traceTreeMapper(MaskingEngine maskingEngine, ObjectProvider<SqlFormatter> sqlFormatter) {
+        return new TraceTreeMapper(maskingEngine, sqlFormatter.getIfAvailable());
     }
 
     @Bean
@@ -93,8 +96,8 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public QueryExtractor queryExtractor(MaskingEngine maskingEngine) {
-        return new QueryExtractor(maskingEngine);
+    public QueryExtractor queryExtractor(MaskingEngine maskingEngine, ObjectProvider<SqlFormatter> sqlFormatter) {
+        return new QueryExtractor(maskingEngine, sqlFormatter.getIfAvailable());
     }
 
     @Bean
@@ -161,5 +164,17 @@ public class PeekabootAutoConfiguration {
                 tracingProperties.getIfAvailable(),
                 insightsService.getIfAvailable(),
                 otelSpanExporter.getIfAvailable() != null);
+    }
+
+    /** Only with Hibernate on the classpath; without it every query's {@code formatted} SQL is null. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.hibernate.engine.jdbc.internal.FormatStyle")
+    static class HibernateSqlFormatterConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public SqlFormatter hibernateSqlFormatter() {
+            return new HibernateSqlFormatter();
+        }
     }
 }

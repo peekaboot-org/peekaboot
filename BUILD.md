@@ -303,7 +303,8 @@ running a different pool.
 `bannedDependencies` with `searchTransitive` on `peekaboot-spring-boot-starter` is where
 that becomes checkable, because the starter is what a consumer actually depends on. It
 bans `jakarta.servlet:jakarta.servlet-api`, `org.springframework:spring-webmvc`,
-`org.springframework.boot:spring-boot-web-server` and `com.zaxxer:HikariCP`. The others
+`org.springframework.boot:spring-boot-web-server`, `com.zaxxer:HikariCP` and
+`org.hibernate.orm:hibernate-core`. The others
 cannot be banned, because the starter's own dependencies bring them: logback through
 `spring-boot-starter-logging`, `spring-boot-health` and `micrometer-observation` through
 `spring-boot-starter-actuator`, the OpenTelemetry SDK and

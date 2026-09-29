@@ -126,7 +126,9 @@ class OrderTraceCaptureIT {
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         List<String> sqlTexts = new ArrayList<>();
-        trace.path("queries").forEach(query -> sqlTexts.add(query.path("sql").asString("")));
+        trace.path("queries")
+                .forEach(query ->
+                        sqlTexts.add(query.path("statement").path("text").asString("")));
 
         assertThat(sqlTexts)
                 .as("QueryExtractor must find at least one query on a page that trips real "
