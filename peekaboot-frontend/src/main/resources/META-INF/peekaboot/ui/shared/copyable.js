@@ -1,6 +1,6 @@
 /**
- * Copy-to-clipboard identifier: renders a labelled, full-length trace or span id that
- * copies itself when clicked.
+ * Copy-to-clipboard controls: a labelled, full-length trace or span id that copies itself
+ * when clicked, and a copy button for text a view is showing, read when it is clicked.
  *
  * Ids appear on three surfaces - the dashboard document, the toolbar's shadow root and
  * the overlay's shadow root - and the click is handled by a single delegated listener per
@@ -15,6 +15,9 @@ const COPIED_FEEDBACK_MS = 1500;
 const boundRoots = new WeakSet();
 /** The feedback timer of each control, keyed by the element so the DOM carries no expando. */
 const feedbackTimers = new WeakMap();
+
+/** The text source of each copyableText control, called on click so it copies what is shown then. */
+const textSources = new WeakMap();
 
 /**
  * The control as a detached element. `label` names the kind of id ("traceId", "spanId")
@@ -37,6 +40,24 @@ export function copyableId(value, {label, truncate = false} = {}) {
 }
 
 /**
+ * A copy button for text that is not its own label - the SQL a view is showing, say.
+ * `textSource` is called on every click, so the control copies what the view shows at that
+ * moment rather than what it showed when it was built.
+ */
+export function copyableText(textSource, {label}) {
+    const control = button({
+        className: 'pk-copy',
+        title: `Copy ${label}`,
+        attrs: {'aria-label': `Copy ${label}`}
+    },
+    el('span', {className: 'pk-copy__label', text: `Copy ${label}`}),
+    el('span', {className: 'pk-copy__icon', text: COPY_ICON, attrs: {'aria-hidden': 'true'}}),
+    el('span', {className: 'pk-copy__status', attrs: {role: 'status'}}));
+    textSources.set(control, textSource);
+    return control;
+}
+
+/**
  * Attaches the one delegated click listener a root needs. Safe to call repeatedly -
  * a root is only ever bound once. Pass the document for the dashboard, or the shadow
  * root for the toolbar and the overlay.
@@ -51,15 +72,21 @@ export function bindCopyables(root) {
     // run after them and stopPropagation would come too late to stop the overlay opening.
     root.addEventListener('click', event => {
         const target = event.target;
-        const button = target && target.closest ? target.closest('.pk-copy[data-pk-copy]') : null;
-        if (!button || !root.contains(button)) {
+        const button = target && target.closest ? target.closest('.pk-copy') : null;
+        const value = button ? copyValue(button) : null;
+        if (value == null || !root.contains(button)) {
             return;
         }
         // copying an id is not a request to also open or filter whatever contains it
         event.stopPropagation();
         event.preventDefault();
-        copyText(button.dataset.pkCopy).then(ok => showResult(button, ok));
+        copyText(value).then(ok => showResult(button, ok));
     }, true);
+}
+
+/** A text control's current answer, or the id an id control was built with; nothing for the empty placeholder. */
+function copyValue(control) {
+    return textSources.has(control) ? textSources.get(control)() : control.dataset.pkCopy;
 }
 
 function showResult(button, ok) {
