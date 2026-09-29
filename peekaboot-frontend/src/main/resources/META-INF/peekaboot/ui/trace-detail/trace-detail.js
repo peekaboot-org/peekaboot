@@ -259,10 +259,10 @@ function header(trace) {
 }
 
 /**
- * Builds the tab strip and renders the initial tab. The three cross-link jumps ride
- * along on the view object every tab receives, so the tabs can reach them without a
- * hand-off channel of their own - as do the display settings (locale, timeZone,
- * features) the tabs format and colour by.
+ * Builds the tab strip and renders the initial tab. The cross-link back to a span's row
+ * (goToSpan, from the Queries and Logs tabs) rides along on the view object every tab
+ * receives, so a tab can reach it without a hand-off channel of its own - as do the
+ * display settings (locale, timeZone, features) the tabs format and colour by.
  */
 function wireTabs(container, trace, urlState, display) {
     const tabContent = container.querySelector('#pk-tab-content');
@@ -279,32 +279,17 @@ function wireTabs(container, trace, urlState, display) {
         ...display,
         filters,
         setFilters: next => urlState?.update(tabId, next),
-        goToSpanLogs,
-        goToSpan,
-        goToQuery
+        goToSpan
     });
 
     // tabStrip's click listener re-fires onSelect even when the clicked tab is already
     // selected (it only tracks aria-selected, not "did the tab actually change") - without
     // this guard, re-clicking the active tab would wipe its own filters/URL for nothing.
     let activeTabId = initialTab;
-
-    /**
-     * The Spans tab's "N logs" toggle: switches to the Logs tab with that span's filter
-     * seeded - the same `span` filter a "?span=..." deep link restores, hence the
-     * urlState.update. `focus: true` because the toggle just clicked belongs to the
-     * markup the switch replaces; focus would otherwise fall back to the shadow host.
-     */
     let tabApi;
-    function goToSpanLogs(spanId) {
-        activeTabId = 'logs';
-        tabApi.select('logs', {silent: true, focus: true});
-        urlState?.update('logs', {span: spanId});
-        renderTabContent(tabContent, 'logs', trace, tabView('logs', {span: spanId}));
-    }
 
     /**
-     * Cross-link jumps between the overlay's own tabs (Spans <-> Queries, Logs -> Spans):
+     * Cross-link jumps between the overlay's own tabs (Queries -> Spans, Logs -> Spans):
      * switch the tab exactly as the strip would (silent select, urlState.update with empty
      * params - the target tab starts unfiltered, same as a manual switch), then scroll to
      * the target row, move keyboard focus onto it (the clicked link's own markup was just
@@ -331,10 +316,6 @@ function wireTabs(container, trace, urlState, display) {
 
     function goToSpan(spanId) {
         jumpToElement('spans', `.pk-gantt-row[data-span-id="${CSS.escape(spanId)}"]`);
-    }
-
-    function goToQuery(spanId) {
-        jumpToElement('queries', `.pk-query-item[data-span-id="${CSS.escape(spanId)}"]`);
     }
 
     tabApi = tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({

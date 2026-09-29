@@ -47,9 +47,9 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
     /**
      * The overlay's landing view, its Spans tab: the other three are swept nowhere, since a
      * sweep of each would cost a trace of its own for no rule the Spans tab misses. The
-     * all-details switch is clicked first, so every span's details panel - tags, the span-id
-     * copy control, the error section, the query link - is open for the sweep instead of
-     * sitting in the {@code display: none} axe skips.
+     * all-details switch is clicked first, so every span's panels - attributes (tags, the
+     * span-id copy control, the error section), its query and its logs - are open for the
+     * sweep instead of sitting in the {@code display: none} axe skips.
      *
      * <p>Opened over the dashboard rather than from the toolbar, so the document around it is
      * Peekaboot's own: the sample app's pages are the consumer's markup, and a sweep of them

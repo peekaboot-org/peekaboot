@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
@@ -465,20 +464,20 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * A full-length span id on every row would crowd the tree, so a row carries none. The id
-     * sits in the span's details panel instead, for the reader who opened the panel for this
-     * span's particulars; CopyableIdIT covers the copy itself.
+     * sits in the span's attributes panel instead, for the reader who opened the panel for
+     * this span's particulars; CopyableIdIT covers the copy itself.
      */
     @Test
-    void aSpanIdIsCopyableFromItsDetailsPanelNotItsRow() {
+    void aSpanIdIsCopyableFromItsAttributesPanelNotItsRow() {
         openOverlayFromToolbar();
 
         assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-gantt-rows .pk-gantt-row .pk-copy')"))
                 .as("no row carries a copy control")
                 .isFalse();
         assertThat(overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-span')]"
-                        + ".every(entry => entry.querySelector('.pk-span-details .pk-copy')?.dataset.pkCopy"
+                        + ".every(entry => entry.querySelector('.pk-span-panel--attrs .pk-copy')?.dataset.pkCopy"
                         + " === entry.querySelector('.pk-gantt-row').dataset.spanId)"))
-                .as("every details panel offers its own span's id")
+                .as("every attributes panel offers its own span's id")
                 .isEqualTo(true);
     }
 
@@ -527,117 +526,55 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * The Spans tab's per-span "N logs" toggle hands off to the Logs tab's own span filter
-     * - switch the overlay to the Logs tab, seed its span filter, and rely on the filter
-     * chip's own clear button for a reversible "back to all logs" - rather than opening a
-     * popup of its own, which would only duplicate the Logs tab's row renderer.
+     * The Spans tab's per-span "N logs" toggle opens that span's own logs in a panel under
+     * its row, in place - no tab switch, no URL change - rather than handing off to the Logs
+     * tab's own span filter the way it used to (spanLogsToggleOpensTheLogsTabFilteredToThat
+     * SpanAndTheFilterIsClearable, before this became an inline panel; the Logs tab's own
+     * span-name button still does that hand-off, unchanged - see logRowSpanLinkJumpsToTheSpanTree).
      *
      * <p>Runs against a real captured trace with nothing stubbed. The index page's error
      * path writes its ERROR log inside the request handler's span while
      * PersonQueryService.findAll() writes an INFO line inside its own observed span, so
-     * the trace's logs genuinely sit on two different spans. That spread is what keeps
-     * both halves of this test from holding vacuously - filtering to one span has to
-     * actually hide something, and clearing has to actually bring something back - so the
-     * premise is asserted before it is relied on rather than assumed.
-     *
-     * <p>Also pins that the hand-off is a real, shareable location and not just a DOM
-     * mutation: goToSpanLogs writes the span into the hash through the very same urlState
-     * seam a "?span=..." deep link is restored from, so the filtered view can be linked to
-     * and Back-navigated like any other, and clearing the filter takes the param back out.
+     * the trace's logs genuinely sit on two different spans - proof the panel lists exactly
+     * the clicked span's own logs, not every log in the trace.
      */
     @Test
-    void spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable() {
-        String traceId = openOverlayForTheMultiSpanLogTrace();
+    void spanLogsToggleOpensThatSpansOwnLogsInPlace() {
+        openOverlayForTheMultiSpanLogTrace();
 
         @SuppressWarnings("unchecked")
-        List<String> spansOfferingLogs = (List<String>)
-                page.evalOnSelectorAll(".pk-span-logs-toggle", "els => els.map(el => el.dataset.spanId)");
+        List<String> spansOfferingLogs = (List<String>) page.evalOnSelectorAll(
+                ".pk-span-logs-toggle", "els => els.map(el => el.closest('.pk-gantt-row').dataset.spanId)");
         assertThat(spansOfferingLogs)
                 .as("the Spans tab must offer a logs toggle per logging span - the helper already "
                         + "waited for the backend to serve more than one, so a shortfall here is the "
                         + "tree failing to render them, not ingestion still catching up")
                 .hasSizeGreaterThan(1);
         String spanId = spansOfferingLogs.getFirst();
+        String panel = "[id='pk-span-logs-" + spanId + "']";
+        String toggle = ".pk-gantt-row[data-span-id='" + spanId + "'] .pk-span-logs-toggle";
 
-        page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
+        assertThat(panelOpen(panel)).as("closed until asked for").isFalse();
 
-        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
-        assertThat(page.url())
-                .as("the hand-off is a real location, not just a DOM change - the same hash shape a "
-                        + "deep link into this filtered view would use")
-                .contains("#traces/" + traceId + "/logs?span=" + spanId);
-        String focusedTab = (String) overlay.evaluate("root => root.activeElement?.dataset.tab");
-        assertThat(focusedTab)
-                .as("the clicked toggle belonged to the Spans tab's markup, which the tab switch just "
-                        + "replaced, destroying it - focus must move deliberately to the Logs tab's own "
-                        + "button rather than falling back to the shadow host")
-                .isEqualTo("logs");
-        String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
-        assertThat(content).as("no popup - the Logs tab itself rendered").contains("pk-logs-list");
+        overlay.click(toggle);
 
-        page.waitForSelector(".pk-log:not(.pk-log--hidden)");
+        assertThat(panelOpen(panel)).isTrue();
+        assertThat(overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
+                .as("no tab switch - the panel opened in place")
+                .isEqualTo("spans");
+        assertThat(page.url()).as("no URL change either").doesNotContain("span=");
         @SuppressWarnings("unchecked")
-        List<String> visibleSpanIds = (List<String>)
-                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
-        assertThat(visibleSpanIds)
-                .as("only the span the toggle was clicked for stays visible")
-                .containsOnly(spanId);
-        assertThat(page.isVisible(".pk-logs-filter-span"))
-                .as("the filtered state is obvious, not just an invisible internal flag")
-                .isTrue();
+        List<String> listedSpanIds = (List<String>) overlay.evaluate(
+                "(root, sel) => [...root.querySelectorAll(sel + ' .pk-log')].map(el => el.dataset.spanId)", panel);
+        assertThat(listedSpanIds).as("only that span's own logs are listed").containsOnly(spanId);
 
-        page.click("#pk-clear-span-filter");
+        overlay.click(toggle);
 
-        overlay.waitForGone(".pk-logs-filter-span");
-        @SuppressWarnings("unchecked")
-        List<String> visibleAfterClear = (List<String>)
-                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
-        assertThat(visibleAfterClear).contains(spanId);
-        assertThat(Set.copyOf(visibleAfterClear))
-                .as("clearing the filter is reversible - the other spans' logs are back too")
-                .hasSizeGreaterThan(1);
-        assertThat(page.url())
-                .as("clearing takes the param back out, so the URL never claims a filter that is "
-                        + "no longer applied")
-                .doesNotContain("span=");
+        assertThat(panelOpen(panel)).isFalse();
     }
 
     /**
-     * The cheap DOM-only counterpart to spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable
-     * above, covering the toolbar-open path rather than the hash route. The toolbar calls
-     * openTraceDetail with no urlState at all (see openOverlayForTheMultiSpanLogTrace's own
-     * javadoc), so goToSpanLogs's urlState?.update is a silent no-op there and the URL never
-     * changes by design - there is nothing to assert about it on this path, only the DOM
-     * hand-off itself.
-     */
-    @Test
-    void spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar() {
-        openPageThatLogsAnError();
-        waitForMultiSpanLogTraceId();
-
-        toolbar.openOverlay();
-
-        @SuppressWarnings("unchecked")
-        List<String> spansOfferingLogs = (List<String>)
-                page.evalOnSelectorAll(".pk-span-logs-toggle", "els => els.map(el => el.dataset.spanId)");
-        assertThat(spansOfferingLogs).hasSizeGreaterThan(1);
-        String spanId = spansOfferingLogs.getFirst();
-
-        page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
-
-        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
-
-        page.waitForSelector(".pk-log:not(.pk-log--hidden)");
-        @SuppressWarnings("unchecked")
-        List<String> visibleSpanIds = (List<String>)
-                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
-        assertThat(visibleSpanIds)
-                .as("only the span the toggle was clicked for stays visible")
-                .containsOnly(spanId);
-    }
-
-    /**
-     * A span's details panel lists that span's logs the way the Logs tab does, stack trace
+     * A span's logs panel lists that span's logs the way the Logs tab does, stack trace
      * folded included. The span tree's own log copies carry no trace, so the panel reads the
      * flat list; the trace's logs sit on more than one span, so a panel that listed them all,
      * or listed the span tree's copies, fails here. The filter-to-span chip is left out: every
@@ -659,11 +596,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(logs.valueStream().map(log -> log.path("spanId").asString()))
                 .as("the trace's logs sit on another span too, or listing them all would pass")
                 .anyMatch(other -> !spanId.equals(other));
-        String panel = "[id='pk-span-details-" + spanId + "']";
+        String panel = "[id='pk-span-logs-" + spanId + "']";
 
-        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle");
+        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-span-logs-toggle");
 
-        assertThat(detailsPanelShown(spanId)).isTrue();
+        assertThat(panelOpen(panel)).isTrue();
         @SuppressWarnings("unchecked")
         List<String> listedMessages = (List<String>) overlay.evaluate(
                 "(root, panel) => [...root.querySelectorAll(panel + ' .pk-log .pk-log__message')].map(el => el.textContent)",
@@ -691,29 +628,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(page.textContent(panel + " .pk-log__reveal")).isEqualTo("Hide framework frames");
     }
 
-    /**
-     * The panel's "Show in Logs tab" button hands off exactly as the row's "N logs" chip does:
-     * the Logs tab, filtered to the span, at a location that says so.
-     */
-    @Test
-    void aSpanPanelsLogsButtonOpensTheLogsTabFilteredToThatSpan() {
-        String traceId = openOverlayForTheMultiSpanLogTrace();
-        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-span-logs-toggle').dataset.spanId");
-        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle");
-
-        page.click("[id='pk-span-details-" + spanId + "'] .pk-span-logs-link");
-
-        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
-        assertThat(page.url()).contains("#traces/" + traceId + "/logs?span=" + spanId);
-        page.waitForSelector(".pk-log:not(.pk-log--hidden)");
-        @SuppressWarnings("unchecked")
-        List<String> visibleSpanIds = (List<String>)
-                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
-        assertThat(visibleSpanIds).containsOnly(spanId);
-        assertThat(page.isVisible(".pk-logs-filter-span")).isTrue();
-    }
-
-    /** A span that wrote no log gets neither a logs section nor a button to an empty Logs tab. */
+    /** A span that wrote no log gets neither a logs panel nor a toggle to open one. */
     @Test
     void aSpanWithoutLogsHasNoLogsSection() {
         Object sections = importModule("trace-detail/tabs/spans.js", """
@@ -722,10 +637,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 m.render(container, {durationMs: 10, startTimeMs: 0,
                     rootSpan: {spanId: 'a', name: 'a', logs: [{spanId: 'a'}], children: [{spanId: 'b', name: 'b'}]},
                     logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
-                const panel = id => container.querySelector(`#pk-span-details-${id}`);
+                const row = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`);
+                const panel = id => container.querySelector(`#pk-span-logs-${id}`);
                 return ['a', 'b'].map(id => [
-                    panel(id).querySelectorAll('.pk-span-details__logs .pk-log').length,
-                    panel(id).querySelectorAll('.pk-span-logs-link').length].join(':'));
+                    panel(id)?.querySelectorAll('.pk-log').length ?? 0,
+                    row(id).querySelectorAll('.pk-span-logs-toggle').length].join(':'));
             })()
             """);
 
@@ -733,42 +649,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Cross-link: a span the backend classified as a query (span.query present) carries a
-     * link to its entry in the Queries tab, in its details panel. The jump switches the
-     * overlay tab, moves keyboard focus onto the target entry and marks it with a temporary
-     * highlight class, so the eye lands where focus just went. Runs on the toolbar-open
-     * path - the jump is pure DOM state and identical on every open path.
-     */
-    @Test
-    void spanQueryLinkJumpsToTheQueriesTabEntry() {
-        openOverlayFromToolbar();
-        overlay.waitFor(".pk-span-query-link");
-        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-span-query-link').dataset.spanId");
-        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle");
-
-        overlay.click(".pk-span-query-link");
-
-        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'queries'");
-        overlay.waitFor(".pk-query-item.pk-jump-flash");
-        String highlighted =
-                (String) overlay.evaluate("root => root.querySelector('.pk-query-item.pk-jump-flash')?.dataset.spanId");
-        assertThat(highlighted).isEqualTo(spanId);
-        Boolean focusOnTarget =
-                (Boolean) overlay.evaluate("root => root.activeElement?.classList.contains('pk-query-item') ?? false");
-        assertThat(focusOnTarget)
-                .as("focus moves with the jump - the clicked link's markup was just replaced")
-                .isTrue();
-
-        // temporary by design: the highlight clears on its own, the focus stays
-        overlay.waitForGone(".pk-jump-flash");
-    }
-
-    /**
-     * Cross-link in the other direction: each Queries-tab entry links back to its span in
-     * the Spans tab's tree - the row is scrolled to, focused and temporarily highlighted,
-     * mirroring spanQueryLinkJumpsToTheQueriesTabEntry above. Also the one test that proves
-     * a real jump applies {@code pk-jump-flash} at all - jumpFlashOutranksAHoveredRow below
-     * adds the class by hand, so it never exercises jumpToElement itself.
+     * Each Queries-tab entry links back to its span in the Spans tab's tree - the row is
+     * scrolled to, focused and temporarily highlighted. The reverse link (a query span's
+     * panel jumping to its Queries-tab entry) no longer exists: the statement sits in the
+     * span's own query panel now (see spans.js's task brief), so this is a one-way cross-link.
+     * Also the one test that proves a real jump applies {@code pk-jump-flash} at all -
+     * jumpFlashOutranksAHoveredRow below adds the class by hand, so it never exercises
+     * jumpToElement itself.
      */
     @Test
     void queryEntrySpanLinkJumpsBackToItsSpanRow() {
@@ -1250,8 +1137,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .isTrue();
         assertThat(
                         overlay.evaluate(
-                                "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"1\"] .pk-span-details')).marginLeft"))
-                .as("its details panel sits under its name")
+                                "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"1\"] .pk-span-panel--attrs')).marginLeft"))
+                .as("its attributes panel sits under its name")
                 .isEqualTo("40px");
         assertThat(
                         overlay.evaluate(
@@ -1469,12 +1356,14 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * The Spans tab renders the facts the backend serves rather than re-deriving them from
-     * tags and names: the row count is {@code span.rowCount}, which the backend pairs onto
-     * the query span itself (null for a count that did not parse, even where the result
-     * set's own tag is right there), an error bar follows {@code span.status} alone, and
-     * every tag on the span is shown - the backend already keeps the statement tags out,
-     * so the tab does not sniff for them. The row count chip is also where the locale
-     * passed to {@code m.render} must land: rendered in de-DE, 12345 rows reads "12.345".
+     * tags and names: the query row's row count is {@code span.rowCount}, which the backend
+     * pairs onto the query span itself (left off the button, and the query panel gets no row
+     * count chip at all, for a count that did not parse, even where the result set's own tag
+     * is right there), an error bar follows {@code span.status} alone, and every tag on the
+     * span is shown - the backend already keeps the statement tags out, so the tab does not
+     * sniff for them. Also the one place the locale passed to {@code m.render} is pinned on
+     * both the button ("N result rows") and the query panel's own chip ("N rows"): rendered
+     * in de-DE, 12345 reads "12.345" in either.
      */
     @Test
     void spansTabTrustsTheBackendsSpanFacts() {
@@ -1485,13 +1374,19 @@ class TraceOverlayIT extends PlaywrightTestBase {
                     m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span}, {locale});
                     return container;
                 };
-                const rowCountOf = (span, locale) => rendered(span, locale).querySelector('.pk-span-row-count')?.textContent ?? null;
+                const queryButton = (span, locale) => rendered(span, locale).querySelector('.pk-span-query-toggle')?.textContent ?? null;
+                const panelRowCount = (span, locale) => rendered(span, locale).querySelector('.pk-span-panel--query .pk-span-row-count')?.textContent ?? null;
                 const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
                 const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
+                const query = {text: 'select * from orders', formatted: null, parameters: []};
                 return [
-                    rowCountOf({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query: {text: 'select * from orders', formatted: null, parameters: []}}),
-                    rowCountOf({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}),
-                    rowCountOf({spanId: 'f', name: 'SELECT big', rowCount: 12345}, 'de-DE'),
+                    queryButton({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query}),
+                    panelRowCount({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query}),
+                    queryButton({spanId: 'g', name: 'SELECT one', rowCount: 1, query}),
+                    queryButton({spanId: 'h', name: 'SELECT none', query}),
+                    !!rendered({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}).querySelector('.pk-span-query-toggle'),
+                    queryButton({spanId: 'f', name: 'SELECT big', rowCount: 12345, query}, 'de-DE'),
+                    panelRowCount({spanId: 'f', name: 'SELECT big', rowCount: 12345, query}, 'de-DE'),
                     errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
                     errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
                     tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
@@ -1501,7 +1396,18 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         @SuppressWarnings("unchecked")
         List<Object> spanFacts = (List<Object>) facts;
-        assertThat(spanFacts).containsExactly("1,234 rows", null, "12.345 rows", true, false, "db.statement,db.system");
+        assertThat(spanFacts)
+                .containsExactly(
+                        "1 query, 1,234 result rows",
+                        "1,234 rows",
+                        "1 query, 1 result row",
+                        "1 query",
+                        false,
+                        "1 query, 12.345 result rows",
+                        "12.345 rows",
+                        true,
+                        false,
+                        "db.statement,db.system");
     }
 
     /**
@@ -1720,27 +1626,32 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * A span's row is one line; its statement and its tags wait in a details panel under the
-     * row until the reader opens it from the span's name. A statement runs to hundreds of
-     * characters and a query span carries a dozen tags - more than a row can carry alongside
-     * every sibling row's own name and bar, so the tree stays the thing on screen by default.
+     * A span's row is one line; its tags wait in its attributes panel under the row until the
+     * reader opens it from the span's name - a query span carries a dozen tags, more than a
+     * row can hold alongside every sibling row's own name and bar, so the tree stays the thing
+     * on screen by default. The statement is not there: it moved to a query panel of its own
+     * (aSpanQueryToggleOpensTheQueryPanelWithItsStatementAndRowCount below), so a span's name
+     * click must not reveal it.
      */
     @Test
-    void aSpanNameOpensTheDetailsPanelUnderItsRow() {
+    void aSpanNameOpensTheAttributesPanelUnderItsRow() {
         openPersonsPage();
         awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
         toolbar.openOverlay();
-        overlay.waitFor(".pk-span-query-link");
-        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-span-query-link').dataset.spanId");
+        overlay.waitFor(".pk-span-query-toggle");
+        String spanId = (String) overlay.evaluate(
+                "root => root.querySelector('.pk-span-query-toggle').closest('.pk-gantt-row').dataset.spanId");
         String nameToggle = ".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle";
 
         assertThat(overlay.evaluate("(root, sel) => root.querySelector(sel).getAttribute('aria-expanded')", nameToggle))
                 .isEqualTo("false");
-        assertThat(detailsPanelShown(spanId)).as("closed until asked for").isFalse();
+        assertThat(panelOpen("[id='pk-span-attrs-" + spanId + "']"))
+                .as("closed until asked for")
+                .isFalse();
 
         overlay.click(nameToggle);
 
-        assertThat(detailsPanelShown(spanId)).isTrue();
+        assertThat(panelOpen("[id='pk-span-attrs-" + spanId + "']")).isTrue();
         assertThat(overlay.evaluate("(root, sel) => root.querySelector(sel).getAttribute('aria-expanded')", nameToggle))
                 .isEqualTo("true");
         String panelId = (String)
@@ -1750,25 +1661,59 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         panelId))
                 .as("the name names the panel it opens")
                 .isEqualTo(spanId);
-        assertThat(overlay.text("#" + panelId + " .pk-code-block").toLowerCase(Locale.ROOT))
-                .contains("select");
         assertThat(((Number) overlay.evaluate(
                                 "(root, id) => root.getElementById(id).querySelectorAll('.pk-span-tags__key').length",
                                 panelId))
                         .intValue())
-                .as("the query span's tags are in its panel")
+                .as("the query span's tags are in its attributes panel")
                 .isPositive();
+        assertThat((Boolean) overlay.evaluate(
+                        "(root, id) => !!root.getElementById(id).querySelector('.pk-code-block')", panelId))
+                .as("the statement lives in the query panel, not here")
+                .isFalse();
 
         overlay.click(nameToggle);
 
-        assertThat(detailsPanelShown(spanId)).isFalse();
+        assertThat(panelOpen("[id='pk-span-attrs-" + spanId + "']")).isFalse();
     }
 
-    private boolean detailsPanelShown(String spanId) {
+    /**
+     * The query panel: opened only by its own "1 query[, N result rows]" toggle, never by the
+     * span's name - the counterpart to aSpanNameOpensTheAttributesPanelUnderItsRow above.
+     * Carries the statement, and the row count moved here from the row when the backend paired
+     * one (spansTabTrustsTheBackendsSpanFacts covers both the with- and without-row-count
+     * shapes at the unit level; this is the real-backend, end-to-end open/close proof).
+     */
+    @Test
+    void aSpanQueryToggleOpensTheQueryPanelWithItsStatementAndRowCount() {
+        openPersonsPage();
+        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-span-query-toggle");
+        String spanId = (String) overlay.evaluate(
+                "root => root.querySelector('.pk-span-query-toggle').closest('.pk-gantt-row').dataset.spanId");
+        String queryToggle = ".pk-gantt-row[data-span-id='" + spanId + "'] .pk-span-query-toggle";
+        String panel = "[id='pk-span-query-" + spanId + "']";
+
+        assertThat(panelOpen(panel)).as("closed until asked for").isFalse();
+
+        overlay.click(queryToggle);
+
+        assertThat(panelOpen(panel)).isTrue();
+        assertThat(overlay.text(queryToggle)).matches("1 query(, [0-9.,]+ result rows?)?");
+        assertThat(overlay.text(panel + " .pk-code-block").toLowerCase(Locale.ROOT))
+                .contains("select");
+
+        overlay.click(queryToggle);
+
+        assertThat(panelOpen(panel)).isFalse();
+    }
+
+    /** Whether `panelSelector` (one of a span's three `.pk-span-panel` ids) is currently the open one. */
+    private boolean panelOpen(String panelSelector) {
         return (Boolean) overlay.evaluate(
-                "(root, id) => getComputedStyle(root.querySelector(`.pk-gantt-row[data-span-id='${id}']`)"
-                        + ".closest('.pk-gantt-span').querySelector('.pk-span-details')).display !== 'none'",
-                spanId);
+                "(root, sel) => { const el = root.querySelector(sel); return el != null && getComputedStyle(el).display !== 'none'; }",
+                panelSelector);
     }
 
     /**

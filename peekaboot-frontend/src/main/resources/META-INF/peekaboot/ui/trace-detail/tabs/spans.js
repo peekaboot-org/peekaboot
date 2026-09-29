@@ -1,16 +1,15 @@
 /**
  * Trace-detail overlay - Spans tab: the gantt chart, its expand/collapse behaviour and each
- * span's details panel. A span's "N logs" chip and its panel's "Show in Logs tab" button both
- * ask trace-detail.js (via context.goToSpanLogs) to switch the overlay to the Logs tab
- * pre-filtered to that span.
+ * span's three independent panels: attributes (kind, span id, error, tags - opened by the
+ * span name or track), a query panel (the statement plus its row count) and a logs panel
+ * (that span's own log entries) - each of the latter two opened by its own small button in
+ * the row ("N query"/"N logs"), closed until asked for.
  *
- * Each span renders as one entry: its one-line row, then its details panel (kind, span id,
- * error, the statement view (shared/sql-view.js), its logs (../log-entry.js), tags), closed
- * until the reader opens it.
+ * Each span renders as one entry: its one-line row, then whichever of its three panels exist.
  * Entries are flat siblings carrying their depth, which is what the subtree toggle walks.
  *
  * This module writes only one geometry value of its own: an entry's depth, as the CSS custom
- * property --pk-gantt-depth. The name cell's indent, the details panel's margin and the
+ * property --pk-gantt-depth. The name cell's indent, a panel's margin and the
  * indent guides' width are all calc()'d from it in trace-detail.css, so --pk-gantt-indent and
  * --pk-gantt-toggle there stay the one place those pixel values live. Bar positions and
  * marker offsets have no such shared formula and are written directly. Every one of these
@@ -64,50 +63,46 @@ export function render(container, trace, context = {}) {
 
     allDetailsToggle.addEventListener('click', () => {
         const open = !allDetailsOpen(entries);
-        entries.querySelectorAll('.pk-gantt-span').forEach(entry => setDetailsOpen(entry, open));
+        panelToggles(entries).forEach(toggle => setPanelOpen(toggle, open));
         syncAllDetailsToggle(entries, allDetailsToggle);
     });
 
     entries.addEventListener('click', (e) => {
-        // The row's logs chip and the details panel's button: both hand off to the Logs tab.
-        const logsToggle = e.target.closest('.pk-span-logs-toggle, .pk-span-logs-link');
-        if (logsToggle) {
-            context.goToSpanLogs?.(logsToggle.dataset.spanId);
-            return;
-        }
-
-        // Cross-link: hands off to the Queries tab, scrolled to this span's entry.
-        const queryLink = e.target.closest('.pk-span-query-link');
-        if (queryLink) {
-            context.goToQuery?.(queryLink.dataset.spanId);
-            return;
-        }
-
         const toggle = e.target.closest('.pk-gantt-toggle');
         if (toggle) {
             toggleSubtree(toggle);
             return;
         }
 
-        // The name is the keyboard path to the details; the track is the same switch for a
-        // pointer, being the widest part of the row. An event marker keeps its own hover.
-        const detailsSwitch = e.target.closest('.pk-gantt-name__toggle')
-            || (!e.target.closest('.pk-gantt-event-marker') && e.target.closest('.pk-gantt-track'));
-        if (detailsSwitch) {
-            const entry = detailsSwitch.closest('.pk-gantt-span');
-            setDetailsOpen(entry, !entry.classList.contains('pk-gantt-span--open'));
+        // The query and logs toggles carry their own aria-controls straight to their own
+        // panel; the name button and the track (the row's widest part, an event marker
+        // keeps its own hover) share the attributes panel's.
+        const directToggle = e.target.closest('.pk-gantt-name__toggle, .pk-span-query-toggle, .pk-span-logs-toggle');
+        const trackClick = !directToggle && !e.target.closest('.pk-gantt-event-marker') && e.target.closest('.pk-gantt-track');
+        const panelSwitch = directToggle || (trackClick && trackClick.closest('.pk-gantt-span').querySelector('.pk-gantt-name__toggle'));
+        if (panelSwitch) {
+            setPanelOpen(panelSwitch, panelSwitch.getAttribute('aria-expanded') !== 'true');
             syncAllDetailsToggle(entries, allDetailsToggle);
         }
     });
 }
 
-function setDetailsOpen(entry, open) {
-    entry.classList.toggle('pk-gantt-span--open', open);
-    entry.querySelector('.pk-gantt-name__toggle').setAttribute('aria-expanded', String(open));
+/** Every span's panel-toggle button (attributes, query, logs) under `scope` - not the subtree toggle, which carries no aria-controls. */
+function panelToggles(scope) {
+    return Array.from(scope.querySelectorAll('.pk-gantt-name [aria-controls]'));
 }
 
+/** Opens or closes the panel `toggle` names, and keeps the entry's own open state - the row's hover tint - in step with its panels. */
+function setPanelOpen(toggle, open) {
+    toggle.setAttribute('aria-expanded', String(open));
+    const entry = toggle.closest('.pk-gantt-span');
+    entry.querySelector(`#${CSS.escape(toggle.getAttribute('aria-controls'))}`)?.classList.toggle('pk-span-panel--open', open);
+    entry.classList.toggle('pk-gantt-span--open', panelToggles(entry).some(t => t.getAttribute('aria-expanded') === 'true'));
+}
+
+/** True once every panel that exists, on every span, is open - what "Hide all details" then offers to undo. */
 function allDetailsOpen(entries) {
-    return !entries.querySelector('.pk-gantt-span:not(.pk-gantt-span--open)');
+    return !entries.querySelector('.pk-gantt-name [aria-controls][aria-expanded="false"]');
 }
 
 /** The label names what the next click does, so it reads true after a panel is opened or closed by hand. */
@@ -191,7 +186,9 @@ function kindDot() {
 function renderSpanEntries(container, span, depth, traceStart, totalDuration, display) {
     if (!span) return;
     const kind = spanKind(span);
-    const detailsId = `pk-span-details-${span.spanId}`;
+    const attrsId = `pk-span-attrs-${span.spanId}`;
+    const queryId = `pk-span-query-${span.spanId}`;
+    const logsId = `pk-span-logs-${span.spanId}`;
     // the backend's verdict, read once per span: ERROR whenever it recorded an error message
     // or class, and everything that marks the span as erroneous - the name, the bar, its
     // accessible name - reads this one flag rather than re-deriving it.
@@ -204,10 +201,12 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
     const row = el('div', {className: 'pk-gantt-row'});
     row.dataset.spanId = span.spanId;
     row.append(
-        nameCell(span, kind, detailsId, hasError, display.locale),
+        nameCell(span, kind, attrsId, queryId, logsId, hasError, display.locale),
         track(span, traceStart, totalDuration, hasError),
         durationCell(span, totalDuration));
-    entry.append(row, detailsPanel(span, kind, detailsId, display));
+    const panels = [attrsPanel(span, kind, attrsId), queryPanel(span, queryId, display.locale), logsPanel(span, display, logsId)]
+        .filter(panel => panel != null);
+    entry.append(row, ...panels);
     container.appendChild(entry);
 
     // An async subtree is excluded from the trace's duration, so measuring its children
@@ -220,11 +219,9 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
         renderSpanEntries(container, child, depth + 1, childrenStart, childrenDuration, display));
 }
 
-function nameCell(span, kind, detailsId, hasError, locale) {
+function nameCell(span, kind, attrsId, queryId, logsId, hasError, locale) {
     const hasChildren = span.children && span.children.length > 0;
     const name = span.name || 'unknown';
-    const spanId = span.spanId;
-    const logCount = (span.logs || []).length;
 
     const cell = el('div', {className: 'pk-gantt-name'});
     cell.append(hasChildren
@@ -235,7 +232,7 @@ function nameCell(span, kind, detailsId, hasError, locale) {
         title: name,
         attrs: {
             'aria-expanded': 'false',
-            'aria-controls': detailsId,
+            'aria-controls': attrsId,
             'aria-label': `${name}, ${kind} span${hasError ? ', error' : ''}${span.asyncEntry ? ', background work' : ''}`
         }
     }, kindDot(), el('span', {className: 'pk-gantt-name__text', text: name})));
@@ -253,19 +250,31 @@ function nameCell(span, kind, detailsId, hasError, locale) {
         }));
     }
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
-    // span.query, and the row count of the result-set span it paired to this one (RowCounts)
-    // as span.rowCount.
-    if (span.rowCount != null) {
-        cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row', {locale})}));
+    // span.query - a batch is still one query, same as the Queries tab's own count - and the
+    // row count of the result-set span it paired to this one (RowCounts) as span.rowCount.
+    if (span.query) {
+        cell.append(panelToggleButton('pk-span-query-toggle', queryId, queryLabel(span, locale)));
     }
+    const logCount = (span.logs || []).length;
     if (logCount > 0) {
-        const logs = formatCount(logCount, 'log', {locale});
-        cell.append(button({
-            className: 'pk-span-action pk-span-logs-toggle', text: logs, title: 'View logs for this span',
-            attrs: {'data-span-id': spanId, 'aria-label': `View ${logs} for this span in the Logs tab`}
-        }));
+        cell.append(panelToggleButton('pk-span-logs-toggle', logsId, formatCount(logCount, 'log', {locale})));
     }
     return cell;
+}
+
+/** "1 query" alone, or with the paired result set's row count - null (unparsed) leaves it off rather than claiming zero. */
+function queryLabel(span, locale) {
+    const query = formatCount(1, 'query');
+    return span.rowCount == null ? query : `${query}, ${formatCount(span.rowCount, 'result row', {locale})}`;
+}
+
+/** A row's toggle for its query or logs panel: the label plus a chevron (trace-detail.css) that flips when the panel opens. */
+function panelToggleButton(className, panelId, label) {
+    return button({
+        className: `pk-span-action pk-span-action--expand ${className}`,
+        text: label,
+        attrs: {'aria-expanded': 'false', 'aria-controls': panelId, 'aria-label': `Show ${label} for this span`}
+    });
 }
 
 function track(span, traceStart, totalDuration, hasError) {
@@ -322,19 +331,13 @@ function durationCell(span, totalDuration) {
     return cell;
 }
 
-/**
- * Everything about a span that does not fit its one-line row, closed until the name or the
- * track opens it. The backend already keeps the statement tags out (they arrive as
- * span.query), and events sit on the track.
- */
-function detailsPanel(span, kind, detailsId, display) {
-    return el('div', {className: 'pk-span-details', attrs: {id: detailsId}},
+/** A span's kind, copyable id, error and tags - opened by its name or track. The backend already keeps the statement tags out (they arrive as span.query, shown in queryPanel instead), and events sit on the track. */
+function attrsPanel(span, kind, attrsId) {
+    return el('div', {className: 'pk-span-panel pk-span-panel--attrs', attrs: {id: attrsId}},
         el('div', {className: 'pk-span-details__head'},
             el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`}),
             copyableId(span.spanId, {label: 'spanId'})),
         errorSection(span),
-        querySection(span),
-        logsSection(span, display),
         tagList(span.tags));
 }
 
@@ -345,30 +348,25 @@ function errorSection(span) {
         span.errorMessage ? el('div', {className: 'pk-span-details__error-message', text: span.errorMessage}) : null);
 }
 
-function querySection(span) {
+/** The statement (shared/sql-view.js), plus the row count of the result-set span RowCounts paired to it - opened by the row's query toggle. */
+function queryPanel(span, queryId, locale) {
     if (!span.query) return null;
-    return el('div', {className: 'pk-span-details__query'},
-        sqlView(span.query),
-        button({
-            className: 'pk-btn pk-btn--small pk-span-query-link', text: 'Show in Queries tab',
-            attrs: {'data-span-id': span.spanId}
-        }));
+    return el('div', {className: 'pk-span-panel pk-span-panel--query', attrs: {id: queryId}},
+        span.rowCount != null ? el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row', {locale})}) : null,
+        sqlView(span.query));
 }
 
 /**
  * The span's logs as the Logs tab shows them, trace included. They come from the trace's flat
- * list, since the span tree's own copies (span.logs, what the row's chip counts) carry no trace.
+ * list, since the span tree's own copies (span.logs, what the row's toggle counts) carry no
+ * trace. Opened by the row's logs toggle.
  */
-function logsSection(span, display) {
+function logsPanel(span, display, logsId) {
     const logs = display.logsBySpan.get(span.spanId);
     if (!logs) return null;
     const dateOptions = {locale: display.locale, timeZone: display.timeZone};
-    return el('div', {className: 'pk-span-details__logs'},
-        ...logs.map(log => logEntry(log, dateOptions)),
-        button({
-            className: 'pk-btn pk-btn--small pk-span-logs-link', text: 'Show in Logs tab',
-            attrs: {'data-span-id': span.spanId}
-        }));
+    return el('div', {className: 'pk-span-panel pk-span-panel--logs', attrs: {id: logsId}},
+        ...logs.map(log => logEntry(log, dateOptions)));
 }
 
 function logsBySpan(logs) {

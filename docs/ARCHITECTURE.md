@@ -1271,7 +1271,7 @@ store, and ride along on any OTLP export.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) names each row by `span.name`, OpenTelemetry's own span-name
-summary such as `SELECT customer_order`, and shows the statement in the span's details panel.
+summary such as `SELECT customer_order`, and shows the statement in the span's query panel.
 The Queries tab (`trace-detail/tabs/queries.js`) lists `query.statement`. Both show the SQL
 `DbSpans.sql` picks from the tags listed above, with the bind parameters from
 `peekaboot.query.parameters`, and render it through `shared/sql-view.js`: highlighted by

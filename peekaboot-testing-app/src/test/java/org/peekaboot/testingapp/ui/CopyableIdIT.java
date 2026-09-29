@@ -149,19 +149,19 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     /**
-     * The span id in a span's details panel copies like every other id and leaves the panel
-     * open.
+     * The span id in a span's attributes panel copies like every other id and leaves the
+     * panel open.
      */
     @Test
-    void clickingASpanIdInItsDetailsPanelCopiesItAndLeavesThePanelOpen() {
+    void clickingASpanIdInItsAttributesPanelCopiesItAndLeavesThePanelOpen() {
         openPageWithToolbar();
         toolbar.openOverlay();
         overlay.waitFor("#pk-gantt-rows .pk-gantt-name__toggle");
 
         overlay.click("#pk-gantt-rows .pk-gantt-name__toggle");
-        overlay.click("#pk-gantt-rows .pk-span-details .pk-copy");
+        overlay.click("#pk-gantt-rows .pk-span-panel--attrs .pk-copy");
 
-        overlay.waitUntil("root => root.querySelector('#pk-gantt-rows .pk-span-details .pk-copy')"
+        overlay.waitUntil("root => root.querySelector('#pk-gantt-rows .pk-span-panel--attrs .pk-copy')"
                 + ".classList.contains('pk-copy--copied')");
         assertThat(
                         (Boolean)

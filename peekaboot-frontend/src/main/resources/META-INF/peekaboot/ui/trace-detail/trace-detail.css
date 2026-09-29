@@ -180,8 +180,8 @@
    error chip with a muted token instead of the danger one. */
 .pk-span-async-chip { border: 1px solid var(--pk-border); color: var(--pk-text-muted); }
 
-/* One small-button treatment for the row's logs toggle and queries.js's jump back to the
-   span tree; each keeps its own class only as the JS hook. */
+/* One small-button treatment for the row's query/logs toggles; each keeps its own class
+   only as the JS hook. */
 .pk-span-action { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: var(--pk-text-xs); cursor: pointer; user-select: none; transition: background-color var(--pk-transition), color var(--pk-transition), border-color var(--pk-transition); }
 .pk-span-action:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
 .pk-span-action:active { background: var(--pk-bg-alt); }
@@ -189,17 +189,26 @@
    line and makes its row taller than every other one. The span name ellipses instead. */
 .pk-span-row-count, .pk-span-action, .pk-span-error-chip, .pk-span-async-chip { flex: none; white-space: nowrap; }
 
-/* Indented to sit under its span's name: past its ancestors' indent and its own toggle column. */
-.pk-span-details { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm) calc(var(--pk-gantt-depth) * var(--pk-gantt-indent) + var(--pk-gantt-toggle)); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
-.pk-gantt-span--open > .pk-span-details { display: flex; flex-direction: column; gap: var(--pk-space-sm); }
+/* The row's query/logs toggles: a trailing chevron (the same glyph and transition
+   components.css's .pk-group__header draws for its own collapsible groups) that starts
+   pointing down and flips to point up once the panel it names is open. */
+.pk-span-action--expand { gap: 4px; }
+.pk-span-action--expand::after { content: '\25BE'; transition: transform var(--pk-transition); }
+.pk-span-action--expand[aria-expanded="true"]::after { transform: rotate(180deg); }
+
+/* One of a span's three panels - attributes, query or logs - each indented to sit under its
+   span's name (past its ancestors' indent and its own toggle column) and lightly set apart
+   from the row above with its kind's own left border and the page's alt background, closed
+   until its own toggle opens it. */
+.pk-span-panel { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm) calc(var(--pk-gantt-depth) * var(--pk-gantt-indent) + var(--pk-gantt-toggle)); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
+.pk-span-panel--open { display: flex; flex-direction: column; gap: var(--pk-space-sm); }
+.pk-span-panel--query.pk-span-panel--open, .pk-span-panel--logs.pk-span-panel--open { align-items: flex-start; gap: var(--pk-space-xs); }
+.pk-span-panel--query .pk-sql { align-self: stretch; }
+/* The panel's own ground and padding already set its entries apart from the rows around it. */
+.pk-span-panel--logs .pk-log { align-self: stretch; padding: 0; border-bottom: none; }
 .pk-span-details__head { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: wrap; color: var(--pk-text-muted); }
 .pk-span-details__error { color: var(--pk-danger); font-family: var(--pk-font-mono); overflow-wrap: anywhere; }
 .pk-span-details__error-class { font-weight: 600; }
-.pk-span-details__query { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
-.pk-span-details__query .pk-sql { align-self: stretch; }
-.pk-span-details__logs { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
-/* The panel's own ground and padding already set its entries apart from the rows around it. */
-.pk-span-details__logs .pk-log { align-self: stretch; padding: 0; border-bottom: none; }
 .pk-span-tags { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--pk-space-md); row-gap: 2px; margin: 0; font-family: var(--pk-font-mono); }
 .pk-span-tags__key { color: var(--pk-text-muted); overflow-wrap: anywhere; }
 .pk-span-tags__value { margin: 0; color: var(--pk-text); overflow-wrap: anywhere; }

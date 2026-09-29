@@ -2,8 +2,8 @@
  * Trace-detail overlay - Logs tab: the filterable log list. Every row names its span
  * (a click filters to it) and carries that span's full id as a copyable control - the
  * one place a span's id lives, since the Spans tab tree shows none (too crowded with a
- * full id on every row); see spans.js's "N logs" toggle, which lands here with this
- * tab's own span filter already seeded.
+ * full id on every row); a span's own logs are listed in place there instead, in its
+ * logs panel (spans.js).
  */
 import {el, button} from '../../shared/dom.js';
 import {LOG_LEVELS} from '../../shared/severity.js';
@@ -54,10 +54,9 @@ function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
 }
 
 /**
- * `view.filters` (`{q, level, span}`, see url-state.js) seeds this tab's state: from the URL
- * when this is the tab restored at overlay-open time, or from spans.js's "N logs" toggle,
- * which routes through the very same seam (trace-detail.js's goToSpanLogs re-renders this
- * tab with `{span}`) instead of needing a hand-off channel of its own.
+ * `view.filters` (`{q, level, span}`, see url-state.js) seeds this tab's state from the URL
+ * when this is the tab restored at overlay-open time - a "?span=..." deep link, or one this
+ * tab's own filter-to-span click just wrote.
  * `view.setFilters(next)` reports every change back so it round-trips into the hash. Both
  * are optional - the dev toolbar's open path (no urlState at all) leaves filtering purely
  * local. `view.locale`/`view.timeZone` are the display settings for the timestamps;

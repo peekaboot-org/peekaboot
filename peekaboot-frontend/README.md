@@ -245,7 +245,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `self-fetching-tab.js` | `selfFetchingTab({fetch, reconcile, loading, renderResult, renderError})`. The shell of a dashboard tab whose data comes from its own endpoint instead of the shared payload: the one place for the active-tab guard (a background render skips the round trip), supersession (a `null` from `api.js` renders nothing) and the error path. `traces.js`, `lifecycle.js`, the Overview tab's tile row and `filteredGroupTab`'s `fetchData` path are built on it. Exposes `render`, `refetch()` for a control the tab wires itself, and the latest render's `container()`/`context()`. |
 | `severity.js` | `durationSeverity(ms, features)`, `querySeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `severityClass(severity)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)`, `taskStatusVariant(status)`, `migrationStateVariant(state)`, `MIGRATION_STATES`. The one place a duration, a span's issues, a log level, a health status, a scheduled task's outcome or a migration's state is turned into a colour; `severityClass` names the `components.css` class (`.pk-duration--slow`, `--very-slow`) every surface colours a duration with. See *Thresholds and the SLOW badge* below. |
 | `sql.js` | `tokenize(sql)`, `renderSql(tokens)`, `substitute(tokens, literals)`, `placeholderCount(tokens)`, `textOf(tokens)`. The trace overlay's SQL tokenizer: keywords, strings, quoted identifiers, numbers, comments, `?` placeholders, operators and punctuation, lossless so the tokens always join back to the captured text. Display only; a dialect construct it misreads costs a colour, never a value. `renderSql` wraps highlighted tokens in `.pk-sql__<type>` spans and leaves identifiers and whitespace as text. |
-| `sql-view.js` | `sqlView(statement)`. A captured `SqlStatement` as the trace overlay shows it, used by the Spans tab's details panel and the Queries tab alike: the highlighted SQL in a `.pk-code-block`, a Formatted toggle when `statement.formatted` is set, a Substitute parameters toggle when there is exactly one parameter set and it fits the placeholders of the SQL shown, a `copyableText` control for exactly that SQL, and one numbered list per parameter set. Toggles start off and are not remembered. |
+| `sql-view.js` | `sqlView(statement)`. A captured `SqlStatement` as the trace overlay shows it, used by the Spans tab's query panel and the Queries tab alike: the highlighted SQL in a `.pk-code-block`, a Formatted toggle when `statement.formatted` is set, a Substitute parameters toggle when there is exactly one parameter set and it fits the placeholders of the SQL shown, a `copyableText` control for exactly that SQL, and one numbered list per parameter set. Toggles start off and are not remembered. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)`. Links the shared sheets (plus the surface's own) into a shadow root; see below. `SHARED_SHEETS`, that list, which `ToolbarShell`'s linked sheets mirror (`SharedModuleIT` pins the two). |
 | `storage.js` | `readSetting`, `writeSetting`. Guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. `readLocaleSetting()`, the stored `LOCALE_STORAGE_KEY` tag kept only if `Intl.NumberFormat.supportedLocalesOf` accepts it, else `null` - the one place the dashboard's locale setting is validated, so the toolbar and the overlay it opens share it through the same key `theme.js` uses for the theme, reading it fresh at each point of use rather than watching it live the way the theme is. |
 | `theme.js` | `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`, `bindTheme(target, onChange)` (resolve, apply and watch in one call, the way every surface starts; returns the unsubscribe). |
@@ -291,17 +291,17 @@ than landing on an empty panel.
 
 ### Cross-links in the trace overlay
 
-The overlay's tabs link into each other. A log row links to the span that wrote it, a query
-span's details panel links to its entry in the Queries tab, and each Queries entry links back
-to its span row (`trace-detail.js`'s `goToSpan`/`goToQuery`). The Logs tab's span-name button
-is the older third link, filtering the log list to a span. A jump switches the overlay tab the
-way the strip would (`replaceState`, params reset), scrolls to the target, moves keyboard focus
-onto it and marks it with the temporary `.pk-jump-flash` highlight. The anchors are
-`data-span-id` on the gantt rows and on `.pk-query-item` (`QueryInfo.spanId`).
+A log row and each Queries entry link back to their span's row in the Spans tab tree
+(`trace-detail.js`'s `goToSpan`). The Logs tab's span-name button is a second, in-tab link,
+filtering the log list to a span. A jump switches the overlay tab the way the strip would
+(`replaceState`, params reset), scrolls to the target, moves keyboard focus onto it and marks
+it with the temporary `.pk-jump-flash` highlight. The anchors are `data-span-id` on the gantt
+rows and on `.pk-query-item` (`QueryInfo.spanId`).
 
-A span's details panel lists its logs as the Logs tab renders them (`log-entry.js`), then a
-button that opens the Logs tab filtered to that span, the same hand-off as the row's "N logs"
-chip (`goToSpanLogs`).
+A span's row carries its own query and logs as two more panels, not cross-links: a "1 query"
+button opens the statement (`shared/sql-view.js`) and its row count, an "N logs" button opens
+that span's own logs as the Logs tab renders them (`log-entry.js`) - both in place, beside the
+attributes panel the span's name/track opens (`trace-detail/tabs/spans.js`).
 
 ## Thresholds and the SLOW badge
 

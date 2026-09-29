@@ -15,14 +15,14 @@ import tools.jackson.databind.JsonNode;
 class SqlStatementViewIT extends SeededPersonTestBase {
 
     @Test
-    void aQuerySpansDetailsShowItsStatementParametersAndToggles() {
+    void aQuerySpansQueryPanelShowsItsStatementParametersAndToggles() {
         JsonNode lookup = openDetailPageLookup();
         String spanId = lookup.path("spanId").asString();
         toolbar.openOverlay();
 
-        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle");
+        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-span-query-toggle");
 
-        assertStatementView("#pk-span-details-" + spanId, lookup.path("statement"));
+        assertStatementView("#pk-span-query-" + spanId, lookup.path("statement"));
     }
 
     @Test
