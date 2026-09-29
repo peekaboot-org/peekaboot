@@ -1,11 +1,12 @@
 /**
  * Trace-detail overlay - Spans tab: the gantt chart, its expand/collapse behaviour and each
- * span's details panel. A span's "N logs" toggle does not render anything of its own - it
- * asks trace-detail.js (via context.goToSpanLogs) to switch the overlay to the Logs tab
- * pre-filtered to that span, which is where a span's logs live.
+ * span's details panel. A span's "N logs" chip and its panel's "Show in Logs tab" button both
+ * ask trace-detail.js (via context.goToSpanLogs) to switch the overlay to the Logs tab
+ * pre-filtered to that span.
  *
  * Each span renders as one entry: its one-line row, then its details panel (kind, span id,
- * error, the statement view (shared/sql-view.js), tags), closed until the reader opens it.
+ * error, the statement view (shared/sql-view.js), its logs (../log-entry.js), tags), closed
+ * until the reader opens it.
  * Entries are flat siblings carrying their depth, which is what the subtree toggle walks.
  *
  * This module writes only one geometry value of its own: an entry's depth, as the CSS custom
@@ -22,6 +23,7 @@ import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {sqlView} from '../../shared/sql-view.js';
+import {logEntry} from '../log-entry.js';
 
 const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
 
@@ -46,7 +48,8 @@ export function render(container, trace, context = {}) {
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick})))),
         entries));
 
-    renderSpanEntries(entries, rootSpan, 0, traceStart, totalDuration, context.locale);
+    const display = {locale: context.locale, timeZone: context.timeZone, logsBySpan: logsBySpan(trace.logs)};
+    renderSpanEntries(entries, rootSpan, 0, traceStart, totalDuration, display);
 
     // Collapsed by default: the subtree's work is not what the caller waited for, so it
     // starts out of the way. Reuses the subtree toggle rather than a second mechanism.
@@ -66,8 +69,8 @@ export function render(container, trace, context = {}) {
     });
 
     entries.addEventListener('click', (e) => {
-        // Logs toggle: hands off to the Logs tab.
-        const logsToggle = e.target.closest('.pk-span-logs-toggle');
+        // The row's logs chip and the details panel's button: both hand off to the Logs tab.
+        const logsToggle = e.target.closest('.pk-span-logs-toggle, .pk-span-logs-link');
         if (logsToggle) {
             context.goToSpanLogs?.(logsToggle.dataset.spanId);
             return;
@@ -185,7 +188,7 @@ function kindDot() {
     return el('span', {className: 'pk-gantt-kind-dot', attrs: {'aria-hidden': 'true'}});
 }
 
-function renderSpanEntries(container, span, depth, traceStart, totalDuration, locale) {
+function renderSpanEntries(container, span, depth, traceStart, totalDuration, display) {
     if (!span) return;
     const kind = spanKind(span);
     const detailsId = `pk-span-details-${span.spanId}`;
@@ -201,10 +204,10 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, lo
     const row = el('div', {className: 'pk-gantt-row'});
     row.dataset.spanId = span.spanId;
     row.append(
-        nameCell(span, kind, detailsId, hasError, locale),
+        nameCell(span, kind, detailsId, hasError, display.locale),
         track(span, traceStart, totalDuration, hasError),
         durationCell(span, totalDuration));
-    entry.append(row, detailsPanel(span, kind, detailsId));
+    entry.append(row, detailsPanel(span, kind, detailsId, display));
     container.appendChild(entry);
 
     // An async subtree is excluded from the trace's duration, so measuring its children
@@ -214,7 +217,7 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, lo
     const childrenStart = span.asyncEntry ? span.startTimeMs : traceStart;
     const childrenDuration = span.asyncEntry ? (subtreeWindowMs(span) || 1) : totalDuration;
     (span.children || []).forEach(child =>
-        renderSpanEntries(container, child, depth + 1, childrenStart, childrenDuration, locale));
+        renderSpanEntries(container, child, depth + 1, childrenStart, childrenDuration, display));
 }
 
 function nameCell(span, kind, detailsId, hasError, locale) {
@@ -324,13 +327,14 @@ function durationCell(span, totalDuration) {
  * track opens it. The backend already keeps the statement tags out (they arrive as
  * span.query), and events sit on the track.
  */
-function detailsPanel(span, kind, detailsId) {
+function detailsPanel(span, kind, detailsId, display) {
     return el('div', {className: 'pk-span-details', attrs: {id: detailsId}},
         el('div', {className: 'pk-span-details__head'},
             el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`}),
             copyableId(span.spanId, {label: 'spanId'})),
         errorSection(span),
         querySection(span),
+        logsSection(span, display),
         tagList(span.tags));
 }
 
@@ -349,6 +353,31 @@ function querySection(span) {
             className: 'pk-btn pk-btn--small pk-span-query-link', text: 'Show in Queries tab',
             attrs: {'data-span-id': span.spanId}
         }));
+}
+
+/**
+ * The span's logs as the Logs tab shows them, trace included. They come from the trace's flat
+ * list, since the span tree's own copies (span.logs, what the row's chip counts) carry no trace.
+ */
+function logsSection(span, display) {
+    const logs = display.logsBySpan.get(span.spanId);
+    if (!logs) return null;
+    const dateOptions = {locale: display.locale, timeZone: display.timeZone};
+    return el('div', {className: 'pk-span-details__logs'},
+        ...logs.map(log => logEntry(log, dateOptions)),
+        button({
+            className: 'pk-btn pk-btn--small pk-span-logs-link', text: 'Show in Logs tab',
+            attrs: {'data-span-id': span.spanId}
+        }));
+}
+
+function logsBySpan(logs) {
+    const bySpan = new Map();
+    (logs || []).forEach(log => {
+        if (!bySpan.has(log.spanId)) bySpan.set(log.spanId, []);
+        bySpan.get(log.spanId).push(log);
+    });
+    return bySpan;
 }
 
 /** Full keys, since short ones collide (db.system.name, jdbc.datasource.name), in key order, since the backend's map has none. */

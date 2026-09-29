@@ -197,6 +197,9 @@
 .pk-span-details__error-class { font-weight: 600; }
 .pk-span-details__query { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
 .pk-span-details__query .pk-sql { align-self: stretch; }
+.pk-span-details__logs { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
+/* The panel's own ground and padding already set its entries apart from the rows around it. */
+.pk-span-details__logs .pk-log { align-self: stretch; padding: 0; border-bottom: none; }
 .pk-span-tags { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--pk-space-md); row-gap: 2px; margin: 0; font-family: var(--pk-font-mono); }
 .pk-span-tags__key { color: var(--pk-text-muted); overflow-wrap: anywhere; }
 .pk-span-tags__value { margin: 0; color: var(--pk-text); overflow-wrap: anywhere; }
@@ -245,7 +248,7 @@
    invisible, so the ring takes the fill's own ink. */
 .pk-logs-filter-span-clear:focus-visible { outline-color: var(--pk-on-primary); }
 
-/* Logs tab row, one per trace log entry (see renderLogRows in tabs/logs.js). Column
+/* One captured log (log-entry.js), in the Logs tab and a span's details panel. Column
    direction so an entry with a stack trace stacks it below the metadata line rather than
    squeezing it in as a fifth flex item; the line itself stays row/nowrap below. */
 .pk-log { display: flex; flex-direction: column; padding: 6px var(--pk-space-md); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); border-bottom: 1px solid var(--pk-bg-alt); }
@@ -279,7 +282,7 @@
 .pk-log__level--error { color: var(--pk-danger); }
 .pk-log__message { flex: 1; overflow-wrap: anywhere; }
 
-/* The trace a log entry carried (tabs/logs.js's traceBlock), rendered only when
+/* The trace a log entry carried (log-entry.js's traceBlock), rendered only when
    log.stackTrace is present. align-self keeps the toggle from stretching to the row's
    full width under .pk-log's column flex. */
 .pk-log__reveal { align-self: flex-start; margin-top: var(--pk-space-xs); }

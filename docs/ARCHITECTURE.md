@@ -594,7 +594,7 @@ asking the same question with nothing to match. `fold` reaches the error page as
 parameter instead - `StackTraceHtml.render` takes it and applies that same
 `fold ? exclusions : List.of()` internally, and `PeekabootErrorView.detail` branches on it
 again to decide whether the reveal control renders at all. Either way the error page ends up
-rendering every frame inline. The browser classifies nothing on either surface; `logs.js`
+rendering every frame inline. The browser classifies nothing on either surface; `log-entry.js`
 renders the ranges it is given, the same way `StackTraceHtml` does server-side.
 
 The error page's reveal script ships twice, inline in a `<script>` tag and linked via

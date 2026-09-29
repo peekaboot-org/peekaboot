@@ -289,10 +289,9 @@ public class TraceInsightsService {
     }
 
     /**
-     * The span tree's own copies carry no stack trace: the frontend's spans tab only ever
-     * counts a span's logs, never reads their content, so shipping the trace here a second
-     * time - once here, once in the flat details list - would double it on the wire for
-     * nothing.
+     * The span tree's own copies carry no stack trace: the frontend's spans tab only counts
+     * them, and its details panel reads a span's logs from the flat details list, the one copy
+     * carrying stack traces, so shipping the trace here too would double it on the wire.
      */
     private SpanNode attachLogsToSpan(SpanNode span, Map<String, List<TraceLog>> logsBySpan) {
         if (span == null) {

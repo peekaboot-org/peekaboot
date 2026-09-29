@@ -637,6 +637,102 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
+     * A span's details panel lists that span's logs the way the Logs tab does, stack trace
+     * folded included. The span tree's own log copies carry no trace, so the panel reads the
+     * flat list; the trace's logs sit on more than one span, so a panel that listed them all,
+     * or listed the span tree's copies, fails here. The filter-to-span chip is left out: every
+     * entry already belongs to the span.
+     */
+    @Test
+    void anOpenSpanListsExactlyItsOwnLogsWithTheirFoldedTraces() {
+        String traceId = openOverlayForTheMultiSpanLogTrace();
+        JsonNode logs = awaitTrace(traceId, ROOT_SPAN_EXPORTED).path("logs");
+        JsonNode errorLog = logs.valueStream()
+                .filter(log -> !log.path("stackTrace").isNull())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no captured log carried a stack trace"));
+        String spanId = errorLog.path("spanId").asString();
+        List<String> ownMessages = logs.valueStream()
+                .filter(log -> spanId.equals(log.path("spanId").asString()))
+                .map(log -> log.path("message").asString())
+                .toList();
+        assertThat(logs.valueStream().map(log -> log.path("spanId").asString()))
+                .as("the trace's logs sit on another span too, or listing them all would pass")
+                .anyMatch(other -> !spanId.equals(other));
+        String panel = "[id='pk-span-details-" + spanId + "']";
+
+        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle");
+
+        assertThat(detailsPanelShown(spanId)).isTrue();
+        @SuppressWarnings("unchecked")
+        List<String> listedMessages = (List<String>) overlay.evaluate(
+                "(root, panel) => [...root.querySelectorAll(panel + ' .pk-log .pk-log__message')].map(el => el.textContent)",
+                panel);
+        assertThat(listedMessages).containsExactlyElementsOf(ownMessages);
+        assertThat(overlay.evaluate("(root, panel) => root.querySelectorAll(panel + ' .pk-log__span').length", panel))
+                .as("no filter-to-span chip in the span's own panel")
+                .isEqualTo(0);
+        @SuppressWarnings("unchecked")
+        List<String> renderedFrames = (List<String>) overlay.evaluate(
+                "(root, panel) => [...root.querySelectorAll(panel + ' .pk-log__trace .pk-log__frame')].map(el => el.textContent)",
+                panel);
+        assertThat(renderedFrames)
+                .containsExactlyElementsOf(
+                        List.of(errorLog.path("stackTrace").asString().split("\n", -1)));
+
+        String hiddenRuns = panel + " .pk-log__trace details.pk-log__hidden";
+        assertThat(page.locator(hiddenRuns).count()).isGreaterThan(0);
+        assertThat(page.locator(hiddenRuns + "[open]").count()).isEqualTo(0);
+
+        page.click(panel + " .pk-log__reveal");
+
+        assertThat(page.locator(hiddenRuns + "[open]").count())
+                .isEqualTo(page.locator(hiddenRuns).count());
+        assertThat(page.textContent(panel + " .pk-log__reveal")).isEqualTo("Hide framework frames");
+    }
+
+    /**
+     * The panel's "Show in Logs tab" button hands off exactly as the row's "N logs" chip does:
+     * the Logs tab, filtered to the span, at a location that says so.
+     */
+    @Test
+    void aSpanPanelsLogsButtonOpensTheLogsTabFilteredToThatSpan() {
+        String traceId = openOverlayForTheMultiSpanLogTrace();
+        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-span-logs-toggle').dataset.spanId");
+        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle");
+
+        page.click("[id='pk-span-details-" + spanId + "'] .pk-span-logs-link");
+
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+        assertThat(page.url()).contains("#traces/" + traceId + "/logs?span=" + spanId);
+        page.waitForSelector(".pk-log:not(.pk-log--hidden)");
+        @SuppressWarnings("unchecked")
+        List<String> visibleSpanIds = (List<String>)
+                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
+        assertThat(visibleSpanIds).containsOnly(spanId);
+        assertThat(page.isVisible(".pk-logs-filter-span")).isTrue();
+    }
+
+    /** A span that wrote no log gets neither a logs section nor a button to an empty Logs tab. */
+    @Test
+    void aSpanWithoutLogsHasNoLogsSection() {
+        Object sections = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0,
+                    rootSpan: {spanId: 'a', name: 'a', logs: [{spanId: 'a'}], children: [{spanId: 'b', name: 'b'}]},
+                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
+                const panel = id => container.querySelector(`#pk-span-details-${id}`);
+                return ['a', 'b'].map(id => [
+                    panel(id).querySelectorAll('.pk-span-details__logs .pk-log').length,
+                    panel(id).querySelectorAll('.pk-span-logs-link').length].join(':'));
+            })()
+            """);
+
+        assertThat(sections).isEqualTo(List.of("1:1", "0:0"));
+    }
+
+    /**
      * Cross-link: a span the backend classified as a query (span.query present) carries a
      * link to its entry in the Queries tab, in its details panel. The jump switches the
      * overlay tab, moves keyboard focus onto the target entry and marks it with a temporary

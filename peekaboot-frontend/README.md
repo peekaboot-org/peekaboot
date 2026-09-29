@@ -28,6 +28,7 @@ META-INF/peekaboot/ui/
 │                    insights-colors.js)
 │                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
+│                    log-entry.js: one captured log, for the Logs tab and a span's details
 ├── toolbar/         toolbar.css, toolbar.js
 ├── error-page/      error-page.css: the page Peekaboot renders in place of Boot's
 │                    whitelabel page
@@ -297,6 +298,10 @@ is the older third link, filtering the log list to a span. A jump switches the o
 way the strip would (`replaceState`, params reset), scrolls to the target, moves keyboard focus
 onto it and marks it with the temporary `.pk-jump-flash` highlight. The anchors are
 `data-span-id` on the gantt rows and on `.pk-query-item` (`QueryInfo.spanId`).
+
+A span's details panel lists its logs as the Logs tab renders them (`log-entry.js`), then a
+button that opens the Logs tab filtered to that span, the same hand-off as the row's "N logs"
+chip (`goToSpanLogs`).
 
 ## Thresholds and the SLOW badge
 
