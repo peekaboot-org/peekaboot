@@ -104,7 +104,10 @@ The frontend is plain ES modules, so a Java enum and its JS mirror drift silentl
 properties' defaults. A vocabulary that gains a JS mirror gets a row there. The same suite pins
 `format.js`'s `formatLongDuration` against `UptimeFormat.humanize` unit by unit, and drives
 `dashboard/tabs/insights-store.js` (the browser's mirror of the insights rings) directly, so
-the JS with no Java counterpart is covered too.
+the JS with no Java counterpart is covered too. `SqlStatement`'s JSON (`text`, `formatted`,
+`parameters`) has no mirror to pin; `SqlStatementViewIT` renders a real one from the testing
+app's person lookup, and `SqlViewModuleIT` covers the view's branches against hand-built
+statements.
 
 ## Real collaborators over mocks
 Mock only when the real dependency is expensive, non-deterministic, or external: servlet

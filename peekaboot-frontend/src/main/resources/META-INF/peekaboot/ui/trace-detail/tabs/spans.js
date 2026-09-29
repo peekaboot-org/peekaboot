@@ -5,8 +5,8 @@
  * pre-filtered to that span, which is where a span's logs live.
  *
  * Each span renders as one entry: its one-line row, then its details panel (kind, span id,
- * error, SQL, tags), closed until the reader opens it. Entries are flat siblings carrying
- * their depth, which is what the subtree toggle walks.
+ * error, the statement view (shared/sql-view.js), tags), closed until the reader opens it.
+ * Entries are flat siblings carrying their depth, which is what the subtree toggle walks.
  *
  * This module writes only one geometry value of its own: an entry's depth, as the CSS custom
  * property --pk-gantt-depth. The name cell's indent, the details panel's margin and the
@@ -21,6 +21,7 @@ import {el, button} from '../../shared/dom.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
+import {sqlView} from '../../shared/sql-view.js';
 
 const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
 
@@ -343,7 +344,7 @@ function errorSection(span) {
 function querySection(span) {
     if (!span.query) return null;
     return el('div', {className: 'pk-span-details__query'},
-        el('pre', {className: 'pk-code-block', text: span.query.text}),
+        sqlView(span.query),
         button({
             className: 'pk-btn pk-btn--small pk-span-query-link', text: 'Show in Queries tab',
             attrs: {'data-span-id': span.spanId}

@@ -26,3 +26,17 @@ export function el(tag, {className, text, title, attrs} = {}, ...children) {
 export function button(props = {}, ...children) {
     return el('button', {...props, attrs: {type: 'button', ...props.attrs}}, ...children);
 }
+
+/**
+ * A toggle button: `aria-pressed` starts false and flips on every click, and `onChange`
+ * receives the new state and the control.
+ */
+export function pressedToggle(props, onChange) {
+    const control = button({...props, attrs: {...props.attrs, 'aria-pressed': 'false'}});
+    control.addEventListener('click', () => {
+        const pressed = control.getAttribute('aria-pressed') !== 'true';
+        control.setAttribute('aria-pressed', String(pressed));
+        onChange(pressed, control);
+    });
+    return control;
+}

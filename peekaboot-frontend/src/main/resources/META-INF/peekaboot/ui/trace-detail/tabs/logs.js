@@ -5,7 +5,7 @@
  * full id on every row); see spans.js's "N logs" toggle, which lands here with this
  * tab's own span filter already seeded.
  */
-import {el, button} from '../../shared/dom.js';
+import {el, button, pressedToggle} from '../../shared/dom.js';
 import {formatTimeOfDay} from '../../shared/format.js';
 import {LOG_LEVELS} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
@@ -113,20 +113,12 @@ function frameLine(text, applicationFrame) {
 
 /** One control per log row: opens or closes every hidden run inside that row's trace at once. */
 function revealControl(pre) {
-    const control = button({
-        className: 'pk-btn pk-btn--small pk-log__reveal',
-        text: 'Show full stack trace',
-        attrs: {'aria-pressed': 'false'}
-    });
-    control.addEventListener('click', () => {
-        const open = control.getAttribute('aria-pressed') !== 'true';
-        control.setAttribute('aria-pressed', String(open));
+    return pressedToggle({className: 'pk-btn pk-btn--small pk-log__reveal', text: 'Show full stack trace'}, (open, control) => {
         control.textContent = open ? 'Hide framework frames' : 'Show full stack trace';
         pre.querySelectorAll('details.pk-log__hidden').forEach(run => {
             run.open = open;
         });
     });
-    return control;
 }
 
 /**

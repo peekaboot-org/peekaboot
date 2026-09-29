@@ -196,7 +196,7 @@
 .pk-span-details__error { color: var(--pk-danger); font-family: var(--pk-font-mono); overflow-wrap: anywhere; }
 .pk-span-details__error-class { font-weight: 600; }
 .pk-span-details__query { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
-.pk-span-details__query .pk-code-block { align-self: stretch; margin: 0; }
+.pk-span-details__query .pk-sql { align-self: stretch; }
 .pk-span-tags { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--pk-space-md); row-gap: 2px; margin: 0; font-family: var(--pk-font-mono); }
 .pk-span-tags__key { color: var(--pk-text-muted); overflow-wrap: anywhere; }
 .pk-span-tags__value { margin: 0; color: var(--pk-text); overflow-wrap: anywhere; }
@@ -214,6 +214,20 @@
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
 /* A block of captured text kept verbatim - a query's SQL, a request body. */
 .pk-code-block { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: var(--pk-space-sm); border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
+/* A captured statement (shared/sql-view.js), in a span's details panel and in the Queries tab. */
+.pk-sql { display: flex; flex-direction: column; gap: var(--pk-space-xs); }
+.pk-sql__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-xs); }
+.pk-sql__code { margin: 0; }
+.pk-sql__params { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
+.pk-sql__params-label { color: var(--pk-text-muted); }
+.pk-sql__param-list { margin: 0; padding-left: 4ch; overflow-wrap: anywhere; }
+/* Light literals as fallbacks: a stale cached tokens.css must not leave a token unpainted. */
+.pk-sql__keyword { color: var(--pk-sql-keyword, #7c3aed); }
+.pk-sql__string { color: var(--pk-sql-string, #117937); }
+.pk-sql__number { color: var(--pk-sql-number, #0a6e7f); }
+.pk-sql__placeholder { color: var(--pk-sql-placeholder, #9a5e06); font-weight: 600; }
+.pk-sql__comment { color: var(--pk-sql-comment, #626c79); font-style: italic; }
+.pk-sql__operator, .pk-sql__punctuation { color: var(--pk-sql-punctuation, #626c79); }
 
 /* Logs tab styles */
 .pk-logs-filter { display: flex; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); align-items: center; flex-wrap: wrap; }

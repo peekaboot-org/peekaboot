@@ -1270,11 +1270,16 @@ batch would otherwise cost time on the application's query thread, bloat the in-
 store, and ride along on any OTLP export.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
-(`trace-detail/tabs/spans.js`) renders `span.name`, OpenTelemetry's own span-name summary, for
-example `SELECT customer_order`. The Queries tab (`trace-detail/tabs/queries.js`) renders
-`query.statement.text`, which is where the tag `DbSpans.sql` picks actually shows up. The overlay opens on
-Spans by default (`trace-detail.js`'s `initial: 'spans'`), and `ScreenshotCapture` photographs
-both, so `trace-detail-queries-*` is the shipped image demonstrating `QueryExtractor`'s output.
+(`trace-detail/tabs/spans.js`) names each row by `span.name`, OpenTelemetry's own span-name
+summary such as `SELECT customer_order`, and shows the statement in the span's details panel.
+The Queries tab (`trace-detail/tabs/queries.js`) lists `query.statement`. Both show the SQL
+`DbSpans.sql` picks from the tags listed above, with the bind parameters from
+`peekaboot.query.parameters`, and render it through `shared/sql-view.js`: highlighted by
+`shared/sql.js`'s own tokenizer, raw by default, and on request shown formatted - laid out by
+the backend's `SqlFormatter` from the raw SQL and masked like the rest of the statement - and
+with its parameters substituted in the browser. The overlay opens on Spans by default (`trace-detail.js`'s `initial: 'spans'`),
+and `ScreenshotCapture` photographs both, so `trace-detail-queries-*` is the shipped image
+demonstrating `QueryExtractor`'s output.
 
 ## Data Models
 

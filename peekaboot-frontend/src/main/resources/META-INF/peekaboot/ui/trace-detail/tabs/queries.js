@@ -6,6 +6,7 @@
  */
 import {emptyState} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
+import {sqlView} from '../../shared/sql-view.js';
 import {querySeverity, severityClass} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 
@@ -54,5 +55,5 @@ function queryItem(query, index, view) {
         el('div', {className: 'pk-query-header'},
             el('span', {className: 'pk-query-system', text: `${index + 1}. ${system.toUpperCase()}`}),
             meta),
-        el('div', {className: 'pk-code-block', text: query.statement?.text || 'Unknown query'}));
+        query.statement ? sqlView(query.statement) : el('div', {className: 'pk-code-block', text: 'Unknown query'}));
 }

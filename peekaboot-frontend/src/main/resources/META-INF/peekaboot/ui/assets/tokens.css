@@ -73,6 +73,14 @@
     --pk-on-primary-wash: rgba(13, 17, 23, 0.15); /* --pk-on-primary at 15%: a hover wash that reads on the primary fill */
     --pk-mark-bg: #fef08a;      /* the search highlight; 15.2:1 under --pk-on-mark */
     --pk-on-mark: #111827;
+    /* SQL highlighting (trace-detail.css), drawn on the code block's --pk-bg. Each borrows a
+       text-tuned token, so the dark theme follows without a block of its own; ratios light / dark. */
+    --pk-sql-keyword: var(--pk-purple);             /* 5.70:1 / 5.64:1 */
+    --pk-sql-string: var(--pk-success-text);        /* 5.51:1 / 7.45:1 */
+    --pk-sql-number: var(--pk-info-text);           /* 5.92:1 / 9.38:1 */
+    --pk-sql-placeholder: var(--pk-warning-text);   /* 5.28:1 / 7.50:1 */
+    --pk-sql-comment: var(--pk-text-muted);         /* 5.33:1 / 6.1:1 */
+    --pk-sql-punctuation: var(--pk-text-muted);
 
     --pk-space-xs: 4px;
     --pk-space-sm: 8px;

@@ -36,6 +36,8 @@
     <!-- a span row's bar, scoped by kind the way spans.js's track() draws it -->
     <span class="pk-gantt-kind--server"><span class="pk-gantt-bar" id="kind-bar-server"></span></span>
     <span class="pk-query-rows" id="query-rows">3 rows</span>
+    <!-- sql-view.js's highlighted statement, on the code block's own ground -->
+    <pre class="pk-code-block pk-sql__code"><span class="pk-sql__keyword" id="sql-keyword">select</span> <span class="pk-sql__string" id="sql-string">'x'</span><span class="pk-sql__punctuation" id="sql-punctuation">,</span> <span class="pk-sql__number" id="sql-number">42</span> <span class="pk-sql__operator" id="sql-operator">=</span> <span class="pk-sql__placeholder" id="sql-placeholder">?</span> <span class="pk-sql__comment" id="sql-comment">-- why</span></pre>
     <button class="pk-tab" id="tab-with-count">Spans<span class="pk-tab__count" id="tab-count">12</span></button>
 
     <div class="pk-group" id="group">

@@ -64,7 +64,8 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
      * (fixed to an open row's own ground, .pk-gantt-name, the way spans.js actually places
      * it) and the details panel's error, tag keys and values - and tabStrip() its count
      * pill; each owes the same 4.5:1 as a badge in both themes. The tag key doubles as the
-     * guard for muted ink on the panel's --pk-bg-alt ground.
+     * guard for muted ink on the panel's --pk-bg-alt ground. The SQL view's token colours are
+     * measured on the code block's own {@code --pk-bg} ground.
      */
     @Test
     void traceDetailInkClearsAaContrastInBothThemes() {
@@ -79,7 +80,14 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
                     "span-error-chip",
                     "span-tag-key",
                     "span-tag-value",
-                    "tab-count")) {
+                    "tab-count",
+                    "sql-keyword",
+                    "sql-string",
+                    "sql-punctuation",
+                    "sql-number",
+                    "sql-operator",
+                    "sql-placeholder",
+                    "sql-comment")) {
                 assertThat(contrastRatio("#" + pill))
                         .as("%s ink/fill contrast (%s theme)", pill, theme)
                         .isGreaterThanOrEqualTo(4.5);
