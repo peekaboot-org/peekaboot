@@ -4,6 +4,8 @@ plugins {
 
 description = "Peekaboot Auto-configuration - Spring Boot auto-configuration"
 
+val datasourceMicrometerVersion = providers.gradleProperty("datasourceMicrometerVersion").get()
+
 dependencies {
     api(project(":peekaboot-backend"))
     api(project(":peekaboot-frontend"))
@@ -26,6 +28,9 @@ dependencies {
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
+    // QueryParameterObservationFilter reads datasource-micrometer's QueryContext; the starter
+    // brings the library, and the filter's auto-configuration stays away without it
+    compileOnly("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
 
     // so PeekabootSecurityAutoConfigurationTest can prove the on-classpath branch of the
     // SecurityContextHolder presence check; the main code holds only its class name as a

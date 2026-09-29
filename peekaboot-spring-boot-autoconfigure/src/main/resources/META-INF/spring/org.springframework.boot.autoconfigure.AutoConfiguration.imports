@@ -11,3 +11,4 @@ org.peekaboot.autoconfigure.AsyncInstrumentationAutoConfiguration
 org.peekaboot.autoconfigure.InsightsAutoConfiguration
 org.peekaboot.autoconfigure.ActuatorSourcesAutoConfiguration
 org.peekaboot.autoconfigure.PeekabootSecurityAutoConfiguration
+org.peekaboot.autoconfigure.QueryParameterAutoConfiguration

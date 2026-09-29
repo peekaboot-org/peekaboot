@@ -25,6 +25,12 @@ public final class DbSpans {
     /** datasource-proxy's per-statement tag; a batch carries one per statement. */
     private static final Pattern BATCH_STATEMENT_TAG = Pattern.compile("jdbc\\.query\\[(\\d+)\\]");
 
+    /**
+     * The bind parameters Peekaboot's own capture records on a query span: a JSON array of
+     * parameter sets, one per execution of a batch, each an array of SQL literals.
+     */
+    public static final String PARAMETERS_TAG = "peekaboot.query.parameters";
+
     private static final String RESULT_SET_SPAN_NAME = "result-set";
     private static final String ROW_COUNT_TAG = "jdbc.row-count";
 

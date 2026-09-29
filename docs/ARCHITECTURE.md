@@ -658,6 +658,7 @@ hooks that run before or outside the application context are registered in
 | `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
+| `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
 | `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled`, `peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold`, and the default property values |
@@ -690,7 +691,7 @@ Most of the auto-configuration classes carry the same two class-level conditions
 servlet guard and the master switch: `PeekabootAutoConfiguration`,
 `PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
 `DevToolbarAutoConfiguration`, `ErrorPageAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
-`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`,
 `InsightsAutoConfiguration` and `PeekabootSecurityAutoConfiguration`.
 
 ```java
@@ -701,9 +702,12 @@ servlet guard and the master switch: `PeekabootAutoConfiguration`,
 Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
 the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar`,
 `TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean, `InsightsAutoConfiguration`
-a `MeterRegistry` bean and `peekaboot.insights.enabled`, and `OtelTracingAutoConfiguration` the
-OpenTelemetry SDK's `SpanExporter` class. Class-level conditions guard only what the starter's
-closure leaves optional: `spring-boot-health` and the OpenTelemetry SDK. HikariCP, Logback and
+a `MeterRegistry` bean and `peekaboot.insights.enabled`, `OtelTracingAutoConfiguration` the
+OpenTelemetry SDK's `SpanExporter` class, and `QueryParameterAutoConfiguration`
+datasource-micrometer's `QueryContext` class. Class-level conditions guard only what the
+starter's closure leaves optional: `spring-boot-health`, the OpenTelemetry SDK and
+datasource-micrometer's tracing observation support, which the starter brings but a host can
+exclude. HikariCP, Logback and
 Flyway are optional too, each guarded a level down on a nested `@Configuration`. `InfoEndpoint`
 and `ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
 consumer of the starter can be without them.
@@ -721,9 +725,12 @@ That guard prevents dead beans, not a crash. Without it a WebFlux or non-web app
 `peekaboot.enabled=true` would register the controller, services and mappers with nothing
 servlet-specific ever invoking them. `ApplicationContextRunner` confirms the context still
 starts cleanly: only `WebMvcConfigurationSupport` calls back into `WebMvcConfigurer`, and it is
-itself only wired up in a servlet context. `PeekabootTracingAutoConfiguration` and
-`OtelTracingAutoConfiguration` carry the guard for the same reason: everything that reads the
-trace store is servlet-only, so they would otherwise fill an `InMemoryTraceStore` for nobody.
+itself only wired up in a servlet context. `PeekabootTracingAutoConfiguration`,
+`OtelTracingAutoConfiguration` and `QueryParameterAutoConfiguration` carry the guard for the
+same reason: everything that reads the trace store, including the tag
+`QueryParameterAutoConfiguration` writes, is servlet-only. Without the guard they would fill an
+`InMemoryTraceStore` for nobody, and the query tag would put raw, unmasked bind values on every
+span with no Peekaboot UI to show them.
 
 `PeekabootLifecycleAutoConfiguration` and `PeekabootStorageAutoConfiguration` carry no servlet
 guard, because the ready/stopped summaries, the run history and the storage directory must work
@@ -732,10 +739,10 @@ servlet-gated on its own. `PeekabootDefaultsEnvironmentPostProcessor` splits the
 activation and storage detection are web-type independent, while `peekaboot-defaults.yml` and
 the dev-toolbar defaults are skipped off-servlet.
 
-`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
-`TracingInterceptorAutoConfiguration` additionally require `peekaboot.tracing.enabled` (default
-on): handler and view observations are tracing, and with it off there is no store for them to
-land in. `DevToolbarAutoConfiguration` does not read that property at all. Its capture half,
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
+`TracingInterceptorAutoConfiguration` and `QueryParameterAutoConfiguration` additionally require
+`peekaboot.tracing.enabled` (default on): handler, view and query observations are tracing, and
+with it off there is no store for them to land in. `DevToolbarAutoConfiguration` does not read that property at all. Its capture half,
 the `RequestCaptureFilter` registration and the Logback appender registrar, is
 `@ConditionalOnBean(TraceStore.class)` instead, so with `peekaboot.tracing.enabled=false` the
 toolbar is still injected into every page with nothing captured behind it.
@@ -1223,6 +1230,37 @@ the reasoning), so a credential with no provider-recognisable shape sitting in a
 column is not caught. The [security page](https://www.peekaboot.org/docs/security/#masking)
 states that as a caveat and tells readers to assume a captured trace carries plaintext SQL. It
 is a caveat, not a promise waiting to be strengthened.
+
+Bind parameters are Peekaboot's own capture. The OpenTelemetry convention tags none, and
+datasource-micrometer's `jdbc.params[N]` is one comma-joined string. `QueryParameterObservationFilter`
+reads datasource-proxy's `QueryInfo.getParametersList()`, which datasource-proxy fills for every
+prepared statement whatever `jdbc.datasource-proxy.include-parameter-values` says.
+
+It adds them as one high-cardinality key, `peekaboot.query.parameters` (`DbSpans.PARAMETERS_TAG`):
+a JSON array of parameter sets, one per batch entry, each an array of SQL literals (`SqlLiterals`).
+Values bound by name are skipped, and a statement without parameters gets no key. A filter runs in
+`Observation.stop()` before any handler's `onStop`, so the tracing handler tags the span with it.
+
+The key sits on the real span, unmasked. An application that also exports its traces, over OTLP
+say, exports the bind values with them; masking applies only where Peekaboot serves a trace.
+
+Excluding `org.peekaboot.autoconfigure.QueryParameterAutoConfiguration` via
+`spring.autoconfigure.exclude` turns bind-value capture off, leaving every other Peekaboot
+feature untouched.
+
+Two caps bound what a single query can add. `SqlLiterals.MAX_LITERAL_LENGTH` (1000) cuts a
+literal past that many source characters - or bytes, for a `byte[]`, capped before hex-encoding
+so the cap bounds the source data rather than the doubled hex output - and marks it with the
+count dropped as a trailing SQL block comment, `'...' /* N characters omitted */` or
+`X'...' /* N bytes omitted */`, so a truncated literal is still one well-formed literal followed
+by a comment rather than a closed string trailing bare, unquoted text - the shape a literal must
+keep if it is ever substituted into query text in place of a placeholder.
+`QueryParameterObservationFilter.MAX_PARAMETER_SETS` (100) drops the parameter sets of a batch
+past that many entries, unmarked, rather than rendering and serialising all of them. Both exist
+because the capture is always on - unlike datasource-micrometer's own `jdbc.params`, off by
+default - and nothing else on the ingestion path bounds a tag's size: an unbounded literal or
+batch would otherwise cost time on the application's query thread, bloat the in-memory trace
+store, and ride along on any OTLP export.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) renders `span.name`, OpenTelemetry's own span-name summary, for

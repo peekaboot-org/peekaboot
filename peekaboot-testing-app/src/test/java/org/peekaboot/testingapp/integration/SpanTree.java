@@ -28,6 +28,18 @@ final class SpanTree {
         return keys;
     }
 
+    /** Every value {@code key} carries on any span of the trace, in walk order. */
+    static List<String> tagValues(JsonNode trace, String key) {
+        List<String> values = new ArrayList<>();
+        walk(trace.path("rootSpan"), span -> {
+            JsonNode value = span.path("tags").path(key);
+            if (value.isString()) {
+                values.add(value.asString());
+            }
+        });
+        return values;
+    }
+
     /**
      * A span called {@code name} somewhere under the root, the root itself excluded. Fails
      * rather than answering empty: a caller asking for a descendant has already waited for it,

@@ -35,6 +35,10 @@
 
         <spring-boot.version>4.1.1</spring-boot.version>
 
+        <!-- The starter's query instrumentation and the autoconfigure module's compile-only
+             view of it; one version, so the two cannot drift. -->
+        <datasource-micrometer.version>2.3.0</datasource-micrometer.version>
+
         <jacoco.version>0.8.15</jacoco.version>
         <!-- The one switch that turns the coverage gate off, data guard included. -->
         <jacoco.skip>false</jacoco.skip>

@@ -6,6 +6,8 @@ plugins {
 
 description = "Peekaboot Spring Boot Starter - Dependency aggregator for easy integration"
 
+val datasourceMicrometerVersion = providers.gradleProperty("datasourceMicrometerVersion").get()
+
 // No sources - the jar is deliberately empty, exactly like the Maven artifact.
 dependencies {
     api(project(":peekaboot-spring-boot-autoconfigure"))
@@ -14,8 +16,8 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-opentelemetry")
     // Query capture - see the pom for why both, and what a host that instruments its own
     // DataSource does instead.
-    api("net.ttddyy.observation:datasource-micrometer-spring-boot:2.3.0")
-    api("net.ttddyy.observation:datasource-micrometer-opentelemetry:2.3.0")
+    api("net.ttddyy.observation:datasource-micrometer-spring-boot:$datasourceMicrometerVersion")
+    api("net.ttddyy.observation:datasource-micrometer-opentelemetry:$datasourceMicrometerVersion")
 }
 
 // The servlet stack and the connection pool are compileOnly in the modules that use them,
