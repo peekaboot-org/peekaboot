@@ -15,14 +15,19 @@
                 <th>First Name</th>
                 <th>Last Name</th>
                 <th>Email</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
-            <tr th:each="person : ${persons}">
+            <tr th:each="person : ${persons}" th:attr="data-person-id=${person.id}">
                 <td th:text="${person.id}"></td>
                 <td th:text="${person.firstName}"></td>
                 <td th:text="${person.lastName}"></td>
                 <td th:text="${person.email}"></td>
+                <td>
+                    <a class="button" th:href="@{/persons/{id}(id=${person.id})}">View</a>
+                    <a class="button" th:href="@{/persons/{id}/edit(id=${person.id})}">Edit</a>
+                </td>
             </tr>
         </tbody>
     </table>

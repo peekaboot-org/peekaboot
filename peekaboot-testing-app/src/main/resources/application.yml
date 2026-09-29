@@ -9,6 +9,12 @@ spring:
   jpa:
     open-in-view: false
 
+  mvc:
+    hiddenmethod:
+      filter:
+        # the person edit form submits PUT through a hidden _method field
+        enabled: true
+
 # peekaboot needs no configuration here: a local run (IDE or spring-boot:run) enables both
 # the dashboard and the dev toolbar by default.
 

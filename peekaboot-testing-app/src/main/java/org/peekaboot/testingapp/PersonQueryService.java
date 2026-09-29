@@ -39,4 +39,15 @@ public class PersonQueryService {
         log.info("loaded {} persons", persons.size());
         return persons;
     }
+
+    /**
+     * Observed like {@link #findAll()}: the detail and edit pages show the lookup as a span of
+     * its own above its one parameterised query. {@link #getPerson} stays unobserved for the
+     * JSON lookup, whose flat span tree is the point of that endpoint.
+     */
+    @Observed(name = "person.query.find-by-id", contextualName = "person.query.find-by-id")
+    public Optional<Person> findById(long id) {
+
+        return personRepository.findById(id);
+    }
 }

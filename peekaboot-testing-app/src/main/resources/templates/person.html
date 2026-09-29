@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="|${person.firstName} ${person.lastName}|">Person</title>
+    <style th:replace="~{fragments/styles :: pageStyles}"></style>
+</head>
+<body>
+    <h1 th:text="|${person.firstName} ${person.lastName}|">Person</h1>
+    <dl>
+        <dt>ID</dt>
+        <dd id="person-id" th:text="${person.id}"></dd>
+        <dt>First Name</dt>
+        <dd id="person-first-name" th:text="${person.firstName}"></dd>
+        <dt>Last Name</dt>
+        <dd id="person-last-name" th:text="${person.lastName}"></dd>
+        <dt>Email</dt>
+        <dd id="person-email" th:text="${person.email}"></dd>
+    </dl>
+    <p>
+        <a class="button" th:href="@{/persons/{id}/edit(id=${person.id})}">Edit</a>
+        <a class="button" th:href="@{/persons}">All persons</a>
+    </p>
+</body>
+</html>
