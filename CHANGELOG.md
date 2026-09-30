@@ -1,3 +1,35 @@
+## 1.0.0 - 2026-09-30
+
+### Breaking changes
+- Fold the Internal trace type into Unknown. Traces with a kindless root span now report UNKNOWN; filter on rootActionType=UNKNOWN where you used INTERNAL.
+
+### Features
+- Exclude pool traces with a checkbox
+- [**breaking**] Fold the Internal trace type into Unknown
+- Fit the trace type filter on one row
+- Capture the bind parameters of JDBC queries
+- Format queries and serve their parameters
+- **testing-app**: Add person view and edit pages
+- Tokenize SQL for highlighting
+- Copy the text a view shows at click time
+- Highlight SQL and substitute its parameters
+- Show a span's logs in its details
+- Expand a span's query and logs in place
+
+### Dependency upgrades
+- **deps**: Bump org.slf4j:slf4j-api from 2.0.19 to 2.0.20
+- **deps**: Bump net.sourceforge.pmd:pmd-core from 7.27.0 to 7.28.0
+- **deps**: Bump com.diffplug.spotless:spotless-maven-plugin
+- **deps**: Bump net.osslabz:jdbc-url-parser from 0.1.1 to 0.1.2
+- **deps**: Bump com.diffplug.spotless:spotless-plugin-gradle
+- **deps**: Bump gradle-wrapper from 9.7.1 to 9.8.0
+
+### Build, CI and chores
+- Pin pmd-core and pmd-java to one property
+- Pin surefire and failsafe to one property
+
+**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/0.3.0...1.0.0
+
 ## 0.3.0 - 2026-09-26
 
 ### Features
