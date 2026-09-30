@@ -42,6 +42,8 @@
         <!-- pmd-java fails against a different pmd-core; one property makes Dependabot
              bump both in one pull request. -->
         <pmd.version>7.28.0</pmd.version>
+        <!-- surefire and failsafe ship as one release. -->
+        <surefire.version>3.6.0</surefire.version>
 
         <jacoco.version>0.8.15</jacoco.version>
         <!-- The one switch that turns the coverage gate off, data guard included. -->
@@ -261,7 +263,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.6.0</version>
+                    <version>${surefire.version}</version>
                     <configuration>
                         <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                         <includes>
@@ -276,7 +278,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>3.6.0</version>
+                    <version>${surefire.version}</version>
                     <configuration>
                         <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                         <includes>
