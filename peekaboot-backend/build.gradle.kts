@@ -9,7 +9,7 @@ dependencies {
     api("tools.jackson.core:jackson-databind")
     api("io.micrometer:micrometer-core")
     api("io.micrometer:micrometer-tracing")
-    api("net.osslabz:jdbc-url-parser:0.1.1")
+    api("net.osslabz:jdbc-url-parser:0.1.2")
     api("com.cronutils:cron-utils:9.2.1")
 
     // Maven <optional> deps: the host app's own starters provide these at runtime,
