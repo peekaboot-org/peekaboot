@@ -45,7 +45,7 @@ import org.xml.sax.SAXException;
  * one side alone. Each is guarded here by comparing the two declarations.
  *
  * <p>The testing-app pom does not inherit {@code peekaboot-parent}, so it repeats the build
- * instant, the JaCoCo version and the Spring Boot line by hand. Those copies are compared
+ * instant, the JaCoCo and PMD versions and the Spring Boot line by hand. Those copies are compared
  * against the root pom the same way.
  */
 class BuildVersionLockstepTest {
@@ -98,6 +98,15 @@ class BuildVersionLockstepTest {
                 "/project/properties/jacoco.version",
                 "/project/properties/jacoco.version",
                 "peekaboot-coverage merges the testing-app's execution data; both agents must agree");
+    }
+
+    @Test
+    @Timeout(10)
+    void testingAppPinsTheSamePmdVersionAsTheRootPom() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/pmd.version",
+                "/project/properties/pmd.version",
+                "both poms run the one PMD ruleset; a different release can flag different code");
     }
 
     @Test
@@ -222,7 +231,7 @@ class BuildVersionLockstepTest {
                 row(
                         "PMD",
                         pom,
-                        "<artifactId>pmd-java</artifactId>\\s*<version>([^<]+)</version>",
+                        "<pmd.version>([^<]+)</pmd.version>",
                         conventions,
                         "pmd \\{\\s*toolVersion = \"([^\"]+)\""),
                 row(

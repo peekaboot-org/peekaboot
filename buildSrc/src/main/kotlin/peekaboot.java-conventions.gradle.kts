@@ -121,7 +121,7 @@ checkstyle {
 }
 
 pmd {
-    toolVersion = "7.27.0"
+    toolVersion = "7.28.0"
     ruleSets = listOf() // the built-in default ruleset must not leak in beside ours
     ruleSetFiles = files(rootProject.file("config/pmd-ruleset.xml"))
 }

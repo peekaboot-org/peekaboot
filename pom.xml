@@ -39,6 +39,10 @@
              view of it; one version, so the two cannot drift. -->
         <datasource-micrometer.version>2.3.0</datasource-micrometer.version>
 
+        <!-- pmd-java fails against a different pmd-core; one property makes Dependabot
+             bump both in one pull request. -->
+        <pmd.version>7.28.0</pmd.version>
+
         <jacoco.version>0.8.15</jacoco.version>
         <!-- The one switch that turns the coverage gate off, data guard included. -->
         <jacoco.skip>false</jacoco.skip>
@@ -478,12 +482,12 @@
                     <dependency>
                         <groupId>net.sourceforge.pmd</groupId>
                         <artifactId>pmd-core</artifactId>
-                        <version>7.28.0</version>
+                        <version>${pmd.version}</version>
                     </dependency>
                     <dependency>
                         <groupId>net.sourceforge.pmd</groupId>
                         <artifactId>pmd-java</artifactId>
-                        <version>7.27.0</version>
+                        <version>${pmd.version}</version>
                     </dependency>
                 </dependencies>
                 <configuration>
