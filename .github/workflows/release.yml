@@ -15,7 +15,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     permissions:
       contents: write
@@ -139,6 +139,11 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
+
+      # release:perform returns at the upload (waitUntil=uploaded in pom.xml), so this is what
+      # holds the post-publish steps back until the release can be downloaded.
+      - name: await-maven-central
+        run: .github/central/await-release.sh "${{ steps.resolve-release-version.outputs.version }}"
 
       # main originates nothing; it is a pointer that only ever fast-forwards onto the commit
       # that was published. Pushing a bare commit SHA makes git refuse anything but a

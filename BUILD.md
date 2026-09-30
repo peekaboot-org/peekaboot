@@ -576,7 +576,7 @@ Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does
    staged. See [Release notes](#release-notes).
 3. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
    picks the staged changelog up, so version bump, changelog and tag are one commit.
-4. `./mvnw -P peekaboot-release release:perform`
+4. `./mvnw -P peekaboot-release release:perform`, then a wait until the release is on repo1.
 5. `main` fast-forwarded to the tagged commit, so it names exactly what was published.
    Nothing merges back, because `main` originates no commits of its own.
 6. Grouped release notes for the new tag rendered by git-cliff into the release body, and
@@ -618,10 +618,14 @@ fork `release:perform` starts is what runs `deploy` and it needs the publishing 
 well as the signature.
 
 `peekaboot-publish` contributes `central-publishing-maven-plugin`, which on a release runs
-with `autoPublish=true` / `waitUntil=published`, so the job does not go green until the
-artifacts are live on Central. Flipping the pair to `false`/`validated` rehearses an upload
-instead: the run stops at a validated deployment awaiting a manual publish in the Portal.
-Neither setting reaches the snapshot path, which never calls the Portal.
+with `autoPublish=true` / `waitUntil=uploaded`. Any later wait polls the Portal's status
+endpoint, and the plugin fails the build on the first non-2xx answer, even though the
+deployment still publishes. So `release:perform` returns at the upload, and the job's
+`await-maven-central` step polls repo1 for the starter's pom, retrying through errors for up
+to 30 minutes. The post-publish steps run only once it is there. Flipping `autoPublish` to
+`false` rehearses an upload instead: the deployment waits for a manual publish in the
+Portal, and `await-maven-central` times out. Neither setting reaches the snapshot path,
+which never calls the Portal.
 
 The sources and javadoc jars are *not* release-only. Both are attached on every build of
 the published modules, and javadoc runs with `doclint` at `all,-missing` and fails on an

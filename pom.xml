@@ -145,12 +145,14 @@
                         <version>0.11.0</version>
                         <extensions>true</extensions>
                         <configuration>
-                            <!-- Rehearse an upload without releasing it by flipping these to
-                                 false/validated: the run then stops at a validated deployment
-                                 that waits for a manual publish in the Portal. Neither reaches
-                                 the snapshot path, which never calls the Portal at all. -->
+                            <!-- uploaded, because any later wait polls a status endpoint whose
+                                 first non-2xx response fails the build; the release workflow
+                                 waits on repo1 instead. Rehearse an upload without releasing it
+                                 by flipping autoPublish to false: the deployment then waits for
+                                 a manual publish in the Portal. Neither reaches the snapshot
+                                 path, which never calls the Portal at all. -->
                             <autoPublish>true</autoPublish>
-                            <waitUntil>published</waitUntil>
+                            <waitUntil>uploaded</waitUntil>
                         </configuration>
                     </plugin>
                 </plugins>
