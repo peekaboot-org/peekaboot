@@ -98,6 +98,16 @@ class BundledFontIT extends PlaywrightTestBase {
         assertRendersIn(overlay.evaluate(FONT_PROBE, List.of(SANS, ".pk-overlay__title-method")), SANS);
     }
 
+    /** A span row's query toggle is a button, which takes the engine's own button font unless told to inherit. */
+    @Test
+    void aSpanRowsToggleButtonRendersInTheBundledSans() {
+        openPersonsPage();
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-span-query-toggle");
+
+        assertRendersIn(overlay.evaluate(FONT_PROBE, List.of(SANS, ".pk-span-query-toggle")), SANS);
+    }
+
     /**
      * The faces come from the jar over the app's own origin. Asserted on the responses the
      * dashboard actually made, so a rule that named a CDN - or a path typo that fell back to
