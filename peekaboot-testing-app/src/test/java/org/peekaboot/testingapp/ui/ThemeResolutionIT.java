@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Response;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.ColorScheme;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,15 @@ class ThemeResolutionIT extends PlaywrightTestBase {
 
     private Object evalTheme(String expression) {
         return importModule("shared/theme.js", expression);
+    }
+
+    // Empty rather than refused: a failed main.js makes boot-recovery.js reload the page.
+    private void serveMainJsEmpty() {
+        page.route(
+                "**/dashboard/main.js",
+                route -> route.fulfill(new Route.FulfillOptions()
+                        .setContentType("text/javascript")
+                        .setBody("")));
     }
 
     @Test
@@ -116,14 +126,14 @@ class ThemeResolutionIT extends PlaywrightTestBase {
      * A dark-theme reader would otherwise see the light palette painted first on every
      * load: the module script that resolves the theme is deferred past first paint.
      * assets/theme-boot.js, linked from index.html's head, stamps data-theme before the
-     * stylesheets apply. main.js is refused here (a real network failure), so whatever
-     * the attribute says was set by that script alone.
+     * stylesheets apply. main.js is served as an empty module here, so whatever the
+     * attribute says was set by that script alone.
      */
     @Test
     void storedThemeIsStampedBeforeTheModuleScriptRuns() {
         setStoredTheme("dark");
         emulateOsColorScheme(ColorScheme.LIGHT);
-        page.route("**/dashboard/main.js", route -> route.abort());
+        serveMainJsEmpty();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
 
@@ -133,7 +143,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void osPreferenceIsStampedBeforeTheModuleScriptRunsWhenNothingIsStored() {
         emulateOsColorScheme(ColorScheme.DARK);
-        page.route("**/dashboard/main.js", route -> route.abort());
+        serveMainJsEmpty();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
 
@@ -152,7 +162,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     void theThemeIsStampedBeforeTheModuleScriptRunsUnderAScriptSrcCsp() {
         setStoredTheme("dark");
         emulateOsColorScheme(ColorScheme.LIGHT);
-        page.route("**/dashboard/main.js", route -> route.abort());
+        serveMainJsEmpty();
         serveWithCsp("**/peekaboot/ui/dashboard/index.html", "script-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
