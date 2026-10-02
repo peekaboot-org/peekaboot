@@ -1,6 +1,7 @@
 package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,8 @@ import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
+import org.peekaboot.backend.domain.liquibase.ChangeSetExecType;
+import org.peekaboot.backend.domain.liquibase.ChangeSetInfo;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
@@ -98,6 +101,37 @@ class ActuatorInsightsServiceTest {
     }
 
     @Test
+    void getInsights_shouldMapLiquibaseChangeSets() {
+        ActuatorInsightsService service = service(
+                Map.of(
+                        "liquibase",
+                        Map.of(
+                                "contexts",
+                                Map.of(
+                                        "application",
+                                        Map.of(
+                                                "liquibaseBeans",
+                                                Map.of(
+                                                        "liquibase",
+                                                        Map.of(
+                                                                "changeSets",
+                                                                List.of(Map.of(
+                                                                        "id",
+                                                                        "create-product",
+                                                                        "execType",
+                                                                        "EXECUTED",
+                                                                        "orderExecuted",
+                                                                        1)))))))),
+                DataSourceMetadataList.EMPTY);
+
+        ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
+
+        assertThat(response.liquibase().changeSets())
+                .extracting(ChangeSetInfo::id, ChangeSetInfo::execType)
+                .containsExactly(tuple("create-product", ChangeSetExecType.EXECUTED));
+    }
+
+    @Test
     void getInsights_shouldHandleMissingData() {
         ActuatorInsightsService service = service(Map.of(), DataSourceMetadataList.EMPTY);
 
@@ -105,6 +139,7 @@ class ActuatorInsightsServiceTest {
 
         assertThat(response.health().status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(response.dataSources()).isEmpty();
+        assertThat(response.liquibase().changeSets()).isEmpty();
         assertThat(response.server()).isNotNull();
     }
 

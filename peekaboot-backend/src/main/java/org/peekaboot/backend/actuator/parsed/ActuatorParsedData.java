@@ -7,5 +7,6 @@ public record ActuatorParsedData(
         EnvResponse env,
         LoggersResponse loggers,
         FlywayResponse flyway,
+        LiquibaseResponse liquibase,
         ConfigPropsResponse configprops,
         ScheduledTasksResponse scheduledtasks) {}

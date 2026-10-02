@@ -427,6 +427,34 @@
       }
     }
   },
+  "liquibase": {
+    "contexts": {
+      "sample-app": {
+        "liquibaseBeans": {
+          "liquibase": {
+            "changeSets": [
+              {
+                "author": "jsandermann",
+                "changeLog": "db/changelog/changes/changelog-master-1.0.0-01.xml",
+                "checksum": "8:ada307e15ac7a48de0a2bfc635955a12",
+                "comments": "",
+                "contexts": [],
+                "dateExecuted": "2020-04-07T21:38:33Z",
+                "deploymentId": "6288313289",
+                "description": "createTable tableName=hibernate_sequence",
+                "execType": "EXECUTED",
+                "id": "1.0.0-01-01",
+                "labels": [],
+                "orderExecuted": 1,
+                "tag": null
+              }
+            ]
+          }
+        },
+        "parentId": null
+      }
+    }
+  },
   "health": {
     "components": {
       "db": {

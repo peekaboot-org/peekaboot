@@ -7,6 +7,7 @@ import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.environment.EnvironmentInfo;
 import org.peekaboot.backend.domain.flyway.FlywayInfo;
 import org.peekaboot.backend.domain.health.HealthInfo;
+import org.peekaboot.backend.domain.liquibase.LiquibaseInfo;
 import org.peekaboot.backend.domain.loggers.LoggersInfo;
 import org.peekaboot.backend.domain.runtime.RuntimeInfo;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
@@ -20,6 +21,7 @@ public record ActuatorInsightsResponse(
         EnvironmentInfo environment,
         LoggersInfo loggers,
         FlywayInfo flyway,
+        LiquibaseInfo liquibase,
         ConfigInfo config,
         ScheduledTasksInfo scheduledTasks,
         ServerInfo server) {}

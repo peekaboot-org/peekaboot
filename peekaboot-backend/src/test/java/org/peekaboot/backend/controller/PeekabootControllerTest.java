@@ -314,7 +314,7 @@ class PeekabootControllerTest {
         @Test
         void shouldReturnResponseFromService() {
             ActuatorInsightsResponse expected =
-                    new ActuatorInsightsResponse(null, null, null, null, null, null, null, null, null, null);
+                    new ActuatorInsightsResponse(null, null, null, null, null, null, null, null, null, null, null);
             when(actuatorInsightsService.getInsights(any(), anyBoolean())).thenReturn(expected);
 
             ActuatorInsightsResponse result = controller.getInsights(null, false);

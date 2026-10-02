@@ -1,6 +1,7 @@
 package org.peekaboot.backend.actuator.parsed;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.io.InputStream;
 import java.time.Instant;
@@ -29,7 +30,7 @@ class ActuatorResponseParserTest {
      * One value per section, read through the typed records, so a binding that silently
      * drops a section (a renamed component, a wrong nesting) fails here rather than as an
      * empty tab. The fixture is a trimmed /actuator/* dump in the shape Spring Boot 4.1
-     * produces: the eight sections this parser binds, one entry each where the real
+     * produces: the nine sections this parser binds, one entry each where the real
      * response carries many.
      */
     @Test
@@ -56,6 +57,14 @@ class ActuatorResponseParserTest {
                         .migrations())
                 .extracting(FlywayResponse.Migration::version)
                 .containsExactly("1");
+        assertThat(response.liquibase()
+                        .contexts()
+                        .get("sample-app")
+                        .liquibaseBeans()
+                        .get("liquibase")
+                        .changeSets())
+                .extracting(LiquibaseResponse.ChangeSet::id, LiquibaseResponse.ChangeSet::dateExecuted)
+                .containsExactly(tuple("1.0.0-01-01", Instant.parse("2020-04-07T21:38:33Z")));
         assertThat(response.configprops().contexts().get("sample-app").beans().values())
                 .extracting(ConfigPropsResponse.ConfigBean::prefix)
                 .contains("server");
@@ -208,6 +217,24 @@ class ActuatorResponseParserTest {
                 .isEmpty();
         assertThat(new FlywayResponse(null).contexts()).isEmpty();
         assertThat(new FlywayResponse.FlywayContext(null, null).flywayBeans()).isEmpty();
+    }
+
+    @Test
+    void anAbsentCollectionInLiquibaseBindsAsEmpty() {
+        ActuatorParsedData response = parser.parse(Map.of(
+                "liquibase",
+                Map.of("contexts", Map.of("app", Map.of("liquibaseBeans", Map.of("liquibase", Map.of()))))));
+
+        assertThat(response.liquibase()
+                        .contexts()
+                        .get("app")
+                        .liquibaseBeans()
+                        .get("liquibase")
+                        .changeSets())
+                .isEmpty();
+        assertThat(new LiquibaseResponse(null).contexts()).isEmpty();
+        assertThat(new LiquibaseResponse.LiquibaseContext(null, null).liquibaseBeans())
+                .isEmpty();
     }
 
     @Test

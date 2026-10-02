@@ -197,7 +197,7 @@ org.peekaboot.backend/
 ├── controller/             # PeekabootController: /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
-│   ├── application/, config/, datasource/, environment/, flyway/, health/,
+│   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
 │   ├── insights/ (incl. ActuatorInsightsResponse, the dashboard's aggregate DTO), lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
@@ -391,14 +391,15 @@ record and `InsightsController`'s 400 body included, both under that package pre
 
 Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` holds a
 list of `InsightsSource` beans, one per source id (`spring`, `health`, `info`,
-`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`). Each is a record
-pairing that id with a `Supplier`. Six of them read an endpoint object
+`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`, `liquibase`). Each is a record
+pairing that id with a `Supplier`. Seven of them read an endpoint object
 `ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
 `HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is
 no endpoint at all. There is no discovery step and no HTTP call; a source that reads
 `null` contributes no entry, which is how an endpoint whose backing bean is absent
-(`flyway` without a Flyway bean, `health` without a `HealthEndpoint` bean, `loggers`
-without a `LoggingSystem` bean) reports that it has nothing rather than failing.
+(`flyway` without a Flyway bean, `liquibase` without a `SpringLiquibase` bean, `health`
+without a `HealthEndpoint` bean, `loggers` without a `LoggingSystem` bean) reports that it
+has nothing rather than failing.
 
 `ActuatorSourcesAutoConfiguration` builds `env` and `configprops` as
 `new EnvironmentEndpoint(environment, sanitizingFunctions, Show.ALWAYS)` and
@@ -682,10 +683,10 @@ Both the list and the ready banner collect DataSources the way Boot's `db` healt
 contributor does, `defaultCandidate = false` ones included: plain `Map<String, DataSource>`
 injection skips those, and Boot's how-to declares a second DataSource that way.
 
-The nine actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
+The ten actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
 `mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the
 `MaskingEngine`, so the one override point for that pipeline is the service itself. They
-are stateless and need at most the engine, and nine `@ConditionalOnMissingBean` methods
+are stateless and need at most the engine, and ten `@ConditionalOnMissingBean` methods
 nobody overrode bought nothing but wiring.
 
 ### Conditional Loading
@@ -1347,10 +1348,14 @@ ActuatorInsightsResponse
 ├── environment: EnvironmentInfo
 ├── loggers: LoggersInfo
 ├── flyway: FlywayInfo
+├── liquibase: LiquibaseInfo
 ├── config: ConfigInfo
 ├── scheduledTasks: ScheduledTasksInfo
 └── server: ServerInfo
 ```
+
+`LiquibaseInfo` flattens every `SpringLiquibase` bean of every context into one list sorted by
+`orderExecuted`; Liquibase records no execution time, so unlike `MigrationInfo` it carries none.
 
 `RuntimeInfo.machine` (`MachineInfo`, computed once and cached) describes the deployment
 environment. It carries the logical processor count, total physical memory and the JVM's max

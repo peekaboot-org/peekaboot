@@ -15,6 +15,7 @@ import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
 import org.peekaboot.backend.mapper.actuator.EnvironmentMapper;
 import org.peekaboot.backend.mapper.actuator.FlywayMapper;
 import org.peekaboot.backend.mapper.actuator.HealthMapper;
+import org.peekaboot.backend.mapper.actuator.LiquibaseMapper;
 import org.peekaboot.backend.mapper.actuator.LoggersMapper;
 import org.peekaboot.backend.mapper.actuator.RuntimeMapper;
 import org.peekaboot.backend.mapper.actuator.ScheduledTasksMapper;
@@ -32,6 +33,7 @@ public final class ActuatorInsightsService {
     private final EnvironmentMapper environmentMapper;
     private final LoggersMapper loggersMapper;
     private final FlywayMapper flywayMapper;
+    private final LiquibaseMapper liquibaseMapper;
     private final ConfigMapper configMapper;
     private final ScheduledTasksMapper scheduledTasksMapper;
     private final List<DataSourceMetadata> dataSourceMetadataList;
@@ -54,6 +56,7 @@ public final class ActuatorInsightsService {
         this.environmentMapper = new EnvironmentMapper(maskingEngine);
         this.loggersMapper = new LoggersMapper();
         this.flywayMapper = new FlywayMapper();
+        this.liquibaseMapper = new LiquibaseMapper();
         this.configMapper = new ConfigMapper(maskingEngine);
         this.scheduledTasksMapper = new ScheduledTasksMapper(maskingEngine);
         this.dataSourceMetadataList = dataSourceMetadataListProvider
@@ -79,6 +82,7 @@ public final class ActuatorInsightsService {
                 environmentMapper.map(typed.env(), unmask),
                 loggersMapper.map(typed.loggers()),
                 flywayMapper.map(typed.flyway()),
+                liquibaseMapper.map(typed.liquibase()),
                 configMapper.map(typed.configprops(), unmask),
                 scheduledTasksMapper.map(typed.scheduledtasks(), locale),
                 ServerInfo.current(locale));
