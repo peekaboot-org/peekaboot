@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: source-test-1
+      author: peekaboot
+      changes:
+        - createTable:
+            tableName: fixture
+            columns:
+              - column:
+                  name: id
+                  type: INT

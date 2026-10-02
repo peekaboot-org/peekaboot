@@ -2,7 +2,16 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.sql.DataSource;
+import liquibase.UpdateSummaryOutputEnum;
+import liquibase.integration.spring.SpringLiquibase;
+import liquibase.ui.UIServiceEnum;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -26,17 +35,38 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.health.registry.DefaultHealthContributorRegistry;
+import org.springframework.boot.liquibase.actuate.endpoint.LiquibaseEndpoint.ChangeSetDescriptor;
+import org.springframework.boot.liquibase.actuate.endpoint.LiquibaseEndpoint.LiquibaseBeansDescriptor;
 import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
 
 class ActuatorSourcesAutoConfigurationTest {
+
+    // java.util.logging is out of logback's reach; the strong reference keeps the level from being collected.
+    private static final Logger LIQUIBASE_LOGGER = Logger.getLogger("liquibase");
+
+    private static Level liquibaseLevel;
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(ActuatorSourcesAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
+
+    @BeforeAll
+    static void quietLiquibase() {
+        liquibaseLevel = LIQUIBASE_LOGGER.getLevel();
+        LIQUIBASE_LOGGER.setLevel(Level.WARNING);
+    }
+
+    @AfterAll
+    static void restoreLiquibaseLogging() {
+        LIQUIBASE_LOGGER.setLevel(liquibaseLevel);
+    }
 
     private static Object read(ApplicationContext context, String id) {
         return context.getBeansOfType(InsightsSource.class).values().stream()
@@ -131,6 +161,47 @@ class ActuatorSourcesAutoConfigurationTest {
         contextRunner.run(context -> assertThat(read(context, "loggers")).isNull());
     }
 
+    /** A real migration on an in-memory H2, so the reading is Liquibase's own history table. */
+    @Test
+    void liquibaseSourceReadsTheChangeSetsOfTheApplicationsLiquibaseBean() {
+        contextRunner.withUserConfiguration(LiquibaseConfig.class).run(context -> {
+            Object descriptor = read(context, "liquibase");
+
+            assertThat(descriptor).isInstanceOfSatisfying(LiquibaseBeansDescriptor.class, liquibase -> {
+                List<String> ids = liquibase.getContexts().values().stream()
+                        .flatMap(ctx -> ctx.getLiquibaseBeans().values().stream())
+                        .flatMap(bean -> bean.getChangeSets().stream())
+                        .map(ChangeSetDescriptor::getId)
+                        .toList();
+                assertThat(ids).containsExactly("source-test-1");
+            });
+        });
+    }
+
+    @Test
+    void liquibaseSourceReadsNullWhenTheApplicationHasNoLiquibaseBean() {
+        contextRunner.run(context -> assertThat(read(context, "liquibase")).isNull());
+    }
+
+    /** Boot's own how-to for a second DataSource marks its migration bean {@code defaultCandidate = false}. */
+    @Test
+    void liquibaseSourceReadsALiquibaseBeanThatIsNoDefaultCandidate() {
+        contextRunner
+                .withUserConfiguration(NonDefaultCandidateLiquibaseConfig.class)
+                .run(context -> {
+                    Object descriptor = read(context, "liquibase");
+
+                    assertThat(descriptor)
+                            .isInstanceOfSatisfying(
+                                    LiquibaseBeansDescriptor.class,
+                                    liquibase -> assertThat(
+                                                    liquibase.getContexts().values())
+                                            .flatMap(ctx ->
+                                                    ctx.getLiquibaseBeans().keySet())
+                                            .containsExactly("secondaryLiquibase"));
+                });
+    }
+
     /** The sources with no visibility gate of their own: present, and reading something. */
     @ParameterizedTest
     @ValueSource(strings = {"spring", "info", "scheduledtasks"})
@@ -152,6 +223,51 @@ class ActuatorSourcesAutoConfigurationTest {
     @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties(FixtureProperties.class)
     static class FixturePropertiesConfig {}
+
+    @Configuration(proxyBeanMethods = false)
+    static class LiquibaseConfig {
+
+        @Bean
+        EmbeddedDatabase liquibaseDataSource() {
+            return new EmbeddedDatabaseBuilder()
+                    .setType(EmbeddedDatabaseType.H2)
+                    .generateUniqueName(true)
+                    .build();
+        }
+
+        @Bean
+        SpringLiquibase liquibase(DataSource dataSource) {
+            return liquibaseOn(dataSource);
+        }
+
+        static SpringLiquibase liquibaseOn(DataSource dataSource) {
+            SpringLiquibase liquibase = new SpringLiquibase();
+            liquibase.setDataSource(dataSource);
+            liquibase.setChangeLog("classpath:db/changelog/insights-source-test.yaml");
+            // Liquibase's defaults print to stdout and phone home; this keeps the test output clean.
+            liquibase.setUiService(UIServiceEnum.LOGGER);
+            liquibase.setShowSummaryOutput(UpdateSummaryOutputEnum.LOG);
+            liquibase.setAnalyticsEnabled(false);
+            return liquibase;
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class NonDefaultCandidateLiquibaseConfig {
+
+        @Bean
+        EmbeddedDatabase secondaryDataSource() {
+            return new EmbeddedDatabaseBuilder()
+                    .setType(EmbeddedDatabaseType.H2)
+                    .generateUniqueName(true)
+                    .build();
+        }
+
+        @Bean(defaultCandidate = false)
+        SpringLiquibase secondaryLiquibase(DataSource dataSource) {
+            return LiquibaseConfig.liquibaseOn(dataSource);
+        }
+    }
 
     @Configuration(proxyBeanMethods = false)
     static class HealthEndpointConfig {

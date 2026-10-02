@@ -18,6 +18,8 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-health")
     compileOnly("org.springframework.boot:spring-boot-flyway")
     compileOnly("org.flywaydb:flyway-core")
+    compileOnly("org.springframework.boot:spring-boot-liquibase")
+    compileOnly("org.liquibase:liquibase-core")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
     // ErrorMvcAutoConfiguration and ErrorAttributes for the error page
     compileOnly("org.springframework.boot:spring-boot-webmvc")

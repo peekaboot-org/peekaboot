@@ -711,10 +711,10 @@ OpenTelemetry SDK's `SpanExporter` class, and `QueryParameterAutoConfiguration`
 datasource-micrometer's `QueryContext` class. Class-level conditions guard only what the
 starter's closure leaves optional: `spring-boot-health`, the OpenTelemetry SDK and
 datasource-micrometer's tracing observation support, which the starter brings but a host can
-exclude. HikariCP, Logback and
-Flyway are optional too, each guarded a level down on a nested `@Configuration`. `InfoEndpoint`
-and `ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
-consumer of the starter can be without them.
+exclude. HikariCP, Logback, Flyway and Liquibase are optional too, each guarded a level down
+on a nested `@Configuration`. `InfoEndpoint` and `ObservationRegistry` arrive with hard
+dependencies of this module and the backend, so no consumer of the starter can be without
+them.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
 controllers, services and actuator wiring, all as explicit `@Bean` methods whose names yield
@@ -832,7 +832,7 @@ all overridable by an app's own `application.yml`:
   developer is still looking at the page.
 
 `peekaboot-defaults.yml` carries no `management.endpoint.*` property. Peekaboot builds
-`env`, `configprops`, `info`, `loggers`, `scheduledtasks` and `flyway` as endpoint
+`env`, `configprops`, `info`, `loggers`, `scheduledtasks`, `flyway` and `liquibase` as endpoint
 instances of its own (see *In-Process Actuator Invocation*), so none of the
 application's exposure or access settings decide whether the dashboard sees one of
 them, and `env`/`configprops`'s own `show-values` and `roles` settings never reach

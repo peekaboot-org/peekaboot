@@ -2,9 +2,12 @@ package org.peekaboot.autoconfigure;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import liquibase.integration.spring.SpringLiquibase;
 import org.flywaydb.core.Flyway;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.SimpleAutowireCandidateResolver;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint;
 import org.springframework.boot.actuate.endpoint.SanitizingFunction;
@@ -21,6 +24,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.flyway.actuate.endpoint.FlywayEndpoint;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
+import org.springframework.boot.liquibase.actuate.endpoint.LiquibaseEndpoint;
 import org.springframework.boot.logging.LoggerGroups;
 import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.context.ApplicationContext;
@@ -154,5 +158,28 @@ public class ActuatorSourcesAutoConfiguration {
                     "flyway",
                     () -> flyway.stream().findAny().isEmpty() ? null : new FlywayEndpoint(context).flywayBeans());
         }
+    }
+
+    /** Nested like {@link FlywaySourceConfiguration}: {@link LiquibaseEndpoint} is in {@code spring-boot-liquibase}. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass({SpringLiquibase.class, LiquibaseEndpoint.class})
+    static class LiquibaseSourceConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(name = "liquibaseInsightsSource")
+        InsightsSource liquibaseInsightsSource(
+                ApplicationContext context, ConfigurableListableBeanFactory beanFactory) {
+            return new InsightsSource(
+                    "liquibase",
+                    () -> hasApplicationBean(beanFactory, SpringLiquibase.class)
+                            ? new LiquibaseEndpoint(context).liquibaseBeans()
+                            : null);
+        }
+    }
+
+    /** Resolved like Boot's db health contributor, so {@code defaultCandidate = false} beans count too. */
+    private static boolean hasApplicationBean(ConfigurableListableBeanFactory beanFactory, Class<?> type) {
+        return !SimpleAutowireCandidateResolver.resolveAutowireCandidates(beanFactory, type, false, true)
+                .isEmpty();
     }
 }
