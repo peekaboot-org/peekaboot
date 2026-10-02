@@ -20,6 +20,8 @@ MySQL publishes the fixed port `127.0.0.1:33307` and carries the `org.springfram
 label; `application.yml` points `app.datasource.inventory.url` at it. Docker needs to be
 running. Flyway, Liquibase and a `@Scheduled` job give the Flyway, Liquibase and Scheduled
 Tasks tabs real data to show.
+Product lookups are cached in Redis (`@Cacheable("products")`, 30 s TTL, unknown SKUs not
+cached), a third compose service on a random port that Boot wires up itself.
 
 ### Demo endpoints
 
@@ -31,7 +33,7 @@ looking at.
 | --- | --- |
 | `GET /orders` | A deliberate N+1: one query for all orders, then three more per order and one inventory lookup per line on the second DataSource, plus an outbound HTTP call per page load. Its Queries tab shows both pools, `POSTGRESQL · orders-db` and `MYSQL · inventory-db`. The Traces tab lists it with all of those counted in the row's query stat. |
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time went. |
-| `POST /api/orders` | Looks the SKU up in the inventory (unknown SKU: 400), reserves its stock with one conditional `UPDATE` (not enough: 409), then writes the order and its line in one transaction, so the trace shows a single `orders-db` connection for both writes. The reservation is outside that transaction: a failed order insert keeps the stock reserved. The `OrderPlacedEvent` listener runs inside the request, adding an `order.placed` span with a log line on it. |
+| `POST /api/orders` | Looks the SKU up in the inventory (unknown SKU: 400), reserves its stock with one conditional `UPDATE` (not enough: 409), then writes the order and its line in one transaction, so the trace shows a single `orders-db` connection for both writes. The reservation is outside that transaction: a failed order insert keeps the stock reserved. The `OrderPlacedEvent` listener runs inside the request, adding an `order.placed` span with a log line on it. A second order for the same SKU within 30 s reads the product from Redis, so its trace has Redis's `get` but no inventory `SELECT`. The first order's `get` misses and is followed by the `SELECT`. |
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
 | `GET /persons/{id}`, `GET /persons/{id}/edit` | One person, through an `@Observed` lookup by id, so the trace carries a query with one bind parameter under a span of its own. The list's View and Edit buttons lead here; an unknown id answers 404. |
 | `PUT /persons/{id}` | The edit form's save, sent as a POST with a hidden `_method=put` (`spring.mvc.hiddenmethod.filter.enabled`). Hibernate flushes one `UPDATE` with four bind parameters, then the page redirects to the detail page. |

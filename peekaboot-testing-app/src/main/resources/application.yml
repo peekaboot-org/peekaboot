@@ -16,6 +16,17 @@ spring:
     show-summary-output: log
     analytics-enabled: false
 
+  cache:
+    type: redis
+    redis:
+      # Short, so the demo shows an expired entry sending the lookup back to MySQL.
+      time-to-live: 30s
+  data:
+    redis:
+      # Spring Data JPA owns the repositories; letting Redis scan them too only logs noise.
+      repositories:
+        enabled: false
+
   jpa:
     open-in-view: false
 

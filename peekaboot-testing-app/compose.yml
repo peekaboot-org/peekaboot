@@ -25,3 +25,7 @@ services:
       interval: 2s
       timeout: 5s
       retries: 30
+  redis:
+    image: 'redis:8'
+    ports:
+      - '6379'

@@ -4,6 +4,9 @@
 # every other test here (see pom.xml), which is precisely what these two need switched on.
 # Kept to what a secured run actually needs - no masking fixtures, no insights tuning.
 spring:
+  cache:
+    # No Redis server under this profile; RedisTraceIT brings a container and switches the cache on.
+    type: none
   # No datasource url, as in application-test.yml: each context gets its own in-memory H2.
   jpa:
     hibernate:
@@ -20,6 +23,10 @@ peekaboot:
   dev-toolbar: true
 
 management:
+  health:
+    redis:
+      # The Redis client is on the classpath without a server, which would read as health DOWN.
+      enabled: false
   tracing:
     sampling:
       probability: 1.0

@@ -5,6 +5,9 @@
 # extending it, because the point here is Spring Security auto-configured and stood down by
 # Peekaboot's own guard, not excluded before either ever sees a request.
 spring:
+  cache:
+    # No Redis server under this profile; RedisTraceIT brings a container and switches the cache on.
+    type: none
   autoconfigure:
     exclude:
       - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
@@ -25,6 +28,12 @@ peekaboot:
   dev-toolbar: false
   security:
     enabled: true
+
+management:
+  health:
+    redis:
+      # The Redis client is on the classpath without a server, which would read as health DOWN.
+      enabled: false
 
 app:
   datasource:

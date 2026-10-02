@@ -2,10 +2,14 @@ package org.peekaboot.testingapp.inventory;
 
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** Plain JdbcClient on the inventory DataSource, so its queries carry no Hibernate in their trace. */
+/**
+ * Plain JdbcClient on the inventory DataSource, so its queries carry no Hibernate in their
+ * trace; product lookups go through the Redis cache.
+ */
 @Repository
 public class InventoryRepository {
 
@@ -16,6 +20,8 @@ public class InventoryRepository {
         this.jdbcClient = jdbcClient;
     }
 
+    // #result is the Optional's content; caching a miss would hide a product added within the TTL.
+    @Cacheable(cacheNames = "products", unless = "#result == null")
     public Optional<Product> findProduct(String sku) {
 
         return jdbcClient

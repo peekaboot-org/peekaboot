@@ -1,4 +1,7 @@
 spring:
+  cache:
+    # No Redis server under this profile; RedisTraceIT brings a container and switches the cache on.
+    type: none
   # spring-boot-starter-security is on this module's test classpath for
   # SecuredPeekabootIT and SecuredDashboardIT only (see pom.xml). Left
   # auto-configured it would put `anyRequest().authenticated()` in front of every test in
@@ -69,6 +72,10 @@ nested-fixture:
       client-secret: fixture-client-secret
 
 management:
+  health:
+    redis:
+      # The Redis client is on the classpath without a server, which would read as health DOWN.
+      enabled: false
   endpoint:
     health:
       show-details: always
