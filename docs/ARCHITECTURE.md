@@ -678,6 +678,9 @@ let an application overriding a single source suppress every reading. The dataso
 metadata is a bean of its own type, `DataSourceMetadataList`, rather than a
 `List<DataSourceMetadata>`: Spring resolves the list type by collecting `DataSourceMetadata`
 beans first, so one application bean of that type would have replaced the whole list.
+Both the list and the ready banner collect DataSources the way Boot's `db` health
+contributor does, `defaultCandidate = false` ones included: plain `Map<String, DataSource>`
+injection skips those, and Boot's how-to declares a second DataSource that way.
 
 The nine actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
 `mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the

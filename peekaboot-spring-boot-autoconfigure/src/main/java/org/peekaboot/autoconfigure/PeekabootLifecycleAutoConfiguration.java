@@ -1,7 +1,6 @@
 package org.peekaboot.autoconfigure;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -21,6 +20,8 @@ import org.peekaboot.backend.lifecycle.ServerUrlResolver;
 import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.SimpleAutowireCandidateResolver;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -73,18 +74,22 @@ public class PeekabootLifecycleAutoConfiguration {
             BuildInfoProvider buildInfoProvider,
             ServerUrlResolver serverUrlResolver,
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider,
-            ObjectProvider<Map<String, DataSource>> dataSourcesProvider,
+            ConfigurableListableBeanFactory beanFactory,
             ObjectProvider<HikariPoolInfo> hikariPoolInfoProvider) {
         DataSourceMetadataList dataSourceMetadataList =
                 dataSourceMetadataListProvider.getIfAvailable(() -> DataSourceMetadataList.EMPTY);
-        Map<String, DataSource> dataSources = dataSourcesProvider.getIfAvailable(Collections::emptyMap);
         return new ApplicationReadyListener(
                 environmentInfo,
                 buildInfoProvider,
                 serverUrlResolver,
                 dataSourceMetadataList.entries(),
-                dataSources,
+                applicationDataSources(beanFactory),
                 hikariPoolInfoProvider.getIfAvailable());
+    }
+
+    /** Resolved like Boot's db health contributor, so {@code defaultCandidate = false} DataSources are included. */
+    static Map<String, DataSource> applicationDataSources(ConfigurableListableBeanFactory beanFactory) {
+        return SimpleAutowireCandidateResolver.resolveAutowireCandidates(beanFactory, DataSource.class, false, true);
     }
 
     /**
@@ -117,10 +122,11 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public DataSourceMetadataList dataSourceMetadataList(Map<String, DataSource> dataSources) {
+        public DataSourceMetadataList dataSourceMetadataList(ConfigurableListableBeanFactory beanFactory) {
             List<DataSourceMetadata> entries = new ArrayList<>();
-            dataSources.forEach((name, dataSource) ->
-                    DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(entries::add));
+            applicationDataSources(beanFactory)
+                    .forEach((name, dataSource) ->
+                            DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(entries::add));
             return new DataSourceMetadataList(entries);
         }
     }

@@ -127,6 +127,22 @@ class PeekabootLifecycleAutoConfigurationTest {
                 .run(context -> assertThat(readyBanner(context)).contains(" DB Connection [dataSource]"));
     }
 
+    /** Spring drops {@code defaultCandidate = false} beans from plain Map injection. */
+    @Test
+    void aDataSourceThatIsNoDefaultCandidateIsStillListed() {
+        contextRunner
+                .withPropertyValues("spring.datasource.url=jdbc:h2:mem:lifecycleprimary;DB_CLOSE_DELAY=-1")
+                .withUserConfiguration(SecondaryDataSourceConfig.class)
+                .run(context -> {
+                    assertThat(context.getBean(DataSourceMetadataList.class).entries())
+                            .extracting(DataSourceMetadata::dataSourceName)
+                            .containsExactlyInAnyOrder("dataSource", "secondaryDataSource");
+                    String banner = readyBanner(context);
+                    assertThat(banner).contains(" DB Connection [secondaryDataSource]");
+                    assertThat(banner.split(" DB Pool: minimumIdle=", -1)).hasSize(3);
+                });
+    }
+
     @Test
     void theStoppedBannerIsRegisteredAlongsideTheReadyOne() {
         contextRunner.run(context -> assertThat(context).hasSingleBean(ApplicationStoppedListener.class));
@@ -239,6 +255,17 @@ class PeekabootLifecycleAutoConfigurationTest {
         DataSource plainDataSource() {
             JdbcDataSource dataSource = new JdbcDataSource();
             dataSource.setURL("jdbc:h2:mem:plainpool;DB_CLOSE_DELAY=-1");
+            return dataSource;
+        }
+    }
+
+    @Configuration
+    static class SecondaryDataSourceConfig {
+
+        @Bean(defaultCandidate = false)
+        DataSource secondaryDataSource() {
+            HikariDataSource dataSource = new HikariDataSource();
+            dataSource.setJdbcUrl("jdbc:h2:mem:lifecyclesecondary;DB_CLOSE_DELAY=-1");
             return dataSource;
         }
     }
