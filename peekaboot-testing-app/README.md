@@ -45,6 +45,33 @@ looking at.
 `OrderTraceCaptureIT` asserts what Peekaboot actually captured from these endpoints, not
 just what they returned.
 
+### What the dashboard makes of Redis spans
+
+Observed on 2026-10-02 against the compose run (Lettuce 7.5.2, Boot's
+`LettuceObservationAutoConfiguration`). Peekaboot has no Redis support of its own; this records
+what it does with Lettuce's spans today, for a decision on whether it should.
+
+- Spans: one CLIENT span per command, named after it in lower case (`get`, `set`, `hello`,
+  `client`, `info`), tagged `db.system=redis`, `db.operation=<COMMAND>`, `peer.service=Redis`
+  and `net.sock.peer.*`. No `db.statement` or `db.query.text`. The cache lookup's `get` sits
+  in the request's trace on a hit and on a miss. The cache write after a miss (`set`) and
+  Lettuce's other commands (`hello`, `client`, `info`) arrive without a parent, and each
+  becomes a one-span trace of its own. After two orders for one SKU, one `/orders` and two
+  rejected orders (409, 400) the store held 8 `set`, 6 `client`, 2 `hello` and 1 `info` traces.
+- Query count: every Redis span counts as a query. The first order for a SKU counted 5
+  (`get`, the product `SELECT`, the stock `UPDATE`, two inserts), the second 4 (`get` in
+  place of the `SELECT`). `GET /orders` counted 55: 32 PostgreSQL, 6 MySQL and 17 Redis.
+- Queries tab: each Redis entry is labelled `REDIS`, without a pool name, and reads
+  "Unknown query", since there is no statement to show (17 of the 55 entries on `/orders`).
+- Issues: none on a Redis span; the slowest took 20 ms against the 50 ms `SLOW_QUERY`
+  threshold. A slower one would be flagged with no statement to show for it.
+- Trace category: the cached order stays `HTTP_REQUEST`; its Traces-tab row reads
+  `http post /api/orders 44ms ... 11 spans | 4 queries 19ms | 5 logs`. Each detached Redis
+  trace is categorised `DATABASE` and listed as its own row (`set`, 1 span, 1 query).
+
+A span counts as a query when it is a CLIENT span with any `db.*` or `jdbc.query*` tag:
+`isQuery` in `peekaboot-backend/src/main/java/org/peekaboot/backend/mapper/trace/DbSpans.java`.
+
 ## The automated UI suite (`src/test`)
 
 The Playwright tests and every test that boots a Spring context live here, all in `*IT`
