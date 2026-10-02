@@ -102,3 +102,13 @@ export const MIGRATION_STATES = Object.keys(MIGRATION_STATE_VARIANTS);
 export function migrationStateVariant(state) {
     return MIGRATION_STATE_VARIANTS[state] || 'muted';
 }
+
+const CHANGE_SET_EXEC_TYPE_VARIANTS = Object.freeze({
+    EXECUTED: 'ok', FAILED: 'error', SKIPPED: 'muted', RERAN: 'ok', MARK_RAN: 'muted', UNKNOWN: 'muted'
+});
+
+export const CHANGE_SET_EXEC_TYPES = Object.keys(CHANGE_SET_EXEC_TYPE_VARIANTS);
+
+export function changeSetExecTypeVariant(execType) {
+    return CHANGE_SET_EXEC_TYPE_VARIANTS[execType] || 'muted';
+}

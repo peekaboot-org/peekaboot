@@ -119,7 +119,7 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | tab module id `scheduled-tasks` | payload key `scheduledTasks` | Two spellings of the same tab, one in the hash, one in `ActuatorInsightsResponse`. |
 
 `SharedModuleIT` pins the vocabularies that do line up (`ROOT_ACTION_TYPES`, `ISSUE_TYPES`,
-`TASK_TYPES`, `MIGRATION_STATES`, `LOG_LEVELS`, the `Features` keys) so they cannot drift apart
+`TASK_TYPES`, `MIGRATION_STATES`, `CHANGE_SET_EXEC_TYPES`, `LOG_LEVELS`, the `Features` keys) so they cannot drift apart
 silently. A new mirrored vocabulary belongs there too.
 
 ## Internal representations
@@ -258,7 +258,7 @@ one that did not.
 ### Dashboard
 The standalone UI at `/peekaboot/`. "Dashboard" always names the whole thing, never one tab. Its
 tab modules register in strip order: Overview, Insights, Lifecycle, Traces, Meters,
-Environment, Flyway, Loggers, Config, Scheduled Tasks. Each exports `id`, `label` and `render`,
+Environment, Flyway, Liquibase, Loggers, Config, Scheduled Tasks. Each exports `id`, `label` and `render`,
 and optionally `isAvailable` to hide its own strip button.
 
 ### Overview Tab

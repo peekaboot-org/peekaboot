@@ -302,9 +302,10 @@
 .pk-table__shrink { width: 1%; white-space: nowrap; }
 .pk-table--kv td:first-child { width: 200px; color: var(--pk-text-muted); }
 .pk-table--kv td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
-/* A table that is a card of its own (Flyway's migrations, Lifecycle's runs). The stripe
-   modifiers go on a row: a state moves to a row-leading border so a failed migration or an
-   unclean run is still findable at a glance in a history hundreds of rows long. */
+/* A table that is a card of its own (Flyway's migrations, Liquibase's change sets,
+   Lifecycle's runs). The stripe modifiers go on a row: a state moves to a row-leading border
+   so a failed migration or an unclean run is still findable at a glance in a history
+   hundreds of rows long. */
 .pk-table--card { background: var(--pk-bg); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); }
 .pk-table__stripe--danger td:first-child { box-shadow: inset 3px 0 0 var(--pk-danger); }
 .pk-table__stripe--muted td:first-child { box-shadow: inset 3px 0 0 var(--pk-text-muted); }

@@ -28,6 +28,7 @@ final class Dashboard {
             Map.entry("meters", "#meters-list .pk-group"),
             Map.entry("environment", "#property-sources .pk-group__header"),
             Map.entry("flyway", "#flyway-timeline .pk-table tbody tr"),
+            Map.entry("liquibase", "#liquibase-changesets .pk-table tbody tr"),
             Map.entry("loggers", "#loggers-list .pk-group"),
             Map.entry("config", "#config-groups .pk-group__header"),
             Map.entry("scheduled-tasks", "#scheduled-tasks-groups .pk-group"));

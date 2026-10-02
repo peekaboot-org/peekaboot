@@ -75,6 +75,7 @@
             <button type="button" class="pk-tab hidden" role="tab" id="meters-tab-btn" data-tab="meters" aria-controls="meters-tab" aria-selected="false">Meters</button>
             <button type="button" class="pk-tab" role="tab" id="environment-tab-btn" data-tab="environment" aria-controls="environment-tab" aria-selected="false">Environment</button>
             <button type="button" class="pk-tab hidden" role="tab" id="flyway-tab-btn" data-tab="flyway" aria-controls="flyway-tab" aria-selected="false">Flyway</button>
+            <button type="button" class="pk-tab hidden" role="tab" id="liquibase-tab-btn" data-tab="liquibase" aria-controls="liquibase-tab" aria-selected="false">Liquibase</button>
             <button type="button" class="pk-tab hidden" role="tab" id="loggers-tab-btn" data-tab="loggers" aria-controls="loggers-tab" aria-selected="false">Loggers</button>
             <button type="button" class="pk-tab hidden" role="tab" id="config-tab-btn" data-tab="config" aria-controls="config-tab" aria-selected="false">Config</button>
             <button type="button" class="pk-tab hidden" role="tab" id="scheduled-tasks-tab-btn" data-tab="scheduled-tasks" aria-controls="scheduled-tasks-tab" aria-selected="false">Scheduled Tasks</button>
@@ -250,6 +251,11 @@
         <!-- Flyway Tab -->
         <section class="pk-tab-panel" id="flyway-tab" role="tabpanel" aria-labelledby="flyway-tab-btn">
             <div id="flyway-timeline"></div>
+        </section>
+
+        <!-- Liquibase Tab -->
+        <section class="pk-tab-panel" id="liquibase-tab" role="tabpanel" aria-labelledby="liquibase-tab-btn">
+            <div id="liquibase-changesets"></div>
         </section>
 
         <!-- Loggers Tab -->

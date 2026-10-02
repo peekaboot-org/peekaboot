@@ -84,6 +84,11 @@ export function cell({className, title} = {}, ...children) {
     return td;
 }
 
+/** A text cell whose title carries the full value, so a truncating column keeps it reachable on hover. */
+export function textCell(text, className) {
+    return cell({className, title: text ? String(text) : undefined}, text ?? '');
+}
+
 /** Text with every match of the query wrapped in <mark>, or plain text when there is no query. */
 function setHighlightedText(element, text, highlight) {
     if (highlight) element.innerHTML = highlightText(text, highlight);

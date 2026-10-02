@@ -21,13 +21,14 @@ import * as traces from './tabs/traces.js';
 import * as meters from './tabs/meters.js';
 import * as environment from './tabs/environment.js';
 import * as flyway from './tabs/flyway.js';
+import * as liquibase from './tabs/liquibase.js';
 import * as loggers from './tabs/loggers.js';
 import * as config from './tabs/config.js';
 import * as scheduledTasks from './tabs/scheduled-tasks.js';
 
 const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
-const TABS = [overview, insights, lifecycle, traces, meters, environment, flyway, loggers, config, scheduledTasks];
+const TABS = [overview, insights, lifecycle, traces, meters, environment, flyway, liquibase, loggers, config, scheduledTasks];
 const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();

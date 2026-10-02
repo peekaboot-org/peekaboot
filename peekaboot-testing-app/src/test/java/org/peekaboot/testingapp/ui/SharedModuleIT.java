@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.flyway.MigrationState;
+import org.peekaboot.backend.domain.liquibase.ChangeSetExecType;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
@@ -273,6 +274,20 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void migrationStatesMirrorTheBackendEnum() {
         assertThat(evalModule("severity.js", "m.MIGRATION_STATES")).isEqualTo(names(MigrationState.values()));
+    }
+
+    @Test
+    void changeSetExecTypesMirrorTheBackendEnum() {
+        assertThat(evalModule("severity.js", "m.CHANGE_SET_EXEC_TYPES")).isEqualTo(names(ChangeSetExecType.values()));
+    }
+
+    @Test
+    void changeSetExecTypeVariantMarksOnlyAFailureAsAnError() {
+        assertThat(evalModule(
+                        "severity.js",
+                        "['EXECUTED', 'RERAN', 'FAILED', 'SKIPPED', 'MARK_RAN', 'UNKNOWN', 'NEW_TYPE', undefined]"
+                                + ".map(type => m.changeSetExecTypeVariant(type))"))
+                .isEqualTo(List.of("ok", "ok", "error", "muted", "muted", "muted", "muted", "muted"));
     }
 
     /**

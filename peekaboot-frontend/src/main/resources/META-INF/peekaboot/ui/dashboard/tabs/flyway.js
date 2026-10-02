@@ -5,7 +5,7 @@
  * single scannable row rather than a card, which would spend roughly 130px per
  * migration on three stacked lines.
  */
-import {badge, cell, table} from '../../shared/components.js';
+import {badge, cell, table, textCell} from '../../shared/components.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {migrationStateVariant} from '../../shared/severity.js';
 
@@ -45,11 +45,6 @@ function renderRow(migration, {locale, timeZone}) {
         cell({className: 'pk-table__shrink'}, badge(migration.state, migrationStateVariant(migration.state)))
     );
     return row;
-}
-
-/** The script column is the one that can genuinely overflow; the title keeps the full value reachable once it truncates. */
-function textCell(text, className) {
-    return cell({className, title: text ? String(text) : undefined}, text ?? '');
 }
 
 /**
