@@ -213,9 +213,12 @@ correlated by the trace and span ids frozen in its MDC. It appears twice on the 
 once in `TraceTree.logs` and again on the `SpanNode` that emitted it. A log with no span id
 appears in the flat list only.
 
-`QueryInfo(spanId, sql, dbSystem, durationMs, timestamp, rowCount, creationOrder)` is one query
-span. `sql` is masked and may be null when the instrumentation recorded no statement; the query
-is still listed. `TraceTree.queries` is populated on the single-trace endpoint only, never on
+`QueryInfo(spanId, statement, dbSystem, dataSourceName, durationMs, timestamp, rowCount,
+creationOrder)` is one query span. `statement` is masked and may be null when the
+instrumentation recorded no statement; the query is still listed. `dataSourceName` is
+the Hikari pool name (`jdbc.datasource.pool`) unless Hikari generated it (`HikariPool-1`), else
+datasource-proxy's `jdbc.datasource.name`, null when neither is tagged.
+`TraceTree.queries` is populated on the single-trace endpoint only, never on
 the listing.
 
 ## The word "insights"

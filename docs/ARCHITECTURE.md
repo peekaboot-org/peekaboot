@@ -1231,10 +1231,18 @@ served parsed as `SpanNode.rowCount` (null when it does not parse), on the query
 
 The Spans tab therefore reads facts the backend decided instead of
 re-deriving them from tag and span names. `DbSpans.system` mirrors this priority for
-`db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Masking is
-value-patterns only, not column-aware literal masking (`MaskingRules.VALUE_PATTERNS` carries
-the reasoning), so a credential with no provider-recognisable shape sitting in an ordinary
-column is not caught. The [security page](https://www.peekaboot.org/docs/security/#masking)
+`db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`.
+
+`QueryInfo.dataSourceName` tells two DataSources on one engine apart in the Queries tab
+(`POSTGRESQL · orders-db`). It is the Hikari pool name (`jdbc.datasource.pool`), else
+datasource-proxy's `jdbc.datasource.name`, which is often the database catalog. A pool name
+Hikari generated (`HikariPool-1`) is skipped, as datasource-micrometer skips it, so a
+DataSource without a `pool-name` falls through to the datasource-proxy name. Setting
+`pool-name` on every DataSource makes the label predictable.
+
+Masking is value-patterns only, not column-aware literal masking (`MaskingRules.VALUE_PATTERNS`
+carries the reasoning), so a credential with no provider-recognisable shape sitting in an
+ordinary column is not caught. The [security page](https://www.peekaboot.org/docs/security/#masking)
 states that as a caveat and tells readers to assume a captured trace carries plaintext SQL. It
 is a caveat, not a promise waiting to be strengthened.
 

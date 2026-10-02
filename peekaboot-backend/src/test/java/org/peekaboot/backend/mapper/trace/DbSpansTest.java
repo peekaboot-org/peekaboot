@@ -130,6 +130,46 @@ class DbSpansTest {
         assertThat(DbSpans.system(Map.of("db.query.text", "SELECT 1"))).isNull();
     }
 
+    @Test
+    void dataSourceNamePrefersTheHikariPool() {
+        assertThat(DbSpans.dataSourceName(Map.of("jdbc.datasource.pool", "orders-db", "jdbc.datasource.name", "H2")))
+                .isEqualTo("orders-db");
+    }
+
+    @Test
+    void dataSourceNameFallsBackToDatasourceProxysName() {
+        assertThat(DbSpans.dataSourceName(Map.of("jdbc.datasource.name", "orders-db")))
+                .isEqualTo("orders-db");
+    }
+
+    /** The tags that name a database or a peer are not a DataSource's name. */
+    @Test
+    void dataSourceNameIsNullWhenNeitherTagIsPresent() {
+        assertThat(DbSpans.dataSourceName(
+                        Map.of("db.system", "postgresql", "db.namespace", "orders", "peer.service", "orders_db")))
+                .isNull();
+    }
+
+    /** Hikari names an unnamed pool HikariPool-N; that says nothing about which DataSource it is. */
+    @Test
+    void dataSourceNameSkipsHikarisGeneratedPoolName() {
+        assertThat(DbSpans.dataSourceName(
+                        Map.of("jdbc.datasource.pool", "HikariPool-1", "jdbc.datasource.name", "orders-db")))
+                .isEqualTo("orders-db");
+        assertThat(DbSpans.dataSourceName(Map.of("jdbc.datasource.pool", "HikariPool-12")))
+                .isNull();
+    }
+
+    @Test
+    void dataSourceNameKeepsAPoolNameThatOnlyLooksLikeHikarisDefault() {
+        assertThat(DbSpans.dataSourceName(Map.of("jdbc.datasource.pool", "HikariPool-orders")))
+                .isEqualTo("HikariPool-orders");
+        assertThat(DbSpans.dataSourceName(Map.of("jdbc.datasource.pool", "HikariPool-")))
+                .isEqualTo("HikariPool-");
+        assertThat(DbSpans.dataSourceName(Map.of("jdbc.datasource.pool", "my-HikariPool-1")))
+                .isEqualTo("my-HikariPool-1");
+    }
+
     private static org.peekaboot.backend.tracing.store.SpanData clientSpan(Map<String, String> tags) {
         return span("s1").kind(Span.Kind.CLIENT).tags(tags).build();
     }

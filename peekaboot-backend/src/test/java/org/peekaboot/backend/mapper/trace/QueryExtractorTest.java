@@ -299,6 +299,89 @@ class QueryExtractorTest {
         assertThat(queries.get(0).dbSystem()).isEqualTo("primary_db");
     }
 
+    /** Two DataSources on one engine share a system; the name is what tells their queries apart. */
+    @Test
+    void extract_shouldCarryTheDataSourceNameBesideTheSystem() {
+        var querySpan = query("span1")
+                .tags(Map.of(
+                        "db.query.text", "SELECT 1",
+                        "db.system", "postgresql",
+                        "jdbc.datasource.pool", "orders-db",
+                        "jdbc.datasource.name", "catalog-uuid"))
+                .order(10)
+                .build();
+
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+
+        assertThat(queries).singleElement().satisfies(query -> {
+            assertThat(query.dbSystem()).isEqualTo("postgresql");
+            assertThat(query.dataSourceName()).isEqualTo("orders-db");
+        });
+    }
+
+    @Test
+    void extract_shouldFallBackToTheDatasourceProxyNameWithoutAPool() {
+        var querySpan = query("span1")
+                .tags(Map.of("db.query.text", "SELECT 1", "jdbc.datasource.name", "orders-db"))
+                .order(10)
+                .build();
+
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+
+        assertThat(queries)
+                .singleElement()
+                .extracting(QueryInfo::dataSourceName)
+                .isEqualTo("orders-db");
+    }
+
+    @Test
+    void extract_shouldIgnoreHikarisGeneratedPoolName() {
+        var querySpan = query("span1")
+                .tags(Map.of(
+                        "db.query.text", "SELECT 1",
+                        "jdbc.datasource.pool", "HikariPool-1",
+                        "jdbc.datasource.name", "orders-db"))
+                .order(10)
+                .build();
+
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+
+        assertThat(queries)
+                .singleElement()
+                .extracting(QueryInfo::dataSourceName)
+                .isEqualTo("orders-db");
+    }
+
+    @Test
+    void extract_shouldLeaveTheDataSourceNameNullForAGeneratedPoolNameAlone() {
+        var querySpan = query("span1")
+                .tags(Map.of("db.query.text", "SELECT 1", "jdbc.datasource.pool", "HikariPool-1"))
+                .order(10)
+                .build();
+
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+
+        assertThat(queries)
+                .singleElement()
+                .extracting(QueryInfo::dataSourceName)
+                .isNull();
+    }
+
+    @Test
+    void extract_shouldLeaveTheDataSourceNameNullWhenNoTagNamesOne() {
+        var querySpan = query("span1")
+                .tags(Map.of("db.query.text", "SELECT 1", "db.system", "postgresql"))
+                .order(10)
+                .build();
+
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+
+        assertThat(queries)
+                .singleElement()
+                .extracting(QueryInfo::dataSourceName)
+                .isNull();
+    }
+
     @Test
     void extract_shouldHandleTraceWithEmptySpans() {
         var traceData = new TraceData("trace1", null, null, null, List.of(), Set.of(), false);

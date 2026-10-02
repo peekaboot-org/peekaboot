@@ -28,11 +28,19 @@ public class QueryExtractor {
 
     private QueryInfo extractQuery(SpanData span, Long rowCount) {
         String dbSystem = DbSpans.system(span.tags());
+        String dataSourceName = DbSpans.dataSourceName(span.tags());
 
         Instant timestamp = span.startTime();
         long creationOrder = span.creationOrder();
 
         return new QueryInfo(
-                span.spanId(), sqlStatements.of(span), dbSystem, span.durationMs(), timestamp, rowCount, creationOrder);
+                span.spanId(),
+                sqlStatements.of(span),
+                dbSystem,
+                dataSourceName,
+                span.durationMs(),
+                timestamp,
+                rowCount,
+                creationOrder);
     }
 }

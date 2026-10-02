@@ -24,7 +24,6 @@ export function render(container, trace, view = {}) {
 function queryItem(query, index, view) {
     const duration = query.durationMs || 0;
     const durationClass = querySeverity(duration, view.features);
-    const system = query.dbSystem || 'SQL';
     const spanId = query.spanId || '';
 
     const meta = el('span', {className: 'pk-query-meta'},
@@ -53,7 +52,14 @@ function queryItem(query, index, view) {
 
     return el('div', {className: 'pk-query-item', attrs: {'data-span-id': spanId || null}},
         el('div', {className: 'pk-query-header'},
-            el('span', {className: 'pk-query-system', text: `${index + 1}. ${system.toUpperCase()}`}),
+            el('span', {className: 'pk-query-system', text: `${index + 1}. ${queryLabel(query)}`}),
             meta),
         query.statement ? sqlView(query.statement) : el('div', {className: 'pk-code-block', text: 'Unknown query'}));
+}
+
+/** A query named by its DataSource alone already shows that name as its system, so it is not repeated. */
+function queryLabel(query) {
+    const system = (query.dbSystem || 'SQL').toUpperCase();
+    const name = query.dataSourceName;
+    return name && name.toUpperCase() !== system ? `${system} · ${name}` : system;
 }

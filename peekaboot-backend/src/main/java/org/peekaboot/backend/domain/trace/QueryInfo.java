@@ -6,6 +6,7 @@ public record QueryInfo(
         String spanId,
         SqlStatement statement,
         String dbSystem,
+        String dataSourceName,
         long durationMs,
         Instant timestamp,
         Long rowCount,

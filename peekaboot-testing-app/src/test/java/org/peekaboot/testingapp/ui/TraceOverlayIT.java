@@ -924,6 +924,26 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(durationLabels).containsExactly("49ms", "50ms SLOW", "49ms", "50ms");
     }
 
+    /** The label adds the DataSource name only where it says more than the system already does. */
+    @Test
+    void queriesTabNamesTheDataSourceBesideTheSystemOnlyWhenItAddsSomething() {
+        Object labels = importModule("trace-detail/tabs/queries.js", """
+            (() => {
+                const statement = {text: 'SELECT 1', formatted: null, parameters: []};
+                const container = document.createElement('div');
+                m.render(container, {queries: [
+                    {statement, durationMs: 1, dbSystem: 'postgresql', dataSourceName: 'orders-db'},
+                    {statement, durationMs: 1, dbSystem: 'h2'},
+                    {statement, durationMs: 1, dbSystem: 'inventory-db', dataSourceName: 'inventory-db'},
+                    {statement, durationMs: 1, dbSystem: 'h2', dataSourceName: 'H2'}
+                ]});
+                return Array.from(container.querySelectorAll('.pk-query-system')).map(label => label.textContent);
+            })()
+            """);
+
+        assertThat(labels).isEqualTo(List.of("1. POSTGRESQL · orders-db", "2. H2", "3. INVENTORY-DB", "4. H2"));
+    }
+
     /**
      * .pk-overlay__close sits in the header's own flex flow next to a
      * .pk-overlay__header-main wrapper, so it cannot drift from the title's first line.

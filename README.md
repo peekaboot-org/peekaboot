@@ -46,9 +46,9 @@ how to override the detection are in
 - A dashboard for health, environment, config, Flyway, loggers, scheduled tasks and
   metrics, read in-process with nothing exposed under `/actuator/**`.
 - In-memory request tracing via Micrometer and OpenTelemetry, with no collector to run.
-- Every SQL statement a request runs is timed, listed and highlighted, shown formatted with
-  its bind parameters on request. The starter brings the JDBC instrumentation, so there is
-  none to wire up yourself.
+- Every SQL statement a request runs is timed, listed, highlighted and labelled with the
+  DataSource it ran on, shown formatted with its bind parameters on request. The starter
+  brings the JDBC instrumentation, so there is none to wire up yourself.
 - Charts that mark every application start and stop, with metric history surviving a
   restart.
 - An error page on a local run, in place of the whitelabel page, carrying the exception,

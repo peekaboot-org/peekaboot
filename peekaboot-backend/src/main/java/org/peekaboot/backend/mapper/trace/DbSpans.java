@@ -25,6 +25,9 @@ public final class DbSpans {
     /** datasource-proxy's per-statement tag; a batch carries one per statement. */
     private static final Pattern BATCH_STATEMENT_TAG = Pattern.compile("jdbc\\.query\\[(\\d+)\\]");
 
+    /** The name Hikari gives a pool nobody named. */
+    private static final Pattern GENERATED_POOL_NAME = Pattern.compile("HikariPool-\\d+");
+
     /**
      * The bind parameters Peekaboot's own capture records on a query span: a JSON array of
      * parameter sets, one per execution of a batch, each an array of SQL literals.
@@ -114,6 +117,19 @@ public final class DbSpans {
      */
     public static String system(Map<String, String> tags) {
         return Tags.first(tags, "db.system.name", "db.system", "jdbc.datasource.name", "peer.service");
+    }
+
+    /**
+     * The Hikari pool name, else datasource-proxy's datasource name; null when neither is tagged.
+     * A pool name Hikari generated ({@code HikariPool-1}) names nothing, so it is skipped, the way
+     * datasource-micrometer skips it when it names a DataSource.
+     */
+    public static String dataSourceName(Map<String, String> tags) {
+        String pool = tags.get("jdbc.datasource.pool");
+        if (pool != null && !GENERATED_POOL_NAME.matcher(pool).matches()) {
+            return pool;
+        }
+        return tags.get("jdbc.datasource.name");
     }
 
     private static String batchStatements(Map<String, String> tags) {
