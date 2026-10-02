@@ -11,21 +11,27 @@ cd peekaboot-testing-app && mvn spring-boot:run
 ```
 
 Starts on <http://localhost:8093> with the dashboard at
-<http://localhost:8093/peekaboot/> and the dev toolbar injected into every page. The
-datasource is a PostgreSQL container started automatically by Spring Boot's Docker Compose
-support, so Docker needs to be running. Flyway migrations and a `@Scheduled` job give the
-Flyway and Scheduled Tasks tabs real data to show.
+<http://localhost:8093/peekaboot/> and the dev toolbar injected into every page. Two
+DataSources start with it. Orders live in PostgreSQL through JPA and Flyway, in a container
+Spring Boot's Docker Compose support wires up (pool `orders-db`). The inventory lives in MySQL
+through plain `JdbcClient` and Liquibase (pool `inventory-db`,
+`InventoryDataSourceConfiguration`). Compose cannot hand a service to a second DataSource, so
+MySQL publishes the fixed port `127.0.0.1:33307` and carries the `org.springframework.boot.ignore`
+label; `application.yml` points `app.datasource.inventory.url` at it. Docker needs to be
+running. Flyway, Liquibase and a `@Scheduled` job give the Flyway, Liquibase and Scheduled
+Tasks tabs real data to show.
 
 ### Demo endpoints
 
-A small order domain (`CustomerOrder`/`OrderLine`, seeded by `V3`/`V4`) exists purely to
-give Peekaboot's trace view something worth looking at.
+A small order domain (`CustomerOrder`/`OrderLine`, seeded by `V3`/`V4`, priced from the
+inventory's `product` table) exists purely to give Peekaboot's trace view something worth
+looking at.
 
 | Endpoint | What it demonstrates |
 | --- | --- |
-| `GET /orders` | A deliberate N+1: one query for all orders, then three more per order, plus an outbound HTTP call per page load. The Traces tab lists it with all of those counted in the row's query stat. |
+| `GET /orders` | A deliberate N+1: one query for all orders, then three more per order and one inventory lookup per line on the second DataSource, plus an outbound HTTP call per page load. Its Queries tab shows both pools, `POSTGRESQL · orders-db` and `MYSQL · inventory-db`. The Traces tab lists it with all of those counted in the row's query stat. |
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time went. |
-| `POST /api/orders` | Places the order and its line in one transaction, so the trace shows a single pooled connection for both writes. The `OrderPlacedEvent` listener runs inside the request, adding an `order.placed` span with a log line on it. |
+| `POST /api/orders` | Looks the SKU up in the inventory (unknown SKU: 400), reserves its stock with one conditional `UPDATE` (not enough: 409), then writes the order and its line in one transaction, so the trace shows a single `orders-db` connection for both writes. The reservation is outside that transaction: a failed order insert keeps the stock reserved. The `OrderPlacedEvent` listener runs inside the request, adding an `order.placed` span with a log line on it. |
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
 | `GET /persons/{id}`, `GET /persons/{id}/edit` | One person, through an `@Observed` lookup by id, so the trace carries a query with one bind parameter under a span of its own. The list's View and Edit buttons lead here; an unknown id answers 404. |
 | `PUT /persons/{id}` | The edit form's save, sent as a POST with a hidden `_method=put` (`spring.mvc.hiddenmethod.filter.enabled`). Hibernate flushes one `UPDATE` with four bind parameters, then the page redirects to the detail page. |
@@ -42,8 +48,10 @@ just what they returned.
 The Playwright tests and every test that boots a Spring context live here, all in `*IT`
 classes, so they run under failsafe at `verify`. `mvn test` runs nothing in this module.
 They activate the `test` profile, which swaps PostgreSQL for in-memory H2 and disables
-Docker Compose, so the suite needs neither Docker nor network access. The one exception
-is the Playwright browser described below.
+Docker Compose, so the suite needs neither Docker nor network access, with two exceptions.
+`MultiDataSourceTraceIT` and `RedisTraceIT` start MySQL and Redis through Testcontainers and
+need Docker. The Playwright browser is described below. Under the test profiles the inventory
+is a second H2 in `MODE=MySQL`, migrated by the same Liquibase changelog.
 
 ```bash
 mvn -pl peekaboot-testing-app -am verify                       # the whole suite

@@ -1,0 +1,58 @@
+databaseChangeLog:
+  - changeSet:
+      id: create-product
+      author: peekaboot
+      changes:
+        - createTable:
+            tableName: product
+            columns:
+              - column:
+                  name: sku
+                  type: VARCHAR(64)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: price
+                  type: DECIMAL(10, 2)
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: create-stock
+      author: peekaboot
+      changes:
+        - createTable:
+            tableName: stock
+            columns:
+              - column:
+                  name: sku
+                  type: VARCHAR(64)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+                    foreignKeyName: fk_stock_product
+                    references: product(sku)
+              - column:
+                  name: quantity
+                  type: INT
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: seed-products
+      author: peekaboot
+      changes:
+        - sql:
+            sql: >
+              INSERT INTO product (sku, name, price) VALUES
+              ('WIDGET-1', 'Widget One', 19.99), ('WIDGET-2', 'Widget Two', 19.99),
+              ('WIDGET-3', 'Widget Three', 19.99), ('WIDGET-4', 'Widget Four', 19.99),
+              ('GADGET-1', 'Gadget One', 149.50), ('GADGET-2', 'Gadget Two', 149.50),
+              ('GADGET-3', 'Gadget Three', 149.50);
+              INSERT INTO stock (sku, quantity) VALUES
+              ('WIDGET-1', 500), ('WIDGET-2', 500), ('WIDGET-3', 500), ('WIDGET-4', 500),
+              ('GADGET-1', 50), ('GADGET-2', 50), ('GADGET-3', 50);

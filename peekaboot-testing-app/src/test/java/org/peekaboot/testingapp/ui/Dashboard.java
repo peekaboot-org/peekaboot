@@ -124,6 +124,12 @@ final class Dashboard {
         overlay.waitFor(".pk-tab");
     }
 
+    /** The Config tab's group for one {@code @ConfigurationProperties} prefix, as a {@link #kvValue} container. */
+    static String configGroup(String prefix) {
+        String name = exactly(prefix).pattern().replace("\\", "\\\\");
+        return "#config-groups .pk-group:has(.pk-group__name:text-matches(\"" + name + "\"))";
+    }
+
     /** The value of the {@code .pk-kv} row under {@code container} whose key reads exactly {@code key}. */
     String kvValue(String container, String key) {
         return kvValueCell(container, key).textContent();

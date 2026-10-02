@@ -87,3 +87,9 @@ logging:
   level:
     # INFO keeps IT logs readable; no test asserts on DEBUG output
     org.peekaboot: INFO
+
+app:
+  datasource:
+    inventory:
+      # MODE=MySQL because the inventory runs on MySQL everywhere else; the uuid keeps it per context.
+      url: jdbc:h2:mem:inventory-${random.uuid};MODE=MySQL;DB_CLOSE_DELAY=-1

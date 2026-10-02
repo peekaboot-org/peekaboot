@@ -27,6 +27,7 @@ dependencies {
     implementation("org.hibernate.orm:hibernate-micrometer")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.springframework.boot:spring-boot-starter-liquibase")
     implementation(project(":peekaboot-spring-boot-starter"))
 
     // developmentOnly comes from the Boot plugin, so the convention plugin's BOM import
@@ -34,6 +35,7 @@ dependencies {
     developmentOnly(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("com.mysql:mysql-connector-j")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-resttestclient")
@@ -42,6 +44,10 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-security")
     testImplementation("com.h2database:h2")
     testImplementation("io.micrometer:micrometer-observation-test")
+    // real MySQL and Redis for the ITs whose subject is that engine, in lockstep with pom.xml
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-mysql")
     // shared test support (LogCapture)
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("com.microsoft.playwright:playwright:1.63.0")

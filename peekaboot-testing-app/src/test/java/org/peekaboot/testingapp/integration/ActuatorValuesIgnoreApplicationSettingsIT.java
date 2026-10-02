@@ -117,7 +117,8 @@ class ActuatorValuesIgnoreApplicationSettingsIT {
         List<String> names = new ArrayList<>();
         for (JsonNode component : health.path("components")) {
             names.add(component.path("name").asString());
-            if ("db".equals(component.path("name").asString())) {
+            // two DataSources make db a composite; the dashboard lists each child as db/<bean name>
+            if ("db/dataSource".equals(component.path("name").asString())) {
                 db = component;
             }
         }

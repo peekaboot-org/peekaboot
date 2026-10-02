@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.RootActionType;
@@ -52,19 +53,21 @@ class ConnectionPoolTraceCaptureIT {
             assertThat(connection.isValid(1)).isTrue();
         }
 
+        // The inventory pool and the Liquibase endpoint's reads start such traces too; only orders-db's is ours.
+        Function<JsonNode, String> poolName = listed -> listed.path("rootSpan")
+                .path("tags")
+                .path("jdbc.datasource.pool")
+                .asString("");
         JsonNode trace = new TraceApiClient(port)
                 .awaitTraceOfType(
                         RootActionType.CONNECTION_POOL,
                         listed -> !listedBeforeAcquisition.contains(
-                                listed.path("traceId").asString("")));
+                                        listed.path("traceId").asString(""))
+                                && "orders-db".equals(poolName.apply(listed)),
+                        poolName);
 
         assertThat(trace.path("rootOperation").asString("")).isEqualTo("connection");
         assertThat(trace.path("rootSpan").path("kind").asString("")).isEqualTo("CLIENT");
-        assertThat(trace.path("rootSpan")
-                        .path("tags")
-                        .path("jdbc.datasource.pool")
-                        .asString(""))
-                .startsWith("HikariPool");
 
         // The three, on the trace this test caused: the chip's own request lists it and so
         // does the wildcard, while the default request does not. Asserting only the last would

@@ -35,6 +35,9 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class UnmaskingControlEnabledIT extends PlaywrightTestBase {
 
+    /** The fixture password's group; the inventory DataSource's properties carry a password of their own. */
+    private static final String SPRING_DATASOURCE = Dashboard.configGroup("spring.datasource");
+
     @Test
     void togglingTheControlRevealsAMaskedConfigValue() {
         openDashboard();
@@ -112,15 +115,15 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
         page.waitForSelector(
                 "#config-groups .pk-kv__key",
                 new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
-        page.click("#config-groups .pk-group__header");
+        page.click(SPRING_DATASOURCE + " .pk-group__header");
     }
 
     private String configPasswordValue() {
-        return dashboard.kvValue("#config-groups", "password");
+        return dashboard.kvValue(SPRING_DATASOURCE, "password");
     }
 
     private void waitForConfigPasswordValue(String expected) {
-        dashboard.awaitKvValue("#config-groups", "password", expected);
+        dashboard.awaitKvValue(SPRING_DATASOURCE, "password", expected);
     }
 
     private String environmentPasswordValue() {

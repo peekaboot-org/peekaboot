@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.order;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public record OrderSummary(
         Long id,
@@ -10,4 +11,5 @@ public record OrderSummary(
         Instant placedAt,
         int lineCount,
         BigDecimal total,
-        String customerName) {}
+        String customerName,
+        List<String> productNames) {}

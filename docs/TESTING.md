@@ -301,7 +301,9 @@ The database needs no such discipline. `application-test.yml` and `application-s
 no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its own
 `jdbc:h2:mem:<uuid>`. H2 keys in-memory databases by name per JVM, so a shared fixed name would
 let each lazily booted context's `ddl-auto: create-drop` wipe the tables under whichever test is
-mid-flight. Only `FlywayTabIT` names its database, because it needs `MODE=PostgreSQL` on the URL.
+mid-flight. Two URLs name a database because they need a compatibility mode: `FlywayTabIT`'s
+(`MODE=PostgreSQL`) and the inventory DataSource's in every H2 profile (`MODE=MySQL`), whose
+`inventory-${random.uuid}` name keeps it per context all the same.
 The `TraceStore` is the only state the shared context's classes contend for.
 
 ## Spring Security on the testing-app classpath

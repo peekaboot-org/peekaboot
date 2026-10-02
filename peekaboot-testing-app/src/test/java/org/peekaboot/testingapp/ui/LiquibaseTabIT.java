@@ -2,11 +2,19 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
 
 /** The Liquibase tab: one table row per change set, in the order the backend sorted them. */
 class LiquibaseTabIT extends PlaywrightTestBase {
+
+    private static final String CHANGELOG = "db/changelog/inventory/db.changelog-master.yaml";
+
+    private static final Pattern CHANGE_SET = Pattern.compile("(?m)^\\s*- changeSet:");
 
     /** Two change sets, the second FAILED, rendered into a fresh {@code container} the expression then reads. */
     private static final String RENDER_TWO_CHANGE_SETS = """
@@ -78,15 +86,23 @@ class LiquibaseTabIT extends PlaywrightTestBase {
                 .isEqualTo(List.of(List.of(false, "pk-badge pk-badge--ok"), List.of(true, "pk-badge pk-badge--error")));
     }
 
-    /** The testing app has no Liquibase, so the strip hides the tab and a deep link lands on Overview, as for Flyway. */
+    /** Boot's own Liquibase bean migrated the inventory DataSource; the tab shows its history. */
     @Test
-    void withoutChangeSetsTheTabIsHiddenAndADeepLinkFallsBackToOverview() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#liquibase");
-        page.waitForSelector("#overview-tab.active");
-        page.waitForSelector("#build-info > *");
+    void liquibaseTabListsEveryInventoryChangeSetAsExecuted() throws IOException {
+        openDashboard();
+        dashboard.openTab("liquibase");
 
-        assertThat(page.url()).endsWith("#overview");
-        assertThat(page.isVisible(Dashboard.tabButton("liquibase"))).isFalse();
-        assertThat(page.isVisible("#liquibase-tab")).isFalse();
+        assertThat(page.locator("#liquibase-changesets .pk-table tbody tr .pk-badge")
+                        .allTextContents())
+                .as("one EXECUTED row per change set the inventory changelog declares")
+                .hasSize(changeSetCount())
+                .containsOnly("EXECUTED");
+        assertThat(page.textContent("#liquibase-changesets"))
+                .contains("create-product", "create-stock", "seed-products");
+    }
+
+    private static int changeSetCount() throws IOException {
+        String changelog = new ClassPathResource(CHANGELOG).getContentAsString(StandardCharsets.UTF_8);
+        return (int) CHANGE_SET.matcher(changelog).results().count();
     }
 }

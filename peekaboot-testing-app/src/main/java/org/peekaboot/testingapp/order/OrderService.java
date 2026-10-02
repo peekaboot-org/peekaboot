@@ -9,6 +9,9 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
+import org.peekaboot.testingapp.inventory.InventoryRepository;
+import org.peekaboot.testingapp.inventory.Product;
+import org.peekaboot.testingapp.inventory.UnknownProductException;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.slf4j.Logger;
@@ -29,6 +32,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderLineRepository orderLineRepository;
+    private final InventoryRepository inventoryRepository;
     private final OrderReportStages reportStages;
     private final CustomerClient customerClient;
     private final ApplicationEventPublisher eventPublisher;
@@ -36,20 +40,23 @@ public class OrderService {
     public OrderService(
             OrderRepository orderRepository,
             OrderLineRepository orderLineRepository,
+            InventoryRepository inventoryRepository,
             OrderReportStages reportStages,
             CustomerClient customerClient,
             ApplicationEventPublisher eventPublisher) {
 
         this.orderRepository = orderRepository;
         this.orderLineRepository = orderLineRepository;
+        this.inventoryRepository = inventoryRepository;
         this.reportStages = reportStages;
         this.customerClient = customerClient;
         this.eventPublisher = eventPublisher;
     }
 
     /**
-     * Deliberate N+1: one query for the orders, then three per order, so the Traces tab has a
-     * page with a query count worth looking at.
+     * Deliberate N+1: one query for the orders, then three per order, then one inventory lookup
+     * per line on the second DataSource, so the Traces tab has a page with a query count worth
+     * looking at and queries from two pools.
      */
     public List<OrderSummary> listOrders() {
 
@@ -72,6 +79,8 @@ public class OrderService {
             BigDecimal total = lines.stream()
                     .map(line -> line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<String> productNames =
+                    lines.stream().map(line -> productName(line.getSku())).toList();
 
             summaries.add(new OrderSummary(
                     order.getId(),
@@ -80,7 +89,8 @@ public class OrderService {
                     order.getPlacedAt(),
                     (int) lineCount,
                     total,
-                    customerName));
+                    customerName,
+                    productNames));
         }
         return summaries;
     }
@@ -104,9 +114,18 @@ public class OrderService {
         return new OrderReport(order.getReference(), lines.size(), total, computeMillis);
     }
 
-    /** One transaction for the order and its line, so the trace shows a single connection for both writes. */
+    /**
+     * Prices the line from the inventory and reserves its stock there, then writes the order and
+     * its line in one transaction, so the trace shows a single orders-db connection for both writes.
+     */
     @Transactional
     public OrderSummary placeOrder(NewOrder request) {
+
+        Product product = inventoryRepository
+                .findProduct(request.sku())
+                .orElseThrow(() -> new UnknownProductException(request.sku()));
+        // Another database, outside this transaction: a failed order insert keeps the stock reserved, fine for a demo.
+        inventoryRepository.reserveStock(product.sku(), request.quantity());
 
         CustomerOrder order = new CustomerOrder();
         order.setReference(newReference());
@@ -117,9 +136,9 @@ public class OrderService {
 
         OrderLine line = new OrderLine();
         line.setOrderId(saved.getId());
-        line.setSku(request.sku());
+        line.setSku(product.sku());
         line.setQuantity(request.quantity());
-        line.setUnitPrice(new BigDecimal("19.99"));
+        line.setUnitPrice(product.price());
         orderLineRepository.save(line);
 
         log.info("placed order {} for customer {}", saved.getReference(), request.customerId());
@@ -131,7 +150,14 @@ public class OrderService {
                 saved.getPlacedAt(),
                 1,
                 line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())),
-                "customer #" + saved.getCustomerId());
+                "customer #" + saved.getCustomerId(),
+                List.of(product.name()));
+    }
+
+    /** A line can name a SKU the inventory never had; the SKU stands in for its name. */
+    private String productName(String sku) {
+
+        return inventoryRepository.findProduct(sku).map(Product::name).orElse(sku);
     }
 
     /** Sixteen hex digits of a random UUID: unique across concurrent orders and within the 32-character column. */

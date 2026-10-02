@@ -48,6 +48,18 @@ class ActuatorMaskingIT {
         assertThat(passwordProperty.path("value").asString()).isEqualTo("******");
     }
 
+    /** The test profile inherits the inventory DataSource's credentials from application.yml: a second password row. */
+    @Test
+    void insightsEndpointMasksTheInventoryDataSourcesPasswordAsWell() {
+        JsonNode config = api.getJson("/peekaboot/api/actuator/all/insights").path("config");
+
+        JsonNode passwordProperty = findConfigInfoProperty(config, "app.datasource.inventory", "password");
+        assertThat(passwordProperty)
+                .as("the app.datasource.inventory.password property must be present in /configprops")
+                .isNotNull();
+        assertThat(passwordProperty.path("value").asString()).isEqualTo("******");
+    }
+
     /**
      * The Environment tab renders raw property sources, so EnvironmentMapper needs masking
      * of its own - it is the most exposed surface, not merely one that has to stay

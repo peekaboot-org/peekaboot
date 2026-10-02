@@ -4,7 +4,17 @@ server:
 spring:
   application:
     name: peekaboot-testing-app
-  # spring.datasource is configured automatically by spring-boot's compose support
+  # The primary DataSource's URL and credentials come from spring-boot's compose support.
+  datasource:
+    hikari:
+      # Peekaboot's Queries tab labels a query with its pool name; the generated HikariPool-N says nothing.
+      pool-name: orders-db
+  liquibase:
+    change-log: classpath:db/changelog/inventory/db.changelog-master.yaml
+    # Liquibase's defaults print to stdout and send usage analytics.
+    ui-service: logger
+    show-summary-output: log
+    analytics-enabled: false
 
   jpa:
     open-in-view: false
@@ -31,3 +41,16 @@ springdoc:
 # observability settings (info contributors, trace sampling,
 # observation annotations, OTLP export off) come from peekaboot's defaults;
 # actuator endpoints are invoked in-process, so no web exposure is needed
+
+# InventoryDataSourceConfiguration's MySQL: compose cannot wire a second DataSource, so it sits on a fixed port.
+app:
+  datasource:
+    inventory:
+      url: jdbc:mysql://127.0.0.1:33307/inventory
+      username: inventory
+      password: inventory_pwd
+      configuration:
+        pool-name: inventory-db
+        # DATETIME has no zone; the default reads it as JVM-local, so Liquibase's dateExecuted would be hours off.
+        data-source-properties:
+          connectionTimeZone: SERVER

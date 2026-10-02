@@ -10,7 +10,7 @@
     <h1>Orders List</h1>
     <table>
         <thead>
-            <tr><th>Reference</th><th>Status</th><th>Placed At</th><th>Lines</th><th>Total</th><th>Customer</th></tr>
+            <tr><th>Reference</th><th>Status</th><th>Placed At</th><th>Lines</th><th>Products</th><th>Total</th><th>Customer</th></tr>
         </thead>
         <tbody>
             <tr th:each="order : ${orders}">
@@ -18,6 +18,7 @@
                 <td th:text="${order.status}"></td>
                 <td th:text="${order.placedAt}"></td>
                 <td th:text="${order.lineCount}"></td>
+                <td th:text="${#strings.listJoin(order.productNames, ', ')}"></td>
                 <td th:text="${order.total}"></td>
                 <td th:text="${order.customerName}"></td>
             </tr>

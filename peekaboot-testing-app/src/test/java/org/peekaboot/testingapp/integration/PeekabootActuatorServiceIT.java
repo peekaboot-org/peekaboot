@@ -78,6 +78,7 @@ class PeekabootActuatorServiceIT {
     // data.keySet(), so this can only assert a subset, not equality; deriving allowed from
     // ActuatorParsedData's own record components means an id that stops matching one fails
     // here instead of silently feeding the mappers a null.
+    // liquibase is present: the test profile migrates the inventory DataSource.
     @Test
     void insightsDataIsASubsetOfTheConsumedEndpointIds() {
         Map<String, Object> data = service.getInsightsData();
@@ -86,7 +87,7 @@ class PeekabootActuatorServiceIT {
                 .map(RecordComponent::getName)
                 .collect(Collectors.toSet());
         assertThat(data.keySet()).isSubsetOf(allowed);
-        assertThat(data).containsKeys("health", "info", "env");
+        assertThat(data).containsKeys("health", "info", "env", "liquibase");
     }
 
     /**

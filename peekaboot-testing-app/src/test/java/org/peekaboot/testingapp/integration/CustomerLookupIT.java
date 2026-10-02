@@ -3,13 +3,9 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
-import java.math.BigDecimal;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
-import org.peekaboot.testingapp.entity.CustomerOrder;
-import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.order.CustomerClient;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
@@ -59,7 +55,7 @@ class CustomerLookupIT {
 
     @Test
     void theOrdersPageNamesAnUnknownCustomerByIdWithoutWarning() {
-        seedAnOrder();
+        OrderFixtures.seedOrder(orderRepository, orderLineRepository, 999L, "WIDGET-CUST");
         // the page names the first order's customer on every row, so that is the id it renders
         long customerId = orderRepository.findAll().getFirst().getCustomerId();
 
@@ -77,19 +73,13 @@ class CustomerLookupIT {
                 .contains("customer #" + customerId);
     }
 
-    private void seedAnOrder() {
-        CustomerOrder order = new CustomerOrder();
-        order.setReference("PK-CUST-" + System.nanoTime());
-        order.setCustomerId(999L);
-        order.setStatus("SHIPPED");
-        order.setPlacedAt(Instant.parse("2026-08-20T08:00:00Z"));
-        CustomerOrder saved = orderRepository.save(order);
+    /** A line can name a SKU the inventory never had, as a fixture's does; the page shows the SKU instead. */
+    @Test
+    void theOrdersPageNamesEachLinesProductAndFallsBackToTheSku() {
+        OrderFixtures.seedOrder(orderRepository, orderLineRepository, 999L, "WIDGET-1", "RETIRED-SKU");
 
-        OrderLine line = new OrderLine();
-        line.setOrderId(saved.getId());
-        line.setSku("WIDGET-CUST");
-        line.setQuantity(1);
-        line.setUnitPrice(new BigDecimal("19.99"));
-        orderLineRepository.save(line);
+        String orders = api.get("/orders");
+
+        assertThat(orders).contains("Widget One").contains("RETIRED-SKU");
     }
 }

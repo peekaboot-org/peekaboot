@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -118,6 +117,8 @@ class OrderTraceCaptureIT {
      * {@code "select "}/{@code " from "} shape below is what a summary like that would
      * fail, so a regression back to the fallback (or a stack that stops emitting
      * {@code db.query.text}) breaks this test rather than passing it silently.
+     *
+     * <p>Only the orders-db queries are Hibernate's; the inventory's are hand-written JdbcClient SQL.
      */
     @Test
     void ordersPageQueriesCarryRealSqlNotASpanNameSummary() {
@@ -125,10 +126,7 @@ class OrderTraceCaptureIT {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        List<String> sqlTexts = new ArrayList<>();
-        trace.path("queries")
-                .forEach(query ->
-                        sqlTexts.add(query.path("statement").path("text").asString("")));
+        List<String> sqlTexts = TraceQueries.statementsOn(trace, "orders-db");
 
         assertThat(sqlTexts)
                 .as("QueryExtractor must find at least one query on a page that trips real "
@@ -204,7 +202,7 @@ class OrderTraceCaptureIT {
 
     @Test
     void placingAnOrderIsCapturedAsItsOwnTrace() {
-        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-NEW", 2));
+        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-1", 2));
 
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
@@ -219,18 +217,18 @@ class OrderTraceCaptureIT {
 
     /**
      * The order and its line are written in one transaction, so the trace shows a single
-     * pooled connection for the request rather than one per save.
+     * orders-db connection for both writes rather than one per save.
      */
     @Test
     void placingAnOrderWritesTheOrderAndItsLineOverOneConnection() {
-        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-TX", 1));
+        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-2", 1));
 
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(SpanTree.names(trace))
-                .as("spans of the POST trace")
-                .filteredOn("connection"::equals)
+        assertThat(SpanTree.tagValuesOfSpansNamed(trace, "connection", "jdbc.datasource.pool"))
+                .as("orders-db connections of the POST trace; the inventory lookup and reservation use their own")
+                .filteredOn("orders-db"::equals)
                 .hasSize(1);
     }
 

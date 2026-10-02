@@ -7,3 +7,21 @@ services:
       - 'POSTGRES_PASSWORD=sample_app_db_pwd'
     ports:
       - '5432'
+  mysql:
+    image: 'mysql:9'
+    environment:
+      - 'MYSQL_DATABASE=inventory'
+      - 'MYSQL_USER=inventory'
+      - 'MYSQL_PASSWORD=inventory_pwd'
+      - 'MYSQL_RANDOM_ROOT_PASSWORD=yes'
+    ports:
+      - '127.0.0.1:33307:3306'
+    labels:
+      # Not a connection-details source: two JDBC services would fail with NoUniqueBeanDefinitionException.
+      org.springframework.boot.ignore: 'true'
+    # Boot skips readiness checks for an ignored service; `compose up --wait` honours this instead.
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --silent']
+      interval: 2s
+      timeout: 5s
+      retries: 30

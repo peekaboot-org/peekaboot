@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -153,6 +154,7 @@ class TraceApiClient {
         return awaitListedTrace(
                 "bucket=" + bucket,
                 trace -> traceId.equals(trace.path("traceId").asString("")),
+                TraceApiClient::rootOperation,
                 "trace " + traceId + " in the " + bucket + " bucket");
     }
 
@@ -176,6 +178,7 @@ class TraceApiClient {
                 "bucket=all",
                 trace -> named.test(trace)
                         && !listedBefore.contains(trace.path("traceId").asString("")),
+                TraceApiClient::rootOperation,
                 "a new '" + rootOperation + "' trace");
     }
 
@@ -183,10 +186,11 @@ class TraceApiClient {
      * The first listed {@code type} trace that {@code match} accepts. The predicate is not
      * optional decoration: the listing is shared with every other test exercising the same
      * application, so the type alone names a trace some other actor produced just as readily
-     * as the one the caller is asserting about.
+     * as the one the caller is asserting about. {@code label} names each listed trace in the
+     * failure, so a match that never comes shows what the listing held instead.
      */
-    JsonNode awaitTraceOfType(RootActionType type, Predicate<JsonNode> match) {
-        return awaitListedTrace("rootActionType=" + type.name(), match, "a " + type + " trace");
+    JsonNode awaitTraceOfType(RootActionType type, Predicate<JsonNode> match, Function<JsonNode, String> label) {
+        return awaitListedTrace("rootActionType=" + type.name(), match, label, "a " + type + " trace");
     }
 
     /**
@@ -194,7 +198,8 @@ class TraceApiClient {
      * {@code match}. The listing leaves out a trace whose root span has not arrived, so a
      * listed match already carries its spans.
      */
-    private JsonNode awaitListedTrace(String query, Predicate<JsonNode> match, String description) {
+    private JsonNode awaitListedTrace(
+            String query, Predicate<JsonNode> match, Function<JsonNode, String> label, String description) {
         String uri = "/peekaboot/api/traces/insights?" + query;
         // written on Awaitility's poll thread, read on the test thread once the wait gave up
         AtomicReference<List<String>> lastListing = new AtomicReference<>(List.of());
@@ -205,7 +210,7 @@ class TraceApiClient {
                             () -> {
                                 List<String> listed = new ArrayList<>();
                                 for (JsonNode trace : api.getJson(uri).path("traces")) {
-                                    listed.add(trace.path("rootOperation").asString(""));
+                                    listed.add(label.apply(trace));
                                     if (match.test(trace)) {
                                         return trace;
                                     }
@@ -218,6 +223,10 @@ class TraceApiClient {
             throw new AssertionError(
                     description + " was not listed within " + TIMEOUT + "; the listing held: " + lastListing.get(), e);
         }
+    }
+
+    private static String rootOperation(JsonNode trace) {
+        return trace.path("rootOperation").asString("");
     }
 
     private JsonNode fetchOrNull(String uri) {
