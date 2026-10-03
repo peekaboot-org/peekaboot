@@ -142,7 +142,7 @@ public class OrderService {
         orderLineRepository.save(line);
 
         log.info("placed order {} for customer {}", saved.getReference(), request.customerId());
-        eventPublisher.publishEvent(new OrderPlacedEvent(saved.getId(), saved.getReference()));
+        eventPublisher.publishEvent(new OrderPlacedEvent(saved.getId(), saved.getReference(), product.sku()));
         return new OrderSummary(
                 saved.getId(),
                 saved.getReference(),

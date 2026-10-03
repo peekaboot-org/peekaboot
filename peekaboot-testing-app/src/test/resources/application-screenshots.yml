@@ -36,10 +36,6 @@ spring:
       skip:
         in-tests: false
   task:
-    # As in application-test.yml: without it the @Async enrichment task becomes a trace of
-    # its own instead of a span under the /orders/enrich request that dispatched it.
-    execution:
-      propagate-context: true
     scheduling:
       pool:
         size: 1

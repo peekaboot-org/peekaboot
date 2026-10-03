@@ -38,12 +38,12 @@ import tools.jackson.databind.JsonNode;
  * an observation to continue, and it stays off scheduled execution entirely - and this class
  * exists to keep both.
  *
- * <p>The testing app switches {@code spring.task.execution.propagate-context} on in its test
- * profile. That is the consuming application's choice, not Peekaboot's, and it is what makes
- * the async span a child of the request that dispatched it rather than a trace of its own.
- * Declared inline below (redundantly with the profile) because this class's every assertion
- * rests on it: restating it here is what this class means by "the property under test", and
- * it also gives this class's context a different Spring test-context cache key from
+ * <p>The testing app switches {@code spring.task.execution.propagate-context} on in its
+ * {@code application.yml}. That is the consuming application's choice, not Peekaboot's, and it
+ * is what makes the async span a child of the request that dispatched it rather than a trace of
+ * its own. Declared inline below (redundantly with the app's default) because this class's every
+ * assertion rests on it: restating it here is what this class means by "the property under
+ * test", and it also gives this class's context a different Spring test-context cache key from
  * {@code ui.PlaywrightTestBase}'s otherwise-identical one. Without that, this class would
  * share one {@code TraceStore} with the whole Playwright UI suite, and {@code TraceOverlayIT}
  * - the only other class hitting the same {@code /orders/enrich} endpoint - can insert an

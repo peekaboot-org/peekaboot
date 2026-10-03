@@ -44,4 +44,14 @@ public class InventoryRepository {
             throw new InsufficientStockException(sku, quantity);
         }
     }
+
+    /** Uncached on purpose, so every order's after-commit check shows its inventory query. */
+    public int stockLevel(String sku) {
+
+        return jdbcClient
+                .sql("SELECT quantity FROM stock WHERE sku = ?")
+                .param(sku)
+                .query(Integer.class)
+                .single();
+    }
 }

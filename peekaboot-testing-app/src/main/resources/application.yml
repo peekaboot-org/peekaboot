@@ -27,6 +27,11 @@ spring:
       repositories:
         enabled: false
 
+  task:
+    # This application's choice, never Peekaboot's: @Async work then stays inside the request that started it.
+    execution:
+      propagate-context: true
+
   jpa:
     open-in-view: false
 

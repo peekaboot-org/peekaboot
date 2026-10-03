@@ -72,6 +72,41 @@ final class SpanTree {
         return found.getFirst();
     }
 
+    /** The span names from the root to the first span called {@code name}, or an error when none is. */
+    static List<String> pathTo(JsonNode trace, String name) {
+        List<String> path = new ArrayList<>();
+        if (!collectPath(trace.path("rootSpan"), name, path)) {
+            throw new AssertionError("no span named '" + name + "' in the trace, among " + names(trace));
+        }
+        return path;
+    }
+
+    /** The statement text of every query at or below {@code span}, in walk order. */
+    static List<String> statementsUnder(JsonNode span) {
+        List<String> statements = new ArrayList<>();
+        walk(span, node -> {
+            String text = node.path("query").path("text").asString("");
+            if (!text.isEmpty()) {
+                statements.add(text);
+            }
+        });
+        return statements;
+    }
+
+    private static boolean collectPath(JsonNode span, String name, List<String> path) {
+        path.add(span.path("name").asString(""));
+        if (name.equals(path.getLast())) {
+            return true;
+        }
+        for (JsonNode child : span.path("children")) {
+            if (collectPath(child, name, path)) {
+                return true;
+            }
+        }
+        path.removeLast();
+        return false;
+    }
+
     private static void walk(JsonNode span, Consumer<JsonNode> visitor) {
         visitor.accept(span);
         for (JsonNode child : span.path("children")) {
