@@ -222,6 +222,7 @@ org.peekaboot.backend/
 │   ├── config/             # PeekabootTracingProperties
 │   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
+│   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
 │   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
 │                           # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
 ```
@@ -659,6 +660,7 @@ hooks that run before or outside the application context are registered in
 | `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
+| `EventListenerInstrumentationAutoConfiguration` | `.imports` | The post-processor that puts a span around the application's `@EventListener` methods (see *Event Listener Spans*) |
 | `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
@@ -695,7 +697,8 @@ Most of the auto-configuration classes carry the same two class-level conditions
 servlet guard and the master switch: `PeekabootAutoConfiguration`,
 `PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
 `DevToolbarAutoConfiguration`, `ErrorPageAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
-`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`,
+`EventListenerInstrumentationAutoConfiguration`, `PeekabootTracingAutoConfiguration`,
+`OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`,
 `InsightsAutoConfiguration` and `PeekabootSecurityAutoConfiguration`.
 
 ```java
@@ -705,7 +708,9 @@ servlet guard and the master switch: `PeekabootAutoConfiguration`,
 
 Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
 the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar`,
-`TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean, `InsightsAutoConfiguration`
+`TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean,
+`EventListenerInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
+`peekaboot.tracing.event-listeners`, `InsightsAutoConfiguration`
 a `MeterRegistry` bean and `peekaboot.insights.enabled`, `OtelTracingAutoConfiguration` the
 OpenTelemetry SDK's `SpanExporter` class, and `QueryParameterAutoConfiguration`
 datasource-micrometer's `QueryContext` class. Class-level conditions guard only what the
@@ -744,8 +749,9 @@ activation and storage detection are web-type independent, while `peekaboot-defa
 the dev-toolbar defaults are skipped off-servlet.
 
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
-`TracingInterceptorAutoConfiguration` and `QueryParameterAutoConfiguration` additionally require
-`peekaboot.tracing.enabled` (default on): handler, view and query observations are tracing, and
+`TracingInterceptorAutoConfiguration`, `EventListenerInstrumentationAutoConfiguration` and
+`QueryParameterAutoConfiguration` additionally require `peekaboot.tracing.enabled` (default on):
+handler, view, event listener and query observations are tracing, and
 with it off there is no store for them to land in. `DevToolbarAutoConfiguration` does not read that property at all. Its capture half,
 the `RequestCaptureFilter` registration and the Logback appender registrar, is
 `@ConditionalOnBean(TraceStore.class)` instead, so with `peekaboot.tracing.enabled=false` the
@@ -953,10 +959,11 @@ toolbar itself only needs a `Tracer` bean and is injected with either bridge (se
 
 ### Handler and View Spans
 
-`TracingHandlerInterceptor` is the only instrumentation Peekaboot adds to the request path;
-`AsyncTaskDecorator` adds the only instrumentation outside it (see *Async Task Spans* below). It
-raises two Micrometer observations, so every exporter the application has configured sees them,
-not just Peekaboot's:
+`TracingHandlerInterceptor` is the only instrumentation Peekaboot adds to the request path
+itself. Outside it, `AsyncTaskDecorator` observes thread hand-offs (see *Async Task Spans*) and
+`EventListenerObservationInterceptor` observes event listeners (see *Event Listener Spans*).
+`TracingHandlerInterceptor` raises two Micrometer observations, so every exporter the
+application has configured sees them, not just Peekaboot's:
 
 | Observation | Raised in | Tags |
 |-------------|-----------|------|
@@ -1040,6 +1047,80 @@ calls `@Async` directly: Peekaboot's decorator is wired into the scheduler regar
 
 Keeping the work under a marked span out of its trace's timings is the store's half of this
 feature, in *Async Subtree Timing* below.
+
+### Event Listener Spans
+
+`EventListenerObservationInterceptor` raises one observation per call of an application's
+`@EventListener` method, `@TransactionalEventListener` included:
+
+| Observation | Raised in | Tags |
+|-------------|-----------|------|
+| `peekaboot.event.listener` | the listener method's proxy, on the thread that runs the method | `peekaboot.event.type` (low cardinality: the simple names of the annotation's event classes when it names any, else the simple name of the method's parameter type), `peekaboot.event.listener.class` (low cardinality: the bean's class, fully qualified), `peekaboot.event.listener.method` (low cardinality: the method name) |
+
+Its contextual name is `<SimpleClassName>#<method>`, the row title in the trace view. The names
+live in `EventListenerMarker`. Nothing classifies by them: the span is raised only while an
+observation is current, so it is always an ordinary child span and needs no `RootActionType`.
+
+`EventListenerInstrumentationAutoConfiguration` registers `EventListenerObservationPostProcessor`,
+an `AbstractBeanFactoryAwareAdvisingPostProcessor` like Spring's own `@Async` support, so the
+feature needs neither `spring-boot-starter-aop` nor AspectJ. A decorating `EventListenerFactory`
+cannot do it: `EventListenerMethodProcessor` initialises only an
+`ApplicationListenerMethodAdapter`, through a package-private `init`, so a wrapped adapter never
+receives its context. Wrapping the method itself is what makes the span time the real call: a
+transactional listener's span opens at after-commit, not at publish, and an event a `condition`
+rejects never reaches the method and gets no span.
+
+The advisor's place in the chain is deliberate. The post-processor adds it in front of the
+advisors already on the bean (`beforeExistingAdvisors`), so a `REQUIRES_NEW` listener's own
+transaction opens inside the span. It runs at `Ordered.LOWEST_PRECEDENCE - 1`, after the
+auto-proxy creator (`HIGHEST_PRECEDENCE`) and one step before `AsyncAnnotationBeanPostProcessor`
+at `@EnableAsync`'s default order, which then puts the async hand-off in front of Peekaboot's
+advisor. An `@Async` listener's span therefore opens on the executor thread, inside the `async
+task` span. An application that orders `@EnableAsync` below that gets a span timing only the
+submission.
+
+The bean method takes the `ObservationRegistry` as an `ObjectProvider`. Boot configures the
+registry in `ObservationRegistryPostProcessor`, a plain `BeanPostProcessor` registered after every
+ordered one; resolving the registry while Peekaboot's ordered post-processor is created would
+freeze it unconfigured, and every handler the application declares would stop seeing observations.
+With two registries and neither primary, Peekaboot cannot tell which is the application's and
+falls back to `ObservationRegistry.NOOP`: listeners still run, without a span, and a listener call
+never fails over Peekaboot.
+
+What is left alone:
+
+- Beans in `org.peekaboot.backend.`, `org.peekaboot.autoconfigure.` and `org.springframework.`.
+  `TraceStoreEventListener` stores every captured log line, so observing it would raise a span per
+  log line inside the trace being captured. Other `org.peekaboot` packages, the testing app's
+  among them, are observed.
+- Methods the application already annotates with `@Observed`, and classes it annotates with it.
+- Static listener methods, which are called without the bean.
+- Classes a proxy would break, logged at debug and left wholly unobserved: a final or sealed
+  class, one with only private constructors (CGLIB cannot subclass any of them; Kotlin classes
+  are final by default), one with a private listener method (Spring refuses to start with one
+  behind a proxy, see `AopUtils.selectInvocableMethod`), and one that declares or inherits a
+  final instance method that is not private, listener or not. CGLIB cannot override that
+  method, so it runs on the proxy instance, whose fields are unset, and returns `null` where the
+  bean would return its state. Proxying such a class would make it behave differently only
+  while Peekaboot is on.
+
+Like the async decorator, the interceptor observes only while an observation is current. A
+listener called with nothing in scope, one on `ApplicationReadyEvent` say, gets no span. An
+`@Async` listener runs on an executor thread, so it gets one only when the application sets
+`spring.task.execution.propagate-context=true`; Peekaboot never sets it.
+`peekaboot.tracing.event-listeners=false` turns the feature off.
+
+Known trade-offs:
+
+- Listener beans become CGLIB proxies, and calling a listener method directly, not through an
+  event, also produces a span.
+- A proxied listener bean is not the object its own methods see as `this`: an identity check
+  against the injected bean fails, and `getClass()` on the injected bean returns the generated
+  subclass. Code that needs the declared class should use `ClassUtils.getUserClass`.
+- The skip list names packages, not authors. Listeners from third-party libraries outside
+  `org.springframework.` are spanned like the application's own.
+- A class with a non-private final instance method keeps its listeners unspanned, even when
+  that method never touches a field.
 
 ### Micrometer Tracer Integration
 

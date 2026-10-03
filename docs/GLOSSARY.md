@@ -79,6 +79,13 @@ is flagged on the tree as `SpanNode.asyncEntry`, which is what the Spans tab col
 re-bases by. What a reader sees:
 [background work](https://www.peekaboot.org/docs/traces/#background-work).
 
+### Event Listener Span
+The span Peekaboot raises around a call of an application's `@EventListener` method, observation
+`EventListenerMarker.OBSERVATION_NAME` (`peekaboot.event.listener`), named
+`<SimpleClassName>#<method>`. Raised only inside another observation, so it is always an ordinary
+child span and never a trace root. The mechanism, its ordering and what it skips are in
+*Event Listener Spans* in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ### Trace Status and Span Status
 `TraceStatus {OK, HAS_ERRORS}` on the trace, `SpanStatus {OK, ERROR}` on each span, both
 serialised by constant name. `TraceTreeMapper` sets `HAS_ERRORS` when any span has an error
