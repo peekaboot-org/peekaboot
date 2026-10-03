@@ -16,6 +16,9 @@
          own error-page rendering is unaffected - a real assertion failure still fails the test. -->
     <logger name="org.apache.catalina.core.ContainerBase" level="OFF"/>
 
+    <!-- Flyway warns that the managed H2 is newer than the version it was verified against. -->
+    <logger name="org.flywaydb.core.internal.database.base.Database" level="ERROR"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>

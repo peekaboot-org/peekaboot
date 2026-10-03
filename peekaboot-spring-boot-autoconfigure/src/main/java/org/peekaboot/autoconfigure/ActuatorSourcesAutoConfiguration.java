@@ -153,10 +153,12 @@ public class ActuatorSourcesAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean(name = "flywayInsightsSource")
-        InsightsSource flywayInsightsSource(ApplicationContext context, ObjectProvider<Flyway> flyway) {
+        InsightsSource flywayInsightsSource(ApplicationContext context, ConfigurableListableBeanFactory beanFactory) {
             return new InsightsSource(
                     "flyway",
-                    () -> flyway.stream().findAny().isEmpty() ? null : new FlywayEndpoint(context).flywayBeans());
+                    () -> hasApplicationBean(beanFactory, Flyway.class)
+                            ? new FlywayEndpoint(context).flywayBeans()
+                            : null);
         }
     }
 

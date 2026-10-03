@@ -10,6 +10,7 @@ import javax.sql.DataSource;
 import liquibase.UpdateSummaryOutputEnum;
 import liquibase.integration.spring.SpringLiquibase;
 import liquibase.ui.UIServiceEnum;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import org.springframework.boot.actuate.env.EnvironmentEndpoint.EnvironmentDescr
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.flyway.actuate.endpoint.FlywayEndpoint.FlywayBeansDescriptor;
 import org.springframework.boot.health.actuate.endpoint.AdditionalHealthEndpointPath;
 import org.springframework.boot.health.actuate.endpoint.CompositeHealthDescriptor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -202,6 +204,27 @@ class ActuatorSourcesAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void flywaySourceReadsAFlywayBeanThatIsNoDefaultCandidate() {
+        contextRunner
+                .withUserConfiguration(NonDefaultCandidateFlywayConfig.class)
+                .run(context -> {
+                    Object descriptor = read(context, "flyway");
+
+                    assertThat(descriptor)
+                            .isInstanceOfSatisfying(
+                                    FlywayBeansDescriptor.class,
+                                    flyway -> assertThat(flyway.getContexts().values())
+                                            .flatMap(ctx -> ctx.getFlywayBeans().keySet())
+                                            .containsExactly("secondaryFlyway"));
+                });
+    }
+
+    @Test
+    void flywaySourceReadsNullWhenTheApplicationHasNoFlywayBean() {
+        contextRunner.run(context -> assertThat(read(context, "flyway")).isNull());
+    }
+
     /** The sources with no visibility gate of their own: present, and reading something. */
     @ParameterizedTest
     @ValueSource(strings = {"spring", "info", "scheduledtasks"})
@@ -266,6 +289,23 @@ class ActuatorSourcesAutoConfigurationTest {
         @Bean(defaultCandidate = false)
         SpringLiquibase secondaryLiquibase(DataSource dataSource) {
             return LiquibaseConfig.liquibaseOn(dataSource);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class NonDefaultCandidateFlywayConfig {
+
+        @Bean
+        EmbeddedDatabase secondaryDataSource() {
+            return new EmbeddedDatabaseBuilder()
+                    .setType(EmbeddedDatabaseType.H2)
+                    .generateUniqueName(true)
+                    .build();
+        }
+
+        @Bean(defaultCandidate = false)
+        Flyway secondaryFlyway(DataSource dataSource) {
+            return Flyway.configure().dataSource(dataSource).load();
         }
     }
 
