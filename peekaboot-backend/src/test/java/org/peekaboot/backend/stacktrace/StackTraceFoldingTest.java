@@ -211,4 +211,16 @@ class StackTraceFoldingTest {
 
         assertThat(folded.applicationFrames()).containsExactly(new StackTraceFolding.Range(0, 3));
     }
+
+    /** Peekaboot's own filters sit on every request's stack; an application under org.peekaboot still shows. */
+    @Test
+    void theDefaultListHidesPeekabootsOwnFramesButNotAnApplicationBeneathIt() {
+        FoldedTrace folded =
+                StackTraceFolding.fold("""
+                \tat org.peekaboot.testingapp.PersonController.fail(PersonController.java:40)
+                \tat org.peekaboot.backend.web.TracingFilter.doFilter(TracingFilter.java:12)""", ExclusionPatterns.DEFAULT, List.of("org.peekaboot.testingapp"));
+
+        assertThat(folded.hidden()).containsExactly(new StackTraceFolding.Range(1, 2));
+        assertThat(folded.applicationFrames()).containsExactly(new StackTraceFolding.Range(0, 1));
+    }
 }
