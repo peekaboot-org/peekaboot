@@ -58,9 +58,11 @@ class PeekabootErrorExceptionResolverTest {
         assertThat(modelAndView).isNotNull();
     }
 
+    /** A browser navigating to a page names text/html alongside its wildcard. */
     @Test
-    void rendersForAWildcardAccept() {
-        request.addHeader("Accept", "*/*");
+    void rendersForABrowserNavigation() {
+        request.addHeader(
+                "Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
 
         ModelAndView modelAndView =
                 resolver.resolveException(request, response, null, new IllegalStateException("boom"));
@@ -68,13 +70,43 @@ class PeekabootErrorExceptionResolverTest {
         assertThat(modelAndView).isNotNull();
     }
 
-    /** curl and a bare fetch() send no Accept header at all; that counts as HTML too. */
+    /** Swagger UI, curl and fetch() send a bare wildcard; they want the application's own response. */
     @Test
-    void rendersWhereTheRequestCarriesNoAcceptHeader() {
+    void fallsThroughForAWildcardAccept() {
+        request.addHeader("Accept", "*/*");
+
         ModelAndView modelAndView =
                 resolver.resolveException(request, response, null, new IllegalStateException("boom"));
 
-        assertThat(modelAndView).isNotNull();
+        assertThat(modelAndView).isNull();
+    }
+
+    @Test
+    void fallsThroughForATextWildcardAccept() {
+        request.addHeader("Accept", "text/*");
+
+        ModelAndView modelAndView =
+                resolver.resolveException(request, response, null, new IllegalStateException("boom"));
+
+        assertThat(modelAndView).isNull();
+    }
+
+    @Test
+    void fallsThroughWhereTheRequestCarriesNoAcceptHeader() {
+        ModelAndView modelAndView =
+                resolver.resolveException(request, response, null, new IllegalStateException("boom"));
+
+        assertThat(modelAndView).isNull();
+    }
+
+    @Test
+    void fallsThroughWhereHtmlIsExplicitlyRefused() {
+        request.addHeader("Accept", "text/html;q=0, application/json");
+
+        ModelAndView modelAndView =
+                resolver.resolveException(request, response, null, new IllegalStateException("boom"));
+
+        assertThat(modelAndView).isNull();
     }
 
     @Test
@@ -196,12 +228,12 @@ class PeekabootErrorExceptionResolverTest {
 
     /** An exception escaping a resolver while handling an exception is the worst outcome available here. */
     @Test
-    void rendersRatherThanThrowingForAnUnparseableAcceptHeader() {
+    void fallsThroughRatherThanThrowingForAnUnparseableAcceptHeader() {
         request.addHeader("Accept", "text/html;;;q=");
 
         ModelAndView modelAndView =
                 resolver.resolveException(request, response, null, new IllegalStateException("boom"));
 
-        assertThat(modelAndView).isNotNull();
+        assertThat(modelAndView).isNull();
     }
 }

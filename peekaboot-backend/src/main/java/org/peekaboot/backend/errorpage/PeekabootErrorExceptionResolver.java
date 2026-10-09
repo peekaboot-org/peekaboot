@@ -3,7 +3,6 @@ package org.peekaboot.backend.errorpage;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.List;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.HttpStatus;
@@ -92,28 +91,20 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
     }
 
     /**
-     * Boot's own test, from {@code WelcomePageHandlerMapping.isHtmlTextAccepted}: an XHR or API
-     * client asking for JSON keeps getting the application's own error response, the same
-     * boundary {@code BasicErrorController} draws between {@code errorHtml} and its JSON method.
+     * Only a client that names {@code text/html} gets the page. A browser navigating to a page
+     * always does; Swagger UI, curl and {@code fetch()} send a bare wildcard or nothing and keep
+     * getting the application's own error response, as does an XHR asking for JSON.
      */
     private static boolean isHtmlTextAccepted(HttpServletRequest request) {
-        for (MediaType mediaType : acceptedMediaTypes(request)) {
-            if (mediaType.includes(MediaType.TEXT_HTML)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static List<MediaType> acceptedMediaTypes(HttpServletRequest request) {
         String acceptHeader = request.getHeader("Accept");
-        if (StringUtils.hasText(acceptHeader)) {
-            try {
-                return MediaType.parseMediaTypes(acceptHeader);
-            } catch (InvalidMediaTypeException ex) {
-                return List.of(MediaType.ALL);
-            }
+        if (!StringUtils.hasText(acceptHeader)) {
+            return false;
         }
-        return List.of(MediaType.ALL);
+        try {
+            return MediaType.parseMediaTypes(acceptHeader).stream()
+                    .anyMatch(each -> each.equalsTypeAndSubtype(MediaType.TEXT_HTML) && each.getQualityValue() > 0);
+        } catch (InvalidMediaTypeException ex) {
+            return false;
+        }
     }
 }
