@@ -8,4 +8,6 @@ dependencies {
     // api, not implementation: LogCapture's API is logback's (Level, ListAppender)
     api("org.slf4j:slf4j-api")
     api("ch.qos.logback:logback-classic")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
