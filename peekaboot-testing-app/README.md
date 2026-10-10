@@ -22,6 +22,13 @@ running. Flyway, Liquibase and a `@Scheduled` job give the Flyway, Liquibase and
 Tasks tabs real data to show.
 Product lookups are cached in Redis (`@Cacheable("products")`, 30 s TTL, unknown SKUs not
 cached), a third compose service on a random port that Boot wires up itself.
+A fourth compose service, go-httpbin (`ghcr.io/mccutchen/go-httpbin:2.25.0`), publishes the
+fixed port `127.0.0.1:18093` with the `org.springframework.boot.ignore` label, and
+`app.profile-service.url` points `ProfileClient` at it.
+Every page opens with a nav linking each scenario below, with forms for the writes.
+`peekaboot.enable-unmasking` is on, so the Environment and Config tabs offer "Show secrets".
+`src/main/resources/peekaboot-insights.yml` switches on the six opt-in Insights panels and adds
+an "Orders placed" panel and Overview tile over the `testingapp.orders.placed` counter.
 
 ### Demo endpoints
 
@@ -35,12 +42,18 @@ looking at.
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time went. |
 | `POST /api/orders` | Looks the SKU up in the inventory (unknown SKU: 400), reserves its stock with one conditional `UPDATE` (not enough: 409), then writes the order and its line in one transaction, so the trace shows a single `orders-db` connection for both writes. The reservation is outside that transaction: a failed order insert keeps the stock reserved. Three listeners react to the `OrderPlacedEvent`. `OrderPlacedListener` is `@Observed`, so its span is the application's own `order.placed` and Peekaboot adds none. `OrderConfirmationListener` runs inside the request and its transaction; Peekaboot's span `OrderConfirmationListener#onOrderPlaced` holds its `order_line` count. `StockLevelListener` is `@Async @TransactionalEventListener`: after the commit it reads the remaining stock from MySQL on a task executor, so `StockLevelListener#onOrderPlaced` sits inside the request's `async task` span. That needs `spring.task.execution.propagate-context`, which `application.yml` sets. A second order for the same SKU within 30 s reads the product from Redis, so its trace has Redis's `get` but no inventory `SELECT`. The first order's `get` misses and is followed by the `SELECT`. |
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
-| `GET /persons/{id}`, `GET /persons/{id}/edit` | One person, through an `@Observed` lookup by id, so the trace carries a query with one bind parameter under a span of its own. The list's View and Edit buttons lead here; an unknown id answers 404. |
+| `GET /persons/{id}`, `GET /persons/{id}/edit` | One person, through an `@Observed` lookup by id, so the trace carries a query with one bind parameter under a span of its own. The list's View and Edit buttons lead here; an unknown id answers 404. The detail page calls the profile service and shows the echoed method, URL, `email` argument and the `traceparent` header the server received, whose trace id matches the toolbar's. `?profile=slow` calls `/delay/1.2` and lands the page in the Slow bucket. `?profile=unavailable` calls `/status/503`, so the CLIENT span fails, `ProfileClient` logs a WARN and the section reads "unreachable". Any other value answers 400, and with no URL configured the section reads "not configured". |
 | `PUT /persons/{id}` | The edit form's save, sent as a POST with a hidden `_method=put` (`spring.mvc.hiddenmethod.filter.enabled`). Hibernate flushes one `UPDATE` with four bind parameters, then the page redirects to the detail page. |
 | `GET /api/person/all` | The same `@Observed` lookup over JSON. A `@RestController` renders no view, so the span tree has no view-render span under the handler. |
 | `GET /api/person/{id}` | A single-row lookup that is *not* `@Observed`. Its JDBC span hangs straight off the handler span, which is what the observed lookup above avoids. An unknown id answers 404, not 200 with an empty body. |
+| `GET /orders/stats` | Order counts per status from one query that waits 80 ms in `pg_sleep`, past the 50 ms `SLOW_QUERY` threshold. The test profile backs `pg_sleep` with an H2 alias (`H2Functions`, `h2-functions.sql`). |
+| `GET /orders/enrich` | Hands `EnrichmentService.enrich` to a task executor and answers at once, so the trace shows an `async task` span that outlives the request. `?fail=true` makes the task throw. Its `order.enrichment` span fails and the trace lands in Errors. Spring hands a `void` `@Async` method's exception to `SimpleAsyncUncaughtExceptionHandler`, which logs it at ERROR, so the `async task` span itself ends OK. |
+| `GET /people` | A forward to `/persons`, so the trace holds a nested dispatch. |
+| `POST /orders` | The nav's order forms. The same `OrderService.placeOrder` as `POST /api/orders`, form-encoded, then a redirect to `/orders`. An unknown SKU answers 400 and too large a quantity 409, both on Peekaboot's error page. Every placed order counts on `testingapp.orders.placed`. |
+| `POST /inventory/restock` | Resets all seven `stock` rows to their seeded quantities in one `JdbcTemplate.batchUpdate`, so the Queries tab shows one statement with seven parameter sets. |
 | `GET /boom` | Always throws. Gives the Errors bucket and the error badge something real to render. The throw is served by the error dispatch, which renders Peekaboot's error page carrying the bar for this failed request. |
 | `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order. Fired by Spring's scheduler, its scheduled-task observation wraps the call and becomes the root span (named `task orderReconciler.reconcileOrders`), carrying the `code.function`/`code.namespace` tags that classify the trace `SCHEDULED_JOB`. A direct call, as some integration tests make, skips that observation: the method's own `@Observed` span becomes the root instead and classifies `INTERNAL`. |
+| `Scheduler` jobs | `fixedRate` (hourly) logs an ERROR without failing, `fixedDelay` (every 5 minutes) throws, and three empty cron jobs give the Scheduled Tasks tab schedules to render. |
 
 `OrderTraceCaptureIT` asserts what Peekaboot actually captured from these endpoints, not
 just what they returned; `EventListenerTraceCaptureIT` does the same for the order listeners.
@@ -79,7 +92,8 @@ classes, so they run under failsafe at `verify`. `mvn test` runs nothing in this
 They activate the `test` profile, which swaps PostgreSQL for in-memory H2 and disables
 Docker Compose, so the suite needs neither Docker nor network access, with two exceptions.
 `MultiDataSourceTraceIT` and `RedisTraceIT` start MySQL and Redis through Testcontainers and
-need Docker. The Playwright browser is described below. Under the test profiles the inventory
+need Docker, and `ProfileLookupTraceIT` starts go-httpbin the same way. The test profile leaves
+`app.profile-service.url` blank, so no other test makes an outbound profile call. The Playwright browser is described below. Under the test profiles the inventory
 is a second H2 in `MODE=MySQL`, migrated by the same Liquibase changelog.
 
 ```bash
