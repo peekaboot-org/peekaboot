@@ -1,8 +1,10 @@
 package org.peekaboot.testingapp.inventory;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -13,11 +15,25 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class InventoryRepository {
 
+    /** The seed-products change set's quantities, as the restock's parameters: quantity, then SKU. */
+    private static final List<Object[]> SEEDED_STOCK = List.of(
+            new Object[] {500, "WIDGET-1"},
+            new Object[] {500, "WIDGET-2"},
+            new Object[] {500, "WIDGET-3"},
+            new Object[] {500, "WIDGET-4"},
+            new Object[] {50, "GADGET-1"},
+            new Object[] {50, "GADGET-2"},
+            new Object[] {50, "GADGET-3"});
+
     private final JdbcClient jdbcClient;
 
-    public InventoryRepository(@Qualifier("inventory") JdbcClient jdbcClient) {
+    private final JdbcTemplate jdbcTemplate;
+
+    public InventoryRepository(
+            @Qualifier("inventory") JdbcClient jdbcClient, @Qualifier("inventory") JdbcTemplate jdbcTemplate) {
 
         this.jdbcClient = jdbcClient;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     // #result is the Optional's content; caching a miss would hide a product added within the TTL.
@@ -53,5 +69,11 @@ public class InventoryRepository {
                 .param(sku)
                 .query(Integer.class)
                 .single();
+    }
+
+    /** One batched UPDATE for every SKU, so the trace holds one statement with seven parameter sets. */
+    public void restockAll() {
+
+        jdbcTemplate.batchUpdate("UPDATE stock SET quantity = ? WHERE sku = ?", SEEDED_STOCK);
     }
 }

@@ -3,6 +3,9 @@ package org.peekaboot.testingapp.integration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -55,6 +58,26 @@ final class PeekabootApi {
                 .uri(path)
                 .accept(MediaType.ALL)
                 .exchange((request, response) -> response.getStatusCode());
+    }
+
+    /**
+     * A form POST the way a browser sends it, answered as served: an error status comes back
+     * instead of being thrown, and a redirect is not followed, so a post-redirect-get shows its 302.
+     */
+    ResponseEntity<String> postForm(String path, MultiValueMap<String, String> form) {
+        return restClient
+                .mutate()
+                // the JDK client's default redirect policy is NEVER
+                .requestFactory(new JdkClientHttpRequestFactory())
+                .build()
+                .post()
+                .uri(path)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .accept(MediaType.TEXT_HTML)
+                .body(form)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {})
+                .toEntity(String.class);
     }
 
     JsonNode getJson(String path, Object... uriVariables) {
