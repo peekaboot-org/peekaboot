@@ -1,6 +1,8 @@
 package org.peekaboot.testingapp.controller;
 
+import jakarta.validation.Valid;
 import org.peekaboot.testingapp.async.EnrichmentService;
+import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.order.OrderService;
 import org.peekaboot.testingapp.repository.OrderStatisticsRepository;
 import org.slf4j.Logger;
@@ -8,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -37,6 +40,17 @@ public class OrderController {
 
         model.addAttribute("orders", orderService.listOrders());
         return "orders";
+    }
+
+    /**
+     * The nav's order forms: the JSON API's placement behind a post-redirect-get. An unknown SKU
+     * (400) or too large a quantity (409) renders the error page instead.
+     */
+    @PostMapping("/orders")
+    public String placeOrder(@Valid NewOrder order) {
+
+        orderService.placeOrder(order);
+        return "redirect:/orders";
     }
 
     /** One deliberately slow query, so the trace view has a SLOW_QUERY issue to point at. */
