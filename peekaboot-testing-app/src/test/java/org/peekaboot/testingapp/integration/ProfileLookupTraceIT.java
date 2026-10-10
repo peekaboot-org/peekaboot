@@ -27,6 +27,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
@@ -44,8 +45,9 @@ import tools.jackson.databind.JsonNode;
 class ProfileLookupTraceIT {
 
     @Container
-    static final GenericContainer<?> HTTPBIN =
-            new GenericContainer<>("ghcr.io/mccutchen/go-httpbin:2.25.0").withExposedPorts(8080);
+    static final GenericContainer<?> HTTPBIN = new GenericContainer<>("ghcr.io/mccutchen/go-httpbin:2.25.0")
+            .withExposedPorts(8080)
+            .waitingFor(Wait.forHttp("/status/200").forPort(8080));
 
     @DynamicPropertySource
     static void profileServiceOnHttpbin(DynamicPropertyRegistry registry) {
@@ -84,10 +86,10 @@ class ProfileLookupTraceIT {
 
         assertThat(httpClientSpans(trace))
                 .singleElement()
-                .satisfies(
-                        client -> assertThat(client.path("tags").valueStream().map(tag -> tag.asString("")))
-                                .as("the client span names the endpoint it called, under whichever tag key")
-                                .anySatisfy(tag -> assertThat(tag).contains("/anything/profiles/")));
+                .satisfies(client -> assertThat(
+                                client.path("tags").path("http.url").asString(""))
+                        .as("the client span names the endpoint it called")
+                        .contains("/anything/profiles/"));
         assertThat(page.getBody())
                 .as("go-httpbin echoes the traceparent it received, which must carry this page's trace id")
                 .contains("<dd id=\"profile-traceparent\">00-" + traceId + "-")
