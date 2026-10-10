@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ import org.springframework.web.client.RestClient;
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("auto-security")
+// Its own SpringApplicationBuilder boots skip spring-test's context-load lock; concurrent Logback resets throw
+// ConcurrentModificationException.
+@Isolated
 class AutoSecuredDashboardIT {
 
     /** A resource-handler path, not a redirect: the one place an authenticated GET here answers 200 rather than 302. */
