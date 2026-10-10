@@ -60,11 +60,11 @@ springdoc:
 # observation annotations, OTLP export off) come from peekaboot's defaults;
 # actuator endpoints are invoked in-process, so no web exposure is needed
 
-# InventoryDataSourceConfiguration's MySQL: compose cannot wire a second DataSource, so it sits on a fixed port.
 app:
   # ProfileClient's server: compose.yml's go-httpbin, on a fixed port since Boot cannot wire it.
   profile-service:
     url: http://127.0.0.1:18093
+  # InventoryDataSourceConfiguration's MySQL: compose cannot wire a second DataSource, so it sits on a fixed port.
   datasource:
     inventory:
       url: jdbc:mysql://127.0.0.1:33307/inventory
