@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.async.AsyncTaskDecorator;
+import org.peekaboot.backend.tracing.async.AsyncTaskFailurePostProcessor;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -19,52 +21,57 @@ class AsyncInstrumentationAutoConfigurationTest {
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
-    void registersTheDecoratorWhenObservationRegistryBeanPresent() {
+    void registersTheDecoratorAndTheFailurePostProcessorWhenObservationRegistryBeanPresent() {
         contextRunner.withUserConfiguration(ObservationRegistryConfig.class).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(AsyncTaskDecorator.class);
+            assertThat(context).hasSingleBean(AsyncTaskFailurePostProcessor.class);
         });
     }
 
     @Test
-    void doesNotRegisterTheDecoratorWithoutAnObservationRegistry() {
+    void doesNotRegisterAsyncInstrumentationWithoutAnObservationRegistry() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(AsyncTaskDecorator.class);
+            assertThat(context).doesNotHaveBean(AsyncTaskFailurePostProcessor.class);
         });
     }
 
     @Test
-    void doesNotRegisterTheDecoratorWhenAsyncInstrumentationDisabled() {
+    void doesNotRegisterAsyncInstrumentationWhenAsyncTracingDisabled() {
         contextRunner
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .withPropertyValues("peekaboot.tracing.async=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(AsyncTaskDecorator.class);
+                    assertThat(context).doesNotHaveBean(AsyncTaskFailurePostProcessor.class);
                 });
     }
 
     /** Handing work to an executor is tracing; with tracing off there is no store to land in. */
     @Test
-    void doesNotRegisterTheDecoratorWhenTracingDisabled() {
+    void doesNotRegisterAsyncInstrumentationWhenTracingDisabled() {
         contextRunner
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .withPropertyValues("peekaboot.tracing.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(AsyncTaskDecorator.class);
+                    assertThat(context).doesNotHaveBean(AsyncTaskFailurePostProcessor.class);
                 });
     }
 
     @Test
-    void doesNotRegisterTheDecoratorWhenPeekabootDisabled() {
+    void doesNotRegisterAsyncInstrumentationWhenPeekabootDisabled() {
         contextRunner
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .withPropertyValues("peekaboot.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(AsyncTaskDecorator.class);
+                    assertThat(context).doesNotHaveBean(AsyncTaskFailurePostProcessor.class);
                 });
     }
 
@@ -91,6 +98,18 @@ class AsyncInstrumentationAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean("peekabootAsyncTaskDecorator")).isSameAs(UserDecoratorConfig.DECORATOR);
+                });
+    }
+
+    @Test
+    void userSuppliedSameNamedFailurePostProcessorReplacesTheDefault() {
+        contextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class, UserPostProcessorConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("peekabootAsyncTaskFailurePostProcessor"))
+                            .isSameAs(UserPostProcessorConfig.POST_PROCESSOR);
+                    assertThat(context).doesNotHaveBean(AsyncTaskFailurePostProcessor.class);
                 });
     }
 
@@ -138,6 +157,17 @@ class AsyncInstrumentationAutoConfigurationTest {
         @Bean
         TaskDecorator peekabootAsyncTaskDecorator() {
             return DECORATOR;
+        }
+    }
+
+    @Configuration
+    static class UserPostProcessorConfig {
+
+        static final BeanPostProcessor POST_PROCESSOR = new BeanPostProcessor() {};
+
+        @Bean
+        static BeanPostProcessor peekabootAsyncTaskFailurePostProcessor() {
+            return POST_PROCESSOR;
         }
     }
 }

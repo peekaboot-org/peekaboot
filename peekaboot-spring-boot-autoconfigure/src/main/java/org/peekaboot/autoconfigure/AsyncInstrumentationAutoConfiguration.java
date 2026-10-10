@@ -2,8 +2,10 @@ package org.peekaboot.autoconfigure;
 
 import io.micrometer.observation.ObservationRegistry;
 import org.peekaboot.backend.tracing.async.AsyncTaskDecorator;
+import org.peekaboot.backend.tracing.async.AsyncTaskFailurePostProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -12,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Role;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.task.TaskDecorator;
@@ -44,5 +47,14 @@ public class AsyncInstrumentationAutoConfiguration {
     public TaskDecorator peekabootAsyncTaskDecorator(ObservationRegistry observationRegistry) {
         log.debug("Peekaboot AsyncTaskDecorator registered for async task span capture");
         return new AsyncTaskDecorator(observationRegistry);
+    }
+
+    // static, so registering the post-processor does not instantiate this configuration early
+    @Bean
+    @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+    @ConditionalOnMissingBean(name = "peekabootAsyncTaskFailurePostProcessor")
+    public static AsyncTaskFailurePostProcessor peekabootAsyncTaskFailurePostProcessor() {
+        log.debug("Peekaboot AsyncTaskFailurePostProcessor registered for failing @Async methods");
+        return new AsyncTaskFailurePostProcessor();
     }
 }

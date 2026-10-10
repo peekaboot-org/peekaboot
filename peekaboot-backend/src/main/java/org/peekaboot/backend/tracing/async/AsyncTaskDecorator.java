@@ -24,6 +24,11 @@ import org.springframework.scheduling.support.DelegatingErrorHandlingRunnable;
  * {@code tasks.scheduled.execution} and every scheduled job would read as an async task.
  * Scheduled execution cannot be recognised from inside the wrapper, because
  * {@code ScheduledMethodRunnable} opens that observation itself, further down the stack.
+ *
+ * <p>A task run through {@code execute()} that throws fails its span here. A task handed over
+ * with {@code submit()} does not: its exception stays inside the {@code FutureTask} this
+ * decorator receives. Spring catches an {@code @Async} method's exception the same way; the
+ * interceptor that {@link AsyncTaskFailurePostProcessor} installs records it on this span.
  */
 public class AsyncTaskDecorator implements TaskDecorator {
 
@@ -46,12 +51,12 @@ public class AsyncTaskDecorator implements TaskDecorator {
             runnable.run();
             return;
         }
-        Observation.createNotStarted(AsyncTaskMarker.OBSERVATION_NAME, observationRegistry)
+        Observation task = Observation.createNotStarted(AsyncTaskMarker.OBSERVATION_NAME, observationRegistry)
                 .contextualName(AsyncTaskMarker.CONTEXTUAL_NAME)
                 .lowCardinalityKeyValue(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .highCardinalityKeyValue(
-                        AsyncTaskMarker.THREAD_TAG_KEY, Thread.currentThread().getName())
-                .observe(runnable);
+                        AsyncTaskMarker.THREAD_TAG_KEY, Thread.currentThread().getName());
+        task.observe(() -> RunningAsyncTask.run(task, runnable));
     }
 
     /**
