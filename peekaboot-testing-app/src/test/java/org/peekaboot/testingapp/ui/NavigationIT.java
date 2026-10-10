@@ -33,13 +33,13 @@ class NavigationIT extends SeededPersonTestBase {
             "Peekaboot dashboard -> /peekaboot",
             "Swagger UI -> /swagger-ui.html");
 
-    private static final String DESCRIBE_ENTRIES = """
-            () => [...document.querySelectorAll('#demo-nav a, #demo-nav form')].map(entry => entry.tagName === 'A'
-                ? entry.textContent.trim() + ' -> ' + entry.getAttribute('href')
+    private static final String DESCRIBE_ENTRIES = DemoNav.mapEntries("""
+            entry.tagName === 'A'
+                ? entry.textContent.trim() + ' -> ' + %1$s
                 : entry.querySelector('button').textContent.trim() + ' -> '
-                    + [entry.method, entry.getAttribute('action'), new URLSearchParams(new FormData(entry)).toString()]
-                        .filter(Boolean).join(' '))
-            """;
+                    + [entry.method, %1$s, new URLSearchParams(new FormData(entry)).toString()]
+                        .filter(Boolean).join(' ')
+            """.formatted(DemoNav.TARGET));
 
     private static final String DESCRIBE_FORMS = """
             () => [...document.querySelectorAll('#demo-nav form')]

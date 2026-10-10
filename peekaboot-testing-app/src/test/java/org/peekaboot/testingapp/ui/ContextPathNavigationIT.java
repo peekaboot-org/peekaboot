@@ -29,10 +29,7 @@ class ContextPathNavigationIT extends PlaywrightTestBase {
         page.navigate(baseUrl + CONTEXT_PATH + "/persons");
 
         @SuppressWarnings("unchecked")
-        List<String> targets = (List<String>) page.evaluate("""
-                () => [...document.querySelectorAll('#demo-nav a, #demo-nav form')]
-                    .map(entry => entry.getAttribute(entry.tagName === 'A' ? 'href' : 'action'))
-                """);
+        List<String> targets = (List<String>) page.evaluate(DemoNav.mapEntries(DemoNav.TARGET));
 
         assertThat(targets)
                 .hasSize(NavigationIT.ENTRIES.size())
