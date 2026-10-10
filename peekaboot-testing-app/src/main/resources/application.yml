@@ -41,8 +41,10 @@ spring:
         # the person edit form submits PUT through a hidden _method field
         enabled: true
 
-# peekaboot needs no configuration here: a local run (IDE or spring-boot:run) enables both
-# the dashboard and the dev toolbar by default.
+# A local run (IDE or spring-boot:run) enables the dashboard and the dev toolbar by default.
+peekaboot:
+  # A local demo: the Environment and Config tabs offer "Show secrets".
+  enable-unmasking: true
 
 # Both endpoints are already enabled by default (springdoc's own conditionals treat an
 # absent property as enabled) - setting them explicitly only stops SpringDocAppInitializer's

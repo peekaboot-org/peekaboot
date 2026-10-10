@@ -13,8 +13,9 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Proves the security-critical half of the two-independent-opt-ins design end to end
- * through the real HTTP API: {@code peekaboot.enable-unmasking} is not set anywhere in
- * this context, so it defaults to false - and the request's {@code unmask=true} parameter
+ * through the real HTTP API: application.yml switches {@code peekaboot.enable-unmasking} on
+ * for the demo and application-test.yml switches it off again, so this context runs with it
+ * false - and the request's {@code unmask=true} parameter
  * must never be a bypass on its own in that state. See
  * {@code UnmaskingEnabledIT} for the complementary "both opt-ins present"
  * case, and {@code ActuatorMaskingIT} for masking itself (not the opt-ins).
