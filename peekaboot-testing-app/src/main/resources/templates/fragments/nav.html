@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Demo scenario navigation</title>
+</head>
+<body>
+    <nav th:fragment="demoNav" id="demo-nav" aria-label="Demo scenarios">
+        <div class="demo-nav__group">
+            <span class="demo-nav__title">Pages</span>
+            <a th:href="@{/persons}">Persons</a>
+            <a th:href="@{/orders}">Orders (N+1, two datasources, outbound call)</a>
+            <a th:href="@{/orders/stats}">Order statistics (slow query)</a>
+        </div>
+        <div class="demo-nav__group">
+            <span class="demo-nav__title">Outbound HTTP</span>
+            <a th:href="@{/persons/1}">Profile lookup</a>
+            <a th:href="@{/persons/1(profile='slow')}">Slow profile lookup</a>
+            <a th:href="@{/persons/1(profile='unavailable')}">Profile service down</a>
+        </div>
+        <div class="demo-nav__group">
+            <span class="demo-nav__title">Background</span>
+            <a th:href="@{/orders/enrich}">Async enrichment</a>
+            <a th:href="@{/orders/enrich(fail=true)}">Failing async enrichment</a>
+        </div>
+        <div class="demo-nav__group">
+            <span class="demo-nav__title">Failures</span>
+            <a th:href="@{/(error=true)}">Logged error, page still 200</a>
+            <a th:href="@{/boom}">Exception, error page</a>
+        </div>
+        <div class="demo-nav__group">
+            <span class="demo-nav__title">Requests</span>
+            <a th:href="@{/people}">Forward (nested dispatch)</a>
+            <a th:href="@{/api/orders/1/report}">Slow report (JSON)</a>
+        </div>
+        <div class="demo-nav__group">
+            <span class="demo-nav__title">Writes</span>
+            <form th:action="@{/orders}" method="post">
+                <input type="hidden" name="customerId" value="1">
+                <input type="hidden" name="sku" value="WIDGET-1">
+                <input type="hidden" name="quantity" value="1">
+                <button type="submit">Place order</button>
+            </form>
+            <form th:action="@{/orders}" method="post">
+                <input type="hidden" name="customerId" value="1">
+                <input type="hidden" name="sku" value="NO-SUCH-PRODUCT">
+                <input type="hidden" name="quantity" value="1">
+                <button type="submit">Order unknown product (400)</button>
+            </form>
+            <form th:action="@{/orders}" method="post">
+                <input type="hidden" name="customerId" value="1">
+                <input type="hidden" name="sku" value="GADGET-1">
+                <input type="hidden" name="quantity" value="100000">
+                <button type="submit">Order more than in stock (409)</button>
+            </form>
+            <form th:action="@{/inventory/restock}" method="post">
+                <button type="submit">Restock all products (JDBC batch)</button>
+            </form>
+        </div>
+        <div class="demo-nav__group">
+            <span class="demo-nav__title">Tools</span>
+            <a th:href="@{/peekaboot}">Peekaboot dashboard</a>
+            <a th:href="@{/swagger-ui.html}">Swagger UI</a>
+        </div>
+    </nav>
+</body>
+</html>

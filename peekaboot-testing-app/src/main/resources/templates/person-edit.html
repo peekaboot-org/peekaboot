@@ -7,8 +7,9 @@
     <style th:replace="~{fragments/styles :: pageStyles}"></style>
 </head>
 <body>
+    <nav th:replace="~{fragments/nav :: demoNav}"></nav>
     <h1 th:text="|Edit ${person.firstName} ${person.lastName}|">Edit person</h1>
-    <form th:action="@{/persons/{id}(id=${person.id})}" th:method="put">
+    <form id="person-edit-form" th:action="@{/persons/{id}(id=${person.id})}" th:method="put">
         <label for="firstName">First Name</label>
         <input id="firstName" name="firstName" th:value="${person.firstName}" required>
         <label for="lastName">Last Name</label>

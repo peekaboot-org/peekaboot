@@ -37,7 +37,7 @@ class PersonPagesIT extends SeededPersonTestBase {
         page.navigate(baseUrl + "/persons/" + person.getId() + "/edit");
 
         page.fill("#email", "ada@analytical.example");
-        page.click("button[type=submit]");
+        page.click("#person-edit-form button[type=submit]");
 
         page.waitForURL(baseUrl + "/persons/" + person.getId());
         assertThat(page.textContent("#person-email")).isEqualTo("ada@analytical.example");

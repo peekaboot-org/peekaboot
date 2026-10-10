@@ -7,6 +7,7 @@
     <style th:replace="~{fragments/styles :: pageStyles}"></style>
 </head>
 <body>
+    <nav th:replace="~{fragments/nav :: demoNav}"></nav>
     <h1>Order statistics</h1>
     <p>Counted by one query that waits 80 ms in <code>pg_sleep</code>, so Peekaboot flags it as a slow query.</p>
     <table>
