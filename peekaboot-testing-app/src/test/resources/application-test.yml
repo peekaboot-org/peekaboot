@@ -21,6 +21,10 @@ spring:
     # (see DashboardTabsIT.configTabMasksSensitiveValues and
     # ActuatorMaskingIT).
     password: test-fixture-password
+  sql:
+    init:
+      # OrderStatisticsRepository calls pg_sleep, which H2 lacks; the default mode runs this on embedded databases only.
+      schema-locations: classpath:h2-functions.sql
   jpa:
     hibernate:
       ddl-auto: create-drop

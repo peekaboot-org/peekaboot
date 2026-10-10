@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.controller;
 
 import org.peekaboot.testingapp.async.EnrichmentService;
 import org.peekaboot.testingapp.order.OrderService;
+import org.peekaboot.testingapp.repository.OrderStatisticsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
@@ -20,10 +21,14 @@ public class OrderController {
 
     private final EnrichmentService enrichmentService;
 
-    public OrderController(OrderService orderService, EnrichmentService enrichmentService) {
+    private final OrderStatisticsRepository orderStatistics;
+
+    public OrderController(
+            OrderService orderService, EnrichmentService enrichmentService, OrderStatisticsRepository orderStatistics) {
 
         this.orderService = orderService;
         this.enrichmentService = enrichmentService;
+        this.orderStatistics = orderStatistics;
     }
 
     @GetMapping("/orders")
@@ -31,6 +36,14 @@ public class OrderController {
 
         model.addAttribute("orders", orderService.listOrders());
         return "orders";
+    }
+
+    /** One deliberately slow query, so the trace view has a SLOW_QUERY issue to point at. */
+    @GetMapping("/orders/stats")
+    public String statistics(Model model) {
+
+        model.addAttribute("statusCounts", orderStatistics.countByStatus());
+        return "order-stats";
     }
 
     /**

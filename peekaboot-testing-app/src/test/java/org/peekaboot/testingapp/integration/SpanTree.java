@@ -93,6 +93,24 @@ final class SpanTree {
         return statements;
     }
 
+    /**
+     * The first span, in walk order, whose statement contains {@code fragment}. Fails rather than
+     * answering empty, naming every statement the trace held.
+     */
+    static JsonNode spanWithStatementContaining(JsonNode trace, String fragment) {
+        List<JsonNode> found = new ArrayList<>();
+        walk(trace.path("rootSpan"), span -> {
+            if (span.path("query").path("text").asString("").contains(fragment)) {
+                found.add(span);
+            }
+        });
+        if (found.isEmpty()) {
+            throw new AssertionError(
+                    "no statement containing '" + fragment + "', among " + statementsUnder(trace.path("rootSpan")));
+        }
+        return found.getFirst();
+    }
+
     private static boolean collectPath(JsonNode span, String name, List<String> path) {
         path.add(span.path("name").asString(""));
         if (name.equals(path.getLast())) {
