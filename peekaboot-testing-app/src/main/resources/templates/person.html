@@ -18,6 +18,18 @@
         <dt>Email</dt>
         <dd id="person-email" th:text="${person.email}"></dd>
     </dl>
+    <h2>Profile service</h2>
+    <p id="profile-status" th:if="${profileLookup.echo == null}" th:text="${profileLookup.outcome}">not configured</p>
+    <dl th:if="${profileLookup.echo != null}" th:object="${profileLookup.echo}">
+        <dt>Method</dt>
+        <dd id="profile-method" th:text="*{method}"></dd>
+        <dt>URL</dt>
+        <dd id="profile-url" th:text="*{url}"></dd>
+        <dt>email argument</dt>
+        <dd id="profile-email" th:text="*{email}"></dd>
+        <dt>traceparent received</dt>
+        <dd id="profile-traceparent" th:text="*{traceparent}"></dd>
+    </dl>
     <p>
         <a class="button" th:href="@{/persons/{id}/edit(id=${person.id})}">Edit</a>
         <a class="button" th:href="@{/persons}">All persons</a>

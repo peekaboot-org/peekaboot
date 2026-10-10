@@ -4,6 +4,8 @@ import org.peekaboot.testingapp.PersonForm;
 import org.peekaboot.testingapp.PersonQueryService;
 import org.peekaboot.testingapp.PersonUpdateService;
 import org.peekaboot.testingapp.entity.Person;
+import org.peekaboot.testingapp.profile.ProfileCall;
+import org.peekaboot.testingapp.profile.ProfileClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -22,11 +24,16 @@ public class PersonController {
 
     private final PersonQueryService personQueryService;
     private final PersonUpdateService personUpdateService;
+    private final ProfileClient profileClient;
 
-    public PersonController(PersonQueryService personQueryService, PersonUpdateService personUpdateService) {
+    public PersonController(
+            PersonQueryService personQueryService,
+            PersonUpdateService personUpdateService,
+            ProfileClient profileClient) {
 
         this.personQueryService = personQueryService;
         this.personUpdateService = personUpdateService;
+        this.profileClient = profileClient;
     }
 
     /**
@@ -62,11 +69,23 @@ public class PersonController {
         return "forward:/persons";
     }
 
-    /** One person, looked up by id: the page whose trace carries a query with a bind parameter. */
+    /**
+     * One person, looked up by id: the page whose trace carries a query with a bind parameter,
+     * and, through {@code profile}, a call to the profile service that answers, answers slowly
+     * or fails.
+     */
     @GetMapping("/persons/{id}")
-    public String person(@PathVariable("id") long id, Model model) {
+    public String person(
+            @PathVariable("id") long id,
+            @RequestParam(name = "profile", required = false) String profile,
+            Model model) {
 
-        model.addAttribute("person", existingPerson(id));
+        ProfileCall call = ProfileCall.fromParameter(profile)
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "no profile scenario " + profile));
+        Person person = existingPerson(id);
+        model.addAttribute("person", person);
+        model.addAttribute("profileLookup", profileClient.lookup(person.getId(), person.getEmail(), call));
         return "person";
     }
 

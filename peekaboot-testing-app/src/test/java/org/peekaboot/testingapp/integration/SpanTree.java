@@ -125,6 +125,17 @@ final class SpanTree {
         return false;
     }
 
+    /** Every span of {@code kind} ({@code CLIENT}, {@code SERVER}, ...), the root included, in walk order. */
+    static List<JsonNode> spansOfKind(JsonNode trace, String kind) {
+        List<JsonNode> spans = new ArrayList<>();
+        walk(trace.path("rootSpan"), span -> {
+            if (kind.equals(span.path("kind").asString(""))) {
+                spans.add(span);
+            }
+        });
+        return spans;
+    }
+
     private static void walk(JsonNode span, Consumer<JsonNode> visitor) {
         visitor.accept(span);
         for (JsonNode child : span.path("children")) {

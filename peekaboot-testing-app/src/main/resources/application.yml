@@ -62,6 +62,9 @@ springdoc:
 
 # InventoryDataSourceConfiguration's MySQL: compose cannot wire a second DataSource, so it sits on a fixed port.
 app:
+  # ProfileClient's server: compose.yml's go-httpbin, on a fixed port since Boot cannot wire it.
+  profile-service:
+    url: http://127.0.0.1:18093
   datasource:
     inventory:
       url: jdbc:mysql://127.0.0.1:33307/inventory

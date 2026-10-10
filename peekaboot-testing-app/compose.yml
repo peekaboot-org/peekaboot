@@ -29,3 +29,10 @@ services:
     image: 'redis:8'
     ports:
       - '6379'
+  httpbin:
+    image: 'ghcr.io/mccutchen/go-httpbin:2.25.0'
+    ports:
+      - '127.0.0.1:18093:8080'
+    labels:
+      # Boot has no connection details for it; app.profile-service.url points at the fixed port.
+      org.springframework.boot.ignore: 'true'

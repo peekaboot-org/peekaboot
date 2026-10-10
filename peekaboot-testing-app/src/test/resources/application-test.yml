@@ -96,6 +96,9 @@ logging:
     org.peekaboot: INFO
 
 app:
+  # Blank: no profile service under this profile, so person pages make no outbound call.
+  profile-service:
+    url: ""
   datasource:
     inventory:
       # MODE=MySQL because the inventory runs on MySQL everywhere else; the uuid keeps it per context.

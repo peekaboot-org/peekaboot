@@ -65,6 +65,21 @@ class PersonPagesIT extends SeededPersonTestBase {
         assertThat(save.status()).isEqualTo(404);
     }
 
+    /** The test profile names no profile service, so the page says so instead of calling one. */
+    @Test
+    void withoutAProfileServiceThePersonPageSaysNotConfigured() {
+        page.navigate(baseUrl + "/persons/" + person.getId());
+
+        assertThat(page.textContent("#profile-status")).isEqualTo("not configured");
+    }
+
+    @Test
+    void anUnknownProfileScenarioIsABadRequest() {
+        assertThat(page.navigate(baseUrl + "/persons/" + person.getId() + "?profile=sideways")
+                        .status())
+                .isEqualTo(400);
+    }
+
     private String row() {
         return "tr[data-person-id='" + person.getId() + "']";
     }
