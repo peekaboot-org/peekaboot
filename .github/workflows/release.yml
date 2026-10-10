@@ -134,7 +134,7 @@ jobs:
       - name: perform-release-publish-on-maven-central
         # no third test run: release:prepare's preparationGoals verified the tag's tree, and this
         # job's own build verified the same sources before the changelog was added to them
-        run: ./mvnw --batch-mode -P peekaboot-release release:perform -Darguments="-DskipTests -Djacoco.skip=true"
+        run: ./mvnw --batch-mode -P peekaboot-release release:perform -Darguments="-DskipTests -DskipITs -Djacoco.skip=true"
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}

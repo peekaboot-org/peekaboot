@@ -343,8 +343,8 @@ Three deliberate things about that module:
   lines. Per-module reporting would throw that away.
 - **A missing data file makes `jacoco:check` pass silently**, turning the gate into
   decoration the moment the merge breaks. `maven-enforcer-plugin` fails the build first if
-  `target/jacoco-merged.exec` is absent. So `mvn verify -DskipTests` fails on purpose; pass
-  `-Djacoco.skip=true` to turn the agent, the check and the guard off together.
+  `target/jacoco-merged.exec` is absent. Pass `-Djacoco.skip=true` to turn the agent, the
+  check and the guard off together.
 
 The aggregate HTML report lands at
 `peekaboot-coverage/target/site/jacoco-aggregate/index.html`. Nothing publishes it.
@@ -646,7 +646,8 @@ the bundle is still uploaded from `peekaboot-coverage`, the reactor's last modul
 `-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
 `target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where
 signing and the upload to Central happen. The workflow passes it
-`-Darguments="-DskipTests -Djacoco.skip=true"`. That tree passed `verify` in
+`-Darguments="-DskipTests -DskipITs -Djacoco.skip=true"`. Failsafe ignores `-DskipTests`,
+so `-DskipITs` is what keeps the Playwright suite out. That tree passed `verify` in
 `preparationGoals`, and the job's own build verified the same sources beforehand, so a
 third run would only repeat the Playwright suite. The static-analysis gates, both
 dependency checks and the configuration-metadata check still run.
@@ -751,8 +752,9 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
 ## Things that will bite you
 
 - Local builds reformat your sources mid-build. Expect a dirty tree; that is by design.
-- `mvn verify -DskipTests` fails at the coverage guard, by design; there is no data to
-  gate on. Use `-Djacoco.skip=true` alongside it.
+- `-DskipTests` skips only the unit tests. Failsafe ignores it, so the testing app's ITs
+  still run, and the coverage check then fails on their partial data. Build without tests
+  with `-DskipTests -DskipITs -Djacoco.skip=true`.
 - `git-commit-id-maven-plugin` is declared only in `peekaboot-testing-app`, the one runnable
   application, and nowhere in the parent. `git.properties` lands at the classpath root and
   Spring resolves `classpath:git.properties` to a single resource, so a library shipping one
