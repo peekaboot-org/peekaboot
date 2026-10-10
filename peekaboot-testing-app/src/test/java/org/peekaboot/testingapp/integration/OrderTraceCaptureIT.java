@@ -188,6 +188,13 @@ class OrderTraceCaptureIT {
                 .isEqualTo("HAS_ERRORS");
     }
 
+    /** The console hides this line (logback-test.xml), so Peekaboot capturing it is what keeps it asserted. */
+    @Test
+    void failingEndpointsLoggedErrorIsCapturedAgainstItsTrace() {
+        traces.awaitTrace(
+                () -> traces.get("/boom"), TraceApiClient.errorLogged("order reconciliation gateway is unreachable"));
+    }
+
     @Test
     void ordersPageTraceIncludesTheOutboundCustomerLookup() {
         String traceId = traces.get("/orders");

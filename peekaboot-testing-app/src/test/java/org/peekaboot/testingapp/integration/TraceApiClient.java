@@ -86,6 +86,14 @@ class TraceApiClient {
         return traceIdOf(api.headersOf(path));
     }
 
+    /** The trace carries an ERROR log whose message is exactly {@code message}. */
+    static Predicate<JsonNode> errorLogged(String message) {
+        return trace -> trace.path("logs")
+                .valueStream()
+                .anyMatch(log -> "ERROR".equals(log.path("level").asString(""))
+                        && message.equals(log.path("message").asString("")));
+    }
+
     /** The trace id a captured response names in Server-Timing, for a request made some other way. */
     static String traceIdOf(HttpHeaders headers) {
         String serverTiming = headers.getFirst("Server-Timing");

@@ -165,6 +165,26 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   noise. A failure the resolver really handles still reaches the client as a 4xx/5xx and fails
   the asserting test, so only that advisory WARN is lost.
 
+- `peekaboot-testing-app`'s `logback-test.xml` replaces Boot's console appender with one carrying
+  `IntentionalLogFilter` entries (`peekaboot-test-support`). Each entry hides one line the tests
+  provoke on purpose. An entry matches the logger and the whole message, so the same class
+  logging anything else still prints.
+- Four of those lines are asserted through Peekaboot's own trace API: `PersonController`'s
+  `?error=true` error (`LogCaptureIT`), the `Scheduler` error (`TraceDeepLinkIT`), the
+  `OrderController` `/boom` error (`OrderTraceCaptureIT`) and `OrderReconciler`'s warning
+  (`DashboardTabsIT`). A filter on the console appender leaves Peekaboot's appender on the root
+  logger receiving the event. `LogCapture` detaches the logger from the root, so Peekaboot would
+  never see the line. A logger level would hide it from Peekaboot too.
+- Two more entries cover product warnings. The `DashboardAuthenticationFilter` challenge is
+  asserted in `AutoSecuredDashboardIT` on a fresh application; the entry hides the first
+  challenge on the shared one, which other tests only trigger. The `SecurityPostureListener`
+  banner is logged while the context loads, and Boot reinitialises Logback on the first start
+  after another context closed, which detaches any earlier `LogCapture`. Only
+  `SecurityPostureListenerTest` asserts the banner.
+- The same file raises `io.netty.resolver.dns.DnsServerAddressStreamProviders` and
+  `org.flywaydb.core.internal.database.base.Database` to `ERROR`. The first warns about a
+  macOS-only native jar. The second warns that H2 is newer than the version Flyway has verified.
+
 ### Accepted, unavoidable noise
 Third-party output and deliberate demo signal. This is not a list of known flaky tests, and
 Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.

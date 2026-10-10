@@ -2,7 +2,39 @@
 <configuration>
 
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Boot's console appender plus filters hiding lines the tests provoke on purpose; Peekaboot's root appender still gets them. -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.testingapp.controller.PersonController</logger>
+            <message>An error occurred while trying to find all persons</message>
+        </filter>
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.testingapp.Scheduler</logger>
+            <message>fixedRate failed</message>
+        </filter>
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.testingapp.controller.OrderController</logger>
+            <message>order reconciliation gateway is unreachable</message>
+        </filter>
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.testingapp.order.OrderReconciler</logger>
+            <message>order PK-.* is still PLACED and has not been acknowledged</message>
+        </filter>
+        <!-- Banner: no LogCapture survives Boot's Logback reinit during context load. Challenge: AutoSecuredDashboardIT asserts it on a fresh app. -->
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.backend.security.SecurityPostureListener</logger>
+            <message>(?s)\s*=+\s*:: Peekaboot Security ::.*</message>
+        </filter>
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.backend.security.DashboardAuthenticationFilter</logger>
+            <message>Challenged an unauthenticated request for /peekaboot/\S+ - nothing but Peekaboot's own generated credentials .*</message>
+        </filter>
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>${CONSOLE_LOG_CHARSET}</charset>
+        </encoder>
+    </appender>
 
     <!-- OrderController's deliberately failing /boom endpoint (populating Peekaboot's Errors
          bucket in OrderTraceCaptureIT) escapes as an unhandled exception, which

@@ -50,7 +50,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-mysql")
-    // shared test support (LogCapture)
+    // shared test support (LogCapture, IntentionalLogFilter)
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("com.microsoft.playwright:playwright:1.63.0")
     // the axe-core rule engine, in lockstep with pom.xml

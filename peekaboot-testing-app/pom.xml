@@ -198,7 +198,7 @@
             <artifactId>testcontainers-mysql</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- shared test support (LogCapture); an unpublished reactor module -->
+        <!-- shared test support (LogCapture, IntentionalLogFilter); an unpublished reactor module -->
         <dependency>
             <groupId>org.peekaboot</groupId>
             <artifactId>peekaboot-test-support</artifactId>
