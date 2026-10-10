@@ -2,6 +2,7 @@ package org.peekaboot.backend.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,7 +95,11 @@ class CredentialsFileTest {
         var path = dir.resolve("security.properties");
         Files.writeString(path, "username=orders-admin\npassword=not-a-hash\ncreated=2026-09-11T08:15:30Z\n");
 
-        assertThat(new CredentialsFile(path).read()).isEmpty();
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            assertThat(new CredentialsFile(path).read()).isEmpty();
+
+            assertSingleWarning(capture, "holds no usable entry; generating a new password");
+        }
     }
 
     @Test
@@ -104,7 +109,11 @@ class CredentialsFileTest {
                 path,
                 "username=orders-admin\npassword=" + PasswordHash.of("s3cret").format() + "\ncreated=never\n");
 
-        assertThat(new CredentialsFile(path).read()).isEmpty();
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            assertThat(new CredentialsFile(path).read()).isEmpty();
+
+            assertSingleWarning(capture, "has no readable creation instant");
+        }
     }
 
     @Test
@@ -114,9 +123,13 @@ class CredentialsFileTest {
 
         var file = new CredentialsFile(blocker.resolve("security.properties"));
 
-        assertThat(file.write(credentials("orders-admin", PasswordHash.of("s3cret"))))
-                .isFalse();
-        assertThat(file.read()).isEmpty();
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            assertThat(file.write(credentials("orders-admin", PasswordHash.of("s3cret"))))
+                    .isFalse();
+            assertThat(file.read()).isEmpty();
+
+            assertSingleWarning(capture, "Could not write the Peekaboot credentials file");
+        }
     }
 
     @Test
@@ -142,6 +155,13 @@ class CredentialsFileTest {
 
             assertThat(capture.appender().list).isEmpty();
         }
+    }
+
+    private static void assertSingleWarning(LogCapture capture, String messageFragment) {
+        assertThat(capture.appender().list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains(messageFragment);
+        });
     }
 
     private static DashboardCredentials credentials(String username, PasswordHash hash) {

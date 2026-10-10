@@ -2,8 +2,10 @@ package org.peekaboot.backend.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testsupport.LogCapture;
 
 /**
  * The inlined copy is what keeps a server-rendered surface styled where an authorization
@@ -42,9 +44,16 @@ class InlinedStylesheetsTest {
     /** peekaboot-frontend absent means the whole UI is absent; an unstyled surface beats a failure. */
     @Test
     void aMissingSheetLeavesTheOthersInPlace() {
-        InlinedStylesheets withMissing =
-                InlinedStylesheets.of(List.of(), List.of("/ui/assets/nope.css", "/ui/assets/tokens.css"));
+        try (LogCapture capture = LogCapture.attach(InlinedStylesheets.class)) {
+            InlinedStylesheets withMissing =
+                    InlinedStylesheets.of(List.of(), List.of("/ui/assets/nope.css", "/ui/assets/tokens.css"));
 
-        assertThat(withMissing.css()).contains("--pk-bg:");
+            assertThat(withMissing.css()).contains("--pk-bg:");
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("stylesheet /ui/assets/nope.css not found on the classpath");
+            });
+        }
     }
 }

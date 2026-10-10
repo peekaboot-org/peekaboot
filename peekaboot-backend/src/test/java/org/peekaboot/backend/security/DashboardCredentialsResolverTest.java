@@ -2,10 +2,12 @@ package org.peekaboot.backend.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.testsupport.LogCapture;
 
 class DashboardCredentialsResolverTest {
 
@@ -58,11 +60,18 @@ class DashboardCredentialsResolverTest {
         java.nio.file.Files.writeString(blocker, "not a directory");
         var file = new CredentialsFile(blocker.resolve("security.properties"));
 
-        var credentials =
-                new DashboardCredentialsResolver(new PeekabootProperties.Security(), file, "orders-service").resolve();
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            var credentials = new DashboardCredentialsResolver(
+                            new PeekabootProperties.Security(), file, "orders-service")
+                    .resolve();
 
-        assertThat(credentials.origin()).isEqualTo(DashboardCredentials.Origin.GENERATED_UNPERSISTED);
-        assertThat(credentials.plaintext()).isNotNull();
+            assertThat(credentials.origin()).isEqualTo(DashboardCredentials.Origin.GENERATED_UNPERSISTED);
+            assertThat(credentials.plaintext()).isNotNull();
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).contains("Could not write the Peekaboot credentials file");
+            });
+        }
     }
 
     @Test
