@@ -1926,7 +1926,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /**
      * Task 11's URL half, on a real captured async subtree from the same endpoint Task 10's
      * row links to: the {@code ?root=<spanId>} deep link that row's own open button lands
-     * on scopes the Spans tab to that span's subtree - its enclosing request root and
+     * on scopes the Spans tab to that span alone - its enclosing request root and
      * spring.handler are excluded - and it carries the "background" marker end to end from
      * the real backend. Then pins {@code url-state.js}'s documented rule rather than
      * fighting it (see spans.js's own module doc): switching tabs scopes params to the tab
@@ -1951,9 +1951,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .as("the async row's own open button lands here - Task 10's own pin")
                 .contains("#traces/" + traceId + "/spans?root=" + asyncSpanId);
         assertThat(visibleGanttRowCount())
-                .as("scoped to the async entry and its order.enrichment child; its enclosing request root and"
-                        + " spring.handler are excluded")
-                .isEqualTo(2);
+                .as("scoped to the async entry alone; its enclosing request root and spring.handler are excluded")
+                .isEqualTo(1);
         assertThat((String)
                         overlay.evaluate("root => root.querySelector('#pk-gantt-rows .pk-gantt-row').dataset.spanId"))
                 .isEqualTo(asyncSpanId);

@@ -151,14 +151,13 @@ class AsyncTraceCaptureIT {
     }
 
     /**
-     * A void {@code @Async} method's exception never reaches the {@code async task} span: Spring's
-     * interceptor catches it inside its own task and hands it to the uncaught-exception handler.
-     * The task's own {@code @Observed} span is what fails, and that files the trace under Errors.
-     * The handler's ERROR is captured here, which also keeps it from Peekaboot's appender, so
-     * the span alone has to do it.
+     * Spring catches a void {@code @Async} method's exception inside its own task and hands it
+     * to the uncaught-exception handler, yet the {@code async task} span still fails with it,
+     * and that files the trace under Errors. The handler's ERROR is captured here, which also
+     * keeps it from Peekaboot's appender, so the span alone has to do it.
      */
     @Test
-    void aFailingAsyncTaskFilesTheRequestsTraceUnderErrors() {
+    void aFailingAsyncTaskFailsItsSpanAndFilesTheRequestsTraceUnderErrors() {
         String traceId;
         JsonNode trace;
         try (LogCapture uncaught = LogCapture.attach(SimpleAsyncUncaughtExceptionHandler.class)) {
@@ -172,19 +171,25 @@ class AsyncTraceCaptureIT {
             });
         }
 
-        assertThat(SpanTree.descendantNamed(trace, "order.enrichment")
-                        .path("status")
-                        .asString(""))
-                .isEqualTo("ERROR");
+        JsonNode asyncSpan = SpanTree.descendantNamed(trace, AsyncTaskMarker.CONTEXTUAL_NAME);
+        assertThat(asyncSpan.path("status").asString("")).isEqualTo("ERROR");
+        assertThat(asyncSpan.path("errorMessage").asString("")).isEqualTo("enrichment of PK-2001 was rejected");
         traces.awaitTraceInBucket("errors", traceId);
+        assertThat(asyncRowStatus(traceId))
+                .as("the async row is summarised over its own subtree, which now holds the failed span")
+                .isEqualTo("HAS_ERRORS");
     }
 
     @Test
     void aSucceedingAsyncTaskStaysOutOfErrors() {
         String traceId = traces.get("/orders/enrich");
 
-        traces.awaitTrace(traceId, ASYNC_SPAN_CAPTURED);
+        JsonNode trace = traces.awaitTrace(traceId, ASYNC_SPAN_CAPTURED);
 
+        assertThat(SpanTree.descendantNamed(trace, AsyncTaskMarker.CONTEXTUAL_NAME)
+                        .path("status")
+                        .asString(""))
+                .isEqualTo("OK");
         assertThat(listedTraceIds("bucket=errors")).doesNotContain(traceId);
     }
 
@@ -313,6 +318,17 @@ class AsyncTraceCaptureIT {
     private String fireFixedRateFromWithinAnObservation() {
         return Observation.createNotStarted("test.scheduling.caller", observationRegistry)
                 .observe(this::fireFixedRateThroughSpringsScheduler);
+    }
+
+    private String asyncRowStatus(String traceId) {
+        JsonNode response =
+                api.getJson("/peekaboot/api/traces/insights?limit=10000&rootActionType=" + RootActionType.ASYNC_TASK);
+        for (JsonNode listed : response.path("traces")) {
+            if (traceId.equals(listed.path("traceId").asString(""))) {
+                return listed.path("status").asString("");
+            }
+        }
+        throw new AssertionError("no async row listed for trace " + traceId);
     }
 
     /** The ids the listing endpoint answers with for {@code query}. */
