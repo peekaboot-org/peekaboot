@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 @Controller
@@ -49,12 +50,14 @@ public class OrderController {
     /**
      * Hands enrichment to a task executor and answers straight away, so the request finishes
      * well before the background work does and the trace shows a hand-off rather than a wait.
+     * {@code ?fail=true} makes the task throw once its work is done, so the trace lands in
+     * Errors although the request answered 200.
      */
     @GetMapping("/orders/enrich")
     @ResponseBody
-    public String enrich() {
+    public String enrich(@RequestParam(name = "fail", defaultValue = "false") boolean fail) {
 
-        enrichmentService.enrich(ENRICHED_REFERENCE);
+        enrichmentService.enrich(ENRICHED_REFERENCE, fail);
         return "enrichment of " + ENRICHED_REFERENCE + " dispatched";
     }
 

@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
@@ -19,6 +20,8 @@ import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.testingapp.Scheduler;
 import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testsupport.LogCapture;
+import org.springframework.aop.interceptor.SimpleAsyncUncaughtExceptionHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
@@ -148,6 +151,44 @@ class AsyncTraceCaptureIT {
     }
 
     /**
+     * A void {@code @Async} method's exception never reaches the {@code async task} span: Spring's
+     * interceptor catches it inside its own task and hands it to the uncaught-exception handler.
+     * The task's own {@code @Observed} span is what fails, and that files the trace under Errors.
+     * The handler's ERROR is captured here, which also keeps it from Peekaboot's appender, so
+     * the span alone has to do it.
+     */
+    @Test
+    void aFailingAsyncTaskFilesTheRequestsTraceUnderErrors() {
+        String traceId;
+        JsonNode trace;
+        try (LogCapture uncaught = LogCapture.attach(SimpleAsyncUncaughtExceptionHandler.class)) {
+            traceId = traces.get("/orders/enrich?fail=true");
+            // the handler logs inside the task, before the async span ends, so waiting for that span is enough
+            trace = traces.awaitTrace(traceId, ASYNC_SPAN_CAPTURED);
+
+            assertThat(uncaught.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+                assertThat(event.getThrowableProxy().getMessage()).isEqualTo("enrichment of PK-2001 was rejected");
+            });
+        }
+
+        assertThat(SpanTree.descendantNamed(trace, "order.enrichment")
+                        .path("status")
+                        .asString(""))
+                .isEqualTo("ERROR");
+        traces.awaitTraceInBucket("errors", traceId);
+    }
+
+    @Test
+    void aSucceedingAsyncTaskStaysOutOfErrors() {
+        String traceId = traces.get("/orders/enrich");
+
+        traces.awaitTrace(traceId, ASYNC_SPAN_CAPTURED);
+
+        assertThat(listedTraceIds("bucket=errors")).doesNotContain(traceId);
+    }
+
+    /**
      * What this pins: a job a timer fires still reads as a scheduled job, with Peekaboot's
      * {@code TaskDecorator} in the scheduler's chain. One decorator bean reaches Spring's
      * scheduler builders as well as its executor builders, so every scheduled job in every
@@ -225,7 +266,7 @@ class AsyncTraceCaptureIT {
         // parentless ASYNC_TASK trace of its own, but listedTraceIds() cannot tell those
         // apart. Same before/after idiom as TraceApiClient.awaitTraceAppearing: only a row
         // that is new since this test's own hand-off can be this test's hand-off.
-        List<String> asyncTaskIdsBeforeHandOff = listedTraceIds(RootActionType.ASYNC_TASK);
+        List<String> asyncTaskIdsBeforeHandOff = listedTraceIds("rootActionType=" + RootActionType.ASYNC_TASK);
 
         CountDownLatch handedOver = new CountDownLatch(1);
 
@@ -239,7 +280,7 @@ class AsyncTraceCaptureIT {
         // hand-off above is readable only once that hand-off's span - had there been one - is.
         traces.awaitTrace(traces.get("/orders"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        List<String> newAsyncTaskIds = new ArrayList<>(listedTraceIds(RootActionType.ASYNC_TASK));
+        List<String> newAsyncTaskIds = new ArrayList<>(listedTraceIds("rootActionType=" + RootActionType.ASYNC_TASK));
         newAsyncTaskIds.removeAll(asyncTaskIdsBeforeHandOff);
 
         assertThat(newAsyncTaskIds)
@@ -274,9 +315,9 @@ class AsyncTraceCaptureIT {
                 .observe(this::fireFixedRateThroughSpringsScheduler);
     }
 
-    /** The ids the listing endpoint answers with for one {@code rootActionType}. */
-    private List<String> listedTraceIds(RootActionType rootActionType) {
-        JsonNode response = api.getJson("/peekaboot/api/traces/insights?limit=10000&rootActionType=" + rootActionType);
+    /** The ids the listing endpoint answers with for {@code query}. */
+    private List<String> listedTraceIds(String query) {
+        JsonNode response = api.getJson("/peekaboot/api/traces/insights?limit=10000&" + query);
         List<String> ids = new ArrayList<>();
         for (JsonNode listed : response.path("traces")) {
             ids.add(listed.path("traceId").asString(""));
