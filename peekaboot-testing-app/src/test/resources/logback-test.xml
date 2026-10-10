@@ -26,6 +26,12 @@
          lost by raising the level to ERROR. -->
     <logger name="org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver" level="ERROR"/>
 
+    <!-- Reactor Netty warns on macOS that its native DNS resolver jar is absent; third-party, unused here. -->
+    <logger name="io.netty.resolver.dns.DnsServerAddressStreamProviders" level="ERROR"/>
+
+    <!-- Flyway warns that the H2 Boot manages is newer than the version it has verified; advisory only. -->
+    <logger name="org.flywaydb.core.internal.database.base.Database" level="ERROR"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
