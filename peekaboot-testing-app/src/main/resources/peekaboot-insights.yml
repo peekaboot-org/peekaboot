@@ -1,0 +1,23 @@
+tiles:
+  - id: orders-placed
+    label: Orders placed
+    meter: testingapp.orders.placed
+    format: count
+    live: true
+
+panels:
+  # No title: each entry patches the bundled panel of that id, here only to switch it on.
+  - { id: thread-states, enabled: true }
+  - { id: hibernate-activity, enabled: true }
+  - { id: executors, enabled: true }
+  - { id: open-files, enabled: true }
+  - { id: tomcat-sessions, enabled: true }
+  - { id: allocation, enabled: true }
+
+  - id: orders-placed
+    title: Orders placed
+    chart: line
+    unit: persec
+    order: 230
+    series:
+      - { id: placed, label: Placed, meter: testingapp.orders.placed, stat: rate }

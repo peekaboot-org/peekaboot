@@ -1,5 +1,6 @@
 package org.peekaboot.testingapp.order;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+    private static final String ORDERS_PLACED = "testingapp.orders.placed";
 
     private final OrderRepository orderRepository;
     private final OrderLineRepository orderLineRepository;
@@ -36,6 +38,7 @@ public class OrderService {
     private final OrderReportStages reportStages;
     private final CustomerClient customerClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final MeterRegistry meterRegistry;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -43,7 +46,8 @@ public class OrderService {
             InventoryRepository inventoryRepository,
             OrderReportStages reportStages,
             CustomerClient customerClient,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            MeterRegistry meterRegistry) {
 
         this.orderRepository = orderRepository;
         this.orderLineRepository = orderLineRepository;
@@ -51,6 +55,9 @@ public class OrderService {
         this.reportStages = reportStages;
         this.customerClient = customerClient;
         this.eventPublisher = eventPublisher;
+        this.meterRegistry = meterRegistry;
+        // Registered up front, so the Overview tile reads 0 rather than nothing before the first order.
+        meterRegistry.counter(ORDERS_PLACED);
     }
 
     /**
@@ -142,6 +149,7 @@ public class OrderService {
         orderLineRepository.save(line);
 
         log.info("placed order {} for customer {}", saved.getReference(), request.customerId());
+        meterRegistry.counter(ORDERS_PLACED).increment();
         eventPublisher.publishEvent(new OrderPlacedEvent(saved.getId(), saved.getReference(), product.sku()));
         return new OrderSummary(
                 saved.getId(),
