@@ -50,7 +50,7 @@ looking at.
 | `GET /orders/enrich` | Hands `EnrichmentService.enrich` to a task executor and answers at once, so the trace shows an `async task` span that outlives the request. `?fail=true` makes the task throw. Its `order.enrichment` span fails and the trace lands in Errors. Spring hands a `void` `@Async` method's exception to `SimpleAsyncUncaughtExceptionHandler`, which logs it at ERROR, so the `async task` span itself ends OK. |
 | `GET /people` | A forward to `/persons`, so the trace holds a nested dispatch. |
 | `POST /orders` | The nav's order forms. The same `OrderService.placeOrder` as `POST /api/orders`, form-encoded, then a redirect to `/orders`. An unknown SKU answers 400 and too large a quantity 409, both on Peekaboot's error page. Every placed order counts on `testingapp.orders.placed`. |
-| `POST /inventory/restock` | Resets all seven `stock` rows to their seeded quantities in one `JdbcTemplate.batchUpdate`, so the Queries tab shows one statement with seven parameter sets. |
+| `POST /inventory/restock` | Redirects to `/orders`. Resets all seven `stock` rows to their seeded quantities in one `JdbcTemplate.batchUpdate`, so the Queries tab shows one statement with seven parameter sets. |
 | `GET /boom` | Always throws. Gives the Errors bucket and the error badge something real to render. The throw is served by the error dispatch, which renders Peekaboot's error page carrying the bar for this failed request. |
 | `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order. Fired by Spring's scheduler, its scheduled-task observation wraps the call and becomes the root span (named `task orderReconciler.reconcileOrders`), carrying the `code.function`/`code.namespace` tags that classify the trace `SCHEDULED_JOB`. A direct call, as some integration tests make, skips that observation: the method's own `@Observed` span becomes the root instead and classifies `INTERNAL`. |
 | `Scheduler` jobs | `fixedRate` (hourly) logs an ERROR without failing, `fixedDelay` (every 5 minutes) throws, and three empty cron jobs give the Scheduled Tasks tab schedules to render. |
@@ -93,8 +93,9 @@ They activate the `test` profile, which swaps PostgreSQL for in-memory H2 and di
 Docker Compose, so the suite needs neither Docker nor network access, with two exceptions.
 `MultiDataSourceTraceIT` and `RedisTraceIT` start MySQL and Redis through Testcontainers and
 need Docker, and `ProfileLookupTraceIT` starts go-httpbin the same way. The test profile leaves
-`app.profile-service.url` blank, so no other test makes an outbound profile call. The Playwright browser is described below. Under the test profiles the inventory
-is a second H2 in `MODE=MySQL`, migrated by the same Liquibase changelog.
+`app.profile-service.url` blank, so no other test makes an outbound profile call. The
+Playwright browser is described below. Under the test profiles the inventory is a second H2 in
+`MODE=MySQL`, migrated by the same Liquibase changelog.
 
 ```bash
 mvn -pl peekaboot-testing-app -am verify                       # the whole suite
