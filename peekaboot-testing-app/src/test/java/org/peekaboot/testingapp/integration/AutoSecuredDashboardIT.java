@@ -2,13 +2,16 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
+import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -75,6 +78,30 @@ class AutoSecuredDashboardIT {
     @Test
     void theInsightsApiRejectsAnAnonymousRequest() {
         assertThat(api().statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    /**
+     * A fresh application, because the filter warns on its first challenge only and the shared
+     * one may already have spent it. The capture is attached after the boot: Boot reinitialises
+     * Logback on the first start after a context closed, which detaches an earlier capture.
+     */
+    @Test
+    void warnsOnceThatNothingButTheGeneratedCredentialsProtectsTheDashboard(@TempDir Path dir) {
+        try (ConfigurableApplicationContext app = boot(dir.resolve("security.properties"));
+                LogCapture capture = LogCapture.attach(DashboardAuthenticationFilter.class)) {
+            PeekabootApi freshApi = new PeekabootApi(
+                    ((WebServerApplicationContext) app).getWebServer().getPort());
+
+            freshApi.statusOf(INSIGHTS_API);
+            freshApi.statusOf(INSIGHTS_API);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .startsWith("Challenged an unauthenticated request for /peekaboot/")
+                        .contains("nothing but Peekaboot's own generated credentials");
+            });
+        }
     }
 
     @Test
