@@ -169,6 +169,34 @@ class SeriesSamplerTest {
         }
     }
 
+    /** Each outage is its own problem: a subtract-meter that resolved in between is reported again when it disappears again. */
+    @Test
+    void unresolvedSubtractMeterIsLoggedAgainAfterItResolvedInBetween() {
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            for (int tick = 0; tick < 3; tick++) {
+                sampler.sample(10_000);
+            }
+            Gauge free = Gauge.builder("disk.free", () -> 400).register(registry);
+            assertThat(sampler.sample(10_000)).isEqualTo(600.0);
+            registry.remove(free);
+            for (int tick = 0; tick < 3; tick++) {
+                assertThat(sampler.sample(10_000)).isNaN();
+            }
+
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getFormattedMessage())
+                    .containsExactly(
+                            "Peekaboot insights: series 'used' (meter 'disk.total'): "
+                                    + "subtract-meter 'disk.free' did not resolve to any meter across 3 ticks",
+                            "Peekaboot insights: series 'used' (meter 'disk.total'): "
+                                    + "subtract-meter 'disk.free' did not resolve to any meter across 3 ticks");
+        }
+    }
+
     @Test
     void negativeDeltaYieldsNaNAndResetsBaseline() {
         Counter counter = registry.counter("hits");

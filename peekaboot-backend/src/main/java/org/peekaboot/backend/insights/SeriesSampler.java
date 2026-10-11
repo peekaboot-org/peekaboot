@@ -81,11 +81,13 @@ public final class SeriesSampler {
     /**
      * A series whose own meter has not resolved is already NaN and separately worth looking
      * at; warning about its subtract-meter too would only be noise on top of that, so this is
-     * only called once the series' own meter did resolve.
+     * only called once the series' own meter did resolve. Resolving re-arms the warning, so
+     * every outage is reported, not just the first.
      */
     private void trackSubtractMeterResolution(boolean unresolved) {
         if (!unresolved) {
             consecutiveUnresolvedSubtractMeterTicks = 0;
+            subtractMeterUnresolvedLogged = false;
             return;
         }
         if (subtractMeterUnresolvedLogged) {
