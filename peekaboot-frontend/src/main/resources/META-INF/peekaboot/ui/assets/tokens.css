@@ -51,7 +51,7 @@
     --pk-text-strong: #111827;
     --pk-primary: #66b327;      /* the mark's green, straight off the artwork */
     --pk-primary-light: #eef8e6;
-    --pk-info: #0e7490;         /* deep tier like --pk-danger/--pk-purple: carries white ink */
+    --pk-info: #02458e;         /* deep tier like --pk-danger/--pk-purple: carries white ink. A blue, not a cyan: a cyan dark enough for white ink sits beside --pk-pink under protanopia */
     --pk-success: #15803d;      /* deep tier too: carries white ink */
     --pk-warning: #b35900;      /* deep tier too: a burnt orange is the only amber-band hue that carries white ink */
     --pk-danger: #d21f1f;       /* dark enough to double as text: 4.73:1 on --pk-bg-hover */
@@ -63,10 +63,10 @@
     --pk-on-primary: #0d1117;   /* 7.25:1 on --pk-primary */
     --pk-danger-soft: #fecaca;  /* the 4xx pill: a client error is not a server error */
     --pk-on-danger-soft: #7f1d1d; /* 6.93:1 on --pk-danger-soft */
-    --pk-on-info:    #ffffff;   /* 5.36:1 on --pk-info */
+    --pk-on-info:    #ffffff;   /* 9.36:1 on --pk-info */
     --pk-on-purple:  #ffffff;   /* 5.70:1 on --pk-purple */
     --pk-primary-text: #447718; /* 5.39:1 on --pk-bg, 5.06:1 on --pk-bg-alt, 4.80:1 on --pk-bg-hover */
-    --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt, 5.27:1 on --pk-bg-hover */
+    --pk-info-text:    #02458e; /* 9.36:1 on --pk-bg, 8.79:1 on --pk-bg-alt, 8.34:1 on --pk-bg-hover */
     --pk-success-text: #117937; /* 5.51:1 on --pk-bg, 5.17:1 on --pk-bg-alt, 4.91:1 on --pk-bg-hover */
     --pk-warning-text: #9a5e06; /* 5.28:1 on --pk-bg, 4.96:1 on --pk-bg-alt, 4.70:1 on --pk-bg-hover */
     --pk-danger-tint: rgba(210, 31, 31, 0.04); /* --pk-danger at 4%: the error banner's wash */
@@ -77,7 +77,7 @@
        text-tuned token, so the dark theme follows without a block of its own; ratios light / dark. */
     --pk-sql-keyword: var(--pk-purple);             /* 5.70:1 / 5.64:1 */
     --pk-sql-string: var(--pk-success-text);        /* 5.51:1 / 7.45:1 */
-    --pk-sql-number: var(--pk-info-text);           /* 5.92:1 / 9.38:1 */
+    --pk-sql-number: var(--pk-info-text);           /* 9.36:1 / 10.11:1 */
     --pk-sql-placeholder: var(--pk-warning-text);   /* 5.28:1 / 7.50:1 */
     --pk-sql-comment: var(--pk-text-muted);         /* 5.33:1 / 6.1:1 */
     --pk-sql-punctuation: var(--pk-text-muted);
@@ -128,7 +128,7 @@
     --pk-text-strong: #f0f6fc;
     --pk-primary: #84cf3d;      /* the mark's green lifted for the dark surface */
     --pk-primary-light: #1a2a10; /* jump-flash tint: --pk-danger stays 4.53:1 as text on it */
-    --pk-info: #38c6e8;
+    --pk-info: #1acdff;
     --pk-success: #3fb950;
     --pk-warning: #d29922;
     --pk-danger: #f85149;
@@ -142,11 +142,11 @@
        the hierarchy, so the softer 4xx tier recedes rather than lightens. */
     --pk-danger-soft: #5c1f1f;
     --pk-on-danger-soft: #f8d7da; /* 9.41:1 on --pk-danger-soft */
-    --pk-on-info:    #0d1117;   /* 9.38:1 */
+    --pk-on-info:    #0d1117;   /* 10.11:1 */
     --pk-on-purple:  #0d1117;   /* 5.64:1 */
     /* all four clear AA on --pk-bg outright, so the fill tone doubles as the text tone */
     --pk-primary-text: #84cf3d; /* 9.89:1 on --pk-bg */
-    --pk-info-text:    #38c6e8; /* 9.38:1 on --pk-bg */
+    --pk-info-text:    #1acdff; /* 10.11:1 on --pk-bg */
     --pk-success-text: #3fb950; /* 7.45:1 on --pk-bg */
     --pk-warning-text: #d29922; /* 7.50:1 on dark --pk-bg */
     --pk-danger-tint: rgba(248, 81, 73, 0.04);

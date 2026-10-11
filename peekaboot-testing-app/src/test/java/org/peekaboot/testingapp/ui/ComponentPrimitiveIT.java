@@ -124,6 +124,28 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
+     * Producer and consumer spans sit side by side in one tree and differ by their fill
+     * alone, so the two kinds must stay apart for a reader with any of the three
+     * dichromacies, in both themes. A CIEDE2000 distance of 12 reads as a clearly different
+     * colour at a glance.
+     */
+    @Test
+    void producerAndConsumerFillsStayApartForColourBlindReaders() {
+        openFixture();
+
+        for (String theme : List.of("light", "dark")) {
+            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
+            String producer = backgroundColor("#kind-dot-producer");
+            String consumer = backgroundColor("#kind-dot-consumer");
+            for (ColourVision.Deficiency deficiency : ColourVision.Deficiency.values()) {
+                assertThat(ColourVision.difference(producer, consumer, deficiency))
+                        .as("producer %s vs consumer %s under %s (%s theme)", producer, consumer, deficiency, theme)
+                        .isGreaterThanOrEqualTo(12.0);
+            }
+        }
+    }
+
+    /**
      * A row count is a fact about the query, not a verdict, so the Queries tab's count
      * takes the span tree's neutral chip instead of its own success-green text.
      */

@@ -11,7 +11,7 @@
  */
 export const LIGHT_FALLBACKS = Object.freeze({
     '--pk-primary-text': '#447718',
-    '--pk-info-text': '#0a6e7f',
+    '--pk-info-text': '#02458e',
     '--pk-warning-text': '#9a5e06',
     '--pk-purple': '#7c3aed',
     '--pk-danger': '#d21f1f',

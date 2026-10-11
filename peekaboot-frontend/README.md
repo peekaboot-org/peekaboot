@@ -475,7 +475,7 @@ That is why `--pk-primary-text` (`#447718`, 5.39:1 on `--pk-bg`) exists as a sep
 darker green, and why it also carries focus rings and the selected-tab underline, which
 clear 1.4.11's 3:1 for non-text UI.
 
-`--pk-info`, `--pk-warning` and `--pk-success` pass by the numbers (5.36:1, 4.83:1 and
+`--pk-info`, `--pk-warning` and `--pk-success` pass by the numbers (9.36:1, 4.83:1 and
 5.02:1) because their light fills sit in the deep tier, but they are ladder-tuned and may
 move again, so text still goes through the `-text` token.
 
@@ -498,7 +498,7 @@ has an `--pk-on-*` counterpart that clears 4.5:1 in both themes by construction;
 `white`/`--pk-text-strong` measure 2.53:1 and, in another spot, ~2.3:1 in dark mode.
 
 The inks do not follow one rule. In light mode `--pk-warning`, `--pk-danger`, `--pk-info`,
-`--pk-purple` and `--pk-success` sit deep enough to carry white (4.83:1, 5.31:1, 5.36:1,
+`--pk-purple` and `--pk-success` sit deep enough to carry white (4.83:1, 5.31:1, 9.36:1,
 5.70:1, 5.02:1) while the brand green `--pk-primary` takes dark ink (7.25:1). In dark mode
 every saturated fill takes dark ink.
 
@@ -507,8 +507,15 @@ lightens so the softer 4xx tier cannot out-glow the full-error pill.
 
 **`--pk-info` is not an alias for `--pk-primary`.** It was, while `--pk-primary` was a blue.
 With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
-`--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~51° (light) /
-~64° (dark) off `--pk-success` in hue.
+`--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~69° (light) /
+~65° (dark) off `--pk-success` in hue.
+
+**`--pk-info` must stay apart from `--pk-pink` for colour-blind readers.** The two fill the
+producer and consumer span kinds side by side. Light `--pk-info` is a deep blue rather than
+the dark theme's cyan, because a cyan dark enough to carry white ink collapses onto
+`--pk-pink` under protanopia. `ComponentPrimitiveIT` holds the pair at CIEDE2000 12 or more
+under simulated protanopia, deuteranopia and tritanopia (Machado 2009, in linear sRGB) in
+both themes.
 
 ### Controls and markup
 
