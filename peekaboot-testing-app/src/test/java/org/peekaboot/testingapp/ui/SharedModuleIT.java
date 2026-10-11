@@ -132,6 +132,33 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("format.js", "m.formatDurationMs(-5)")).isEqualTo("-");
     }
 
+    /** A timeline axis split into quarters, in one unit chosen by its length. */
+    @Test
+    void formatTimelineTicksLabelsEveryQuarterInOneUnit() {
+        assertThat(evalModule("format.js", "m.formatTimelineTicks(0.05)"))
+                .isEqualTo(List.of("0ms", "0.01ms", "0.03ms", "0.04ms", "0.05ms"));
+        assertThat(evalModule("format.js", "m.formatTimelineTicks(0.4)"))
+                .isEqualTo(List.of("0ms", "0.1ms", "0.2ms", "0.3ms", "0.4ms"));
+        assertThat(evalModule("format.js", "m.formatTimelineTicks(3)"))
+                .isEqualTo(List.of("0ms", "0.8ms", "1.5ms", "2.3ms", "3.0ms"));
+        assertThat(evalModule("format.js", "m.formatTimelineTicks(37)"))
+                .isEqualTo(List.of("0ms", "9ms", "19ms", "28ms", "37ms"));
+        assertThat(evalModule("format.js", "m.formatTimelineTicks(1200)"))
+                .isEqualTo(List.of("0s", "0.30s", "0.60s", "0.90s", "1.20s"));
+        assertThat(evalModule("format.js", "m.formatTimelineTicks(240000)"))
+                .isEqualTo(List.of("0m", "1.00m", "2.00m", "3.00m", "4.00m"));
+    }
+
+    /** formatDurationMs rounds a 3ms trace's quarters to "<1ms 2ms 2ms"; the axis needs every label distinct. */
+    @Test
+    void formatTimelineTicksNeverRepeatALabel() {
+        assertThat(evalModule(
+                        "format.js",
+                        "[0.001, 0.004, 0.01, 0.3, 0.9, 1, 2, 3, 4, 7, 999, 1000, 1001, 59999, 60000, 123456]"
+                                + ".filter(total => new Set(m.formatTimelineTicks(total)).size !== 5)"))
+                .isEqualTo(List.of());
+    }
+
     @Test
     void formatIntervalClimbsTheUnitLadderWithOneDecimal() {
         assertThat(evalModule("format.js", "m.formatInterval(250)")).isEqualTo("250ms");

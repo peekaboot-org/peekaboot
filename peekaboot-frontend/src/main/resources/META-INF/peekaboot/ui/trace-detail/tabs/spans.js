@@ -18,7 +18,7 @@
  * depth 0 and every bar to the left edge.
  */
 import {el, button} from '../../shared/dom.js';
-import {formatCount, formatDurationMs} from '../../shared/format.js';
+import {formatCount, formatDurationMs, formatTimelineTicks} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {sqlView} from '../../shared/sql-view.js';
@@ -34,9 +34,7 @@ export function render(container, trace, context = {}) {
     // the 1 keeps a zero-length trace from dividing by zero in every position below
     const totalDuration = (scopedRoot ? subtreeWindowMs(scopedRoot) : trace.durationMs) || 1;
     const traceStart = (scopedRoot ? scopedRoot.startTimeMs : trace.startTimeMs) || 0;
-    // the origin is where the trace starts, not a duration anyone measured, so it is
-    // spelled out rather than run through formatDurationMs - which calls 0 "<1ms"
-    const ticks = ['0ms', ...[0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p))];
+    const ticks = formatTimelineTicks(totalDuration);
 
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
     const allDetailsToggle = button({className: 'pk-btn pk-btn--small pk-gantt-all-details', text: 'Show all details'});

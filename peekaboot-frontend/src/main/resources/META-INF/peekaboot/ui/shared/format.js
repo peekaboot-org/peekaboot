@@ -8,6 +8,26 @@ export function formatDurationMs(ms) {
     return (ms / 60000).toFixed(2) + 'm';
 }
 
+// formatDurationMs's units, each with the fewest decimals it shows.
+const TIMELINE_UNITS = [
+    {below: 1000, unit: 'ms', scale: 1, decimals: 0},
+    {below: 60000, unit: 's', scale: 1000, decimals: 2},
+    {below: Infinity, unit: 'm', scale: 60000, decimals: 2}
+];
+
+/**
+ * The five labels of a timeline axis from 0 to totalMs, one per quarter. All five share the
+ * unit formatDurationMs would give totalMs, with as many decimals as keep neighbours apart:
+ * rounding each quarter on its own turns a 3ms trace's 2.25ms into "2ms", next to 1.5ms's.
+ */
+export function formatTimelineTicks(totalMs) {
+    const {unit, scale, decimals: minDecimals} = TIMELINE_UNITS.find(candidate => totalMs < candidate.below);
+    const step = totalMs / scale / 4;
+    let decimals = minDecimals;
+    while (step > 0 && step < 10 ** -decimals) decimals++;
+    return [0, 1, 2, 3, 4].map(quarter => (quarter === 0 ? '0' : (step * quarter).toFixed(decimals)) + unit);
+}
+
 /**
  * Sibling of formatDurationMs for spans too long for it to say anything useful (two days
  * would render as "2880.00m") - the three largest non-zero units ("1 day, 2 hours, 3
