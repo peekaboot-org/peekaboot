@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.within;
 
 import ch.qos.logback.classic.Level;
@@ -13,6 +14,9 @@ import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.peekaboot.backend.insights.SeriesSampler.UnresolvedMeterReport;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.testsupport.LogCapture;
@@ -32,13 +36,15 @@ class SeriesSamplerTest {
 
     @Test
     void unresolvedMeterYieldsNaN() {
-        SeriesSampler sampler = new SeriesSampler(def("does.not.exist", Map.of(), Stat.VALUE), registry);
+        SeriesSampler sampler =
+                new SeriesSampler(def("does.not.exist", Map.of(), Stat.VALUE), registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isNaN();
     }
 
     @Test
     void resolvesMetersRegisteredAfterConstruction() {
-        SeriesSampler sampler = new SeriesSampler(def("late.gauge", Map.of(), Stat.VALUE), registry);
+        SeriesSampler sampler =
+                new SeriesSampler(def("late.gauge", Map.of(), Stat.VALUE), registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isNaN();
         Gauge.builder("late.gauge", () -> 42).register(registry);
         assertThat(sampler.sample(10_000)).isEqualTo(42.0);
@@ -49,14 +55,16 @@ class SeriesSamplerTest {
         Gauge.builder("mem", () -> 100).tags("area", "heap", "id", "eden").register(registry);
         Gauge.builder("mem", () -> 200).tags("area", "heap", "id", "old").register(registry);
         Gauge.builder("mem", () -> 999).tags("area", "nonheap", "id", "meta").register(registry);
-        SeriesSampler sampler = new SeriesSampler(def("mem", Map.of("area", "heap"), Stat.VALUE), registry);
+        SeriesSampler sampler =
+                new SeriesSampler(def("mem", Map.of("area", "heap"), Stat.VALUE), registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isEqualTo(300.0);
     }
 
     @Test
     void counterRateIsDeltaPerSecond() {
         Counter counter = registry.counter("hits");
-        SeriesSampler sampler = new SeriesSampler(def("hits", Map.of(), Stat.RATE), registry);
+        SeriesSampler sampler =
+                new SeriesSampler(def("hits", Map.of(), Stat.RATE), registry, UnresolvedMeterReport.WARN);
         counter.increment(5);
         assertThat(sampler.sample(10_000)).isNaN(); // first sample: no baseline
         counter.increment(20);
@@ -66,7 +74,7 @@ class SeriesSamplerTest {
     @Test
     void timerAvgIsDeltaTotalOverDeltaCountInMillis() {
         Timer timer = registry.timer("req");
-        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), Stat.AVG), registry);
+        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), Stat.AVG), registry, UnresolvedMeterReport.WARN);
         sampler.sample(10_000); // baseline
         timer.record(Duration.ofMillis(100));
         timer.record(Duration.ofMillis(300));
@@ -79,7 +87,7 @@ class SeriesSamplerTest {
     void timerMaxInMillis() {
         Timer timer = registry.timer("req");
         timer.record(Duration.ofMillis(250));
-        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), Stat.MAX), registry);
+        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), Stat.MAX), registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isCloseTo(250.0, within(1e-9));
     }
 
@@ -87,7 +95,8 @@ class SeriesSamplerTest {
     void longTaskTimerValueIsActiveTasks() {
         LongTaskTimer ltt = LongTaskTimer.builder("inflight").register(registry);
         LongTaskTimer.Sample running = ltt.start();
-        SeriesSampler sampler = new SeriesSampler(def("inflight", Map.of(), Stat.VALUE), registry);
+        SeriesSampler sampler =
+                new SeriesSampler(def("inflight", Map.of(), Stat.VALUE), registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isEqualTo(1.0);
         running.stop();
         assertThat(sampler.sample(10_000)).isEqualTo(0.0);
@@ -98,7 +107,7 @@ class SeriesSamplerTest {
         Gauge.builder("disk.total", () -> 1000).register(registry);
         Gauge.builder("disk.free", () -> 400).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
-        SeriesSampler sampler = new SeriesSampler(diff, registry);
+        SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isEqualTo(600.0);
     }
 
@@ -107,7 +116,7 @@ class SeriesSamplerTest {
     void unresolvedSubtractMeterIsNotLoggedBeforeTheWarningThreshold() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free.typo", null);
-        SeriesSampler sampler = new SeriesSampler(diff, registry);
+        SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             assertThat(sampler.sample(10_000)).isNaN();
@@ -121,7 +130,7 @@ class SeriesSamplerTest {
     void unresolvedSubtractMeterIsLoggedOnceAfterTheWarningThresholdNotPerSample() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free.typo", null);
-        SeriesSampler sampler = new SeriesSampler(diff, registry);
+        SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             assertThat(sampler.sample(10_000)).isNaN();
@@ -138,15 +147,103 @@ class SeriesSamplerTest {
         }
     }
 
-    /** A series whose own meter never resolved is already NaN and separately reported; no need to also warn about its subtract-meter. */
+    /** A series whose own meter never resolved is already reported as such; warning about its subtract-meter too would be noise. */
     @Test
     void unresolvedSubtractMeterIsNotLoggedWhileThePrimaryMeterIsAlsoUnresolved() {
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
-        SeriesSampler sampler = new SeriesSampler(diff, registry);
+        SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             for (int tick = 0; tick < 5; tick++) {
                 assertThat(sampler.sample(10_000)).isNaN();
+            }
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getFormattedMessage())
+                    .containsExactly("Peekaboot insights: series 'used': meter 'disk.total' did not resolve"
+                            + " to any meter across 3 ticks");
+        }
+    }
+
+    /** A misnamed meter can't be caught at config load, whatever the stat, so it is reported once it has stayed unresolved. */
+    @ParameterizedTest
+    @EnumSource(Stat.class)
+    void unresolvedPrimaryMeterIsLoggedOnceAfterTheWarningThreshold(Stat stat) {
+        SeriesSampler sampler = new SeriesSampler(def("my.typo", Map.of(), stat), registry, UnresolvedMeterReport.WARN);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            sampler.sample(10_000);
+            sampler.sample(10_000);
+            assertThat(capture.appender().list).isEmpty();
+            sampler.sample(10_000); // 3rd consecutive unresolved tick: threshold reached
+            sampler.sample(10_000); // a further tick must not log again
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: series 's': meter 'my.typo' did not resolve to any meter"
+                                + " across 3 ticks");
+            });
+        }
+    }
+
+    /** Each outage is its own problem: a meter that resolved in between is reported again when it disappears again. */
+    @Test
+    void unresolvedPrimaryMeterIsLoggedAgainAfterItResolvedInBetween() {
+        SeriesSampler sampler =
+                new SeriesSampler(def("late.gauge", Map.of(), Stat.VALUE), registry, UnresolvedMeterReport.WARN);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            for (int tick = 0; tick < 3; tick++) {
+                sampler.sample(10_000);
+            }
+            Gauge gauge = Gauge.builder("late.gauge", () -> 42).register(registry);
+            assertThat(sampler.sample(10_000)).isEqualTo(42.0);
+            registry.remove(gauge);
+            for (int tick = 0; tick < 3; tick++) {
+                assertThat(sampler.sample(10_000)).isNaN();
+            }
+
+            assertThat(capture.appender().list).hasSize(2);
+        }
+    }
+
+    /** Shipped panels name meters an application may simply not have (no DataSource, no request yet): not worth a warning. */
+    @Test
+    void aShippedSeriesReportsBothOutagesAtDebug() {
+        SeriesDef primaryMissing = new SeriesDef("a", "A", "hikaricp.connections", Map.of(), Stat.VALUE, null, null);
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef subtractMissing = new SeriesDef("b", "B", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
+        SeriesSampler primary = new SeriesSampler(primaryMissing, registry, UnresolvedMeterReport.DEBUG);
+        SeriesSampler subtract = new SeriesSampler(subtractMissing, registry, UnresolvedMeterReport.DEBUG);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class, Level.DEBUG)) {
+            for (int tick = 0; tick < 3; tick++) {
+                primary.sample(10_000);
+                subtract.sample(10_000);
+            }
+
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getLevel(), event -> event.getFormattedMessage())
+                    .containsExactly(
+                            tuple(
+                                    Level.DEBUG,
+                                    "Peekaboot insights: series 'a': meter 'hikaricp.connections' did not"
+                                            + " resolve to any meter across 3 ticks"),
+                            tuple(
+                                    Level.DEBUG,
+                                    "Peekaboot insights: series 'b' (meter 'disk.total'): subtract-meter"
+                                            + " 'disk.free' did not resolve to any meter across 3 ticks"));
+        }
+    }
+
+    @Test
+    void aSamplerThatReportsNothingStaysSilent() {
+        SeriesSampler sampler =
+                new SeriesSampler(def("my.typo", Map.of(), Stat.VALUE), registry, UnresolvedMeterReport.NONE);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class, Level.TRACE)) {
+            for (int tick = 0; tick < 5; tick++) {
+                sampler.sample(10_000);
             }
             assertThat(capture.appender().list).isEmpty();
         }
@@ -157,7 +254,7 @@ class SeriesSamplerTest {
     void subtractMeterRegisteredAfterConstructionStopsBeingUnresolved() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
-        SeriesSampler sampler = new SeriesSampler(diff, registry);
+        SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             assertThat(sampler.sample(10_000)).isNaN();
@@ -174,7 +271,7 @@ class SeriesSamplerTest {
     void unresolvedSubtractMeterIsLoggedAgainAfterItResolvedInBetween() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
-        SeriesSampler sampler = new SeriesSampler(diff, registry);
+        SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             for (int tick = 0; tick < 3; tick++) {
@@ -201,7 +298,8 @@ class SeriesSamplerTest {
     void negativeDeltaYieldsNaNAndResetsBaseline() {
         Counter counter = registry.counter("hits");
         counter.increment(50);
-        SeriesSampler sampler = new SeriesSampler(def("hits", Map.of(), Stat.RATE), registry);
+        SeriesSampler sampler =
+                new SeriesSampler(def("hits", Map.of(), Stat.RATE), registry, UnresolvedMeterReport.WARN);
         sampler.sample(10_000); // baseline 50
         registry.remove(counter);
         Counter fresh = registry.counter("hits");
@@ -218,7 +316,7 @@ class SeriesSamplerTest {
         for (int i = 0; i < 5; i++) {
             timer.record(Duration.ofMillis(100));
         }
-        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), Stat.AVG), registry);
+        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), Stat.AVG), registry, UnresolvedMeterReport.WARN);
         sampler.sample(10_000); // baseline: 5 calls, 500 ms
         registry.remove(timer);
         Timer fresh = registry.timer("req");

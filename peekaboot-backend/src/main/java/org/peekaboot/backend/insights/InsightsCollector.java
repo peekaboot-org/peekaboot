@@ -7,7 +7,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.LongSupplier;
+import org.peekaboot.backend.insights.SeriesSampler.UnresolvedMeterReport;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
@@ -58,17 +60,19 @@ public final class InsightsCollector implements SmartLifecycle {
     public InsightsCollector(
             List<InsightsProperties.Level> levels,
             List<SeriesDef> series,
+            Set<String> shippedSeriesIds,
             List<TileDef> tiles,
             MeterRegistry registry,
             Listener listener,
             SnapshotSource snapshotSource) {
-        this(levels, series, tiles, registry, listener, snapshotSource, System::currentTimeMillis);
+        this(levels, series, shippedSeriesIds, tiles, registry, listener, snapshotSource, System::currentTimeMillis);
     }
 
     /** {@code clock} supplies the epoch millis the level threads schedule their boundaries from; tests fix it. */
     InsightsCollector(
             List<InsightsProperties.Level> levels,
             List<SeriesDef> series,
+            Set<String> shippedSeriesIds,
             List<TileDef> tiles,
             MeterRegistry registry,
             Listener listener,
@@ -83,7 +87,9 @@ public final class InsightsCollector implements SmartLifecycle {
         }
 
         for (SeriesDef def : series) {
-            samplers.put(def.id(), new SeriesSampler(def, registry));
+            UnresolvedMeterReport report =
+                    shippedSeriesIds.contains(def.id()) ? UnresolvedMeterReport.DEBUG : UnresolvedMeterReport.WARN;
+            samplers.put(def.id(), new SeriesSampler(def, registry, report));
         }
         this.rings = new SeriesRings(levels, samplers.keySet());
 

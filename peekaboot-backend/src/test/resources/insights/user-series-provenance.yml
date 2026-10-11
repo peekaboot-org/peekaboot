@@ -1,0 +1,8 @@
+# One series of the operator's own, and a shipped panel patched by id alone.
+panels:
+  - id: custom
+    title: Custom
+    series:
+      - { id: typo, label: Typo, meter: my.typo.meter }
+  - id: load
+    order: 1

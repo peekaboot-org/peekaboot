@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -59,6 +60,7 @@ class InsightsCollectorTest {
         collector = new InsightsCollector(
                 levels,
                 List.of(series),
+                Set.of(),
                 List.of(staticTile, liveTile),
                 registry,
                 listener,
@@ -265,6 +267,7 @@ class InsightsCollectorTest {
         InsightsCollector midTick = new InsightsCollector(
                 levels,
                 List.of(value("first", "first"), value("second", "second")),
+                Set.of(),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
@@ -295,6 +298,7 @@ class InsightsCollectorTest {
         return new InsightsCollector(
                 levels,
                 List.of(rate),
+                Set.of(),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),

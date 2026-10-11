@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
@@ -37,6 +38,7 @@ class InsightsCollectorRestoreTest {
                         InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
                         InsightsProperties.Level.of(Duration.ofMinutes(1), 60)),
                 series,
+                Set.of(),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
@@ -159,6 +161,7 @@ class InsightsCollectorRestoreTest {
         return new InsightsCollector(
                 List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 20)),
                 List.of(value("cpu.process", "g")),
+                Set.of(),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
@@ -220,6 +223,7 @@ class InsightsCollectorRestoreTest {
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
                         InsightsProperties.Level.of(Duration.ofMillis(500), 20)),
                 List.of(value("cpu.process", "g")),
+                Set.of(),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),

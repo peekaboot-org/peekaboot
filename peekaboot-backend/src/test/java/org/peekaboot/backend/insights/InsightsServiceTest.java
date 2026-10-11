@@ -242,6 +242,34 @@ class InsightsServiceTest {
         }
     }
 
+    /**
+     * A meter the operator named and that never shows up is most likely a typo, worth a
+     * warning. A shipped series is only as good as the application's meters: no DataSource
+     * means no hikaricp meters, and that is no fault of anyone's. A panel patched by id
+     * alone still draws the shipped series.
+     */
+    @Test
+    void anUnresolvedSeriesWarnsOnlyWhenTheOperatorDefinedIt() {
+        InsightsService custom = withUserPanels("classpath:insights/user-series-provenance.yml");
+
+        try (LogCapture logs = LogCapture.attach(SeriesSampler.class, Level.DEBUG)) {
+            for (int tick = 0; tick < 3; tick++) {
+                custom.collector().tick(10_000);
+            }
+
+            assertThat(logs.appender().list)
+                    .filteredOn(event -> event.getLevel() == Level.WARN)
+                    .extracting(event -> event.getFormattedMessage())
+                    .containsExactly("Peekaboot insights: series 'custom.typo': meter 'my.typo.meter' did not resolve"
+                            + " to any meter across 3 ticks");
+            assertThat(logs.appender().list)
+                    .filteredOn(event -> event.getLevel() == Level.DEBUG)
+                    .extracting(event -> event.getFormattedMessage())
+                    .anySatisfy(message -> assertThat(message).contains("series 'load.load1m'"))
+                    .anySatisfy(message -> assertThat(message).contains("series 'db-pool.total'"));
+        }
+    }
+
     /** The service over the bundled panels plus the operator's override at {@code location}. */
     private InsightsService withUserPanels(String location) {
         InsightsProperties properties = new InsightsProperties();

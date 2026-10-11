@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ class InsightsCollectorLifecycleTest {
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
                         InsightsProperties.Level.of(Duration.ofMillis(500), 10)),
                 List.of(value("g", "g")),
+                Set.of(),
                 List.of(),
                 registry,
                 listener,

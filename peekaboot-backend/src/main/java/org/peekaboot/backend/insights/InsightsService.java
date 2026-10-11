@@ -2,8 +2,10 @@ package org.peekaboot.backend.insights;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
@@ -57,7 +59,9 @@ public final class InsightsService implements SmartLifecycle {
         Resource userOverride = properties.getConfigLocation() != null
                 ? resourceLoader.getResource(properties.getConfigLocation())
                 : resourceLoader.getResource(CLASSPATH_PREFIX + USER_LOCATION);
-        PanelsFile file = load(defaults, userOverride, properties.getLevels().size());
+        int levelCount = properties.getLevels().size();
+        PanelsFile bundled = withKnownLevels(PanelConfigLoader.load(defaults, null), levelCount);
+        PanelsFile file = withUserOverride(bundled, defaults, userOverride, levelCount);
 
         this.panels = file.panels().stream()
                 .filter(panel -> panel.enabled() == null || panel.enabled())
@@ -70,18 +74,24 @@ public final class InsightsService implements SmartLifecycle {
         this.seriesCount = namespacedSeries.size();
 
         this.store = InsightsSnapshotStore.create(storage, properties);
-        this.collector =
-                new InsightsCollector(properties.getLevels(), namespacedSeries, tiles, registry, listener, store);
+        this.collector = new InsightsCollector(
+                properties.getLevels(),
+                namespacedSeries,
+                shippedSeriesIds(panels, bundled),
+                tiles,
+                registry,
+                listener,
+                store);
     }
 
     /**
-     * The bundled defaults on their own first: they are ours, so a failure there is
-     * our bug and has to surface. The user's override is merged on top separately,
+     * The caller loads the bundled defaults on their own first: they are ours, so a failure
+     * there is our bug and has to surface. The user's override is merged on top separately,
      * because it is theirs - a typo in it costs them their panel customisation, not
      * the application Peekaboot is embedded in.
      */
-    private static PanelsFile load(Resource defaults, Resource userOverride, int levelCount) {
-        PanelsFile bundled = withKnownLevels(PanelConfigLoader.load(defaults, null), levelCount);
+    private static PanelsFile withUserOverride(
+            PanelsFile bundled, Resource defaults, Resource userOverride, int levelCount) {
         if (userOverride == null || !userOverride.exists()) {
             return bundled;
         }
@@ -106,6 +116,23 @@ public final class InsightsService implements SmartLifecycle {
             }
         }
         return file;
+    }
+
+    /**
+     * The namespaced ids of the series that are exactly as shipped. A panel patched by id
+     * alone keeps them; a series the operator wrote, or rewrote, is theirs.
+     */
+    private static Set<String> shippedSeriesIds(List<PanelDef> panels, PanelsFile bundled) {
+        Map<String, List<SeriesDef>> bundledSeries =
+                bundled.panels().stream().collect(Collectors.toMap(PanelDef::id, PanelDef::series));
+        Set<String> shipped = new HashSet<>();
+        for (PanelDef panel : panels) {
+            List<SeriesDef> candidates = bundledSeries.getOrDefault(panel.id(), List.of());
+            panel.series().stream()
+                    .filter(candidates::contains)
+                    .forEach(series -> shipped.add(namespacedId(panel.id(), series.id())));
+        }
+        return shipped;
     }
 
     private static SeriesDef namespaced(String panelId, SeriesDef series) {

@@ -16,6 +16,7 @@ import java.util.function.ToDoubleFunction;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
@@ -28,28 +29,60 @@ public final class SeriesSampler {
     private static final Logger log = LoggerFactory.getLogger(SeriesSampler.class);
 
     /**
-     * Consecutive ticks a subtract-meter must stay unmatched before it is reported. Three
+     * How a meter that stays unresolved is reported. An operator's own series warns, since
+     * an unknown name there is most likely a typo. A shipped series logs at debug: the
+     * application may simply not have that meter (no DataSource, no request served yet).
+     */
+    public enum UnresolvedMeterReport {
+        WARN(Level.WARN),
+        DEBUG(Level.DEBUG),
+        NONE(null);
+
+        private final Level level;
+
+        UnresolvedMeterReport(Level level) {
+            this.level = level;
+        }
+    }
+
+    /**
+     * Consecutive ticks a meter must stay unmatched before it is reported. Three
      * gives a lazily-registered meter (Micrometer binders resolve some meters only once the
      * thing they measure first happens) a few sampling passes to appear, while still
      * reporting a genuine typo within a small multiple of the panel's own tick interval
      * rather than letting it go unnoticed indefinitely.
      */
-    private static final int UNRESOLVED_SUBTRACT_METER_WARNING_TICKS = 3;
+    private static final int UNRESOLVED_METER_REPORT_TICKS = 3;
 
     private final SeriesDef def;
     private final MeterRegistry registry;
     private double previousCount = Double.NaN;
     private double previousTotal = Double.NaN;
-    private int consecutiveUnresolvedSubtractMeterTicks;
-    private boolean subtractMeterUnresolvedLogged;
+    private final Outage meterOutage;
+    private final Outage subtractMeterOutage;
 
-    public SeriesSampler(SeriesDef def, MeterRegistry registry) {
+    public SeriesSampler(SeriesDef def, MeterRegistry registry, UnresolvedMeterReport report) {
         this.def = def;
         this.registry = registry;
+        this.meterOutage = new Outage(
+                report,
+                "Peekaboot insights: series '{}': meter '{}' did not resolve to any meter across {} ticks",
+                def.id(),
+                def.meter(),
+                UNRESOLVED_METER_REPORT_TICKS);
+        this.subtractMeterOutage = new Outage(
+                report,
+                "Peekaboot insights: series '{}' (meter '{}'): subtract-meter '{}' did not resolve"
+                        + " to any meter across {} ticks",
+                def.id(),
+                def.meter(),
+                def.subtractMeter(),
+                UNRESOLVED_METER_REPORT_TICKS);
     }
 
     public double sample(long elapsedMillis) {
         List<Meter> meters = matching(def.meter());
+        meterOutage.track(meters.isEmpty());
         return switch (def.stat()) {
             case VALUE -> sampleValue(meters);
             case RATE -> sampleRate(meters, elapsedMillis);
@@ -71,40 +104,48 @@ public final class SeriesSampler {
             return value;
         }
         List<Meter> subtractMeters = matching(def.subtractMeter());
+        // a series whose own meter is unresolved is reported as such; its subtract-meter on top would be noise
         if (!meters.isEmpty()) {
-            trackSubtractMeterResolution(subtractMeters.isEmpty());
+            subtractMeterOutage.track(subtractMeters.isEmpty());
         }
         double other = currentValue(subtractMeters);
         return value - other; // NaN propagates if either side is unresolved
     }
 
     /**
-     * A series whose own meter has not resolved is already NaN and separately worth looking
-     * at; warning about its subtract-meter too would only be noise on top of that, so this is
-     * only called once the series' own meter did resolve. Resolving re-arms the warning, so
-     * every outage is reported, not just the first.
+     * Reports a meter once it has stayed unresolved for {@link #UNRESOLVED_METER_REPORT_TICKS}
+     * consecutive ticks. Resolving re-arms it, so every outage is reported, not just the first.
      */
-    private void trackSubtractMeterResolution(boolean unresolved) {
-        if (!unresolved) {
-            consecutiveUnresolvedSubtractMeterTicks = 0;
-            subtractMeterUnresolvedLogged = false;
-            return;
+    private static final class Outage {
+
+        private final UnresolvedMeterReport report;
+        private final String message;
+        private final Object[] arguments;
+        private int consecutiveUnresolvedTicks;
+        private boolean reported;
+
+        private Outage(UnresolvedMeterReport report, String message, Object... arguments) {
+            this.report = report;
+            this.message = message;
+            this.arguments = arguments;
         }
-        if (subtractMeterUnresolvedLogged) {
-            return;
+
+        private void track(boolean unresolved) {
+            if (!unresolved) {
+                consecutiveUnresolvedTicks = 0;
+                reported = false;
+                return;
+            }
+            if (reported || report.level == null) {
+                return;
+            }
+            consecutiveUnresolvedTicks++;
+            if (consecutiveUnresolvedTicks < UNRESOLVED_METER_REPORT_TICKS) {
+                return;
+            }
+            log.atLevel(report.level).log(message, arguments);
+            reported = true;
         }
-        consecutiveUnresolvedSubtractMeterTicks++;
-        if (consecutiveUnresolvedSubtractMeterTicks < UNRESOLVED_SUBTRACT_METER_WARNING_TICKS) {
-            return;
-        }
-        log.warn(
-                "Peekaboot insights: series '{}' (meter '{}'): subtract-meter '{}' did not resolve"
-                        + " to any meter across {} ticks",
-                def.id(),
-                def.meter(),
-                def.subtractMeter(),
-                UNRESOLVED_SUBTRACT_METER_WARNING_TICKS);
-        subtractMeterUnresolvedLogged = true;
     }
 
     private static double currentValue(List<Meter> meters) {

@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.insights.SeriesSampler.UnresolvedMeterReport;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.insights.config.TileDef;
@@ -28,7 +29,8 @@ final class TileTracker {
             SeriesDef tileSeries =
                     new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), Stat.VALUE, null, null);
             boolean live = Boolean.TRUE.equals(def.live());
-            tiles.put(def.id(), new TileState(new SeriesSampler(tileSeries, registry), live));
+            tiles.put(
+                    def.id(), new TileState(new SeriesSampler(tileSeries, registry, UnresolvedMeterReport.NONE), live));
         }
     }
 
