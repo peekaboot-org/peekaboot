@@ -1062,6 +1062,31 @@ The same decorator bean pool backs both `ThreadPoolTaskExecutorBuilder` and the 
 builders, which is why the scheduled-execution guard matters even for an application that never
 calls `@Async` directly: Peekaboot's decorator is wired into the scheduler regardless.
 
+A task's failure reaches its span by three routes, because two of Spring's paths catch it before
+the decorator could see it thrown:
+
+- A task passed to `execute()` throws through the decorator, and `Observation.observe` records it.
+- `submit()` on both `ThreadPoolTaskExecutor` and `SimpleAsyncTaskExecutor` hands the decorator a
+  `FutureTask`, which keeps the exception. The decorator reads `Future.state()` once the task
+  has run and records `exceptionNow()` when it is `FAILED`.
+- An `@Async` method runs inside Spring's own `Callable`, which passes a `void` method's failure
+  to the `AsyncUncaughtExceptionHandler`. `AsyncTaskFailurePostProcessor` puts
+  `AsyncTaskFailureInterceptor` directly behind Spring's `AsyncAnnotationAdvisor`, on the
+  executor thread, where it records a thrown exception or a failed returned `Future` on the span
+  `RunningAsyncTask` holds for that thread. That covers `void`, `Future` and `CompletableFuture`
+  alike. Spring rethrows a `Future` method's failure into its `FutureTask` afterwards, so the
+  decorator skips a span that already carries an error rather than recording it twice.
+
+Two paths stay uncovered. `submitCompletable()` completes a `CompletableFuture` from inside the
+task `CompletableFuture` hands the executor, so the decorator never holds the future that failed.
+`@EnableAsync(mode = AdviceMode.ASPECTJ)` weaves the async hand-off into the class with
+`AnnotationAsyncExecutionAspect` instead of a proxy, so there is no advisor chain to join.
+Covering it would mean shipping an aspect of Peekaboot's own and requiring the application to
+weave it, which the project does not do. Under that mode a failing `void` or
+`CompletableFuture` method leaves its span OK; a `Future` method's failure still arrives through
+the `FutureTask` route, since the aspect submits through the same `AsyncExecutionAspectSupport`.
+A frozen proxy refuses the added advisor and is logged at DEBUG.
+
 Keeping the work under a marked span out of its trace's timings is the store's half of this
 feature, in *Async Subtree Timing* below.
 

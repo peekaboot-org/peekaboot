@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.async;
 
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
+import java.util.concurrent.Future;
 import java.util.concurrent.RunnableScheduledFuture;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.springframework.core.task.TaskDecorator;
@@ -25,9 +26,11 @@ import org.springframework.scheduling.support.DelegatingErrorHandlingRunnable;
  * Scheduled execution cannot be recognised from inside the wrapper, because
  * {@code ScheduledMethodRunnable} opens that observation itself, further down the stack.
  *
- * <p>A task run through {@code execute()} that throws fails its span here. A task handed over
- * with {@code submit()} does not: its exception stays inside the {@code FutureTask} this
- * decorator receives. Spring catches an {@code @Async} method's exception the same way; the
+ * <p>A task that throws fails its span here, whether it came through {@code execute()} or
+ * {@code submit()}: both of Spring's executors hand a submitted task over as a {@code FutureTask},
+ * which keeps the exception to itself, so it is read back once the task has run. A task from
+ * {@code submitCompletable()} completes a future this decorator cannot see, and its failure is not
+ * recorded. Spring catches an {@code @Async} method's exception inside its own task; the
  * interceptor that {@link AsyncTaskFailurePostProcessor} installs records it on this span.
  */
 public class AsyncTaskDecorator implements TaskDecorator {
@@ -56,7 +59,22 @@ public class AsyncTaskDecorator implements TaskDecorator {
                 .lowCardinalityKeyValue(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .highCardinalityKeyValue(
                         AsyncTaskMarker.THREAD_TAG_KEY, Thread.currentThread().getName());
-        task.observe(() -> RunningAsyncTask.run(task, runnable));
+        task.observe(() -> {
+            RunningAsyncTask.run(task, runnable);
+            recordFailureOfSubmitted(task, runnable);
+        });
+    }
+
+    /**
+     * Skips a failure already recorded: Spring rethrows a Future-returning {@code @Async} method's
+     * exception into its {@code FutureTask} after the failure interceptor has seen it.
+     */
+    private static void recordFailureOfSubmitted(Observation task, Runnable runnable) {
+        if (runnable instanceof Future<?> submitted
+                && submitted.state() == Future.State.FAILED
+                && task.getContext().getError() == null) {
+            task.error(submitted.exceptionNow());
+        }
     }
 
     /**
