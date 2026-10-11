@@ -58,7 +58,7 @@ class MaskingEngineTest {
         // A @ConfigurationProperties group or an env-var prefix is often named in the
         // plural (app.secrets.*, DB_PASSWORDS). Matching is whole-token, so the singular
         // rule never sees "secrets": each plural is listed as a rule of its own. The last
-        // three rows are the cost, accepted the same way as XDG_SESSION_ID above: "tokens"
+        // three rows are the cost, accepted the same way as XDG_SESSION_ID below: "tokens"
         // and "secrets" also name an LLM budget or a Kubernetes secrets mount, none of them
         // secret, and a masked number on the Config tab costs less than a leaked subtree.
         @ParameterizedTest
