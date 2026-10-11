@@ -1,5 +1,7 @@
 package org.peekaboot.autoconfigure;
 
+import java.util.List;
+
 /** Property keys read outside a {@code @ConfigurationProperties} binding. */
 final class PeekabootPropertyKeys {
 
@@ -46,6 +48,30 @@ final class PeekabootPropertyKeys {
 
     /** Folds framework frames out of every stack trace Peekaboot renders; defaulted from the launch context. */
     static final String STACK_TRACE_FOLD = "peekaboot.stack-trace.fold";
+
+    /**
+     * Every key an auto-configuration is gated on with {@code @ConditionalOnBooleanProperty}.
+     * Those conditions match only {@code true}, while the binder also reads {@code yes},
+     * {@code on} and {@code 1} as true, so {@link BooleanSwitches} refuses those values.
+     */
+    static final List<String> BOOLEAN_SWITCHES = List.of(
+            ENABLED,
+            DEV_TOOLBAR,
+            LIFECYCLE_ENABLED,
+            TRACING_ENABLED,
+            TRACING_ASYNC,
+            TRACING_EVENT_LISTENERS,
+            INSIGHTS_ENABLED,
+            SECURITY_ENABLED,
+            ERROR_PAGE_ENABLED,
+            ERROR_PAGE_OVERRIDE);
+
+    /**
+     * The switches some condition also gates on with {@code havingValue = false}, which matches
+     * only {@code false}, so {@link BooleanSwitches} refuses {@code no}, {@code off} and
+     * {@code 0} on these too.
+     */
+    static final List<String> SWITCHES_ALSO_GATED_ON_FALSE = List.of(ERROR_PAGE_OVERRIDE);
 
     /**
      * The property source carrying the launch-context defaults - present under this name only

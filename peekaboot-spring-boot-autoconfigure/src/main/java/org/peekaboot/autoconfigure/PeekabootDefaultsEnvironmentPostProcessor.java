@@ -64,6 +64,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+        // Before the read of peekaboot.enabled below, whose conversion would take yes for true.
+        BooleanSwitches.requireUnambiguous(environment);
         LocalDevDetector.LaunchKind launchKind = launchKind();
         boolean localDevelopment = launchKind == LocalDevDetector.LaunchKind.LOCAL_DEV;
         boolean enabled = environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, localDevelopment);

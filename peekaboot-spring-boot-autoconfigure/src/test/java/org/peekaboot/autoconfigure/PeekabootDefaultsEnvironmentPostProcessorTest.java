@@ -11,6 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.diagnostics.FailureAnalyzedException;
 import org.springframework.boot.env.DefaultPropertiesPropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.EnumerablePropertySource;
@@ -584,6 +585,23 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThatThrownBy(() -> postProcessor.postProcessEnvironment(new MockEnvironment(), servletApplication()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("peekaboot-no-push-defaults.yml");
+    }
+
+    /**
+     * The detection reads {@code peekaboot.enabled} through the conversion service, which takes
+     * {@code yes} as true, while every auto-configuration's condition takes it as off. Refusing
+     * the value before that read keeps the two from disagreeing about whether Peekaboot is on.
+     */
+    @Test
+    void refusesASwitchValueTheConditionsWouldReadDifferently() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty(PeekabootPropertyKeys.ENABLED, "yes");
+
+        assertThatThrownBy(() -> postProcessor(false).postProcessEnvironment(environment, servletApplication()))
+                .isInstanceOf(FailureAnalyzedException.class)
+                .hasMessageContaining("peekaboot.enabled = 'yes'");
+        assertThat(environment.getPropertySources().contains("peekabootDefaults"))
+                .isFalse();
     }
 
     /** The seam for the two tests above: what the post-processor finds under a bundled file's name. */

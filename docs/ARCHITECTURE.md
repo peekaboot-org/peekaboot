@@ -664,7 +664,7 @@ hooks that run before or outside the application context are registered in
 | `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled`, `peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold`, and the default property values |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled`, `peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold`, the default property values, and the check that no switch holds a value the conditions and the binder read differently |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
@@ -818,6 +818,23 @@ process that is not a developer's own launch.
 has to be evaluated before any Peekaboot bean exists, and is also bound as
 `PeekabootProperties.Lifecycle.enabled` so it carries configuration metadata and shows up on
 the Config tab like every other switch.
+
+That double reading is why a switch a condition gates on must not hold a value the two read
+differently. `@ConditionalOnBooleanProperty` compares the raw value with `true`, ignoring case,
+while the binder behind `PeekabootProperties` trims it and also reads `yes`, `on` and `1` as true,
+so `peekaboot.error-page.override=yes` would leave the page off with the Config tab showing it on.
+`no`, `off` and `0` read as off both ways and are accepted, except on
+`PeekabootPropertyKeys.SWITCHES_ALSO_GATED_ON_FALSE`: `peekaboot.error-page.override` is also
+gated with `havingValue = false`, which matches only `false`, so `no` would drop the page entirely.
+An empty or unconvertible value has no binder reading at all and is refused too. `BooleanSwitches`
+checks every key in `PeekabootPropertyKeys.BOOLEAN_SWITCHES` first thing in
+`PeekabootDefaultsEnvironmentPostProcessor`, before the detection reads `peekaboot.enabled`
+through the same lenient conversion, and throws Boot's `FailureAnalyzedException`, so startup ends
+with a failure report naming each offending property and value. Both lists are hand-kept because
+a native image has no class files to scan for the conditions at startup; `BooleanSwitchesTest`
+reads every `@ConditionalOnBooleanProperty` on a registered auto-configuration and fails when a
+`peekaboot.*` key is missing from either. A YAML file never trips the check with a bare `yes`:
+YAML 1.1 already parses that as the boolean `true`.
 
 ### Default Properties
 
