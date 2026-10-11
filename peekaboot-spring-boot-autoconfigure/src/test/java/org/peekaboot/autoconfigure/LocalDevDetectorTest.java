@@ -125,6 +125,19 @@ class LocalDevDetectorTest {
                 .isTrue();
     }
 
+    /**
+     * An empty Class-Path names no entry. Resolved as one, it would be the jar's own
+     * directory, here a build output directory.
+     */
+    @Test
+    void readsAnEmptyManifestClassPathAsNoEntries(@TempDir Path tempDir) throws IOException {
+        Path classpathJar = jarWithClassPath(tempDir.resolve("app/target/classes"));
+        LaunchSignals signals = signals(classpathJar.toString());
+
+        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isFalse();
+    }
+
     @Test
     void rejectsAJibShapedLaunch() {
         // same thread name and class loader as an IDE run - only the classpath tells them apart

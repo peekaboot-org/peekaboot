@@ -130,7 +130,8 @@ final class LocalDevDetector {
                 Manifest manifest = jarFile.getManifest();
                 String classPath =
                         manifest == null ? null : manifest.getMainAttributes().getValue(Attributes.Name.CLASS_PATH);
-                if (classPath == null) {
+                // resolving an empty entry would yield the jar's own directory
+                if (classPath == null || classPath.isBlank()) {
                     return List.of();
                 }
                 URI jarUri = jar.toURI();
