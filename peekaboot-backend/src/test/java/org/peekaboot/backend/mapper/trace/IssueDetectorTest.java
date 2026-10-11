@@ -56,14 +56,6 @@ class IssueDetectorTest {
                         new SpanIssue(IssueType.VERY_SLOW, "Span took 600ms (threshold: 500ms)", IssueSeverity.ERROR)),
                 Arguments.of(
                         Named.of(
-                                "an error without a message",
-                                node("span1")
-                                        .durationMs(50)
-                                        .status(SpanStatus.ERROR)
-                                        .build()),
-                        new SpanIssue(IssueType.ERROR, "Span ended with error", IssueSeverity.ERROR)),
-                Arguments.of(
-                        Named.of(
                                 "an 80ms query, past the slow-query threshold",
                                 node("span1")
                                         .kind(Span.Kind.CLIENT)
@@ -90,62 +82,18 @@ class IssueDetectorTest {
         assertThat(slowQuery.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY);
     }
 
+    /** A failed span is shown by its status and error fields; an issue would only repeat them. */
     @Test
-    void aBlankErrorMessageFallsThroughToTheTag() {
-        SpanNode span = node("span1")
-                .status(SpanStatus.ERROR)
-                .error("   ", "java.net.ConnectException")
-                .tags(Map.of("error.message", "from a tag"))
-                .build();
-
-        TraceTree result = detector.detectIssues(tree(span).build());
-
-        assertThat(result.rootSpan().issues()).extracting(SpanIssue::message).containsExactly("from a tag");
-    }
-
-    /** SpanNode is public API, so a caller can hand it null tags; the record normalises them to empty. */
-    @Test
-    void anErrorSpanWithoutTagsFallsBackToTheGenericMessage() {
-        SpanNode span = node("span1").status(SpanStatus.ERROR).tags(null).build();
-
-        TraceTree result = detector.detectIssues(tree(span).build());
-
-        assertThat(result.rootSpan().issues()).extracting(SpanIssue::message).containsExactly("Span ended with error");
-    }
-
-    @Test
-    void usesErrorMessageFromSpanAttributeIfAvailable() {
+    void aFailedSpanRaisesNoIssue() {
         SpanNode span = node("span1")
                 .durationMs(50)
                 .status(SpanStatus.ERROR)
-                .tags(Map.of("error.message", "Connection refused"))
-                .build();
-        TraceTree trace = tree(span).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        SpanIssue issue = result.rootSpan().issues().get(0);
-        assertThat(issue.type()).isEqualTo(IssueType.ERROR);
-        assertThat(issue.message()).isEqualTo("Connection refused");
-    }
-
-    @Test
-    void prefersErrorMessageFieldOverTag() {
-        // The exporter stores the error in SpanNode.errorMessage and never writes an
-        // error.message tag; another instrumentation may, and the field still wins.
-        SpanNode span = node("span1")
-                .durationMs(50)
-                .status(SpanStatus.ERROR)
-                .tags(Map.of("error.message", "from a tag"))
                 .error("Connection refused: db:5432", "java.net.ConnectException")
                 .build();
-        TraceTree trace = tree(span).build();
 
-        TraceTree result = detector.detectIssues(trace);
+        TraceTree result = detector.detectIssues(tree(span).build());
 
-        SpanIssue issue = result.rootSpan().issues().get(0);
-        assertThat(issue.type()).isEqualTo(IssueType.ERROR);
-        assertThat(issue.message()).isEqualTo("Connection refused: db:5432");
+        assertThat(result.rootSpan().issues()).isEmpty();
     }
 
     @Test
@@ -281,7 +229,6 @@ class IssueDetectorTest {
         SpanNode span = node("span1")
                 .kind(Span.Kind.CLIENT)
                 .durationMs(200)
-                .status(SpanStatus.ERROR)
                 .tags(Map.of("db.system", "postgresql"))
                 .build();
         TraceTree trace = tree(span).build();
@@ -289,10 +236,7 @@ class IssueDetectorTest {
         TraceTree result = detector.detectIssues(trace);
 
         List<SpanIssue> issues = result.rootSpan().issues();
-        assertThat(issues).hasSize(3);
-        assertThat(issues)
-                .extracting(SpanIssue::type)
-                .containsExactlyInAnyOrder(IssueType.SLOW, IssueType.SLOW_QUERY, IssueType.ERROR);
+        assertThat(issues).extracting(SpanIssue::type).containsExactlyInAnyOrder(IssueType.SLOW, IssueType.SLOW_QUERY);
     }
 
     @Test

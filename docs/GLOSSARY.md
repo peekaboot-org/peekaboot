@@ -94,7 +94,7 @@ bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Issue
 `SpanIssue(IssueType type, String message, IssueSeverity severity)`, held in `SpanNode.issues`.
-`IssueType`'s constants are `SLOW`, `VERY_SLOW`, `ERROR` and `SLOW_QUERY`; `IssueSeverity`
+`IssueType`'s constants are `SLOW`, `VERY_SLOW` and `SLOW_QUERY`; `IssueSeverity`
 has two and serialises lowercase through `@JsonValue`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves

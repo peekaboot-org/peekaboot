@@ -246,12 +246,11 @@ class SharedModuleIT extends PlaywrightTestBase {
 
     @Test
     void issueSeverityReportsTheWorstOfASpansIssues() {
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'ERROR'}, {type: 'SLOW_QUERY'}])"))
+        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW_QUERY'}])"))
                 .isEqualTo("slow");
         assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW'}, {type: 'VERY_SLOW'}])"))
                 .isEqualTo("very-slow");
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'ERROR'}])"))
-                .isEqualTo("");
+        assertThat(evalModule("severity.js", "m.issueSeverity([])")).isEqualTo("");
         assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
     }
 

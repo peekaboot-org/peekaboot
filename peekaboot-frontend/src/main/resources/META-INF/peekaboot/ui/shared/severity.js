@@ -53,7 +53,6 @@ export function querySeverity(ms, features) {
 const ISSUE_SEVERITIES = Object.freeze({
     SLOW: 'slow',
     VERY_SLOW: 'very-slow',
-    ERROR: '',
     SLOW_QUERY: 'slow'
 });
 

@@ -7,7 +7,6 @@ import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
-import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 
 public class IssueDetector {
@@ -46,10 +45,6 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        if (span.status() == SpanStatus.ERROR) {
-            issues.add(new SpanIssue(IssueType.ERROR, getErrorMessage(span), IssueSeverity.ERROR));
-        }
-
         if (DbSpans.isQuery(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
             issues.add(new SpanIssue(
                     IssueType.SLOW_QUERY,
@@ -69,13 +64,5 @@ public class IssueDetector {
         return span.issues().stream()
                         .anyMatch(issue -> issue.type() == IssueType.SLOW || issue.type() == IssueType.VERY_SLOW)
                 || span.children().stream().anyMatch(IssueDetector::hasSlowIssue);
-    }
-
-    private String getErrorMessage(SpanNode span) {
-        if (span.errorMessage() != null && !span.errorMessage().isBlank()) {
-            return span.errorMessage();
-        }
-        String taggedMessage = span.tags().get("error.message");
-        return taggedMessage != null ? taggedMessage : "Span ended with error";
     }
 }
