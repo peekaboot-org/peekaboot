@@ -804,6 +804,57 @@ class TraceInsightsServiceTest {
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 1));
     }
 
+    /**
+     * The list is newest first by arrival, and an async row arrives when its task ends: often
+     * long after the request that dispatched it, with newer traces listed in between.
+     */
+    @Test
+    void anAsyncRowIsListedByWhenItArrivedRatherThanBesideItsTrigger() {
+        store.addSpan(rootSpan("http1", "test-operation", Span.Kind.SERVER, 50).build());
+        addTrace("http2", 20, false);
+        addTrace("http3", 20, false);
+        store.addSpan(asyncTaskSpan("http1", 50, 240_000));
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
+                .extracting(TraceTree::traceId, TraceTree::rootActionType)
+                .containsExactly(
+                        tuple("http1", RootActionType.ASYNC_TASK),
+                        tuple("http3", RootActionType.HTTP_REQUEST),
+                        tuple("http2", RootActionType.HTTP_REQUEST),
+                        tuple("http1", RootActionType.HTTP_REQUEST));
+    }
+
+    @Test
+    void oneTracesAsyncRowsAreListedNewestFirstToo() {
+        addTraceWithTwoAsyncTasks("http1", 50);
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
+                .extracting(row -> row.rootSpan().spanId())
+                .containsExactly("async-b-http1", "async-a-http1", "span-http1");
+    }
+
+    /**
+     * A bucket lists a trace from when it entered that bucket, so a task that ended before
+     * its trace failed sits under the trace rather than among older failures.
+     */
+    @Test
+    void anAsyncRowThatArrivedBeforeItsTraceEnteredTheBucketStaysUnderIt() {
+        addTraceWithAsyncWork("http1", 50, 1_000);
+        addTrace("http2", 20, true);
+        store.addLog(log("http1")
+                .inSpan("span-http1")
+                .at("ERROR")
+                .saying("failed after the task ended")
+                .build());
+
+        assertThat(service.getInsights(10, TraceBucket.ERRORS, "*", null).traces())
+                .extracting(TraceTree::traceId, TraceTree::rootActionType)
+                .containsExactly(
+                        tuple("http1", RootActionType.HTTP_REQUEST),
+                        tuple("http1", RootActionType.ASYNC_TASK),
+                        tuple("http2", RootActionType.HTTP_REQUEST));
+    }
+
     private static SpanData rootSpanWithoutTags(String traceId, String spanId, String name) {
         return span(spanId).in(traceId).named(name).build();
     }

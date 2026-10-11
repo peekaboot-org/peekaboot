@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
-import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -172,7 +171,7 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
 
     private List<String> capturedRequestPaths() {
         return traceStore.getTraces(TraceBucket.ALL, Integer.MAX_VALUE).stream()
-                .map(TraceDataBundle::request)
+                .map(listed -> listed.bundle().request())
                 .filter(Objects::nonNull)
                 .map(RequestCompletedEvent::path)
                 .toList();

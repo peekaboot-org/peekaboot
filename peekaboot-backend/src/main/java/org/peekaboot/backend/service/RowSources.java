@@ -2,6 +2,7 @@ package org.peekaboot.backend.service;
 
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -9,6 +10,7 @@ import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.tracing.store.ListedTrace;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
@@ -23,12 +25,24 @@ import org.peekaboot.backend.tracing.store.TraceStore;
  */
 final class RowSources {
 
+    /** Stable, because an async row clamped to its trace's listedAt ties with it and must list below it. */
+    private static final Comparator<RowSource> NEWEST_FIRST =
+            Comparator.comparingLong(RowSource::listedAt).reversed();
+
     private RowSources() {}
 
-    /** One listing row: the bundle it reads from, and the span the row is rooted at. */
-    record RowSource(TraceDataBundle bundle, SpanData rootSpan, String subtreeRootSpanId) {}
+    /**
+     * One listing row: the bundle it reads from, the span the row is rooted at, and when the row
+     * appeared in the bucket, in span export order.
+     */
+    record RowSource(TraceDataBundle bundle, SpanData rootSpan, String subtreeRootSpanId, long listedAt) {}
 
-    /** The bucket's rows that pass the root-level filters, newest first - nothing mapped or masked yet. */
+    /**
+     * The bucket's rows that pass the root-level filters, newest first - nothing mapped or masked
+     * yet. Newest means the row appeared in the bucket most recently, which for an async row is
+     * when its task ended: the list stays in the order things arrived, and a task that outlived
+     * its request by minutes lists at the top rather than beside a request long scrolled away.
+     */
     static List<RowSource> matching(
             @Nullable TraceStore traceStore,
             TraceTreeMapper traceTreeMapper,
@@ -39,8 +53,9 @@ final class RowSources {
             return List.of();
         }
         return traceStore.getTraces(bucket, Integer.MAX_VALUE).stream()
-                .flatMap(bundle -> rowsOf(bundle).stream())
+                .flatMap(listed -> rowsOf(listed).stream())
                 .filter(row -> matchesRootFilters(traceTreeMapper, row.rootSpan(), actionTypes, rootOperation))
+                .sorted(NEWEST_FIRST)
                 .toList();
     }
 
@@ -55,12 +70,16 @@ final class RowSources {
      * {@link #isIncompleteFragment} - but that skip applies only to the trace's own row: an
      * async entry inside a fragment bundle is still real work, so the bundle can still
      * contribute rows even when its own root is filtered out.
+     *
+     * <p>An async row is listed from its entry span's export, or from when the trace entered
+     * the bucket if that came later: a row cannot have appeared in a bucket before its trace did.
      */
-    private static List<RowSource> rowsOf(TraceDataBundle bundle) {
+    private static List<RowSource> rowsOf(ListedTrace listed) {
+        TraceDataBundle bundle = listed.bundle();
         SpanData root = bundle.rootSpan();
         List<RowSource> rows = new ArrayList<>();
         if (!isIncompleteFragment(root)) {
-            rows.add(new RowSource(bundle, root, null));
+            rows.add(new RowSource(bundle, root, null, listed.listedAt()));
         }
         if (!bundle.hasAsyncSpans()) {
             return rows;
@@ -73,7 +92,7 @@ final class RowSources {
             if (root != null && entry.spanId().equals(root.spanId())) {
                 continue;
             }
-            rows.add(new RowSource(bundle, entry, entry.spanId()));
+            rows.add(new RowSource(bundle, entry, entry.spanId(), Math.max(listed.listedAt(), entry.creationOrder())));
         }
         return rows;
     }

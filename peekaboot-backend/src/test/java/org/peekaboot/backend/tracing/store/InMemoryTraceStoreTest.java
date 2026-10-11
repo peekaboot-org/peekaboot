@@ -120,7 +120,7 @@ class InMemoryTraceStoreTest {
         storage.addSpan(errorSpan("t1"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -129,7 +129,7 @@ class InMemoryTraceStoreTest {
         storage.addLog(log("t1").at("ERROR").saying("boom").build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -147,7 +147,7 @@ class InMemoryTraceStoreTest {
                 .build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -164,7 +164,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(span("s1").in("t1").at(START, Duration.ofMillis(150)).build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -190,7 +190,7 @@ class InMemoryTraceStoreTest {
                 .build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -214,7 +214,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(asyncSpan("t1", "root", START.plusMillis(100), Duration.ofMinutes(4)));
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -225,7 +225,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(asyncSpan("t1", null, START, Duration.ofMillis(3_700)));
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -252,7 +252,7 @@ class InMemoryTraceStoreTest {
                 .build());
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
                 .as("with its parent still missing, the child counts as work the caller waited for")
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
 
         store.addSpan(asyncSpan("t1", "root", START.plusMillis(40), Duration.ofMinutes(4)));
@@ -278,8 +278,8 @@ class InMemoryTraceStoreTest {
         storage.addSpan(spanIn("t1", "s1"));
         storage.addSpan(spanIn("t2", "s2"));
 
-        List<TraceDataBundle> all = storage.getTraces(TraceBucket.ALL, 10);
-        assertThat(all).extracting(TraceDataBundle::traceId).containsExactly("t2", "t1");
+        List<ListedTrace> all = storage.getTraces(TraceBucket.ALL, 10);
+        assertThat(all).extracting(listed -> listed.bundle().traceId()).containsExactly("t2", "t1");
     }
 
     @Test
@@ -289,7 +289,7 @@ class InMemoryTraceStoreTest {
         }
 
         assertThat(storage.getTraces(TraceBucket.ALL, 3))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("trace-4", "trace-3", "trace-2");
     }
 
@@ -300,7 +300,7 @@ class InMemoryTraceStoreTest {
         }
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 3))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("trace-4", "trace-3", "trace-2");
     }
 
@@ -322,7 +322,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(errorSpan("t3"));
 
         assertThat(store.getTraces(TraceBucket.ERRORS, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t3", "t2");
     }
 
@@ -340,7 +340,7 @@ class InMemoryTraceStoreTest {
         }
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t3", "t2");
     }
 
@@ -352,7 +352,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(spanIn("t3", "s3"));
 
         assertThat(store.getTraces(TraceBucket.ALL, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t3", "t2");
         assertThat(store.getTrace("t1")).isEmpty();
     }
@@ -364,7 +364,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(spanIn("t2", "s2"));
 
         assertThat(store.getTraces(TraceBucket.ALL, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t2");
         assertThat(store.getTrace("t1")).isPresent();
         assertThat(store.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
@@ -394,11 +394,11 @@ class InMemoryTraceStoreTest {
         store.addSpan(span("s2").in("t2").at(START, Duration.ofMillis(10)).build());
 
         assertThat(store.getTraces(TraceBucket.ALL, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t2");
         assertThat(store.getTrace("t1")).isPresent();
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -418,7 +418,7 @@ class InMemoryTraceStoreTest {
         assertThat(bundle.spans()).hasSize(1);
         assertThat(bundle.logs()).hasSize(1);
         assertThat(store.getTraces(TraceBucket.ALL, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 
@@ -478,7 +478,7 @@ class InMemoryTraceStoreTest {
         storage.addLog(log("t1").at("error").saying("boom").build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
-                .extracting(TraceDataBundle::traceId)
+                .extracting(listed -> listed.bundle().traceId())
                 .containsExactly("t1");
     }
 

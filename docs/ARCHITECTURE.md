@@ -1300,6 +1300,16 @@ for a trace with no marked span. `asyncEntrySpans()` reads the subtree entry poi
 set - a marked span whose resolved parent is not itself async - which is what keeps the listing
 pass off a tree walk.
 
+Each entry point is a listing row of its own, and the listing is newest first by arrival, the
+order the buckets already keep. A trace's row dates from when the trace entered the bucket; an
+async row from its entry span's export, since that is when the row appears. Placing it beside its
+trigger instead would bury a task that outlived its request by minutes under every trace that
+arrived meanwhile, off the first page exactly while the user waits for it. To compare the two,
+each bucket stamps a trace on entry with the newest `creationOrder` the store has received
+(`ListedTrace.listedAt`), and `RowSources` sorts rows by that key, with an async row taking the
+later of its entry's `creationOrder` and its trace's stamp. The sort is stable, so a trace that
+entered a bucket after its task ended still lists above its own async row, as it always did.
+
 Ancestry resolves parents through `resolve(...)`, the redirect table span deduplication leaves
 behind, exactly as `rootOf` does. A span hanging off a deduplicated span names a parent id that is no
 longer stored, so skipping the redirect would leave it outside the subtree it belongs to and back

@@ -22,7 +22,8 @@ public interface TraceStore {
 
     Optional<TraceDataBundle> getTrace(String traceId);
 
-    List<TraceDataBundle> getTraces(TraceBucket bucket, int limit);
+    /** The bucket's traces, newest first by when each entered the bucket. */
+    List<ListedTrace> getTraces(TraceBucket bucket, int limit);
 
     int getTraceCount(TraceBucket bucket);
 
