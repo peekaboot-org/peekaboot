@@ -27,12 +27,6 @@ public class TestController {
         return "forward:/test";
     }
 
-    @GetMapping(value = "/api/data", produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
-    public String apiData() {
-        return "{\"message\":\"hello\"}";
-    }
-
     /** Always throws: the error dispatch's page and the bar on it are what ErrorDispatchIT reads. */
     @GetMapping("/throwing")
     public String throwing() {
