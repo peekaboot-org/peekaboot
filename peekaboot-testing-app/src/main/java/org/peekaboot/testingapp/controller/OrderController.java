@@ -65,13 +65,20 @@ public class OrderController {
      * Hands enrichment to a task executor and answers straight away, so the request finishes
      * well before the background work does and the trace shows a hand-off rather than a wait.
      * {@code ?fail=true} makes the task throw once its work is done, so the trace lands in
-     * Errors although the request answered 200.
+     * Errors although the request answered 200. {@code ?notify=true} has the task hand a
+     * customer notification to a task of its own, which outlives it.
      */
     @GetMapping("/orders/enrich")
     @ResponseBody
-    public String enrich(@RequestParam(name = "fail", defaultValue = "false") boolean fail) {
+    public String enrich(
+            @RequestParam(name = "fail", defaultValue = "false") boolean fail,
+            @RequestParam(name = "notify", defaultValue = "false") boolean notify) {
 
-        enrichmentService.enrich(ENRICHED_REFERENCE, fail);
+        if (notify) {
+            enrichmentService.enrichAndNotify(ENRICHED_REFERENCE);
+        } else {
+            enrichmentService.enrich(ENRICHED_REFERENCE, fail);
+        }
         return "enrichment of " + ENRICHED_REFERENCE + " dispatched";
     }
 

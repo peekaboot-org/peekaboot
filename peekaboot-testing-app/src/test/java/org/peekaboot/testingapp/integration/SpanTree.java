@@ -72,6 +72,21 @@ final class SpanTree {
         return found.getFirst();
     }
 
+    /** Every span called {@code name}, the root included, in walk order: an ancestor before its descendants. */
+    static List<JsonNode> spansNamed(JsonNode trace, String name) {
+        List<JsonNode> spans = new ArrayList<>();
+        walk(trace.path("rootSpan"), span -> {
+            if (name.equals(span.path("name").asString(""))) {
+                spans.add(span);
+            }
+        });
+        return spans;
+    }
+
+    static String spanId(JsonNode span) {
+        return span.path("spanId").asString("");
+    }
+
     /** The span names from the root to the first span called {@code name}, or an error when none is. */
     static List<String> pathTo(JsonNode trace, String name) {
         List<String> path = new ArrayList<>();

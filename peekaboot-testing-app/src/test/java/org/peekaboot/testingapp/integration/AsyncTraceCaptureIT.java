@@ -72,6 +72,10 @@ class AsyncTraceCaptureIT {
     private static final Predicate<JsonNode> ASYNC_SPAN_CAPTURED = TraceApiClient.ROOT_SPAN_EXPORTED.and(
             trace -> SpanTree.names(trace).contains(AsyncTaskMarker.CONTEXTUAL_NAME));
 
+    /** Both tasks' spans are stored; the nested one ends last, so nothing of the trace is still to come. */
+    private static final Predicate<JsonNode> NESTED_ASYNC_SPANS_CAPTURED = TraceApiClient.ROOT_SPAN_EXPORTED.and(
+            trace -> SpanTree.spansNamed(trace, AsyncTaskMarker.CONTEXTUAL_NAME).size() == 2);
+
     @LocalServerPort
     private int port;
 
@@ -178,6 +182,43 @@ class AsyncTraceCaptureIT {
         assertThat(asyncRowStatus(traceId))
                 .as("the async row is summarised over its own subtree, which now holds the failed span")
                 .isEqualTo("HAS_ERRORS");
+    }
+
+    /**
+     * Background work that dispatches background work of its own: the notification task runs
+     * inside the enrichment task's span and outlives it. A row times its whole subtree, so the
+     * enrichment row reaches the notification's end rather than stopping at its own span's, and
+     * the nested task gets no row of its own, while the request's duration covers neither.
+     */
+    @Test
+    void aNestedAsyncTaskStaysInsideTheRowOfTheTaskThatDispatchedIt() {
+        String traceId = traces.get("/orders/enrich?notify=true");
+
+        JsonNode trace = traces.awaitTrace(traceId, NESTED_ASYNC_SPANS_CAPTURED);
+
+        List<JsonNode> asyncSpans = SpanTree.spansNamed(trace, AsyncTaskMarker.CONTEXTUAL_NAME);
+        JsonNode enrichment = asyncSpans.getFirst();
+        JsonNode notification = asyncSpans.getLast();
+        assertThat(enrichment.path("children").valueStream().map(SpanTree::spanId))
+                .as("the notification task continues the enrichment task's observation")
+                .contains(SpanTree.spanId(notification));
+        assertThat(endMs(notification))
+                .as("the fixture's nested task outlives its parent; otherwise the row's window and "
+                        + "the parent span's own duration would be the same number")
+                .isGreaterThan(endMs(enrichment));
+
+        assertThat(trace.path("durationMs").asLong())
+                .as("neither task lengthens the request that dispatched the first")
+                .isEqualTo(trace.path("rootSpan").path("durationMs").asLong());
+
+        assertThat(asyncRowsOf(traceId)).singleElement().satisfies(row -> {
+            assertThat(SpanTree.spanId(row.path("rootSpan"))).isEqualTo(SpanTree.spanId(enrichment));
+            assertThat(row.path("durationMs").asLong())
+                    .as("the row spans its subtree's window, from the enrichment's start to the "
+                            + "nested notification's end")
+                    .isEqualTo(
+                            endMs(notification) - enrichment.path("startTimeMs").asLong());
+        });
     }
 
     @Test
@@ -321,14 +362,24 @@ class AsyncTraceCaptureIT {
     }
 
     private String asyncRowStatus(String traceId) {
+        List<JsonNode> rows = asyncRowsOf(traceId);
+        if (rows.isEmpty()) {
+            throw new AssertionError("no async row listed for trace " + traceId);
+        }
+        return rows.getFirst().path("status").asString("");
+    }
+
+    private List<JsonNode> asyncRowsOf(String traceId) {
         JsonNode response =
                 api.getJson("/peekaboot/api/traces/insights?limit=10000&rootActionType=" + RootActionType.ASYNC_TASK);
-        for (JsonNode listed : response.path("traces")) {
-            if (traceId.equals(listed.path("traceId").asString(""))) {
-                return listed.path("status").asString("");
-            }
-        }
-        throw new AssertionError("no async row listed for trace " + traceId);
+        return response.path("traces")
+                .valueStream()
+                .filter(listed -> traceId.equals(listed.path("traceId").asString("")))
+                .toList();
+    }
+
+    private static long endMs(JsonNode span) {
+        return span.path("startTimeMs").asLong() + span.path("durationMs").asLong();
     }
 
     /** The ids the listing endpoint answers with for {@code query}. */

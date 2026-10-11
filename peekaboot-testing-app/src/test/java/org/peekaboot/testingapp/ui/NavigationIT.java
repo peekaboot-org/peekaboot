@@ -22,6 +22,7 @@ class NavigationIT extends SeededPersonTestBase {
             "Profile service down -> /persons/1?profile=unavailable",
             "Async enrichment -> /orders/enrich",
             "Failing async enrichment -> /orders/enrich?fail=true",
+            "Nested async enrichment -> /orders/enrich?notify=true",
             "Logged error, page still 200 -> /?error=true",
             "Exception, error page -> /boom",
             "Forward (nested dispatch) -> /people",

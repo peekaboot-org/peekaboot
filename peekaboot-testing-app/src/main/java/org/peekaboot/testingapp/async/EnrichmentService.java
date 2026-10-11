@@ -1,5 +1,6 @@
 package org.peekaboot.testingapp.async;
 
+import org.peekaboot.testingapp.SimulatedWork;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -22,25 +23,34 @@ public class EnrichmentService {
 
     private static final Logger log = LoggerFactory.getLogger(EnrichmentService.class);
 
+    private final CustomerNotifier customerNotifier;
+
+    public EnrichmentService(CustomerNotifier customerNotifier) {
+
+        this.customerNotifier = customerNotifier;
+    }
+
     @Async
     public void enrich(String reference, boolean fail) {
 
+        enrichNow(reference, fail);
+    }
+
+    /** Hands the notification to another task, which then outlives this one. */
+    @Async
+    public void enrichAndNotify(String reference) {
+
+        enrichNow(reference, false);
+        customerNotifier.notifyEnriched(reference);
+    }
+
+    private void enrichNow(String reference, boolean fail) {
+
         log.info("enriching order {}", reference);
-        pause(WORK_MILLIS);
+        SimulatedWork.pause(WORK_MILLIS);
         if (fail) {
             throw new IllegalStateException("enrichment of " + reference + " was rejected");
         }
         log.info("enriched order {}", reference);
-    }
-
-    /** Stands in for work this demo does not actually do. */
-    private void pause(long millis) {
-
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted while simulating work", e);
-        }
     }
 }
