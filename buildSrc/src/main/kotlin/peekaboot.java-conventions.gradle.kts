@@ -116,7 +116,7 @@ jacoco {
 }
 
 checkstyle {
-    toolVersion = "14.1.0"
+    toolVersion = "14.3.0"
     configFile = rootProject.file("config/checkstyle.xml")
 }
 
