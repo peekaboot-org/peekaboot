@@ -6,11 +6,13 @@ import static org.assertj.core.api.Assertions.within;
 
 import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Mouse;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.AriaRole;
+import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
 import java.math.BigDecimal;
@@ -966,6 +968,64 @@ class DashboardTabsIT extends PlaywrightTestBase {
         dashboard.openListedTrace(traceId);
 
         assertThat(page.url()).endsWith("#traces/" + traceId);
+    }
+
+    /**
+     * The row is a pointer shortcut to its open button: a click on the stats line, outside
+     * every control, opens the same trace. The row stays a plain element, so the button
+     * remains its one tab stop.
+     */
+    @Test
+    void clickingAnywhereOnATraceRowOpensIt() {
+        String traceId = openTracesTabWithATrace();
+        Locator header = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__header");
+
+        assertThat(header.evaluate("header => getComputedStyle(header).cursor")).isEqualTo("pointer");
+        assertThat(header.evaluate("header => [header, header.parentElement].map(el => el.tabIndex)"))
+                .isEqualTo(List.of(-1, -1));
+
+        header.locator(".pk-trace-item__time").click();
+
+        overlay.awaitTrace(traceId);
+        assertThat(page.url()).endsWith("#traces/" + traceId);
+    }
+
+    /**
+     * A link inside the row keeps its click to itself. Were the row to open the trace as
+     * well, the history would hold that trace under the link's target, and Back would land
+     * on a trace the reader never asked for.
+     */
+    @Test
+    void followingALinkInsideATraceRowDoesNotOpenTheTraceToo() {
+        String traceId = seedAnErrorTrace();
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
+
+        page.click(Dashboard.traceItem(traceId) + " .pk-trace-item__scheduler-link");
+        page.waitForSelector("#scheduled-tasks-tab.active");
+        page.goBack();
+
+        assertThat(page.url()).endsWith("#traces");
+    }
+
+    /** A drag that selects text in the row ends in a click on it, which selects rather than opens. */
+    @Test
+    void selectingTextInATraceRowDoesNotOpenIt() {
+        String traceId = openTracesTabWithATrace();
+        BoundingBox time = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__time")
+                .boundingBox();
+        double y = time.y + time.height / 2;
+
+        page.mouse().move(time.x + 1, y);
+        page.mouse().down();
+        page.mouse().move(time.x + time.width - 1, y, new Mouse.MoveOptions().setSteps(5));
+        page.mouse().up();
+
+        assertThat(page.querySelector(TraceOverlay.HOST)).isNull();
+        assertThat(page.url()).endsWith("#traces");
+        assertThat((String) page.evaluate("() => String(document.getSelection())"))
+                .isNotBlank();
     }
 
     @Test

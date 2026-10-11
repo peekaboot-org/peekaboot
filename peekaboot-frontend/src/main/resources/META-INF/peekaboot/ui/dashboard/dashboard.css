@@ -317,6 +317,8 @@
 }
 .pk-trace-item__header { display: flex; align-items: center; gap: var(--pk-space-md); padding: var(--pk-space-md); transition: background-color var(--pk-transition); flex-wrap: wrap; }
 .pk-trace-item__header:hover { background: var(--pk-bg-alt); }
+/* The whole row is a pointer shortcut to its open button (traces.js forwardRowClicks). */
+.pk-trace-item[data-trace-id] .pk-trace-item__header { cursor: pointer; }
 /* The column the row's two lines used to get from .pk-trace-item__open itself. The button
    now covers the main line alone, because the stats line below it carries the traceId's
    copy control and a <button> cannot contain interactive content. The scheduler link is a

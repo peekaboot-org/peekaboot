@@ -34,6 +34,9 @@ let connectionPoolExcluded = true;
 let currentRootOperationFilter = null;
 let currentBucket = 'all';
 
+// What a row's click shortcut leaves alone; the open button itself is one, so its own click is not repeated.
+const INTERACTIVE_ELEMENTS = 'a, button, input, select, textarea, label, summary, [tabindex]';
+
 const BUCKET_EMPTY_MESSAGES = {
     all: 'No traces recorded',
     errors: 'No error traces recorded',
@@ -351,6 +354,7 @@ function renderTraceItem(trace, context) {
     openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
     if (trace.traceId) {
         openBtn.addEventListener('click', () => context.openTrace(trace.traceId, trace.subtree?.rootSpanId));
+        forwardRowClicks(header, openBtn);
     }
 
     const body = document.createElement('div');
@@ -364,6 +368,19 @@ function renderTraceItem(trace, context) {
 
     item.appendChild(header);
     return item;
+}
+
+/**
+ * Makes a click anywhere on `row` a pointer shortcut to `openBtn`, which stays the row's one
+ * tab stop. A click on another control in the row stays that control's, and the click that
+ * ends a drag-select selects rather than opens.
+ */
+function forwardRowClicks(row, openBtn) {
+    row.addEventListener('click', event => {
+        const control = event.target.closest(INTERACTIVE_ELEMENTS);
+        if ((control && row.contains(control)) || !document.getSelection().isCollapsed) return;
+        openBtn.click();
+    });
 }
 
 function renderMainLine(trace, actionType, hasErrors, rootOperation) {

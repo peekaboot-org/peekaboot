@@ -527,16 +527,20 @@ With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
   `<button>` carries the primary action, and the other interactive element becomes the
   button's sibling rather than its descendant. The toolbar's open button needed it, and the
   traces tab's row twice: once for its scheduler link, once for the traceId's copy control,
-  which is why the row's button now covers its main line alone and the stats line beside it
-  is no longer part of the click target. Watch for it in any "make this row clickable" change.
+  which is why the row's button covers its main line alone. The rest of the row reaches that
+  button through a pointer shortcut (`forwardRowClicks` in `traces.js`), never by wrapping it.
+  Watch for it in any "make this row clickable" change.
 
   The trace-detail overlay's small controls are all `<button>`s with the browser's button
   chrome reset away (`.pk-unbutton`, plus `.pk-icon-btn` for the 24px glyph box), so each
   is reachable by keyboard. That covers the gantt expand/collapse toggle, the span name
   that opens a span's details, the logs toggle, the gantt event markers, the "show logs for
   all spans" link, the log span-filter cell and the span-filter clear. A new control that
-  needs `cursor: pointer` is the smell; make it a `<button>` first. The gantt track's pointer
-  cursor is the one exception, since the track is a pointer shortcut to the span name's button.
+  needs `cursor: pointer` is the smell; make it a `<button>` first. The two exceptions are
+  pointer shortcuts to a button that keeps the keyboard path: the gantt track opens the span
+  name's button, and a trace row in the Traces tab opens its own open button. The row's
+  shortcut skips a click on another control inside it and the click that ends a text
+  selection.
 
 - **A control whose only content is an icon needs an explicit `aria-label`, and the icon
   needs `aria-hidden="true"`.** `title` does *not* rescue it: text content outranks title
