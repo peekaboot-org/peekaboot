@@ -9,16 +9,16 @@ inputs:
   server-id:
     description: Maven server id setup-java writes to settings.xml; the release workflow sets it to central.
     default: github
-  server-username:
+  server-username-env-var:
     description: Name of the environment variable holding that server's username.
     default: ''
-  server-password:
+  server-password-env-var:
     description: Name of the environment variable holding that server's password or token.
     default: ''
   gpg-private-key:
     description: GPG private key to import for signing; empty imports nothing.
     default: ''
-  gpg-passphrase:
+  gpg-passphrase-env-var:
     description: Name of the environment variable holding that key's passphrase.
     default: ''
   browsers:
@@ -43,10 +43,10 @@ runs:
         distribution: 'temurin'
         cache: maven
         server-id: ${{ inputs.server-id }}
-        server-username: ${{ inputs.server-username }}
-        server-password: ${{ inputs.server-password }}
+        server-username-env-var: ${{ inputs.server-username-env-var }}
+        server-password-env-var: ${{ inputs.server-password-env-var }}
         gpg-private-key: ${{ inputs.gpg-private-key }}
-        gpg-passphrase: ${{ inputs.gpg-passphrase }}
+        gpg-passphrase-env-var: ${{ inputs.gpg-passphrase-env-var }}
 
     # A browser build changes with the Playwright version and nothing else, so the cache is
     # keyed on that property rather than on every pom. The engine list joins the key because
