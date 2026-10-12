@@ -169,7 +169,15 @@ public final class InsightsSnapshotStore implements SnapshotStore {
         return ", persisted across restarts";
     }
 
-    synchronized void writeNow() {
+    void writeNow() {
+        try {
+            write();
+        } catch (IOException e) {
+            reportWriteFailure(e);
+        }
+    }
+
+    private synchronized void write() throws IOException {
         Supplier<InsightsSnapshot> source = capture;
         if (source == null) {
             return;
@@ -178,17 +186,17 @@ public final class InsightsSnapshotStore implements SnapshotStore {
         if (!replacesWhatIsThere(snapshot)) {
             return;
         }
-        try {
-            OwnerOnlyFiles.replaceAtomically(file, stream -> {
-                try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
-                    InsightsSnapshotCodec.write(out, snapshot);
-                }
-            });
-        } catch (IOException e) {
-            if (!writeFailureLogged) {
-                writeFailureLogged = true;
-                log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", file, e);
+        OwnerOnlyFiles.replaceAtomically(file, stream -> {
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
+                InsightsSnapshotCodec.write(out, snapshot);
             }
+        });
+    }
+
+    private void reportWriteFailure(IOException e) {
+        if (!writeFailureLogged) {
+            writeFailureLogged = true;
+            log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", file, e);
         }
     }
 
@@ -213,7 +221,15 @@ public final class InsightsSnapshotStore implements SnapshotStore {
                 Thread.currentThread().interrupt();
                 return;
             }
-            writeNow();
+            try {
+                write();
+            } catch (IOException e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    // stop()'s interrupt closed the channel; stop() writes the final snapshot itself
+                    return;
+                }
+                reportWriteFailure(e);
+            }
         }
     }
 

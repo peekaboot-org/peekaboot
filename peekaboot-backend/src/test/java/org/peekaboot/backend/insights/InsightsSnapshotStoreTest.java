@@ -11,6 +11,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Named;
@@ -174,6 +178,42 @@ class InsightsSnapshotStoreTest {
         }
         assertThat(directory.resolve("insights.snapshot.tmp")).doesNotExist();
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+    }
+
+    /**
+     * stop() interrupts the writer, and a file channel closes itself on an interrupt; a
+     * scheduled write caught in flight is cancelled by the final write, not a failure.
+     */
+    @Test
+    void stoppingDuringAScheduledWriteIsNotAFailure() throws InterruptedException {
+        CountDownLatch scheduledWriteInFlight = new CountDownLatch(1);
+        AtomicBoolean firstCapture = new AtomicBoolean(true);
+        InsightsSnapshotStore store = new InsightsSnapshotStore(
+                directory.resolve(InsightsSnapshotStore.FILE_NAME),
+                GEOMETRY,
+                Duration.ofHours(1),
+                Duration.ofDays(30),
+                new IntervalBoundary(() -> NOW, millis -> {}));
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.start(
+                    () -> {
+                        if (firstCapture.getAndSet(false)) {
+                            scheduledWriteInFlight.countDown();
+                            while (!Thread.currentThread().isInterrupted()) {
+                                LockSupport.park();
+                            }
+                        }
+                        return snapshot(NOW, 10_000, 90);
+                    },
+                    () -> false);
+            assertThat(scheduledWriteInFlight.await(5, TimeUnit.SECONDS)).isTrue();
+
+            store.stop();
+
+            assertThat(capture.appender().list).isEmpty();
+        }
+        assertThat(loadWith(store(Duration.ofDays(30)))).isPresent();
     }
 
     @Test
