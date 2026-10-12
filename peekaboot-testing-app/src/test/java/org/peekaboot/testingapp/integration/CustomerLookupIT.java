@@ -6,6 +6,7 @@ import ch.qos.logback.classic.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.order.CustomerClient;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
@@ -55,31 +56,39 @@ class CustomerLookupIT {
 
     @Test
     void theOrdersPageNamesAnUnknownCustomerByIdWithoutWarning() {
-        OrderFixtures.seedOrder(orderRepository, orderLineRepository, 999L, "WIDGET-CUST");
-        // the page names the first order's customer on every row, so that is the id it renders
-        long customerId = orderRepository.findAll().getFirst().getCustomerId();
+        CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 999L, "WIDGET-CUST");
+        try {
+            // the page names the first order's customer on every row, so that is the id it renders
+            long customerId = orderRepository.findAll().getFirst().getCustomerId();
 
-        String orders;
-        try (LogCapture logs = LogCapture.attach(CustomerClient.class)) {
-            orders = api.get("/orders");
+            String orders;
+            try (LogCapture logs = LogCapture.attach(CustomerClient.class)) {
+                orders = api.get("/orders");
 
-            assertThat(logs.appender().list)
-                    .as("a 404 from the person API is an answer, not a failure worth a stack trace")
-                    .noneMatch(event -> event.getLevel().isGreaterOrEqual(Level.WARN));
+                assertThat(logs.appender().list)
+                        .as("a 404 from the person API is an answer, not a failure worth a stack trace")
+                        .noneMatch(event -> event.getLevel().isGreaterOrEqual(Level.WARN));
+            }
+
+            assertThat(orders)
+                    .as("the order still renders, with the id standing in for the name")
+                    .contains("customer #" + customerId);
+        } finally {
+            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
         }
-
-        assertThat(orders)
-                .as("the order still renders, with the id standing in for the name")
-                .contains("customer #" + customerId);
     }
 
     /** A line can name a SKU the inventory never had, as a fixture's does; the page shows the SKU instead. */
     @Test
     void theOrdersPageNamesEachLinesProductAndFallsBackToTheSku() {
-        OrderFixtures.seedOrder(orderRepository, orderLineRepository, 999L, "WIDGET-1", "RETIRED-SKU");
+        CustomerOrder order =
+                OrderFixtures.seedOrder(orderRepository, orderLineRepository, 999L, "WIDGET-1", "RETIRED-SKU");
+        try {
+            String orders = api.get("/orders");
 
-        String orders = api.get("/orders");
-
-        assertThat(orders).contains("Widget One").contains("RETIRED-SKU");
+            assertThat(orders).contains("Widget One").contains("RETIRED-SKU");
+        } finally {
+            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+        }
     }
 }

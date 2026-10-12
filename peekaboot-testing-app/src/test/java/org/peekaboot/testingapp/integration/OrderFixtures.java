@@ -13,7 +13,7 @@ final class OrderFixtures {
     private OrderFixtures() {}
 
     /** An order for {@code customerId} with one line of quantity 1 per SKU, whether the inventory knows it or not. */
-    static void seedOrder(
+    static CustomerOrder seedOrder(
             OrderRepository orderRepository, OrderLineRepository orderLineRepository, long customerId, String... skus) {
         CustomerOrder order = new CustomerOrder();
         order.setReference("PK-SEED-" + System.nanoTime());
@@ -30,5 +30,13 @@ final class OrderFixtures {
             line.setUnitPrice(new BigDecimal("19.99"));
             orderLineRepository.save(line);
         }
+        return saved;
+    }
+
+    /** Undoes {@link #seedOrder}, so a test leaves the context's shared database as it found it. */
+    static void deleteOrder(
+            OrderRepository orderRepository, OrderLineRepository orderLineRepository, CustomerOrder order) {
+        orderLineRepository.deleteAll(orderLineRepository.findByOrderId(order.getId()));
+        orderRepository.delete(order);
     }
 }

@@ -11,6 +11,7 @@ import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
@@ -78,15 +79,18 @@ class MultiDataSourceTraceIT {
 
     @Test
     void theOrdersPageQueriesBothDataSourcesUnderTheirOwnNames() {
-        OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-1");
+        CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-1");
+        try {
+            JsonNode trace = traces.awaitTrace(traces.get("/orders"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode trace = traces.awaitTrace(traces.get("/orders"), TraceApiClient.ROOT_SPAN_EXPORTED);
-
-        assertThat(TraceQueries.dataSourceNames(trace)).contains("orders-db", "inventory-db");
-        assertThat(TraceQueries.statementsOn(trace, "orders-db"))
-                .anySatisfy(sql -> assertThat(sql).contains("from customer_order"));
-        assertThat(TraceQueries.statementsOn(trace, "inventory-db"))
-                .anySatisfy(sql -> assertThat(sql.toLowerCase(Locale.ROOT)).contains("from product"));
+            assertThat(TraceQueries.dataSourceNames(trace)).contains("orders-db", "inventory-db");
+            assertThat(TraceQueries.statementsOn(trace, "orders-db"))
+                    .anySatisfy(sql -> assertThat(sql).contains("from customer_order"));
+            assertThat(TraceQueries.statementsOn(trace, "inventory-db"))
+                    .anySatisfy(sql -> assertThat(sql.toLowerCase(Locale.ROOT)).contains("from product"));
+        } finally {
+            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+        }
     }
 
     @Test
