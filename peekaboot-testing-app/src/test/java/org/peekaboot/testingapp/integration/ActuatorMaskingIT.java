@@ -19,7 +19,7 @@ import tools.jackson.databind.JsonNode;
  * endpoint the dashboard reads.
  *
  * <p>application-test.yml binds {@code spring.datasource.password} as a fixture value
- * purely to give this test (and {@code DashboardTabsIT.configTabMasksSensitiveValues})
+ * purely to give this test (and {@code UnmaskingControlEnabledIT.togglingTheControlRevealsAMaskedConfigValue})
  * a real, secret-looking property to check the masking engine's actual output against -
  * the test profile's H2 datasource doesn't otherwise need a password.
  */

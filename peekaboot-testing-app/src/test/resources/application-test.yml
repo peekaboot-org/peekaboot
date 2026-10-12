@@ -18,7 +18,7 @@ spring:
   datasource:
     # Unused by the in-memory H2 connection itself - bound purely so the Config/Environment
     # tabs have a real, secret-looking property to prove the masking engine against
-    # (see DashboardTabsIT.configTabMasksSensitiveValues and
+    # (see UnmaskingControlEnabledIT.togglingTheControlRevealsAMaskedConfigValue and
     # ActuatorMaskingIT).
     password: test-fixture-password
   sql:

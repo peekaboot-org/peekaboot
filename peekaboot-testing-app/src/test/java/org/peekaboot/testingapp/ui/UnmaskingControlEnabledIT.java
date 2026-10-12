@@ -25,8 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
  *
  * <p>{@code application-test.yml} binds {@code spring.datasource.password} as a fixture
  * value purely so this test has a real, secret-looking property to reveal (see
- * {@code DashboardTabsIT.configTabMasksSensitiveValues} for the masked-by-default half
- * of the same fixture).
+ * {@code UnmaskingDisabledIT} for the masked-by-default half of the same fixture).
  */
 @SpringBootTest(
         classes = TestingApp.class,
@@ -110,8 +109,8 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
     private void openConfigPasswordRow() {
         dashboard.openTab("config");
         page.fill("#config-filter", "password");
-        // Rows render into the DOM regardless of the group's expand/collapse state - see
-        // DashboardTabsIT.configTabMasksSensitiveValues.
+        // Rows render into the DOM regardless of the group's expand/collapse state; only the
+        // group's [hidden] wrapper controls visibility.
         page.waitForSelector(
                 "#config-groups .pk-kv__key",
                 new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
