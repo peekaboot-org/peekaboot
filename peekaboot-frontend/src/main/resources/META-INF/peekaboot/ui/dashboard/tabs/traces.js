@@ -66,10 +66,23 @@ export function isAvailable(data, features) {
 }
 
 export function render(container, data, context) {
+    if (!context.features?.tracingSpansPossible) {
+        showWhyNoTracesCanAppear(container);
+        return;
+    }
     // delegated on the panel, which survives every re-render of the trace list
     bindCopyables(container);
     wireControls(container);
     tab.render(container, data, context);
+}
+
+/**
+ * The store exists but no span source feeds it, so it can never hold a trace: the
+ * explanation replaces the controls and the list, and nothing is fetched.
+ */
+function showWhyNoTracesCanAppear(container) {
+    Array.from(container.children).forEach(child =>
+        child.classList.toggle('hidden', child.id !== 'traces-unavailable'));
 }
 
 /**

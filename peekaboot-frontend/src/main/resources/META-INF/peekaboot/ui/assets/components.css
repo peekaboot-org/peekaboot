@@ -367,6 +367,11 @@
     padding: var(--pk-space-md);
     text-align: center;
 }
+/* A name to type in verbatim, such as a dependency to add, is not placeholder text. */
+.pk-empty code {
+    font-family: var(--pk-font-mono);
+    font-style: normal;
+}
 
 /* Loading state (components.js's loadingBlock, and the dashboard's static boot placeholder):
    the spinner with its caption. */

@@ -288,7 +288,9 @@ panel override) falls back to its default instead of reaching the backend or fil
 invisibly, and the URL is rewritten to the state that restored. A lower-case `type` is
 folded the way the backend folds it. A tab this instance does not have (`#traces` with
 tracing off, `#flyway` without migrations, `#liquibase` without change sets) falls back to
-`#overview` the same way, rather than landing on an empty panel.
+`#overview` the same way, rather than landing on an empty panel. `#traces` with tracing on
+but no span source (`features.tracingSpansPossible` false) stays, and shows why no trace can
+appear instead of a list.
 
 ### Cross-links in the trace overlay
 
@@ -589,6 +591,7 @@ breaks them silently. Grep `peekaboot-testing-app/src/test` before you do.
 | `#machine-net-tabs`, `#machine-net-ipv4[-btn]`, `#machine-net-ipv6[-btn]` and `.pk-machine-net__addr` | The Machine card's IPv4/IPv6 tab strip and its per-family address rows; `OverviewMachineIT` drives selection, keyboard navigation and the refresh-survival of the open family through these ids. |
 | `#jvm-defaults-card` and `data-datasource` | `OverviewMachineIT` asserts the first datasource card (marked `data-datasource` by `overview.js`) directly follows the JVM Defaults card in the Overview grid. |
 | `#traces-bucket` and `data-bucket` | The All/Errors/Slow bucket filter buttons; tests select and click by `[data-bucket="..."]`. |
+| `#traces-unavailable` | The Traces tab's explanation when no span source exists; `TracesTabWithoutSpanSourceIT` waits on it. |
 | `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `renderTab()` looks it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
 | `data-tab` | The tab-strip button attribute (`.pk-tab[data-tab="<id>"]`) that `tabStrip()` and `main.js` both key off for selection state. |
 | `.pk-error`, `.pk-error__frame`, `.pk-error__frame--app` | The error page's root, its trace lines and the ones in the application's own packages. `PeekabootErrorView` writes them and the UI tests assert the page is Peekaboot's and that the marked frames are the application's. |

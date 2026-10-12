@@ -224,6 +224,11 @@
             <div id="no-traces" class="pk-empty hidden">
                 <p>No traces recorded</p>
             </div>
+            <!-- shown in place of everything above when features.tracingSpansPossible is false -->
+            <div id="traces-unavailable" class="pk-empty hidden">
+                <p>No traces can appear: the OpenTelemetry SDK is not on the class path, so nothing reports spans to Peekaboot.</p>
+                <p>Add <code>org.springframework.boot:spring-boot-starter-opentelemetry</code> to the application. The Peekaboot starter brings it unless it was excluded.</p>
+            </div>
         </section>
 
         <!-- Meters Tab -->

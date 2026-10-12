@@ -949,7 +949,8 @@ OpenTelemetry SDK has a store that exists (`features.tracing`, gated only by
 `peekaboot.tracing.enabled`) but can never receive one. `PeekabootController` exposes that
 gap as `features.tracingSpansPossible`. False is a hard guarantee that the bean this section
 describes was never created. True only means the bridge exists, not that anything downstream
-(sampling, the rest of the host's OpenTelemetry wiring) will actually produce a span.
+(sampling, the rest of the host's OpenTelemetry wiring) will actually produce a span. While it
+is false the Traces tab fetches nothing and names the dependency to add in place of its list.
 
 The exporter is one more `SpanExporter` bean alongside whatever Boot's own OpenTelemetry
 auto-configuration registered, standing up no tracing stack of its own and copying every
