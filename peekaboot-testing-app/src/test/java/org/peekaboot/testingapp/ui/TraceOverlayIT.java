@@ -3,7 +3,6 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
@@ -11,6 +10,7 @@ import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
+import com.microsoft.playwright.options.RequestOptions;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
 import java.awt.image.BufferedImage;
@@ -18,11 +18,13 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
@@ -32,10 +34,11 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
 import org.peekaboot.testingapp.order.OrderReconciler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -47,7 +50,12 @@ import tools.jackson.databind.node.ObjectNode;
 class TraceOverlayIT extends PlaywrightTestBase {
 
     /** The colour of the stand-in page header {@link #overlayStacksAboveHostPageChrome} puts on the page. */
+    private static final Logger log = LoggerFactory.getLogger(TraceOverlayIT.class);
+
     private static final int HOST_HEADER_RGB = 0x123456;
+
+    /** How often a trace is produced again when load pushed it off the shape a test needs. */
+    private static final int TRACE_SHAPE_ATTEMPTS = 5;
 
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
@@ -1334,40 +1342,86 @@ class TraceOverlayIT extends PlaywrightTestBase {
         return traceId;
     }
 
+    /** The span duration the backend's SLOW verdict starts at, as the running app publishes it. */
+    private long slowSpanThresholdMs() {
+        return awaitJson(
+                        contextPath() + "/peekaboot/api/features",
+                        "features => features.slowSpanThresholdMs",
+                        "/api/features named no slow-span threshold")
+                .asLong();
+    }
+
     /**
-     * Serves the toolbar's current trace with its trace-level {@code slow} flag and total
-     * duration replaced, so the header can be driven through both verdicts on one real trace.
+     * A trace the backend calls slow whose total is short: the enrichment request answers at
+     * once and its {@code @Async} task works past the slow-span threshold, outside the
+     * synchronous window the total reads. Fired again when the request itself ran past the
+     * threshold, as it can under load, since only a short total tells the two rules apart.
      */
-    private void openOverlayWithTracePatched(boolean slow, long durationMs) {
-        page.route("**/api/traces/*/insights", route -> {
-            APIResponse response = route.fetch();
-            ObjectNode trace = (ObjectNode) readJson(response.text());
-            trace.put("slow", slow).put("durationMs", durationMs);
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(trace.toString()));
-        });
-        toolbar.openOverlay();
+    private String awaitSlowTraceWithAShortTotal(long thresholdMs) {
+        for (int attempt = 0; attempt < TRACE_SHAPE_ATTEMPTS; attempt++) {
+            String traceId = triggerOrderEnrichment();
+            JsonNode trace = awaitTrace(traceId, "trace => (" + ROOT_SPAN_EXPORTED + ")(trace) && trace.slow");
+            if (trace.path("durationMs").asLong() < thresholdMs) {
+                return traceId;
+            }
+            log.info("enrichment trace {} took {}ms in total, firing it again", traceId, trace.path("durationMs"));
+        }
+        throw new AssertionError("no enrichment request answered within " + thresholdMs + "ms");
+    }
+
+    /**
+     * A trace with a long total and no slow span: two quick requests sent with one shared
+     * {@code traceparent}, the second a threshold's length after the first, so the window
+     * spans the gap while neither request's own span comes near it. Sent again under a fresh
+     * trace id when a request itself ran past the threshold.
+     */
+    private String awaitLongTraceWithoutASlowSpan(long thresholdMs) {
+        for (int attempt = 0; attempt < TRACE_SHAPE_ATTEMPTS; attempt++) {
+            String traceId = randomHex(16);
+            String traceparent = "00-" + traceId + "-" + randomHex(8) + "-01";
+            RequestOptions sharingTheTrace = RequestOptions.create().setHeader("traceparent", traceparent);
+            page.request().get(baseUrl + "/api/person/all", sharingTheTrace);
+            page.waitForTimeout((double) thresholdMs);
+            page.request().get(baseUrl + "/api/person/all", sharingTheTrace);
+
+            JsonNode trace = awaitTrace(traceId, "trace => trace.durationMs >= " + thresholdMs);
+            if (!trace.path("slow").asBoolean()) {
+                return traceId;
+            }
+            log.info("trace {} carries a slow request span, sending the pair again", traceId);
+        }
+        throw new AssertionError("no pair of requests answered within " + thresholdMs + "ms each");
+    }
+
+    private static String randomHex(int bytes) {
+        byte[] random = new byte[bytes];
+        ThreadLocalRandom.current().nextBytes(random);
+        return HexFormat.of().formatHex(random);
+    }
+
+    private void openOverlayFromTheDashboard(String traceId) {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-overlay__meta");
-        page.unroute("**/api/traces/*/insights");
     }
 
     /**
      * The header's SLOW marking is the backend's per-trace verdict ({@code trace.slow}: some
      * span carries a SLOW or VERY_SLOW issue), the very flag the Traces tab's badge reads.
      * Applying the span thresholds to the trace's total instead called a 120 ms request slow
-     * in the header while the list beside it did not, and a 5 s trace with no slow span
-     * (the toolbar's own fetch ladder, say) the other way round.
+     * in the header while the list beside it did not, and a long trace with no slow span the
+     * other way round. Both traces here are real, and each sits on the side of the threshold
+     * where the two rules disagree.
      */
     @Test
     void headerSlowMarkingFollowsTheBackendsVerdict() {
-        openPersonsPage();
-        toolbar.traceId();
+        long thresholdMs = slowSpanThresholdMs();
 
-        openOverlayWithTracePatched(true, 5);
+        openOverlayFromTheDashboard(awaitSlowTraceWithAShortTotal(thresholdMs));
         assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn").trim()).isEqualTo("SLOW");
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
                 .contains("slow");
 
-        openOverlayWithTracePatched(false, 5000);
+        openOverlayFromTheDashboard(awaitLongTraceWithoutASlowSpan(thresholdMs));
         assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('.pk-overlay__meta .pk-badge--warn')"))
                 .isFalse();
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
