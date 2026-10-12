@@ -573,6 +573,11 @@ both themes.
   releases it on close *before* restoring focus to the invoker, since `focus()` on an inert
   element does nothing.
 
+- **Escape closes the overlay only from inside it or from the body**, where focus falls when
+  a focused control is removed or the invoker turns inert. It then stops there. An Escape a
+  control inside already handled (`preventDefault()`) or one aimed at a live element outside
+  is left alone. `TraceOverlayEscapeIT` pins each case.
+
 - **Interactive targets are at least 24x24 CSS px** (WCAG 2.2 §2.5.8). Measured, not
   computed from the CSS: `.pk-btn--small` looked like 24px on paper and rendered at 20.
 

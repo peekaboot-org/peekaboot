@@ -80,6 +80,13 @@ function deepActiveElement() {
     return element;
 }
 
+/** An Escape something inside the overlay already handled, a popover closing itself say, is not also a close. */
+function closeOnEscape(event) {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    event.stopPropagation();
+    closeTraceDetail();
+}
+
 /**
  * options: basePath (the toolbar's server-provided one; the dashboard's own by default),
  * urlState (see main.js's buildTraceUrlState), onClose, and the dashboard's display
@@ -121,13 +128,16 @@ export function openTraceDetail(traceId, options = {}) {
     setBackgroundInert(overlayHost);
     // Bound here rather than in render(): from this line on the page behind is inert, and a
     // reader waiting out the trace fetch (or looking at the error state) must be able to
-    // leave. closeTraceDetail() unbinds it, however the overlay is dismissed.
+    // leave. The host listener dies with the host; closeTraceDetail() unbinds the other.
+    overlayHost.addEventListener('keydown', closeOnEscape);
+    // Focus falls to the body when a focused control is removed, when a click lands on
+    // something unfocusable, and when the invoker turns inert. Escape there still means the
+    // overlay; anything live outside it, a top-layer popover say, keeps its own. Captured, so
+    // the page's own document listeners never see an Escape the overlay took.
     escHandler = event => {
-        if (event.key === 'Escape') {
-            closeTraceDetail();
-        }
+        if (event.target === document.body) closeOnEscape(event);
     };
-    document.addEventListener('keydown', escHandler);
+    document.addEventListener('keydown', escHandler, {capture: true});
 
     const shadow = overlayHost.attachShadow({mode: 'open'});
     themeUnwatch = bindTheme(overlayHost);
@@ -158,7 +168,7 @@ export function closeTraceDetail() {
     // at this point, and focus() on an inert element is a no-op.
     releaseBackgroundInert();
     if (escHandler) {
-        document.removeEventListener('keydown', escHandler);
+        document.removeEventListener('keydown', escHandler, {capture: true});
         escHandler = null;
     }
     if (themeUnwatch) {
