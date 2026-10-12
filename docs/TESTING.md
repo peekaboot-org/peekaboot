@@ -272,6 +272,37 @@ reveals it 400ms after paint with a delayed animation, and `toolbar.js` removes 
 runs, so a script that never arrives leaves a reader with a notice and a real link to the
 dashboard. A test waiting for `data-pk-ready` still times out, and that is the accepted cost.
 
+### Keeping container churn on a Linux host away from the browser
+
+The trigger is the IPv6 link-local address the kernel gives each new host-side veth and bridge.
+Links going up or down without an address change drop nothing. Chromium's Linux
+`AddressTrackerLinux` reports every netlink address change with no interface filter, and the socket
+pools answer each one with `FlushWithError(ERR_NETWORK_CHANGED)` (`net/base/address_tracker_linux.cc`,
+`net/socket/transport_client_socket_pool.cc`, `net/http/http_stream_pool.cc`; checked at Chromium
+153.0.8010.12, the build Playwright 1.63 bundles). No switch or feature turns it off: the only
+opt-out, `HttpNetworkSessionParams::ignore_ip_address_changes`, is internal. Firefox and WebKit
+complete every request under the same churn.
+
+A host that runs other projects' containers next to the suite can stop generating those addresses
+for links created after boot. Docker 29 writes no IPv6 sysctl on the host-side veth, and on a
+bridge only when the network enables IPv6, so the kernel default decides. Pin the uplink back to
+the normal mode, since it still needs its link-local address for router advertisements (`ens18`
+here; the systemd udev rule applies per-interface keys as a link appears):
+
+```
+# /etc/sysctl.d/90-no-linklocal-on-new-links.conf
+net.ipv6.conf.default.addr_gen_mode = 1
+net.ipv6.conf.ens18.addr_gen_mode = 0
+```
+
+Apply it with `sysctl --system`. Links that already exist keep their addresses. A Docker network
+with IPv6 enabled expects the kernel's link-local address on its bridge and is untested under this
+setting, so check `docker network inspect` for `EnableIPv6` first.
+Creating or removing a Docker network still adds or drops the bridge's IPv4 address, which
+Chromium also counts as a change; that happens far less often than a container start. Neither the
+Mac (Docker Desktop keeps its links inside a VM) nor CI (the suite's own containers are already
+isolated) needs the setting.
+
 ## Geometry waits on the bundled webfont
 
 Peekaboot serves Geist from its own jar, so a size or position assertion has to wait for the
