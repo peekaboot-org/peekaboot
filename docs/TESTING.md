@@ -242,8 +242,11 @@ a teardown hiding a real failure still leaves a line in the output.
 ## Requests the browser loses
 
 Chromium drops every request in flight, with `net::ERR_NETWORK_CHANGED`, whenever the host's
-network configuration changes. A container taking a veth interface up or down is enough, and
-nothing in the suite provokes or can prevent it - on a machine with any container churn it
+network configuration changes. A container taking a veth interface up or down is enough: the
+host side's link-local address arriving about a second after the start drops whatever is in
+flight. The suite's own Testcontainers classes did this to the browser tests running beside
+them, so they carry `@StartsContainers`, which isolates them from every other class. Containers
+started outside the build cannot be kept out - on a machine with other container churn it still
 lands a couple of times in a four-minute run. The dashboard is where it showed: no build step
 means `main.js` is a graph of forty-odd separate fetches, and losing one left the shell
 unevaluated, the loading placeholder up and the page mute, which every waiting test read as a

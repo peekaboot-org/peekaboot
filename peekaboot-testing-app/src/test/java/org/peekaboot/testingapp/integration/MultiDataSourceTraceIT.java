@@ -42,6 +42,7 @@ import tools.jackson.databind.JsonNode;
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@StartsContainers
 class MultiDataSourceTraceIT {
 
     // No @ServiceConnection: that would hand MySQL to the primary DataSource's connection details.

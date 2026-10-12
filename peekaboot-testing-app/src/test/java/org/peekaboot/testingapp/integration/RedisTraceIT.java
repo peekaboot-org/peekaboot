@@ -35,6 +35,7 @@ import tools.jackson.databind.JsonNode;
         properties = "spring.cache.type=redis")
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@StartsContainers
 class RedisTraceIT {
 
     private static final Logger log = LoggerFactory.getLogger(RedisTraceIT.class);
