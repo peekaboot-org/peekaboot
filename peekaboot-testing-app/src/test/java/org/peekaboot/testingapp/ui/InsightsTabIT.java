@@ -361,7 +361,7 @@ class InsightsTabIT extends PlaywrightTestBase {
      */
     @Test
     void resettingZoomRestoresLiveAutoFitOnEveryChart() {
-        page.route("**/api/insights/stream", route -> route.abort());
+        Runnable releaseStream = interceptUntilReleased("**/api/insights/stream", Route::abort);
 
         openInsights();
         String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
@@ -379,7 +379,7 @@ class InsightsTabIT extends PlaywrightTestBase {
 
         // live updates reach the readout again once the stream is let back in, exactly as
         // before a zoom/reset cycle - proves the reset did not leave anything wedged
-        page.unroute("**/api/insights/stream");
+        releaseStream.run();
         // Firefox gives up on the aborted stream for good (readyState CLOSED, see
         // insights-stream.js) where the other engines retry it themselves, so the reopen is
         // driven here rather than left to the 30s refresh cycle this wait would be racing.
@@ -634,15 +634,15 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.onConsoleMessage(message -> {
             if (message.text().contains("Insights tab failed to initialise")) initFailures.add(message.text());
         });
-        page.route("**/api/insights/stream", route -> route.abort());
-        page.route("**/api/insights/data**", route -> route.abort());
+        Runnable releaseStream = interceptUntilReleased("**/api/insights/stream", Route::abort);
+        Runnable releaseData = interceptUntilReleased("**/api/insights/data**", Route::abort);
 
         openDashboard();
         page.click("#insights-tab-btn");
         page.waitForCondition(() -> !initFailures.isEmpty());
 
-        page.unroute("**/api/insights/data**");
-        page.unroute("**/api/insights/stream");
+        releaseData.run();
+        releaseStream.run();
         List<String> markerLoads = new ArrayList<>();
         page.onRequest(request -> {
             if (request.url().contains("/api/lifecycle/events")) markerLoads.add(request.url());
@@ -669,13 +669,14 @@ class InsightsTabIT extends PlaywrightTestBase {
      */
     @Test
     void aClosedStreamIsAnnouncedAndReopenedByTheRefreshCycle() {
-        page.route("**/api/insights/stream", route -> route.fulfill(new Route.FulfillOptions().setStatus(404)));
+        Runnable releaseStream = interceptUntilReleased(
+                "**/api/insights/stream", route -> route.fulfill(new Route.FulfillOptions().setStatus(404)));
         openInsights();
 
         page.waitForSelector("#insights-stream-stopped");
         assertThat(page.textContent("#insights-stream-stopped")).contains("Live updates stopped");
 
-        page.unroute("**/api/insights/stream");
+        releaseStream.run();
         page.click("#refresh-btn");
         page.waitForSelector(
                 "#insights-stream-stopped", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));

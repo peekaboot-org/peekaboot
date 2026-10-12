@@ -16,6 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -296,6 +298,25 @@ abstract class PlaywrightTestBase {
             headers.put("content-security-policy", policy);
             route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
         });
+    }
+
+    /**
+     * Hands every request for {@code urlGlob} to {@code interception} until the returned action
+     * runs, and lets every later one through, with the route installed for the whole test.
+     * Unrouting instead can remove the page's last route, which switches request interception
+     * off, and a request the page starts at that moment can stall with its document never
+     * firing load.
+     */
+    protected Runnable interceptUntilReleased(String urlGlob, Consumer<Route> interception) {
+        AtomicBoolean released = new AtomicBoolean();
+        page.route(urlGlob, route -> {
+            if (released.get()) {
+                route.resume();
+            } else {
+                interception.accept(route);
+            }
+        });
+        return () -> released.set(true);
     }
 
     /**
