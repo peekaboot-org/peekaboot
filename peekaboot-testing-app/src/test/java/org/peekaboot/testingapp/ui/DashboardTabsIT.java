@@ -1395,29 +1395,35 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void theOrdersPageTraceListsTheQueryCountOfItsNPlusOne() {
-        seedAnOrder();
-        long orders = orderRepository.count();
-        page.navigate(baseUrl + "/orders");
-        String traceId = toolbar.traceId();
-        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+        CustomerOrder order = seedAnOrder();
+        try {
+            long orders = orderRepository.count();
+            page.navigate(baseUrl + "/orders");
+            String traceId = toolbar.traceId();
+            awaitTrace(traceId, ROOT_SPAN_EXPORTED);
 
-        openDashboard();
-        dashboard.openTracesTab();
-        dashboard.awaitListedTrace(traceId);
+            openDashboard();
+            dashboard.openTracesTab();
+            dashboard.awaitListedTrace(traceId);
 
-        List<String> stats =
-                page.locator(Dashboard.traceItem(traceId) + " .pk-stat").allTextContents();
-        String queryStat = stats.stream()
-                .filter(stat -> QUERY_STAT.matcher(stat).find())
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("no stat reads '<n> queries': " + stats));
-        Matcher queries = QUERY_STAT.matcher(queryStat);
-        assertThat(queries.find())
-                .as("the row's query stat reads '<n> queries': %s", queryStat)
-                .isTrue();
-        assertThat(parseGroupedInt(queries.group(1)))
-                .as("the N+1 runs one query for the list plus %d per order, over %d orders", QUERIES_PER_ORDER, orders)
-                .isGreaterThanOrEqualTo((int) (orders * QUERIES_PER_ORDER + 1));
+            List<String> stats =
+                    page.locator(Dashboard.traceItem(traceId) + " .pk-stat").allTextContents();
+            String queryStat = stats.stream()
+                    .filter(stat -> QUERY_STAT.matcher(stat).find())
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("no stat reads '<n> queries': " + stats));
+            Matcher queries = QUERY_STAT.matcher(queryStat);
+            assertThat(queries.find())
+                    .as("the row's query stat reads '<n> queries': %s", queryStat)
+                    .isTrue();
+            assertThat(parseGroupedInt(queries.group(1)))
+                    .as(
+                            "the N+1 runs one query for the list plus %d per order, over %d orders",
+                            QUERIES_PER_ORDER, orders)
+                    .isGreaterThanOrEqualTo((int) (orders * QUERIES_PER_ORDER + 1));
+        } finally {
+            deleteOrder(order);
+        }
     }
 
     /**
@@ -1427,19 +1433,23 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void theSlowReportTraceIsListedInTheSlowBucket() {
-        long orderId = seedAnOrder().getId();
-        page.navigate(baseUrl + "/api/orders/" + orderId + "/report");
-        String traceId = awaitListedTrace("bucket=slow", "trace => trace.rootOperation.includes('/report')");
+        CustomerOrder order = seedAnOrder();
+        try {
+            page.navigate(baseUrl + "/api/orders/" + order.getId() + "/report");
+            String traceId = awaitListedTrace("bucket=slow", "trace => trace.rootOperation.includes('/report')");
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=slow");
-        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='slow'][aria-pressed='true']");
-        dashboard.awaitListedTrace(traceId);
+            page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=slow");
+            page.waitForSelector("#traces-bucket .pk-btn[data-bucket='slow'][aria-pressed='true']");
+            dashboard.awaitListedTrace(traceId);
 
-        String rendered = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__duration")
-                .textContent();
-        assertThat(durationMsOf(rendered))
-                .as("a Slow-bucket row shows the duration that put it there: %s", rendered)
-                .isGreaterThanOrEqualTo(slowTraceThresholdMs());
+            String rendered = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__duration")
+                    .textContent();
+            assertThat(durationMsOf(rendered))
+                    .as("a Slow-bucket row shows the duration that put it there: %s", rendered)
+                    .isGreaterThanOrEqualTo(slowTraceThresholdMs());
+        } finally {
+            deleteOrder(order);
+        }
     }
 
     /**
