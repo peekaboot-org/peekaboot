@@ -175,12 +175,14 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   (`TracesTabIT`) and `PartnerFeedImporter`'s warning and error (`TraceOverlayIT`). A filter on the console appender leaves Peekaboot's appender on the root
   logger receiving the event. `LogCapture` detaches the logger from the root, so Peekaboot would
   never see the line. A logger level would hide it from Peekaboot too.
-- Two more entries cover product warnings. The `DashboardAuthenticationFilter` challenge is
+- Three more entries cover product warnings. The `DashboardAuthenticationFilter` challenge is
   asserted in `AutoSecuredDashboardIT` on a fresh application; the entry hides the first
   challenge on the shared one, which other tests only trigger. The `SecurityPostureListener`
   banner is logged while the context loads, and Boot reinitialises Logback on the first start
   after another context closed, which detaches any earlier `LogCapture`. Only
-  `SecurityPostureListenerTest` asserts the banner.
+  `SecurityPostureListenerTest` asserts the banner. `SeriesSampler` warns about the
+  `absent-subsystem` panel that `insights-test-panels.yml` adds on purpose, a few ticks after each
+  test-profile context starts, too early to catch reliably; `InsightsServiceTest` asserts it.
 - The same file raises `io.netty.resolver.dns.DnsServerAddressStreamProviders` and
   `org.flywaydb.core.internal.database.base.Database` to `ERROR`. The first warns about a
   macOS-only native jar. The second warns that H2 is newer than the version Flyway has verified.

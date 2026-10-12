@@ -29,6 +29,11 @@
             <logger>org.peekaboot.testingapp.order.PartnerFeedImporter</logger>
             <message>partner feed import broke off</message>
         </filter>
+        <!-- insights-test-panels.yml's absent-subsystem panel names a meter this app lacks, on purpose; InsightsServiceTest asserts the warning. -->
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.backend.insights.SeriesSampler</logger>
+            <message>Peekaboot insights: series 'absent-subsystem\.gauge': meter 'no\.such\.meter' did not resolve to any meter across 3 ticks</message>
+        </filter>
         <!-- Banner: no LogCapture survives Boot's Logback reinit during context load. Challenge: AutoSecuredDashboardIT asserts it on a fresh app. -->
         <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
             <logger>org.peekaboot.backend.security.SecurityPostureListener</logger>
