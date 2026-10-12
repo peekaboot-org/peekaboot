@@ -145,7 +145,7 @@ class InsightsTabIT extends PlaywrightTestBase {
     /**
      * Deep-linking straight to "#insights" renders the tab on the first cycle, and the
      * Overview tile row, which reads the same /api/insights/config, fills the moment
-     * Overview is switched to - never before (see DashboardTabsIT's
+     * Overview is switched to - never before (see OverviewTabIT's
      * overviewSkipsTheTileFetchWhileAnotherTabIsShowing). The two readers de-duplicate
      * independently (each passes its own dedupeKey, see shared/api.js), so a switch to
      * Overview while this tab's own config request is still in flight leaves neither

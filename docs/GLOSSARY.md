@@ -174,7 +174,7 @@ own name, typically `task <bean>.<method>` when Spring's scheduler fired it.
 `TraceInsightsService.matchesRootOperation` bridges the mismatch with the `Class.method` suffix
 fallback, which is what makes the tab's "View traces" link
 (`dashboard/tabs/scheduled-tasks.js`) land on that one task's runs.
-`DashboardTabsIT.schedulerTracesLinkArrivesFiltered` is the end-to-end proof.
+`TraceFiltersIT.schedulerTracesLinkArrivesFiltered` is the end-to-end proof.
 
 Beware the third meaning: the Traces tab's own filter banner labels `rootOperation` **Target**,
 which is the span name, not this field.

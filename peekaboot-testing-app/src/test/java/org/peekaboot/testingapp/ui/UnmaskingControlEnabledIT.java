@@ -95,7 +95,7 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
 
         dashboard.openTab("environment");
         page.fill("#env-filter", "spring.datasource.password");
-        // Matches DashboardTabsIT.environmentFilterHighlightsMatches: waiting for a
+        // Matches ActuatorTabsIT.environmentFilterHighlightsMatches: waiting for a
         // generic group header risks resolving against the pre-filter list still on
         // screen, since filtering never auto-expands a group.
         page.waitForSelector(

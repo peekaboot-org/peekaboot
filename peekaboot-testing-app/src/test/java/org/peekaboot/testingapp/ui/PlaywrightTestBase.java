@@ -570,4 +570,23 @@ abstract class PlaywrightTestBase {
     protected void setStoredTheme(String theme) {
         page.addInitScript("localStorage.setItem('peekaboot-theme', '" + theme + "');");
     }
+
+    /**
+     * Puts an ordinary HTTP_REQUEST trace in the store by loading the page under the dev
+     * toolbar, and returns its id once the store serves it. Nothing else guarantees a trace:
+     * the failing scheduled jobs run once at startup, whether or not the tracer was ready to
+     * capture them, so a test waiting for a listed trace would otherwise depend on the
+     * tests that happened to run before it.
+     */
+    protected String seedAnHttpTrace() {
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+        return traceId;
+    }
+
+    /** A count as format.js groups it (e.g. "1,234"), stripped of its group separators before parsing. */
+    protected static int parseGroupedInt(String grouped) {
+        return Integer.parseInt(grouped.replaceAll("[.,]", ""));
+    }
 }

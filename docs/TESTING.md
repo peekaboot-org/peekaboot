@@ -172,7 +172,7 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
 - Six of those lines are asserted through Peekaboot's own trace API: `PersonController`'s
   `?error=true` error (`LogCaptureIT`), the `Scheduler` error (`TraceDeepLinkIT`), the
   `OrderController` `/boom` error (`OrderTraceCaptureIT`), `OrderReconciler`'s warning
-  (`DashboardTabsIT`) and `PartnerFeedImporter`'s warning and error (`TraceOverlayIT`). A filter on the console appender leaves Peekaboot's appender on the root
+  (`TracesTabIT`) and `PartnerFeedImporter`'s warning and error (`TraceOverlayIT`). A filter on the console appender leaves Peekaboot's appender on the root
   logger receiving the event. `LogCapture` detaches the logger from the root, so Peekaboot would
   never see the line. A logger level would hide it from Peekaboot too.
 - Two more entries cover product warnings. The `DashboardAuthenticationFilter` challenge is
