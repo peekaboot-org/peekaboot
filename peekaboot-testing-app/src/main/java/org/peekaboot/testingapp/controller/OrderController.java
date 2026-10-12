@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.peekaboot.testingapp.async.EnrichmentService;
 import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.order.OrderService;
+import org.peekaboot.testingapp.order.PartnerFeedImporter;
 import org.peekaboot.testingapp.repository.OrderStatisticsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,12 +28,18 @@ public class OrderController {
 
     private final OrderStatisticsRepository orderStatistics;
 
+    private final PartnerFeedImporter partnerFeedImporter;
+
     public OrderController(
-            OrderService orderService, EnrichmentService enrichmentService, OrderStatisticsRepository orderStatistics) {
+            OrderService orderService,
+            EnrichmentService enrichmentService,
+            OrderStatisticsRepository orderStatistics,
+            PartnerFeedImporter partnerFeedImporter) {
 
         this.orderService = orderService;
         this.enrichmentService = enrichmentService;
         this.orderStatistics = orderStatistics;
+        this.partnerFeedImporter = partnerFeedImporter;
     }
 
     @GetMapping("/orders")
@@ -80,6 +87,14 @@ public class OrderController {
             enrichmentService.enrich(ENRICHED_REFERENCE, fail);
         }
         return "enrichment of " + ENRICHED_REFERENCE + " dispatched";
+    }
+
+    /** One request whose trace carries several logged throwables, with a cause chain and a suppressed exception. */
+    @GetMapping("/orders/import")
+    @ResponseBody
+    public String importPartnerFeed() {
+
+        return partnerFeedImporter.importFeed();
     }
 
     /**

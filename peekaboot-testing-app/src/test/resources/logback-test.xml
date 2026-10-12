@@ -21,6 +21,14 @@
             <logger>org.peekaboot.testingapp.order.OrderReconciler</logger>
             <message>order PK-.* is still PLACED and has not been acknowledged</message>
         </filter>
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.testingapp.order.PartnerFeedImporter</logger>
+            <message>skipped partner feed row PK-FEED-1;two</message>
+        </filter>
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.testingapp.order.PartnerFeedImporter</logger>
+            <message>partner feed import broke off</message>
+        </filter>
         <!-- Banner: no LogCapture survives Boot's Logback reinit during context load. Challenge: AutoSecuredDashboardIT asserts it on a fresh app. -->
         <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
             <logger>org.peekaboot.backend.security.SecurityPostureListener</logger>

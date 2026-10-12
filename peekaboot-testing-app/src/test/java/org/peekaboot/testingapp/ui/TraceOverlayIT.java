@@ -57,6 +57,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /** How often a trace is produced again when load pushed it off the shape a test needs. */
     private static final int TRACE_SHAPE_ATTEMPTS = 5;
 
+    /** The messages PartnerFeedImporter logs its two throwables under. */
+    private static final String REJECTED_ROW_LOG = "skipped partner feed row PK-FEED-1;two";
+
+    private static final String BROKEN_FEED_LOG = "partner feed import broke off";
+
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
 
@@ -811,11 +816,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * scoping rule {@code revealControl(pre)} implements by closing over that row's own
      * {@code <pre>} rather than querying the document. Clicking the control then opens
      * every hidden run inside that trace, and - since {@code open} is recomputed from
-     * {@code aria-pressed} on every click - a second click closes every run again. The
-     * fixture here only ever produces one row with a throwable, so this cannot show a click
-     * leaving a DIFFERENT row's trace alone; what it does pin is the invariant the
-     * implementation actually promises - exactly one control per qualifying row - which
-     * holds however many such rows the fixture grows to.
+     * {@code aria-pressed} on every click - a second click closes every run again. This
+     * fixture produces one row with a throwable, so it pins exactly one control per qualifying
+     * row; that a click leaves a different row's trace alone is
+     * {@link #everyThrowableInATraceTravelsOnceAndFoldsByItsOwnRanges}'s to show.
      */
     @Test
     void theLogTraceRevealControlOpensEveryHiddenRun() {
@@ -841,6 +845,142 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .isEqualTo(0);
         assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("false");
         assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
+    }
+
+    /**
+     * Fires the partner feed import until its trace carries both throwables it logs, and returns
+     * that trace's id. A run served while a concurrent context boot had the capture appender
+     * detached is traced without its logs, the window {@link #openPageThatLogsAnError()} reloads
+     * for; the root span being stored settles it, since logs are captured synchronously.
+     */
+    private String awaitPartnerFeedImportTrace() {
+        for (int attempt = 0; attempt < TRACE_SHAPE_ATTEMPTS; attempt++) {
+            String traceId = traceIdOf(page.navigate(baseUrl + "/orders/import"));
+            JsonNode trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+            if (thrownLogsByMessage(trace).size() == 2) {
+                return traceId;
+            }
+            log.info("partner feed trace {} lacks a logged throwable, importing again", traceId);
+        }
+        throw new AssertionError("no partner feed import produced a trace carrying both of its throwables");
+    }
+
+    private static Map<String, JsonNode> thrownLogsByMessage(JsonNode trace) {
+        Map<String, JsonNode> thrown = new LinkedHashMap<>();
+        trace.path("logs")
+                .valueStream()
+                .filter(entry -> !entry.path("stackTrace").isNull())
+                .forEach(entry -> thrown.put(entry.path("message").asString(), entry));
+        return thrown;
+    }
+
+    private static int occurrences(String text, String needle) {
+        int count = 0;
+        for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) {
+            count++;
+        }
+        return count;
+    }
+
+    /** The line indices a list of {@code {start, endExclusive}} ranges covers. */
+    private static List<Integer> indicesIn(JsonNode ranges) {
+        List<Integer> indices = new ArrayList<>();
+        ranges.forEach(range -> {
+            for (int i = range.path("start").asInt();
+                    i < range.path("endExclusive").asInt();
+                    i++) {
+                indices.add(i);
+            }
+        });
+        return indices;
+    }
+
+    private static List<Integer> lengthsOf(JsonNode ranges) {
+        return ranges.valueStream()
+                .map(range ->
+                        range.path("endExclusive").asInt() - range.path("start").asInt())
+                .toList();
+    }
+
+    /** What the Logs tab rendered for the row logged with {@code message}, read off that row alone. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> renderedLogRow(String message) {
+        return (Map<String, Object>) overlay.evaluate("""
+                (root, message) => {
+                    const row = [...root.querySelectorAll('.pk-log')]
+                        .find(entry => entry.querySelector('.pk-log__message').textContent === message);
+                    const frames = [...row.querySelectorAll('.pk-log__trace .pk-log__frame')];
+                    return {
+                        lines: frames.map(frame => frame.textContent),
+                        applicationFrames: frames.flatMap((frame, i) =>
+                            frame.classList.contains('pk-log__frame--app') ? [i] : []),
+                        hiddenRuns: [...row.querySelectorAll('details.pk-log__hidden')]
+                            .map(run => run.querySelectorAll('.pk-log__frame').length),
+                        openRuns: row.querySelectorAll('details.pk-log__hidden[open]').length
+                    };
+                }
+                """, message);
+    }
+
+    /**
+     * One request whose trace carries two logged throwables, one with a cause chain and one with
+     * a suppressed exception that has a cause of its own. Each trace crosses the wire once - the
+     * span tree's copies of a log carry none - and each row renders its own trace by its own
+     * ranges: the server indexes every log's lines separately, so a row read against another
+     * row's ranges, or a suppressed frame's two leading tabs missed, shows here as a wrong fold
+     * or an application frame left unmarked. The reveal control of one row leaves the other alone.
+     */
+    @Test
+    void everyThrowableInATraceTravelsOnceAndFoldsByItsOwnRanges() {
+        String traceId = awaitPartnerFeedImportTrace();
+        String payload = page.request()
+                .get(baseUrl + "/peekaboot/api/traces/" + traceId + "/insights")
+                .text();
+        Map<String, JsonNode> thrownLogs = thrownLogsByMessage(readJson(payload));
+        assertThat(thrownLogs.get(REJECTED_ROW_LOG).path("stackTrace").asString())
+                .contains("Caused by: java.lang.NumberFormatException");
+        assertThat(thrownLogs.get(BROKEN_FEED_LOG).path("stackTrace").asString())
+                .contains("\tSuppressed: java.io.UncheckedIOException")
+                .contains("Caused by: java.io.IOException: partner feed connection reset");
+        thrownLogs.forEach((message, entry) -> assertThat(
+                        occurrences(payload, entry.path("stackTrace").toString()))
+                .as("the payload carries the trace logged with '%s' once", message)
+                .isOne());
+
+        openOverlayFromTheDashboard(traceId);
+        overlay.openLogsTab();
+
+        thrownLogs.forEach((message, entry) -> {
+            List<String> lines = List.of(entry.path("stackTrace").asString().split("\n", -1));
+            List<Integer> applicationLines = new ArrayList<>();
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).stripLeading().startsWith("at org.peekaboot.testingapp.")) {
+                    applicationLines.add(i);
+                }
+            }
+            Map<String, Object> rendered = renderedLogRow(message);
+            assertThat(rendered.get("lines"))
+                    .as("'%s' renders its own trace", message)
+                    .isEqualTo(lines);
+            assertThat(rendered.get("hiddenRuns"))
+                    .as("'%s' folds by its own ranges", message)
+                    .isEqualTo(lengthsOf(entry.path("hiddenFrames")));
+            assertThat(rendered.get("applicationFrames"))
+                    .as("'%s' marks the application's own frames, suppressed ones included", message)
+                    .isEqualTo(indicesIn(entry.path("applicationFrames")))
+                    .isEqualTo(applicationLines);
+        });
+
+        page.locator(".pk-log")
+                .filter(new Locator.FilterOptions().setHasText(REJECTED_ROW_LOG))
+                .locator(".pk-log__reveal")
+                .click();
+        assertThat(renderedLogRow(REJECTED_ROW_LOG).get("openRuns"))
+                .isEqualTo(lengthsOf(thrownLogs.get(REJECTED_ROW_LOG).path("hiddenFrames"))
+                        .size());
+        assertThat(renderedLogRow(BROKEN_FEED_LOG).get("openRuns"))
+                .as("revealing one row's trace leaves the other folded")
+                .isEqualTo(0);
     }
 
     /** The query span lands after the response, so the overlay is opened once the store serves it. */

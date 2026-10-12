@@ -399,7 +399,11 @@ abstract class PlaywrightTestBase {
      * read a trace id from.
      */
     protected String triggerOrderEnrichment() {
-        Response response = page.navigate(baseUrl + "/orders/enrich");
+        return traceIdOf(page.navigate(baseUrl + "/orders/enrich"));
+    }
+
+    /** The trace id a response names in its Server-Timing header, for an endpoint with no toolbar to read it from. */
+    protected static String traceIdOf(Response response) {
         String serverTiming = response.headerValue("Server-Timing");
         Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
         if (!matcher.find()) {
