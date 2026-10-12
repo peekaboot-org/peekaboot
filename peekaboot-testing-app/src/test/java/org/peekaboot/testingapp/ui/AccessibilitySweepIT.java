@@ -6,6 +6,7 @@ import com.deque.html.axecore.playwright.AxeBuilder;
 import com.deque.html.axecore.results.AxeResults;
 import com.deque.html.axecore.results.Rule;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -20,6 +21,12 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
 
     /** WCAG 2.1 A and AA, the level the project's contrast work targets; axe's own best practices are advisory. */
     private static final List<String> WCAG_AA = List.of("wcag2a", "wcag2aa", "wcag21a", "wcag21aa");
+
+    /** The overlay tabs after its landing Spans tab, each with what it renders once it holds content. */
+    private static final Map<String, String> OVERLAY_TAB_CONTENT = Map.of(
+            "queries", ".pk-query-item",
+            "logs", ".pk-log",
+            "request", ".pk-request-section");
 
     /**
      * Every tab the strip shows, one sweep each: an inactive panel is {@code display: none},
@@ -45,10 +52,10 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
     }
 
     /**
-     * The overlay's landing view, its Spans tab: the other three are swept nowhere, since a
-     * sweep of each would cost a trace of its own for no rule the Spans tab misses. The
-     * all-details switch is clicked first, so every span's panels - attributes (tags, the
-     * span-id copy control, the error section), its query and its logs - are open for the
+     * Every overlay tab, one sweep each, over one trace that fills them all: the persons page
+     * with {@code ?error=true} runs a query and logs an ERROR with a stack trace. On the Spans
+     * tab the all-details switch is clicked first, so every span's panels - attributes (tags,
+     * the span-id copy control, the error section), its query and its logs - are open for the
      * sweep instead of sitting in the {@code display: none} axe skips.
      *
      * <p>Opened over the dashboard rather than from the toolbar, so the document around it is
@@ -63,8 +70,13 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
         overlay.waitFor(".pk-tab");
         overlay.click(".pk-gantt-all-details");
         overlay.waitFor(".pk-gantt-span--open");
+        assertNoViolations("the overlay's spans tab", sweep());
 
-        assertNoViolations("the trace overlay", sweep());
+        OVERLAY_TAB_CONTENT.forEach((tab, content) -> {
+            overlay.openTab(tab);
+            overlay.waitFor(content);
+            assertNoViolations("the overlay's " + tab + " tab", sweep());
+        });
     }
 
     /**
@@ -106,7 +118,10 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
     /** The rule id and the nodes it failed on; the raw result object prints as an object reference. */
     private static String describe(List<Rule> violations) {
         return violations.stream()
-                .map(rule -> rule.getId() + " on " + rule.getNodes().size() + " node(s): " + rule.getHelp())
+                .map(rule -> rule.getId() + " on " + rule.getNodes().size() + " node(s): " + rule.getHelp()
+                        + rule.getNodes().stream()
+                                .map(node -> node.getTarget() + " " + node.getHtml())
+                                .toList())
                 .toList()
                 .toString();
     }

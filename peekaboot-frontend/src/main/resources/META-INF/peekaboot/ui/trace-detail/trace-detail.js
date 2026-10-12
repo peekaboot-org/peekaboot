@@ -218,7 +218,8 @@ function render(content, trace, urlState, display) {
     }, el('div', {className: 'pk-overlay__container'},
         header(trace),
         el('div', {className: 'pk-tabs'}),
-        el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content'}})));
+        // In the tab order: it scrolls, and a tab such as Request has no control for the keyboard to scroll it by.
+        el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content', tabindex: '0'}})));
     content.replaceChildren(container);
 
     container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
