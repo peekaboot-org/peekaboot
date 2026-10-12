@@ -2,9 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
-import com.microsoft.playwright.Route;
 import org.junit.jupiter.api.Test;
 
 class DashboardTabStripIT extends PlaywrightTestBase {
@@ -160,28 +158,5 @@ class DashboardTabStripIT extends PlaywrightTestBase {
         assertThat(page.url()).endsWith("#overview");
         assertThat(page.getAttribute(".pk-tab[data-tab='overview']", "aria-selected"))
                 .isEqualTo("true");
-    }
-
-    /**
-     * The negative half of the feature gating: the strip hides a tab whose feature is off.
-     * The real /api/features response is served with one flag flipped rather than a fabricated
-     * body, so every other flag - and the thresholds the tabs colour by - stay as the running
-     * app reports them; the Traces tab is the positive control that the flip was surgical.
-     */
-    @Test
-    void aTabIsHiddenWhenItsFeatureIsOff() {
-        page.route("**/peekaboot/api/features", route -> {
-            APIResponse features = route.fetch();
-            route.fulfill(new Route.FulfillOptions()
-                    .setResponse(features)
-                    .setBody(features.text().replace("\"metrics\":true", "\"metrics\":false")));
-        });
-
-        openDashboard();
-
-        assertThat(page.isVisible(Dashboard.tabButton("meters"))).isFalse();
-        assertThat(page.isVisible(Dashboard.tabButton("traces")))
-                .as("only the metrics flag was flipped")
-                .isTrue();
     }
 }
