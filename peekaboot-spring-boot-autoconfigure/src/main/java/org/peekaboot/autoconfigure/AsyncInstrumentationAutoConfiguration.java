@@ -9,7 +9,6 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration;
@@ -21,7 +20,6 @@ import org.springframework.core.task.TaskDecorator;
 
 @AutoConfiguration(after = ObservationAutoConfiguration.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnClass(TaskDecorator.class)
 @ConditionalOnBean(ObservationRegistry.class)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.TRACING_ENABLED, matchIfMissing = true)
