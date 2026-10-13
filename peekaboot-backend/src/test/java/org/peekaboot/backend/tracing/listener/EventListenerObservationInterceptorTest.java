@@ -66,6 +66,22 @@ class EventListenerObservationInterceptorTest {
                 .isEqualTo("com.example.listener.Listeners$InheritedPlain");
     }
 
+    /** One interceptor serves every listener bean, and beans inheriting one method share its Method object. */
+    @Test
+    void namesEachBeanClassThatInheritsTheSameListenerMethod() throws Exception {
+        EventListenerObservationInterceptor interceptor =
+                new EventListenerObservationInterceptor(observations::registry);
+        Listeners.Plain plain = intercepted(new Listeners.Plain(), interceptor);
+        Listeners.Plain inherited = intercepted(new Listeners.InheritedPlain(), interceptor);
+
+        observations.insideParentObservation(() -> plain.onOrderPlaced(new Listeners.OrderPlaced("PK-1")));
+        observations.insideParentObservation(() -> inherited.onOrderPlaced(new Listeners.OrderPlaced("PK-2")));
+
+        assertThat(listenerContexts())
+                .extracting(Observation.Context::getContextualName)
+                .containsExactly("Plain#onOrderPlaced", "InheritedPlain#onOrderPlaced");
+    }
+
     @Test
     void namesTheEventTypeOfAParameterlessListenerFromItsAnnotation() throws Exception {
         Listeners.Plain listener = intercepted(new Listeners.Plain());
@@ -156,9 +172,13 @@ class EventListenerObservationInterceptorTest {
     }
 
     private <T> T intercepted(T target) {
+        return intercepted(target, new EventListenerObservationInterceptor(observations::registry));
+    }
+
+    private <T> T intercepted(T target, EventListenerObservationInterceptor interceptor) {
         ProxyFactory proxyFactory = new ProxyFactory(target);
         proxyFactory.setProxyTargetClass(true);
-        proxyFactory.addAdvice(new EventListenerObservationInterceptor(observations::registry));
+        proxyFactory.addAdvice(interceptor);
         @SuppressWarnings("unchecked")
         T proxy = (T) proxyFactory.getProxy();
         return proxy;
