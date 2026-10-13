@@ -285,7 +285,7 @@ function nameCell(span, kind, attrsId, queryId, logsId, hasError, display) {
     // span.query - a batch is still one query, same as the Queries tab's own count - and the
     // row count of the result-set span it paired to this one (RowCounts) as span.rowCount.
     if (span.query) {
-        cell.append(panelToggleButton('pk-span-query-toggle', queryId, queryLabel(span, display.locale)));
+        cell.append(panelToggleButton('pk-span-query-toggle', queryId, queryToggleLabel(span, display.locale)));
     }
     const logCount = display.logsBySpan.get(span.spanId)?.length ?? 0;
     if (logCount > 0) {
@@ -295,7 +295,7 @@ function nameCell(span, kind, attrsId, queryId, logsId, hasError, display) {
 }
 
 /** "1 query" alone, or with the paired result set's row count - null (unparsed) leaves it off rather than claiming zero. */
-function queryLabel(span, locale) {
+function queryToggleLabel(span, locale) {
     const query = formatCount(1, 'query');
     return span.rowCount == null ? query : `${query}, ${formatCount(span.rowCount, 'result row', {locale})}`;
 }
