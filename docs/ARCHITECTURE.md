@@ -506,10 +506,11 @@ own resolvers, so it intercepts the exception first. It returns
 null for an `AsyncRequestNotUsableException` before anything else - `DefaultHandlerExceptionResolver`
 answers that one with an empty `ModelAndView` on purpose, so nothing is written to a connection
 the client already dropped, and rendering here would call `getWriter()` on that same dead
-connection and raise the exception again. It also returns null - falling through to the
-application's own handling - unless the request accepts HTML, the same boundary
-`BasicErrorController` draws between `errorHtml` and its JSON method, using Boot's own test from
-`WelcomePageHandlerMapping.isHtmlTextAccepted`. It derives a status from the exception (an
+connection and raise the exception again. It also returns null, falling through to the
+application's own handling, unless the `Accept` header names `text/html` with a quality above
+zero. A bare `*/*` or a missing header does not count, so Swagger UI, curl and `fetch()` keep
+getting the application's own error response, as does an XHR asking for JSON. It derives a
+status from the exception (an
 `ErrorResponse`'s own status, a merged `@ResponseStatus` on its class, or the same on a cause,
 walked iteratively with a small depth cap so a cyclic cause chain cannot overflow the stack;
 500 otherwise), sets `RequestDispatcher.ERROR_STATUS_CODE`, `ERROR_REQUEST_URI` and
