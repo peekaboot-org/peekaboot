@@ -13,7 +13,7 @@ import {bindTheme, applyTheme, storeTheme} from '../shared/theme.js';
 import {readSetting, writeSetting, readLocaleSetting, LOCALE_STORAGE_KEY} from '../shared/storage.js';
 import {formatDateTimeWith} from '../shared/format.js';
 import {parseAppHash, buildAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
-import {openTraceDetail, closeTraceDetail} from '../trace-detail/trace-detail.js';
+import {openTraceDetail, closeTraceDetail, shownTraceTarget} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
 import * as insights from './tabs/insights.js';
 import * as lifecycle from './tabs/lifecycle.js';
@@ -96,14 +96,7 @@ function overlayTargetKey(traceId, subview, params) {
 function buildTraceUrlState(traceId, subview = null, params = {}) {
     return {
         initial: {subview, params},
-        update: (subview, params) => {
-            replaceAppHash({tab: 'traces', detail: traceId, subview, params});
-            // Keeps the host's target stamp in step with in-overlay navigation (tab
-            // switches, filter changes), so expandTraceById's re-open guard below still
-            // recognizes this as "already showing" after the reader moves around inside it.
-            const overlay = document.getElementById('peekaboot-trace-overlay');
-            if (overlay) overlay.dataset.traceTarget = overlayTargetKey(traceId, subview, params);
-        }
+        update: (subview, params) => replaceAppHash({tab: 'traces', detail: traceId, subview, params})
     };
 }
 
@@ -118,8 +111,9 @@ function expandTraceById(traceId, subview = null, params = {}) {
     // step that only changed one of those, or a click-to-open that already ran) - re-opening
     // would tear the overlay down and rebuild it for nothing. Comparing the id alone would
     // treat an async row's own-subtree URL as "the same" as its trace's whole-trace URL and
-    // silently no-op the second click. The host's own dataset is the one source of truth.
-    if (document.getElementById('peekaboot-trace-overlay')?.dataset.traceTarget
+    // silently no-op the second click. The overlay's own record is the one source of truth.
+    const shown = shownTraceTarget();
+    if (shown && overlayTargetKey(shown.traceId, shown.subview, shown.params)
             === overlayTargetKey(traceId, subview, params)) return;
 
     const {locale: currentLocale, timeZone, features: currentFeatures} = currentContext();
@@ -135,9 +129,6 @@ function expandTraceById(traceId, subview = null, params = {}) {
             if (tab === 'traces' && detail === traceId) pushAppHash({tab: 'traces'});
         }
     });
-    // openTraceDetail() builds and appends the host synchronously (the fetch it kicks off
-    // is the only async part), so the freshly created host is there to stamp.
-    document.getElementById('peekaboot-trace-overlay').dataset.traceTarget = overlayTargetKey(traceId, subview, params);
 }
 
 /**

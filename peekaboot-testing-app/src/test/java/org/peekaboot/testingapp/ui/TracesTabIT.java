@@ -452,18 +452,17 @@ class TracesTabIT extends PlaywrightTestBase {
     }
 
     /**
-     * The trace-detail re-open guard derives "is trace X open" from the overlay host's own
-     * data-trace-id (stamped by trace-detail.js) rather than from a private flag in
-     * main.js. A flag desyncs on two hash-driven opens in a row - e.g. deep-linking from
+     * The trace-detail re-open guard asks the overlay what it shows (trace-detail.js's
+     * shownTraceTarget) rather than keeping a private flag in main.js. A flag desyncs on two
+     * hash-driven opens in a row - e.g. deep-linking from
      * one trace straight into another, or a Back/Forward step that lands on a different
      * trace: openTraceDetail's synchronous closeTraceDetail() call fires the *first*
      * trace's still-registered onClose callback, which would clear the flag before the
      * *second* traceId was even recorded, and the next hashchange landing back on the
      * (already open) second trace would then fail the "already open" check and tear the
      * overlay down to rebuild it for no reason - the exact flicker the guard exists to
-     * prevent. The host attribute cannot desync regardless of which of the app's two
-     * entry points (main.js's hash routing, or traces.js's own click-to-open, which
-     * bypasses main.js's bookkeeping entirely) opened the overlay.
+     * prevent. The overlay's own record cannot desync: openTraceDetail clears the old one and
+     * sets the new one in a single call, whichever entry point opened it.
      * <p>
      * Marks the host with a throwaway attribute right after switching traces, then
      * re-fires the very hashchange event Back/Forward (or a redundant navigation) would
@@ -493,6 +492,25 @@ class TracesTabIT extends PlaywrightTestBase {
 
         // Re-fire the hashchange for the trace that's already open, without changing the
         // hash itself - what Back/Forward landing back on it produces.
+        page.evaluate("() => window.dispatchEvent(new Event('hashchange'))");
+
+        assertThat(page.getAttribute(TraceOverlay.HOST, "data-test-marker")).isEqualTo("stable");
+    }
+
+    /**
+     * A tab switch inside the overlay rewrites the URL, and Back/Forward can land on that URL
+     * again. The re-open guard has to count it as already showing, or it tears the overlay down
+     * and loses the reader's place in it.
+     */
+    @Test
+    void replayingTheUrlAnOverlayTabSwitchWroteDoesNotRebuildTheOverlay() {
+        String traceId = seedAnHttpTrace();
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.awaitTrace(traceId);
+        overlay.openTab("queries");
+        page.waitForFunction("id => window.location.hash === '#traces/' + id + '/queries'", traceId);
+
+        page.evaluate("() => { document.getElementById('peekaboot-trace-overlay').dataset.testMarker = 'stable'; }");
         page.evaluate("() => window.dispatchEvent(new Event('hashchange'))");
 
         assertThat(page.getAttribute(TraceOverlay.HOST, "data-test-marker")).isEqualTo("stable");

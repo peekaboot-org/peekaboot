@@ -4,7 +4,8 @@
  * Loaded two ways:
  *  - lazily, via toolbar.js's `await import('../trace-detail/trace-detail.js')`;
  *  - eagerly, via dashboard/main.js's static import.
- * Both call the named `openTraceDetail`/`closeTraceDetail` exports.
+ * Both call the named `openTraceDetail`/`closeTraceDetail` exports; the dashboard also asks
+ * `shownTraceTarget` what is open.
  *
  * This file holds only the shell (open/close, the chrome, tab wiring); each tab's
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
@@ -45,6 +46,7 @@ let themeUnwatch = null;
 let previouslyFocusedElement = null;
 let currentSession = 0;
 let inertedSiblings = [];
+let shownTarget = null;
 
 /**
  * Makes everything except the overlay host inert while the dialog is open.
@@ -88,6 +90,15 @@ function closeOnEscape(event) {
 }
 
 /**
+ * What the open overlay shows, as {traceId, subview, params}: the target it opened on, moved
+ * along by its own tab switches and filter changes. Null while closed. The dashboard compares
+ * a URL against it to tell a navigation to somewhere new from one that re-states this.
+ */
+export function shownTraceTarget() {
+    return shownTarget;
+}
+
+/**
  * options: basePath (the toolbar's server-provided one; the dashboard's own by default),
  * urlState (see main.js's buildTraceUrlState), onClose, and the dashboard's display
  * settings - locale, timeZone and the /api/features payload. The toolbar passes its own
@@ -100,6 +111,7 @@ export function openTraceDetail(traceId, options = {}) {
     const invokingElement = deepActiveElement();
     closeTraceDetail();
 
+    shownTarget = {traceId, subview: options.urlState?.initial?.subview ?? null, params: options.urlState?.initial?.params ?? {}};
     previouslyFocusedElement = invokingElement;
     onCloseCallback = options.onClose || null;
     currentSession += 1;
@@ -110,9 +122,8 @@ export function openTraceDetail(traceId, options = {}) {
 
     const overlayHost = document.createElement('div');
     overlayHost.id = 'peekaboot-trace-overlay';
-    // Exposes which trace (if any) is open as plain DOM state, so callers on either of
-    // this module's two entry points (main.js's hash routing, traces.js's click-to-open)
-    // can check "is this trace already open?" without either of them having to track it.
+    // The UI tests wait on this to tell one open from the next; everything else of the
+    // overlay sits inside the shadow root.
     overlayHost.dataset.traceId = traceId;
     // An inline style, not a `:host` rule in trace-detail.css: attachSharedStyles() links
     // that sheet asynchronously, and a CSS-only rule would leave the host collapsed to
@@ -160,6 +171,7 @@ export function closeTraceDetail() {
     // Invalidates any fetchAndRender() still in flight from the overlay just removed, so
     // it cannot re-render into a detached node.
     currentSession += 1;
+    shownTarget = null;
     const existing = document.getElementById('peekaboot-trace-overlay');
     if (existing) {
         existing.remove();
@@ -286,10 +298,16 @@ function wireTabs(container, trace, urlState, display) {
     // Params are scoped to the deepest view (this tab), so a tab switch always starts
     // that tab's filters empty - see url-state.js's push/replace rule. Only the tab
     // restored from the URL at open time seeds its filters from urlState.initial.params.
+    // Every move inside the overlay goes through here, so shownTraceTarget() follows the reader.
+    const navigate = (tabId, params) => {
+        shownTarget = {...shownTarget, subview: tabId, params};
+        urlState?.update(tabId, params);
+    };
+
     const tabView = (tabId, filters) => ({
         ...display,
         filters,
-        setFilters: next => urlState?.update(tabId, next),
+        setFilters: next => navigate(tabId, next),
         goToSpan
     });
 
@@ -310,7 +328,7 @@ function wireTabs(container, trace, urlState, display) {
     function jumpToElement(tabId, selector, reveal) {
         activeTabId = tabId;
         tabApi.select(tabId, {silent: true});
-        urlState?.update(tabId, {});
+        navigate(tabId, {});
         renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
         const target = tabContent.querySelector(selector);
         if (!target) {
@@ -338,7 +356,7 @@ function wireTabs(container, trace, urlState, display) {
         onSelect: tabId => {
             if (tabId === activeTabId) return;
             activeTabId = tabId;
-            urlState?.update(tabId, {});
+            navigate(tabId, {});
             renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
         },
         initial: initialTab,

@@ -602,6 +602,7 @@ breaks them silently. Grep `peekaboot-testing-app/src/test` before you do.
 | `#traces-unavailable` | The Traces tab's explanation when no span source exists; `TracesTabWithoutSpanSourceIT` waits on it. |
 | `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `renderTab()` looks it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
 | `data-tab` | The tab-strip button attribute (`.pk-tab[data-tab="<id>"]`) that `tabStrip()` and `main.js` both key off for selection state. |
+| `#peekaboot-trace-overlay[data-trace-id]` | The overlay host, stamped with the trace it shows. `trace-detail.js` sets it only for the UI tests, which wait on it to tell one open from the next (`TraceOverlay.awaitTrace`). |
 | `.pk-error`, `.pk-error__frame`, `.pk-error__frame--app` | The error page's root, its trace lines and the ones in the application's own packages. `PeekabootErrorView` writes them and the UI tests assert the page is Peekaboot's and that the marked frames are the application's. |
 
 ## The collapsed bar's trace fetch schedule
