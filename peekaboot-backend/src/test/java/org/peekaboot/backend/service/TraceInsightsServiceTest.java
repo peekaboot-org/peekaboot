@@ -29,6 +29,7 @@ import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
+import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
@@ -52,9 +53,9 @@ class TraceInsightsServiceTest {
     @BeforeEach
     void setUp() {
         store = TraceStores.withDefaults();
-        traceTreeMapper = new TraceTreeMapper(new MaskingEngine(), null);
+        traceTreeMapper = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE);
         issueDetector = new IssueDetector(new UiTracingProperties());
-        queryExtractor = new QueryExtractor(new MaskingEngine(), null);
+        queryExtractor = new QueryExtractor(new MaskingEngine(), SqlFormatter.NONE);
         service = newService(store);
     }
 

@@ -12,7 +12,7 @@ public class QueryExtractor {
 
     private final SqlStatements sqlStatements;
 
-    /** {@code sqlFormatter} is null when none is available; statements then carry no formatted SQL. */
+    /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
     public QueryExtractor(MaskingEngine maskingEngine, SqlFormatter sqlFormatter) {
         this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
     }

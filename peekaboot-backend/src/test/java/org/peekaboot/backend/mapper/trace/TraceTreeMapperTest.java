@@ -34,7 +34,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 class TraceTreeMapperTest {
 
-    private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine(), null);
+    private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE);
 
     @Test
     void buildsATreeFromFlatSpans() {
@@ -393,8 +393,9 @@ class TraceTreeMapperTest {
                 httpCall);
 
         TraceTree result = mapper.map(traceData);
-        int queriesListed =
-                new QueryExtractor(new MaskingEngine(), null).extract(traceData).size();
+        int queriesListed = new QueryExtractor(new MaskingEngine(), SqlFormatter.NONE)
+                .extract(traceData)
+                .size();
         long queryNodes =
                 result.rootSpan().children().stream().filter(DbSpans::isQuery).count();
 

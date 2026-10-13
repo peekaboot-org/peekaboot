@@ -85,7 +85,7 @@ public class PeekabootAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public TraceTreeMapper traceTreeMapper(MaskingEngine maskingEngine, ObjectProvider<SqlFormatter> sqlFormatter) {
-        return new TraceTreeMapper(maskingEngine, sqlFormatter.getIfAvailable());
+        return new TraceTreeMapper(maskingEngine, sqlFormatter.getIfAvailable(() -> SqlFormatter.NONE));
     }
 
     @Bean
@@ -97,7 +97,7 @@ public class PeekabootAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public QueryExtractor queryExtractor(MaskingEngine maskingEngine, ObjectProvider<SqlFormatter> sqlFormatter) {
-        return new QueryExtractor(maskingEngine, sqlFormatter.getIfAvailable());
+        return new QueryExtractor(maskingEngine, sqlFormatter.getIfAvailable(() -> SqlFormatter.NONE));
     }
 
     @Bean

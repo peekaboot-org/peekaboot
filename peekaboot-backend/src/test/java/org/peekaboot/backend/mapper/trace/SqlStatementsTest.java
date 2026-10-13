@@ -22,7 +22,7 @@ class SqlStatementsTest {
 
     @Test
     void servesTheRawStatementAloneWithoutAFormatter() {
-        SqlStatement statement = new SqlStatements(new MaskingEngine(), null)
+        SqlStatement statement = new SqlStatements(new MaskingEngine(), SqlFormatter.NONE)
                 .of(jdbcQuery("q1", "select 1").build());
 
         assertThat(statement).isEqualTo(new SqlStatement("select 1", null, List.of()));

@@ -2,6 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -22,7 +23,7 @@ final class SqlStatements {
     private final MaskingEngine maskingEngine;
     private final SqlFormatter sqlFormatter;
 
-    /** {@code sqlFormatter} is null when none is available; every statement's {@code formatted} is null then. */
+    /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
     SqlStatements(MaskingEngine maskingEngine, SqlFormatter sqlFormatter) {
         this.maskingEngine = maskingEngine;
         this.sqlFormatter = sqlFormatter;
@@ -38,10 +39,7 @@ final class SqlStatements {
                 maskingEngine.maskValue(sql), maskingEngine.maskValue(formatted(sql)), maskedParameters(span.tags()));
     }
 
-    private String formatted(String sql) {
-        if (sqlFormatter == null) {
-            return null;
-        }
+    private @Nullable String formatted(String sql) {
         try {
             return sqlFormatter.format(sql);
         } catch (RuntimeException e) {

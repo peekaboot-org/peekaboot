@@ -19,7 +19,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 class QueryExtractorTest {
 
-    private final QueryExtractor extractor = new QueryExtractor(new MaskingEngine(), null);
+    private final QueryExtractor extractor = new QueryExtractor(new MaskingEngine(), SqlFormatter.NONE);
 
     @Test
     void extract_shouldFindQueryWithDbStatementTag() {

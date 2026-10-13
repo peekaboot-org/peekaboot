@@ -28,7 +28,7 @@ public class TraceTreeMapper {
     private final TagMasker tagMasker;
     private final SqlStatements sqlStatements;
 
-    /** {@code sqlFormatter} is null when none is available; query statements then carry no formatted SQL. */
+    /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
     public TraceTreeMapper(MaskingEngine maskingEngine, SqlFormatter sqlFormatter) {
         this.maskingEngine = maskingEngine;
         this.tagMasker = new TagMasker(maskingEngine);

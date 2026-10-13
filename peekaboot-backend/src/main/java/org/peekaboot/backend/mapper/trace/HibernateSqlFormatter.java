@@ -8,7 +8,9 @@ import org.hibernate.engine.jdbc.internal.Formatter;
 /**
  * Hibernate's {@code format_sql} layout ({@link FormatStyle#BASIC}), so a statement reads the
  * way the application's own SQL log prints it. The auto-configuration creates it only with
- * Hibernate on the classpath.
+ * Hibernate on the classpath. {@code org.hibernate.engine.jdbc.internal} is Hibernate's internal
+ * API, used because it is what {@code format_sql} itself runs; {@code HibernateSqlFormatterTest}
+ * fails first if an upgrade moves it.
  */
 public final class HibernateSqlFormatter implements SqlFormatter {
 
