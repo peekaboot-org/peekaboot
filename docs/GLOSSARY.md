@@ -71,9 +71,9 @@ matches a bean-name span name.
 
 ### Async Subtree
 A span carrying the marker tag `AsyncTaskMarker.TAG_KEY` (`peekaboot.async`), plus every
-descendant of it. `TraceDataBundle.asyncSpanIds` holds that membership transitively;
-`asyncEntrySpans()` returns the entry points alone, a marked span whose resolved parent is not
-itself async. An entry point classifies as `RootActionType.ASYNC_TASK`, gets a listing row of
+descendant of it. `AsyncMembership` holds that membership for each `TraceDataBundle`;
+`asyncEntrySpans()` returns the entry points alone, a member whose resolved parent is not a
+member. An entry point classifies as `RootActionType.ASYNC_TASK`, gets a listing row of
 its own carrying `TraceTree.subtree` as a `SubtreeView(rootSpanId, enclosedByStoredTrace)`, and
 is flagged on the tree as `SpanNode.asyncEntry`, which is what the Spans tab collapses and
 re-bases by. What a reader sees:
@@ -139,9 +139,9 @@ behind by span deduplication. It is never serialised. `TraceData` is the flat, c
 view of its spans that the mappers consume.
 
 ### Synchronous Window
-`TraceDataBundle.synchronousWindow()`, the high-water window over the spans outside any async
-subtree, held in `minSyncStart`/`maxSyncEnd` beside the full-window pair
-`minSpanStart`/`maxSpanEnd`. `snapshot()` carries it as `TraceData.duration`, so a trace's
+`TraceDataBundle.synchronousWindow()`, the window over the spans outside any async subtree, held
+by `AsyncMembership` beside the bundle's full window. Eviction never lowers it; a late async entry
+can. `snapshot()` carries it as `TraceData.duration`, so a trace's
 duration in the listing, the detail header, the waterfall denominator and Slow-bucket admission
 is this number rather than `spanWindow()`. The two agree for every trace with no async span. The
 maintenance rules are in *Async Subtree Timing* in [`ARCHITECTURE.md`](ARCHITECTURE.md).

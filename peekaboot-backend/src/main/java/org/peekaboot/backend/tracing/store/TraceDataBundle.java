@@ -1,7 +1,6 @@
 package org.peekaboot.backend.tracing.store;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -9,7 +8,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,25 +52,13 @@ public class TraceDataBundle {
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
     private boolean truncated = false;
     // Classification signals, maintained span by span in store() so InMemoryTraceStore's
-    // classify() never has to copy and sort the whole trace per arriving span. High-water
-    // values, deliberately not recomputed on eviction: bucket membership is add-only, and
-    // a folded-away duplicate is an identical twin of its surviving span, so skipping it
-    // changes nothing.
+    // classify() never has to copy and sort the whole trace per arriving span. Eviction never
+    // lowers fullWindow, so the trace keeps the start and duration it was admitted by. A
+    // folded-away duplicate carries its survivor's name and tags and lies inside it, so skipping
+    // it changes nothing.
     private boolean hasErrorSpan;
-    private Instant minSpanStart;
-    private Instant maxSpanEnd;
-    // Async-subtree signals, maintained span by span like the classification signals above.
-    // asyncSpanIds is transitive membership; the sync marks cover the non-async spans. Eviction
-    // never lowers them, because TraceData.duration must stay the number the Slow bucket
-    // admitted the trace by: a refold starts from the evicted pair below, never from nothing.
-    // Only a late async entry lowers them.
-    private final Set<String> asyncSpanIds = new HashSet<>();
-    private Instant minSyncStart;
-    private Instant maxSyncEnd;
-    // the window of every span the cap evicted while it counted as synchronous
-    private Instant evictedSyncStart;
-    private Instant evictedSyncEnd;
-    private boolean syncWindowStale;
+    private Window fullWindow = Window.EMPTY;
+    private final AsyncMembership asyncMembership = new AsyncMembership();
     private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
@@ -98,7 +84,7 @@ public class TraceDataBundle {
                 absorbDuplicateChildrenOf(span);
                 placeInAsyncSubtrees(span);
             }
-            refreshSyncWindow();
+            asyncMembership.refresh(spansById.values());
             if (spansById.size() > maxSpans) {
                 truncated = true;
                 evictOldest(spansById.size() - maxSpans);
@@ -117,7 +103,7 @@ public class TraceDataBundle {
         if (parent != null && SpanDuplicateMatcher.isDuplicate(span, parent)) {
             recordRedirect(span.spanId(), parent.spanId());
             // the duplicate's stored children hang under parent from now on, and share its subtree
-            if (asyncSpanIds.contains(parent.spanId())) {
+            if (asyncMembership.contains(parent.spanId())) {
                 joinDescendants(span.spanId());
             }
             return true;
@@ -130,13 +116,7 @@ public class TraceDataBundle {
         if (span.hasError()) {
             hasErrorSpan = true;
         }
-        if (span.startTime() != null
-                && (minSpanStart == null || span.startTime().isBefore(minSpanStart))) {
-            minSpanStart = span.startTime();
-        }
-        if (span.endTime() != null && (maxSpanEnd == null || span.endTime().isAfter(maxSpanEnd))) {
-            maxSpanEnd = span.endTime();
-        }
+        fullWindow = fullWindow.including(span);
         if (span.parentId() != null) {
             childrenByParentId
                     .computeIfAbsent(span.parentId(), k -> new ArrayList<>())
@@ -152,13 +132,12 @@ public class TraceDataBundle {
      * the redirect.
      */
     private void placeInAsyncSubtrees(SpanData span) {
-        String parentId = resolve(span.parentId());
-        if (AsyncTaskMarker.isMarked(span.tags()) || (parentId != null && asyncSpanIds.contains(parentId))) {
-            asyncSpanIds.add(span.spanId());
+        if (AsyncTaskMarker.isMarked(span.tags()) || asyncMembership.contains(resolve(span.parentId()))) {
+            asyncMembership.enter(span.spanId());
             joinDescendants(span.spanId());
             return;
         }
-        foldIntoSyncWindow(span);
+        asyncMembership.foldSynchronous(span);
     }
 
     /**
@@ -171,10 +150,7 @@ public class TraceDataBundle {
         while (!pending.isEmpty()) {
             for (String childId : resolvedChildIdsOf(pending.remove())) {
                 SpanData child = spansById.get(childId);
-                if (child != null && asyncSpanIds.add(childId)) {
-                    if (boundsSyncWindow(child)) {
-                        syncWindowStale = true;
-                    }
+                if (child != null && asyncMembership.join(child)) {
                     pending.add(childId);
                 }
             }
@@ -192,46 +168,6 @@ public class TraceDataBundle {
             childIds.addAll(childrenByParentId.getOrDefault(duplicateId, List.of()));
         }
         return childIds;
-    }
-
-    /** A min/max pair cannot drop one span, so only a joining span that set a mark forces a refold. */
-    private boolean boundsSyncWindow(SpanData span) {
-        return (span.startTime() != null && span.startTime().equals(minSyncStart))
-                || (span.endTime() != null && span.endTime().equals(maxSyncEnd));
-    }
-
-    private void refreshSyncWindow() {
-        if (!syncWindowStale) {
-            return;
-        }
-        minSyncStart = evictedSyncStart;
-        maxSyncEnd = evictedSyncEnd;
-        for (SpanData stored : spansById.values()) {
-            if (!asyncSpanIds.contains(stored.spanId())) {
-                foldIntoSyncWindow(stored);
-            }
-        }
-        syncWindowStale = false;
-    }
-
-    private void foldIntoSyncWindow(SpanData span) {
-        if (span.startTime() != null
-                && (minSyncStart == null || span.startTime().isBefore(minSyncStart))) {
-            minSyncStart = span.startTime();
-        }
-        if (span.endTime() != null && (maxSyncEnd == null || span.endTime().isAfter(maxSyncEnd))) {
-            maxSyncEnd = span.endTime();
-        }
-    }
-
-    private void foldIntoEvictedSyncWindow(SpanData span) {
-        if (span.startTime() != null
-                && (evictedSyncStart == null || span.startTime().isBefore(evictedSyncStart))) {
-            evictedSyncStart = span.startTime();
-        }
-        if (span.endTime() != null && (evictedSyncEnd == null || span.endTime().isAfter(evictedSyncEnd))) {
-            evictedSyncEnd = span.endTime();
-        }
     }
 
     /**
@@ -252,8 +188,8 @@ public class TraceDataBundle {
             if (candidate != null && SpanDuplicateMatcher.isDuplicate(candidate, survivor)) {
                 spansById.remove(childId);
                 recordRedirect(childId, survivor.spanId());
-                // its survivor covers the same window, so the synchronous marks need no refold
-                asyncSpanIds.remove(childId);
+                // placed after this fold, the survivor decides whether the duplicate's time stays
+                asyncMembership.forget(candidate);
                 it.remove();
             }
         }
@@ -319,9 +255,7 @@ public class TraceDataBundle {
             removeFromParentIndex(evicted);
             childrenByParentId.remove(evicted.spanId());
             pruneRedirectsPointingAt(evicted.spanId());
-            if (!asyncSpanIds.remove(evicted.spanId())) {
-                foldIntoEvictedSyncWindow(evicted);
-            }
+            asyncMembership.evict(evicted);
         }
     }
 
@@ -400,11 +334,11 @@ public class TraceDataBundle {
             // the root is one of the resolved copies, so the mapper's equality skip finds it in the list
             return new TraceData(
                     traceId,
-                    minSpanStart,
+                    fullWindow.start(),
                     synchronousWindow(),
                     rootOf(spans),
                     spans,
-                    Set.copyOf(asyncSpanIds),
+                    asyncMembership.members(),
                     truncated);
         }
     }
@@ -476,7 +410,7 @@ public class TraceDataBundle {
      */
     public Duration spanWindow() {
         synchronized (spansLock) {
-            return minSpanStart == null || maxSpanEnd == null ? null : Duration.between(minSpanStart, maxSpanEnd);
+            return fullWindow.duration();
         }
     }
 
@@ -489,17 +423,15 @@ public class TraceDataBundle {
      */
     public Duration synchronousWindow() {
         synchronized (spansLock) {
-            if (minSyncStart == null || maxSyncEnd == null) {
-                return spanWindow();
-            }
-            return Duration.between(minSyncStart, maxSyncEnd);
+            Duration synchronous = asyncMembership.syncWindow().duration();
+            return synchronous != null ? synchronous : fullWindow.duration();
         }
     }
 
     /** Whether any stored span belongs to an async subtree; the cheap short-circuit for readers. */
     public boolean hasAsyncSpans() {
         synchronized (spansLock) {
-            return !asyncSpanIds.isEmpty();
+            return !asyncMembership.isEmpty();
         }
     }
 
@@ -512,11 +444,10 @@ public class TraceDataBundle {
         synchronized (spansLock) {
             List<SpanData> entries = new ArrayList<>();
             for (SpanData stored : spansById.values()) {
-                if (!asyncSpanIds.contains(stored.spanId())) {
+                if (!asyncMembership.contains(stored.spanId())) {
                     continue;
                 }
-                String parentId = resolve(stored.parentId());
-                if (parentId == null || !asyncSpanIds.contains(parentId)) {
+                if (!asyncMembership.contains(resolve(stored.parentId()))) {
                     entries.add(stored);
                 }
             }
@@ -527,7 +458,7 @@ public class TraceDataBundle {
     /** Transitive async-subtree membership, for the mapper to summarise and shape a tree by. */
     public Set<String> asyncSpanIds() {
         synchronized (spansLock) {
-            return Set.copyOf(asyncSpanIds);
+            return asyncMembership.members();
         }
     }
 

@@ -526,6 +526,23 @@ class TraceDataBundleTest {
     }
 
     /**
+     * The duplicate arrives first and counts as synchronous until the real span absorbs it. That
+     * real span enters a subtree as it arrives, so the duplicate's time has to leave the window.
+     */
+    @Test
+    void aDuplicateAbsorbedByAnAsyncSurvivorLeavesTheSynchronousWindow() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(jdbcDuplicate("dup", "real", "SELECT 1").at(110, 5_000).build(), 500);
+        bundle.addSpan(asyncSpan("async", "root", 40, 10_000), 500);
+        bundle.addSpan(
+                jdbcQuery("real", "SELECT 1").parent("async").at(100, 6_000).build(), 500);
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+
+        assertThat(bundle.spans()).extracting(SpanData::spanId).doesNotContain("dup");
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    /**
      * A member stays one after the entry above it is evicted: its time must not fold back into
      * the synchronous window when the next async entry arrives.
      */

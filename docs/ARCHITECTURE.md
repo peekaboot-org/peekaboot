@@ -1269,10 +1269,11 @@ never a second deduplication pass beside the write-time one.
 ### Async Subtree Timing
 
 Background work must not lengthen the trace that triggered it, so `TraceDataBundle` keeps two
-pairs of high-water marks rather than one. `minSpanStart`/`maxSpanEnd` stay the true window over
-every span ever stored. `minSyncStart`/`maxSyncEnd` cover only the spans outside an async
-subtree, and `synchronousWindow()` is an O(1) read off that second pair. It falls back to
-`spanWindow()` for a bundle whose every span is async - an orphaned task, where the background
+windows rather than one, each a `Window` record of earliest start and latest end. `fullWindow`
+stays the true window over every span ever stored. The second covers only the spans outside an
+async subtree. It lives in `AsyncMembership`, the bundle's collaborator that also holds which
+spans are async, and `synchronousWindow()` is an O(1) read off it. It falls back to
+`spanWindow()` for a bundle whose every span is async: an orphaned task, where the background
 work is the whole trace and its own duration is the honest answer.
 
 `snapshot()` passes `synchronousWindow()` as `TraceData.duration`, so the listing, the detail
@@ -1292,18 +1293,18 @@ cover every span: Errors-bucket admission reads the bundle's own error signal, w
 sets, so a trace whose only failure was a background task would read OK while sitting in the
 Errors bucket.
 
-Membership is `asyncSpanIds`, maintained span by span in `addSpan`. An arriving span enters it
-when it carries the marker or its resolved parent is already in it, and folds into the synchronous
-window otherwise. A span that enters takes its stored descendants along. Spans are stored
-child-before-parent, so a marked span's descendants have been counting as synchronous until it
-turns up. The walk follows `childrenByParentId` down from the entering span, plus the children of
-each folded-away duplicate `redirectsPointingAt` lists for it, and stops at spans already in the
-set, whose own descendants entered with them. Each span is walked once, and a trace with no marked
-span pays nothing. A min/max pair cannot drop one span, so the synchronous window is refolded over
-the stored spans only when a span on one of its edges leaves it: a stored span that joins a
-subtree, or a folded-away duplicate dropped for a survivor that may. `asyncEntrySpans()` reads the
-subtree entry points off the same set: a member whose resolved parent is not itself a member. That
-is what keeps the listing pass off a tree walk.
+Membership lives in `AsyncMembership`, maintained span by span in `TraceDataBundle.addSpan`. An
+arriving span enters it when it carries the marker or its resolved parent is already in it, and
+folds into the synchronous window otherwise. A span that enters takes its stored descendants
+along. Spans are stored child-before-parent, so a marked span's descendants have been counting as
+synchronous until it turns up. The walk follows `childrenByParentId` down from the entering span,
+plus the children of each folded-away duplicate `redirectsPointingAt` lists for it, and stops at
+spans already in the set, whose own descendants entered with them. Each span is walked once, and a
+trace with no marked span pays nothing. A min/max pair cannot drop one span, so the synchronous
+window is refolded over the stored spans only when a span on one of its edges leaves it. That
+happens when a stored span joins a subtree, and when a folded-away duplicate is dropped for a
+survivor that may. `asyncEntrySpans()` reads the subtree entry points off the same set, a member
+whose resolved parent is not itself a member, which keeps the listing pass off a tree walk.
 
 Each entry point is a listing row of its own, and the listing is newest first by arrival, the
 order the buckets already keep. A trace's row dates from when the trace entered the bucket; an
