@@ -458,9 +458,11 @@ place of `deploy` and they check what every other branch publishes. The dispatch
 follows a Dependabot merge has `github-actions[bot]` as its actor, so it deploys `dev`'s
 snapshot like any other push to `dev`.
 
-On a `dependabot/gradle/*` branch a second job, `gradle-build`, runs `prepare-build` and
-`./gradlew build` next to the Maven job, because the Maven build never reads the Gradle files
-those PRs change. See [Lockstep](#lockstep).
+On a `dependabot/gradle/*` branch a second job, `gradle-build`, runs next to the Maven job,
+because the Maven build compiles nothing from the Gradle files those PRs change. It validates
+the wrapper jar with `gradle/actions/wrapper-validation` first, since those branches can
+replace the jar `./gradlew` executes, then runs `prepare-build` and `./gradlew build`. See
+[Lockstep](#lockstep).
 
 ### `draft-release-notes.yml`
 
