@@ -84,6 +84,8 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Every later script reads it from env, which never interpolates into shell text.
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       # Rendered before the tag exists, so --tag has to name the version being released, and
       # staged so that release:prepare's own commit carries it. Regenerated whole rather than
@@ -91,9 +93,9 @@ jobs:
       # job here, before anything is signed or published.
       - name: render-changelog
         run: |
-          .github/release-notes/render.sh --tag "${{ steps.resolve-release-version.outputs.version }}" \
+          .github/release-notes/render.sh --tag "${VERSION}" \
             --output CHANGELOG.md
-          grep -q "^## ${{ steps.resolve-release-version.outputs.version }} " CHANGELOG.md
+          grep -q "^## ${VERSION} " CHANGELOG.md
           git add CHANGELOG.md
 
       # Staged beside the changelog so release:prepare's own commit carries it, which puts the
@@ -101,8 +103,6 @@ jobs:
       # the only dependency snippet this repo spells a version out in. sed then grep: a pattern
       # that stops matching still exits 0, and the stale version would publish unnoticed.
       - name: stage-readme-version
-        env:
-          VERSION: ${{ steps.resolve-release-version.outputs.version }}
         run: |
           sed -i -E "s|^( *<version>)[0-9]+\.[0-9]+\.[0-9]+(</version>)$|\1${VERSION}\2|" README.md
           grep -q "<version>${VERSION}</version>" README.md
@@ -118,7 +118,7 @@ jobs:
       - name: prepare-release
         run: |
           ./mvnw --batch-mode -P peekaboot-release release:prepare \
-            -DreleaseVersion=${{ steps.resolve-release-version.outputs.version }}
+            -DreleaseVersion="${VERSION}"
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
 
@@ -127,10 +127,8 @@ jobs:
       # surface here, where the damage is a tag, and not after Central holds the artifacts.
       - name: verify-release-commit
         run: |
-          git grep -q "^## ${{ steps.resolve-release-version.outputs.version }} " \
-            "${{ steps.resolve-release-version.outputs.version }}" -- CHANGELOG.md
-          git grep -q "<version>${{ steps.resolve-release-version.outputs.version }}</version>" \
-            "${{ steps.resolve-release-version.outputs.version }}" -- README.md
+          git grep -q "^## ${VERSION} " "${VERSION}" -- CHANGELOG.md
+          git grep -q "<version>${VERSION}</version>" "${VERSION}" -- README.md
 
       - name: perform-release-publish-on-maven-central
         # no third test run: release:prepare's preparationGoals verified the tag's tree, and this
@@ -144,7 +142,7 @@ jobs:
       # release:perform returns at the upload (waitUntil=uploaded in pom.xml), so this is what
       # holds the post-publish steps back until the release can be downloaded.
       - name: await-maven-central
-        run: .github/central/await-release.sh "${{ steps.resolve-release-version.outputs.version }}"
+        run: .github/central/await-release.sh "${VERSION}"
 
       # main originates nothing; it is a pointer that only ever fast-forwards onto the commit
       # that was published. Pushing a bare commit SHA makes git refuse anything but a
@@ -153,8 +151,6 @@ jobs:
       # First of the post-publish steps because it is the one that cannot fail on its own, so
       # a later step failing cannot leave main stale.
       - name: fast-forward-main
-        env:
-          VERSION: ${{ steps.resolve-release-version.outputs.version }}
         run: |
           tag_commit="$(git rev-parse "refs/tags/${VERSION}^{commit}")"
           git push origin "${tag_commit}:refs/heads/main"
@@ -165,7 +161,7 @@ jobs:
             --output release-notes.md
           # A tag_pattern that stops matching makes git-cliff render all history as
           # "## Unreleased" and still exit 0, which would publish as the release body.
-          grep -q "^## ${{ steps.resolve-release-version.outputs.version }} " release-notes.md
+          grep -q "^## ${VERSION} " release-notes.md
 
       - name: create-release-notes
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -207,7 +203,6 @@ jobs:
       - name: publish-site
         env:
           SITE_REPO_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
-          VERSION: ${{ steps.resolve-release-version.outputs.version }}
         run: |
           git clone --branch dev \
             "https://x-access-token:${SITE_REPO_TOKEN}@github.com/peekaboot-org/peekaboot-org.github.io.git" \
