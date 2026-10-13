@@ -54,6 +54,7 @@ diff -u "$HERE/expected-notes.md" "$WORK/tagged-as-unreleased.md"
 echo "checking the per-sha overrides on the real history"
 "$HERE/../render.sh" --repository "$HERE/../../.." --context > "$WORK/real.json"
 test "$(jq -r '[.[].commits[] | select(.id == "ca362a2ec9ef976392c84fe7dc6fc986509289c3")] | .[0].group' "$WORK/real.json")" = "<!-- 08 -->Tests"
+test "$(jq -r '[.[].commits[] | select(.id == "76fc25377de62e302c41447826f85580ccae0d8d")] | .[0].group' "$WORK/real.json")" = "<!-- 08 -->Tests"
 test "$(jq '[.[].commits[] | select(.id == "f5449589da9d6b7187d462028897cf0139850236")] | length' "$WORK/real.json")" = 0
 
 echo "all release-notes checks passed"
