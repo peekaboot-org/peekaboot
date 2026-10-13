@@ -7,7 +7,9 @@ description: >
 
 inputs:
   server-id:
-    description: Maven server id setup-java writes to settings.xml; the release workflow sets it to central.
+    description: >
+      Maven server id setup-java writes to settings.xml. The two publishing workflows,
+      build-on-push and release, set it to central.
     default: github
   server-username-env-var:
     description: Name of the environment variable holding that server's username.
