@@ -80,7 +80,7 @@ function handleHashChange() {
 
 /**
  * The full identity of what the overlay is showing - not just the trace id. One trace id
- * can now open two different targets: the whole trace, or one async row's own subtree at
+ * can open two different targets: the whole trace, or one async row's own subtree at
  * "#traces/<id>/spans?root=<spanId>". Reuses buildAppHash so this is exactly the hash such
  * a target would occupy.
  */
