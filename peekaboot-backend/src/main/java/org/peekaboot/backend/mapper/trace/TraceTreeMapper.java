@@ -96,25 +96,34 @@ public class TraceTreeMapper {
     }
 
     /**
-     * The same trace seen from one of its spans: the tree rooted there, timed by that
-     * subtree's own window rather than the trace's, classified from that span, summarised
-     * over that subtree's own spans rather than the whole trace's - see
-     * {@link #subtreeSummary} - and ended OK or in error by those same spans. What the
-     * listing's async rows and the {@code ?root=} deep link both render.
+     * The same trace seen from one of its spans: the tree built from that span's own
+     * descendants, timed by their window rather than the trace's, classified from that span,
+     * summarised over those spans alone - see {@link #subtreeSummary} - and ended OK or in error
+     * by them. What the listing's async rows render. A span no longer stored maps as the whole
+     * trace: the cap can evict an entry between listing and mapping.
      */
     public TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId) {
-        TraceTree whole = map(traceData);
-        SpanNode subtreeRoot = findNode(whole.rootSpan(), subtreeRootSpanId);
-        if (subtreeRoot == null) {
-            return whole;
-        }
-        SpanData subtreeRootData = traceData.spans().stream()
+        List<SpanData> spans = traceData.spans();
+        SpanData subtreeRootData = spans.stream()
                 .filter(span -> subtreeRootSpanId.equals(span.spanId()))
                 .findFirst()
                 .orElse(null);
-        boolean enclosed = subtreeRootData != null
-                && subtreeRootData.parentId() != null
-                && traceData.spans().stream().anyMatch(span -> span.spanId().equals(subtreeRootData.parentId()));
+        if (subtreeRootData == null) {
+            return map(traceData);
+        }
+        Map<String, List<SpanData>> childrenByParentId =
+                spans.stream().filter(s -> s.parentId() != null).collect(Collectors.groupingBy(SpanData::parentId));
+        String parentId = subtreeRootData.parentId();
+        boolean enclosed = parentId != null
+                && spans.stream().anyMatch(span -> span.spanId().equals(parentId));
+        // every cycle reachable from the subtree's root runs through it, and its parent edge is the way in
+        if (parentId != null) {
+            childrenByParentId.get(parentId).remove(subtreeRootData);
+        }
+        Set<String> asyncSpanIds = traceData.asyncSpanIds();
+        boolean parentIsAsync = parentId != null && asyncSpanIds.contains(parentId);
+        SpanNode subtreeRoot = buildSpanTree(
+                subtreeRootData, childrenByParentId, RowCounts.byQuerySpanId(spans), asyncSpanIds, parentIsAsync);
         TraceTabSummary summary = subtreeSummary(subtreeRoot);
         // the subtree's own errors, not the enclosing trace's: background work that succeeded
         // must not wear the ERROR badge of the request that dispatched it, which would also
@@ -125,14 +134,14 @@ public class TraceTreeMapper {
                 subtreeRoot.startTimeMs(),
                 subtreeWindowMs(subtreeRoot),
                 status,
-                whole.slow(),
+                false, // decided by IssueDetector once the issues exist
                 detectRootActionType(subtreeRootData),
                 subtreeRoot.name(),
                 subtreeRoot,
                 summary,
-                whole.httpExchange(),
-                whole.logs(),
-                whole.queries(),
+                null,
+                List.of(),
+                List.of(),
                 new SubtreeView(subtreeRootSpanId, enclosed),
                 traceData.truncated());
     }
@@ -183,22 +192,6 @@ public class TraceTreeMapper {
         int errorCount;
         int queryCount;
         long queryDurationMs;
-    }
-
-    private static SpanNode findNode(SpanNode node, String spanId) {
-        if (node == null) {
-            return null;
-        }
-        if (spanId.equals(node.spanId())) {
-            return node;
-        }
-        for (SpanNode child : node.children()) {
-            SpanNode found = findNode(child, spanId);
-            if (found != null) {
-                return found;
-            }
-        }
-        return null;
     }
 
     /**

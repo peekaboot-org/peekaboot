@@ -10,6 +10,7 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -572,6 +573,50 @@ class TraceTreeMapperTest {
         var traceData = TraceDatas.of("trace1", root);
 
         assertThat(mapper.map(traceData).subtree()).isNull();
+    }
+
+    /** A listing page maps one subtree per async row, so the spans outside it must cost nothing. */
+    @Test
+    void mapSubtreeBuildsOnlyTheSubtreesOwnSpans() {
+        List<String> formatted = new ArrayList<>();
+        SqlFormatter recording = sql -> {
+            formatted.add(sql);
+            return sql;
+        };
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 50).build();
+        var requestQuery =
+                jdbcQuery("q-request", "select 1").parent("root").at(10, 5).build();
+        var async = asyncEntry("async", "root", 40, 1_000);
+        var taskQuery =
+                jdbcQuery("q-task", "select 2").parent("async").at(50, 5).build();
+
+        new TraceTreeMapper(new MaskingEngine(), recording)
+                .mapSubtree(TraceDatas.of("trace1", root, requestQuery, async, taskQuery), "async");
+
+        assertThat(formatted).containsExactly("select 2");
+    }
+
+    /** The subtree's own parent edge is the one way back into it, so cutting it ends a cycle. */
+    @Test
+    void mapSubtreeOfASpanInsideACycleTerminates() {
+        var a = span("a").parent("b").named("a-op").at(0, 100).order(1).build();
+        var b = span("b").parent("a").named("b-op").at(10, 50).order(2).build();
+
+        TraceTree result = mapper.mapSubtree(TraceDatas.of("trace1", a, b), "b");
+
+        assertThat(result.rootSpan().spanId()).isEqualTo("b");
+    }
+
+    /** The cap can evict an async row's entry span between listing and mapping. */
+    @Test
+    void mapSubtreeOfASpanNoLongerStoredMapsTheWholeTrace() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
+
+        TraceTree result = mapper.mapSubtree(TraceDatas.of("trace1", root), "evicted");
+
+        assertThat(result.subtree()).isNull();
+        assertThat(result.rootSpan().spanId()).isEqualTo("root");
     }
 
     @Test
