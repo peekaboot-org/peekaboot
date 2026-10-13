@@ -304,7 +304,8 @@ anchors are `data-span-id` on the gantt rows and on `.pk-query-item` (`QueryInfo
 A span's row carries its own query and logs as two more panels, not cross-links: a "1 query"
 button opens the statement (`shared/sql-view.js`) and its row count, an "N logs" button opens
 that span's own logs as the Logs tab renders them (`log-entry.js`) - both in place, beside the
-attributes panel the span's name/track opens (`trace-detail/tabs/spans.js`).
+attributes panel the span's name/track opens (`trace-detail/tabs/spans.js`). Each panel is
+built the first time it opens.
 
 ## Thresholds and the SLOW badge
 

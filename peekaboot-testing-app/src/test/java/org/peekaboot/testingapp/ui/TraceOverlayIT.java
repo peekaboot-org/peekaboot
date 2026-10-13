@@ -481,6 +481,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-gantt-rows .pk-gantt-row .pk-copy')"))
                 .as("no row carries a copy control")
                 .isFalse();
+        overlay.click(".pk-gantt-all-details");
         assertThat(overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-span')]"
                         + ".every(entry => entry.querySelector('.pk-span-panel--attrs .pk-copy')?.dataset.pkCopy"
                         + " === entry.querySelector('.pk-gantt-row').dataset.spanId)"))
@@ -530,6 +531,42 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         "Hide all details:2:2",
                         "Show all details:0:0",
                         "Hide all details:2:2");
+    }
+
+    /**
+     * A span's panels are built the first time each opens, not up front with every row, and slot
+     * in by their toggle's place in the row, so their order holds whatever order they open in.
+     * The all-details switch builds whatever is still missing.
+     */
+    @Test
+    void aSpansPanelsAreBuiltWhenFirstOpenedInRowOrder() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0,
+                    rootSpan: {spanId: 'a', name: 'a', tags: {'db.system.name': 'h2'},
+                        query: {text: 'select 1', formatted: null, parameters: []}},
+                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
+                const entry = container.querySelector('.pk-gantt-span');
+                const panels = () => [...entry.querySelectorAll('.pk-span-panel')].map(panel => panel.id).join(',');
+                const before = panels();
+                entry.querySelector('.pk-span-logs-toggle').click();
+                const logsOpened = [panels(), entry.querySelector('#pk-span-logs-a .pk-log__message')?.textContent ?? null];
+                entry.querySelector('.pk-gantt-name__toggle').click();
+                const attrsOpened = [panels(), entry.querySelector('#pk-span-attrs-a .pk-span-tags__key')?.textContent ?? null];
+                container.querySelector('.pk-gantt-all-details').click();
+                return [before, ...logsOpened, ...attrsOpened, panels()];
+            })()
+            """);
+
+        assertThat(facts)
+                .isEqualTo(List.of(
+                        "",
+                        "pk-span-logs-a",
+                        "from a",
+                        "pk-span-attrs-a,pk-span-logs-a",
+                        "db.system.name",
+                        "pk-span-attrs-a,pk-span-query-a,pk-span-logs-a"));
     }
 
     /**
@@ -645,6 +682,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 m.render(container, {durationMs: 10, startTimeMs: 0,
                     rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]},
                     logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
+                container.querySelector('.pk-gantt-all-details').click();
                 const row = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`);
                 const panel = id => container.querySelector(`#pk-span-logs-${id}`);
                 return ['a', 'b'].map(id => [
@@ -1379,6 +1417,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         + "  > track.getBoundingClientRect().width * 0.9; }"))
                 .as("the root span's bar spans its track")
                 .isTrue();
+        overlay.click(".pk-gantt-span[data-depth='1'] .pk-gantt-name__toggle");
         assertThat(
                         overlay.evaluate(
                                 "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"1\"] .pk-span-panel--attrs')).marginLeft"))
@@ -1703,6 +1742,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const rendered = (span, locale) => {
                     const container = document.createElement('div');
                     m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span}, {locale});
+                    container.querySelector('.pk-gantt-all-details').click();
                     return container;
                 };
                 const queryButton = (span, locale) => rendered(span, locale).querySelector('.pk-span-query-toggle')?.textContent ?? null;
@@ -1754,6 +1794,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const container = document.createElement('div');
                 m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'SELECT person',
                     tags: {'jdbc.datasource.name': 'sample_app_db', 'db.system.name': 'postgresql', 'db.operation.name': 'SELECT'}}});
+                container.querySelector('.pk-gantt-all-details').click();
                 return Array.from(container.querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
             })()
             """);
@@ -1913,6 +1954,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                     {spanId: 'b', name: 'SELECT person', kind: 'CLIENT'},
                     {spanId: 'c', name: 'spring.handler', kind: null},
                     {spanId: 'd', name: 'odd', kind: 'SOMETHING_NEW'}]}});
+                container.querySelector('.pk-gantt-all-details').click();
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 return [
                     Array.from(container.querySelectorAll('.pk-gantt-legend__item')).map(el => el.textContent).join(','),
@@ -1949,6 +1991,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                     {spanId: 'b', name: 'http get', status: 'ERROR',
                         errorClass: 'org.springframework.web.client.ResourceAccessException', errorMessage: 'Connection refused'},
                     {spanId: 'c', name: 'ok', status: 'OK'}]}});
+                container.querySelector('.pk-gantt-all-details').click();
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const nameToggle = id => entry(id).querySelector('.pk-gantt-name__toggle');
                 const erroneous = id => nameToggle(id).classList.contains('pk-gantt-name__toggle--error');

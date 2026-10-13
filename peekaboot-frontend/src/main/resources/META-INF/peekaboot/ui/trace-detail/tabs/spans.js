@@ -5,7 +5,8 @@
  * (that span's own log entries) - each of the latter two opened by its own small button in
  * the row ("N query"/"N logs"), closed until asked for.
  *
- * Each span renders as one entry: its one-line row, then whichever of its three panels exist.
+ * Each span renders as one entry: its one-line row, then whichever of its three panels the
+ * reader has opened, each built on its first open.
  * Entries are flat siblings carrying their depth, which is what the subtree toggle walks.
  *
  * This module writes only one geometry value of its own: an entry's depth, as the CSS custom
@@ -25,6 +26,10 @@ import {sqlView} from '../../shared/sql-view.js';
 import {logEntry} from '../log-entry.js';
 
 const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
+
+// A span entry's panel builders by panel id. A trace of thousands of spans would otherwise
+// build three hidden panels per row that the reader never opens.
+const PANEL_BUILDERS = new WeakMap();
 
 export function render(container, trace, context = {}) {
     // "?root=<spanId>" narrows the tab to one subtree. Scoped to this tab like every other
@@ -90,12 +95,26 @@ function panelToggles(scope) {
     return Array.from(scope.querySelectorAll('.pk-gantt-name [aria-controls]'));
 }
 
-/** Opens or closes the panel `toggle` names, and keeps the entry's own open state - the row's hover tint - in step with its panels. */
+/** Opens or closes the panel `toggle` names, building it on first open, and keeps the entry's own open state - the row's hover tint - in step with its panels. */
 function setPanelOpen(toggle, open) {
     toggle.setAttribute('aria-expanded', String(open));
     const entry = toggle.closest('.pk-gantt-span');
-    entry.querySelector(`#${CSS.escape(toggle.getAttribute('aria-controls'))}`)?.classList.toggle('pk-span-panel--open', open);
+    const panel = panelOf(entry, toggle) ?? (open ? placePanel(entry, toggle) : null);
+    panel?.classList.toggle('pk-span-panel--open', open);
     entry.classList.toggle('pk-gantt-span--open', panelToggles(entry).some(t => t.getAttribute('aria-expanded') === 'true'));
+}
+
+function panelOf(entry, toggle) {
+    return entry.querySelector(`#${CSS.escape(toggle.getAttribute('aria-controls'))}`);
+}
+
+/** Builds the panel `toggle` names and puts it ahead of the panels of the toggles after it, so panels keep the row's order. */
+function placePanel(entry, toggle) {
+    const panel = PANEL_BUILDERS.get(entry)[toggle.getAttribute('aria-controls')]();
+    const toggles = panelToggles(entry);
+    const next = toggles.slice(toggles.indexOf(toggle) + 1).map(later => panelOf(entry, later)).find(Boolean) ?? null;
+    entry.insertBefore(panel, next);
+    return panel;
 }
 
 /** True once every panel that exists, on every span, is open - what "Hide all details" then offers to undo. */
@@ -214,9 +233,12 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
         nameCell(span, kind, attrsId, queryId, logsId, hasError, display),
         track(span, traceStart, totalDuration, hasError),
         durationCell(span, totalDuration));
-    const panels = [attrsPanel(span, kind, attrsId), queryPanel(span, queryId, display.locale), logsPanel(span, display, logsId)]
-        .filter(panel => panel != null);
-    entry.append(row, ...panels);
+    entry.append(row);
+    PANEL_BUILDERS.set(entry, {
+        [attrsId]: () => attrsPanel(span, kind, attrsId),
+        [queryId]: () => queryPanel(span, queryId, display.locale),
+        [logsId]: () => logsPanel(span, display, logsId)
+    });
     container.appendChild(entry);
 
     // An async subtree is excluded from the trace's duration, so measuring its children
@@ -360,7 +382,6 @@ function errorSection(span) {
 
 /** The statement (shared/sql-view.js), plus the row count of the result-set span RowCounts paired to it - opened by the row's query toggle. */
 function queryPanel(span, queryId, locale) {
-    if (!span.query) return null;
     return el('div', {className: 'pk-span-panel pk-span-panel--query', attrs: {id: queryId}},
         span.rowCount != null ? el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row', {locale})}) : null,
         sqlView(span.query));
@@ -369,7 +390,6 @@ function queryPanel(span, queryId, locale) {
 /** The span's logs as the Logs tab shows them, stack trace included, from the trace's flat list the row's toggle counts. Opened by that toggle. */
 function logsPanel(span, display, logsId) {
     const logs = display.logsBySpan.get(span.spanId);
-    if (!logs) return null;
     const dateOptions = {locale: display.locale, timeZone: display.timeZone};
     return el('div', {className: 'pk-span-panel pk-span-panel--logs', attrs: {id: logsId}},
         ...logs.map(log => logEntry(log, dateOptions)));
