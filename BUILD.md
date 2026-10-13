@@ -347,10 +347,10 @@ one-line commit. Lowering one to make a build pass is not a fix.
 Three deliberate things about that module:
 
 - **It exists because `jacoco:check` only ever analyses the classes of the module it runs
-  in**, and there is no `check-aggregate` goal. So the gated classes are physically
-  collected here: `unpack-dependencies` unpacks the measured modules' jars into
-  `target/classes`, and `check` runs against those. JaCoCo matches execution data to
-  classes by a bytecode hash, so the unpacked copies are the classes the tests ran.
+  in**, and there is no `check-aggregate` goal. So the gated classes are physically collected
+  here. `unpack-dependencies` unpacks the measured modules' jars into `target/classes`, and
+  `check` runs against those. JaCoCo matches execution data to classes by a bytecode hash, so
+  the unpacked copies are the classes the tests ran.
 - **It depends on every measured module, including the sample app**, which is what forces
   it to build last, after every `jacoco.exec` has been written. `peekaboot-testing-app`'s
   own code is excluded from the report and the gate, but its tests run peekaboot
@@ -425,9 +425,9 @@ root `action.yml` only.
 
 The steps the build workflows share, as a composite action: JDK 25 (temurin) with the
 Maven cache, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
-`playwright.version` property and the engines asked for (a browser build changes with
-Playwright, not with any other dependency), `~/.npm` cached on the frontend lockfile's
-hash, the reactor's SNAPSHOTs installed, then those browsers installed. The Node
+`playwright.version` property and the engines asked for (only a Playwright bump changes the
+browser build), `~/.npm` cached on the frontend lockfile's hash, the reactor's SNAPSHOTs
+installed, then those browsers installed. The Node
 distribution needs no cache entry of its own: frontend-maven-plugin fetches it as a Maven
 artifact, which `setup-java`'s cache already covers. The `browsers` input names them and defaults to `chromium`, which
 leaves the push build as it was; `with-deps` adds `--with-deps`, the flag that apt-installs
