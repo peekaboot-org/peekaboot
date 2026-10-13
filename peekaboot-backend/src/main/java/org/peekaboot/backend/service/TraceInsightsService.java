@@ -1,13 +1,10 @@
 package org.peekaboot.backend.service;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -237,9 +234,7 @@ public class TraceInsightsService {
         RequestCompletedEvent reqEvent = bundle.request();
         HttpExchange httpExchange = reqEvent != null ? HttpExchange.from(reqEvent) : null;
 
-        return tree.withRootSpan(attachLogsToSpan(tree.rootSpan(), groupLogsBySpan(logs)), tree.slow())
-                .withSummary(withLogs(tree.summary(), capturedLogs))
-                .withDetails(httpExchange, logs, queries);
+        return tree.withSummary(withLogs(tree.summary(), capturedLogs)).withDetails(httpExchange, logs, queries);
     }
 
     /**
@@ -274,36 +269,5 @@ public class TraceInsightsService {
                 wireStackTrace,
                 folded.hidden(),
                 folded.applicationFrames());
-    }
-
-    /** Logs by the span they were emitted in; a log with no span id belongs to the flat list only. */
-    private static Map<String, List<TraceLog>> groupLogsBySpan(List<TraceLog> logs) {
-        Map<String, List<TraceLog>> logsBySpan = new HashMap<>();
-        for (TraceLog log : logs) {
-            if (log.spanId() != null) {
-                logsBySpan.computeIfAbsent(log.spanId(), k -> new ArrayList<>()).add(log);
-            }
-        }
-        return logsBySpan;
-    }
-
-    /**
-     * The span tree's own copies carry no stack trace: the frontend's spans tab only counts
-     * them, and its details panel reads a span's logs from the flat details list, the one copy
-     * carrying stack traces, so shipping the trace here too would double it on the wire.
-     */
-    private SpanNode attachLogsToSpan(SpanNode span, Map<String, List<TraceLog>> logsBySpan) {
-        if (span == null) {
-            return null;
-        }
-        List<SpanNode> children = span.children().stream()
-                .map(child -> attachLogsToSpan(child, logsBySpan))
-                .toList();
-        List<TraceLog> spanLogs = logsBySpan.get(span.spanId());
-        SpanNode withChildren = span.withChildren(children);
-        return spanLogs == null
-                ? withChildren
-                : withChildren.withLogs(
-                        spanLogs.stream().map(TraceLog::withoutStackTrace).toList());
     }
 }

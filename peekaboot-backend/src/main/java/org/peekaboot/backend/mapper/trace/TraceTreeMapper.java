@@ -382,7 +382,6 @@ public class TraceTreeMapper {
                 spanData.remoteServiceName(),
                 sqlStatements.of(spanData),
                 rowCounts.get(spanData.spanId()),
-                null,
                 isAsync && !parentIsAsync);
     }
 

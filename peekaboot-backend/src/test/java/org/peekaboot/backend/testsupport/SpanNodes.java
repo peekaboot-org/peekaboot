@@ -8,7 +8,6 @@ import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SqlStatement;
-import org.peekaboot.backend.domain.trace.TraceLog;
 
 /**
  * Builds already-mapped {@link SpanNode} fixtures for the stages after
@@ -41,7 +40,6 @@ public final class SpanNodes {
         private String remoteServiceName;
         private SqlStatement query;
         private Long rowCount;
-        private List<TraceLog> logs;
         private boolean asyncEntry;
 
         private Builder(String spanId) {
@@ -119,11 +117,6 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder logs(List<TraceLog> logs) {
-            this.logs = logs;
-            return this;
-        }
-
         public SpanNode build() {
             return new SpanNode(
                     spanId,
@@ -142,7 +135,6 @@ public final class SpanNodes {
                     remoteServiceName,
                     query,
                     rowCount,
-                    logs,
                     asyncEntry);
         }
     }

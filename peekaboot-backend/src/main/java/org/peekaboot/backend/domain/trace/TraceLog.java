@@ -28,10 +28,4 @@ public record TraceLog(
         String threadName,
         String stackTrace,
         List<Range> hiddenFrames,
-        List<Range> applicationFrames) {
-
-    /** The same log with its throwable stripped - what the span tree carries, since it only ever counts logs. */
-    public TraceLog withoutStackTrace() {
-        return new TraceLog(spanId, timestamp, level, loggerName, message, threadName, null, List.of(), List.of());
-    }
-}
+        List<Range> applicationFrames) {}

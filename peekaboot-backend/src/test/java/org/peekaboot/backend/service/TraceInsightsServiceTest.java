@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.BucketCounts;
@@ -20,7 +21,6 @@ import org.peekaboot.backend.domain.trace.HttpRequest;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
-import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceLog;
@@ -39,6 +39,7 @@ import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
+import tools.jackson.databind.JsonNode;
 
 class TraceInsightsServiceTest {
 
@@ -249,27 +250,17 @@ class TraceInsightsServiceTest {
         assertThat(result.hiddenFrames()).containsExactly(new StackTraceFolding.Range(2, 3));
     }
 
-    /**
-     * The span tree only ever shows a log count, never a log's content, so the copy it holds
-     * must not carry the trace a second time next to the details list's own copy.
-     */
+    /** The span tree shows a log count, which the browser takes from the flat list, so a span carries no copy. */
     @Test
-    void theSpanAttachedCopyCarriesNoStackTraceWhileTheDetailsCopyDoes() {
-        String trace = "java.lang.IllegalStateException: boom\n\tat org.peekaboot.app.Thing.method(Thing.java:10)\n";
-        TraceInsightsService folding = newService(store, List.of(), List.of("org.peekaboot.app"));
+    void theDetailServesEachLogOnceInItsFlatList() {
         addTrace("trace1", 100, false);
-        store.addLog(log("trace1").inSpan("span-trace1").withStackTrace(trace).build());
+        store.addLog(log("trace1").inSpan("span-trace1").saying("once").build());
 
-        TraceTree tree = folding.getTraceInsights("trace1").orElseThrow();
-        TraceLog detailsCopy = tree.logs().getFirst();
-        TraceLog spanCopy = tree.rootSpan().logs().getFirst();
+        JsonNode json = PeekabootJson.MAPPER.valueToTree(
+                service.getTraceInsights("trace1").orElseThrow());
 
-        assertThat(detailsCopy.stackTrace()).isNotNull();
-        assertThat(detailsCopy.applicationFrames()).isNotEmpty();
-        assertThat(spanCopy.stackTrace()).isNull();
-        assertThat(spanCopy.hiddenFrames()).isEmpty();
-        assertThat(spanCopy.applicationFrames()).isEmpty();
-        assertThat(spanCopy.message()).isEqualTo(detailsCopy.message());
+        assertThat(json.path("logs").size()).isEqualTo(1);
+        assertThat(json.path("rootSpan").has("logs")).isFalse();
     }
 
     @Test
@@ -301,12 +292,12 @@ class TraceInsightsServiceTest {
         TraceTree result = service.getTraceInsights("trace1").orElseThrow();
 
         assertThat(result.logs()).extracting(TraceLog::message).containsExactly("spanless");
-        assertThat(result.rootSpan().logs()).isEmpty();
+        assertThat(result.logs().getFirst().spanId()).isNull();
         assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(1, 0, 0));
     }
 
     @Test
-    void aLogEmittedInAGrandchildSpanIsAttachedToThatSpanAlone() {
+    void aLogEmittedInAGrandchildSpanNamesThatSpan() {
         store.addSpan(rootSpan("t1", "GET /x", Span.Kind.SERVER, 100).build());
         store.addSpan(span("child")
                 .in("t1")
@@ -324,11 +315,7 @@ class TraceInsightsServiceTest {
 
         TraceTree tree = service.getTraceInsights("t1").orElseThrow();
 
-        SpanNode child = tree.rootSpan().children().getFirst();
-        SpanNode grandchild = child.children().getFirst();
-        assertThat(grandchild.logs()).extracting(TraceLog::message).containsExactly("deep");
-        assertThat(tree.rootSpan().logs()).isEmpty();
-        assertThat(child.logs()).isEmpty();
+        assertThat(tree.logs()).extracting(TraceLog::spanId).containsExactly("grandchild");
     }
 
     @Test
@@ -625,7 +612,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void aLogEmittedInAFoldedDuplicateSpanIsAttachedToTheSurvivingSpan() {
+    void aLogEmittedInAFoldedDuplicateSpanNamesTheSurvivingSpan() {
         // a DB span whose duplicate is folded away on write, and a log emitted
         // while inside the folded-away duplicate's MDC scope - i.e. carrying the
         // duplicate's spanId, not the surviving span's
@@ -637,16 +624,7 @@ class TraceInsightsServiceTest {
                 .build());
         Optional<TraceTree> result = service.getTraceInsights("trace1");
 
-        // the log attaches to the surviving span in the tree rather than being
-        // silently dropped as an orphan
         assertThat(result).isPresent();
-        SpanNode dbSpanNode = result.get().rootSpan().children().stream()
-                .filter(s -> "span-db-trace1".equals(s.spanId()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(dbSpanNode.logs()).extracting(TraceLog::message).containsExactly("Datasource log");
-
-        // And: the flat logs list also carries the resolved (surviving) spanId
         assertThat(result.get().logs()).hasSize(1);
         assertThat(result.get().logs().get(0).spanId()).isEqualTo("span-db-trace1");
     }

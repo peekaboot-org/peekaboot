@@ -20,8 +20,8 @@ Two records, one concept. `SpanData` is the store's copy of an exported OpenTele
 `spanId` and `parentId`, `Map<String, String>` tags, a nullable Micrometer `Span.Kind` (OTel's
 `INTERNAL` has no Micrometer constant and maps to null), and a `creationOrder` minted in export
 order. `SpanNode` is the mapped tree node the API serves: the same `Span.Kind` and tag map,
-plus `children`, `issues`, `logs` and a masked `query`. Issues and logs hang off the node;
-`SpanData` carries neither.
+plus `children`, `issues` and a masked `query`. Issues hang off the node and `SpanData` carries
+none. A span's logs are the entries of `TraceTree.logs` naming its `spanId`.
 
 ### Root Span
 `TraceDataBundle` chooses it, once: the earliest-created stored span whose parent is not stored,
@@ -98,7 +98,7 @@ bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 has two and serialises lowercase through `@JsonValue`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
-`issues` empty on every node it builds, and leaves `logs` null. Firing conditions:
+`issues` empty on every node it builds. Firing conditions:
 [issues](https://www.peekaboot.org/docs/traces/#issues). Thresholds and property names:
 [peekaboot.ui.tracing](https://www.peekaboot.org/docs/configuration/#peekabootuitracing).
 
@@ -219,10 +219,12 @@ fill; see *Servlet Filters* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for what suc
 solve first.
 
 ### Trace Log and Query Info
-`TraceLog(spanId, timestamp, level, loggerName, message, threadName)` is one captured log event,
-correlated by the trace and span ids frozen in its MDC. It appears twice on the detail response:
-once in `TraceTree.logs` and again on the `SpanNode` that emitted it. A log with no span id
-appears in the flat list only.
+`TraceLog(spanId, timestamp, level, loggerName, message, threadName, stackTrace, hiddenFrames,
+applicationFrames)` is one captured log event, correlated by the trace and span ids frozen in its
+MDC. `stackTrace` is the captured throwable, null where there was none; `hiddenFrames` and
+`applicationFrames` are the line ranges folding marked in it. It appears once on the detail
+response, in `TraceTree.logs`, its `spanId` resolved to the span that survived deduplication. A log
+with no span id belongs to no span.
 
 `QueryInfo(spanId, statement, dbSystem, dataSourceName, durationMs, timestamp, rowCount,
 creationOrder)` is one query span. `statement` is masked and may be null when the
@@ -253,9 +255,9 @@ prefix form goes away without a `MeterRegistry` bean, the suffix form does not.
 
 ### Backend-for-Frontend (BFF)
 The pattern behind the suffix. The backend assembles, correlates and masks before the frontend
-sees anything: logs already attached to their spans, issues already detected, SQL already
-masked, thresholds already resolved onto `/api/features`. The frontend renders what it is given
-and keeps no analysis of its own. Peekaboot's UI is served from the same process it observes, so
+sees anything: logs already resolved to the span that emitted them, issues already detected, SQL
+already masked, thresholds already resolved onto `/api/features`. The frontend renders what it is
+given and keeps no analysis of its own. Peekaboot's UI is served from the same process it observes, so
 there is no second service to hold that logic.
 
 ## UI surfaces

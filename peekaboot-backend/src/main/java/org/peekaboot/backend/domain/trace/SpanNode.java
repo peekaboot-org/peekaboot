@@ -21,7 +21,6 @@ public record SpanNode(
         String remoteServiceName,
         SqlStatement query,
         Long rowCount,
-        List<TraceLog> logs,
         boolean asyncEntry) {
 
     /** Absent collections normalise to empty here, so no reader of a mapped span has to guard for null. */
@@ -30,51 +29,6 @@ public record SpanNode(
         tags = tags == null ? Map.of() : tags;
         events = events == null ? List.of() : events;
         issues = issues == null ? List.of() : issues;
-        logs = logs == null ? List.of() : logs;
-    }
-
-    public SpanNode withLogs(List<TraceLog> newLogs) {
-        return new SpanNode(
-                spanId,
-                name,
-                kind,
-                startTimeMs,
-                durationMs,
-                status,
-                children,
-                tags,
-                events,
-                issues,
-                creationOrder,
-                errorMessage,
-                errorClass,
-                remoteServiceName,
-                query,
-                rowCount,
-                newLogs,
-                asyncEntry);
-    }
-
-    public SpanNode withChildren(List<SpanNode> newChildren) {
-        return new SpanNode(
-                spanId,
-                name,
-                kind,
-                startTimeMs,
-                durationMs,
-                status,
-                newChildren,
-                tags,
-                events,
-                issues,
-                creationOrder,
-                errorMessage,
-                errorClass,
-                remoteServiceName,
-                query,
-                rowCount,
-                logs,
-                asyncEntry);
     }
 
     /** The issues judged for this span, with the children the same judgement already ran over. */
@@ -96,7 +50,6 @@ public record SpanNode(
                 remoteServiceName,
                 query,
                 rowCount,
-                logs,
                 asyncEntry);
     }
 }

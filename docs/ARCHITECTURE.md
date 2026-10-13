@@ -1202,20 +1202,20 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
 1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
    It re-parents orphans under the root the snapshot names, masks tags, error messages and
    query text, classifies the root action type and computes the tab summary. It leaves
-   `TraceTree.slow` false, every `SpanNode.issues` list empty and every `SpanNode.logs` null.
+   `TraceTree.slow` false and every `SpanNode.issues` list empty.
    **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in and decides `TraceTree.slow`.
    `TraceInsightsService` calls it on both trace endpoints.
 3. `TraceInsightsService.enrichWithDetails` adds what only the stored bundle knows: the flat log
-   list, the same logs grouped onto the span that emitted them (`groupLogsBySpan` then
-   `attachLogsToSpan`), the `HttpExchange` and `QueryExtractor`'s queries. It runs on
+   list, each entry's `spanId` resolved through the bundle's duplicate redirects, the
+   `HttpExchange` and `QueryExtractor`'s queries. It runs on
    `GET /peekaboot/api/traces/{traceId}/insights` only. The listing endpoint gets step 1, a log
    *count* for the row badges, and step 2, so its trees carry issues but no log list and no
    queries.
 
 Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
-output through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`/
-`withLogs`/`withChildren`, so a stage names only the components it adds.
+output through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`,
+so a stage names only the components it adds.
 
 `TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
 creation order, the root span, the trace window and the `truncated` flag. The root is chosen
