@@ -14,7 +14,6 @@
         if (!control) return;
         var open = control.getAttribute('aria-pressed') !== 'true';
         control.setAttribute('aria-pressed', String(open));
-        control.textContent = open ? 'Hide framework frames' : 'Show full stack trace';
         document.querySelectorAll('details.pk-error__hidden').forEach(function (run) {
             run.open = open;
         });

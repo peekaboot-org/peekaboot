@@ -555,7 +555,10 @@ both themes.
   needs `aria-hidden="true"`.** `title` does *not* rescue it: text content outranks title
   in the accessible-name algorithm, so a bare glyph button is announced as "↻" or "×".
   When the control is stateful (pause/resume, theme, timezone), the label is updated in
-  `main.js` next to the icon swap. A label that lies about state is worse than none.
+  `main.js` next to the icon swap. A label that lies about state is worse than none. A
+  toggle carrying `aria-pressed` or `aria-expanded` is the other way round: one fixed label,
+  and the attribute alone says the state (`sql-view.js`'s Formatted toggle), so it is
+  announced once.
 
 - **Decorative emoji get `aria-hidden="true"`.** The dashboard's card icons would otherwise
   be read as part of the heading: "package Build", "seedling Spring".

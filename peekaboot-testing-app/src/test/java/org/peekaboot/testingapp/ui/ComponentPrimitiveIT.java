@@ -356,7 +356,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
-     * The Environment/Config "Secrets shown" pressed state pairs the --pk-danger fill
+     * The Environment/Config secrets toggle's pressed state pairs the --pk-danger fill
      * with the --pk-on-danger ink (dashboard.css, per the palette's fill/ink rule). That
      * pairing must hold in every state the button can be in - resting AND hovered, light
      * AND dark: components.css's generic .pk-btn hover rule outranks the pressed rule by

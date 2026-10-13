@@ -60,6 +60,7 @@ class ErrorPageIT extends PlaywrightTestBase {
      * top of them - opening every run on the first click, and, since {@code open} is
      * recomputed from {@code aria-pressed} on every click, closing every run again on the
      * second.
+     * The label stays put: aria-pressed carries the state, so it is announced once.
      */
     @Test
     void theRevealControlOpensEveryHiddenRun() {
@@ -71,7 +72,7 @@ class ErrorPageIT extends PlaywrightTestBase {
         assertThat(page.locator("details.pk-error__hidden[open]").count())
                 .isEqualTo(page.locator("details.pk-error__hidden").count());
         assertThat(page.getAttribute(".pk-error__reveal", "aria-pressed")).isEqualTo("true");
-        assertThat(page.textContent(".pk-error__reveal")).isEqualTo("Hide framework frames");
+        assertThat(page.textContent(".pk-error__reveal")).isEqualTo("Show full stack trace");
 
         page.click(".pk-error__reveal");
 

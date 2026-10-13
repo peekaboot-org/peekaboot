@@ -639,7 +639,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         assertThat(page.locator(hiddenRuns + "[open]").count())
                 .isEqualTo(page.locator(hiddenRuns).count());
-        assertThat(page.textContent(panel + " .pk-log__reveal")).isEqualTo("Hide framework frames");
+        assertThat(page.getAttribute(panel + " .pk-log__reveal", "aria-pressed"))
+                .isEqualTo("true");
     }
 
     /** A span that wrote no log gets neither a logs panel nor a toggle to open one. */
@@ -899,7 +900,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(page.locator(".pk-log__trace details.pk-log__hidden[open]").count())
                 .isEqualTo(page.locator(".pk-log__trace details.pk-log__hidden").count());
         assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("true");
-        assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Hide framework frames");
+        assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
 
         page.click(".pk-log__reveal");
 
@@ -1777,6 +1778,36 @@ class TraceOverlayIT extends PlaywrightTestBase {
         overlay.click("#pk-gantt-rows .pk-gantt-toggle");
 
         assertThat(visibleGanttRows()).isEqualTo(allRows);
+    }
+
+    /**
+     * A row's toggles keep one name and carry their state in aria-expanded, so a screen reader
+     * announces the state once and never against the name ("Collapse child spans, collapsed").
+     */
+    @Test
+    void spanRowTogglesKeepOneNameAndCarryTheirStateInAriaExpanded() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'a',
+                    query: {text: 'select 1', formatted: null, parameters: []},
+                    children: [{spanId: 'b', name: 'b'}]}});
+                const subtree = container.querySelector('.pk-gantt-toggle');
+                const query = container.querySelector('.pk-span-query-toggle');
+                const state = control => `${control.getAttribute('aria-label')}|${control.getAttribute('aria-expanded')}`;
+                const before = [state(subtree), state(query)];
+                subtree.click();
+                query.click();
+                return [...before, state(subtree), state(query)];
+            })()
+            """);
+
+        assertThat(facts)
+                .isEqualTo(List.of(
+                        "Child spans|true",
+                        "1 query for this span|false",
+                        "Child spans|false",
+                        "1 query for this span|true"));
     }
 
     private int visibleGanttRows() {

@@ -37,6 +37,7 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
     /** The fixture password's group; the inventory DataSource's properties carry a password of their own. */
     private static final String SPRING_DATASOURCE = Dashboard.configGroup("spring.datasource");
 
+    /** The label stays put: aria-pressed carries the state, so it is announced once. */
     @Test
     void togglingTheControlRevealsAMaskedConfigValue() {
         openDashboard();
@@ -45,12 +46,16 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
         assertThat(configPasswordValue()).isEqualTo("******");
         assertThat(page.getAttribute("#config-unmask-slot .pk-unmask-toggle", "aria-pressed"))
                 .isEqualTo("false");
+        assertThat(page.textContent("#config-unmask-slot .pk-unmask-toggle__label"))
+                .isEqualTo("Show secrets");
 
         page.click("#config-unmask-slot .pk-unmask-toggle");
         waitForConfigPasswordValue("test-fixture-password");
 
         assertThat(page.getAttribute("#config-unmask-slot .pk-unmask-toggle", "aria-pressed"))
                 .isEqualTo("true");
+        assertThat(page.textContent("#config-unmask-slot .pk-unmask-toggle__label"))
+                .isEqualTo("Show secrets");
     }
 
     /**

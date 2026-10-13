@@ -111,7 +111,6 @@ function syncAllDetailsToggle(entries, allDetailsToggle) {
 function toggleSubtree(toggle) {
     const expand = toggle.getAttribute('aria-expanded') === 'false';
     toggle.setAttribute('aria-expanded', String(expand));
-    toggle.setAttribute('aria-label', expand ? 'Collapse child spans' : 'Expand child spans');
     setSubtreeVisible(toggle.closest('.pk-gantt-span'), expand);
 }
 
@@ -236,7 +235,7 @@ function nameCell(span, kind, attrsId, queryId, logsId, hasError, locale) {
 
     const cell = el('div', {className: 'pk-gantt-name'});
     cell.append(hasChildren
-        ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
+        ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', attrs: {'aria-expanded': 'true', 'aria-label': 'Child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
     cell.append(button({
         className: 'pk-unbutton pk-gantt-name__toggle' + (hasError ? ' pk-gantt-name__toggle--error' : ''),
@@ -284,7 +283,7 @@ function panelToggleButton(className, panelId, label) {
     return button({
         className: `pk-span-action pk-span-action--expand ${className}`,
         text: label,
-        attrs: {'aria-expanded': 'false', 'aria-controls': panelId, 'aria-label': `Show ${label} for this span`}
+        attrs: {'aria-expanded': 'false', 'aria-controls': panelId, 'aria-label': `${label} for this span`}
     });
 }
 

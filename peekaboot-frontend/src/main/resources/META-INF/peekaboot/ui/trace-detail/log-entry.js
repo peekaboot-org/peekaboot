@@ -72,8 +72,7 @@ function frameLine(text, applicationFrame) {
 
 /** One control per log row: opens or closes every hidden run inside that row's trace at once. */
 function revealControl(pre) {
-    return pressedToggle({className: 'pk-btn pk-btn--small pk-log__reveal', text: 'Show full stack trace'}, (open, control) => {
-        control.textContent = open ? 'Hide framework frames' : 'Show full stack trace';
+    return pressedToggle({className: 'pk-btn pk-btn--small pk-log__reveal', text: 'Show full stack trace'}, open => {
         pre.querySelectorAll('details.pk-log__hidden').forEach(run => {
             run.open = open;
         });

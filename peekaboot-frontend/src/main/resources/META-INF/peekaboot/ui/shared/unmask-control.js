@@ -39,6 +39,7 @@ function buildButton(context) {
 
     const label = document.createElement('span');
     label.className = 'pk-unmask-toggle__label';
+    label.textContent = 'Show secrets';
 
     button.append(icon, label);
     // context.toggleUnmask is a stable function reference owned by main.js (it reads/
@@ -51,6 +52,4 @@ function buildButton(context) {
 
 function updateButton(button, revealed) {
     button.setAttribute('aria-pressed', String(revealed));
-    button.querySelector('.pk-unmask-toggle__label').textContent =
-        revealed ? 'Secrets shown — click to hide' : 'Show secrets';
 }
