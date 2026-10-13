@@ -10,9 +10,10 @@ import java.util.Set;
  *
  * @param startTime     the earliest span start the bundle ever saw, or null while no timed span
  *                      has arrived
- * @param duration      the window the bundle's non-async spans have covered, high-water like
- *                      {@code startTime}: the same number the Slow bucket admitted the trace by,
- *                      even once the span cap has evicted the earliest spans
+ * @param duration      the window the bundle's non-async spans have covered. Eviction never
+ *                      lowers it, so it stays the number the Slow bucket admitted the trace by
+ *                      once the span cap has dropped the earliest spans; only a late async entry,
+ *                      showing that spans already counted were background work, can lower it
  * @param rootSpan      the span the tree hangs from, chosen by the bundle (see
  *                      {@link TraceDataBundle#rootSpan()}); null for a trace with no spans
  * @param spans         in creation order, never null

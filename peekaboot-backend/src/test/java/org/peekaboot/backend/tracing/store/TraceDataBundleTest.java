@@ -412,6 +412,38 @@ class TraceDataBundleTest {
     }
 
     /**
+     * A late async entry makes the bundle recompute the synchronous window, and the spans the
+     * cap already evicted must still count: they are what the caller waited for, and the window
+     * is the number the Slow bucket admitted the trace by.
+     */
+    @Test
+    void aLateAsyncEntryKeepsTheSynchronousTimeOfEvictedSpans() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("slow", "root", 0, 1_500), 3);
+        bundle.addSpan(plainSpan("quick", "root", 10, 10), 3);
+        bundle.addSpan(plainSpan("background", "async", 100, 2_900), 3);
+        // evicts "slow"
+        bundle.addSpan(plainSpan("later", "root", 30, 10), 3);
+        // evicts "quick", and moves "background" out of the synchronous window
+        bundle.addSpan(asyncSpan("async", "root", 90, 3_010), 3);
+
+        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
+    }
+
+    /** Eviction must not open a gap between the two windows where no async span exists. */
+    @Test
+    void withoutAsyncSpansBothWindowsStayEqualUnderEviction() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("first", "root", 0, 1_500), 2);
+        bundle.addSpan(plainSpan("second", "root", 10, 10), 2);
+        bundle.addSpan(plainSpan("third", "root", 30, 10), 2);
+
+        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
+    }
+
+    /**
      * A span's stated parentId can point at a JDBC span already folded away as a duplicate by
      * the time async membership is computed, so ancestry must go through
      * {@code TraceDataBundle#resolve} rather than the raw id: skipping it loses membership for

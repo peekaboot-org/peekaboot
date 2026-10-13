@@ -263,6 +263,51 @@ class InMemoryTraceStoreTest {
                 .isEqualTo(Duration.ofMillis(50));
     }
 
+    /**
+     * A truncated trace never drops out of Slow. The late
+     * entry shows "background" was async work, but the evicted "slow" span is still time the
+     * caller waited for, so the trace stays with the duration it was admitted by.
+     */
+    @Test
+    void aTruncatedTraceStaysSlowWhenALateAsyncEntryArrives() {
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setSlowTraceThresholdMs(1_000);
+            p.setMaxSpansPerTrace(3);
+        });
+        store.addSpan(span("slow")
+                .in("t1")
+                .parent("root")
+                .named("load orders")
+                .at(START, Duration.ofMillis(1_500))
+                .build());
+        store.addSpan(span("quick")
+                .in("t1")
+                .parent("root")
+                .named("audit")
+                .at(START.plusMillis(10), Duration.ofMillis(10))
+                .build());
+        store.addSpan(span("background")
+                .in("t1")
+                .parent("async")
+                .named("enrich order")
+                .at(START.plusMillis(100), Duration.ofMillis(2_900))
+                .build());
+        store.addSpan(span("later")
+                .in("t1")
+                .parent("root")
+                .named("render")
+                .at(START.plusMillis(30), Duration.ofMillis(10))
+                .build());
+        store.addSpan(asyncSpan("t1", "root", START.plusMillis(90), Duration.ofMillis(3_010)));
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
+                .extracting(listed -> listed.bundle().traceId())
+                .containsExactly("t1");
+        TraceData snapshot = store.getTrace("t1").orElseThrow().snapshot();
+        assertThat(snapshot.truncated()).isTrue();
+        assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(1_500));
+    }
+
     @Test
     void classificationIsIdempotent() {
         storage.addSpan(errorSpan("t1"));

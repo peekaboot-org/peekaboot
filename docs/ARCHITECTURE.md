@@ -1224,9 +1224,9 @@ earliest-created span. `TraceDataBundle.rootSpan()` answers the same rule withou
 is what the listing filters classify by, so the row a filter admits and the tree the mapper
 builds agree on what started the trace. `attachOrphansToRoot` then re-parents every other span
 whose parent is not in the trace onto that root, so a subtree whose parent has not been exported
-yet does not silently vanish. The window is the bundle's high-water start and end, the same
-number the Slow bucket admitted the trace by, so a truncated trace never lists a duration below
-the threshold that put it there. `truncated` travels on the snapshot rather than being derived
+yet does not silently vanish. Eviction never lowers the window, so it stays the number the Slow
+bucket admitted the trace by, and a truncated trace never lists a duration below the threshold
+that put it there. `truncated` travels on the snapshot rather than being derived
 from the span list: the list is already deduplicated and already capped, so nothing in it can
 say whether real spans were dropped.
 
@@ -1277,11 +1277,14 @@ work is the whole trace and its own duration is the honest answer.
 
 `snapshot()` passes `synchronousWindow()` as `TraceData.duration`, so the listing, the detail
 header and the waterfall denominator in `trace-detail/tabs/spans.js` all read it, and
-`InMemoryTraceStore` admits to the Slow bucket by the same method. Both pairs are high-water
-under eviction, for the reason `TraceData.duration`'s Javadoc states: the duration shown has to
-be the number the Slow bucket admitted the trace by, even once the span cap has dropped the
-earliest spans. A window recomputed at read time would shrink as spans are evicted, and
-admission would then disagree with what the row says.
+`InMemoryTraceStore` admits to the Slow bucket by the same method. Eviction never lowers either
+window, for the reason `TraceData.duration`'s Javadoc states: the duration shown has to be the
+number the Slow bucket admitted the trace by, even once the span cap has dropped the earliest
+spans. Eviction never lowers the full window. The synchronous one falls when a late async
+entry shows that spans already counted were background work, and the Slow bucket follows it
+down. Its recomputation therefore starts from the window of every span the cap evicted while it
+counted as synchronous, never from nothing. A window recomputed from the stored spans alone would
+shrink as spans are evicted and take the trace out of Slow on lost spans.
 
 `TraceTabSummary.SpansSummary.totalDurationMs`, the sum of per-span durations rather than a
 window, excludes async spans too. `count`, `errorCount` and the query figures deliberately still
@@ -1314,11 +1317,14 @@ behind, exactly as `rootOf` does. A span hanging off a deduplicated span names a
 longer stored, so skipping the redirect would leave it outside the subtree it belongs to and back
 in the synchronous window.
 
-The trade-off is truncation. Eviction drops evicted ids from `asyncSpanIds` and never lowers the
-marks, so a rebuild over a span set that no longer holds the marked entry span stops recognising
-that subtree, and its retained descendants fold back into the synchronous window. The `truncated`
-flag already says the data is partial, and 500 spans ahead of the async entry point is well
-outside the case this serves.
+The trade-off is truncation. A span evicted while it counted as synchronous stays counted, even
+if its async entry arrives later and would have taken it out. Eviction also drops evicted ids from
+`asyncSpanIds`, so a rebuild over a span set that no longer holds the marked entry span stops
+recognising that subtree, and its retained descendants fold back into the synchronous window. Both
+leave background time in the window rather than take synchronous time out: a truncated trace can
+stay in Slow on background work, and never drops out on lost spans. The `truncated` flag already
+says the data is partial, and 500 spans ahead of the async entry point is well outside the case
+this serves.
 
 ### Query Extraction
 
@@ -1434,7 +1440,7 @@ photographs both, so `trace-detail-queries-*` is the shipped image demonstrating
 ```
 TraceData
 ├── traceId: String
-├── startTime, duration      # the bundle's high-water window
+├── startTime, duration      # eviction never lowers it
 ├── rootSpan: SpanData       # chosen once by the bundle
 ├── spans: List<SpanData>    # creation order
 └── truncated: boolean

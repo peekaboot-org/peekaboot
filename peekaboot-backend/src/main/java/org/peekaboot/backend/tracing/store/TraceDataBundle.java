@@ -60,12 +60,16 @@ public class TraceDataBundle {
     private Instant minSpanStart;
     private Instant maxSpanEnd;
     // Async-subtree signals, maintained span by span like the classification signals above.
-    // asyncSpanIds is transitive membership; the sync marks are the same high-water values as
-    // minSpanStart/maxSpanEnd over non-async spans only, because TraceData.duration must stay
-    // the number the Slow bucket admitted the trace by even after eviction.
+    // asyncSpanIds is transitive membership; the sync marks cover the non-async spans. Eviction
+    // never lowers them, because TraceData.duration must stay the number the Slow bucket
+    // admitted the trace by: a rebuild refolds the stored spans on top of the evicted pair
+    // instead of starting from nothing. Only a late async entry lowers them.
     private final Set<String> asyncSpanIds = new HashSet<>();
     private Instant minSyncStart;
     private Instant maxSyncEnd;
+    // the window of every span the cap evicted while it counted as synchronous
+    private Instant evictedSyncStart;
+    private Instant evictedSyncEnd;
     private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
@@ -179,8 +183,8 @@ public class TraceDataBundle {
                 }
             }
         }
-        minSyncStart = null;
-        maxSyncEnd = null;
+        minSyncStart = evictedSyncStart;
+        maxSyncEnd = evictedSyncEnd;
         for (SpanData stored : spansById.values()) {
             if (!asyncSpanIds.contains(stored.spanId())) {
                 foldIntoSyncWindow(stored);
@@ -195,6 +199,16 @@ public class TraceDataBundle {
         }
         if (span.endTime() != null && (maxSyncEnd == null || span.endTime().isAfter(maxSyncEnd))) {
             maxSyncEnd = span.endTime();
+        }
+    }
+
+    private void foldIntoEvictedSyncWindow(SpanData span) {
+        if (span.startTime() != null
+                && (evictedSyncStart == null || span.startTime().isBefore(evictedSyncStart))) {
+            evictedSyncStart = span.startTime();
+        }
+        if (span.endTime() != null && (evictedSyncEnd == null || span.endTime().isAfter(evictedSyncEnd))) {
+            evictedSyncEnd = span.endTime();
         }
     }
 
@@ -281,7 +295,9 @@ public class TraceDataBundle {
             removeFromParentIndex(evicted);
             childrenByParentId.remove(evicted.spanId());
             pruneRedirectsPointingAt(evicted.spanId());
-            asyncSpanIds.remove(evicted.spanId());
+            if (!asyncSpanIds.remove(evicted.spanId())) {
+                foldIntoEvictedSyncWindow(evicted);
+            }
         }
     }
 

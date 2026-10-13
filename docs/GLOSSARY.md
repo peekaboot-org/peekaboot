@@ -104,8 +104,9 @@ Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapp
 
 ### Trace Bucket
 `TraceBucket {ALL, ERRORS, SLOW}`, the three independent maps inside `InMemoryTraceStore` and
-the `bucket` query parameter of the listing endpoint. Membership is decided on write, add-only,
-and a trace stays in Errors or Slow after ageing out of All. Definitions and thresholds:
+the `bucket` query parameter of the listing endpoint. Membership is decided on write. Errors is
+add-only; Slow follows the synchronous window both ways, since a late async entry can lower it.
+A trace stays in Errors or Slow after ageing out of All. Definitions and thresholds:
 [the three buckets](https://www.peekaboot.org/docs/traces/#the-three-buckets).
 
 ## Where the code and the UI use different words
