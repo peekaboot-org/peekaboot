@@ -104,8 +104,7 @@ public class TraceInsightsService {
         final String operationFilter = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
         // filtered on each row's root span alone; only the returned page is mapped (and masked)
-        List<RowSource> matches =
-                RowSources.matching(traceStore, traceTreeMapper, bucket, actionTypeFilter, operationFilter);
+        List<RowSource> matches = RowSources.matching(traceStore, bucket, actionTypeFilter, operationFilter);
         List<TraceTree> traceTrees = matches.stream()
                 .limit(limit)
                 .map(this::mapRow)
@@ -155,10 +154,10 @@ public class TraceInsightsService {
 
     private TraceTree mapRow(RowSource row) {
         TraceData traceData = row.bundle().snapshot();
-        if (row.subtreeRootSpanId() == null) {
+        if (!row.subtree()) {
             return withLogsSummary(traceTreeMapper.map(traceData), row.bundle().logs());
         }
-        TraceTree subtree = traceTreeMapper.mapSubtree(traceData, row.subtreeRootSpanId());
+        TraceTree subtree = traceTreeMapper.mapSubtree(traceData, row.rootSpan().spanId());
         return withLogsSummary(subtree, logsWithin(subtree.rootSpan(), row.bundle()));
     }
 
@@ -212,7 +211,7 @@ public class TraceInsightsService {
             String rootOperation) {
         List<RowSource> rows = bucket == requested
                 ? requestedMatches
-                : RowSources.matching(traceStore, traceTreeMapper, bucket, actionTypes, rootOperation);
+                : RowSources.matching(traceStore, bucket, actionTypes, rootOperation);
         return (int) rows.stream().map(row -> row.bundle().traceId()).distinct().count();
     }
 

@@ -246,7 +246,7 @@ public class TraceTreeMapper {
         }
     }
 
-    public RootActionType detectRootActionType(SpanData rootSpan) {
+    public static RootActionType detectRootActionType(SpanData rootSpan) {
         if (rootSpan == null) {
             return RootActionType.UNKNOWN;
         }

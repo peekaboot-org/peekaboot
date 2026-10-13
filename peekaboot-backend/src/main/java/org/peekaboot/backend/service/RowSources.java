@@ -6,7 +6,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
@@ -19,9 +18,8 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 /**
  * Expands a bucket's bundles into listing rows and applies the root-level filters, so
  * {@link TraceInsightsService} stays about turning a page of rows into a response rather than
- * also being about what counts as a row in the first place. Stateless, like
- * {@link org.peekaboot.backend.stacktrace.StackTraceFolding}: the store and mapper it needs
- * come from the caller rather than being held, since nothing here outlives one call.
+ * also being about what counts as a row in the first place. Stateless: the store comes from the
+ * caller, since nothing here outlives one call.
  */
 final class RowSources {
 
@@ -32,10 +30,11 @@ final class RowSources {
     private RowSources() {}
 
     /**
-     * One listing row: the bundle it reads from, the span the row is rooted at, and when the row
-     * appeared in the bucket, in span export order.
+     * One listing row: the bundle it reads from, the span the row is rooted at, whether that span
+     * roots a subtree of the trace rather than the trace itself, and when the row appeared in the
+     * bucket, in span export order.
      */
-    record RowSource(TraceDataBundle bundle, SpanData rootSpan, String subtreeRootSpanId, long listedAt) {}
+    record RowSource(TraceDataBundle bundle, SpanData rootSpan, boolean subtree, long listedAt) {}
 
     /**
      * The bucket's rows that pass the root-level filters, newest first - nothing mapped or masked
@@ -44,17 +43,10 @@ final class RowSources {
      * its request by minutes lists at the top rather than beside a request long scrolled away.
      */
     static List<RowSource> matching(
-            @Nullable TraceStore traceStore,
-            TraceTreeMapper traceTreeMapper,
-            TraceBucket bucket,
-            Set<RootActionType> actionTypes,
-            String rootOperation) {
-        if (traceStore == null) {
-            return List.of();
-        }
+            TraceStore traceStore, TraceBucket bucket, Set<RootActionType> actionTypes, String rootOperation) {
         return traceStore.getTraces(bucket, Integer.MAX_VALUE).stream()
                 .flatMap(listed -> rowsOf(listed).stream())
-                .filter(row -> matchesRootFilters(traceTreeMapper, row.rootSpan(), actionTypes, rootOperation))
+                .filter(row -> matchesRootFilters(row.rootSpan(), actionTypes, rootOperation))
                 .sorted(NEWEST_FIRST)
                 .toList();
     }
@@ -79,20 +71,19 @@ final class RowSources {
         SpanData root = bundle.rootSpan();
         List<RowSource> rows = new ArrayList<>();
         if (!isIncompleteFragment(root)) {
-            rows.add(new RowSource(bundle, root, null, listed.listedAt()));
+            rows.add(new RowSource(bundle, root, false, listed.listedAt()));
         }
         if (!bundle.hasAsyncSpans()) {
             return rows;
         }
         for (SpanData entry : bundle.asyncEntrySpans()) {
-            // a purely async bundle's entry span is already the trace's own row - added above
-            // with subtreeRootSpanId null, so it maps whole-trace-shaped and carries no
-            // SubtreeView, unlike a mixed bundle's orphaned entry, which goes through
-            // mapSubtree below and carries SubtreeView(id, false)
+            // a purely async bundle's entry span is its trace's own row, added above as a whole
+            // trace with no SubtreeView; any other entry is a subtree row, which
+            // TraceInsightsService maps through TraceTreeMapper.mapSubtree
             if (root != null && entry.spanId().equals(root.spanId())) {
                 continue;
             }
-            rows.add(new RowSource(bundle, entry, entry.spanId(), Math.max(listed.listedAt(), entry.creationOrder())));
+            rows.add(new RowSource(bundle, entry, true, Math.max(listed.listedAt(), entry.creationOrder())));
         }
         return rows;
     }
@@ -105,9 +96,8 @@ final class RowSources {
      * each filter nothing away, and short-circuit before the classification a wildcard has
      * no use for.
      */
-    private static boolean matchesRootFilters(
-            TraceTreeMapper traceTreeMapper, SpanData root, Set<RootActionType> actionTypes, String rootOperation) {
-        return (actionTypes.isEmpty() || actionTypes.contains(traceTreeMapper.detectRootActionType(root)))
+    private static boolean matchesRootFilters(SpanData root, Set<RootActionType> actionTypes, String rootOperation) {
+        return (actionTypes.isEmpty() || actionTypes.contains(TraceTreeMapper.detectRootActionType(root)))
                 && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null, rootOperation));
     }
 
