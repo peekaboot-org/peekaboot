@@ -17,12 +17,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Challenges any {@code /peekaboot/**} request that reaches it unauthenticated.
+ * Challenges every {@code /peekaboot/**} request that does not carry Peekaboot's own credentials.
  *
- * <p>Registered after Spring Security's own filter, so it is nested inside the security chain
- * and sees only requests that chain already let through. A request the application authenticated
- * passes through untouched; one it permitted anonymously is challenged with Peekaboot's own
- * credentials.
+ * <p>Whatever else authenticated the request does not count. An application that secures the
+ * dashboard itself switches this guard off with {@code peekaboot.security.enabled=false}.
  *
  * <p>An application that wants its own guard instead overrides this by declaring a
  * {@code FilterRegistrationBean<DashboardAuthenticationFilter>} bean of its own - the type
@@ -42,16 +40,13 @@ public class DashboardAuthenticationFilter implements Filter {
 
     private final DashboardCredentials credentials;
     private final CredentialCache cache;
-    private final RequestAuthentication requestAuthentication;
 
     /** Guards the one-time WARN: the moment Peekaboot learns nothing else protects the dashboard. */
     private final AtomicBoolean challengeLogged = new AtomicBoolean();
 
-    public DashboardAuthenticationFilter(
-            DashboardCredentials credentials, CredentialCache cache, RequestAuthentication requestAuthentication) {
+    public DashboardAuthenticationFilter(DashboardCredentials credentials, CredentialCache cache) {
         this.credentials = credentials;
         this.cache = cache;
-        this.requestAuthentication = requestAuthentication;
     }
 
     @Override
@@ -65,11 +60,6 @@ public class DashboardAuthenticationFilter implements Filter {
             throw new ServletException("DashboardAuthenticationFilter requires an HTTP request");
         }
 
-        if (requestAuthentication.alreadyAuthenticated()) {
-            chain.doFilter(request, response);
-            return;
-        }
-
         String header = httpRequest.getHeader(AUTHORIZATION_HEADER);
         if (header == null || !verify(header)) {
             if (header != null) {
@@ -79,12 +69,7 @@ public class DashboardAuthenticationFilter implements Filter {
             return;
         }
 
-        requestAuthentication.record(credentials.username());
-        try {
-            chain.doFilter(request, response);
-        } finally {
-            requestAuthentication.clear();
-        }
+        chain.doFilter(request, response);
     }
 
     private boolean verify(String header) {

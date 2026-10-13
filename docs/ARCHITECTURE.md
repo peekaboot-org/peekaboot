@@ -242,7 +242,7 @@ org.peekaboot.backend/
 |--------|-------|-----------------|---------|
 | `RequestCaptureFilter` | `HIGHEST_PRECEDENCE + 100` | a `Tracer` **and** a `TraceStore` bean exist | Captures request/response metadata for traces, and sets the `Server-Timing` header |
 | `DevToolbarFilter` | `LOWEST_PRECEDENCE` | a `Tracer` bean exists | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it. Registered for `REQUEST` and `ERROR`: the `REQUEST` dispatch stashes the failing request's method, URI and trace id on a request attribute, and the `ERROR` dispatch reads it back so the error page's bar reports the request that failed, not the `/error` dispatch that renders it |
-| `DashboardAuthenticationFilter` | `spring.security.filter.order` + 100 | `peekaboot.enabled` **and** `peekaboot.security.enabled` | Challenges a `/peekaboot/**` request that reaches it unauthenticated, with Peekaboot's fallback credentials |
+| `DashboardAuthenticationFilter` | `0` | `peekaboot.enabled` **and** `peekaboot.security.enabled` | Challenges every `/peekaboot/**` request with Peekaboot's credentials, whatever else authenticated it |
 
 Both `RequestCaptureFilter` and `DevToolbarFilter` map `/*`. `RequestCaptureFilter`'s order is
 documented in the registration: it sits *inside* Boot's `ServerHttpObservationFilter`
@@ -252,22 +252,17 @@ innermost; it wraps the response in a `ContentBufferingResponseWrapper` and inje
 into the buffered body. Both registrations live only in `DevToolbarAutoConfiguration`, so
 neither filter runs while `peekaboot.dev-toolbar` is off.
 
-`DashboardAuthenticationFilter` maps `/peekaboot/*` rather than `/*`. Its order is read from the
-environment at registration time, `spring.security.filter.order` plus 100, falling back to
-Boot's own default of `-100` where the application has not set the property, so the guard tracks
-the security filter even where an application has moved it. That resolves to `0` at Boot's
-defaults, one past Spring Security's own filter, so `DashboardAuthenticationFilter` only sees a
-request the security chain already let through: `RequestAuthentication` asks whether something
-else already authenticated it and stands down if so, and challenges it with Peekaboot's
-credentials otherwise.
+`DashboardAuthenticationFilter` maps `/peekaboot/*` rather than `/*`, at a fixed order of `0`.
+At Boot's defaults that is behind Spring Security's filter at `-100`, but nothing depends on it.
+A request either carries Peekaboot's credentials or is challenged, whatever the application's
+security decided first. With both armed they lock each other out, so an application that
+secures `/peekaboot/**` itself sets `peekaboot.security.enabled=false`.
 
 A contributed `SecurityFilterChain` could not do this job. `FilterChainProxy` is
 first-match-wins and has no ordering slot for a last resort: a chain ordered above the
 application's would shadow working security, and one ordered below has nowhere to go, since an
-unordered application chain already sits at `LOWEST_PRECEDENCE`. Asking the request itself,
-after the security chain has run, is the only signal that composes with every setup: the
-application's own security wins where it covers the dashboard, Peekaboot fills the gap where it
-does not, and neither has to know about the other.
+unordered application chain already sits at `LOWEST_PRECEDENCE`. A servlet filter on
+`/peekaboot/*` sits outside that ordering and needs no Spring Security on the class path.
 
 An application that wants to supply its own guard overrides the registration by declaring a
 `FilterRegistrationBean<DashboardAuthenticationFilter>` bean of its own -

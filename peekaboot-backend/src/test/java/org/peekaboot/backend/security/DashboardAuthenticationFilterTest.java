@@ -46,7 +46,7 @@ class DashboardAuthenticationFilterTest {
     void challengesARequestWithNoCredentials() throws Exception {
         var response = new MockHttpServletResponse();
 
-        filter(new NeverAuthenticated()).doFilter(get("/peekaboot/"), response, chain);
+        filter().doFilter(get("/peekaboot/"), response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getHeader("WWW-Authenticate")).isEqualTo("Basic realm=\"Peekaboot\", charset=\"UTF-8\"");
@@ -59,7 +59,7 @@ class DashboardAuthenticationFilterTest {
         var request = get("/peekaboot/api/insights");
         request.addHeader("Authorization", basic("orders-admin", "wrong"));
 
-        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+        filter().doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(chainCalls).hasValue(0);
@@ -72,7 +72,7 @@ class DashboardAuthenticationFilterTest {
         var request = get("/peekaboot/api/insights");
         request.addHeader("Authorization", basic("orders-admin", "wrong"));
 
-        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+        filter().doFilter(request, response, chain);
 
         assertThat(logs.appender().list).anySatisfy(event -> {
             assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
@@ -90,7 +90,7 @@ class DashboardAuthenticationFilterTest {
         var request = get("/peekaboot/");
         request.addHeader("Authorization", basic("someone-else", PASSWORD));
 
-        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+        filter().doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
     }
@@ -101,7 +101,7 @@ class DashboardAuthenticationFilterTest {
         var request = get("/peekaboot/");
         request.addHeader("Authorization", "Bearer abcdef");
 
-        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+        filter().doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
     }
@@ -112,7 +112,7 @@ class DashboardAuthenticationFilterTest {
         var request = get("/peekaboot/");
         request.addHeader("Authorization", "Basic not base64!");
 
-        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+        filter().doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
     }
@@ -125,7 +125,7 @@ class DashboardAuthenticationFilterTest {
                 "Authorization",
                 "Basic " + Base64.getEncoder().encodeToString("nocolonhere".getBytes(StandardCharsets.UTF_8)));
 
-        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+        filter().doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
     }
@@ -136,7 +136,7 @@ class DashboardAuthenticationFilterTest {
         var request = get("/peekaboot/");
         request.addHeader("Authorization", basic("orders-admin", PASSWORD));
 
-        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+        filter().doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(chainCalls).hasValue(1);
@@ -150,7 +150,7 @@ class DashboardAuthenticationFilterTest {
         var request = get("/peekaboot/");
         request.addHeader("Authorization", basic("orders-admin", passwordWithColon));
 
-        filter(new NeverAuthenticated(), passwordWithColon).doFilter(request, response, chain);
+        filter(passwordWithColon).doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(chainCalls).hasValue(1);
@@ -159,7 +159,7 @@ class DashboardAuthenticationFilterTest {
     /** The one branch that returns true without looking at either the username or the password. */
     @Test
     void aSecondRequestWithTheSameHeaderIsServedFromTheCache() throws Exception {
-        var filter = filter(new NeverAuthenticated());
+        var filter = filter();
         var request = get("/peekaboot/");
         request.addHeader("Authorization", basic("orders-admin", PASSWORD));
         filter.doFilter(request, new MockHttpServletResponse(), chain);
@@ -173,56 +173,19 @@ class DashboardAuthenticationFilterTest {
         assertThat(chainCalls).hasValue(2);
     }
 
-    /** The application's own security has already spoken; the guard is not a second opinion. */
-    @Test
-    void standsDownWhenTheRequestArrivedAuthenticated() throws Exception {
-        var response = new MockHttpServletResponse();
-        var recorder = new RecordingAuthentication();
-        recorder.markAlreadyAuthenticated();
-
-        filter(recorder).doFilter(get("/peekaboot/"), response, chain);
-
-        assertThat(response.getStatus()).isEqualTo(200);
-        assertThat(chainCalls).hasValue(1);
-        assertThat(recorder.cleared).isFalse();
-    }
-
-    @Test
-    void recordsAndThenClearsItsOwnAuthentication() throws Exception {
-        var recorder = new RecordingAuthentication();
-        var request = get("/peekaboot/");
-        request.addHeader("Authorization", basic("orders-admin", PASSWORD));
-
-        filter(recorder).doFilter(request, new MockHttpServletResponse(), chain);
-
-        assertThat(recorder.recorded).isEqualTo("orders-admin");
-        assertThat(recorder.cleared).isTrue();
-    }
-
-    /** clear() wipes the whole SecurityContext; firing it on a request this filter never authenticated is a bug. */
-    @Test
-    void doesNotClearOnTheChallengePath() throws Exception {
-        var recorder = new RecordingAuthentication();
-
-        filter(recorder).doFilter(get("/peekaboot/"), new MockHttpServletResponse(), chain);
-
-        assertThat(recorder.cleared).isFalse();
-    }
-
     @Test
     void refusesANonHttpRequest() {
         ServletRequest request = mock(ServletRequest.class);
         ServletResponse response = mock(ServletResponse.class);
 
-        assertThatThrownBy(() -> filter(new NeverAuthenticated()).doFilter(request, response, chain))
-                .isInstanceOf(ServletException.class);
+        assertThatThrownBy(() -> filter().doFilter(request, response, chain)).isInstanceOf(ServletException.class);
 
         assertThat(chainCalls).hasValue(0);
     }
 
     @Test
     void warnsOnlyOnceAcrossRepeatedChallenges() throws Exception {
-        var filter = filter(new NeverAuthenticated());
+        var filter = filter();
 
         filter.doFilter(get("/peekaboot/"), new MockHttpServletResponse(), chain);
         filter.doFilter(get("/peekaboot/api/insights"), new MockHttpServletResponse(), chain);
@@ -233,18 +196,18 @@ class DashboardAuthenticationFilterTest {
         });
     }
 
-    private static DashboardAuthenticationFilter filter(RequestAuthentication requestAuthentication) {
-        return filter(requestAuthentication, PASSWORD);
+    private static DashboardAuthenticationFilter filter() {
+        return filter(PASSWORD);
     }
 
-    private static DashboardAuthenticationFilter filter(RequestAuthentication requestAuthentication, String password) {
+    private static DashboardAuthenticationFilter filter(String password) {
         var credentials = new DashboardCredentials(
                 "orders-admin",
                 PasswordHash.of(password),
                 null,
                 Instant.parse("2026-09-11T08:15:30Z"),
                 DashboardCredentials.Origin.LOADED);
-        return new DashboardAuthenticationFilter(credentials, new CredentialCache(), requestAuthentication);
+        return new DashboardAuthenticationFilter(credentials, new CredentialCache());
     }
 
     private static MockHttpServletRequest get(String path) {
@@ -256,30 +219,5 @@ class DashboardAuthenticationFilterTest {
     private static String basic(String username, String password) {
         return "Basic "
                 + Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static final class RecordingAuthentication implements RequestAuthentication {
-        private boolean alreadyAuthenticated;
-        private String recorded;
-        private boolean cleared;
-
-        void markAlreadyAuthenticated() {
-            alreadyAuthenticated = true;
-        }
-
-        @Override
-        public boolean alreadyAuthenticated() {
-            return alreadyAuthenticated;
-        }
-
-        @Override
-        public void record(String username) {
-            recorded = username;
-        }
-
-        @Override
-        public void clear() {
-            cleared = true;
-        }
     }
 }

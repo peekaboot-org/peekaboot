@@ -8,9 +8,6 @@ import org.peekaboot.backend.security.CredentialsFile;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.backend.security.DashboardCredentialsResolver;
-import org.peekaboot.backend.security.NeverAuthenticated;
-import org.peekaboot.backend.security.RequestAuthentication;
-import org.peekaboot.backend.security.SecurityContextRequestAuthentication;
 import org.peekaboot.backend.security.SecurityPosture;
 import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.backend.storage.StorageDirectory;
@@ -48,11 +45,6 @@ public class PeekabootSecurityAutoConfiguration {
             "org.springframework.security.core.context.SecurityContextHolder";
 
     private static final String CREDENTIALS_FILE_NAME = "security.properties";
-
-    private static final int GUARD_ORDER_MARGIN = 100;
-
-    /** Spring Boot's own default for {@code spring.security.filter.order}. */
-    private static final int DEFAULT_SECURITY_FILTER_ORDER = -100;
 
     private static final ResolvableType GUARD_TYPE =
             ResolvableType.forClassWithGenerics(FilterRegistrationBean.class, DashboardAuthenticationFilter.class);
@@ -126,44 +118,20 @@ public class PeekabootSecurityAutoConfiguration {
             return new CredentialCache();
         }
 
-        @Bean
-        @ConditionalOnMissingBean
-        RequestAuthentication requestAuthentication() {
-            return springSecurityPresent() ? new SecurityContextRequestAuthentication() : new NeverAuthenticated();
-        }
-
         // the missing-bean check matches the deduced generic type, so the application's other
         // filter registrations never back this one off
         @Bean
         @ConditionalOnMissingBean
         FilterRegistrationBean<DashboardAuthenticationFilter> dashboardAuthenticationFilter(
-                DashboardCredentials credentials,
-                CredentialCache credentialCache,
-                RequestAuthentication requestAuthentication,
-                Environment environment) {
+                DashboardCredentials credentials, CredentialCache credentialCache) {
 
             FilterRegistrationBean<DashboardAuthenticationFilter> registration = new FilterRegistrationBean<>();
-            registration.setFilter(
-                    new DashboardAuthenticationFilter(credentials, credentialCache, requestAuthentication));
+            registration.setFilter(new DashboardAuthenticationFilter(credentials, credentialCache));
             registration.addUrlPatterns(PeekabootPaths.BASE_PATH + "/*");
-            // after Spring Security's own filter wherever the application has put it, so the
-            // guard sees only requests that chain already let through
-            registration.setOrder(guardOrder(environment.getProperty(
-                    "spring.security.filter.order", Integer.class, DEFAULT_SECURITY_FILTER_ORDER)));
+            // fixed, since the guard answers for the path whatever Spring Security's filter order is
+            registration.setOrder(0);
             registration.setName("dashboardAuthenticationFilter");
             return registration;
-        }
-
-        /**
-         * Saturates at {@code Integer.MAX_VALUE} instead of overflowing, so a
-         * {@code spring.security.filter.order} near that bound cannot wrap negative and order
-         * the guard ahead of Spring Security's own filter.
-         */
-        private static int guardOrder(int securityFilterOrder) {
-            if (securityFilterOrder > Integer.MAX_VALUE - GUARD_ORDER_MARGIN) {
-                return Integer.MAX_VALUE;
-            }
-            return securityFilterOrder + GUARD_ORDER_MARGIN;
         }
 
         /** The artifact alone: {@code com.acme.orders-admin} is a worse username than {@code orders-admin}. */

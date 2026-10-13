@@ -20,8 +20,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Peekaboot ships no authentication of its own, so the website's security page tells
- * readers to put a Spring Security filter chain in front of {@code /peekaboot/**}. This
+ * The website's security page tells readers who want their own security in front of
+ * {@code /peekaboot/**} to switch Peekaboot's guard off and add a Spring Security filter chain.
+ * A test launch never arms the guard, so this class runs as if it were switched off. This
  * proves that the configuration it publishes - {@link PeekabootSecurityConfig}, imported
  * here verbatim - actually does what the page claims, at the real HTTP surface.
  *
@@ -129,10 +130,10 @@ class SecuredPeekabootIT {
     }
 
     /**
-     * The application's chain already authenticates /peekaboot/** so the guard stands down and
-     * the application's own admin credentials keep working - Peekaboot's generated ones are
-     * never required. If the guard were absent this class would fail to autowire
-     * {@link DashboardCredentials} rather than pass by accident.
+     * With both armed, the application's chain and Peekaboot's guard lock each other out: each
+     * refuses the other's credentials. That is why the published recipe switches the guard off.
+     * If the guard were absent this class would fail to autowire {@link DashboardCredentials}
+     * rather than pass by accident.
      */
     @Nested
     @SpringBootTest(
@@ -165,17 +166,25 @@ class SecuredPeekabootIT {
             nestedApi = new PeekabootApi(nestedPort);
         }
 
+        /**
+         * The application's admin passes the application's chain and is still challenged: a
+         * principal the application authenticated does not open the dashboard. The realm proves
+         * the 401 is Peekaboot's, not the application's {@code httpBasic}.
+         */
         @Test
-        void theApplicationsCredentialsStillOpenTheDashboard() {
-            assertThat(nestedApi.withBasicAuth("admin", "admin-password").statusOf(DASHBOARD_ASSET))
-                    .isEqualTo(HttpStatus.OK);
+        void theApplicationsCredentialsAreStillChallengedByTheGuard() {
+            PeekabootApi asTheApplicationsAdmin = nestedApi.withBasicAuth("admin", "admin-password");
+
+            assertThat(asTheApplicationsAdmin.statusOf(DASHBOARD_ASSET)).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(asTheApplicationsAdmin.headersOf(DASHBOARD_ASSET).getFirst("WWW-Authenticate"))
+                    .startsWith("Basic realm=\"Peekaboot\"");
         }
 
         /**
          * A bad-credentials request never reaches {@code DashboardAuthenticationFilter} at all -
          * Spring Security's own {@code httpBasic} entry point challenges it directly, before the
-         * request continues down to where Peekaboot's guard is nested (registered at {@code
-         * spring.security.filter.order + 100}). So the 401 alone would pass whether the guard were
+         * request continues down to where Peekaboot's guard sits (registered at order {@code 0},
+         * behind Spring Security's filter at {@code -100}). So the 401 alone would pass whether the guard were
          * armed, stood down, or deleted outright. What pins it on the application's own chain is the
          * challenge header: Peekaboot's own refusal always carries {@code realm="Peekaboot"} (see
          * {@code DashboardAuthenticationFilter}), and this one does not.

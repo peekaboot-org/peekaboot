@@ -9,13 +9,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.security.CredentialsFile;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
-import org.peekaboot.backend.security.NeverAuthenticated;
-import org.peekaboot.backend.security.RequestAuthentication;
-import org.peekaboot.backend.security.SecurityContextRequestAuthentication;
 import org.peekaboot.backend.security.SecurityPosture;
 import org.peekaboot.backend.security.SecurityPostureListener;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationContext;
@@ -147,40 +143,12 @@ class PeekabootSecurityAutoConfigurationTest {
                         .isPresent());
     }
 
+    /** A moved Spring Security filter does not move the guard: it answers for the path on its own. */
     @Test
-    void usesTheSecurityContextWhenSpringSecurityIsPresent(@TempDir Path storageDir) {
-        runner(storageDir)
-                .run(context -> assertThat(context.getBean(RequestAuthentication.class))
-                        .isInstanceOf(SecurityContextRequestAuthentication.class));
-    }
-
-    @Test
-    void fallsBackWhenSpringSecurityIsAbsent(@TempDir Path storageDir) {
-        runner(storageDir)
-                .withClassLoader(new FilteredClassLoader("org.springframework.security"))
-                .run(context -> assertThat(context.getBean(RequestAuthentication.class))
-                        .isInstanceOf(NeverAuthenticated.class));
-    }
-
-    @Test
-    void ordersTheGuardAfterSpringSecuritysOwnFilter(@TempDir Path storageDir) {
-        runner(storageDir)
-                .run(context -> assertThat(registration(context).getOrder()).isEqualTo(0));
-    }
-
-    @Test
-    void followsAMovedSpringSecurityFilterOrder(@TempDir Path storageDir) {
+    void keepsTheGuardAtOrderZeroWhereverSpringSecuritysFilterSits(@TempDir Path storageDir) {
         runner(storageDir)
                 .withPropertyValues("spring.security.filter.order=500")
-                .run(context -> assertThat(registration(context).getOrder()).isEqualTo(600));
-    }
-
-    /** A configured order within 100 of {@code Integer.MAX_VALUE} must not wrap negative. */
-    @Test
-    void clampsTheGuardOrderInsteadOfOverflowing(@TempDir Path storageDir) {
-        runner(storageDir)
-                .withPropertyValues("spring.security.filter.order=" + Integer.MAX_VALUE)
-                .run(context -> assertThat(registration(context).getOrder()).isEqualTo(Integer.MAX_VALUE));
+                .run(context -> assertThat(registration(context).getOrder()).isEqualTo(0));
     }
 
     /**
