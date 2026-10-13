@@ -423,6 +423,12 @@ variable names on to `setup-java`, and the release workflow's GPG key with them.
 `build-on-push` and `release` both name the `central` server, because both publish; only
 the release signs. `cross-browser` passes none and gets `setup-java`'s defaults.
 
+Both publishing workflows also pass `server-origin: https://central.sonatype.com`. Maven 3.10
+sends a server's credentials only to the origins declared for its id, and for `central` that is
+`repo.maven.apache.org` alone, so without it every upload goes out anonymous and Central answers
+401. `setup-java` cannot write `<repositoryOrigins>`, so the action adds it to the generated
+`settings.xml` and fails if the server entry is not there.
+
 The Chromium install is split into two steps on purpose. `exec:java` ignores `-pl` scoping
 when combined with `-am`: it runs the goal against every upstream reactor module too and
 fails on the first one without Playwright on its classpath. So the reactor's SNAPSHOTs are
