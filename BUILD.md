@@ -7,8 +7,9 @@ checks and a coverage floor run as gates across the build lifecycle (see
 in the build needs it and nothing uses the machine's own Node.
 
 A parallel Gradle build covers the same modules, tests and gates (see
-[the Gradle build](#the-parallel-gradle-build) below). CI runs Maven only, so every Maven
-statement in this document is authoritative and the Gradle build must be kept in lockstep.
+[the Gradle build](#the-parallel-gradle-build) below). CI runs Maven, and Gradle only for
+Gradle-ecosystem Dependabot branches, so every Maven statement in this document is
+authoritative and the Gradle build must be kept in lockstep.
 
 ## Prerequisites
 
@@ -164,9 +165,10 @@ Playwright, springdoc, the testing-app's direct dependencies, and the frontend g
 the pinned Node version and `npm ci`. The frontend's *lint tool* versions are not on that
 list - they live once in `peekaboot-frontend/package.json`, which both builds install from,
 so there is nothing to drift. Dependabot watches the
-`gradle` ecosystem next to `maven`, so bumps arrive as paired PRs. The Gradle half is never
-auto-merged, because nothing in CI would build it; check it against the merged Maven bump
-by hand.
+`gradle` ecosystem next to `maven`, so bumps arrive as paired PRs. On a `dependabot/gradle/*`
+branch `build-on-push` adds a `gradle-build` job, and the Gradle half auto-merges once both
+jobs are green. That proves the Gradle build passes, not that its versions match Maven's: the
+Gradle half can land while its Maven twin is still open, so check open pairs now and then.
 
 ### Reproducibility and artifact parity
 
@@ -452,6 +454,10 @@ See [Snapshots](#snapshots) and [Release notes](#release-notes).
 Dependabot's runs reach no repository secrets at all, so `github.actor` picks `verify` in
 place of `deploy` and they check what every other branch publishes.
 
+On a `dependabot/gradle/*` branch a second job, `gradle-build`, runs `prepare-build` and
+`./gradlew build` next to the Maven job, because the Maven build never reads the Gradle files
+those PRs change. See [Lockstep](#lockstep).
+
 ### `draft-release-notes.yml`
 
 Pushes to `dev` only. Renders the unreleased notes and upserts a draft release named
@@ -494,8 +500,8 @@ with `gh run watch`, and rebase-merges it once green. It waits itself rather tha
 `gh pr merge --auto`, which only arms when a branch rule holds the pull request open; `dev`
 carries no such rule, for the reason under [Releasing](#releasing). A red or cancelled build
 leaves the pull request open for a human. Three kinds wait for a human anyway: semver-major
-updates, every `gradle`-ecosystem update (CI never builds Gradle, so a merged Gradle bump
-would be unverified), and the `spring-boot` dependency group. Boot is a
+updates and the `spring-boot` dependency group. The watch covers every job in the run, so a
+Gradle-ecosystem PR also waits for the `gradle-build` job. Boot is a
 compatibility event rather than a bump, because peekaboot implements
 `EndpointExposureOutcomeContributor`, constructs actuator endpoint objects directly and
 depends on Boot's property-source ordering. That whole line

@@ -78,3 +78,25 @@ jobs:
             echo '## Pending release notes'
             .github/release-notes/render.sh --unreleased
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The parallel Gradle build, for Gradle-ecosystem Dependabot branches only: the Maven job
+  # never reads a build.gradle.kts, so without this a Gradle bump would merge unbuilt.
+  # dependabot-pr-auto-merge waits on the whole run, this job included.
+  gradle-build:
+    if: startsWith(github.ref_name, 'dependabot/gradle/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # For the JDK and the Playwright browsers the testing-app's UI tests need.
+      - name: prepare-build
+        uses: ./.github/actions/prepare-build
+
+      - name: gradle-build
+        run: ./gradlew --no-daemon build
