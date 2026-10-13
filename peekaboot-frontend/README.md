@@ -297,9 +297,9 @@ appear instead of a list.
 A log row and each Queries entry link back to their span's row in the Spans tab tree
 (`trace-detail.js`'s `goToSpan`). The Logs tab's span-name button is a second, in-tab link,
 filtering the log list to a span. A jump switches the overlay tab the way the strip would
-(`replaceState`, params reset), scrolls to the target, moves keyboard focus onto it and marks
-it with the temporary `.pk-jump-flash` highlight. The anchors are `data-span-id` on the gantt
-rows and on `.pk-query-item` (`QueryInfo.spanId`).
+(`replaceState`, params reset), opens any collapsed subtree hiding the target, scrolls to it,
+moves keyboard focus onto it and marks it with the temporary `.pk-jump-flash` highlight. The
+anchors are `data-span-id` on the gantt rows and on `.pk-query-item` (`QueryInfo.spanId`).
 
 A span's row carries its own query and logs as two more panels, not cross-links: a "1 query"
 button opens the statement (`shared/sql-view.js`) and its row count, an "N logs" button opens

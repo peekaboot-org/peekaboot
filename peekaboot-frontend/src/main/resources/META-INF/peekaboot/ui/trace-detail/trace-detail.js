@@ -302,12 +302,12 @@ function wireTabs(container, trace, urlState, display) {
     /**
      * Cross-link jumps between the overlay's own tabs (Queries -> Spans, Logs -> Spans):
      * switch the tab exactly as the strip would (silent select, urlState.update with empty
-     * params - the target tab starts unfiltered, same as a manual switch), then scroll to
-     * the target row, move keyboard focus onto it (the clicked link's own markup was just
-     * replaced, so focus would otherwise fall back to the shadow host) and mark it with a
-     * temporary highlight so the eye lands where focus went.
+     * params - the target tab starts unfiltered, same as a manual switch), then open whatever
+     * collapsed subtree hides the target (`reveal`), scroll to it, move keyboard focus onto it
+     * (the clicked link's own markup was just replaced, so focus would otherwise fall back to
+     * the shadow host) and mark it with a temporary highlight so the eye lands where focus went.
      */
-    function jumpToElement(tabId, selector) {
+    function jumpToElement(tabId, selector, reveal) {
         activeTabId = tabId;
         tabApi.select(tabId, {silent: true});
         urlState?.update(tabId, {});
@@ -318,6 +318,7 @@ function wireTabs(container, trace, urlState, display) {
             tabApi.select(tabId, {silent: true, focus: true});
             return;
         }
+        reveal(target);
         target.scrollIntoView({block: 'center'});
         target.tabIndex = -1;
         target.focus({preventScroll: true});
@@ -326,7 +327,7 @@ function wireTabs(container, trace, urlState, display) {
     }
 
     function goToSpan(spanId) {
-        jumpToElement('spans', `.pk-gantt-row[data-span-id="${CSS.escape(spanId)}"]`);
+        jumpToElement('spans', `.pk-gantt-row[data-span-id="${CSS.escape(spanId)}"]`, spans.revealRow);
     }
 
     tabApi = tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({

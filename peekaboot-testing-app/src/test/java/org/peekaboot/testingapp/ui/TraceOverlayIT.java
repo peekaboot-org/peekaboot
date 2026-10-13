@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
@@ -754,6 +755,67 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
+     * An async subtree starts collapsed, so a Queries link to a span inside one points at a
+     * hidden row: the scroll and the focus do nothing there and the flash lands out of sight.
+     * The jump opens the subtree first. Read in one poll, so the flash's 2s timer cannot end
+     * between the reads.
+     */
+    @Test
+    void aQueryLinkRevealsItsSpanInsideACollapsedAsyncSubtree() {
+        String traceId = storeAsyncQueryTrace();
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/queries");
+        overlay.waitFor(".pk-query-span-link[data-span-id='async-query']");
+
+        overlay.click(".pk-query-span-link[data-span-id='async-query']");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> landed = (Map<String, Object>) overlay.waitUntil("""
+                root => {
+                    const row = root.querySelector('.pk-gantt-row.pk-jump-flash');
+                    return row && {
+                        flashed: row.dataset.spanId,
+                        focused: root.activeElement?.closest('.pk-gantt-row')?.dataset.spanId ?? null,
+                        visible: row.checkVisibility(),
+                        asyncEntryExpanded: root.querySelector('.pk-gantt-span--async .pk-gantt-toggle').getAttribute('aria-expanded')
+                    };
+                }
+                """);
+
+        assertThat(landed)
+                .containsEntry("flashed", "async-query")
+                .containsEntry("focused", "async-query")
+                .containsEntry("visible", true)
+                .containsEntry("asyncEntryExpanded", "true");
+    }
+
+    /**
+     * Every collapsed span above a row opens, not just the nearest: here the reader collapsed
+     * both the root and the row's parent. A span the path does not pass through keeps its
+     * own subtree collapsed.
+     */
+    @Test
+    void revealingARowExpandsEveryCollapsedSpanAboveIt() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'root', name: 'root', children: [
+                    {spanId: 'mid', name: 'mid', children: [{spanId: 'leaf', name: 'leaf'}]},
+                    {spanId: 'sibling', name: 'sibling', children: [{spanId: 'cousin', name: 'cousin'}]}]}});
+                const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
+                const toggle = id => entry(id).querySelector('.pk-gantt-toggle');
+                toggle('mid').click();
+                toggle('sibling').click();
+                toggle('root').click();
+                m.revealRow(container.querySelector('.pk-gantt-row[data-span-id="leaf"]'));
+                return ['mid', 'leaf', 'sibling', 'cousin'].map(id => entry(id).style.display === 'none' ? 'hidden' : 'shown')
+                    .concat(['root', 'mid', 'sibling'].map(id => toggle(id).getAttribute('aria-expanded')));
+            })()
+            """);
+
+        assertThat(facts).isEqualTo(List.of("shown", "shown", "shown", "hidden", "true", "true", "false"));
+    }
+
+    /**
      * The ERROR log fixture's throwable carries framework frames the exclusion list folds
      * away, so the trace renders with at least one hidden run collapsed behind a
      * {@code <details>} and at least one application frame highlighted - proof the browser
@@ -1424,6 +1486,47 @@ class TraceOverlayIT extends PlaywrightTestBase {
                     return Math.abs(name.width - row.getBoundingClientRect().width) < 1 && track.top >= name.bottom;
                 })
                 """)).isEqualTo(true);
+    }
+
+    /**
+     * Stores a request whose {@code @Async} task ran a query two levels under its entry span,
+     * and returns the trace id. The sample app's async work runs no query, so the shape is
+     * written straight to the store.
+     */
+    private String storeAsyncQueryTrace() {
+        String traceId = "overlay-async-query-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("http get /orders/enrich")
+                .kind(Span.Kind.SERVER)
+                .at(0, 20)
+                .tag("http.method", "GET")
+                .tag("url.path", "/orders/enrich")
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "handler")
+                .parent("root")
+                .named("spring.handler")
+                .at(1, 18)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "async-task")
+                .parent("handler")
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .at(5, 200)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "enrich")
+                .parent("async-task")
+                .named("enrich order")
+                .at(6, 190)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "async-query")
+                .parent("enrich")
+                .named("SELECT customer_order")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 5)
+                .tag("db.system.name", "h2")
+                .tag("db.query.text", "select * from customer_order")
+                .build());
+        return traceId;
     }
 
     /**

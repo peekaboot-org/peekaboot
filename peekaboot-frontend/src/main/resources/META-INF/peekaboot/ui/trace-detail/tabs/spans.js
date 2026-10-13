@@ -136,6 +136,19 @@ function nextOutsideSubtree(entry) {
     return next;
 }
 
+/** Opens every collapsed span above `row`, so a cross-link can land on a row inside a collapsed subtree. */
+export function revealRow(row) {
+    const entry = row.closest('.pk-gantt-span');
+    let depth = Number(entry.dataset.depth);
+    for (let above = entry.previousElementSibling; above && depth > 0; above = above.previousElementSibling) {
+        const aboveDepth = Number(above.dataset.depth);
+        if (aboveDepth >= depth) continue;
+        depth = aboveDepth;
+        const collapsed = above.querySelector('.pk-gantt-toggle[aria-expanded="false"]');
+        if (collapsed) toggleSubtree(collapsed);
+    }
+}
+
 function findSpan(span, spanId) {
     if (!span) return null;
     if (span.spanId === spanId) return span;
