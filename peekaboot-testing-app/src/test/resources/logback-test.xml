@@ -41,7 +41,7 @@
         </filter>
         <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
             <logger>org.peekaboot.backend.security.DashboardAuthenticationFilter</logger>
-            <message>Challenged an unauthenticated request for /peekaboot/\S+ - nothing but Peekaboot's own generated credentials .*</message>
+            <message>Challenged a request for /peekaboot(/\S*)? without Peekaboot's credentials\. .*</message>
         </filter>
         <encoder>
             <pattern>${CONSOLE_LOG_PATTERN}</pattern>

@@ -41,7 +41,7 @@ public class DashboardAuthenticationFilter implements Filter {
     private final DashboardCredentials credentials;
     private final CredentialCache cache;
 
-    /** Guards the one-time WARN: the moment Peekaboot learns nothing else protects the dashboard. */
+    /** Guards the one-time WARN on the first challenge. */
     private final AtomicBoolean challengeLogged = new AtomicBoolean();
 
     public DashboardAuthenticationFilter(DashboardCredentials credentials, CredentialCache cache) {
@@ -106,7 +106,7 @@ public class DashboardAuthenticationFilter implements Filter {
         return new Presented(decoded.substring(0, separator), decoded.substring(separator + 1));
     }
 
-    /** DEBUG rather than WARN: the one-time WARN already says the dashboard is unauthenticated. */
+    /** DEBUG rather than WARN: the first challenge already logged once at WARN. */
     private static void logFailedVerification(HttpServletRequest request, String header) {
         Presented presented = parse(header);
         log.debug(
@@ -121,9 +121,8 @@ public class DashboardAuthenticationFilter implements Filter {
     private void challenge(HttpServletRequest request, HttpServletResponse response) {
         if (challengeLogged.compareAndSet(false, true)) {
             log.warn(
-                    "Challenged an unauthenticated request for {} - nothing but Peekaboot's own generated"
-                            + " credentials is protecting the dashboard. See"
-                            + " https://www.peekaboot.org/docs/security/",
+                    "Challenged a request for {} without Peekaboot's credentials."
+                            + " See https://www.peekaboot.org/docs/security/",
                     request.getRequestURI());
         }
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

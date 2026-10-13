@@ -29,8 +29,8 @@ public final class CredentialsFile {
     private static final String PASSWORD_KEY = "password";
     private static final String CREATED_KEY = "created";
 
-    private static final String HEADER = "Peekaboot generated these credentials because nothing else"
-            + " authenticates /peekaboot/**.\nDelete this file for a new password, or set"
+    private static final String HEADER = "Peekaboot generated these credentials for its"
+            + " /peekaboot/** guard.\nDelete this file for a new password, or set"
             + " peekaboot.security.password.";
 
     private static final String OWNER_ONLY = "rw-------";

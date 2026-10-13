@@ -15,14 +15,12 @@ class SecurityPostureTest {
 
     private static final Instant CREATED = Instant.parse("2026-09-11T08:15:30Z");
 
-    /** Without Spring Security nothing else can be authenticating the dashboard, so the exposure is certain. */
     @Test
-    void armed_warnsAndPrintsTheGeneratedPasswordOnceWithoutSpringSecurity() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, false)
+    void armed_printsTheGeneratedPasswordOnce() {
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
                 .report()
                 .orElseThrow();
 
-        assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
         assertThat(report.text())
                 .contains("orders-admin")
                 .contains("hunter2")
@@ -30,10 +28,33 @@ class SecurityPostureTest {
                 .contains("https://www.peekaboot.org/docs/security/");
     }
 
-    /** The application's chain may well cover the dashboard, so this is a note, not an alarm. */
+    /** One headline whatever else is on the class path: the guard answers for the path on its own. */
     @Test
-    void armed_onlyInformsWhenSpringSecurityIsPresent() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, true, false)
+    void armed_saysTheGuardChallengesEveryRequest() {
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
+                .report()
+                .orElseThrow();
+
+        assertThat(report.text())
+                .contains(" Peekaboot challenges every /peekaboot/** request with HTTP Basic.")
+                .doesNotContain("stop-gap");
+    }
+
+    @Test
+    void armed_namesTheSwitchThatHandsThePathToYourOwnSecurity() {
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
+                .report()
+                .orElseThrow();
+
+        assertThat(report.text())
+                .contains(" To use your own security instead, set peekaboot.security.enabled=false:"
+                        + " https://www.peekaboot.org/docs/security/");
+    }
+
+    /** An armed guard is the intended setup, so it is a note, not an alarm. */
+    @Test
+    void armed_onlyInformsWhileTheToolbarIsOff() {
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
                 .report()
                 .orElseThrow();
 
@@ -45,7 +66,7 @@ class SecurityPostureTest {
         var loaded = new DashboardCredentials(
                 "orders-admin", PasswordHash.of("hunter2"), null, CREATED, DashboardCredentials.Origin.LOADED);
 
-        var report = SecurityPosture.armed(loaded, FILE, false, false).report().orElseThrow();
+        var report = SecurityPosture.armed(loaded, FILE, false).report().orElseThrow();
 
         String expectedDate = DateTimeFormatter.ISO_LOCAL_DATE
                 .withZone(ZoneId.systemDefault())
@@ -62,15 +83,14 @@ class SecurityPostureTest {
                 CREATED,
                 DashboardCredentials.Origin.CONFIGURED);
 
-        var report =
-                SecurityPosture.armed(configured, FILE, false, false).report().orElseThrow();
+        var report = SecurityPosture.armed(configured, FILE, false).report().orElseThrow();
 
         assertThat(report.text()).doesNotContain(FILE.toString()).contains("peekaboot.security.password");
     }
 
     @Test
     void armed_warnsThatAWriteFailureWillChangeThePassword() {
-        var report = SecurityPosture.armed(unpersisted("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(unpersisted("hunter2"), FILE, false)
                 .report()
                 .orElseThrow();
 
@@ -79,7 +99,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_saysStorageIsOffWhenThereIsNoCredentialsFile() {
-        var report = SecurityPosture.armed(unpersisted("hunter2"), null, false, false)
+        var report = SecurityPosture.armed(unpersisted("hunter2"), null, false)
                 .report()
                 .orElseThrow();
 
@@ -92,9 +112,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_warnsAboutTheToolbarWhenItIsOn() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, true)
-                .report()
-                .orElseThrow();
+        var report =
+                SecurityPosture.armed(generated("hunter2"), FILE, true).report().orElseThrow();
 
         assertThat(report.text()).contains("dev toolbar");
     }
@@ -105,10 +124,9 @@ class SecurityPostureTest {
      * on ordinary application pages.
      */
     @Test
-    void armed_warnsEvenWithSpringSecurityPresentWhenTheToolbarIsOn() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, true, true)
-                .report()
-                .orElseThrow();
+    void armed_warnsWhenTheToolbarIsOn() {
+        var report =
+                SecurityPosture.armed(generated("hunter2"), FILE, true).report().orElseThrow();
 
         assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
     }
@@ -119,6 +137,15 @@ class SecurityPostureTest {
 
         assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
         assertThat(report.text()).doesNotContain(LifecycleBanner.SEPARATOR).hasLineCount(1);
+    }
+
+    @Test
+    void disabledOnADeployment_saysYourOwnSecurityMustAuthenticateTheDashboard() {
+        var report = SecurityPosture.disabledOnADeployment().report().orElseThrow();
+
+        assertThat(report.text())
+                .contains("Peekaboot does not authenticate /peekaboot/**, so your application's own security must.")
+                .doesNotContain("Nothing here authenticates");
     }
 
     @Test

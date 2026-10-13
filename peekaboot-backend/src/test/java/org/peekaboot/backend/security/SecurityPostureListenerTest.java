@@ -38,7 +38,7 @@ class SecurityPostureListenerTest {
 
     @Test
     void onApplicationEvent_logsAnInfoPostureAtInfo() {
-        var posture = SecurityPosture.armed(generated(), FILE, true, false);
+        var posture = SecurityPosture.armed(generated(), FILE, false);
         var expectedText = posture.report().orElseThrow().text();
 
         try (var logs = LogCapture.attach(SecurityPostureListener.class)) {

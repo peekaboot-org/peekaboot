@@ -65,7 +65,7 @@ class PeekabootSecurityAutoConfigurationTest {
                 });
     }
 
-    /** The posture still reports, so switching the fallback off in a deployment is not silent. */
+    /** The posture still reports, so switching the guard off in a deployment is not silent. */
     @Test
     void stillRegistersThePostureListenerWhileSecurityIsOff(@TempDir Path storageDir) {
         runner(storageDir)

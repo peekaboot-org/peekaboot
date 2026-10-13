@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootProperties;
 
 /**
- * Where the dashboard's fallback credentials come from: the configured password, else the
+ * Where the dashboard guard's credentials come from: the configured password, else the
  * credentials file, else a fresh generated one.
  *
  * <p>The username is resolved on every run rather than taken from the file, so changing {@code

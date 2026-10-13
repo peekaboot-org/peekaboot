@@ -21,7 +21,7 @@ Like `peekaboot.dev-toolbar`, the switch follows the launch context rather than
 else, and an explicit setting wins in either direction. Switching Peekaboot on deliberately in
 a shared environment therefore writes nothing to that host's `$HOME`.
 
-`security.properties`, the PBKDF2 hash of the dashboard's fallback password, follows the same
+`security.properties`, the PBKDF2 hash of the dashboard guard's password, follows the same
 switch: with storage off, `CredentialsFile` has no path to write and the password regenerates on
 every restart, which the startup report says explicitly, naming `peekaboot.storage.enabled=true`
 as what keeps it stable. `peekaboot.security.credentials-file` is the one way around the switch:
@@ -253,16 +253,16 @@ into the buffered body. Both registrations live only in `DevToolbarAutoConfigura
 neither filter runs while `peekaboot.dev-toolbar` is off.
 
 `DashboardAuthenticationFilter` maps `/peekaboot/*` rather than `/*`, at a fixed order of `0`.
-At Boot's defaults that is behind Spring Security's filter at `-100`, but nothing depends on it.
-A request either carries Peekaboot's credentials or is challenged, whatever the application's
-security decided first. With both armed they lock each other out, so an application that
-secures `/peekaboot/**` itself sets `peekaboot.security.enabled=false`.
+Nothing depends on where Spring Security's filter sits: a request carries Peekaboot's
+credentials or is challenged, whatever the application's security decided first. With both armed
+they lock each other out, so an application that secures `/peekaboot/**` itself sets
+`peekaboot.security.enabled=false`.
 
 A contributed `SecurityFilterChain` could not do this job. `FilterChainProxy` is
-first-match-wins and has no ordering slot for a last resort: a chain ordered above the
-application's would shadow working security, and one ordered below has nowhere to go, since an
-unordered application chain already sits at `LOWEST_PRECEDENCE`. A servlet filter on
-`/peekaboot/*` sits outside that ordering and needs no Spring Security on the class path.
+first-match-wins: a chain ordered above the application's would shadow working security, and
+one ordered below has nowhere to go, since an unordered application chain already sits at
+`LOWEST_PRECEDENCE`. A servlet filter on `/peekaboot/*` sits outside that ordering and needs no
+Spring Security on the class path.
 
 An application that wants to supply its own guard overrides the registration by declaring a
 `FilterRegistrationBean<DashboardAuthenticationFilter>` bean of its own -
@@ -909,8 +909,8 @@ application is meant to set.
 servlet-and-`peekaboot.enabled` guard as most auto-configurations
 above; `peekaboot.security.enabled` gates a nested configuration one level down rather than the
 class itself, because the startup posture report is registered whenever Peekaboot is enabled,
-not only while the fallback is armed - an operator who turned the fallback off on a deployment
-launch still gets told at startup that the dashboard is unauthenticated.
+not only while the guard is armed: an operator who switched it off on a deployment launch still
+gets told at startup that the application's own security must cover `/peekaboot/**`.
 
 There is no throttle on failed authentication attempts. Each wrong password still costs a full
 210,000-iteration PBKDF2 derivation, roughly 100ms, and `CredentialCache` remembers only

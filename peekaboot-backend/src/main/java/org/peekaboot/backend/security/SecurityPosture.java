@@ -43,22 +43,20 @@ public final class SecurityPosture {
         return new SecurityPosture(null);
     }
 
-    /** The operator switched the fallback off on a deployment launch. One reminder, not a banner. */
+    /** The operator switched the guard off on a deployment launch. One reminder, not a banner. */
     public static SecurityPosture disabledOnADeployment() {
         return new SecurityPosture(new Report(
                 Level.WARN,
                 "Peekaboot is enabled with peekaboot.security.enabled=false outside local development."
-                        + " Nothing here authenticates /peekaboot/** - see " + DOCS));
+                        + " Peekaboot does not authenticate /peekaboot/**, so your application's own security"
+                        + " must. See " + DOCS));
     }
 
     public static SecurityPosture armed(
-            DashboardCredentials credentials,
-            @Nullable Path credentialsFile,
-            boolean springSecurityPresent,
-            boolean devToolbarOn) {
+            DashboardCredentials credentials, @Nullable Path credentialsFile, boolean devToolbarOn) {
 
         StringBuilder report = LifecycleBanner.open("Peekaboot Security");
-        LifecycleBanner.line(report, headline(springSecurityPresent));
+        LifecycleBanner.line(report, " Peekaboot challenges every /peekaboot/** request with HTTP Basic.");
         LifecycleBanner.line(report, " Username: " + credentials.username());
         LifecycleBanner.line(report, passwordLine(credentials, credentialsFile));
         if (devToolbarOn) {
@@ -66,19 +64,12 @@ public final class SecurityPosture {
                     report,
                     " The dev toolbar is on: its requests will now raise a credential dialog on ordinary pages.");
         }
-        LifecycleBanner.line(report, " This is a stop-gap. Put /peekaboot/** behind your own security: " + DOCS);
+        LifecycleBanner.line(
+                report, " To use your own security instead, set peekaboot.security.enabled=false: " + DOCS);
         LifecycleBanner.close(report);
 
-        Level level = springSecurityPresent && !devToolbarOn ? Level.INFO : Level.WARN;
+        Level level = devToolbarOn ? Level.WARN : Level.INFO;
         return new SecurityPosture(new Report(level, report.toString()));
-    }
-
-    private static String headline(boolean springSecurityPresent) {
-        return springSecurityPresent
-                ? " Peekaboot will challenge any /peekaboot/** request your security chain lets through"
-                        + " unauthenticated."
-                : " WARNING: Peekaboot is enabled outside local development and nothing else authenticates"
-                        + " /peekaboot/**. HTTP Basic has been switched on automatically.";
     }
 
     private static String passwordLine(DashboardCredentials credentials, @Nullable Path credentialsFile) {

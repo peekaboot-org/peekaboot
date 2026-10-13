@@ -184,8 +184,8 @@ class SecuredPeekabootIT {
          * A bad-credentials request never reaches {@code DashboardAuthenticationFilter} at all -
          * Spring Security's own {@code httpBasic} entry point challenges it directly, before the
          * request continues down to where Peekaboot's guard sits (registered at order {@code 0},
-         * behind Spring Security's filter at {@code -100}). So the 401 alone would pass whether the guard were
-         * armed, stood down, or deleted outright. What pins it on the application's own chain is the
+         * behind Spring Security's filter at {@code -100}). So the 401 alone would pass whether the
+         * guard were armed or deleted outright. What pins it on the application's own chain is the
          * challenge header: Peekaboot's own refusal always carries {@code realm="Peekaboot"} (see
          * {@code DashboardAuthenticationFilter}), and this one does not.
          */

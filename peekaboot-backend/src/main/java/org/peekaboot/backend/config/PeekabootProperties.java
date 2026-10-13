@@ -157,14 +157,13 @@ public class PeekabootProperties {
     }
 
     /**
-     * The credentials Peekaboot falls back to when nothing else authenticates
-     * {@code /peekaboot/**}. Everything here is unset by default; {@code enabled} is
+     * The credentials of Peekaboot's own {@code /peekaboot/**} guard. Everything here is unset by default; {@code enabled} is
      * defaulted from the launch context like {@code peekaboot.enabled}, and on only for a
      * deployment launch.
      */
     public static class Security {
 
-        /** Whether Peekaboot challenges dashboard requests that reach it unauthenticated. */
+        /** Whether Peekaboot challenges every /peekaboot/** request with its own HTTP Basic credentials. */
         private boolean enabled = false;
 
         /** Unset derives {@code <artifact>-admin} from the build coordinates or the application name. */

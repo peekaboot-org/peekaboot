@@ -25,9 +25,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestClient;
 
 /**
- * No unit test can see this: with nothing else authenticating {@code /peekaboot/**}, a real
- * deployment launch arms Peekaboot's own fallback and really challenges the dashboard over
- * HTTP, and the generated password really survives a restart. {@code SecuredPeekabootIT}
+ * No unit test can see this: a real deployment launch arms Peekaboot's guard and really
+ * challenges the dashboard over HTTP, and the generated password really survives a restart. {@code SecuredPeekabootIT}
  * covers the other half: the guard still challenges a user the application's own chain signed
  * in.
  *
@@ -86,7 +85,7 @@ class AutoSecuredDashboardIT {
      * Logback on the first start after a context closed, which detaches an earlier capture.
      */
     @Test
-    void warnsOnceThatNothingButTheGeneratedCredentialsProtectsTheDashboard(@TempDir Path dir) {
+    void warnsOnceOnTheFirstChallenge(@TempDir Path dir) {
         try (ConfigurableApplicationContext app = boot(dir.resolve("security.properties"));
                 LogCapture capture = LogCapture.attach(DashboardAuthenticationFilter.class)) {
             PeekabootApi freshApi = new PeekabootApi(
@@ -98,8 +97,8 @@ class AutoSecuredDashboardIT {
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage())
-                        .startsWith("Challenged an unauthenticated request for /peekaboot/")
-                        .contains("nothing but Peekaboot's own generated credentials");
+                        .startsWith("Challenged a request for /peekaboot/")
+                        .contains("without Peekaboot's credentials");
             });
         }
     }

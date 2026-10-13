@@ -24,25 +24,21 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.env.Environment;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 /**
- * The credentials Peekaboot falls back to, the filter that enforces them and the startup report
- * that explains both.
+ * The guard's credentials, the filter that enforces them and the startup report that explains
+ * both.
  *
- * <p>The posture listener is registered whenever Peekaboot is enabled, not only while the
- * fallback is armed: an operator who switched the fallback off on a deployment launch still gets
- * told the dashboard is unauthenticated.
+ * <p>The posture listener is registered whenever Peekaboot is enabled, not only while the guard
+ * is armed: an operator who switched it off on a deployment launch still gets told their own
+ * security must cover {@code /peekaboot/**}.
  */
 @AutoConfiguration(after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @EnableConfigurationProperties(PeekabootProperties.class)
 public class PeekabootSecurityAutoConfiguration {
-
-    private static final String SECURITY_CONTEXT_HOLDER =
-            "org.springframework.security.core.context.SecurityContextHolder";
 
     private static final String CREDENTIALS_FILE_NAME = "security.properties";
 
@@ -75,7 +71,6 @@ public class PeekabootSecurityAutoConfiguration {
             return SecurityPosture.armed(
                     resolvedCredentials,
                     resolvedCredentialsFile.path().orElse(null),
-                    springSecurityPresent(),
                     environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false));
         }
         return deploymentLaunch(environment) ? SecurityPosture.disabledOnADeployment() : SecurityPosture.quiet();
@@ -143,15 +138,6 @@ public class PeekabootSecurityAutoConfiguration {
             }
             return environment.getProperty("spring.application.name");
         }
-    }
-
-    /**
-     * The application's own classloader - what the thread context classloader resolves to under
-     * every Boot launcher - not this class's own, which would answer for whatever loaded
-     * Peekaboot itself rather than the consuming application's classpath.
-     */
-    static boolean springSecurityPresent() {
-        return ClassUtils.isPresent(SECURITY_CONTEXT_HOLDER, ClassUtils.getDefaultClassLoader());
     }
 
     /**
