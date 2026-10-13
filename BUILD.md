@@ -458,12 +458,14 @@ invocation resolves whatever is latest that day.
 
 Runs on every branch except `main`, and on a `workflow_dispatch`, which
 `dependabot-pr-auto-merge` sends for `dev` after each merge. It checks out with
-`fetch-depth: 0` for the subject gate
-and git-cliff, gates the pushed commit subjects first, then runs `prepare-build`, sets the
-branch's snapshot version and runs `./mvnw --batch-mode clean deploy -P peekaboot-publish`.
-After the build it installs git-cliff, runs the release-notes tests and writes the pending
-notes into the run summary. The job keeps `contents: read`: publishing
-authenticates to Central with the same secrets the release uses, not with `GITHUB_TOKEN`.
+`fetch-depth: 0` for the subject gate and git-cliff, gates the pushed commit subjects first,
+then runs `prepare-build`, sets the branch's snapshot version and runs
+`./mvnw --batch-mode clean deploy -P peekaboot-publish`.
+After the build it installs git-cliff, runs the release-notes tests and the tests of
+`.github/central/await-release.sh` (`.github/central/test/run.sh`, against the real repo1),
+and writes the pending notes into the run summary. The job keeps `contents: read`, because
+publishing authenticates to Central with the secrets the release uses rather than
+`GITHUB_TOKEN`.
 See [Snapshots](#snapshots) and [Release notes](#release-notes).
 
 Dependabot's runs reach no repository secrets at all, so `github.actor` picks `verify` in
@@ -480,10 +482,11 @@ replace the jar `./gradlew` executes, then runs `prepare-build` and `./gradlew b
 ### `draft-release-notes.yml`
 
 Pushes to `dev`, and a dispatch on `dev` after each Dependabot merge (see
-[`dependabot-pr-auto-merge.yml`](#dependabot-pr-auto-mergeyml)). Renders the unreleased
-notes and upserts a draft release named
-`Unreleased` on the placeholder tag name `unreleased`, so the notes for the cycle in
-progress are readable on the Releases page rather than only inside a workflow run. A draft
+[`dependabot-pr-auto-merge.yml`](#dependabot-pr-auto-mergeyml)). A dispatch from any other
+ref fails before the checkout, since the job overwrites the one draft. It renders the
+unreleased notes and upserts a draft release named `Unreleased` on the placeholder tag name
+`unreleased`, so the notes for the cycle in progress are readable on the Releases page rather
+than only inside a workflow run. A draft
 carries no git tag, since GitHub creates the ref only on publish. So it has no
 `/releases/tag/unreleased` URL - that 404s. GitHub parks it under
 `/releases/tag/untagged-<hash>`; find it at the top of the Releases page, badged
@@ -520,15 +523,18 @@ Waits for the `build-on-push` run of a Dependabot PR's head commit with `gh run 
 approves the PR and rebase-merges it into `dev`. It waits itself rather than using
 `gh pr merge --auto`, which only arms when a branch rule holds the pull request open; `dev`
 carries no such rule, for the reason under [Releasing](#releasing). A red or cancelled build
-leaves the pull request open and unapproved for a human. Three kinds wait for a human anyway: semver-major
-updates and the `spring-boot` dependency group. The watch covers every job in the run, so a
-Gradle-ecosystem PR also waits for the `gradle-build` job. Boot is a
+leaves the pull request open and unapproved for a human. The merge condition is an
+allow-list. It admits a patch or minor update from the `github_actions`, `maven`, `gradle` or
+`npm_and_yarn` ecosystem, outside the `spring-boot` dependency group. Anything else waits for
+a human, so a semver-major update does, and so does a pull request whose update type
+Dependabot did not report. The watch covers every job in the run, so a Gradle-ecosystem PR
+also waits for the `gradle-build` job. Boot is a
 compatibility event rather than a bump, because peekaboot implements
 `EndpointExposureOutcomeContributor`, constructs actuator endpoint objects directly and
 depends on Boot's property-source ordering. That whole line
 arrives as one grouped PR: its version is declared twice on the Maven side, and a bump
 landing in one place only leaves the reactor building two Boot versions. Dependabot watches
-Maven and Gradle daily, GitHub Actions weekly.
+Maven, Gradle and the frontend's npm packages daily, GitHub Actions weekly.
 
 The workflow has the three jobs of `osslabz/github-actions`' shared
 `dependabot-auto-merge.yml`. It keeps its own copy because the shared one merges only Maven and
