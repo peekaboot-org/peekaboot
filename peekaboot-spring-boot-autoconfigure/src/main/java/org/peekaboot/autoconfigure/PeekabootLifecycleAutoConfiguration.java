@@ -2,7 +2,6 @@ package org.peekaboot.autoconfigure;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import javax.sql.DataSource;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
@@ -21,7 +20,6 @@ import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
-import org.springframework.beans.factory.support.SimpleAutowireCandidateResolver;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -83,13 +81,8 @@ public class PeekabootLifecycleAutoConfiguration {
                 buildInfoProvider,
                 serverUrlResolver,
                 dataSourceMetadataList.entries(),
-                applicationDataSources(beanFactory),
+                ApplicationBeans.ofType(beanFactory, DataSource.class),
                 hikariPoolInfoProvider.getIfAvailable());
-    }
-
-    /** Resolved like Boot's db health contributor, so {@code defaultCandidate = false} DataSources are included. */
-    static Map<String, DataSource> applicationDataSources(ConfigurableListableBeanFactory beanFactory) {
-        return SimpleAutowireCandidateResolver.resolveAutowireCandidates(beanFactory, DataSource.class, false, true);
     }
 
     /**
@@ -124,7 +117,7 @@ public class PeekabootLifecycleAutoConfiguration {
         @ConditionalOnMissingBean
         public DataSourceMetadataList dataSourceMetadataList(ConfigurableListableBeanFactory beanFactory) {
             List<DataSourceMetadata> entries = new ArrayList<>();
-            applicationDataSources(beanFactory)
+            ApplicationBeans.ofType(beanFactory, DataSource.class)
                     .forEach((name, dataSource) ->
                             DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(entries::add));
             return new DataSourceMetadataList(entries);

@@ -7,7 +7,6 @@ import org.flywaydb.core.Flyway;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
-import org.springframework.beans.factory.support.SimpleAutowireCandidateResolver;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint;
 import org.springframework.boot.actuate.endpoint.SanitizingFunction;
@@ -179,9 +178,7 @@ public class ActuatorSourcesAutoConfiguration {
         }
     }
 
-    /** Resolved like Boot's db health contributor, so {@code defaultCandidate = false} beans count too. */
     private static boolean hasApplicationBean(ConfigurableListableBeanFactory beanFactory, Class<?> type) {
-        return !SimpleAutowireCandidateResolver.resolveAutowireCandidates(beanFactory, type, false, true)
-                .isEmpty();
+        return !ApplicationBeans.ofType(beanFactory, type).isEmpty();
     }
 }
