@@ -10,8 +10,8 @@ design system:
 - **Trace-detail overlay** (`trace-detail/`). A full-screen dialog, also shadow-rooted,
   opened from the dashboard or the toolbar.
 - **Error page** (`error-page/`). Rendered by `PeekabootErrorView` where Spring Boot would
-  render its whitelabel page: the failing request, the exception and its stack trace. No
-  script of its own.
+  render its whitelabel page: the failing request, the exception and its stack trace. Its one
+  script, `reveal.js`, opens every folded run at once; the page works without it.
 
 No build step. Plain ES modules and CSS, served as-is. They are linted, though: see
 [Linting](#linting).
@@ -32,6 +32,7 @@ META-INF/peekaboot/ui/
 ├── toolbar/         toolbar.css, toolbar.js
 ├── error-page/      error-page.css: the page Peekaboot renders in place of Boot's
 │                    whitelabel page
+│                    reveal.js: the control that opens every folded run at once
 └── vendor/          uplot/: the chart library, loaded on demand (see below)
                      geist/: the bundled webfont, with both its licence files
 ```
