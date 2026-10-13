@@ -879,11 +879,13 @@ exists Peekaboot folds its entries into it, underneath the application's own, so
 `SpringApplicationBuilder.properties("peekaboot.enabled=false")` wins like any other setting.
 Where it does not, Peekaboot's four named sources are appended last, in this order:
 `peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
-`peekabootDevToolbarDefaults`. `peekabootDetection` is where all five launch-context-detected
-switches land - `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled`,
-`peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold` - since none of them needs a
-yml resource of its own (see *Conditional Loading*). `PeekabootDefaultsRegistrationTest` pins
-both halves.
+`peekabootDevToolbarDefaults`. `peekabootDetection` is where all seven launch-context-detected
+values land, since none of them needs a yml resource of its own (see *Conditional Loading*).
+Five follow a local run: `peekaboot.enabled`, `peekaboot.dev-toolbar`,
+`peekaboot.storage.enabled`, `peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold`.
+Two follow a deployment launch: `peekaboot.security.enabled` and
+`peekaboot.security.deployment-detected` (see *Automatic Dashboard Security*).
+`PeekabootDefaultsRegistrationTest` pins both halves.
 
 ### Automatic Dashboard Security
 
