@@ -17,22 +17,36 @@
 ### Breaking changes
 - Drop the legacy endpoint. /v1 is gone, use /v2
 - **api**: Rename the field
+- **store**: Key traces by id
 
 ### Features
 - [**breaking**] Drop the legacy endpoint
 - **api**: [**breaking**] Rename the field
+- Add the second thing
+
+### Performance
+- Cache the lookups
 
 ### Dependency upgrades
 - **deps**: Bump com.example:thing
+
+### Reverts
+- Restore the old rule
 
 ### Documentation
 - Explain the new endpoint
 
 ### Internal changes
+- **store**: [**breaking**] Key traces by id
 - Tidy the helpers
 
 ### Tests
+- **testing-app**: Add a demo page
+- **test**: Pin the flaky wait
 - Cover the new endpoint
+
+### Build, CI and chores
+- **deps-dev**: Bump com.example:plugin
 
 **Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.0.0...1.1.0
 

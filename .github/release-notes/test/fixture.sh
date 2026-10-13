@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Builds a throwaway repo covering the cases the real history cannot: both spellings of a
-# breaking change, a subject repeated with a different body, a non-conventional subject, and
-# two tags cut in the same second.
+# breaking change, a breaking change of an internal type, user-facing types that classify as
+# internal, a subject repeated with a different body, a non-conventional subject, and two tags
+# cut in the same second.
 #
 # Commit dates are fixed so the generated notes are byte-comparable against the golden files.
 set -euo pipefail
@@ -38,10 +39,20 @@ git -C "$DIR" tag 1.0.0
 commit "$SECOND" "feat!: drop the legacy endpoint" -m "BREAKING CHANGE: /v1 is gone, use /v2"
 # `!` with no footer: git-cliff falls back to the description, so no detail may be appended.
 commit "$SECOND" "feat(api)!: rename the field"
+# A user-facing type with no breaking marker, so Features survives on the site.
+commit "$SECOND" "feat: add the second thing"
+commit "$SECOND" "perf: cache the lookups"
+# User-facing types whose scope says the change is test harness work.
+commit "$SECOND" "feat(testing-app): add a demo page"
+commit "$SECOND" "fix(test): pin the flaky wait"
+commit "$SECOND" "revert: restore the old rule"
+# A breaking change of an internal type still belongs under Breaking changes.
+commit "$SECOND" "refactor(store)!: key traces by id"
 commit "$SECOND" "refactor: tidy the helpers"
 commit "$SECOND" "refactor: tidy the helpers" -m "a different body, the same subject"
 commit "$SECOND" "test: cover the new endpoint"
 commit "$SECOND" "build(deps): bump com.example:thing"
+commit "$SECOND" "build(deps-dev): bump com.example:plugin"
 commit "$SECOND" "docs: explain the new endpoint"
 commit "$SECOND" "this subject is not conventional at all"
 commit "$SECOND" "[release] set version to 1.1.0"

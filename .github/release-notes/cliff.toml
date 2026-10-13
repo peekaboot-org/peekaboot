@@ -53,13 +53,21 @@ filter_unconventional = true
 protect_breaking_commits = true
 # Only semver tags are release boundaries, so a stray `unreleased` tag cannot become one.
 tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
-# Two constraints: `^build\(deps` must stay above the generic `^build`, and the numbers must
-# stay zero-padded two digits because git-cliff sorts group names as strings. A tenth group
-# would sort ahead of `<!-- 2 -->` and would also need site.jq's 0[1-5] cutoff widened.
+# The first matching parser wins. Test-harness scopes stay above `^feat`, `^build\(deps-dev\)`
+# above `^build\(deps`, and `^build\(deps` above the generic `^build`. The numbers stay
+# zero-padded two digits because git-cliff sorts group names as strings. site.jq shows groups
+# 01-03 on the website, so renumbering those means editing it too.
 commit_parsers = [
+    # Shipped commits typed fix: that fix no bug a user could hit. History is not rewritten.
+    # ca362a2e changed tests only.
+    { sha = "ca362a2ec9ef976392c84fe7dc6fc986509289c3", group = "<!-- 08 -->Tests" },
+    # f5449589 is the wording follow-up of 6d1ba5aa, which carries the entry.
+    { sha = "f5449589da9d6b7187d462028897cf0139850236", skip = true },
+    { message = '^(feat|fix|perf)\((testing-app|test)\)', group = "<!-- 08 -->Tests" },
     { message = '^feat', group = "<!-- 01 -->Features" },
     { message = '^fix', group = "<!-- 02 -->Bug fixes" },
     { message = '^perf', group = "<!-- 03 -->Performance" },
+    { message = '^build\(deps-dev\)', group = "<!-- 09 -->Build, CI and chores" },
     { message = '^build\(deps', group = "<!-- 04 -->Dependency upgrades" },
     { message = '^revert', group = "<!-- 05 -->Reverts" },
     { message = '^docs', group = "<!-- 06 -->Documentation" },

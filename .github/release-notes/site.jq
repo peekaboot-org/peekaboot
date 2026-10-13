@@ -3,9 +3,9 @@
 
 def strip_group_prefix: sub("^<!-- [0-9]+ -->"; "");
 
-# Groups 01-05 are the user-facing half of the numbering. Breaking changes are synthesised
-# below from the `breaking` flag, not matched here - no commit parser emits a group 00.
-def is_user_facing: test("^<!-- 0[1-5] -->");
+# Groups 01-03, features, fixes and performance, are what the website shows. Breaking changes
+# are synthesised below from the `breaking` flag; no commit parser emits a group 00.
+def is_user_facing: test("^<!-- 0[1-3] -->");
 
 # Matches the release body's `upper_first`, so both renderings read the same.
 def upper_first: (.[0:1] | ascii_upcase) + .[1:];
@@ -49,8 +49,9 @@ def to_entries_list:
             entries: ([ .commits[] | select(.breaking) ] | to_entries_list) } ]
         | map(select(.entries | length > 0))
       ) + (
-        # group_by sorts by the key, so the <!-- NN --> prefixes order the sections.
-        [ .commits[] | select(.group | is_user_facing) ]
+        # A breaking commit is listed under Breaking changes only. group_by sorts by the key,
+        # so the <!-- NN --> prefixes order the sections.
+        [ .commits[] | select((.group | is_user_facing) and (.breaking | not)) ]
         | group_by(.group)
         | map({ title: (.[0].group | strip_group_prefix), entries: to_entries_list })
       )) end) })

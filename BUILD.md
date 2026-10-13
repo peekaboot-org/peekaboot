@@ -723,11 +723,22 @@ from them too. A subject it cannot parse is a change it cannot weigh. The gate d
 enforce the 50-character subject limit, because Dependabot's own `build(deps): bump ...` lines
 routinely exceed it.
 
-Two things in `cliff.toml` are load-bearing. `^build\(deps` must stay above the generic
-`^build`, or every Dependabot commit lands in "Build, CI and chores". And group numbers must
-stay zero-padded to two digits, because git-cliff sorts group names as strings — `<!-- 10 -->`
-would sort ahead of `<!-- 2 -->`. `site.jq` hardcodes groups `01`-`05` as the user-facing set
-the website shows, so a tenth group means editing both files.
+Parser order in `cliff.toml` is load-bearing, because the first matching parser wins. The
+`testing-app` and `test` scopes of `feat`, `fix` and `perf` must stay above `^feat`, so test
+harness work lands under Tests. `^build\(deps-dev\)` must stay above `^build\(deps`, so
+build-only dependency bumps land under "Build, CI and chores". And `^build\(deps` must stay
+above the generic `^build`, or every Dependabot commit lands in "Build, CI and chores". Group
+numbers must stay zero-padded to two digits, because git-cliff sorts group names as strings.
+An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`. Two parsers name a commit by its
+sha. Those are shipped commits typed `fix:` that fixed no bug a user could hit. History is not
+rewritten, so the generator regroups or skips them, and the harness checks those two on the
+real history.
+
+The website shows released versions only. `site.jq` builds a "Breaking changes" section from
+the `breaking` flag, then groups `01`-`03`, features, bug fixes and performance. `site.jq`
+hardcodes that cutoff, so renumbering those groups means editing both files. A breaking commit
+appears under Breaking changes alone on the website. Dependency upgrades, reverts and the
+internal groups stay in the GitHub release notes and `CHANGELOG.md`.
 
 The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
 `.github/actions/install-git-cliff`.
@@ -738,8 +749,9 @@ The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
 
 Its expectations are golden files rendered from a fixture repo with fixed commit dates, so
 they do not drift as `dev` grows. The fixture carries both spellings of a breaking change, a
-subject repeated with a different body, a non-conventional subject, and two tags cut in the
-same second.
+breaking change of an internal type, user-facing types scoped to the test harness, a
+development dependency bump, a subject repeated with a different body, a non-conventional
+subject, and two tags cut in the same second.
 
 ### How the next version is chosen
 

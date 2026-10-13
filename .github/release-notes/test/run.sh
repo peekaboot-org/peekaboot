@@ -49,4 +49,11 @@ sed -e "1s/.*/## Unreleased/" -e "s|/1\.2\.0\.\.\.$BUMPED$|/1.2.0...dev|" \
     "$WORK/tagged.md" > "$WORK/tagged-as-unreleased.md"
 diff -u "$HERE/expected-notes.md" "$WORK/tagged-as-unreleased.md"
 
+# The per-sha overrides name real commits, so they are checked on this repository's own
+# history rather than on the fixture. CI checks out the full history for the same reason.
+echo "checking the per-sha overrides on the real history"
+"$HERE/../render.sh" --repository "$HERE/../../.." --context > "$WORK/real.json"
+test "$(jq -r '[.[].commits[] | select(.id == "ca362a2ec9ef976392c84fe7dc6fc986509289c3")] | .[0].group' "$WORK/real.json")" = "<!-- 08 -->Tests"
+test "$(jq '[.[].commits[] | select(.id == "f5449589da9d6b7187d462028897cf0139850236")] | length' "$WORK/real.json")" = 0
+
 echo "all release-notes checks passed"
