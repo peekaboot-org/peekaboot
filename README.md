@@ -102,8 +102,9 @@ SpotBugs, Checkstyle, PMD), the frontend's linters (ESLint, stylelint and html-v
 on a Node the build downloads), the dependency and output checks, and the reactor-wide
 JaCoCo coverage floor in `peekaboot-coverage`. Local builds format your sources for you; run
 `mvn spotless:apply` to do it by hand. A parallel Gradle build (`./gradlew build`) covers
-the same modules, tests and gates, but Maven is the system of record and the only thing CI
-runs, so a change to one has to be mirrored in the other.
+the same modules, tests and gates. Maven is the system of record, and CI builds Gradle only
+on Gradle-ecosystem Dependabot branches, so a change to one build has to be mirrored in the
+other.
 
 Further reading:
 

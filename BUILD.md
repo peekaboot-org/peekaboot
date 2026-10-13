@@ -150,7 +150,8 @@ The module version and the build instant are *derived*, not copied. `settings.gr
 reads `<version>` and `project.build.outputTimestamp` out of the root `pom.xml` and hands
 both to every Gradle project. `maven-release-plugin` rewrites the poms alone, so a
 hand-kept copy on the Gradle side went stale at every release and nothing noticed, because
-CI runs Maven only. `BuildVersionLockstepTest` fails if such a copy reappears.
+CI builds Gradle only on Gradle-ecosystem Dependabot branches. `BuildVersionLockstepTest`
+fails if such a copy reappears.
 
 `gradle.properties` holds `springBootVersion`, matching the root
 pom's `spring-boot.version` and the testing-app's parent version. The convention plugin
