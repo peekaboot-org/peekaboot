@@ -135,7 +135,7 @@
 .pk-gantt-toggle:hover { color: var(--pk-text); }
 /* .pk-gantt-name clips overflow for the ellipsis below, which crops a positive-offset ring
    off a control flush against its edge; the inset offset keeps the whole ring inside instead. */
-.pk-gantt-toggle:focus-visible, .pk-gantt-name__toggle:focus-visible { outline-offset: -2px; }
+.pk-gantt-toggle:focus-visible, .pk-gantt-name__toggle:focus-visible, .pk-gantt-name .pk-span-action:focus-visible { outline-offset: -2px; }
 /* Holds the toggle's column on a row with no children, so sibling names line up. */
 .pk-gantt-toggle-spacer { flex: none; width: var(--pk-gantt-toggle); }
 

@@ -283,6 +283,23 @@ class AccessibilityIT extends PlaywrightTestBase {
     }
 
     /**
+     * The same clip crops the ring off a row's query and logs toggles, which sit flush with the
+     * cell's top and bottom. Reached by Tab from the span's name button, so the toggle is a real
+     * :focus-visible match.
+     */
+    @Test
+    void spanRowTogglesKeepTheirFocusRingInsideTheClippingCell() {
+        openPersonsPage();
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-span-query-toggle");
+        overlay.evaluate("root => root.querySelector('.pk-span-query-toggle')"
+                + ".closest('.pk-gantt-name').querySelector('.pk-gantt-name__toggle').focus()");
+
+        page.keyboard().press("Tab");
+        assertFocusRingInsideNameCell(".pk-span-query-toggle");
+    }
+
+    /**
      * The active element must be a real {@code :focus-visible} match for {@code selector}, and
      * its outline - the bounding rect grown by outline-width + outline-offset on every side,
      * read from computed style rather than assumed - must stay inside the bounding rect of the
