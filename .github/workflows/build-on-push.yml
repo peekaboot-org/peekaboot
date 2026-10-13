@@ -4,6 +4,9 @@ on:
   push:
     branches-ignore:
       - main
+  # dependabot-pr-auto-merge dispatches this on dev after a merge, whose GITHUB_TOKEN push
+  # starts no run of its own.
+  workflow_dispatch:
 
 concurrency:
   group: build-on-push-${{ github.ref }}

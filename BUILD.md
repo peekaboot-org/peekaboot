@@ -443,7 +443,9 @@ invocation resolves whatever is latest that day.
 
 ### `build-on-push.yml`
 
-Runs on every branch except `main`. It checks out with `fetch-depth: 0` for the subject gate
+Runs on every branch except `main`, and on a `workflow_dispatch`, which
+`dependabot-pr-auto-merge` sends for `dev` after each merge. It checks out with
+`fetch-depth: 0` for the subject gate
 and git-cliff, gates the pushed commit subjects first, then runs `prepare-build`, sets the
 branch's snapshot version and runs `./mvnw --batch-mode clean deploy -P peekaboot-publish`.
 After the build it installs git-cliff, runs the release-notes tests and writes the pending
@@ -452,7 +454,9 @@ authenticates to Central with the same secrets the release uses, not with `GITHU
 See [Snapshots](#snapshots) and [Release notes](#release-notes).
 
 Dependabot's runs reach no repository secrets at all, so `github.actor` picks `verify` in
-place of `deploy` and they check what every other branch publishes.
+place of `deploy` and they check what every other branch publishes. The dispatched build that
+follows a Dependabot merge has `github-actions[bot]` as its actor, so it deploys `dev`'s
+snapshot like any other push to `dev`.
 
 On a `dependabot/gradle/*` branch a second job, `gradle-build`, runs `prepare-build` and
 `./gradlew build` next to the Maven job, because the Maven build never reads the Gradle files
@@ -460,7 +464,9 @@ those PRs change. See [Lockstep](#lockstep).
 
 ### `draft-release-notes.yml`
 
-Pushes to `dev` only. Renders the unreleased notes and upserts a draft release named
+Pushes to `dev`, and a dispatch on `dev` after each Dependabot merge (see
+[`dependabot-pr-auto-merge.yml`](#dependabot-pr-auto-mergeyml)). Renders the unreleased
+notes and upserts a draft release named
 `Unreleased` on the placeholder tag name `unreleased`, so the notes for the cycle in
 progress are readable on the Releases page rather than only inside a workflow run. A draft
 carries no git tag, since GitHub creates the ref only on publish. So it has no
@@ -495,11 +501,11 @@ See [Releasing](#releasing).
 
 ### `dependabot-pr-auto-merge.yml`
 
-Approves a Dependabot PR targeting `dev`, waits for the `build-on-push` run of its head commit
-with `gh run watch`, and rebase-merges it once green. It waits itself rather than using
+Waits for the `build-on-push` run of a Dependabot PR's head commit with `gh run watch`, then
+approves the PR and rebase-merges it into `dev`. It waits itself rather than using
 `gh pr merge --auto`, which only arms when a branch rule holds the pull request open; `dev`
 carries no such rule, for the reason under [Releasing](#releasing). A red or cancelled build
-leaves the pull request open for a human. Three kinds wait for a human anyway: semver-major
+leaves the pull request open and unapproved for a human. Three kinds wait for a human anyway: semver-major
 updates and the `spring-boot` dependency group. The watch covers every job in the run, so a
 Gradle-ecosystem PR also waits for the `gradle-build` job. Boot is a
 compatibility event rather than a bump, because peekaboot implements
@@ -508,6 +514,15 @@ depends on Boot's property-source ordering. That whole line
 arrives as one grouped PR: its version is declared twice on the Maven side, and a bump
 landing in one place only leaves the reactor building two Boot versions. Dependabot watches
 Maven and Gradle daily, GitHub Actions weekly.
+
+The workflow has the three jobs of `osslabz/github-actions`' shared
+`dependabot-auto-merge.yml`. It keeps its own copy because the shared one merges only Maven and
+GitHub Actions updates and does not hold the `spring-boot` group back. `metadata` runs
+`dependabot/fetch-metadata` with `pull-requests: read` alone. `merge` holds the write
+permissions and runs only for a pull request Dependabot opened and pushed. `build-merged-dev`
+dispatches `build-on-push` and `draft-release-notes` on `dev` once the merge succeeded. The
+merge pushes `dev` with `GITHUB_TOKEN`, and a push with that token starts no workflow, so
+without the dispatch the merged `dev` would get no build, no snapshot and no draft notes.
 
 Branch model: `dev` is the default and integration branch, and the only branch that
 originates commits. `main` is a pointer to the last released commit; the release job

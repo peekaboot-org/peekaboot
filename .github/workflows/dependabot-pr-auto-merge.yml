@@ -1,15 +1,57 @@
 name: dependabot-pr-auto-merge
 
+# The same three jobs as osslabz/github-actions' dependabot-auto-merge.yml. That workflow merges
+# Maven and GitHub Actions updates only; this repository also merges Gradle and npm updates and
+# holds the spring-boot group back, so it keeps its own copy.
 on:
   pull_request:
     branches:
       - dev
+
 jobs:
-  dependabot-pr-auto-merge:
+  # Read-only, so fetch-metadata never runs in a job holding contents or pull-requests write.
+  metadata:
+    # Opened and pushed by Dependabot only: a human's push to a Dependabot branch leaves the
+    # merge to a human.
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
-    # The merge step waits for the build, so this job outlives it. Bounded well above the
-    # build's own 30, and far below the six-hour default a watch would otherwise inherit.
+    timeout-minutes: 5
+
+    permissions:
+      pull-requests: read
+
+    outputs:
+      package-ecosystem: ${{ steps.metadata.outputs.package-ecosystem }}
+      update-type: ${{ steps.metadata.outputs.update-type }}
+      dependency-group: ${{ steps.metadata.outputs.dependency-group }}
+
+    steps:
+      - name: dependabot-pr-fetch-metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+  # An allow-list, so a pull request whose ecosystem or update type is unknown or empty waits
+  # for a human instead of merging. Major updates wait too. So does the Spring Boot line: this
+  # starter implements EndpointExposureOutcomeContributor, constructs Boot's actuator endpoint
+  # objects directly (borrowing only the HealthEndpoint bean) and depends on Boot's
+  # property-source ordering, so a Boot minor is a compatibility event rather than a bump.
+  # The author check repeats the metadata job's, so a mis-triggered run reads as a skip.
+  merge:
+    needs: metadata
+    if: >-
+      github.actor == 'dependabot[bot]'
+      && github.event.pull_request.user.login == 'dependabot[bot]'
+      && contains(fromJSON('["github_actions", "maven", "gradle", "npm_and_yarn"]'), needs.metadata.outputs.package-ecosystem)
+      && contains(fromJSON('["version-update:semver-patch", "version-update:semver-minor"]'), needs.metadata.outputs.update-type)
+      && needs.metadata.outputs.dependency-group != 'spring-boot'
+    runs-on: ubuntu-latest
+    # Waits for the build, which is bounded at 30 minutes.
     timeout-minutes: 40
+    # A Dependabot push that supersedes a running merge attempt cancels it instead of racing
+    # it. Job-level, so it never cancels build-merged-dev after a merge that succeeded.
+    concurrency:
+      group: dependabot-merge-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
 
     permissions:
       contents: write
@@ -17,38 +59,30 @@ jobs:
       # `gh run list` and `gh run watch` read the Actions API. The Checks API is not involved.
       actions: read
 
-    if: github.actor == 'dependabot[bot]'
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
+
     steps:
-      - name: dependabot-pr-fetch-metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
-
-      # Major updates wait for a human. So does the Spring Boot line: this starter implements EndpointExposureOutcomeContributor,
-      # constructs Boot's actuator endpoint objects directly (borrowing only the HealthEndpoint
-      # bean) and depends on Boot's property-source ordering, so a Boot minor is a
-      # compatibility event rather than a bump.
-      # One step for all three commands: the condition reads this job's metadata step, which a
-      # job-level `if` cannot see.
+      # Waits for the build rather than using `gh pr merge --auto`. Auto-merge only arms when
+      # something holds the pull request open, which was the dev ruleset's required check;
+      # that check is gone, because it also refused the release job's pushes and GitHub
+      # Actions cannot be granted a ruleset bypass. A red or cancelled build exits non-zero
+      # here and the pull request stays open for a human, which is the safe direction.
+      # Waits on the push-triggered build-on-push run for this head commit, never on
+      # `gh pr checks --watch`: that watches every check on the pull request, this job is one
+      # of them, and gh's loop exits only once nothing is pending, with no exclusion for the
+      # run executing it. It would wait on itself until the job timeout.
+      # The run may not exist yet when the pull_request event fires, hence the poll.
+      # The approval follows the green build, so a red pull request never shows as approved.
+      # --rebase, not --merge: the dev ruleset requires linear history. Dependabot's single
+      # commit already carries a conventional subject, which rebase keeps and squash would
+      # replace with the pull request title.
+      # --match-head-commit: a Dependabot rebase between the watch and the merge would
+      # otherwise merge a commit this build never covered.
       - name: dependabot-pr-approve-and-merge
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.metadata.outputs.dependency-group != 'spring-boot'
-        # Waits for the build rather than using `gh pr merge --auto`. Auto-merge only arms when
-        # something holds the pull request open, which was the dev ruleset's required check;
-        # that check is gone, because it also refused the release job's pushes and GitHub
-        # Actions cannot be granted a ruleset bypass. A red or cancelled build exits non-zero
-        # here and the pull request stays open for a human, which is the safe direction.
-        # Waits on the push-triggered build-on-push run for this head commit, never on
-        # `gh pr checks --watch`: that watches every check on the pull request, this job is one
-        # of them, and gh's loop exits only once nothing is pending, with no exclusion for the
-        # run executing it. It would wait on itself until the job timeout.
-        # The run may not exist yet when the pull_request event fires, hence the poll.
-        # --rebase, not --merge: the dev ruleset requires linear history. Dependabot's single
-        # commit already carries a conventional subject, which rebase keeps and squash would
-        # replace with the pull request title.
-        # --match-head-commit: a Dependabot rebase between the watch and the merge would
-        # otherwise merge a commit this build never covered.
+        id: merge
         run: |
-          gh pr review --approve "$PR_URL"
-
+          run_id=""
           for _ in $(seq 30); do
             run_id=$(gh run list --workflow build-on-push.yml --commit "$HEAD_SHA" \
               --limit 1 --json databaseId --jq '.[0].databaseId // empty')
@@ -61,11 +95,34 @@ jobs:
             exit 1
           fi
 
-          gh run watch "$run_id" --exit-status
+          gh run watch "$run_id" --exit-status --interval 30
+          gh pr review --approve "$PR_URL"
           gh pr merge --rebase --match-head-commit "$HEAD_SHA" "$PR_URL"
+          echo "merged=true" >> "$GITHUB_OUTPUT"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           HEAD_SHA: ${{github.event.pull_request.head.sha}}
           # No checkout, so gh has no git remote to read the repository from.
+          GH_REPO: ${{github.repository}}
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+  # The merge pushed dev with GITHUB_TOKEN, which starts no workflow. The rebased combination
+  # on dev was never built as such, so it is built, published and drafted here. A job of its
+  # own, so `actions: write` stays away from the job that runs fetch-metadata.
+  build-merged-dev:
+    needs: merge
+    if: needs.merge.outputs.merged == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      actions: write
+
+    steps:
+      - name: dispatch-dev-workflows
+        run: |
+          gh workflow run build-on-push.yml --ref dev
+          gh workflow run draft-release-notes.yml --ref dev
+        env:
           GH_REPO: ${{github.repository}}
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}

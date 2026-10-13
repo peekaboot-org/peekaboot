@@ -6,9 +6,14 @@ on:
   push:
     branches:
       - dev
+  # dependabot-pr-auto-merge dispatches this on dev after a merge, whose GITHUB_TOKEN push
+  # starts no run of its own.
+  workflow_dispatch:
 
+# Keyed on the ref, so a dispatch from another branch cannot cancel dev's render before the
+# guard below fails it.
 concurrency:
-  group: draft-release-notes
+  group: draft-release-notes-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,6 +25,15 @@ jobs:
       contents: write
 
     steps:
+      # The push trigger is limited to dev, but a dispatch names any ref, and this job
+      # overwrites the one Unreleased draft.
+      - name: guard-dev-ref
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/dev" ]; then
+            echo "::error::the Unreleased draft is rendered from dev only; this run was dispatched from $GITHUB_REF"
+            exit 1
+          fi
+
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
