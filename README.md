@@ -15,11 +15,9 @@ schedules, metrics and traces in one dashboard, with no external infrastructure.
 
 ## Why Peekaboot?
 
-Peek, because that's what it does — a look inside a running application. Boot, because that's
-where it lives. And peek-a-boo, because that's how it behaves: add one dependency and your app's
-internals are suddenly there; package the jar and they're gone again.
-
-In short: Peekaboot lets you peek inside your Spring Boot application while it runs.
+Peek, because it lets you look inside a running application. Boot, because that's where it
+lives. And peek-a-boo, because that's how it behaves. Add one dependency and your app's
+internals show up on a local run. Deploy the same jar and Peekaboot stays off.
 
 ## Quick start
 
