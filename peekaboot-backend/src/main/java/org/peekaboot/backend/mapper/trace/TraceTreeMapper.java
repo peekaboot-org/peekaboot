@@ -286,7 +286,7 @@ public class TraceTreeMapper {
         // Peekaboot's own marker, so unambiguous - unlike the third-party tag families below,
         // which infer from someone else's convention. First for that reason, and because the
         // entry span carries no Span.Kind and would otherwise fall through to UNKNOWN.
-        if (tags.containsKey(AsyncTaskMarker.TAG_KEY)) {
+        if (AsyncTaskMarker.isMarked(tags)) {
             return RootActionType.ASYNC_TASK;
         }
         // Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine

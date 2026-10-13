@@ -129,12 +129,10 @@ final class RowSources {
      * ran, not somebody else's trace seen through a hole, so it is listed rather than hidden.
      */
     private static boolean isIncompleteFragment(SpanData root) {
-        return root != null && root.parentId() != null && root.kind() != Span.Kind.SERVER && !carriesAsyncMarker(root);
-    }
-
-    /** Whether {@code span} carries Peekaboot's own async-entry marker tag. */
-    private static boolean carriesAsyncMarker(SpanData span) {
-        return span.tags() != null && span.tags().containsKey(AsyncTaskMarker.TAG_KEY);
+        return root != null
+                && root.parentId() != null
+                && root.kind() != Span.Kind.SERVER
+                && !AsyncTaskMarker.isMarked(root.tags());
     }
 
     /** The chip sends a substring of the operation name, so a partial, case-insensitive match is the contract. */

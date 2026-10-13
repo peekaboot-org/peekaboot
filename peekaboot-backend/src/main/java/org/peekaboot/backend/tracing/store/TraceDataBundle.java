@@ -140,7 +140,7 @@ public class TraceDataBundle {
      * counting as synchronous until now.
      */
     private void recordAsyncMembership(SpanData span) {
-        if (isAsyncMarked(span)) {
+        if (AsyncTaskMarker.isMarked(span.tags())) {
             rebuildAsyncMembership();
             return;
         }
@@ -161,7 +161,7 @@ public class TraceDataBundle {
     private void rebuildAsyncMembership() {
         asyncSpanIds.clear();
         for (SpanData stored : spansById.values()) {
-            if (isAsyncMarked(stored)) {
+            if (AsyncTaskMarker.isMarked(stored.tags())) {
                 asyncSpanIds.add(stored.spanId());
             }
         }
@@ -196,10 +196,6 @@ public class TraceDataBundle {
         if (span.endTime() != null && (maxSyncEnd == null || span.endTime().isAfter(maxSyncEnd))) {
             maxSyncEnd = span.endTime();
         }
-    }
-
-    private static boolean isAsyncMarked(SpanData span) {
-        return span.tags() != null && span.tags().containsKey(AsyncTaskMarker.TAG_KEY);
     }
 
     /**
