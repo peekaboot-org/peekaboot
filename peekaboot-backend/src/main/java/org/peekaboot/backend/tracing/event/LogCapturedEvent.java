@@ -7,10 +7,11 @@ import java.time.Instant;
  *
  * @param stackTrace {@code ThrowableProxyUtil.asString}'s rendering of the logged throwable, or
  *     null where there was none. Close to but not identical to {@code Throwable.printStackTrace}'s
- *     own output: an elided run reads "... N common frames omitted" rather than "... N more",
- *     and enabling Logback's packaging data would append " [jar:version]" to every frame -
- *     inside the substring an exclusion pattern matches against. Capped at
- *     {@code PeekabootLogbackAppender}'s line limit, with a trailing marker where it was.
+ *     own output: an elided run reads "... N common frames omitted" rather than "... N more".
+ *     Logback's packaging data, where an application enables it, appends " [jar:version]" to every
+ *     frame, inside the substring an exclusion pattern matches against, so a jar path containing
+ *     an excluded token can hide a frame. Capped at {@code PeekabootLogbackAppender}'s line limit,
+ *     with a trailing marker where it was.
  */
 public record LogCapturedEvent(
         String traceId,
