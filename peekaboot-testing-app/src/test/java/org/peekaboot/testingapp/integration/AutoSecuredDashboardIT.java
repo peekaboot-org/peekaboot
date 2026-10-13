@@ -75,6 +75,12 @@ class AutoSecuredDashboardIT {
     }
 
     @Test
+    void theBareDashboardPathIsChallengedToo() {
+        assertThat(api().statusOf("/peekaboot")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(api().headersOf("/peekaboot").getFirst("WWW-Authenticate")).contains("realm=\"Peekaboot\"");
+    }
+
+    @Test
     void theInsightsApiRejectsAnAnonymousRequest() {
         assertThat(api().statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
