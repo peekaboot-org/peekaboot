@@ -394,3 +394,17 @@
     border-radius: 50%;
     animation: pk-spin 1s linear infinite;
 }
+
+/* A stack trace with its framework runs folded: StackTraceHtml writes it on the error page,
+   log-entry.js in the trace overlay. It scrolls sideways instead of wrapping, since a wrapped
+   frame line loses the column alignment that makes the application's own frames findable at a
+   glance. Every line is a span so those frames can stand out; the rest recedes to muted
+   rather than disappearing, since a framework frame is still part of the story. */
+.pk-stack-trace { overflow-x: auto; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); line-height: 1.6; }
+.pk-stack-trace__frame { display: block; color: var(--pk-text-muted); }
+.pk-stack-trace__frame--app { color: var(--pk-text-strong); font-weight: 600; }
+/* A run of framework frames, closed until the reader asks. The summary keeps the native
+   disclosure marker so it reads as the control it is. */
+.pk-stack-trace__hidden { display: block; }
+.pk-stack-trace__hidden-summary { cursor: pointer; color: var(--pk-text-muted); font-style: italic; padding-left: 2ch; }
+.pk-stack-trace__hidden-summary:hover, .pk-stack-trace__hidden[open] .pk-stack-trace__hidden-summary { color: var(--pk-text); }

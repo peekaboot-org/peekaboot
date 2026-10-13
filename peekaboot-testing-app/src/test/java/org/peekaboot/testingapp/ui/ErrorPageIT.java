@@ -27,9 +27,22 @@ class ErrorPageIT extends PlaywrightTestBase {
                 .contains("500")
                 .contains("java.lang.IllegalStateException")
                 .contains("order reconciliation gateway is unreachable");
-        assertThat(page.locator(".pk-error__frame--app").count())
+        assertThat(page.locator(".pk-stack-trace__frame--app").count())
                 .as("the sample app's own frames are marked, or the trace is a wall of framework lines")
                 .isGreaterThan(0);
+    }
+
+    /** The shared stack-trace block reaches the page, whose components.css is both inlined and linked. */
+    @Test
+    void theApplicationsOwnFramesStandOutInBold() {
+        page.navigate(baseUrl + "/boom");
+        page.waitForSelector(".pk-error");
+
+        assertThat(page.locator(".pk-stack-trace__frame--app").count()).isPositive();
+        assertThat(page.locator(".pk-stack-trace__frame--app")
+                        .first()
+                        .evaluate("el => getComputedStyle(el).fontWeight"))
+                .isEqualTo("600");
     }
 
     @Test
@@ -65,18 +78,19 @@ class ErrorPageIT extends PlaywrightTestBase {
     @Test
     void theRevealControlOpensEveryHiddenRun() {
         page.navigate(baseUrl + "/boom");
-        assertThat(page.locator("details.pk-error__hidden").first().isVisible()).isTrue();
+        assertThat(page.locator("details.pk-stack-trace__hidden").first().isVisible())
+                .isTrue();
 
         page.click(".pk-error__reveal");
 
-        assertThat(page.locator("details.pk-error__hidden[open]").count())
-                .isEqualTo(page.locator("details.pk-error__hidden").count());
+        assertThat(page.locator("details.pk-stack-trace__hidden[open]").count())
+                .isEqualTo(page.locator("details.pk-stack-trace__hidden").count());
         assertThat(page.getAttribute(".pk-error__reveal", "aria-pressed")).isEqualTo("true");
         assertThat(page.textContent(".pk-error__reveal")).isEqualTo("Show full stack trace");
 
         page.click(".pk-error__reveal");
 
-        assertThat(page.locator("details.pk-error__hidden[open]").count()).isEqualTo(0);
+        assertThat(page.locator("details.pk-stack-trace__hidden[open]").count()).isEqualTo(0);
         assertThat(page.getAttribute(".pk-error__reveal", "aria-pressed")).isEqualTo("false");
         assertThat(page.textContent(".pk-error__reveal")).isEqualTo("Show full stack trace");
     }
@@ -108,8 +122,8 @@ class ErrorPageIT extends PlaywrightTestBase {
 
         assertThat(copied).doesNotContain("\n\n");
         assertThat(copied.lines())
-                .hasSize(page.locator(".pk-error__frame").count()
-                        + page.locator(".pk-error__hidden-summary").count());
+                .hasSize(page.locator(".pk-stack-trace__frame").count()
+                        + page.locator(".pk-stack-trace__hidden-summary").count());
     }
 
     /**
@@ -121,7 +135,7 @@ class ErrorPageIT extends PlaywrightTestBase {
                 + " const frames = document.querySelector('.pk-error__frames');"
                 + " const style = getComputedStyle(frames);"
                 + " const lineHeight = parseFloat(style.lineHeight);"
-                + " const tops = [...frames.querySelectorAll('.pk-error__frame, .pk-error__hidden-summary')]"
+                + " const tops = [...frames.querySelectorAll('.pk-stack-trace__frame, .pk-stack-trace__hidden-summary')]"
                 + "     .filter(line => line.checkVisibility())"
                 + "     .map(line => line.getBoundingClientRect().top);"
                 + " const contentBottom = frames.getBoundingClientRect().top + frames.clientTop"
@@ -142,6 +156,6 @@ class ErrorPageIT extends PlaywrightTestBase {
                 .containsEntry("content-security-policy", "script-src 'self'");
         page.click(".pk-error__reveal");
 
-        assertThat(page.locator("details.pk-error__hidden[open]").count()).isGreaterThan(0);
+        assertThat(page.locator("details.pk-stack-trace__hidden[open]").count()).isGreaterThan(0);
     }
 }

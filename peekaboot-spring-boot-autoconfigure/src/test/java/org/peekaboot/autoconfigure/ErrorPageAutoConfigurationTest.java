@@ -77,7 +77,7 @@ class ErrorPageAutoConfigurationTest {
 
                     view.render(Map.of(), request, response);
 
-                    assertThat(response.getContentAsString()).contains("pk-error__hidden");
+                    assertThat(response.getContentAsString()).contains("<details class=\"pk-stack-trace__hidden\"");
                 });
     }
 
@@ -107,7 +107,7 @@ class ErrorPageAutoConfigurationTest {
 
                     view.render(Map.of(), request, response);
 
-                    assertThat(response.getContentAsString()).contains("pk-error__hidden");
+                    assertThat(response.getContentAsString()).contains("<details class=\"pk-stack-trace__hidden\"");
                 });
     }
 

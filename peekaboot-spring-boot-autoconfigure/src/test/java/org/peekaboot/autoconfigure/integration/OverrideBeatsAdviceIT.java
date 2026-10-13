@@ -44,7 +44,7 @@ class OverrideBeatsAdviceIT {
                 .toEntity(String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody()).contains("pk-error__frame");
+        assertThat(response.getBody()).contains("<span class=\"pk-stack-trace__frame");
         assertThat(response.getBody()).doesNotContain("THE APPLICATION'S OWN PROBLEM");
     }
 
@@ -63,7 +63,7 @@ class OverrideBeatsAdviceIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(response.getBody()).contains("THE APPLICATION'S OWN PROBLEM");
-        assertThat(response.getBody()).doesNotContain("pk-error__frame");
+        assertThat(response.getBody()).doesNotContain("pk-stack-trace__frame");
     }
 
     private RestClient client() {

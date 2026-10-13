@@ -14,7 +14,7 @@
         if (!control) return;
         var open = control.getAttribute('aria-pressed') !== 'true';
         control.setAttribute('aria-pressed', String(open));
-        document.querySelectorAll('details.pk-error__hidden').forEach(function (run) {
+        document.querySelectorAll('details.pk-stack-trace__hidden').forEach(function (run) {
             run.open = open;
         });
     });

@@ -1,8 +1,8 @@
 /* Trace-detail overlay. Tokens come from ../assets/tokens.css; tabs, the status pill,
-   the empty-state message, the coloured durations, labels and icon buttons reuse
-   ../assets/components.css, the focus ring and the button reset ../assets/base.css. The
-   host's own fixed-fullscreen sizing is set inline by trace-detail.js (see the comment at
-   that call site); .pk-overlay simply fills it. */
+   the empty-state message, the coloured durations, labels, icon buttons and the stack
+   trace reuse ../assets/components.css, the focus ring and the button reset
+   ../assets/base.css. The host's own fixed-fullscreen sizing is set inline by
+   trace-detail.js (see the comment at that call site); .pk-overlay simply fills it. */
 
 .pk-overlay {
     position: absolute;
@@ -291,17 +291,11 @@
 .pk-log__level--error { color: var(--pk-danger); }
 .pk-log__message { flex: 1; overflow-wrap: anywhere; }
 
-/* The trace a log entry carried (log-entry.js's traceBlock), rendered only when
-   log.stackTrace is present. align-self keeps the toggle from stretching to the row's
-   full width under .pk-log's column flex. */
+/* The trace a log entry carried (log-entry.js's traceBlock, a components.css
+   .pk-stack-trace), rendered only when log.stackTrace is present. align-self keeps the
+   toggle from stretching to the row's full width under .pk-log's column flex. */
 .pk-log__reveal { align-self: flex-start; margin-top: var(--pk-space-xs); }
-.pk-log__trace { margin: var(--pk-space-xs) 0 0; overflow-x: auto; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); line-height: 1.6; }
-.pk-log__frame { display: block; color: var(--pk-text-muted); }
-.pk-log__frame--app { color: var(--pk-text-strong); font-weight: 600; }
-.pk-log__hidden { display: block; }
-.pk-log__hidden-summary { display: block; cursor: pointer; color: var(--pk-text-muted); font-style: italic; padding-left: 2ch; }
-.pk-log__hidden-summary:hover { color: var(--pk-text); }
-.pk-log__hidden[open] .pk-log__hidden-summary { color: var(--pk-text); }
+.pk-log__trace { margin: var(--pk-space-xs) 0 0; }
 
 /* Cross-link jump target (trace-detail.js's jumpToElement): briefly tinted and
    ring-marked - design tokens only, visible in both themes - so the eye lands where

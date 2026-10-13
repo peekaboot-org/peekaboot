@@ -110,7 +110,7 @@ class PeekabootErrorViewTest {
         assertThat(response.getContentAsString())
                 .contains("java.lang.IllegalStateException")
                 .contains("gateway unreachable")
-                .contains("<span class=\"pk-error__frame");
+                .contains("<span class=\"pk-stack-trace__frame");
     }
 
     /** A sendError carries a message and no exception; the page then has no trace to show. */
@@ -124,7 +124,7 @@ class PeekabootErrorViewTest {
         assertThat(response.getContentAsString())
                 .contains("404")
                 .contains("No handler for /nope")
-                .doesNotContain("<span class=\"pk-error__frame");
+                .doesNotContain("<span class=\"pk-stack-trace__frame");
     }
 
     /** The path is whatever the request carried, and it is written into markup. */
@@ -251,7 +251,7 @@ class PeekabootErrorViewTest {
     }
 
     private static Throwable exceptionSpellingTheHiddenRunClass() {
-        IllegalStateException exception = new IllegalStateException("pk-error__hidden");
+        IllegalStateException exception = new IllegalStateException("pk-stack-trace__hidden");
         exception.setStackTrace(new StackTraceElement[] {
             new StackTraceElement("com.example.Widget", "process", "Widget.java", 10),
             new StackTraceElement(

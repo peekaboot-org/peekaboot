@@ -1,8 +1,9 @@
 /* The page Peekaboot renders in place of Boot's whitelabel page. Tokens come from
    ../assets/tokens.css, the reset, the focus ring and the logo mark from ../assets/base.css,
-   the status pill from ../assets/components.css (.pk-badge) - the four sheets
-   PeekabootErrorView inlines and links. Its own document, not a shadow root, so the rem
-   type scale on :root applies and the page follows a reader's root-size preference. */
+   the status pill and the stack trace from ../assets/components.css (.pk-badge,
+   .pk-stack-trace) - the four sheets PeekabootErrorView inlines and links. Its own document,
+   not a shadow root, so the rem type scale on :root applies and the page follows a reader's
+   root-size preference. */
 
 /* One column, read top to bottom: the status, then what failed, then the trace. Wide enough
    for a typical frame line without wrapping, so the eye can scan the left edge of the
@@ -83,36 +84,14 @@
     align-self: flex-start;
 }
 
-/* The trace scrolls sideways instead of wrapping: a wrapped frame line loses the column
-   alignment that makes the application's own frames findable at a glance. */
+/* The trace is this page's main content, so it gets a box of its own. */
 .pk-error__frames {
     margin: 0;
     padding: var(--pk-space-md);
     background: var(--pk-bg-alt);
     border: 1px solid var(--pk-border);
     border-radius: var(--pk-radius);
-    overflow-x: auto;
-    font-family: var(--pk-font-mono);
-    font-size: var(--pk-text-xs);
-    line-height: 1.6;
 }
-/* Every line is a span so the frames the application owns can stand out; the rest recedes
-   to muted rather than disappearing, since a framework frame is still part of the story. */
-.pk-error__frame {
-    display: block;
-    color: var(--pk-text-muted);
-}
-.pk-error__frame--app {
-    color: var(--pk-text-strong);
-    font-weight: 600;
-}
-
-/* A run of framework frames, closed until the reader asks. The row is a control inside a
-   <pre> that scrolls sideways, and it keeps the native disclosure marker so it reads as one. */
-.pk-error__hidden { display: block; }
-.pk-error__hidden-summary { cursor: pointer; color: var(--pk-text-muted); font-style: italic; padding-left: 2ch; }
-.pk-error__hidden-summary:hover { color: var(--pk-text); }
-.pk-error__hidden[open] .pk-error__hidden-summary { color: var(--pk-text); }
 
 .pk-error__footer {
     display: flex;

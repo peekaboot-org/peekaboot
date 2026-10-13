@@ -91,7 +91,7 @@ public class PeekabootErrorView implements View {
                         <h2 class="pk-error__exception">{{EXCEPTION}}</h2>
                         <p class="pk-error__message">{{MESSAGE}}</p>
                         {{REVEAL}}
-                        <pre class="pk-error__frames" tabindex="0" aria-label="Stack trace">{{FRAMES}}</pre>
+                        <pre class="pk-stack-trace pk-error__frames" tabindex="0" aria-label="Stack trace">{{FRAMES}}</pre>
                     </section>
             """;
 

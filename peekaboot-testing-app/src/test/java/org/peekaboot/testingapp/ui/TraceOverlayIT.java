@@ -655,13 +655,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .isEqualTo(0);
         @SuppressWarnings("unchecked")
         List<String> renderedFrames = (List<String>) overlay.evaluate(
-                "(root, panel) => [...root.querySelectorAll(panel + ' .pk-log__trace .pk-log__frame')].map(el => el.textContent)",
+                "(root, panel) => [...root.querySelectorAll(panel + ' .pk-log__trace .pk-stack-trace__frame')].map(el => el.textContent)",
                 panel);
         assertThat(renderedFrames)
                 .containsExactlyElementsOf(
                         List.of(errorLog.path("stackTrace").asString().split("\n", -1)));
 
-        String hiddenRuns = panel + " .pk-log__trace details.pk-log__hidden";
+        String hiddenRuns = panel + " .pk-log__trace details.pk-stack-trace__hidden";
         assertThat(page.locator(hiddenRuns).count()).isGreaterThan(0);
         assertThat(page.locator(hiddenRuns + "[open]").count()).isEqualTo(0);
 
@@ -876,7 +876,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * straight in the way {@code AccessibilityIT} already does for other log-row elements.
      *
      * <p>The counts above are a coarse smoke test; the real pin is the last assertion -
-     * every {@code .pk-log__frame} rendered inside {@code .pk-log__trace}, read off in
+     * every {@code .pk-stack-trace__frame} rendered inside {@code .pk-log__trace}, read off in
      * document order and compared line for line against the trace's own {@code stackTrace}
      * field. A walk that loses track of where a hidden run ends - rendering its frames once
      * inside the {@code <details>} and again as loose frames below it - or one that drops a
@@ -902,15 +902,30 @@ class TraceOverlayIT extends PlaywrightTestBase {
         toolbar.openOverlay();
         overlay.openLogsTab();
 
-        assertThat(page.locator(".pk-log__trace details.pk-log__hidden").count())
+        assertThat(page.locator(".pk-log__trace details.pk-stack-trace__hidden").count())
                 .isGreaterThan(0);
-        assertThat(page.locator(".pk-log__trace .pk-log__frame--app").count()).isGreaterThan(0);
+        assertThat(page.locator(".pk-log__trace .pk-stack-trace__frame--app").count())
+                .isGreaterThan(0);
 
         String stackTrace = capturedStackTrace(traceId);
         @SuppressWarnings("unchecked")
-        List<String> renderedFrames = (List<String>) overlay.evaluate(
-                "root => [...root.querySelectorAll('.pk-log__trace .pk-log__frame')].map(el => el.textContent)");
+        List<String> renderedFrames = (List<String>)
+                overlay.evaluate(
+                        "root => [...root.querySelectorAll('.pk-log__trace .pk-stack-trace__frame')].map(el => el.textContent)");
         assertThat(renderedFrames).containsExactlyElementsOf(List.of(stackTrace.split("\n", -1)));
+    }
+
+    /** The overlay's trace takes the same shared block as the error page, through its shadow root's components.css. */
+    @Test
+    void aLoggedTracesApplicationFramesStandOutInBold() {
+        openPageThatLogsAnError();
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.waitFor(".pk-log__trace");
+
+        assertThat(overlay.evaluate("root => { const frame = root.querySelector('.pk-stack-trace__frame--app');"
+                        + " return frame && getComputedStyle(frame).fontWeight; }"))
+                .isEqualTo("600");
     }
 
     /** The trace's own {@code stackTrace} field, joined back the way the server sent it. */
@@ -943,19 +958,22 @@ class TraceOverlayIT extends PlaywrightTestBase {
         overlay.waitFor(".pk-log__reveal");
 
         int rowsWithHiddenRuns = (int) (Integer) overlay.evaluate("root => [...root.querySelectorAll('.pk-log')]"
-                + ".filter(row => row.querySelector('details.pk-log__hidden')).length");
+                + ".filter(row => row.querySelector('details.pk-stack-trace__hidden')).length");
         assertThat(page.locator(".pk-log__reveal").count()).isEqualTo(rowsWithHiddenRuns);
 
         page.click(".pk-log__reveal");
 
-        assertThat(page.locator(".pk-log__trace details.pk-log__hidden[open]").count())
-                .isEqualTo(page.locator(".pk-log__trace details.pk-log__hidden").count());
+        assertThat(page.locator(".pk-log__trace details.pk-stack-trace__hidden[open]")
+                        .count())
+                .isEqualTo(page.locator(".pk-log__trace details.pk-stack-trace__hidden")
+                        .count());
         assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("true");
         assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
 
         page.click(".pk-log__reveal");
 
-        assertThat(page.locator(".pk-log__trace details.pk-log__hidden[open]").count())
+        assertThat(page.locator(".pk-log__trace details.pk-stack-trace__hidden[open]")
+                        .count())
                 .isEqualTo(0);
         assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("false");
         assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
@@ -1023,14 +1041,14 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 (root, message) => {
                     const row = [...root.querySelectorAll('.pk-log')]
                         .find(entry => entry.querySelector('.pk-log__message').textContent === message);
-                    const frames = [...row.querySelectorAll('.pk-log__trace .pk-log__frame')];
+                    const frames = [...row.querySelectorAll('.pk-log__trace .pk-stack-trace__frame')];
                     return {
                         lines: frames.map(frame => frame.textContent),
                         applicationFrames: frames.flatMap((frame, i) =>
-                            frame.classList.contains('pk-log__frame--app') ? [i] : []),
-                        hiddenRuns: [...row.querySelectorAll('details.pk-log__hidden')]
-                            .map(run => run.querySelectorAll('.pk-log__frame').length),
-                        openRuns: row.querySelectorAll('details.pk-log__hidden[open]').length
+                            frame.classList.contains('pk-stack-trace__frame--app') ? [i] : []),
+                        hiddenRuns: [...row.querySelectorAll('details.pk-stack-trace__hidden')]
+                            .map(run => run.querySelectorAll('.pk-stack-trace__frame').length),
+                        openRuns: row.querySelectorAll('details.pk-stack-trace__hidden[open]').length
                     };
                 }
                 """, message);

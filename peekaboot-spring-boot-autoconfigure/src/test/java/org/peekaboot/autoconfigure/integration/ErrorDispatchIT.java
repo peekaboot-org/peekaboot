@@ -51,7 +51,7 @@ class ErrorDispatchIT {
         assertThat(page)
                 .contains("java.lang.IllegalStateException")
                 .contains("gateway unreachable")
-                .contains("pk-error__frame")
+                .contains("<span class=\"pk-stack-trace__frame")
                 .contains("500");
     }
 

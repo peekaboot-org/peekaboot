@@ -17,7 +17,7 @@ import org.springframework.web.util.HtmlUtils;
  */
 final class StackTraceHtml {
 
-    private static final String FRAME = "pk-error__frame";
+    private static final String FRAME = "pk-stack-trace__frame";
 
     private static final String APPLICATION_FRAME = FRAME + " " + FRAME + "--app";
 
@@ -49,7 +49,7 @@ final class StackTraceHtml {
         for (int i = run.start(); i < run.endExclusive(); i++) {
             frames.append(span(lines.get(i), applicationFrames.contains(i)));
         }
-        return "<details class=\"pk-error__hidden\"><summary class=\"pk-error__hidden-summary\">"
+        return "<details class=\"pk-stack-trace__hidden\"><summary class=\"pk-stack-trace__hidden-summary\">"
                 + count + (count == 1 ? " frame" : " frames") + " hidden</summary>"
                 + frames + "</details>";
     }

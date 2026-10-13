@@ -30,7 +30,7 @@ class StackTraceHtmlTest {
         String html = render(TRACE, List.of(), List.of("com.example"));
 
         assertThat(html)
-                .contains("<span class=\"pk-error__frame pk-error__frame--app\">"
+                .contains("<span class=\"pk-stack-trace__frame pk-stack-trace__frame--app\">"
                         + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)\n</span>");
     }
 
@@ -40,7 +40,7 @@ class StackTraceHtmlTest {
 
         assertThat(html)
                 .contains(
-                        "<span class=\"pk-error__frame\">"
+                        "<span class=\"pk-stack-trace__frame\">"
                                 + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)\n</span>");
     }
 
@@ -62,7 +62,7 @@ class StackTraceHtmlTest {
         String html =
                 render("\tat app//com.example.orders.Gateway.call(Gateway.java:17)", List.of(), List.of("com.example"));
 
-        assertThat(html).contains("pk-error__frame--app");
+        assertThat(html).contains("pk-stack-trace__frame--app");
     }
 
     /** An exception message carries whatever the request carried. */
@@ -90,7 +90,7 @@ class StackTraceHtmlTest {
     void marksNoFrameWithoutApplicationPackages() {
         String html = render(TRACE, List.of(), List.of());
 
-        assertThat(html).doesNotContain("pk-error__frame--app");
+        assertThat(html).doesNotContain("pk-stack-trace__frame--app");
     }
 
     @Test
@@ -98,8 +98,8 @@ class StackTraceHtmlTest {
         String html = render(TRACE, EXCLUDED, List.of("com.example"));
 
         assertThat(html)
-                .contains("<details class=\"pk-error__hidden\">")
-                .contains("<summary class=\"pk-error__hidden-summary\">2 frames hidden</summary>");
+                .contains("<details class=\"pk-stack-trace__hidden\">")
+                .contains("<summary class=\"pk-stack-trace__hidden-summary\">2 frames hidden</summary>");
     }
 
     /** Hidden frames stay in the document so a reader can open them, and so ErrorPageIT can count them. */
@@ -114,7 +114,7 @@ class StackTraceHtmlTest {
     void rendersEveryFrameInlineWithNothingExcluded() {
         String html = render(TRACE, List.of(), List.of("com.example"));
 
-        assertThat(html).doesNotContain("<details").doesNotContain("pk-error__hidden");
+        assertThat(html).doesNotContain("<details").doesNotContain("pk-stack-trace__hidden");
     }
 
     /**
@@ -129,20 +129,20 @@ class StackTraceHtmlTest {
 
         assertThat(html)
                 .isEqualTo(
-                        "<span class=\"pk-error__frame\">java.lang.IllegalStateException: gateway unreachable\n</span>"
-                                + "<span class=\"pk-error__frame pk-error__frame--app\">"
+                        "<span class=\"pk-stack-trace__frame\">java.lang.IllegalStateException: gateway unreachable\n</span>"
+                                + "<span class=\"pk-stack-trace__frame pk-stack-trace__frame--app\">"
                                 + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)\n</span>"
-                                + "<details class=\"pk-error__hidden\">"
-                                + "<summary class=\"pk-error__hidden-summary\">2 frames hidden</summary>"
-                                + "<span class=\"pk-error__frame\">"
+                                + "<details class=\"pk-stack-trace__hidden\">"
+                                + "<summary class=\"pk-stack-trace__hidden-summary\">2 frames hidden</summary>"
+                                + "<span class=\"pk-stack-trace__frame\">"
                                 + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)\n</span>"
-                                + "<span class=\"pk-error__frame\">"
+                                + "<span class=\"pk-stack-trace__frame\">"
                                 + "\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)\n</span>"
                                 + "</details>"
-                                + "<span class=\"pk-error__frame\">Caused by: java.net.ConnectException: Connection refused\n</span>"
-                                + "<span class=\"pk-error__frame pk-error__frame--app\">"
+                                + "<span class=\"pk-stack-trace__frame\">Caused by: java.net.ConnectException: Connection refused\n</span>"
+                                + "<span class=\"pk-stack-trace__frame pk-stack-trace__frame--app\">"
                                 + "\tat com.example.orders.Gateway.call(Gateway.java:17)\n</span>"
-                                + "<span class=\"pk-error__frame\">\t... 12 more\n</span>");
+                                + "<span class=\"pk-stack-trace__frame\">\t... 12 more\n</span>");
     }
 
     /** The nothing-excluded counterpart to {@link #rendersTheWholeTraceWithTheHiddenRunInPlaceAndInOrder()}. */
@@ -152,17 +152,17 @@ class StackTraceHtmlTest {
 
         assertThat(html)
                 .isEqualTo(
-                        "<span class=\"pk-error__frame\">java.lang.IllegalStateException: gateway unreachable\n</span>"
-                                + "<span class=\"pk-error__frame pk-error__frame--app\">"
+                        "<span class=\"pk-stack-trace__frame\">java.lang.IllegalStateException: gateway unreachable\n</span>"
+                                + "<span class=\"pk-stack-trace__frame pk-stack-trace__frame--app\">"
                                 + "\tat com.example.orders.OrderService.reconcile(OrderService.java:42)\n</span>"
-                                + "<span class=\"pk-error__frame\">"
+                                + "<span class=\"pk-stack-trace__frame\">"
                                 + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)\n</span>"
-                                + "<span class=\"pk-error__frame\">"
+                                + "<span class=\"pk-stack-trace__frame\">"
                                 + "\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)\n</span>"
-                                + "<span class=\"pk-error__frame\">Caused by: java.net.ConnectException: Connection refused\n</span>"
-                                + "<span class=\"pk-error__frame pk-error__frame--app\">"
+                                + "<span class=\"pk-stack-trace__frame\">Caused by: java.net.ConnectException: Connection refused\n</span>"
+                                + "<span class=\"pk-stack-trace__frame pk-stack-trace__frame--app\">"
                                 + "\tat com.example.orders.Gateway.call(Gateway.java:17)\n</span>"
-                                + "<span class=\"pk-error__frame\">\t... 12 more\n</span>");
+                                + "<span class=\"pk-stack-trace__frame\">\t... 12 more\n</span>");
     }
 
     @Test

@@ -41,7 +41,7 @@ function traceBlock(log) {
     });
     const hidden = new Map((log.hiddenFrames || []).map(r => [r.start, r]));
 
-    const pre = el('pre', {className: 'pk-log__trace', attrs: {tabindex: '0', 'aria-label': 'Stack trace'}});
+    const pre = el('pre', {className: 'pk-stack-trace pk-log__trace', attrs: {tabindex: '0', 'aria-label': 'Stack trace'}});
     for (let i = 0; i < lines.length; ) {
         const run = hidden.get(i);
         if (run) {
@@ -49,10 +49,10 @@ function traceBlock(log) {
             // a malformed range (endExclusive <= start) then advances i by zero or backward,
             // but can never match this same entry again, so the walk still terminates.
             hidden.delete(i);
-            const details = el('details', {className: 'pk-log__hidden'});
+            const details = el('details', {className: 'pk-stack-trace__hidden'});
             const count = run.endExclusive - run.start;
             details.append(el('summary', {
-                className: 'pk-log__hidden-summary',
+                className: 'pk-stack-trace__hidden-summary',
                 text: `${count} ${count === 1 ? 'frame' : 'frames'} hidden`
             }));
             for (let j = run.start; j < run.endExclusive; j++) details.append(frameLine(lines[j], app.has(j)));
@@ -67,13 +67,13 @@ function traceBlock(log) {
 }
 
 function frameLine(text, applicationFrame) {
-    return el('span', {className: applicationFrame ? 'pk-log__frame pk-log__frame--app' : 'pk-log__frame', text});
+    return el('span', {className: applicationFrame ? 'pk-stack-trace__frame pk-stack-trace__frame--app' : 'pk-stack-trace__frame', text});
 }
 
 /** One control per log row: opens or closes every hidden run inside that row's trace at once. */
 function revealControl(pre) {
     return pressedToggle({className: 'pk-btn pk-btn--small pk-log__reveal', text: 'Show full stack trace'}, open => {
-        pre.querySelectorAll('details.pk-log__hidden').forEach(run => {
+        pre.querySelectorAll('details.pk-stack-trace__hidden').forEach(run => {
             run.open = open;
         });
     });

@@ -90,9 +90,9 @@ surface:
 3. **`components.css`**. The `.pk-*` primitives (badge, coloured duration, stat line, label,
    icon button, group, kv row, meter, button, copy control, table with its card and stripe
    modifiers, tab strip, icon link, placeholder note with its centred empty-state form,
-   loading block and spinner) every surface's own CSS builds on. A surface stylesheet
-   (`dashboard.css`, `toolbar.css`, `trace-detail.css`, `error-page.css`) only adds
-   surface-specific chrome,
+   loading block and spinner, folded stack trace) every surface's own CSS builds on. A
+   surface stylesheet (`dashboard.css`, `toolbar.css`, `trace-detail.css`, `error-page.css`)
+   only adds surface-specific chrome,
    never a second copy of a primitive. A variant one surface needs becomes a modifier here
    (`.pk-table--kv`, the overlay's key/value table); a surface element that only sizes or
    spaces a primitive carries its own class beside the primitive's (`.pk-note
@@ -604,7 +604,7 @@ breaks them silently. Grep `peekaboot-testing-app/src/test` before you do.
 | `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `renderTab()` looks it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
 | `data-tab` | The tab-strip button attribute (`.pk-tab[data-tab="<id>"]`) that `tabStrip()` and `main.js` both key off for selection state. |
 | `#peekaboot-trace-overlay[data-trace-id]` | The overlay host, stamped with the trace it shows. `trace-detail.js` sets it only for the UI tests, which wait on it to tell one open from the next (`TraceOverlay.awaitTrace`). |
-| `.pk-error`, `.pk-error__frame`, `.pk-error__frame--app` | The error page's root, its trace lines and the ones in the application's own packages. `PeekabootErrorView` writes them and the UI tests assert the page is Peekaboot's and that the marked frames are the application's. |
+| `.pk-error`, `.pk-stack-trace__frame`, `.pk-stack-trace__frame--app` | The error page's root, its trace lines and the ones in the application's own packages. `PeekabootErrorView` and `StackTraceHtml` write them and the UI tests assert the page is Peekaboot's and that the marked frames are the application's. |
 
 ## The collapsed bar's trace fetch schedule
 
