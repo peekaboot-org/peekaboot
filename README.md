@@ -39,19 +39,20 @@ how to override the detection are in
 
 ## What you get
 
-- A dev toolbar docked to every page, with request status, duration, the span, query and
-  log counts with query time and error and warning counts, and a link to the full trace.
-- A dashboard for health, environment, config, Flyway, Liquibase, loggers, scheduled tasks and
-  metrics, read in-process with nothing exposed under `/actuator/**`.
+- A dev toolbar docked to every HTML page your app renders, with request status, duration,
+  the span, query and log counts with query time and error and warning counts, and a link to
+  the full trace.
+- A dashboard for health, environment, config, Flyway, Liquibase (from 1.1.0), loggers,
+  scheduled tasks and metrics, read in-process with nothing exposed under `/actuator/**`.
 - In-memory request tracing via Micrometer and OpenTelemetry, with no collector to run.
-- Every SQL statement a request runs is timed, listed, highlighted and labelled with the
-  DataSource it ran on, shown formatted with its bind parameters on request. The starter
-  brings the JDBC instrumentation, so there is none to wire up yourself.
+- Every SQL statement a request runs is timed, listed and highlighted, and shown formatted
+  with its bind parameters on request. From 1.1.0 each one is labelled with the DataSource it
+  ran on. The starter brings the JDBC instrumentation, so there is none to wire up yourself.
 - Charts that mark every application start and stop, with metric history surviving a
   restart.
 - An error page on a local run, in place of the whitelabel page, carrying the exception,
   the stack trace and the toolbar.
-- Zero configuration, on for a local run and off everywhere else.
+- Zero configuration, on for a local run, off for a deployment or a test.
 
 ## Documentation
 
@@ -119,10 +120,11 @@ Further reading:
 
 ## Requirements
 
-- Java 25+, the current LTS. The build compiles with `release 25` and has no toolchain
-  fallback, Peekaboot's collectors run on virtual threads, and nothing below 25 is built
-  or tested.
+- Java 25 or newer, the current LTS. The build compiles with `release 25` and has no
+  toolchain fallback, Peekaboot's collectors run on virtual threads, and nothing below 25 is
+  built or tested.
 - Spring Boot 4.1.
+- A servlet web application.
 
 ## License
 
