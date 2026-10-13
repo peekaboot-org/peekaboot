@@ -470,51 +470,52 @@ exposure model means in practice for securing a deployment.
 ### Error Page
 
 `ErrorPageAutoConfiguration` registers Peekaboot's page in the fallback slot Spring Boot leaves
-for one, or - where `peekaboot.error-page.override` is set - in either of two places that
+for one. With `peekaboot.error-page.override` set, it registers it in either of two places that
 outrank an application's own.
 
 Unset, it registers a `View` bean named `error`, the fallback slot. Boot's own whitelabel view
 is `@ConditionalOnMissingBean(name = "error")`, so registering this bean first, `before
 ErrorMvcAutoConfiguration`, backs the whitelabel view off and leaves Boot's
 `BeanNameViewResolver` to resolve `error` to `PeekabootErrorView` instead. It carries every
-condition Boot puts on its own whitelabel page - `spring.web.error.whitelabel.enabled` and no
-`error` view template available - plus its own `@ConditionalOnMissingBean(name = "error")`. An
+condition Boot puts on its own whitelabel page (`spring.web.error.whitelabel.enabled` and no
+`error` view template available) plus its own `@ConditionalOnMissingBean(name = "error")`. An
 application therefore keeps whatever error page it already has: an `error` view bean of its
 own, an `error` template, or a static `error/*.html`.
 
 Set, it registers two beans instead. An `ErrorViewResolver` at `Ordered.HIGHEST_PRECEDENCE`,
-which `BasicErrorController` consults before it falls back to the view name `error` - so
+which `BasicErrorController` consults before it falls back to the view name `error`. So
 Peekaboot's page outranks a template, a static `error/*.html` and an application `error` bean,
 without clashing with any of them. None of the back-off conditions apply on that path, including
 the whitelabel one, since it does not depend on `BeanNameViewResolver`. The resolver answers
 every error. Registering any `ErrorViewResolver` removes Boot's own, so returning null would
 drop the `error/4xx.html` convention rather than fall through to it.
 
-Alongside it, a `PeekabootErrorExceptionResolver`, a `HandlerExceptionResolver` at
-`Ordered.HIGHEST_PRECEDENCE + 1` - one slot after Boot's `DefaultErrorAttributes`, which is
+Alongside it sits a `PeekabootErrorExceptionResolver`, a `HandlerExceptionResolver` at
+`Ordered.HIGHEST_PRECEDENCE + 1`, one slot after Boot's `DefaultErrorAttributes`, which is
 itself a resolver at that exact value. A tie there would be broken by bean registration order,
-which nothing here controls, so the next slot is the deterministic choice; it is not, as the
-value might suggest, about giving `DefaultErrorAttributes` a chance to record the exception
-first - `DispatcherServlet.processHandlerException` calls `WebUtils.exposeErrorRequestAttributes`
-once a resolver has answered, which sets `jakarta.servlet.error.exception` if nothing already
-has, and `DefaultErrorAttributes.getError` falls back to exactly that. This is what lets
+which nothing here controls, so the next slot is the deterministic choice. Despite what the
+value suggests, the slot does not give `DefaultErrorAttributes` a chance to record the
+exception first. `DispatcherServlet.processHandlerException` calls
+`WebUtils.exposeErrorRequestAttributes` once a resolver has answered, which sets
+`jakarta.servlet.error.exception` if nothing already has, and `DefaultErrorAttributes.getError`
+falls back to exactly that. This is what lets
 Peekaboot's page win where an application renders its own from a `@ControllerAdvice`: that
 advice resolves inside the REQUEST dispatch, so no ERROR dispatch ever follows it,
 `BasicErrorController` never runs and no `ErrorViewResolver` is ever consulted. It outranks the
 `HandlerExceptionResolverComposite` that holds `ExceptionHandlerExceptionResolver` among Boot's
 own resolvers, so it intercepts the exception first. It returns
-null for an `AsyncRequestNotUsableException` before anything else - `DefaultHandlerExceptionResolver`
+null for an `AsyncRequestNotUsableException` before anything else. `DefaultHandlerExceptionResolver`
 answers that one with an empty `ModelAndView` on purpose, so nothing is written to a connection
 the client already dropped, and rendering here would call `getWriter()` on that same dead
 connection and raise the exception again. It also returns null, falling through to the
 application's own handling, unless the `Accept` header names `text/html` with a quality above
 zero. A bare `*/*` or a missing header does not count, so Swagger UI, curl and `fetch()` keep
 getting the application's own error response, as does an XHR asking for JSON. It derives a
-status from the exception (an
-`ErrorResponse`'s own status, a merged `@ResponseStatus` on its class, or the same on a cause,
-walked iteratively with a small depth cap so a cyclic cause chain cannot overflow the stack;
-500 otherwise), sets `RequestDispatcher.ERROR_STATUS_CODE`, `ERROR_REQUEST_URI` and
-`ERROR_METHOD` on the request - nothing else sets that last one on a REQUEST dispatch - so
+status from the exception (an `ErrorResponse`'s own status, a merged `@ResponseStatus` on its
+class, or the same on a cause, walked iteratively with a small depth cap so a cyclic cause
+chain cannot overflow the stack; 500 otherwise), sets `RequestDispatcher.ERROR_STATUS_CODE`,
+`ERROR_REQUEST_URI` and
+`ERROR_METHOD` on the request (nothing else sets that last one on a REQUEST dispatch), so
 `PeekabootErrorView` renders the same request line, status and reason it would off a real ERROR
 dispatch, and returns a `ModelAndView` carrying that status and a `PeekabootErrorView` built the
 same way the `ErrorViewResolver`'s is, from a separate call to the same `errorView(...)` helper.
@@ -551,16 +552,16 @@ trace reaches: `StackTraceHtml` renders it into the error page's `<pre>`, and
 Both callers pass it the same `exclusions` and `applicationPackages`; neither surface
 classifies anything of its own.
 
-A frame hides when its whole line contains one of the exclusion patterns as a substring - the
-same test Logback's `%wEx` conversion word applies, not a prefix and not a regex. That is why a
-marker like `ByCGLIB` works as a pattern: it need not anchor to a package boundary, only appear
-somewhere in the line a CGLIB-generated proxy class leaves behind.
+A frame hides when its whole line contains one of the exclusion patterns as a substring, the
+same test Logback's `%wEx` conversion word applies. A pattern is neither a prefix nor a regex.
+That is why a marker like `ByCGLIB` works as a pattern: it need not anchor to a package
+boundary, only appear somewhere in the line a CGLIB-generated proxy class leaves behind.
 
 `ExclusionPatterns.resolve` picks the list once, from the first source that carries an opinion.
 An explicit `peekaboot.stack-trace.exclude` wins when it is a non-empty list, and replaces the
 built-in list rather than adding to it; an empty list there is not an opinion, and falls
 through the same as leaving the property unset. `logging.exception-conversion-word` comes next.
-A `%wEx{...}` block that names nothing past its leading depth - `%wEx{full}` alone, say - is
+A `%wEx{...}` block that names nothing past its leading depth, such as `%wEx{full}` alone, is
 itself an opinion, "exclude nothing," so resolution stops there with an empty list and folding
 hides nothing; `ExclusionPatternsTest` pins `resolve(List.of(), "%wEx{full}")` at empty for
 exactly this reason. A conversion word carrying no `%wEx{...}` block at all carries no opinion,
@@ -568,15 +569,14 @@ and falls through instead to `ExclusionPatterns.DEFAULT`, a built-in list of ref
 container, web-framework, template-engine and driver/proxy packages.
 
 `StackTraceFolding.fold` decides `isApplicationFrame` before it ever tests a frame against the
-exclusion list, against the `applicationPackages` list its caller passes in - `StackTraceFolding`
-lives in `peekaboot-backend` and takes that list as a parameter, so it cannot reference
-`ApplicationPackages`, which resolves it and lives in the autoconfigure module - so an
-application frame is never hidden even where its line would otherwise match a pattern. What is
-highlighted and what is hidden come from separate inputs and never merge. Non-frame lines - the
-exception header, `Caused by:`, `Suppressed:`, and an elision (`... N more` from
-`printStackTrace`, `... N common frames omitted` from the log path) - never enter a hidden run
-either, since only a tab-led line that starts `at ` once its own leading tabs are gone is a
-candidate.
+exclusion list, against the `applicationPackages` list its caller passes in. An application
+frame is therefore never hidden, even where its line would otherwise match a pattern. The list
+is a parameter because `StackTraceFolding` lives in `peekaboot-backend` and cannot reference
+`ApplicationPackages`, which resolves it and lives in the autoconfigure module. What is
+highlighted and what is hidden come from separate inputs and never merge. Non-frame lines never
+enter a hidden run either. These are the exception header, `Caused by:`, `Suppressed:`, and an
+elision (`... N more` from `printStackTrace`, `... N common frames omitted` from the log path).
+Only a tab-led line that starts `at ` once its own leading tabs are gone is a candidate.
 
 Folding is a render-time decision. `PeekabootLogbackAppender` captures a throwable's full trace
 unfolded, capped at 1000 lines with a `... N lines omitted` marker so a `StackOverflowError`'s
@@ -1034,15 +1034,15 @@ recovered. A telling name has to come from the application, through
 
 Two guards, for two different failure modes. The decorator observes only when the submitting
 thread already has an observation open; a task with nothing to continue would start a rootless
-span rather than extend a trace. And it recognizes the two shapes the scheduling paths hand a
-decorator - a `RunnableScheduledFuture` from `ThreadPoolTaskScheduler`'s `decorateTask` hook, a
-`DelegatingErrorHandlingRunnable` from `SimpleAsyncTaskScheduler` - and returns those unwrapped:
-one `TaskDecorator` bean serves both the executor and the scheduler builders, and without that
+span rather than extend a trace. And it returns unwrapped the two shapes the scheduling paths
+hand a decorator, a `RunnableScheduledFuture` from `ThreadPoolTaskScheduler`'s `decorateTask`
+hook and a `DelegatingErrorHandlingRunnable` from `SimpleAsyncTaskScheduler`. One
+`TaskDecorator` bean serves both the executor and the scheduler builders, and without that
 check Peekaboot's span would parent Spring's own `tasks.scheduled.execution` observation, turning
 every scheduled job into an async task.
 
 `AsyncInstrumentationAutoConfiguration` registers the bean as `peekabootAsyncTaskDecorator`, and
-its `@ConditionalOnMissingBean` matches that name, not the `TaskDecorator` type - the same reason
+its `@ConditionalOnMissingBean` matches that name, not the `TaskDecorator` type, for the same reason
 `tracingInterceptorConfigurer` above matches by name. `ContextPropagatingTaskDecorator`, which
 Boot registers when an application sets `spring.task.execution.propagate-context=true`, is
 itself a `TaskDecorator` bean; a type-based condition would treat it as already satisfying the
@@ -1051,7 +1051,7 @@ serve. Peekaboot never sets that property itself.
 
 Both decorators can therefore coexist, folded by Boot into one `CompositeTaskDecorator`. The
 fold makes the list's first element innermost, and `ObjectProvider.orderedStream()` sorts
-ascending, so the lowest order ends up innermost - closest to the task. `ContextPropagatingTaskDecorator`
+ascending, so the lowest order ends up innermost, closest to the task. `ContextPropagatingTaskDecorator`
 declares no order and sorts last, at `Ordered.LOWEST_PRECEDENCE`. Peekaboot's decorator carries
 an explicit `@Order(Ordered.LOWEST_PRECEDENCE - 1000)`, placing it just inside that: the trace
 context is restored before Peekaboot's span opens, and an application decorator with an ordinary
@@ -1400,30 +1400,32 @@ Excluding `org.peekaboot.autoconfigure.QueryParameterAutoConfiguration` via
 feature untouched.
 
 Two caps bound what a single query can add. `SqlLiterals.MAX_LITERAL_LENGTH` (1000) cuts a
-literal past that many source characters - or bytes, for a `byte[]`, capped before hex-encoding
-so the cap bounds the source data rather than the doubled hex output - and marks it with the
-count dropped as a trailing SQL block comment, `'...' /* N characters omitted */` or
-`X'...' /* N bytes omitted */`, so a truncated literal is still one well-formed literal followed
-by a comment rather than a closed string trailing bare, unquoted text - the shape a literal must
-keep if it is ever substituted into query text in place of a placeholder.
+literal past that many source characters, or bytes for a `byte[]`. A `byte[]` is capped before
+hex-encoding, so the cap bounds the source data rather than the doubled hex output. The cut
+literal ends with the count dropped as a trailing SQL block comment,
+`'...' /* N characters omitted */` or `X'...' /* N bytes omitted */`. A truncated literal
+therefore stays one well-formed literal followed by a comment, rather than a closed string
+trailing bare, unquoted text. A literal must keep that shape if it is ever substituted into
+query text in place of a placeholder.
 `QueryParameterObservationFilter.MAX_PARAMETER_SETS` (100) drops the parameter sets of a batch
 past that many entries, unmarked, rather than rendering and serialising all of them. Both exist
-because the capture is always on - unlike datasource-micrometer's own `jdbc.params`, off by
-default - and nothing else on the ingestion path bounds a tag's size: an unbounded literal or
-batch would otherwise cost time on the application's query thread, bloat the in-memory trace
-store, and ride along on any OTLP export.
+because the capture is always on, unlike datasource-micrometer's own `jdbc.params`, which is
+off by default. Nothing else on the ingestion path bounds a tag's size, so an unbounded literal
+or batch would cost time on the application's query thread, bloat the in-memory trace store,
+and ride along on any OTLP export.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) names each row by `span.name`, OpenTelemetry's own span-name
 summary such as `SELECT customer_order`, and shows the statement in the span's query panel.
 The Queries tab (`trace-detail/tabs/queries.js`) lists `query.statement`. Both show the SQL
 `DbSpans.sql` picks from the tags listed above, with the bind parameters from
-`peekaboot.query.parameters`, and render it through `shared/sql-view.js`: highlighted by
-`shared/sql.js`'s own tokenizer, raw by default, and on request shown formatted - laid out by
-the backend's `SqlFormatter` from the raw SQL and masked like the rest of the statement - and
-with its parameters substituted in the browser. The overlay opens on Spans by default (`trace-detail.js`'s `initial: 'spans'`),
-and `ScreenshotCapture` photographs both, so `trace-detail-queries-*` is the shipped image
-demonstrating `QueryExtractor`'s output.
+`peekaboot.query.parameters`, and render it through `shared/sql-view.js`. That view highlights
+the SQL with `shared/sql.js`'s own tokenizer and shows it raw by default. On request it shows
+the formatted text, which the backend's `SqlFormatter` lays out from the raw SQL and masks like
+the rest of the statement, with the parameters substituted in the browser. The overlay opens
+on Spans by default (`trace-detail.js`'s `initial: 'spans'`), and `ScreenshotCapture`
+photographs both, so `trace-detail-queries-*` is the shipped image demonstrating
+`QueryExtractor`'s output.
 
 ## Data Models
 
