@@ -91,6 +91,30 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("markup.js", "m.MASK_LITERAL")).isEqualTo(MaskingEngine.MASK_LITERAL);
     }
 
+    /**
+     * Every caller hands the stored locale straight to Intl, which reads undefined as the
+     * browser's own locale and throws on null. Read through typeof, since both arrive in Java
+     * as null.
+     */
+    @Test
+    void anUnusableStoredLocaleReadsAsUndefined() {
+        assertThat(
+                        evalModule(
+                                "storage.js",
+                                "(() => { localStorage.removeItem('peekaboot-locale'); return typeof m.readLocaleSetting(); })()"))
+                .isEqualTo("undefined");
+        assertThat(
+                        evalModule(
+                                "storage.js",
+                                "(() => { localStorage.setItem('peekaboot-locale', 'en_US'); return typeof m.readLocaleSetting(); })()"))
+                .isEqualTo("undefined");
+        assertThat(
+                        evalModule(
+                                "storage.js",
+                                "(() => { localStorage.setItem('peekaboot-locale', 'de-DE'); return m.readLocaleSetting(); })()"))
+                .isEqualTo("de-DE");
+    }
+
     @Test
     void highlightTextWrapsEveryMatchAndEscapesTheRest() {
         assertThat(evalModule("markup.js", "m.highlightText('a<b>a', 'a')"))

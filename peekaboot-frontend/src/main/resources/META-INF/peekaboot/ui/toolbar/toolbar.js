@@ -17,10 +17,7 @@
  *
  * The bar never fetches /api/features: it colours durations by the shared defaults
  * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults. Its counts
- * do group in the dashboard's chosen locale, shared through the same storage.js key the
- * theme uses - but read fresh with readLocaleSetting() each time the stat line renders or
- * the overlay opens, not watched live the way the theme is. It falls back to the browser's
- * own locale when nothing valid is stored.
+ * group in the dashboard's chosen locale, read through storage.js's readLocaleSetting().
  */
 import {createClient} from '../shared/api.js';
 import {badge} from '../shared/components.js';
@@ -115,11 +112,7 @@ function initToolbar(host, data) {
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
         const duration = durationStat(clock, trace.durationMs, durationSeverity(trace.durationMs));
-        // Read fresh rather than captured once at init, the same reason openOverlay() below
-        // reads it again: a reader can change the dashboard's locale select without
-        // reloading this page. undefined (not null): toLocaleString(locale) throws given an
-        // explicit null, but treats undefined as "use the browser's own".
-        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {locale: readLocaleSetting() || undefined}));
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {locale: readLocaleSetting()}));
     }
 
     // Nothing ever arrived: replace "loading" with the placeholder row rather than
@@ -132,7 +125,7 @@ function initToolbar(host, data) {
 
     async function openOverlay() {
         const overlay = await import('../trace-detail/trace-detail.js');
-        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath, locale: readLocaleSetting() || undefined});
+        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath, locale: readLocaleSetting()});
     }
 
     if (!data.idle && data.traceId) {

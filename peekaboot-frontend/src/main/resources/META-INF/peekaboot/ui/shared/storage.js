@@ -31,15 +31,15 @@ export const LOCALE_STORAGE_KEY = 'peekaboot-locale';
 /**
  * The stored locale tag, kept only if Intl actually accepts it - a stale non-BCP-47 value
  * (e.g. an old build's 'en_US') would otherwise reach every toLocaleString call as a
- * RangeError. Null for nothing stored, a blocked store, or an invalid tag, so every
- * caller's own fallback (the browser's locale) applies the same way.
+ * RangeError. Undefined for nothing stored, a blocked store, or an invalid tag: Intl and
+ * toLocaleString read undefined as the browser's own locale, and throw on null.
  */
 export function readLocaleSetting() {
     const value = readSetting(LOCALE_STORAGE_KEY);
-    if (!value) return null;
+    if (!value) return undefined;
     try {
-        return Intl.NumberFormat.supportedLocalesOf([value]).length > 0 ? value : null;
+        return Intl.NumberFormat.supportedLocalesOf([value]).length > 0 ? value : undefined;
     } catch {
-        return null;
+        return undefined;
     }
 }
