@@ -19,7 +19,6 @@ dependencies {
     // ErrorAttributes for the error page, see PeekabootErrorView
     compileOnly("org.springframework.boot:spring-boot-webmvc")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
-    compileOnly("org.springframework.security:spring-security-core")
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("com.zaxxer:HikariCP")
     compileOnly("org.hibernate.orm:hibernate-core")
@@ -32,7 +31,6 @@ dependencies {
     // shared test support (LogCapture)
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.springframework.security:spring-security-core")
     // otherwise resolves only transitively through spring-boot-starter-test, so a
     // starter change could remove it silently
     testImplementation("org.awaitility:awaitility")
