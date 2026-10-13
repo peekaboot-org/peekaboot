@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
@@ -242,29 +243,73 @@ class InsightsCollectorTest {
 
     /**
      * The snapshot writer wakes on the persistence-interval boundary, which is a level-0
-     * boundary too, so a capture can land while a tick is still appending series one at a
-     * time. The codec refuses a column longer than its level's count, so a snapshot taken
-     * mid-tick has to trim itself to what every series has rather than fail the write and
-     * burn the store's one-shot failure log. Reproduced by parking the tick inside the
-     * second series' gauge, once the first series' ring already holds the new sample.
+     * boundary too, so a capture often lands while a tick is running. The codec refuses a
+     * column longer than its level's count, so such a capture must carry one count for every
+     * series rather than fail the write and burn the store's one-shot failure log.
      */
     @Test
-    void captureTakenMidTickTrimsEverySeriesToTheSampleCountTheyAllHave() throws Exception {
+    void captureTakenMidTickCarriesOneSampleCountForEverySeries() throws Exception {
+        MidTick midTick = parkTickInsideSampling();
+        InsightsSnapshot snapshot;
+        try {
+            snapshot = midTick.collector().capture();
+        } finally {
+            midTick.finish();
+        }
+
+        assertThat(snapshot.levels().get(0).count()).isEqualTo(1);
+        // the parked tick has sampled the first series but written nothing yet
+        assertThat(snapshot.series().get("first").get(0)[0]).containsExactly(1.0);
+        assertThat(snapshot.series().get("second").get(0)[0]).containsExactly(2.0);
+        // the codec refuses a snapshot whose columns contradict its header, so a write that
+        // succeeds is the assertion that the capture is self-consistent
+        InsightsSnapshotCodec.write(new DataOutputStream(OutputStream.nullOutputStream()), snapshot);
+    }
+
+    /**
+     * A tick samples every series before it appends any, so a snapshot taken while it is
+     * still sampling sees only the previous whole tick. The chart dates sample i from
+     * {@code endEpochMs} and {@code count}, so a partial tick would misdate every sample. This
+     * pins the append-after-sampling order only: the write has no seam to park in, so the
+     * lock {@code snapshot} takes is not covered here.
+     */
+    @Test
+    void snapshotTakenMidTickSeesOnlyWholeTicks() throws Exception {
+        MidTick midTick = parkTickInsideSampling();
+        LevelSnapshot snapshot;
+        try {
+            snapshot = midTick.collector().snapshot(0);
+        } finally {
+            midTick.finish();
+        }
+
+        assertThat(snapshot.count()).isEqualTo(1);
+        assertThat(snapshot.endEpochMs()).isEqualTo(10_000);
+        assertThat(snapshot.tickValues())
+                .allSatisfy((id, values) -> assertThat(values).as(id).hasSize(snapshot.count()));
+    }
+
+    /**
+     * Two value series, ticked once at 10_000, with the 20_000 tick parked inside the second
+     * series' gauge after the first series sampled its newer value. The caller reads, then
+     * calls {@link MidTick#finish()}.
+     */
+    private MidTick parkTickInsideSampling() throws InterruptedException {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         AtomicLong first = new AtomicLong(1);
         AtomicBoolean parkSecond = new AtomicBoolean();
-        CountDownLatch tickParked = new CountDownLatch(1);
-        CountDownLatch captureDone = new CountDownLatch(1);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
         Gauge.builder("first", first::get).register(registry);
         Gauge.builder("second", () -> {
                     if (parkSecond.get()) {
-                        tickParked.countDown();
-                        awaitQuietly(captureDone);
+                        entered.countDown();
+                        awaitQuietly(release);
                     }
                     return 2;
                 })
                 .register(registry);
-        InsightsCollector midTick = new InsightsCollector(
+        InsightsCollector collector = new InsightsCollector(
                 levels,
                 List.of(value("first", "first"), value("second", "second")),
                 Set.of(),
@@ -272,24 +317,27 @@ class InsightsCollectorTest {
                 registry,
                 InsightsCollectors.noOpListener(),
                 InsightsCollectors.noSnapshot());
-        midTick.tick(10_000);
+        collector.tick(10_000);
         first.set(5);
         parkSecond.set(true);
-        Thread tick = new Thread(() -> midTick.tick(20_000), "tick");
+        Thread tick = new Thread(() -> collector.tick(20_000), "tick");
         tick.start();
-        tickParked.await();
+        boolean parked = entered.await(5, TimeUnit.SECONDS);
+        if (!parked) {
+            release.countDown();
+        }
+        assertThat(parked).as("tick parked inside the second series' gauge").isTrue();
+        return new MidTick(collector, release, tick);
+    }
 
-        InsightsSnapshot snapshot = midTick.capture();
-        captureDone.countDown();
-        tick.join();
+    private record MidTick(InsightsCollector collector, CountDownLatch release, Thread tick) {
 
-        assertThat(snapshot.levels().get(0).count()).isEqualTo(1);
-        // the first series had the newer sample already; it is the one dropped
-        assertThat(snapshot.series().get("first").get(0)[0]).containsExactly(1.0);
-        assertThat(snapshot.series().get("second").get(0)[0]).containsExactly(2.0);
-        // the codec refuses a snapshot whose columns contradict its header, so a write that
-        // succeeds is the assertion that the trim left it self-consistent
-        InsightsSnapshotCodec.write(new DataOutputStream(OutputStream.nullOutputStream()), snapshot);
+        void finish() throws InterruptedException {
+            release.countDown();
+            assertThat(tick.join(Duration.ofSeconds(5)))
+                    .as("parked tick finished")
+                    .isTrue();
+        }
     }
 
     /** One rate series over {@code test.counter}, on the same registry and levels as the fixture collector. */

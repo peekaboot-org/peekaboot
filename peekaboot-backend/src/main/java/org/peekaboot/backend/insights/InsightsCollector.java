@@ -175,15 +175,11 @@ public final class InsightsCollector implements SmartLifecycle {
     /** Samples every series into level 0 and notifies the listener. */
     void tick(long epochMs) {
         long elapsedMs = elapsedSince(0, epochMs);
-        rings.fillMissed(0, epochMs);
-
         Map<String, Double> values = new LinkedHashMap<>();
         for (Map.Entry<String, SeriesSampler> entry : samplers.entrySet()) {
-            double value = entry.getValue().sample(elapsedMs);
-            rings.addTick(entry.getKey(), value);
-            values.put(entry.getKey(), value);
+            values.put(entry.getKey(), entry.getValue().sample(elapsedMs));
         }
-        rings.stamp(0, epochMs);
+        rings.appendTick(epochMs, values);
 
         listener.onTick(epochMs, values);
     }
@@ -208,18 +204,15 @@ public final class InsightsCollector implements SmartLifecycle {
         if (level < 1 || level >= intervalMillis.length) {
             throw new IllegalArgumentException("level must be in [1, " + (intervalMillis.length - 1) + "]");
         }
-        rings.fillMissed(level, epochMs);
-
         int n = (int) (intervalMillis[level] / intervalMillis[level - 1]);
         Map<String, AggregateStats> entries = new LinkedHashMap<>();
         for (String id : rings.seriesIds()) {
             AggregateStats stats = level == 1
                     ? AggregateStats.of(rings.tickWindow(id, n))
                     : aggregateFromFinerLevel(rings.statsWindow(id, level - 1, n));
-            rings.addStats(id, level, stats);
             entries.put(id, stats);
         }
-        rings.stamp(level, epochMs);
+        rings.appendStats(level, epochMs, entries);
 
         listener.onRollUp(level, epochMs, entries);
     }

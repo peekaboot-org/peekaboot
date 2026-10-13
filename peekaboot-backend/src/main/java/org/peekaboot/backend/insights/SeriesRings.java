@@ -15,12 +15,12 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
  * {@link StatsRing} per coarser level, plus the boundary each level was last stamped with.
  * The same set is what persistence writes and reads back.
  *
- * <p>Written by one collector thread per level and read without a common lock by the API
- * and the snapshot writer. Every ring synchronizes on itself, so a reader sees whole
- * samples; the skew a concurrent write leaves is what {@link #snapshot(int)} and
- * {@link #capture()} describe. A level's samples are appended before
- * {@link #stamp(int, long)} dates them, so a reader that has already read the boundary can
- * find the rings one sample ahead of it, never one behind.
+ * <p>Written by one collector thread per level, and once by {@link #restore} ahead of their
+ * first write; read by the API and the snapshot writer. A tick or roll-up lands as one write
+ * under one lock: its gap fill, every series' sample and the stamp that dates them. A restore
+ * holds the same lock, and {@link #snapshot(int)} and {@link #capture()} read under it, so a
+ * reader sees whole ticks only. Meters are sampled before the write, so the lock covers
+ * in-memory appends and nothing slower.
  */
 final class SeriesRings {
 
@@ -31,6 +31,8 @@ final class SeriesRings {
     private final Map<String, StatsRing[]> statsRings = new LinkedHashMap<>();
 
     private final AtomicLongArray levelEndEpochMs;
+
+    private final Object lock = new Object();
 
     SeriesRings(List<InsightsProperties.Level> levels, Collection<String> seriesIds) {
         this.intervalMillis = new long[levels.size()];
@@ -56,14 +58,34 @@ final class SeriesRings {
         return level0Rings.keySet();
     }
 
-    /** Appends one sampled value to a series' level-0 ring. */
-    void addTick(String seriesId, double value) {
-        level0Rings.get(seriesId).add(value);
+    /**
+     * Appends one sample to every series' level-0 ring and dates them {@code epochMs}, as one
+     * write. A series {@code values} lacks gets a gap, and ids no series carries are ignored,
+     * so every ring grows by the same count.
+     */
+    void appendTick(long epochMs, Map<String, Double> values) {
+        synchronized (lock) {
+            fillMissed(0, epochMs);
+            for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+                entry.getValue().add(values.getOrDefault(entry.getKey(), Double.NaN));
+            }
+            levelEndEpochMs.set(0, epochMs);
+        }
     }
 
-    /** Appends one aggregated window to a series' ring at {@code level}. */
-    void addStats(String seriesId, int level, AggregateStats stats) {
-        statsRings.get(seriesId)[level].add(stats);
+    /**
+     * Appends one aggregated window to every series' ring at {@code level} and dates them
+     * {@code epochMs}, as one write, with the same gap and unknown-id rules as
+     * {@link #appendTick}.
+     */
+    void appendStats(int level, long epochMs, Map<String, AggregateStats> entries) {
+        synchronized (lock) {
+            fillMissed(level, epochMs);
+            for (Map.Entry<String, StatsRing[]> entry : statsRings.entrySet()) {
+                entry.getValue()[level].add(entries.getOrDefault(entry.getKey(), AggregateStats.EMPTY));
+            }
+            levelEndEpochMs.set(level, epochMs);
+        }
     }
 
     /** The last {@code n} level-0 samples of a series, oldest first. */
@@ -81,11 +103,6 @@ final class SeriesRings {
         return levelEndEpochMs.get(level);
     }
 
-    /** Dates a level's newest samples, once every series' write for {@code epochMs} has landed. */
-    void stamp(int level, long epochMs) {
-        levelEndEpochMs.set(level, epochMs);
-    }
-
     /**
      * Appends one empty entry per boundary this level slept through (a suspended
      * laptop, a stalled sampler). Timestamps derive from {@code (endEpoch, index)}, so a
@@ -94,7 +111,7 @@ final class SeriesRings {
      * beyond which every visible sample is a gap anyway. Listeners see no synthetic
      * events - clients mirror the same geometry from the event's epoch.
      */
-    void fillMissed(int level, long epochMs) {
+    private void fillMissed(int level, long epochMs) {
         long previous = levelEndEpochMs.get(level);
         if (previous <= 0 || epochMs <= previous) {
             return;
@@ -117,73 +134,71 @@ final class SeriesRings {
     }
 
     /**
-     * Point-in-time copy of one level's ring contents, read without a lock like every API
-     * read. {@code count} is the length of whichever series the loop lands on last: a tick
-     * or roll-up landing mid-read can leave the series read after it one sample longer
-     * than those before, and the response tolerates that skew rather than trimming the way
-     * {@link #capture()} must for the file format.
+     * Point-in-time copy of one level's ring contents, read under the same lock as
+     * {@link #appendTick} so it holds whole ticks only: every series carries {@code count}
+     * samples and {@code endEpochMs} dates the newest. The chart dates each sample from those
+     * two, so a partial tick would misdate every sample and repeat the next live event.
      */
     LevelSnapshot snapshot(int level) {
-        long intervalMs = intervalMillis[level];
-        long endEpochMs = levelEndEpochMs.get(level);
-        if (level == 0) {
-            Map<String, double[]> tickValues = new LinkedHashMap<>();
-            int count = 0;
-            for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
-                double[] values = entry.getValue().toArray();
-                tickValues.put(entry.getKey(), values);
-                count = values.length;
+        synchronized (lock) {
+            long intervalMs = intervalMillis[level];
+            long endEpochMs = levelEndEpochMs.get(level);
+            if (level == 0) {
+                Map<String, double[]> tickValues = new LinkedHashMap<>();
+                int count = 0;
+                for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+                    double[] values = entry.getValue().toArray();
+                    tickValues.put(entry.getKey(), values);
+                    count = values.length;
+                }
+                return new LevelSnapshot(0, intervalMs, endEpochMs, count, tickValues, Map.of());
             }
-            return new LevelSnapshot(0, intervalMs, endEpochMs, count, tickValues, Map.of());
+            Map<String, Map<String, double[]>> statValues = new LinkedHashMap<>();
+            int count = 0;
+            for (Map.Entry<String, StatsRing[]> entry : statsRings.entrySet()) {
+                StatsRing ring = entry.getValue()[level];
+                statValues.put(entry.getKey(), ring.toArrays());
+                count = ring.size();
+            }
+            return new LevelSnapshot(level, intervalMs, endEpochMs, count, Map.of(), statValues);
         }
-        Map<String, Map<String, double[]>> statValues = new LinkedHashMap<>();
-        int count = 0;
-        for (Map.Entry<String, StatsRing[]> entry : statsRings.entrySet()) {
-            StatsRing ring = entry.getValue()[level];
-            statValues.put(entry.getKey(), ring.toArrays());
-            count = ring.size();
-        }
-        return new LevelSnapshot(level, intervalMs, endEpochMs, count, Map.of(), statValues);
     }
 
     /**
      * Everything persistence needs: every level of every series, including the
-     * {@code samples} column the API's {@link #snapshot(int)} deliberately omits.
-     * Ring contents and {@code endEpochMs} are read without a common lock, exactly as
-     * the API reads them, so a tick or roll-up landing mid-capture can leave the series
-     * read after it one sample longer than those read before. The snapshot is made
-     * self-consistent instead: every level's count is what all of its series have, and
-     * a series that is longer loses its newest sample - the tick that produced it is
-     * not yet complete, and the next capture carries it. What remains is that the newest
-     * sample can be dated one interval early, once, in a cache.
+     * {@code samples} column the API's {@link #snapshot(int)} deliberately omits. Read under
+     * the same lock as {@link #appendTick}, like {@link #snapshot(int)}, so every level holds
+     * whole ticks only and its {@code endEpochMs} dates the newest of them.
      */
     InsightsSnapshot capture() {
-        long[] endEpochMs = new long[intervalMillis.length];
-        for (int level = 0; level < intervalMillis.length; level++) {
-            endEpochMs[level] = levelEndEpochMs.get(level);
-        }
-        Map<String, List<double[][]>> series = new LinkedHashMap<>();
-        for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
-            List<double[][]> byLevel = new ArrayList<>(intervalMillis.length);
-            byLevel.add(new double[][] {entry.getValue().toArray()});
-            StatsRing[] rings = statsRings.get(entry.getKey());
-            for (int level = 1; level < intervalMillis.length; level++) {
-                byLevel.add(rings[level].toColumns());
-            }
-            series.put(entry.getKey(), byLevel);
-        }
-        int[] counts = sharedCounts(series);
-        for (List<double[][]> byLevel : series.values()) {
+        synchronized (lock) {
+            long[] endEpochMs = new long[intervalMillis.length];
             for (int level = 0; level < intervalMillis.length; level++) {
-                byLevel.set(level, trimmed(byLevel.get(level), counts[level]));
+                endEpochMs[level] = levelEndEpochMs.get(level);
             }
+            Map<String, List<double[][]>> series = new LinkedHashMap<>();
+            for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+                List<double[][]> byLevel = new ArrayList<>(intervalMillis.length);
+                byLevel.add(new double[][] {entry.getValue().toArray()});
+                StatsRing[] rings = statsRings.get(entry.getKey());
+                for (int level = 1; level < intervalMillis.length; level++) {
+                    byLevel.add(rings[level].toColumns());
+                }
+                series.put(entry.getKey(), byLevel);
+            }
+            int[] counts = sharedCounts(series);
+            for (List<double[][]> byLevel : series.values()) {
+                for (int level = 0; level < intervalMillis.length; level++) {
+                    byLevel.set(level, trimmed(byLevel.get(level), counts[level]));
+                }
+            }
+            List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
+            for (int level = 0; level < intervalMillis.length; level++) {
+                levels.add(new InsightsSnapshot.Level(
+                        intervalMillis[level], levelSizes[level], endEpochMs[level], counts[level]));
+            }
+            return new InsightsSnapshot(System.currentTimeMillis(), levels, series);
         }
-        List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
-        for (int level = 0; level < intervalMillis.length; level++) {
-            levels.add(new InsightsSnapshot.Level(
-                    intervalMillis[level], levelSizes[level], endEpochMs[level], counts[level]));
-        }
-        return new InsightsSnapshot(System.currentTimeMillis(), levels, series);
     }
 
     /** Per level, the sample count every series has; 0 when no series is configured at all. */
@@ -221,20 +236,22 @@ final class SeriesRings {
      * gap on this level's first tick or roll-up, with no separate replay to maintain.
      */
     void restore(InsightsSnapshot snapshot) {
-        for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
-            List<double[][]> persisted = snapshot.series().get(entry.getKey());
-            StatsRing[] rings = statsRings.get(entry.getKey());
-            if (persisted != null && persisted.size() == intervalMillis.length) {
-                entry.getValue().restore(persisted.get(0)[0]);
-                for (int level = 1; level < intervalMillis.length; level++) {
-                    rings[level].restore(persisted.get(level));
+        synchronized (lock) {
+            for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+                List<double[][]> persisted = snapshot.series().get(entry.getKey());
+                StatsRing[] rings = statsRings.get(entry.getKey());
+                if (persisted != null && persisted.size() == intervalMillis.length) {
+                    entry.getValue().restore(persisted.get(0)[0]);
+                    for (int level = 1; level < intervalMillis.length; level++) {
+                        rings[level].restore(persisted.get(level));
+                    }
+                } else {
+                    padWithGaps(entry.getValue(), rings, snapshot.levels());
                 }
-            } else {
-                padWithGaps(entry.getValue(), rings, snapshot.levels());
             }
-        }
-        for (int level = 0; level < intervalMillis.length; level++) {
-            levelEndEpochMs.set(level, snapshot.levels().get(level).endEpochMs());
+            for (int level = 0; level < intervalMillis.length; level++) {
+                levelEndEpochMs.set(level, snapshot.levels().get(level).endEpochMs());
+            }
         }
     }
 
