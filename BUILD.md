@@ -443,11 +443,11 @@ invocation resolves whatever is latest that day.
 
 ### `build-on-push.yml`
 
-Runs on every branch except `main`: checkout with `fetch-depth: 0` for the subject gate and git-cliff,
-`prepare-build`, the branch's snapshot version, then
-`./mvnw --batch-mode clean deploy -P peekaboot-publish`. After the build it
-installs git-cliff, runs the release-notes tests, gates the pushed commit subjects and
-writes the pending notes into the run summary. The job keeps `contents: read`: publishing
+Runs on every branch except `main`. It checks out with `fetch-depth: 0` for the subject gate
+and git-cliff, gates the pushed commit subjects first, then runs `prepare-build`, sets the
+branch's snapshot version and runs `./mvnw --batch-mode clean deploy -P peekaboot-publish`.
+After the build it installs git-cliff, runs the release-notes tests and writes the pending
+notes into the run summary. The job keeps `contents: read`: publishing
 authenticates to Central with the same secrets the release uses, not with `GITHUB_TOKEN`.
 See [Snapshots](#snapshots) and [Release notes](#release-notes).
 
@@ -684,9 +684,8 @@ four in its own `pluginManagement`, and Dependabot bumps both poms in one pull r
 
 Everything lives in `.github/release-notes/`. `cliff.toml` classifies commits by
 conventional-commit type into numbered groups and holds the markdown template, `site.jq`
-reshapes git-cliff's `--context` JSON into the website's data file,
-`check-commit-subjects.sh` is the push gate, and `test/` holds a fixture repo with golden
-files.
+reshapes git-cliff's `--context` JSON into the website's data file, and `test/` holds a
+fixture repo with golden files.
 
 `render.sh` is the only place git-cliff is invoked, and it refuses to run without the
 config. That guard earns its keep: `git-cliff --config <missing>` merely warns, falls back
@@ -699,11 +698,13 @@ the `[release]` commits drop out via `filter_unconventional`, neither being conv
 `filter_commits` is on with no `.*` catch-all, so an unrecognised type is dropped rather than
 bucketed — which is what the gate is for.
 
-The gate rejects any non-merge subject in the pushed range that is not a conventional commit.
-This is not only about the notes: git-cliff derives the release version from these subjects
-too, so one it cannot parse is a change it cannot weigh. It does not enforce the
-50-character subject limit, because Dependabot's own `build(deps): bump ...` lines routinely
-exceed it.
+The push gate is `osslabz/github-actions/commit-subject-check`, which `build-on-push` runs
+with `default-branch: dev`. It rejects any non-merge subject in the pushed range that is not a
+conventional commit, and skips a forced push and a dispatched run, which have no meaningful
+range. The subjects matter beyond the notes, because git-cliff derives the release version
+from them too. A subject it cannot parse is a change it cannot weigh. The gate does not
+enforce the 50-character subject limit, because Dependabot's own `build(deps): bump ...` lines
+routinely exceed it.
 
 Two things in `cliff.toml` are load-bearing. `^build\(deps` must stay above the generic
 `^build`, or every Dependabot commit lands in "Build, CI and chores". And group numbers must

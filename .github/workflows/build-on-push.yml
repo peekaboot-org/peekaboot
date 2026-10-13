@@ -24,14 +24,12 @@ jobs:
           # full history: the subject gate and git-cliff read commits back to the previous tag
           fetch-depth: 0
 
-      # A push that creates a branch reports the zero SHA as `before`, and the gate then
-      # compares against origin/dev. checkout fetches history but not necessarily that
-      # remote-tracking ref, so fetch it rather than depend on checkout's behaviour.
+      # A new branch is checked from where it left origin/dev, which the full-history checkout
+      # fetches. A forced push and a dispatched run have no meaningful range and pass.
       - name: check-commit-subjects
-        run: |
-          git fetch --no-tags origin dev:refs/remotes/origin/dev
-          .github/release-notes/check-commit-subjects.sh . \
-            "${{ github.event.before }}" "${{ github.event.after }}"
+        uses: osslabz/github-actions/commit-subject-check@v1
+        with:
+          default-branch: dev
 
       # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build
