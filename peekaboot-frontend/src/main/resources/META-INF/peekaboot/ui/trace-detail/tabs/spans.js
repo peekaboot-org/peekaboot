@@ -211,7 +211,7 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
     const row = el('div', {className: 'pk-gantt-row'});
     row.dataset.spanId = span.spanId;
     row.append(
-        nameCell(span, kind, attrsId, queryId, logsId, hasError, display.locale),
+        nameCell(span, kind, attrsId, queryId, logsId, hasError, display),
         track(span, traceStart, totalDuration, hasError),
         durationCell(span, totalDuration));
     const panels = [attrsPanel(span, kind, attrsId), queryPanel(span, queryId, display.locale), logsPanel(span, display, logsId)]
@@ -229,7 +229,7 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
         renderSpanEntries(container, child, depth + 1, childrenStart, childrenDuration, display));
 }
 
-function nameCell(span, kind, attrsId, queryId, logsId, hasError, locale) {
+function nameCell(span, kind, attrsId, queryId, logsId, hasError, display) {
     const hasChildren = span.children && span.children.length > 0;
     const name = span.name || 'unknown';
 
@@ -263,11 +263,11 @@ function nameCell(span, kind, attrsId, queryId, logsId, hasError, locale) {
     // span.query - a batch is still one query, same as the Queries tab's own count - and the
     // row count of the result-set span it paired to this one (RowCounts) as span.rowCount.
     if (span.query) {
-        cell.append(panelToggleButton('pk-span-query-toggle', queryId, queryLabel(span, locale)));
+        cell.append(panelToggleButton('pk-span-query-toggle', queryId, queryLabel(span, display.locale)));
     }
-    const logCount = (span.logs || []).length;
+    const logCount = display.logsBySpan.get(span.spanId)?.length ?? 0;
     if (logCount > 0) {
-        cell.append(panelToggleButton('pk-span-logs-toggle', logsId, formatCount(logCount, 'log', {locale})));
+        cell.append(panelToggleButton('pk-span-logs-toggle', logsId, formatCount(logCount, 'log', {locale: display.locale})));
     }
     return cell;
 }
@@ -366,11 +366,7 @@ function queryPanel(span, queryId, locale) {
         sqlView(span.query));
 }
 
-/**
- * The span's logs as the Logs tab shows them, trace included. They come from the trace's flat
- * list, since the span tree's own copies (span.logs, what the row's toggle counts) carry no
- * trace. Opened by the row's logs toggle.
- */
+/** The span's logs as the Logs tab shows them, stack trace included, from the trace's flat list the row's toggle counts. Opened by that toggle. */
 function logsPanel(span, display, logsId) {
     const logs = display.logsBySpan.get(span.spanId);
     if (!logs) return null;

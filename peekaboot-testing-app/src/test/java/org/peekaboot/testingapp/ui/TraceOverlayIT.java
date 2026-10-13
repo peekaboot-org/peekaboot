@@ -110,20 +110,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * Waits until the trace the toolbar currently tracks carries logs on more than one span,
      * and returns its id - shared by both the hash-route and toolbar-path variants of the
      * span-logs filter test below, since both need the same real, non-vacuous precondition.
-     * It counts spans carrying logs the way spans.js itself derives them (span.logs, walked
-     * down span.children), so the precondition is measured against the very shape the Spans
-     * tab renders its "N logs" toggles from.
+     * It counts spans carrying logs the way spans.js does, by span id over the trace's flat log
+     * list, so the precondition is measured against the very shape the Spans tab renders its
+     * "N logs" toggles from.
      */
     private String waitForMultiSpanLogTraceId() {
         String traceId = toolbar.traceId();
-        awaitTrace(traceId, """
-                trace => {
-                    const spansWithLogs = span => !span ? 0
-                        : ((span.logs || []).length > 0 ? 1 : 0)
-                          + (span.children || []).reduce((n, child) => n + spansWithLogs(child), 0);
-                    return spansWithLogs(trace.rootSpan) > 1;
-                }
-                """);
+        awaitTrace(traceId, "trace => new Set((trace.logs || []).map(log => log.spanId).filter(Boolean)).size > 1");
         return traceId;
     }
 
@@ -650,7 +643,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
             (() => {
                 const container = document.createElement('div');
                 m.render(container, {durationMs: 10, startTimeMs: 0,
-                    rootSpan: {spanId: 'a', name: 'a', logs: [{spanId: 'a'}], children: [{spanId: 'b', name: 'b'}]},
+                    rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]},
                     logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
                 const row = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`);
                 const panel = id => container.querySelector(`#pk-span-logs-${id}`);
@@ -661,6 +654,26 @@ class TraceOverlayIT extends PlaywrightTestBase {
             """);
 
         assertThat(sections).isEqualTo(List.of("1:1", "0:0"));
+    }
+
+    /**
+     * A row's logs toggle counts the span's entries in the trace's flat log list, the one its
+     * panel renders. The span tree carries no per-span copy, so a toggle counting one would
+     * never appear.
+     */
+    @Test
+    void aSpansLogsToggleCountsItsEntriesInTheTracesLogList() {
+        Object label = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                const log = message => ({spanId: 'a', level: 'INFO', message, timestamp: '2026-01-01T00:00:00Z'});
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'a'},
+                    logs: [log('first'), log('second')]});
+                return container.querySelector('.pk-span-logs-toggle')?.textContent ?? null;
+            })()
+            """);
+
+        assertThat(label).isEqualTo("2 logs");
     }
 
     /**
