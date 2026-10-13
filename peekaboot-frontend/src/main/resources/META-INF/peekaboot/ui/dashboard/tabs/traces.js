@@ -228,6 +228,8 @@ function renderTypeFilterCheckboxes(container) {
         connectionPoolExcluded = exclusion.checked;
     });
     exclusion.id = 'traces-filter-exclude-pool';
+    // Checked excludes here and includes on every box beside it, so the verb is in the name.
+    exclusion.setAttribute('aria-label', `Exclude ${rootActionLabel(EXCLUDABLE_TYPE)}`);
     exclusion.checked = connectionPoolExcluded;
     excludedGroup.append(exclusion.parentElement);
 }

@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.AriaRole;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ReducedMotion;
 import java.util.List;
@@ -227,6 +228,26 @@ class AccessibilityIT extends PlaywrightTestBase {
                 .isEqualTo("Filter logs");
         assertThat(overlay.evaluate("root => root.querySelector('#pk-log-level').getAttribute('aria-label')"))
                 .isEqualTo("Log level");
+    }
+
+    /**
+     * Checked means included on every type checkbox but this one, where it means excluded. The
+     * "Excluded:" caption beside it is not part of its name, so the verb has to be, or a screen
+     * reader announces "Connection Pool, checked" and means the opposite of its neighbours.
+     */
+    @Test
+    void thePoolCheckboxNamesWhatCheckingItDoes() {
+        openDashboard();
+        dashboard.openTab("traces");
+        page.waitForSelector("#traces-filter-exclude-pool");
+
+        assertThat(page.getByRole(
+                                AriaRole.CHECKBOX,
+                                new Page.GetByRoleOptions()
+                                        .setName("Exclude Connection Pool")
+                                        .setExact(true))
+                        .count())
+                .isOne();
     }
 
     /**
