@@ -2,10 +2,12 @@ package org.peekaboot.backend.tracing.store;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -62,14 +64,15 @@ public class TraceDataBundle {
     // Async-subtree signals, maintained span by span like the classification signals above.
     // asyncSpanIds is transitive membership; the sync marks cover the non-async spans. Eviction
     // never lowers them, because TraceData.duration must stay the number the Slow bucket
-    // admitted the trace by: a rebuild refolds the stored spans on top of the evicted pair
-    // instead of starting from nothing. Only a late async entry lowers them.
+    // admitted the trace by: a refold starts from the evicted pair below, never from nothing.
+    // Only a late async entry lowers them.
     private final Set<String> asyncSpanIds = new HashSet<>();
     private Instant minSyncStart;
     private Instant maxSyncEnd;
     // the window of every span the cap evicted while it counted as synchronous
     private Instant evictedSyncStart;
     private Instant evictedSyncEnd;
+    private boolean syncWindowStale;
     private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
@@ -90,11 +93,12 @@ public class TraceDataBundle {
      */
     public void addSpan(SpanData span, int maxSpans) {
         synchronized (spansLock) {
-            if (isDuplicateOfStoredParent(span)) {
-                return;
+            if (!isDuplicateOfStoredParent(span)) {
+                store(span);
+                absorbDuplicateChildrenOf(span);
+                placeInAsyncSubtrees(span);
             }
-            store(span);
-            absorbDuplicateChildrenOf(span);
+            refreshSyncWindow();
             if (spansById.size() > maxSpans) {
                 truncated = true;
                 evictOldest(spansById.size() - maxSpans);
@@ -112,6 +116,10 @@ public class TraceDataBundle {
         SpanData parent = resolvedParentId != null ? spansById.get(resolvedParentId) : null;
         if (parent != null && SpanDuplicateMatcher.isDuplicate(span, parent)) {
             recordRedirect(span.spanId(), parent.spanId());
+            // the duplicate's stored children hang under parent from now on, and share its subtree
+            if (asyncSpanIds.contains(parent.spanId())) {
+                joinDescendants(span.spanId());
+            }
             return true;
         }
         return false;
@@ -134,54 +142,67 @@ public class TraceDataBundle {
                     .computeIfAbsent(span.parentId(), k -> new ArrayList<>())
                     .add(span.spanId());
         }
-        recordAsyncMembership(span);
     }
 
     /**
-     * Places the arriving span inside or outside an async subtree and folds it into the
-     * synchronous window accordingly. A marked span forces a rebuild: spans are stored
-     * child-before-parent (see the class Javadoc), so its already-stored descendants have been
-     * counting as synchronous until now.
+     * Places the arriving span inside or outside an async subtree. A span that enters one takes
+     * its stored descendants along: spans are stored child-before-parent (see the class Javadoc),
+     * so they have been counting as synchronous until now. Runs after
+     * {@link #absorbDuplicateChildrenOf}, so a folded duplicate's children are reached through
+     * the redirect.
      */
-    private void recordAsyncMembership(SpanData span) {
-        if (AsyncTaskMarker.isMarked(span.tags())) {
-            rebuildAsyncMembership();
-            return;
-        }
+    private void placeInAsyncSubtrees(SpanData span) {
         String parentId = resolve(span.parentId());
-        if (parentId != null && asyncSpanIds.contains(parentId)) {
+        if (AsyncTaskMarker.isMarked(span.tags()) || (parentId != null && asyncSpanIds.contains(parentId))) {
             asyncSpanIds.add(span.spanId());
+            joinDescendants(span.spanId());
             return;
         }
         foldIntoSyncWindow(span);
     }
 
     /**
-     * Recomputes transitive membership and the synchronous marks over the stored spans. Runs
-     * once per async task rather than per span. Walks parents rather than
-     * {@link #childrenByParentId} because that index is keyed on the raw parent id, while
-     * membership has to follow {@link #resolve} through the duplicate redirects.
+     * Moves the stored spans below {@code spanId} into its subtree. Stops at spans already in
+     * one, whose own descendants joined with them, so each span is walked once per trace.
      */
-    private void rebuildAsyncMembership() {
-        asyncSpanIds.clear();
-        for (SpanData stored : spansById.values()) {
-            if (AsyncTaskMarker.isMarked(stored.tags())) {
-                asyncSpanIds.add(stored.spanId());
+    private void joinDescendants(String spanId) {
+        Deque<String> pending = new ArrayDeque<>();
+        pending.add(spanId);
+        while (!pending.isEmpty()) {
+            for (String childId : resolvedChildIdsOf(pending.remove())) {
+                SpanData child = spansById.get(childId);
+                if (child != null && asyncSpanIds.add(childId)) {
+                    if (boundsSyncWindow(child)) {
+                        syncWindowStale = true;
+                    }
+                    pending.add(childId);
+                }
             }
         }
-        boolean grew = true;
-        while (grew) {
-            grew = false;
-            for (SpanData stored : spansById.values()) {
-                if (asyncSpanIds.contains(stored.spanId())) {
-                    continue;
-                }
-                String parentId = resolve(stored.parentId());
-                if (parentId != null && asyncSpanIds.contains(parentId)) {
-                    asyncSpanIds.add(stored.spanId());
-                    grew = true;
-                }
-            }
+    }
+
+    /**
+     * The ids of the stored spans whose resolved parent is {@code spanId}. {@link #childrenByParentId}
+     * is keyed on the raw parent id, so a child naming a folded-away duplicate of {@code spanId}
+     * sits under the duplicate's id, and {@link #redirectsPointingAt} lists every such duplicate.
+     */
+    private List<String> resolvedChildIdsOf(String spanId) {
+        List<String> childIds = new ArrayList<>(childrenByParentId.getOrDefault(spanId, List.of()));
+        for (String duplicateId : redirectsPointingAt.getOrDefault(spanId, List.of())) {
+            childIds.addAll(childrenByParentId.getOrDefault(duplicateId, List.of()));
+        }
+        return childIds;
+    }
+
+    /** A min/max pair cannot drop one span, so only a joining span that set a mark forces a refold. */
+    private boolean boundsSyncWindow(SpanData span) {
+        return (span.startTime() != null && span.startTime().equals(minSyncStart))
+                || (span.endTime() != null && span.endTime().equals(maxSyncEnd));
+    }
+
+    private void refreshSyncWindow() {
+        if (!syncWindowStale) {
+            return;
         }
         minSyncStart = evictedSyncStart;
         maxSyncEnd = evictedSyncEnd;
@@ -190,6 +211,7 @@ public class TraceDataBundle {
                 foldIntoSyncWindow(stored);
             }
         }
+        syncWindowStale = false;
     }
 
     private void foldIntoSyncWindow(SpanData span) {
@@ -230,6 +252,8 @@ public class TraceDataBundle {
             if (candidate != null && SpanDuplicateMatcher.isDuplicate(candidate, survivor)) {
                 spansById.remove(childId);
                 recordRedirect(childId, survivor.spanId());
+                // its survivor covers the same window, so the synchronous marks need no refold
+                asyncSpanIds.remove(childId);
                 it.remove();
             }
         }

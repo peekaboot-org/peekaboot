@@ -147,8 +147,8 @@ public class InMemoryTraceStore implements TraceStore {
      * that happened stays one - but the Slow bucket cannot be: the synchronous window a trace
      * was admitted by can fall. A child of an async entry arrives before the entry itself
      * does (see {@link TraceDataBundle}), counts as synchronous until then, and can push the
-     * window past the threshold on background work alone; the entry's arrival rebuilds
-     * membership and the window returns to what the caller waited for. Without the removal
+     * window past the threshold on background work alone; the entry's arrival takes the child
+     * into its subtree and the window returns to what the caller waited for. Without the removal
      * below the Slow bucket would keep listing that trace beside a duration disagreeing with
      * the one it was admitted by.
      */

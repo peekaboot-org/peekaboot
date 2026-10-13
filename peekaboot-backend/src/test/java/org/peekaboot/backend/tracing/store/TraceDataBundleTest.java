@@ -350,7 +350,7 @@ class TraceDataBundleTest {
 
     /**
      * Spans are stored child-before-parent, so a descendant of an async span counts as
-     * synchronous until its marked parent arrives and the rebuild reclassifies it.
+     * synchronous until its marked parent arrives and takes it into the subtree.
      */
     @Test
     void anAsyncSubtreesDescendantsAreExcludedEvenWhenTheyArriveFirst() {
@@ -473,13 +473,11 @@ class TraceDataBundleTest {
     }
 
     /**
-     * The growth pass only reaches spans exactly one hop below an id already known to be
-     * async, so a descendant two hops down needs the loop to run twice. Storing leaf before
-     * mid - the real export order - is what forces that: on the first pass mid is not yet
-     * marked when leaf is checked, so a single pass would miss leaf and leave it synchronous.
+     * The walk has to go below the entry's direct children. Storing leaf before mid, the real
+     * export order, leaves a descendant two hops down that a one-level walk would miss.
      */
     @Test
-    void rebuildAsyncMembershipNeedsMoreThanOnePassForATwoHopDescendant() {
+    void aTwoHopDescendantStoredBeforeItsEntryLeavesTheSynchronousWindow() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         SpanData leaf = plainSpan("leaf", "mid", 20, 40_000);
         SpanData mid = plainSpan("mid", "async", 10, 50_000);
@@ -492,6 +490,71 @@ class TraceDataBundleTest {
         bundle.addSpan(root, 500);
 
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(20));
+    }
+
+    /**
+     * A span that outlives its async parent arrives after it and joins through its parent, but
+     * its own children arrived before it and have been counting as synchronous.
+     */
+    @Test
+    void aSpanJoiningThroughItsParentTakesItsStoredDescendantsAlong() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("leaf", "late", 100, 9_000), 500);
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 500);
+        bundle.addSpan(plainSpan("late", "async", 50, 9_500), 500);
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+
+        assertThat(bundle.asyncSpanIds()).containsExactlyInAnyOrder("async", "late", "leaf");
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    /**
+     * The duplicate arrives after the real span it folds into, which is already async. Its
+     * children were stored under the duplicate's id and now hang under the real span.
+     */
+    @Test
+    void aDuplicateFoldedIntoAnAsyncSpanBringsItsStoredChildrenAlong() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("leaf", "dup", 100_000, 5_000), 500);
+        bundle.addSpan(jdbcQuery("real", "SELECT 1").parent("async").at(100, 50).build(), 500);
+        bundle.addSpan(asyncSpan("async", "root", 40, 10_000), 500);
+        bundle.addSpan(jdbcDuplicate("dup", "real", "SELECT 1").at(110, 30).build(), 500);
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+
+        assertThat(bundle.spans()).extracting(SpanData::spanId).doesNotContain("dup");
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    /**
+     * A member stays one after the entry above it is evicted: its time must not fold back into
+     * the synchronous window when the next async entry arrives.
+     */
+    @Test
+    void descendantsStoredBeforeTheirEntryIsEvictedStayOutOfTheSynchronousWindow() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(asyncSpan("first", "root", 90, 1_000), 3);
+        bundle.addSpan(plainSpan("late", "first", 100, 9_000), 3);
+        bundle.addSpan(plainSpan("x", "root", 0, 50), 3);
+        // evicts "first"
+        bundle.addSpan(plainSpan("y", "root", 10, 10), 3);
+        // evicts "late"
+        bundle.addSpan(asyncSpan("second", "root", 30, 10), 3);
+
+        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
+    }
+
+    @Test
+    void aFoldedAwayAsyncDuplicateLeavesNoMemberBehind() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(markedTwin("dup", "real"), 2);
+        bundle.addSpan(markedTwin("real", "root"), 2);
+        bundle.addSpan(plainSpan("x", "root", 0, 50), 2);
+        // evicts "real", the last async span stored
+        bundle.addSpan(plainSpan("y", "root", 10, 10), 2);
+
+        assertThat(bundle.hasAsyncSpans()).isFalse();
+        assertThat(bundle.asyncSpanIds()).isEmpty();
     }
 
     @Test
@@ -551,6 +614,16 @@ class TraceDataBundleTest {
                 .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .tag(AsyncTaskMarker.THREAD_TAG_KEY, spanId)
                 .at(startOffsetMs, durationMs)
+                .build();
+    }
+
+    /** An async span with no thread tag, so two of them are tag-for-tag identical and one folds into the other. */
+    private SpanData markedTwin(String spanId, String parentId) {
+        return span(spanId)
+                .parent(parentId)
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .at(0, 100)
                 .build();
     }
 

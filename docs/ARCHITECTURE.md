@@ -1292,15 +1292,18 @@ cover every span: Errors-bucket admission reads the bundle's own error signal, w
 sets, so a trace whose only failure was a background task would read OK while sitting in the
 Errors bucket.
 
-Membership is `asyncSpanIds`, maintained span by span in `store()`. An arriving span joins the
-set when its resolved parent is already in it, and folds into the synchronous marks otherwise. A
-*marked* span instead triggers `rebuildAsyncMembership`, which recomputes membership over the
-stored spans and rebuilds the synchronous marks from scratch. That rebuild is what corrects the
-export order: spans are stored child-before-parent, so a marked span's descendants have been
-counting as synchronous until it turns up. It costs one pass per async task, and nothing at all
-for a trace with no marked span. `asyncEntrySpans()` reads the subtree entry points off the same
-set - a marked span whose resolved parent is not itself async - which is what keeps the listing
-pass off a tree walk.
+Membership is `asyncSpanIds`, maintained span by span in `addSpan`. An arriving span enters it
+when it carries the marker or its resolved parent is already in it, and folds into the synchronous
+window otherwise. A span that enters takes its stored descendants along. Spans are stored
+child-before-parent, so a marked span's descendants have been counting as synchronous until it
+turns up. The walk follows `childrenByParentId` down from the entering span, plus the children of
+each folded-away duplicate `redirectsPointingAt` lists for it, and stops at spans already in the
+set, whose own descendants entered with them. Each span is walked once, and a trace with no marked
+span pays nothing. A min/max pair cannot drop one span, so the synchronous window is refolded over
+the stored spans only when a span on one of its edges leaves it: a stored span that joins a
+subtree, or a folded-away duplicate dropped for a survivor that may. `asyncEntrySpans()` reads the
+subtree entry points off the same set: a member whose resolved parent is not itself a member. That
+is what keeps the listing pass off a tree walk.
 
 Each entry point is a listing row of its own, and the listing is newest first by arrival, the
 order the buckets already keep. A trace's row dates from when the trace entered the bucket; an
@@ -1315,16 +1318,16 @@ entered a bucket after its task ended still lists above its own async row, as it
 Ancestry resolves parents through `resolve(...)`, the redirect table span deduplication leaves
 behind, exactly as `rootOf` does. A span hanging off a deduplicated span names a parent id that is no
 longer stored, so skipping the redirect would leave it outside the subtree it belongs to and back
-in the synchronous window.
+in the synchronous window. A duplicate folded into a span that is already async brings its stored
+children into the subtree the same way.
 
 The trade-off is truncation. A span evicted while it counted as synchronous stays counted, even
-if its async entry arrives later and would have taken it out. Eviction also drops evicted ids from
-`asyncSpanIds`, so a rebuild over a span set that no longer holds the marked entry span stops
-recognising that subtree, and its retained descendants fold back into the synchronous window. Both
-leave background time in the window rather than take synchronous time out: a truncated trace can
-stay in Slow on background work, and never drops out on lost spans. The `truncated` flag already
-says the data is partial, and 500 spans ahead of the async entry point is well outside the case
-this serves.
+if its async entry arrives later and would have taken it out. So a truncated trace can stay in
+Slow on background work, but never drops out on lost spans. A member stays one after the entry
+above it is evicted, and lists as an entry point of its own. A child arriving after its entry was
+evicted folds into the synchronous window instead: nothing stored says the entry existed, and
+remembering evicted ids would grow without bound. The `truncated` flag already says the data is
+partial, and 500 spans ahead of the async entry point is well outside the case this serves.
 
 ### Query Extraction
 
