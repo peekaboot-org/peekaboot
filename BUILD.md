@@ -152,7 +152,7 @@ both to every Gradle project. `maven-release-plugin` rewrites the poms alone, so
 hand-kept copy on the Gradle side went stale at every release and nothing noticed, because
 CI runs Maven only. `BuildVersionLockstepTest` fails if such a copy reappears.
 
-One value still lives once in `gradle.properties`: `springBootVersion`, matching the root
+`gradle.properties` holds `springBootVersion`, matching the root
 pom's `spring-boot.version` and the testing-app's parent version. The convention plugin
 turns it into the BOM import every module gets, and `buildSrc` reads it for the Boot
 plugin. The same test compares it against the version Maven resolves, because Dependabot
@@ -160,15 +160,27 @@ cannot group the two ecosystems into one pull request. Mockito's agent jar takes
 version from that BOM, as Maven does.
 
 Every other shared literal is written on both sides and has to change on both: Error
-Prone, palantir, Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors,
-Playwright, springdoc, the testing-app's direct dependencies, and the frontend gate's two:
-the pinned Node version and `npm ci`. The frontend's *lint tool* versions are not on that
-list - they live once in `peekaboot-frontend/package.json`, which both builds install from,
-so there is nothing to drift. Dependabot watches the
-`gradle` ecosystem next to `maven`, so bumps arrive as paired PRs. On a `dependabot/gradle/*`
-branch `build-on-push` adds a `gradle-build` job, and the Gradle half auto-merges once both
-jobs are green. That proves the Gradle build passes, not that its versions match Maven's: the
-Gradle half can land while its Maven twin is still open, so check open pairs now and then.
+Prone, palantir, Checkstyle, SpotBugs, Spotless, JaCoCo, PMD, the coverage floors,
+datasource-micrometer (`datasourceMicrometerVersion` in `gradle.properties`), jdbc-url-parser,
+cron-utils, the testing-app's direct dependencies (springdoc, datasource-proxy, Playwright and
+axe-core), the compiler release level, the IT thread count, and the frontend gate's two: the
+pinned Node version and `npm ci`. `BuildVersionLockstepTest` compares every pair, JaCoCo's
+second Gradle declaration in `peekaboot-coverage` included. SpotBugs and Spotless compare
+through a mapping, because one side names a plugin whose version is not the tool's. The
+frontend's *lint tool* versions are not on that list. They live once in
+`peekaboot-frontend/package.json`, which both builds install from, so there is nothing to
+drift.
+
+The Maven job runs `BuildVersionLockstepTest` on every branch, so a bump on one side alone goes
+red and waits for a human. How the other side moves depends on how Gradle declares the value.
+A library declared as a dependency coordinate on both sides (datasource-micrometer, springdoc,
+datasource-proxy, jdbc-url-parser, cron-utils, Playwright, axe-core) gets a `gradle` PR next
+to the `maven` one, and the human lands the two together. A tool Gradle pins through
+`toolVersion`, `palantirJavaFormat(...)` or the Node `version =` has no Gradle PR, because
+Dependabot's `gradle` ecosystem bumps dependency coordinates only. The Maven PR goes red alone,
+and the human adds the Gradle edit on that branch. On a `dependabot/gradle/*` branch
+`build-on-push` adds a `gradle-build` job next to the Maven job, and a Gradle bump with no
+Maven twin, such as a `buildSrc` plugin or the wrapper, auto-merges once both jobs are green.
 
 ### Reproducibility and artifact parity
 

@@ -34,19 +34,21 @@ import org.xml.sax.SAXException;
 /**
  * Build metadata both build systems need is declared once, in the poms, because
  * {@code maven-release-plugin} rewrites the poms on every release and knows nothing about the
- * Gradle build. A second copy on the Gradle side is not merely redundant - it goes stale the
- * moment a release runs, and nothing notices, because each build is internally consistent and
- * CI runs Maven only.
+ * Gradle build. A second copy on the Gradle side goes stale the moment a release runs, and
+ * nothing notices, because each build is internally consistent and CI builds Gradle only on
+ * Gradle-ecosystem Dependabot branches.
  *
  * <p>Every value a Gradle script cannot read out of a pom is written on both sides instead:
- * the Spring Boot line, the tool versions behind the five gates, the coverage floors, the
- * Playwright and axe-core versions, the compiler release level and the IT thread count.
- * Dependabot bumps the two ecosystems in separate pull requests, so any of them can move on
- * one side alone. Each is guarded here by comparing the two declarations.
+ * the Spring Boot line, the static-analysis tool versions, the coverage floors, the library
+ * versions both builds declare, the frontend gate's Node version and install command, the
+ * compiler release level and the IT thread count. Dependabot bumps the two ecosystems in
+ * separate pull requests, so any of them can move on one side alone. Each is guarded here by
+ * comparing the two declarations, which fails the Maven build every branch runs.
  *
  * <p>The testing-app pom does not inherit {@code peekaboot-parent}, so it repeats the build
- * instant, the JaCoCo and PMD versions and the Spring Boot line by hand. Those copies are compared
- * against the root pom the same way.
+ * instant, the JaCoCo, PMD and Surefire versions, the compiler release level and the Spring Boot
+ * line by hand. The build instant, JaCoCo, PMD and Boot copies are compared against the root pom
+ * the same way. The rest is not: Dependabot bumps both poms in one pull request.
  */
 class BuildVersionLockstepTest {
 
@@ -181,8 +183,8 @@ class BuildVersionLockstepTest {
     }
 
     /**
-     * The one pair that cannot be compared literally: Maven names the plugin, whose version is
-     * the SpotBugs release it bundles plus a patch segment of its own; Gradle names the analyser.
+     * Maven names the plugin, whose version is the SpotBugs release it bundles plus a patch
+     * segment of its own; Gradle names the analyser.
      */
     @Test
     @Timeout(10)
@@ -199,6 +201,32 @@ class BuildVersionLockstepTest {
                 .isEqualTo(analyser);
     }
 
+    /**
+     * Maven names spotless-maven-plugin and Gradle names spotless-plugin-gradle. Spotless
+     * releases both plugins with spotless-lib, each under a major of its own and with the lib's
+     * minor and patch: 3.10.4 and 8.10.4 both bundle lib 4.10.4. The two builds format alike
+     * when everything past the major agrees.
+     */
+    @Test
+    @Timeout(10)
+    void bothBuildsRunTheSameSpotlessLib() {
+        String mavenPlugin = declaredValue(
+                reactorRoot().resolve("pom.xml"),
+                "<artifactId>spotless-maven-plugin</artifactId>\\s*<version>([^<]+)</version>");
+        String gradlePlugin =
+                declaredValue(reactorRoot().resolve("buildSrc/build.gradle.kts"), "spotless-plugin-gradle:([^\"]+)\"");
+
+        assertThat(withoutMajor(gradlePlugin))
+                .as(
+                        "spotless-maven-plugin %s and spotless-plugin-gradle %s must bundle the same spotless-lib",
+                        mavenPlugin, gradlePlugin)
+                .isEqualTo(withoutMajor(mavenPlugin));
+    }
+
+    private static String withoutMajor(String version) {
+        return version.replaceFirst("^\\d+\\.", "");
+    }
+
     static Stream<Arguments> valuesBothBuildsSpellOut() {
         Path root = Path.of("..").toAbsolutePath().normalize();
         Path pom = root.resolve("pom.xml");
@@ -209,6 +237,8 @@ class BuildVersionLockstepTest {
         Path appScript = root.resolve("peekaboot-testing-app/build.gradle.kts");
         Path frontendPom = root.resolve("peekaboot-frontend/pom.xml");
         Path frontendScript = root.resolve("peekaboot-frontend/build.gradle.kts");
+        Path backendPom = root.resolve("peekaboot-backend/pom.xml");
+        Path backendScript = root.resolve("peekaboot-backend/build.gradle.kts");
         return Stream.of(
                 row(
                         "Error Prone",
@@ -241,6 +271,12 @@ class BuildVersionLockstepTest {
                         conventions,
                         "jacoco \\{\\s*toolVersion = \"([^\"]+)\""),
                 row(
+                        "JaCoCo in the coverage module",
+                        pom,
+                        "<jacoco.version>([^<]+)</jacoco.version>",
+                        coverageScript,
+                        "jacoco \\{\\s*toolVersion = \"([^\"]+)\""),
+                row(
                         "the compiler release level",
                         pom,
                         "<peekaboot.java.version>([^<]+)</peekaboot.java.version>",
@@ -270,6 +306,36 @@ class BuildVersionLockstepTest {
                         "axe-core</groupId>\\s*<artifactId>playwright</artifactId>\\s*<version>([^<]+)</version>",
                         appScript,
                         "axe-core:playwright:([^\"]+)\""),
+                row(
+                        "springdoc",
+                        appPom,
+                        "<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>\\s*<version>([^<]+)</version>",
+                        appScript,
+                        "springdoc-openapi-starter-webmvc-ui:([^\"]+)\""),
+                row(
+                        "datasource-proxy",
+                        appPom,
+                        "<artifactId>datasource-proxy-spring-boot-starter</artifactId>\\s*<version>([^<]+)</version>",
+                        appScript,
+                        "datasource-proxy-spring-boot-starter:([^\"]+)\""),
+                row(
+                        "datasource-micrometer",
+                        pom,
+                        "<datasource-micrometer.version>([^<]+)</datasource-micrometer.version>",
+                        root.resolve("gradle.properties"),
+                        "datasourceMicrometerVersion=(.+)"),
+                row(
+                        "jdbc-url-parser",
+                        backendPom,
+                        "<artifactId>jdbc-url-parser</artifactId>\\s*<version>([^<]+)</version>",
+                        backendScript,
+                        "jdbc-url-parser:([^\"]+)\""),
+                row(
+                        "cron-utils",
+                        backendPom,
+                        "<artifactId>cron-utils</artifactId>\\s*<version>([^<]+)</version>",
+                        backendScript,
+                        "cron-utils:([^\"]+)\""),
                 row(
                         "the IT thread count",
                         appPom,
