@@ -572,7 +572,7 @@ that failed, never the dispatch that rendered the page.
 
 One classifier, `StackTraceFolding.fold`, decides which frames fold away on both surfaces a
 trace reaches: `StackTraceHtml` renders it into the error page's `<pre>`, and
-`TraceInsightsService.toTraceLog` renders it into the wire `TraceLog` the Logs tab consumes.
+`TraceLogMapper.toTraceLog` renders it into the wire `TraceLog` the Logs tab consumes.
 Both callers pass it the same `exclusions` and `applicationPackages`; neither surface
 classifies anything of its own.
 
@@ -604,7 +604,7 @@ Only a tab-led line that starts `at ` once its own leading tabs are gone is a ca
 
 Folding is a render-time decision. `PeekabootLogbackAppender` captures a throwable's full trace
 unfolded, capped at 1000 lines with a `... N lines omitted` marker so a `StackOverflowError`'s
-1024-frame trace can't dominate retention; `TraceInsightsService` runs
+1024-frame trace can't dominate retention; `TraceLogMapper` runs
 `StackTraceFolding.fold` over that stored trace on every read, and `PeekabootErrorView` runs it
 fresh on every request. The full trace is therefore always present on the wire.
 
@@ -613,7 +613,7 @@ once from `peekaboot.stack-trace.fold`, `peekaboot.stack-trace.exclude`,
 `logging.exception-conversion-word` and `AutoConfigurationPackages`, and both
 `PeekabootAutoConfiguration` and `ErrorPageAutoConfiguration` import it, so either runs without
 the other. `peekaboot.stack-trace.fold=false` empties the exclusion list rather than travelling
-as a flag, so `TraceInsightsService` and `PeekabootErrorView` ask the same question with nothing
+as a flag, so `TraceLogMapper` and `PeekabootErrorView` ask the same question with nothing
 to match: `hiddenFrames` comes back empty, and the page renders no reveal control because
 nothing was hidden. The browser classifies nothing on either surface; `log-entry.js`
 renders the ranges it is given, the same way `StackTraceHtml` does server-side.
@@ -1211,7 +1211,7 @@ no header-injection code anywhere in the repo.
 
 `PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event;
 `TraceStoreEventListener` forwards it to `TraceStore`, which stores by traceId, and
-`TraceInsightsService` attaches them to the trace's spans on read (see *Trace Assembly and
+`TraceLogMapper` maps them into the trace's flat log list on read (see *Trace Assembly and
 Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which only
 `DevToolbarAutoConfiguration` registers, so correlated logs require `peekaboot.dev-toolbar=true`.
 A trace's Logs tab stays empty without it, independent of `peekaboot.tracing.enabled`.
@@ -1241,7 +1241,8 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    `TraceInsightsService` calls it on both trace endpoints.
 3. `TraceInsightsService.enrichWithDetails` adds what only the stored bundle knows: the flat log
    list, each entry's `spanId` resolved through the bundle's duplicate redirects, the
-   `HttpExchange` and `QueryExtractor`'s queries. It runs on
+   `HttpExchange` and `QueryExtractor`'s queries. The log list and its count come from
+   `TraceLogMapper`, to which it delegates. It runs on
    `GET /peekaboot/api/traces/{traceId}/insights` only. The listing endpoint gets step 1, a log
    *count* for the row badges, and step 2, so its trees carry issues but no log list and no
    queries.

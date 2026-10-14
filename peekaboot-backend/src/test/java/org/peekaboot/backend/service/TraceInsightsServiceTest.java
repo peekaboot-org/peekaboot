@@ -207,36 +207,14 @@ class TraceInsightsServiceTest {
         assertThat(result.get().logs().get(0).loggerName()).isEqualTo("TestLogger");
     }
 
+    /** The service folds with the rules it was built with; {@link TraceLogMapperTest} pins the folding itself. */
     @Test
-    void aLogWithoutAThrowableCarriesNoStackTraceOrRanges() {
-        addTrace("trace1", 100, false);
-        store.addLog(
-                log("trace1").inSpan("span-trace1").saying("no trouble here").build());
-
-        TraceLog result =
-                service.getTraceInsights("trace1").orElseThrow().logs().getFirst();
-
-        assertThat(result.stackTrace()).isNull();
-        assertThat(result.hiddenFrames()).isEmpty();
-        assertThat(result.applicationFrames()).isEmpty();
-    }
-
-    /**
-     * The service resolves its own exclusions and application packages once at construction, the
-     * same way the error page does; this pins that wiring rather than {@link
-     * org.peekaboot.backend.stacktrace.StackTraceFolding}'s own folding rules.
-     *
-     * <p>The fixture's first line ends in a lone {@code \r}, which {@code String.lines()} (what
-     * folding splits on) treats as a line terminator but JavaScript's {@code split('\n')} (what
-     * the browser splits on) does not - and the expected value is written out literally rather
-     * than re-deriving it with the same {@code String.join("\n", ...)} expression the
-     * implementation runs, so this pins the stated reason for that join instead of restating it.
-     */
-    @Test
-    void aLogWithAThrowableCarriesItsFoldedStackTrace() {
-        String trace = "java.lang.IllegalStateException: boom\r"
-                + "\tat org.peekaboot.app.Thing.method(Thing.java:10)\n"
-                + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)\n";
+    void theDetailFoldsAStackTraceWithTheServicesRules() {
+        String trace = """
+                java.lang.IllegalStateException: boom
+                \tat org.peekaboot.app.Thing.method(Thing.java:10)
+                \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)
+                """;
         TraceInsightsService folding = newService(store, List.of("org.springframework"), List.of("org.peekaboot.app"));
         addTrace("trace1", 100, false);
         store.addLog(log("trace1").inSpan("span-trace1").withStackTrace(trace).build());
@@ -244,10 +222,6 @@ class TraceInsightsServiceTest {
         TraceLog result =
                 folding.getTraceInsights("trace1").orElseThrow().logs().getFirst();
 
-        assertThat(result.stackTrace()).isEqualTo("""
-                        java.lang.IllegalStateException: boom
-                        \tat org.peekaboot.app.Thing.method(Thing.java:10)
-                        \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)""");
         assertThat(result.applicationFrames()).containsExactly(new StackTraceFolding.Range(1, 2));
         assertThat(result.hiddenFrames()).containsExactly(new StackTraceFolding.Range(2, 3));
     }
@@ -296,28 +270,6 @@ class TraceInsightsServiceTest {
         assertThat(result.logs()).extracting(TraceLog::message).containsExactly("spanless");
         assertThat(result.logs().getFirst().spanId()).isNull();
         assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(1, 0, 0));
-    }
-
-    @Test
-    void aLogEmittedInAGrandchildSpanNamesThatSpan() {
-        store.addSpan(rootSpan("t1", "GET /x", Span.Kind.SERVER, 100).build());
-        store.addSpan(span("child")
-                .in("t1")
-                .parent("span-t1")
-                .named("service")
-                .at(10, 50)
-                .build());
-        store.addSpan(span("grandchild")
-                .in("t1")
-                .parent("child")
-                .named("repository")
-                .at(20, 20)
-                .build());
-        store.addLog(log("t1").inSpan("grandchild").saying("deep").build());
-
-        TraceTree tree = service.getTraceInsights("t1").orElseThrow();
-
-        assertThat(tree.logs()).extracting(TraceLog::spanId).containsExactly("grandchild");
     }
 
     @Test
@@ -611,24 +563,6 @@ class TraceInsightsServiceTest {
         assertThat(exchange.request().path()).isEqualTo("/users");
         assertThat(exchange.request().controller()).isEqualTo(new HttpRequest.Controller("UserController", "list"));
         assertThat(exchange.response().status()).isEqualTo(200);
-    }
-
-    @Test
-    void aLogEmittedInAFoldedDuplicateSpanNamesTheSurvivingSpan() {
-        // a DB span whose duplicate is folded away on write, and a log emitted
-        // while inside the folded-away duplicate's MDC scope - i.e. carrying the
-        // duplicate's spanId, not the surviving span's
-        addTraceWithDuplicatedDbSpan("trace1", 100);
-        store.addLog(log("trace1")
-                .inSpan("span-db-dup-trace1")
-                .at("TRACE")
-                .saying("Datasource log")
-                .build());
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
-
-        assertThat(result).isPresent();
-        assertThat(result.get().logs()).hasSize(1);
-        assertThat(result.get().logs().get(0).spanId()).isEqualTo("span-db-trace1");
     }
 
     @Test

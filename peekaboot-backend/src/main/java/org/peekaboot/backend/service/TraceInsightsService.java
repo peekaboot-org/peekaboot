@@ -2,7 +2,6 @@ package org.peekaboot.backend.service;
 
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -12,17 +11,13 @@ import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import org.peekaboot.backend.domain.trace.TraceLog;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
@@ -52,7 +47,7 @@ public class TraceInsightsService {
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
     private final QueryExtractor queryExtractor;
-    private final StackTraceRules stackTraceRules;
+    private final TraceLogMapper traceLogMapper;
 
     public TraceInsightsService(
             @Nullable TraceStore traceStore,
@@ -64,7 +59,7 @@ public class TraceInsightsService {
         this.traceTreeMapper = traceTreeMapper;
         this.issueDetector = issueDetector;
         this.queryExtractor = queryExtractor;
-        this.stackTraceRules = stackTraceRules;
+        this.traceLogMapper = new TraceLogMapper(stackTraceRules);
     }
 
     /**
@@ -142,47 +137,11 @@ public class TraceInsightsService {
     private TraceTree mapRow(RowSource row) {
         TraceData traceData = row.bundle().snapshot();
         if (!row.subtree()) {
-            return withLogsSummary(traceTreeMapper.map(traceData), row.bundle().logs());
+            return traceLogMapper.withLogsSummary(
+                    traceTreeMapper.map(traceData), row.bundle().logs());
         }
         TraceTree subtree = traceTreeMapper.mapSubtree(traceData, row.rootSpan().spanId());
-        return withLogsSummary(subtree, logsWithin(subtree.rootSpan(), row.bundle()));
-    }
-
-    /**
-     * The logs emitted inside one subtree's own spans. A subtree row reports the work it
-     * contains, so the enclosing request's log count - and the error badge that count puts on
-     * the row - are not its to show. Resolved through the bundle for the same reason the
-     * detail's logs are: a log's MDC span id may name a span folded away since.
-     */
-    private static List<LogCapturedEvent> logsWithin(SpanNode subtreeRoot, TraceDataBundle bundle) {
-        Set<String> spanIds = new HashSet<>();
-        collectSpanIds(subtreeRoot, spanIds);
-        return bundle.logs().stream()
-                .filter(log -> log.spanId() != null && spanIds.contains(bundle.resolveSpanId(log.spanId())))
-                .toList();
-    }
-
-    private static void collectSpanIds(SpanNode node, Set<String> spanIds) {
-        if (node == null) {
-            return;
-        }
-        spanIds.add(node.spanId());
-        node.children().forEach(child -> collectSpanIds(child, spanIds));
-    }
-
-    /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */
-    private static TraceTree withLogsSummary(TraceTree tree, List<LogCapturedEvent> logs) {
-        return tree.withSummary(withLogs(tree.summary(), logs));
-    }
-
-    private static TraceTabSummary withLogs(TraceTabSummary summary, List<LogCapturedEvent> logs) {
-        return new TraceTabSummary(summary.request(), summary.spans(), summary.queries(), logsSummary(logs));
-    }
-
-    private static TraceTabSummary.LogsSummary logsSummary(List<LogCapturedEvent> logs) {
-        int errors = (int) logs.stream().filter(LogCapturedEvent::isError).count();
-        int warnings = (int) logs.stream().filter(LogCapturedEvent::isWarn).count();
-        return new TraceTabSummary.LogsSummary(logs.size(), errors, warnings);
+        return traceLogMapper.withLogsSummary(subtree, traceLogMapper.logsWithin(subtree.rootSpan(), row.bundle()));
     }
 
     /**
@@ -217,47 +176,11 @@ public class TraceInsightsService {
     }
 
     private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
-        List<LogCapturedEvent> capturedLogs = bundle.logs();
-        List<TraceLog> logs =
-                capturedLogs.stream().map(e -> toTraceLog(bundle, e)).toList();
-
         RequestCompletedEvent reqEvent = bundle.request();
         HttpExchange httpExchange = reqEvent != null ? HttpExchange.from(reqEvent) : null;
 
-        return tree.withSummary(withLogs(tree.summary(), capturedLogs)).withDetails(httpExchange, logs, queries);
-    }
-
-    /**
-     * Folding happens here rather than at capture: the full trace stays on the event, and these
-     * ranges are only the rendering hint the browser needs so it classifies nothing itself.
-     */
-    private TraceLog toTraceLog(TraceDataBundle bundle, LogCapturedEvent e) {
-        if (e.stackTrace() == null) {
-            return new TraceLog(
-                    bundle.resolveSpanId(e.spanId()),
-                    e.timestamp(),
-                    e.level(),
-                    e.loggerName(),
-                    e.message(),
-                    e.threadName(),
-                    null,
-                    List.of(),
-                    List.of());
-        }
-        var folded = stackTraceRules.fold(e.stackTrace());
-        // The ranges index into folded.lines(), not the raw captured string: String.lines() splits
-        // on a lone \r where the browser's split('\n') would not, so sending anything else back
-        // would leave the two disagreeing about which line a given index names.
-        String wireStackTrace = String.join("\n", folded.lines());
-        return new TraceLog(
-                bundle.resolveSpanId(e.spanId()),
-                e.timestamp(),
-                e.level(),
-                e.loggerName(),
-                e.message(),
-                e.threadName(),
-                wireStackTrace,
-                folded.hidden(),
-                folded.applicationFrames());
+        return traceLogMapper
+                .withLogsSummary(tree, bundle.logs())
+                .withDetails(httpExchange, traceLogMapper.map(bundle), queries);
     }
 }
