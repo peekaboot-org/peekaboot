@@ -1,10 +1,9 @@
 package org.peekaboot.autoconfigure;
 
-import jakarta.servlet.http.HttpServletRequest;
-import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
+import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionMessage;
@@ -24,11 +23,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.Ordered;
 import org.springframework.core.type.AnnotatedTypeMetadata;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.DispatcherServlet;
-import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.View;
 
 /**
@@ -72,6 +68,7 @@ public class ErrorPageAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_OVERRIDE)
     public PeekabootErrorViewResolver peekabootErrorViewResolver(
             ErrorAttributes errorAttributes, StackTraceRules stackTraceRules, PeekabootPaths paths) {
@@ -79,6 +76,7 @@ public class ErrorPageAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_OVERRIDE)
     public PeekabootErrorExceptionResolver peekabootErrorExceptionResolver(
             ErrorAttributes errorAttributes,
@@ -87,23 +85,6 @@ public class ErrorPageAutoConfiguration {
             MessageSource messageSource) {
         return new PeekabootErrorExceptionResolver(
                 new PeekabootErrorView(errorAttributes, stackTraceRules, paths), messageSource);
-    }
-
-    /**
-     * Resolves every error, so it must never return null: registering any {@code ErrorViewResolver}
-     * removes Boot's own, and with it the {@code error/4xx.html} convention a null would fall through to.
-     */
-    record PeekabootErrorViewResolver(PeekabootErrorView view) implements ErrorViewResolver, Ordered {
-
-        @Override
-        public ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status, Map<String, Object> model) {
-            return new ModelAndView(view, model);
-        }
-
-        @Override
-        public int getOrder() {
-            return HIGHEST_PRECEDENCE;
-        }
     }
 
     /**

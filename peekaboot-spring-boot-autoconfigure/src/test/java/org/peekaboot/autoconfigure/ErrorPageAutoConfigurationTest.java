@@ -7,8 +7,10 @@ import jakarta.servlet.RequestDispatcher;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
+import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -16,9 +18,11 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorViewResolver;
+import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
 import org.springframework.boot.webmvc.error.ErrorAttributes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.support.StaticMessageSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.DispatcherServlet;
@@ -51,7 +55,7 @@ class ErrorPageAutoConfigurationTest {
             assertThat(context.getBean("error")).isInstanceOf(PeekabootErrorView.class);
             // proves the page is actually reachable: BeanNameViewResolver is what resolves "error" to this bean
             assertThat(context).hasSingleBean(BeanNameViewResolver.class);
-            assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+            assertThat(context).doesNotHaveBean(PeekabootErrorViewResolver.class);
         });
     }
 
@@ -231,7 +235,7 @@ class ErrorPageAutoConfigurationTest {
                 .withUserConfiguration(OwnErrorView.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ErrorViewResolver.class);
-                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context).hasSingleBean(PeekabootErrorViewResolver.class);
                     assertThat(context.getBean("error")).isSameAs(OwnErrorView.VIEW);
                 });
     }
@@ -246,7 +250,7 @@ class ErrorPageAutoConfigurationTest {
                         "test.error-template=true")
                 .run(context -> {
                     assertThat(context).hasSingleBean(ErrorViewResolver.class);
-                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context).hasSingleBean(PeekabootErrorViewResolver.class);
                 });
     }
 
@@ -263,7 +267,7 @@ class ErrorPageAutoConfigurationTest {
                         "spring.web.error.whitelabel.enabled=false")
                 .run(context -> {
                     assertThat(context).hasSingleBean(ErrorViewResolver.class);
-                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context).hasSingleBean(PeekabootErrorViewResolver.class);
                 });
     }
 
@@ -273,7 +277,7 @@ class ErrorPageAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("peekaboot.error-page.enabled=false", "peekaboot.error-page.override=true")
                 .run(context -> {
-                    assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context).doesNotHaveBean(PeekabootErrorViewResolver.class);
                     assertThat(context.getBean("error")).isNotInstanceOf(PeekabootErrorView.class);
                 });
     }
@@ -288,7 +292,7 @@ class ErrorPageAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
                 .run(context -> {
-                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context).hasSingleBean(PeekabootErrorViewResolver.class);
                     assertThat(context.getBean("error")).isNotInstanceOf(PeekabootErrorView.class);
                 });
     }
@@ -300,7 +304,7 @@ class ErrorPageAutoConfigurationTest {
                 .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=false")
                 .run(context -> {
                     assertThat(context.getBean("error")).isInstanceOf(PeekabootErrorView.class);
-                    assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context).doesNotHaveBean(PeekabootErrorViewResolver.class);
                 });
     }
 
@@ -339,5 +343,31 @@ class ErrorPageAutoConfigurationTest {
         View errorView() {
             return VIEW;
         }
+    }
+
+    /** An application that brings its own replaces Peekaboot's, like every other Peekaboot bean. */
+    @Test
+    void backsOffForAnApplicationsOwnExceptionResolver() {
+        PeekabootErrorExceptionResolver own = new PeekabootErrorExceptionResolver(ownView(), new StaticMessageSource());
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .withBean("ownExceptionResolver", PeekabootErrorExceptionResolver.class, () -> own)
+                .run(context -> assertThat(context.getBean(PeekabootErrorExceptionResolver.class))
+                        .isSameAs(own));
+    }
+
+    @Test
+    void backsOffForAnApplicationsOwnViewResolver() {
+        PeekabootErrorViewResolver own = new PeekabootErrorViewResolver(ownView());
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .withBean("ownViewResolver", PeekabootErrorViewResolver.class, () -> own)
+                .run(context -> assertThat(context.getBean(PeekabootErrorViewResolver.class))
+                        .isSameAs(own));
+    }
+
+    private static PeekabootErrorView ownView() {
+        return new PeekabootErrorView(
+                new DefaultErrorAttributes(), new StackTraceRules(List.of(), List.of()), PeekabootPaths.defaults());
     }
 }

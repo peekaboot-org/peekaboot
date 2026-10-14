@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
+import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
@@ -159,7 +160,7 @@ class ErrorPageResolutionOrderTest {
         }
     }
 
-    /** Mirrors the shape of {@link ErrorPageAutoConfiguration.PeekabootErrorViewResolver} at a lower precedence. */
+    /** Mirrors the shape of {@link PeekabootErrorViewResolver} at a lower precedence. */
     record CompetingErrorViewResolver(View view) implements ErrorViewResolver, Ordered {
 
         @Override
