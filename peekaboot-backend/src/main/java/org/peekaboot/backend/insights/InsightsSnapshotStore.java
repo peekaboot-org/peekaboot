@@ -182,8 +182,10 @@ public final class InsightsSnapshotStore implements SnapshotStore {
         if (source == null) {
             return;
         }
+        // Read before capturing: a restore landing in between would vouch for rings captured without it.
+        boolean restoredBeforeCapture = historyRestored.getAsBoolean();
         InsightsSnapshot snapshot = source.get();
-        if (!replacesWhatIsThere(snapshot)) {
+        if (!replacesWhatIsThere(snapshot, restoredBeforeCapture)) {
             return;
         }
         OwnerOnlyFiles.replaceAtomically(file, stream -> {
@@ -207,8 +209,8 @@ public final class InsightsSnapshotStore implements SnapshotStore {
      * otherwise replace a full retention window with them. A run that found nothing to take
      * over has nothing to lose, and writes as soon as it has sampled at all.
      */
-    private boolean replacesWhatIsThere(InsightsSnapshot snapshot) {
-        return historyRestored.getAsBoolean()
+    private boolean replacesWhatIsThere(InsightsSnapshot snapshot, boolean restoredBeforeCapture) {
+        return restoredBeforeCapture
                 || (!unclaimedHistory && snapshot.levels().stream().anyMatch(level -> level.endEpochMs() > 0));
     }
 

@@ -153,6 +153,31 @@ class InsightsSnapshotStoreTest {
                 Arguments.of(Named.of("history taken over: this run's samples replace it", true), new double[] {9.0}));
     }
 
+    /** A capture taken before the restore landed holds none of the history it would overwrite. */
+    @Test
+    void aCaptureTakenBeforeTheRestoreLandedDoesNotReplaceTheHistory() {
+        InsightsSnapshotStore writer = store(Duration.ofDays(30));
+        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        writer.stop();
+
+        InsightsSnapshotStore second = store(Duration.ofDays(30));
+        assertThat(loadWith(second)).isPresent();
+        AtomicBoolean restored = new AtomicBoolean();
+        second.start(
+                () -> {
+                    InsightsSnapshot preRestore = ownSamplesOnly(9.0);
+                    restored.set(true);
+                    return preRestore;
+                },
+                restored::get);
+        second.stop();
+
+        assertThat(loadWith(store(Duration.ofDays(30))))
+                .get()
+                .extracting(persisted -> persisted.series().get("cpu.process").get(0)[0])
+                .isEqualTo(new double[] {1.0, 2.0});
+    }
+
     /** A write that fails part way must not leave megabytes of nothing in the user's home. */
     @Test
     void aWriteThatFailsLeavesNoPartialFileBehind() {
