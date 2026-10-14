@@ -17,7 +17,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_printsTheGeneratedPasswordOnce() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -31,7 +31,7 @@ class SecurityPostureTest {
     /** One headline whatever else is on the class path: the guard answers for the path on its own. */
     @Test
     void armed_saysTheGuardChallengesEveryRequest() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -42,7 +42,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_namesTheSwitchThatHandsThePathToYourOwnSecurity() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -54,7 +54,7 @@ class SecurityPostureTest {
     /** An armed guard is the intended setup, so it is a note, not an alarm. */
     @Test
     void armed_onlyInformsWhileTheToolbarIsOff() {
-        var report = SecurityPosture.armed(generated("hunter2"), FILE, false)
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -66,7 +66,7 @@ class SecurityPostureTest {
         var loaded = new DashboardCredentials(
                 "orders-admin", PasswordHash.of("hunter2"), null, CREATED, DashboardCredentials.Origin.LOADED);
 
-        var report = SecurityPosture.armed(loaded, FILE, false).report().orElseThrow();
+        var report = SecurityPosture.armed(loaded, FILE, false, false).report().orElseThrow();
 
         String expectedDate = DateTimeFormatter.ISO_LOCAL_DATE
                 .withZone(ZoneId.systemDefault())
@@ -83,14 +83,15 @@ class SecurityPostureTest {
                 CREATED,
                 DashboardCredentials.Origin.CONFIGURED);
 
-        var report = SecurityPosture.armed(configured, FILE, false).report().orElseThrow();
+        var report =
+                SecurityPosture.armed(configured, FILE, false, false).report().orElseThrow();
 
         assertThat(report.text()).doesNotContain(FILE.toString()).contains("peekaboot.security.password");
     }
 
     @Test
     void armed_warnsThatAWriteFailureWillChangeThePassword() {
-        var report = SecurityPosture.armed(unpersisted("hunter2"), FILE, false)
+        var report = SecurityPosture.armed(unpersisted("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -99,7 +100,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_saysStorageIsOffWhenThereIsNoCredentialsFile() {
-        var report = SecurityPosture.armed(unpersisted("hunter2"), null, false)
+        var report = SecurityPosture.armed(unpersisted("hunter2"), null, false, false)
                 .report()
                 .orElseThrow();
 
@@ -112,8 +113,9 @@ class SecurityPostureTest {
 
     @Test
     void armed_warnsAboutTheToolbarWhenItIsOn() {
-        var report =
-                SecurityPosture.armed(generated("hunter2"), FILE, true).report().orElseThrow();
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, true, false)
+                .report()
+                .orElseThrow();
 
         assertThat(report.text()).contains("dev toolbar");
     }
@@ -125,15 +127,16 @@ class SecurityPostureTest {
      */
     @Test
     void armed_warnsWhenTheToolbarIsOn() {
-        var report =
-                SecurityPosture.armed(generated("hunter2"), FILE, true).report().orElseThrow();
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, true, false)
+                .report()
+                .orElseThrow();
 
         assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
     }
 
     @Test
     void disabledOnADeployment_isOneWarningLineWithNoBanner() {
-        var report = SecurityPosture.disabledOnADeployment().report().orElseThrow();
+        var report = SecurityPosture.disabledOnADeployment(false).report().orElseThrow();
 
         assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
         assertThat(report.text()).doesNotContain(LifecycleBanner.SEPARATOR).hasLineCount(1);
@@ -141,7 +144,7 @@ class SecurityPostureTest {
 
     @Test
     void disabledOnADeployment_saysYourOwnSecurityMustAuthenticateTheDashboard() {
-        var report = SecurityPosture.disabledOnADeployment().report().orElseThrow();
+        var report = SecurityPosture.disabledOnADeployment(false).report().orElseThrow();
 
         assertThat(report.text())
                 .contains("Peekaboot does not authenticate /peekaboot/**, so your application's own security must.")
@@ -151,6 +154,34 @@ class SecurityPostureTest {
     @Test
     void quiet_reportsNothing() {
         assertThat(SecurityPosture.quiet().report()).isEmpty();
+    }
+
+    /** The error page serves stack traces to anyone, outside the guard; an operator running at WARN has to hear it. */
+    @Test
+    void armed_warnsWhenTheErrorPageIsOnOutsideLocalDevelopment() {
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, true)
+                .report()
+                .orElseThrow();
+
+        assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
+        assertThat(report.text()).contains("peekaboot.error-page.enabled=true").contains("stack traces");
+    }
+
+    @Test
+    void armed_saysNothingAboutTheErrorPageWhileItIsOff() {
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, false, false)
+                .report()
+                .orElseThrow();
+
+        assertThat(report.text()).doesNotContain("peekaboot.error-page.enabled");
+    }
+
+    @Test
+    void disabledOnADeployment_addsTheErrorPageWarningAsASecondLine() {
+        var report = SecurityPosture.disabledOnADeployment(true).report().orElseThrow();
+
+        assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
+        assertThat(report.text()).hasLineCount(2).contains("peekaboot.error-page.enabled=true");
     }
 
     private static DashboardCredentials generated(String password) {

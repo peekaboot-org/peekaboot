@@ -20,6 +20,10 @@ public final class SecurityPosture {
 
     private static final String DOCS = "https://www.peekaboot.org/docs/security/";
 
+    private static final String ERROR_PAGE_ON_A_DEPLOYMENT =
+            "peekaboot.error-page.enabled=true outside local development: any client that asks for HTML"
+                    + " gets full stack traces, and no guard covers the error page.";
+
     public enum Level {
         WARN,
         INFO
@@ -44,16 +48,19 @@ public final class SecurityPosture {
     }
 
     /** The operator switched the guard off on a deployment launch. One reminder, not a banner. */
-    public static SecurityPosture disabledOnADeployment() {
-        return new SecurityPosture(new Report(
-                Level.WARN,
-                "Peekaboot is enabled with peekaboot.security.enabled=false outside local development."
-                        + " Peekaboot does not authenticate /peekaboot/**, so your application's own security"
-                        + " must. See " + DOCS));
+    public static SecurityPosture disabledOnADeployment(boolean errorPageOn) {
+        String text = "Peekaboot is enabled with peekaboot.security.enabled=false outside local development."
+                + " Peekaboot does not authenticate /peekaboot/**, so your application's own security"
+                + " must. See " + DOCS;
+        return new SecurityPosture(
+                new Report(Level.WARN, errorPageOn ? text + "\n" + ERROR_PAGE_ON_A_DEPLOYMENT : text));
     }
 
     public static SecurityPosture armed(
-            DashboardCredentials credentials, @Nullable Path credentialsFile, boolean devToolbarOn) {
+            DashboardCredentials credentials,
+            @Nullable Path credentialsFile,
+            boolean devToolbarOn,
+            boolean errorPageOnADeployment) {
 
         StringBuilder report = LifecycleBanner.open("Peekaboot Security");
         LifecycleBanner.line(report, " Peekaboot challenges every /peekaboot/** request with HTTP Basic.");
@@ -64,11 +71,14 @@ public final class SecurityPosture {
                     report,
                     " The dev toolbar is on: its requests will now raise a credential dialog on ordinary pages.");
         }
+        if (errorPageOnADeployment) {
+            LifecycleBanner.line(report, " " + ERROR_PAGE_ON_A_DEPLOYMENT);
+        }
         LifecycleBanner.line(
                 report, " To use your own security instead, set peekaboot.security.enabled=false: " + DOCS);
         LifecycleBanner.close(report);
 
-        Level level = devToolbarOn ? Level.WARN : Level.INFO;
+        Level level = devToolbarOn || errorPageOnADeployment ? Level.WARN : Level.INFO;
         return new SecurityPosture(new Report(level, report.toString()));
     }
 

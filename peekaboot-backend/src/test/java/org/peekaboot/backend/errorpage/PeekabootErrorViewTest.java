@@ -184,7 +184,9 @@ class PeekabootErrorViewTest {
     void saysWhereThePageCameFromAndHowToTurnItOff() throws Exception {
         view.render(Map.of(), request, response);
 
-        assertThat(response.getContentAsString()).contains("peekaboot.error-page.enabled=false");
+        assertThat(response.getContentAsString())
+                .contains("peekaboot.error-page.enabled=false")
+                .doesNotContain("local run");
     }
 
     @Test

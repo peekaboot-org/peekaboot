@@ -547,7 +547,9 @@ browser.
 
 `peekaboot.error-page.enabled` gates all three paths, defaulted from the same launch-context
 detection as `peekaboot.enabled` and the dev toolbar: on for a detected local run, off otherwise,
-with an explicit setting winning either way (see *Conditional Loading*). It carries the dev
+with an explicit setting winning either way (see *Conditional Loading*). Switched on for a
+deployment launch, the page serves full stack traces outside the guard, so `SecurityPosture`
+adds a WARN to the startup report. It carries the dev
 toolbar the same way any other HTML response does, because `DevToolbarFilter` is registered for
 the `ERROR` dispatch as well as `REQUEST` (see *Servlet Filters*). The bar reports the request
 that failed, never the dispatch that rendered the page.

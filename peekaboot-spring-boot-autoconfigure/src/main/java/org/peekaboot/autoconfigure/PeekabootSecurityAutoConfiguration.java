@@ -67,13 +67,19 @@ public class PeekabootSecurityAutoConfiguration {
             Environment environment) {
         DashboardCredentials resolvedCredentials = credentials.getIfAvailable();
         CredentialsFile resolvedCredentialsFile = credentialsFile.getIfAvailable();
+        boolean deploymentLaunch = deploymentLaunch(environment);
+        boolean errorPageOnADeployment = deploymentLaunch
+                && environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, Boolean.class, false);
         if (resolvedCredentials != null && resolvedCredentialsFile != null && guardRegistered(beanFactory)) {
             return SecurityPosture.armed(
                     resolvedCredentials,
                     resolvedCredentialsFile.path().orElse(null),
-                    environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false));
+                    environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false),
+                    errorPageOnADeployment);
         }
-        return deploymentLaunch(environment) ? SecurityPosture.disabledOnADeployment() : SecurityPosture.quiet();
+        return deploymentLaunch
+                ? SecurityPosture.disabledOnADeployment(errorPageOnADeployment)
+                : SecurityPosture.quiet();
     }
 
     @Configuration(proxyBeanMethods = false)

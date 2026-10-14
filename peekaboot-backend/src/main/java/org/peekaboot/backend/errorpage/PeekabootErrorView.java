@@ -27,8 +27,9 @@ import org.springframework.web.util.HtmlUtils;
  *
  * <p>Every detail comes from the application's own {@link ErrorAttributes}, asked for with
  * every {@code Include} switched on. The application's {@code spring.web.error.include-*}
- * settings are therefore neither read nor changed by this page - they govern what its error
- * <em>responses</em> carry, and this is a page a developer is looking at on a local run.
+ * settings are therefore neither read nor changed by this page. They govern what its error
+ * <em>responses</em> carry; this page is for the developer debugging the failure, which is why
+ * {@code SecurityPosture} warns when it is on outside local development.
  *
  * <p>Like the dev toolbar's shell, the stylesheets travel with the markup as well as being
  * linked, so a reader who has put an authorization gate in front of {@code /peekaboot/**} -
@@ -80,7 +81,7 @@ public class PeekabootErrorView implements View {
             {{DETAIL}}
                     <footer class="pk-error__footer">
                         <a class="pk-logo-mark pk-error__mark" href="{{BASE}}/" aria-label="Open Peekaboot dashboard"></a>
-                        <span>Peekaboot renders this page on a local run; set <code>peekaboot.error-page.enabled=false</code> to keep your own.</span>
+                        <span>Rendered by Peekaboot; set <code>peekaboot.error-page.enabled=false</code> to keep your own error page.</span>
                     </footer>
                 </main>
             </body>

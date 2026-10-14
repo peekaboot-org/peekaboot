@@ -177,6 +177,44 @@ class PeekabootSecurityAutoConfigurationTest {
                         .isEmpty());
     }
 
+    @Test
+    void warnsAboutTheErrorPageOnADeploymentWithTheGuardArmed(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(report -> {
+                            assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
+                            assertThat(report.text()).contains("peekaboot.error-page.enabled=true");
+                        }));
+    }
+
+    @Test
+    void warnsAboutTheErrorPageOnADeploymentWithTheGuardOff(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues(
+                        "peekaboot.security.enabled=false",
+                        "peekaboot.error-page.enabled=true",
+                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(
+                                report -> assertThat(report.text()).contains("peekaboot.error-page.enabled=true")));
+    }
+
+    /** A local run is where the page belongs. */
+    @Test
+    void saysNothingAboutTheErrorPageOnALocalRun(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.error-page.enabled=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(
+                                report -> assertThat(report.text()).doesNotContain("peekaboot.error-page.enabled")));
+    }
+
     /**
      * With no guard of its own to find, Spring retries the lookup ignoring generics, and every
      * other {@code FilterRegistrationBean} in the application is a candidate on that pass - two of
