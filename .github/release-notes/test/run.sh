@@ -52,7 +52,23 @@ diff -u "$HERE/expected-notes.md" "$WORK/tagged-as-unreleased.md"
 # The per-sha overrides name real commits, so they are checked on this repository's own
 # history rather than on the fixture. CI checks out the full history for the same reason.
 echo "checking the per-sha overrides on the real history"
-"$HERE/../render.sh" --repository "$HERE/../../.." --context > "$WORK/real.json"
+readonly REPOSITORY="$HERE/../../.."
+if [ "$(git -C "$REPOSITORY" rev-parse --is-shallow-repository)" = true ]; then
+    echo "the per-sha overrides need full history; CI checks out depth 0" >&2
+    exit 1
+fi
+override_shas="$(sed -n 's/.*sha = "\([0-9a-f]*\)".*/\1/p' "$HERE/../cliff.toml")"
+if [ -z "$override_shas" ]; then
+    echo "found no sha = \"...\" override in cliff.toml; the extraction here no longer matches it" >&2
+    exit 1
+fi
+while read -r sha; do
+    if ! git -C "$REPOSITORY" cat-file -e "$sha^{commit}" 2> /dev/null; then
+        echo "cliff.toml names a commit this history lacks: $sha; a rewrite needs the override updated" >&2
+        exit 1
+    fi
+done <<< "$override_shas"
+"$HERE/../render.sh" --repository "$REPOSITORY" --context > "$WORK/real.json"
 test "$(jq -r '[.[].commits[] | select(.id == "ca362a2ec9ef976392c84fe7dc6fc986509289c3")] | .[0].group' "$WORK/real.json")" = "<!-- 08 -->Tests"
 test "$(jq -r '[.[].commits[] | select(.id == "76fc25377de62e302c41447826f85580ccae0d8d")] | .[0].group' "$WORK/real.json")" = "<!-- 08 -->Tests"
 test "$(jq '[.[].commits[] | select(.id == "f5449589da9d6b7187d462028897cf0139850236")] | length' "$WORK/real.json")" = 0
