@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -277,8 +278,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         PeekabootPropertyKeys.STORAGE_ENABLED,
                         PeekabootPropertyKeys.SECURITY_ENABLED,
                         PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED,
-                        PeekabootPropertyKeys.ERROR_PAGE_ENABLED,
-                        PeekabootPropertyKeys.STACK_TRACE_FOLD);
+                        PeekabootPropertyKeys.ERROR_PAGE_ENABLED);
         assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isNull();
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
@@ -405,17 +405,15 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isTrue();
     }
 
-    /** Folding follows the launch context like the surfaces it applies to. */
-    @Test
-    void foldingFollowsTheLaunchContext() {
-        MockEnvironment localDev = new MockEnvironment();
-        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(localDev, servletApplication());
-        assertThat(localDev.getProperty(PeekabootPropertyKeys.STACK_TRACE_FOLD)).isEqualTo("true");
+    /** Folding is presentation only, so it keeps its static default on every launch. */
+    @ParameterizedTest
+    @EnumSource(LocalDevDetector.LaunchKind.class)
+    void leavesFoldingToItsStaticDefault(LocalDevDetector.LaunchKind launchKind) {
+        MockEnvironment environment = new MockEnvironment();
 
-        MockEnvironment deployment = new MockEnvironment();
-        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(deployment, servletApplication());
-        assertThat(deployment.getProperty(PeekabootPropertyKeys.STACK_TRACE_FOLD))
-                .isEqualTo("false");
+        postProcessor(launchKind).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("peekaboot.stack-trace.fold")).isNull();
     }
 
     /**

@@ -204,6 +204,35 @@ class PeekabootAutoConfigurationTest {
                 });
     }
 
+    /** No fold setting at all: the context runner runs no post-processor, so only the bound default decides. */
+    @Test
+    void foldsCapturedLogsWithoutAnyFoldSetting() {
+        tracingRunner()
+                .withPropertyValues("peekaboot.stack-trace.exclude=com.acme.vendor")
+                .run(context -> {
+                    TraceStore traceStore = context.getBean(TraceStore.class);
+                    addRootSpan(traceStore);
+                    traceStore.addLog(
+                            new LogCapturedEvent(
+                                    "t1",
+                                    "s1",
+                                    Instant.EPOCH,
+                                    "ERROR",
+                                    "TestLogger",
+                                    "boom",
+                                    "main",
+                                    "java.lang.IllegalStateException: boom\n\tat com.acme.vendor.Client.call(Client.java:42)\n"));
+
+                    TraceLog log = context.getBean(TraceInsightsService.class)
+                            .getTraceInsights("t1")
+                            .orElseThrow()
+                            .logs()
+                            .getFirst();
+
+                    assertThat(log.hiddenFrames()).isNotEmpty();
+                });
+    }
+
     /** Drives a captured query through the real TraceInsightsService: a bean existing proves nothing about what reached the mappers. */
     @Test
     void formatsCapturedQueriesWhenHibernateIsPresent() {

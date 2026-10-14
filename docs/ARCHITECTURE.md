@@ -682,7 +682,7 @@ hooks that run before or outside the application context are registered in
 | `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled`, `peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold`, the default property values, and the check that no switch holds a value the conditions and the binder read differently |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`, the default property values, and the check that no switch holds a value the conditions and the binder read differently |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
@@ -784,10 +784,11 @@ toolbar keys on the same local-development detection as `peekaboot.enabled`, not
 `peekaboot.enabled`'s resolved value, so turning Peekaboot on deliberately in a shared
 environment does not inject the toolbar into every page as a side effect.
 
-`peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold` are the fourth and fifth
-switches this detection derives, alongside `peekaboot.enabled`, `peekaboot.dev-toolbar` and
-`peekaboot.storage.enabled` (see *Persisted state*): on for a detected local run, off
-otherwise, with an explicit setting always winning.
+`peekaboot.error-page.enabled` is the fourth switch this detection derives, alongside
+`peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled` (see *Persisted
+state*): on for a detected local run, off otherwise, with an explicit setting always winning.
+`peekaboot.stack-trace.fold` is not among them: folding only decides what a trace shows first,
+so it defaults to `true` on every launch.
 
 `LocalDevDetector` starts from the heuristics Spring Boot DevTools itself uses and adds two
 signals of its own, checked in order:
@@ -909,19 +910,19 @@ exists Peekaboot folds its entries into it, underneath the application's own, so
 `SpringApplicationBuilder.properties("peekaboot.enabled=false")` wins like any other setting.
 Where it does not, Peekaboot's four named sources are appended last, in this order:
 `peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
-`peekabootDevToolbarDefaults`. `peekabootDetection` is where all seven launch-context-detected
+`peekabootDevToolbarDefaults`. `peekabootDetection` is where all six launch-context-detected
 values land, since none of them needs a yml resource of its own (see *Conditional Loading*).
-Five follow a local run: `peekaboot.enabled`, `peekaboot.dev-toolbar`,
-`peekaboot.storage.enabled`, `peekaboot.error-page.enabled` and `peekaboot.stack-trace.fold`.
+Four follow a local run: `peekaboot.enabled`, `peekaboot.dev-toolbar`,
+`peekaboot.storage.enabled` and `peekaboot.error-page.enabled`.
 Two follow a deployment launch: `peekaboot.security.enabled` and
 `peekaboot.security.deployment-detected` (see *Automatic Dashboard Security*).
 `PeekabootDefaultsRegistrationTest` pins both halves.
 
 ### Automatic Dashboard Security
 
-`peekaboot.security.enabled` follows the same idiom as the other five launch-context switches:
+`peekaboot.security.enabled` follows the same idiom as the other four launch-context switches:
 `PeekabootDefaultsEnvironmentPostProcessor` publishes a detected default at lowest precedence,
-and any explicit setting wins over it. Unlike the other five the default does not follow
+and any explicit setting wins over it. Unlike the other four the default does not follow
 `LOCAL_DEV`; it is `true` on a `DEPLOYMENT` launch and `false` on both `LOCAL_DEV` and `TEST`,
 the third value `LocalDevDetector.LaunchKind` grows for this. `TEST` is matched against
 `SKIPPED_STACK_ELEMENTS` before the local-dev checks run at all, not folded into them: several

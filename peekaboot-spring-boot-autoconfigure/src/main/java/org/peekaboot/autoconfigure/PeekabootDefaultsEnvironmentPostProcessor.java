@@ -24,15 +24,14 @@ import org.springframework.core.io.Resource;
 
 /**
  * Derives the defaults for {@code peekaboot.enabled}, {@code peekaboot.dev-toolbar},
- * {@code peekaboot.storage.enabled}, {@code peekaboot.error-page.enabled} and
- * {@code peekaboot.stack-trace.fold} from the launch context (on only when running locally
- * in an IDE or via spring-boot:run/bootRun), and for
+ * {@code peekaboot.storage.enabled} and {@code peekaboot.error-page.enabled} from the launch
+ * context (on only when running locally in an IDE or via spring-boot:run/bootRun), and for
  * {@code peekaboot.security.enabled} from the same detection reading
  * {@link LocalDevDetector.LaunchKind#DEPLOYMENT} rather than local development: a test launch
  * is neither, so a consumer's own {@code @SpringBootTest} is not made to start authenticating
  * against a dashboard it never armed. Peekaboot's defaults apply at the lowest precedence, so
  * any application property wins - {@code SpringApplication.setDefaultProperties} included. An
- * explicit setting for any of the six always overrides the detection.
+ * explicit setting for any of the five always overrides the detection.
  *
  * <p>All defaults live in yml resources. {@code peekaboot-no-push-defaults.yml} is applied
  * unconditionally, so the starter never pushes telemetry anywhere unless the application
@@ -78,7 +77,6 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         detected.put(PeekabootPropertyKeys.DEV_TOOLBAR, localDevelopment);
         detected.put(PeekabootPropertyKeys.STORAGE_ENABLED, localDevelopment);
         detected.put(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, localDevelopment);
-        detected.put(PeekabootPropertyKeys.STACK_TRACE_FOLD, localDevelopment);
         // Security follows the deployment launch rather than localDevelopment: a test is
         // neither, and a consumer's @SpringBootTest must not start being challenged.
         detected.put(PeekabootPropertyKeys.SECURITY_ENABLED, deploymentLaunch);
@@ -95,7 +93,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         BooleanSwitches.requireUnambiguous(environment);
         boolean enabled = environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, localDevelopment);
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
-                + " dev toolbar, storage, error page and stack-trace folding "
+                + " dev toolbar, storage and error page "
                 + (localDevelopment ? "enabled" : "disabled")
                 + " by default, security " + (deploymentLaunch ? "enabled" : "disabled") + " by default");
 

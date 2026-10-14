@@ -249,8 +249,8 @@ public class PeekabootProperties {
      */
     public static class StackTrace {
 
-        /** Hides frames matching {@code exclude} behind a disclosure. Defaulted from the launch context like {@code peekaboot.enabled}. */
-        private boolean fold = false;
+        /** Hides frames matching {@code exclude} behind a disclosure; on everywhere, since one control reveals them. */
+        private boolean fold = true;
 
         /**
          * Frames to hide, matched as a substring of the whole frame line the way Logback matches

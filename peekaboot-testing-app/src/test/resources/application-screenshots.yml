@@ -49,12 +49,10 @@ peekaboot:
   # systemProperties/systemEnvironment, see MASKED_GROUP_HEADER_SELECTOR's doc comment)
   # for what makes that safe to publish.
   enable-unmasking: true
-  # Both detected off for a test launch (see application-test.yml); on here so the error page
-  # is served for /boom and folds its framework frames the way a developer's local run does.
+  # Detected off for a test launch (see application-test.yml); on here so the error page is
+  # served for /boom.
   error-page:
     enabled: true
-  stack-trace:
-    fold: true
 
 management:
   endpoint:

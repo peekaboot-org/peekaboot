@@ -15,4 +15,10 @@ class PeekabootPropertiesTest {
         assertThat(properties.getSecurity().getPassword()).isNull();
         assertThat(properties.getSecurity().getCredentialsFile()).isNull();
     }
+
+    /** Folding decides only what a trace shows first; one control reveals the rest. */
+    @Test
+    void foldsStackTracesByDefault() {
+        assertThat(new PeekabootProperties().getStackTrace().isFold()).isTrue();
+    }
 }
