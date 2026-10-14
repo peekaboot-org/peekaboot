@@ -37,6 +37,10 @@ public final class IntentionalLogFilter extends Filter<ILoggingEvent> {
 
     @Override
     public FilterReply decide(ILoggingEvent event) {
+        // Logback attaches a filter whose start failed, so a misconfigured entry hides nothing
+        if (!isStarted()) {
+            return FilterReply.NEUTRAL;
+        }
         String formatted = event.getFormattedMessage();
         boolean intentional = event.getLoggerName().equals(logger)
                 && formatted != null

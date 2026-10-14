@@ -17,7 +17,7 @@ class IntentionalLogFilterTest {
         IntentionalLogFilter filter = new IntentionalLogFilter();
         filter.setLogger(logger);
         filter.setMessage(message);
-        return filter;
+        return started(filter);
     }
 
     private FilterReply decide(IntentionalLogFilter filter, String logger, String message) {
@@ -94,6 +94,31 @@ class IntentionalLogFilterTest {
 
     @Test
     void startsWhenLoggerAndMessageAreSet() {
-        assertThat(started(filter("a.Emitter", "expected failure")).isStarted()).isTrue();
+        assertThat(filter("a.Emitter", "expected failure").isStarted()).isTrue();
+    }
+
+    @Test
+    void staysNeutralUntilStarted() {
+        IntentionalLogFilter filter = new IntentionalLogFilter();
+        filter.setLogger("a.Emitter");
+        filter.setMessage("expected failure");
+
+        assertThat(decide(filter, "a.Emitter", "expected failure")).isEqualTo(FilterReply.NEUTRAL);
+    }
+
+    @Test
+    void staysNeutralWhenStartedWithoutAMessage() {
+        IntentionalLogFilter filter = new IntentionalLogFilter();
+        filter.setLogger("a.Emitter");
+
+        assertThat(decide(started(filter), "a.Emitter", "expected failure")).isEqualTo(FilterReply.NEUTRAL);
+    }
+
+    @Test
+    void staysNeutralWhenStartedWithoutALogger() {
+        IntentionalLogFilter filter = new IntentionalLogFilter();
+        filter.setMessage("expected failure");
+
+        assertThat(decide(started(filter), "a.Emitter", "expected failure")).isEqualTo(FilterReply.NEUTRAL);
     }
 }
