@@ -328,10 +328,10 @@ class DevToolbarAutoConfigurationTest {
      */
     @Test
     void logbackCaptureReinstallerRunsForEveryApplicationAfterLoggingIsInitialised() {
-        assertThat(SpringFactoriesLoader.loadFactoryNames(
-                        ApplicationListener.class, getClass().getClassLoader()))
+        assertThat(SpringFactoriesLoader.forDefaultResourceLocation(getClass().getClassLoader())
+                        .load(ApplicationListener.class))
                 .as("registered in spring.factories, so every application repairs the capture")
-                .contains(LogbackCaptureReinstaller.class.getName());
+                .hasAtLeastOneElementOfType(LogbackCaptureReinstaller.class);
 
         assertThat(new LogbackCaptureReinstaller().getOrder())
                 .as("must run after LoggingApplicationListener, which performs the reset")

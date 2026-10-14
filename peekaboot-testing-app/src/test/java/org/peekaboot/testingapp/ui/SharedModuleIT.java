@@ -350,14 +350,13 @@ class SharedModuleIT extends PlaywrightTestBase {
         @SuppressWarnings("unchecked")
         List<String> levels = (List<String>) evalModule("severity.js", "m.LOG_LEVELS");
 
-        assertThat(levels).hasSize(5).doesNotContain(Level.OFF.toString(), Level.ALL.toString());
         assertThat(levels)
-                .allSatisfy(level -> assertThat(Level.toLevel(level, null))
-                        .as("%s is a Logback level", level)
-                        .isNotNull());
-        assertThat(levels)
-                .isSortedAccordingTo(
-                        (a, b) -> Level.toLevel(b).toInt() - Level.toLevel(a).toInt());
+                .containsExactly(
+                        Level.ERROR.toString(),
+                        Level.WARN.toString(),
+                        Level.INFO.toString(),
+                        Level.DEBUG.toString(),
+                        Level.TRACE.toString());
     }
 
     @Test
