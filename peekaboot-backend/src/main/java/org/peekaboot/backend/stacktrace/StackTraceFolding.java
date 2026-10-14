@@ -33,14 +33,12 @@ public final class StackTraceFolding {
      * trace the same way {@link String#lines()} does.
      *
      * <p>Both {@code hidden} and {@code applicationFrames} are ascending, disjoint, and every
-     * range is non-empty - {@code endExclusive > start} always holds, since a consumer that
-     * walks the ranges in line order and jumps straight to a match's {@code endExclusive}
-     * would sit at the same index forever on an empty one. A consumer relies on that order: it
-     * walks each list once, front to back, alongside {@code lines}, rather than searching it
-     * for the range starting at each index. Consecutive application frames merge into one
-     * range the same way a run of hidden ones does - both consumers flatten ranges to an index
-     * set before rendering, so a merged range costs them nothing and a trace that is nothing
-     * but application frames does not turn into one singleton range per line.
+     * range is non-empty: a consumer that jumps straight to a run's {@code endExclusive} would
+     * sit at the same index forever on an empty one. {@code StackTraceHtml} walks {@code hidden}
+     * once, front to back, alongside {@code lines}, and relies on that order; {@code log-entry.js}
+     * looks each run up by its start. Both flatten {@code applicationFrames} to an index set, so
+     * consecutive application frames merge into one range the way a run of hidden ones does, and
+     * a trace that is nothing but application frames does not turn into one range per line.
      */
     public record FoldedTrace(List<String> lines, List<Range> hidden, List<Range> applicationFrames) {}
 

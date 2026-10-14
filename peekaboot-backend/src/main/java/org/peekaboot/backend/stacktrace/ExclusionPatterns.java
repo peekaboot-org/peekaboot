@@ -14,9 +14,9 @@ public final class ExclusionPatterns {
     /**
      * Reflection, the container, the web framework, the template engine and the drivers and
      * proxies a request passes through on its way to the application's own code, Peekaboot's own
-     * filters among them. An application
-     * whose stack differs says so through {@code logging.exception-conversion-word}, which is read
-     * ahead of this, or through the property.
+     * filters among them. An application whose stack differs says so through
+     * {@code logging.exception-conversion-word}, which is read ahead of this, or through the
+     * property.
      */
     public static final List<String> DEFAULT = List.of(
             "java.lang.reflect.Method",
