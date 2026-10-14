@@ -10,7 +10,6 @@ import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
-import com.microsoft.playwright.options.RequestOptions;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
 import java.awt.image.BufferedImage;
@@ -18,13 +17,11 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
@@ -35,8 +32,6 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
 import org.peekaboot.testingapp.order.OrderReconciler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
@@ -51,12 +46,7 @@ import tools.jackson.databind.JsonNode;
 class TraceOverlayIT extends PlaywrightTestBase {
 
     /** The colour of the stand-in page header {@link #overlayStacksAboveHostPageChrome} puts on the page. */
-    private static final Logger log = LoggerFactory.getLogger(TraceOverlayIT.class);
-
     private static final int HOST_HEADER_RGB = 0x123456;
-
-    /** How often a trace is produced again when load pushed it off the shape a test needs. */
-    private static final int TRACE_SHAPE_ATTEMPTS = 5;
 
     /** The messages PartnerFeedImporter logs its two throwables under. */
     private static final String REJECTED_ROW_LOG = "skipped partner feed row PK-FEED-1;two";
@@ -1656,51 +1646,49 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * A trace the backend calls slow whose total is short: the enrichment request answers at
-     * once and its {@code @Async} task works past the slow-span threshold, outside the
-     * synchronous window the total reads. Fired again when the request itself ran past the
-     * threshold, as it can under load, since only a short total tells the two rules apart.
+     * A trace the backend calls slow whose total is short: the request answers in 10ms and its
+     * {@code @Async} task works for exactly the slow-span threshold, outside the synchronous
+     * window the total reads.
      */
-    private String awaitSlowTraceWithAShortTotal(long thresholdMs) {
-        for (int attempt = 0; attempt < TRACE_SHAPE_ATTEMPTS; attempt++) {
-            String traceId = triggerOrderEnrichment();
-            JsonNode trace = awaitTrace(traceId, "trace => (" + ROOT_SPAN_EXPORTED + ")(trace) && trace.slow");
-            if (trace.path("durationMs").asLong() < thresholdMs) {
-                return traceId;
-            }
-            log.info("enrichment trace {} took {}ms in total, firing it again", traceId, trace.path("durationMs"));
-        }
-        throw new AssertionError("no enrichment request answered within " + thresholdMs + "ms");
+    private String storeSlowTraceWithAShortTotal(long thresholdMs) {
+        String traceId = "overlay-slow-async-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("http get /orders/enrich")
+                .kind(Span.Kind.SERVER)
+                .at(0, 10)
+                .tag("http.method", "GET")
+                .tag("url.path", "/orders/enrich")
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "async")
+                .parent("root")
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .at(5, thresholdMs)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
+                .build());
+        return traceId;
     }
 
     /**
-     * A trace with a long total and no slow span: two quick requests sent with one shared
-     * {@code traceparent}, the second a threshold's length after the first, so the window
-     * spans the gap while neither request's own span comes near it. Sent again under a fresh
-     * trace id when a request itself ran past the threshold.
+     * A trace with a long total and no slow span: a 10ms request and a 10ms call under it that
+     * starts a threshold's length later, so the window spans the gap while neither span comes
+     * near the threshold.
      */
-    private String awaitLongTraceWithoutASlowSpan(long thresholdMs) {
-        for (int attempt = 0; attempt < TRACE_SHAPE_ATTEMPTS; attempt++) {
-            String traceId = randomHex(16);
-            String traceparent = "00-" + traceId + "-" + randomHex(8) + "-01";
-            RequestOptions sharingTheTrace = RequestOptions.create().setHeader("traceparent", traceparent);
-            page.request().get(baseUrl + "/api/person/all", sharingTheTrace);
-            page.waitForTimeout((double) thresholdMs);
-            page.request().get(baseUrl + "/api/person/all", sharingTheTrace);
-
-            JsonNode trace = awaitTrace(traceId, "trace => trace.durationMs >= " + thresholdMs);
-            if (!trace.path("slow").asBoolean()) {
-                return traceId;
-            }
-            log.info("trace {} carries a slow request span, sending the pair again", traceId);
-        }
-        throw new AssertionError("no pair of requests answered within " + thresholdMs + "ms each");
-    }
-
-    private static String randomHex(int bytes) {
-        byte[] random = new byte[bytes];
-        ThreadLocalRandom.current().nextBytes(random);
-        return HexFormat.of().formatHex(random);
+    private String storeLongTraceWithoutASlowSpan(long thresholdMs) {
+        String traceId = "overlay-long-quick-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("http get /api/person/all")
+                .kind(Span.Kind.SERVER)
+                .at(0, 10)
+                .tag("http.method", "GET")
+                .tag("url.path", "/api/person/all")
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "late")
+                .parent("root")
+                .named("http get")
+                .kind(Span.Kind.CLIENT)
+                .at(thresholdMs, 10)
+                .build());
+        return traceId;
     }
 
     private void openOverlayFromTheDashboard(String traceId) {
@@ -1713,19 +1701,23 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * span carries a SLOW or VERY_SLOW issue), the very flag the Traces tab's badge reads.
      * Applying the span thresholds to the trace's total instead called a 120 ms request slow
      * in the header while the list beside it did not, and a long trace with no slow span the
-     * other way round. Both traces here are real, and each sits on the side of the threshold
-     * where the two rules disagree.
+     * other way round. Each stored trace sits on the side of the threshold where the two rules
+     * disagree, which the backend confirms before the header is read.
      */
     @Test
     void headerSlowMarkingFollowsTheBackendsVerdict() {
         long thresholdMs = slowSpanThresholdMs();
+        String slowWithAShortTotal = storeSlowTraceWithAShortTotal(thresholdMs);
+        String longWithoutASlowSpan = storeLongTraceWithoutASlowSpan(thresholdMs);
+        awaitTrace(slowWithAShortTotal, "trace => trace.slow && trace.durationMs < " + thresholdMs);
+        awaitTrace(longWithoutASlowSpan, "trace => !trace.slow && trace.durationMs >= " + thresholdMs);
 
-        openOverlayFromTheDashboard(awaitSlowTraceWithAShortTotal(thresholdMs));
+        openOverlayFromTheDashboard(slowWithAShortTotal);
         assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn").trim()).isEqualTo("SLOW");
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
                 .contains("slow");
 
-        openOverlayFromTheDashboard(awaitLongTraceWithoutASlowSpan(thresholdMs));
+        openOverlayFromTheDashboard(longWithoutASlowSpan);
         assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('.pk-overlay__meta .pk-badge--warn')"))
                 .isFalse();
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
