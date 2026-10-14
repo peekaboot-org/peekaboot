@@ -2,7 +2,10 @@ package org.peekaboot.autoconfigure.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
@@ -37,15 +40,22 @@ class OverrideBeatsAdviceIT {
 
     @Test
     void peekabootsPageWinsOverTheApplicationsAdviceForAnHtmlRequest() {
-        ResponseEntity<String> response = client().get()
-                .uri("/throwing")
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .toEntity(String.class);
+        try (LogCapture logs = LogCapture.attach(PeekabootErrorExceptionResolver.class)) {
+            ResponseEntity<String> response = client().get()
+                    .uri("/throwing")
+                    .accept(MediaType.TEXT_HTML)
+                    .retrieve()
+                    .toEntity(String.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody()).contains("<span class=\"pk-stack-trace__frame");
-        assertThat(response.getBody()).doesNotContain("THE APPLICATION'S OWN PROBLEM");
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).contains("<span class=\"pk-stack-trace__frame");
+            assertThat(response.getBody()).doesNotContain("THE APPLICATION'S OWN PROBLEM");
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Request processing failed: java.lang.IllegalStateException: gateway unreachable");
+            });
+        }
     }
 
     /**

@@ -22,6 +22,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorViewResolver;
 import org.springframework.boot.webmvc.error.ErrorAttributes;
+import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
@@ -106,8 +107,10 @@ public class ErrorPageAutoConfiguration {
             ErrorAttributes errorAttributes,
             BeanFactory beanFactory,
             PeekabootProperties properties,
-            Environment environment) {
-        return new PeekabootErrorExceptionResolver(errorView(errorAttributes, beanFactory, properties, environment));
+            Environment environment,
+            MessageSource messageSource) {
+        return new PeekabootErrorExceptionResolver(
+                errorView(errorAttributes, beanFactory, properties, environment), messageSource);
     }
 
     /**

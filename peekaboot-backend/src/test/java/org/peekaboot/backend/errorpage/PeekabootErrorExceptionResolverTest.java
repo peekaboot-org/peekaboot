@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Level;
 import jakarta.servlet.RequestDispatcher;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.Timeout;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
+import org.springframework.context.support.StaticMessageSource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.http.MockHttpInputMessage;
@@ -34,24 +37,84 @@ class PeekabootErrorExceptionResolverTest {
     private final PeekabootErrorView view =
             new PeekabootErrorView(new DefaultErrorAttributes(), List.of(), List.of(), false);
 
-    private final PeekabootErrorExceptionResolver resolver = new PeekabootErrorExceptionResolver(view);
+    private final StaticMessageSource messages = new StaticMessageSource();
+
+    private final PeekabootErrorExceptionResolver resolver = new PeekabootErrorExceptionResolver(view, messages);
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
     private LogCapture springLogs;
+    private LogCapture logs;
 
-    // Spring's own resolver WARNs for each exception it maps; captured so it never prints, and asserted where a test is
-    // about it.
+    // Most cases here render an unmapped exception, which logs at ERROR, and Spring's own resolver
+    // WARNs for each one it maps; both captured so neither prints, and asserted where a test is
+    // about them.
     @BeforeEach
     void setUp() {
         request = new MockHttpServletRequest("GET", "/throwing");
         response = new MockHttpServletResponse();
         springLogs = LogCapture.attach(DefaultHandlerExceptionResolver.class);
+        logs = LogCapture.attach(PeekabootErrorExceptionResolver.class);
     }
 
     @AfterEach
     void closeLogs() {
         springLogs.close();
+        logs.close();
+    }
+
+    /** Unmapped, the exception would have reached the container, which logs it at ERROR; the page stands in for that. */
+    @Test
+    void logsAnExceptionNothingMapsAtErrorTheWayTheContainerWould() {
+        request.addHeader("Accept", "text/html");
+
+        resolver.resolveException(request, response, null, new IllegalStateException("boom"));
+
+        assertThat(logs.appender().list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage())
+                    .isEqualTo("Request processing failed: java.lang.IllegalStateException: boom");
+            assertThat(event.getThrowableProxy().getClassName()).isEqualTo(IllegalStateException.class.getName());
+        });
+    }
+
+    /** A cyclic chain never reaches Spring's mapping, and is just as unmapped. */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void logsACyclicCauseChainAtErrorToo() {
+        request.addHeader("Accept", "text/html");
+        RuntimeException first = new RuntimeException("first");
+        RuntimeException second = new RuntimeException("second", first);
+        first.initCause(second);
+
+        resolver.resolveException(request, response, null, first);
+
+        assertThat(logs.appender().list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage())
+                    .isEqualTo("Request processing failed: java.lang.RuntimeException: first");
+        });
+    }
+
+    /** Spring resolves a mapped status without an ERROR line, and so does the page that stands in for it. */
+    @Test
+    void logsNothingAtErrorForAMappedStatus() {
+        request.addHeader("Accept", "text/html");
+
+        resolver.resolveException(request, response, null, new ResponseStatusException(HttpStatus.NOT_FOUND));
+        resolver.resolveException(request, response, null, new TypeMismatchException("abc", Long.class));
+
+        assertThat(logs.appender().list).isEmpty();
+    }
+
+    /** The application's own handling decides what to log for a request the page leaves alone. */
+    @Test
+    void logsNothingForARequestItLeavesToTheApplication() {
+        request.addHeader("Accept", "application/json");
+
+        resolver.resolveException(request, response, null, new IllegalStateException("boom"));
+
+        assertThat(logs.appender().list).isEmpty();
     }
 
     /** An XHR or API client asking for JSON must keep getting the application's own error response. */
@@ -138,6 +201,62 @@ class PeekabootErrorExceptionResolverTest {
 
     @ResponseStatus(HttpStatus.CONFLICT)
     static class AnnotatedException extends RuntimeException {}
+
+    @ResponseStatus(code = HttpStatus.CONFLICT, reason = "Already booked")
+    static class ReasonedException extends RuntimeException {}
+
+    @ResponseStatus(code = HttpStatus.CONFLICT, reason = "booking.taken")
+    static class MessageCodeReasonedException extends RuntimeException {}
+
+    /** Spring resolves a reason through the application's MessageSource; so does the page. */
+    @Test
+    void resolvesAReasonThatIsAMessageCode() {
+        request.addHeader("Accept", "text/html");
+        messages.addMessage("booking.taken", Locale.getDefault(), "That slot is already booked");
+
+        resolver.resolveException(request, response, null, new MessageCodeReasonedException());
+
+        assertThat(request.getAttribute(RequestDispatcher.ERROR_MESSAGE)).isEqualTo("That slot is already booked");
+    }
+
+    /** Spring's ResponseStatusExceptionResolver sends a ResponseStatusException's headers; so does the page. */
+    @Test
+    void keepsTheHeadersOfAResponseStatusException() {
+        request.addHeader("Accept", "text/html");
+        ResponseStatusException tooMany = new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS) {
+            @Override
+            public HttpHeaders getHeaders() {
+                HttpHeaders headers = new HttpHeaders();
+                headers.add("Retry-After", "30");
+                return headers;
+            }
+        };
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, tooMany);
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("30");
+    }
+
+    @Test
+    void keepsTheReasonOfAResponseStatusAnnotation() {
+        request.addHeader("Accept", "text/html");
+
+        resolver.resolveException(request, response, null, new ReasonedException());
+
+        assertThat(request.getAttribute(RequestDispatcher.ERROR_MESSAGE)).isEqualTo("Already booked");
+    }
+
+    /** Nothing more can be written to a committed response, so Spring's resolvers stand back from it, and so does this one. */
+    @Test
+    void standsBackFromACommittedResponse() {
+        request.addHeader("Accept", "text/html");
+        response.setCommitted(true);
+
+        assertThat(resolver.resolveException(request, response, null, new IllegalStateException("boom")))
+                .isNull();
+        assertThat(logs.appender().list).isEmpty();
+    }
 
     @Test
     void derivesTheStatusFromAResponseStatusAnnotation() {

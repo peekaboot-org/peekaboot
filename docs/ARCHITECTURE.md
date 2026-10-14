@@ -471,7 +471,9 @@ exposure model means in practice for securing a deployment.
 
 `ErrorPageAutoConfiguration` registers Peekaboot's page in the fallback slot Spring Boot leaves
 for one. With `peekaboot.error-page.override` set, it registers it in either of two places that
-outrank an application's own.
+outrank an application's own. With the override on, an exception the application's own
+`@ExceptionHandler` maps still renders Peekaboot's page for an HTML request, as a 500 with an
+ERROR log line where nothing in Spring maps it.
 
 Unset, it registers a `View` bean named `error`, the fallback slot. Boot's own whitelabel view
 is `@ConditionalOnMissingBean(name = "error")`, so registering this bean first, `before
@@ -506,17 +508,21 @@ advice resolves inside the REQUEST dispatch, so no ERROR dispatch ever follows i
 own resolvers, so it intercepts the exception first. It returns null, falling through to the
 application's own handling, unless the `Accept` header names `text/html` with a quality above
 zero. A bare `*/*` or a missing header does not count, so Swagger UI, curl and `fetch()` keep
-getting the application's own error response, as does an XHR asking for JSON. The status is
-Spring's own, asked in Spring's order. A `ResponseStatusException` or a merged `@ResponseStatus`
-on the exception or a cause comes first, read the way `ResponseStatusExceptionResolver` reads it
-but over a chain walked once with cycle detection; a cyclic chain is a 500 right there, because
-Spring's own cause walk would never return from it.
-A private `DefaultHandlerExceptionResolver` comes next, answering against a response wrapper that
-records `sendError` instead of sending it: a `TypeMismatchException` or an unreadable body keeps
-its 400, the headers that mapping sets (`Allow` on a 405) reach the real response, and its
-message becomes `ERROR_MESSAGE`. Where that mapping answers without a status, a client that
+getting the application's own error response, as does an XHR asking for JSON. It also returns
+null for a response already committed, as Spring's own resolvers do. The status is Spring's own,
+asked in Spring's order: a private `ResponseStatusExceptionResolver`, then a private
+`DefaultHandlerExceptionResolver`, both answering against a response wrapper that records
+`sendError` instead of sending it. A `ResponseStatusException` keeps its status and headers, an
+`@ResponseStatus` its reason, a `TypeMismatchException` or an unreadable body its 400, and the
+headers either mapping sets (`Retry-After`, `Allow` on a 405) reach the real response; the
+recorded message becomes `ERROR_MESSAGE`. A cause chain is first walked once with cycle detection:
+a cyclic one never reaches Spring, whose cause walks would never return from it, and only the
+status of a `ResponseStatusException` or a merged `@ResponseStatus` on it counts, without headers
+or reason. Where that mapping answers without a status, a client that
 already hung up, the resolver returns its empty `ModelAndView`, so nothing is written to the dead
-connection. Anything left is a 500. It sets `RequestDispatcher.ERROR_STATUS_CODE`, `ERROR_REQUEST_URI` and
+connection. Anything left is a 500, and since the container would have logged it at ERROR had it escaped,
+the resolver logs it on its own logger as `Request processing failed: <exception>`, the message
+`FrameworkServlet` gives it. It sets `RequestDispatcher.ERROR_STATUS_CODE`, `ERROR_REQUEST_URI` and
 `ERROR_METHOD` on the request (nothing else sets that last one on a REQUEST dispatch), so
 `PeekabootErrorView` renders the same request line, status and reason it would off a real ERROR
 dispatch, and returns a `ModelAndView` carrying that status and a `PeekabootErrorView` built the

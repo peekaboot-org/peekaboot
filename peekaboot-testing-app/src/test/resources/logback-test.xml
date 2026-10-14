@@ -29,6 +29,11 @@
             <logger>org.peekaboot.testingapp.order.PartnerFeedImporter</logger>
             <message>partner feed import broke off</message>
         </filter>
+        <!-- The override page logs what Tomcat would have; ErrorPageContentNegotiationIT asserts it on the request's trace. -->
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver</logger>
+            <message>Request processing failed: java\.lang\.IllegalStateException: order reconciliation gateway is unreachable</message>
+        </filter>
         <!-- insights-test-panels.yml's absent-subsystem panel names a meter this app lacks, on purpose; InsightsServiceTest asserts the warning. -->
         <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
             <logger>org.peekaboot.backend.insights.SeriesSampler</logger>

@@ -10,6 +10,9 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.MessageSource;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.HttpStatus;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolver;
 import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver;
 
 /**
@@ -29,11 +33,12 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
  * {@code ErrorViewResolver} - the mechanism {@link PeekabootErrorView}'s other two paths rely on.
  * Registered only where {@code peekaboot.error-page.override} is set, alongside those paths.
  *
- * <p>The status is the one Spring's own resolvers would send, asked in their order: a
- * {@code ResponseStatusException} or {@code @ResponseStatus} on the exception or a cause, then
- * {@link DefaultHandlerExceptionResolver}'s mapping, then 500. Running ahead of both, this
- * resolver would otherwise turn every client error Spring knows into a server error. A cyclic
- * cause chain is a 500 without asking Spring, whose walk would never return from it.
+ * <p>The status, headers and reason are the ones Spring's own resolvers would send, asked in their
+ * order: {@link ResponseStatusExceptionResolver}, then {@link DefaultHandlerExceptionResolver},
+ * then 500. Running ahead of both, this resolver would otherwise turn every client error Spring
+ * knows into a server error. A cyclic cause chain never reaches either, since their cause walks
+ * would never return from it: only the status of a {@code ResponseStatusException} or a
+ * {@code @ResponseStatus} on it counts, without headers or reason, and anything else is a 500.
  *
  * <p>Sets the request attributes an ERROR dispatch would have set, so {@link PeekabootErrorView}
  * reads the same status, reason, path and method off this REQUEST dispatch that it would off a
@@ -41,37 +46,45 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
  */
 public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver, Ordered {
 
+    private static final Logger log = LoggerFactory.getLogger(PeekabootErrorExceptionResolver.class);
+
     /** Asked rather than copied, so Spring stays the one place its mapping lives. */
     private static final DefaultHandlerExceptionResolver SPRING_MAPPING = new DefaultHandlerExceptionResolver();
 
     private final PeekabootErrorView view;
 
-    public PeekabootErrorExceptionResolver(PeekabootErrorView view) {
+    private final ResponseStatusExceptionResolver responseStatusMapping = new ResponseStatusExceptionResolver();
+
+    /** @param messageSource the application's, so an {@code @ResponseStatus} reason that is a message code resolves as Spring resolves it */
+    public PeekabootErrorExceptionResolver(PeekabootErrorView view, MessageSource messageSource) {
         this.view = view;
+        this.responseStatusMapping.setMessageSource(messageSource);
     }
 
     @Override
     public ModelAndView resolveException(
             HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        if (!isHtmlTextAccepted(request)) {
+        // Nothing more can be written to a committed response; Spring's own resolvers stand back too.
+        if (!isHtmlTextAccepted(request) || response.isCommitted()) {
             return null;
         }
         CauseChain chain = CauseChain.of(ex);
-        HttpStatusCode annotated = annotatedStatusOf(chain.links());
-        if (annotated != null) {
-            return page(request, annotated);
-        }
         if (chain.cyclic()) {
-            // Spring's own cause walk (DisconnectedClientHelper) never ends on a cycle.
-            return page(request, HttpStatus.INTERNAL_SERVER_ERROR);
+            // Spring's own cause walks never end on a cycle, so only a status is read here, without headers or reason.
+            HttpStatusCode annotated = annotatedStatusOf(chain.links());
+            return annotated != null ? page(request, annotated) : unmappedPage(request, ex);
         }
         SendErrorRecorder recorder = new SendErrorRecorder(response);
-        ModelAndView springAnswer = SPRING_MAPPING.resolveException(request, recorder, handler, ex);
+        ModelAndView springAnswer = responseStatusMapping.resolveException(request, recorder, handler, ex);
         if (springAnswer == null) {
-            return page(request, HttpStatus.INTERNAL_SERVER_ERROR);
+            springAnswer = SPRING_MAPPING.resolveException(request, recorder, handler, ex);
+        }
+        if (springAnswer == null) {
+            return unmappedPage(request, ex);
         }
         if (recorder.status == null) {
-            // Spring writes nothing for a client that already hung up; neither may the page.
+            // Spring writes nothing where the client already hung up or the response went out
+            // meanwhile; neither may the page.
             return springAnswer;
         }
         if (recorder.message != null) {
@@ -91,6 +104,12 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
         return HIGHEST_PRECEDENCE + 1;
     }
 
+    /** Unmapped, it would have escaped to the container, which logs it at ERROR under this message. */
+    private ModelAndView unmappedPage(HttpServletRequest request, Exception ex) {
+        log.error("Request processing failed: {}", ex.toString(), ex);
+        return page(request, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
     private ModelAndView page(HttpServletRequest request, HttpStatusCode status) {
         request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, status.value());
         request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, request.getRequestURI());
@@ -100,7 +119,7 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
         return modelAndView;
     }
 
-    /** Read the way {@code ResponseStatusExceptionResolver} reads it, over a chain already known to end. */
+    /** Read the way {@code ResponseStatusExceptionResolver} reads it, for the cyclic chain Spring's own walk cannot take. */
     private static @Nullable HttpStatusCode annotatedStatusOf(List<Throwable> links) {
         for (Throwable link : links) {
             if (link instanceof ResponseStatusException responseStatusException) {

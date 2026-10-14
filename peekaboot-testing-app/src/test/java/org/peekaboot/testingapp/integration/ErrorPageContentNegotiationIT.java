@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -21,6 +22,9 @@ import org.springframework.web.client.RestClient;
  * default path through {@code BasicErrorController} and the override path that outranks it.
  */
 class ErrorPageContentNegotiationIT {
+
+    private static final String OVERRIDE_PAGE_FAILURE =
+            "Request processing failed: java.lang.IllegalStateException: order reconciliation gateway is unreachable";
 
     private record ErrorResponse(HttpStatusCode status, MediaType contentType, String body) {}
 
@@ -96,6 +100,19 @@ class ErrorPageContentNegotiationIT {
 
             assertThat(response.status()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.body()).contains("pk-error");
+        }
+
+        /** The page stands where the container would have logged the failure, so the line lands on the request's trace. */
+        @Test
+        void logsTheExceptionAgainstTheRequestsTrace() {
+            HttpHeaders headers = RestClient.create("http://localhost:" + port)
+                    .get()
+                    .uri("/boom")
+                    .header("Accept", "text/html")
+                    .exchange((request, response) -> response.getHeaders());
+            TraceApiClient traces = new TraceApiClient(port);
+
+            traces.awaitTrace(TraceApiClient.traceIdOf(headers), TraceApiClient.errorLogged(OVERRIDE_PAGE_FAILURE));
         }
     }
 }
