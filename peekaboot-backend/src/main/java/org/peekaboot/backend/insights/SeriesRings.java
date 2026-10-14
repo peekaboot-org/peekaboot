@@ -1,7 +1,6 @@
 package org.peekaboot.backend.insights;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -168,7 +167,8 @@ final class SeriesRings {
      * Everything persistence needs: every level of every series, including the
      * {@code samples} column the API's {@link #snapshot(int)} deliberately omits. Read under
      * the same lock as {@link #appendTick}, like {@link #snapshot(int)}, so every level holds
-     * whole ticks only and its {@code endEpochMs} dates the newest of them.
+     * whole ticks only, one sample count for every series, and its {@code endEpochMs} dates
+     * the newest of them.
      */
     InsightsSnapshot capture() {
         synchronized (lock) {
@@ -177,20 +177,18 @@ final class SeriesRings {
                 endEpochMs[level] = levelEndEpochMs.get(level);
             }
             Map<String, List<double[][]>> series = new LinkedHashMap<>();
+            int[] counts = new int[intervalMillis.length];
             for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
                 List<double[][]> byLevel = new ArrayList<>(intervalMillis.length);
-                byLevel.add(new double[][] {entry.getValue().toArray()});
+                double[][] level0 = {entry.getValue().toArray()};
+                byLevel.add(level0);
+                counts[0] = level0[0].length;
                 StatsRing[] rings = statsRings.get(entry.getKey());
                 for (int level = 1; level < intervalMillis.length; level++) {
                     byLevel.add(rings[level].toColumns());
+                    counts[level] = rings[level].size();
                 }
                 series.put(entry.getKey(), byLevel);
-            }
-            int[] counts = sharedCounts(series);
-            for (List<double[][]> byLevel : series.values()) {
-                for (int level = 0; level < intervalMillis.length; level++) {
-                    byLevel.set(level, trimmed(byLevel.get(level), counts[level]));
-                }
             }
             List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
             for (int level = 0; level < intervalMillis.length; level++) {
@@ -199,33 +197,6 @@ final class SeriesRings {
             }
             return new InsightsSnapshot(System.currentTimeMillis(), levels, series);
         }
-    }
-
-    /** Per level, the sample count every series has; 0 when no series is configured at all. */
-    private int[] sharedCounts(Map<String, List<double[][]>> series) {
-        int[] counts = new int[intervalMillis.length];
-        if (series.isEmpty()) {
-            return counts;
-        }
-        Arrays.fill(counts, Integer.MAX_VALUE);
-        for (List<double[][]> byLevel : series.values()) {
-            for (int level = 0; level < intervalMillis.length; level++) {
-                counts[level] = Math.min(counts[level], byLevel.get(level)[0].length);
-            }
-        }
-        return counts;
-    }
-
-    /** Columns are oldest first, so cutting at {@code count} drops the newest samples. */
-    private static double[][] trimmed(double[][] columns, int count) {
-        if (columns[0].length == count) {
-            return columns;
-        }
-        double[][] cut = new double[columns.length][];
-        for (int i = 0; i < columns.length; i++) {
-            cut[i] = Arrays.copyOf(columns[i], count);
-        }
-        return cut;
     }
 
     /**

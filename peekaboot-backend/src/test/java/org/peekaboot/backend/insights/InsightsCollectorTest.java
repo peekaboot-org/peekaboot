@@ -245,7 +245,9 @@ class InsightsCollectorTest {
      * The snapshot writer wakes on the persistence-interval boundary, which is a level-0
      * boundary too, so a capture often lands while a tick is running. The codec refuses a
      * column longer than its level's count, so such a capture must carry one count for every
-     * series rather than fail the write and burn the store's one-shot failure log.
+     * series rather than fail the write and burn the store's one-shot failure log. Like
+     * {@link #snapshotTakenMidTickSeesOnlyWholeTicks}, this pins the append-after-sampling
+     * order only.
      */
     @Test
     void captureTakenMidTickCarriesOneSampleCountForEverySeries() throws Exception {
