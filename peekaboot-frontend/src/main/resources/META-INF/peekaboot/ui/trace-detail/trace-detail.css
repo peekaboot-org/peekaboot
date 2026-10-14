@@ -229,7 +229,8 @@
 .pk-sql__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-xs); }
 .pk-sql__code { margin: 0; }
 .pk-sql__params { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
-.pk-sql__params-label { color: var(--pk-text-muted); }
+.pk-sql__params-label,
+.pk-sql__params-omitted { color: var(--pk-text-muted); }
 .pk-sql__param-list { margin: 0; padding-left: 4ch; overflow-wrap: anywhere; }
 /* Light literals as fallbacks: a stale cached tokens.css must not leave a token unpainted. */
 .pk-sql__keyword { color: var(--pk-sql-keyword, #7c3aed); }

@@ -99,25 +99,52 @@ class QueryParameterObservationFilterTest {
         assertThat(parametersTag()).isEqualTo("[[\"1\",\"'Ann'\"],[\"2\",\"'Bob'\"]]");
     }
 
-    /** A runaway batch should not turn one query into thousands of high-cardinality tag entries. */
+    /** A runaway batch should not turn one query into thousands of tag entries, and says how many it dropped. */
     @Test
-    void capsTheNumberOfParameterSetsPerBatch() throws SQLException {
+    void capsTheNumberOfParameterSetsPerBatchAndCountsTheRest() throws SQLException {
+        insertBatchOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS + 2);
+
+        JsonNode sets = PeekabootJson.MAPPER.readTree(parametersTag());
+        assertThat(sets).hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS + 1);
+        assertThat(sets.get(QueryParameterObservationFilter.MAX_PARAMETER_SETS - 1)
+                        .get(0)
+                        .asString(""))
+                .isEqualTo(String.valueOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS));
+        assertThat(sets.get(QueryParameterObservationFilter.MAX_PARAMETER_SETS)
+                        .get(0)
+                        .asString(""))
+                .isEqualTo("/* 2 parameter sets omitted */");
+    }
+
+    @Test
+    void countsASingleDroppedParameterSetInTheSingular() throws SQLException {
+        insertBatchOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS + 1);
+
+        JsonNode sets = PeekabootJson.MAPPER.readTree(parametersTag());
+        assertThat(sets.get(QueryParameterObservationFilter.MAX_PARAMETER_SETS)
+                        .get(0)
+                        .asString(""))
+                .isEqualTo("/* 1 parameter set omitted */");
+    }
+
+    @Test
+    void marksNothingForABatchWithinTheCap() throws SQLException {
+        insertBatchOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS);
+
+        assertThat(PeekabootJson.MAPPER.readTree(parametersTag()))
+                .hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS);
+    }
+
+    private void insertBatchOf(int size) throws SQLException {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement insert = connection.prepareStatement("INSERT INTO person (id, name) VALUES (?, ?)")) {
-            for (long id = 1; id <= QueryParameterObservationFilter.MAX_PARAMETER_SETS + 1; id++) {
+            for (long id = 1; id <= size; id++) {
                 insert.setLong(1, id);
                 insert.setString(2, "n" + id);
                 insert.addBatch();
             }
             insert.executeBatch();
         }
-
-        JsonNode sets = PeekabootJson.MAPPER.readTree(parametersTag());
-        assertThat(sets).hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS);
-        assertThat(sets.get(QueryParameterObservationFilter.MAX_PARAMETER_SETS - 1)
-                        .get(0)
-                        .asString(""))
-                .isEqualTo(String.valueOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS));
     }
 
     /** setNull's second argument is the SQL type, not a value. */
