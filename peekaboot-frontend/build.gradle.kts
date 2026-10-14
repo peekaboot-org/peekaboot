@@ -1,4 +1,6 @@
 import com.github.gradle.node.npm.task.NpmTask
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
 
 plugins {
     id("peekaboot.java-conventions")
@@ -31,6 +33,33 @@ node {
     npmInstallCommand = "ci"
 }
 
+// Maven's -q hides npm's output because frontend-maven-plugin logs it at INFO; Gradle passes
+// it straight through. npm ci's install summary goes to stdout and only --silent hides it,
+// which would hide npm's errors too, so stdout is dropped and stderr still carries them.
+tasks.npmInstall {
+    execOverrides {
+        standardOutput = OutputStream.nullOutputStream()
+    }
+}
+
+// A lint run that passes prints nothing; one that fails prints everything npm and the linter
+// wrote, since npm's own errors (a missing script, a broken package.json) come only on its output.
+fun NpmTask.printOutputOnlyOnFailure() {
+    val output = ByteArrayOutputStream()
+    ignoreExitValue = true
+    execOverrides {
+        standardOutput = output
+        errorOutput = output
+    }
+    doLast {
+        val exitValue = checkNotNull(result).exitValue
+        if (exitValue != 0) {
+            logger.error(output.toString(Charsets.UTF_8))
+            throw GradleException("npm ${npmCommand.get().joinToString(" ")} exited with $exitValue")
+        }
+    }
+}
+
 // One task per tool, mirroring the pom's lint-js / lint-css / lint-html executions and
 // running the same three npm scripts. No declared outputs, so each always runs: a gate an
 // up-to-date marker can skip is not a gate.
@@ -39,6 +68,7 @@ val lintJs = tasks.register<NpmTask>("lintJs") {
     description = "Runs ESLint over the frontend's ES modules."
     dependsOn(tasks.npmInstall)
     npmCommand = listOf("run", "lint:js")
+    printOutputOnlyOnFailure()
 }
 
 val lintCss = tasks.register<NpmTask>("lintCss") {
@@ -47,6 +77,7 @@ val lintCss = tasks.register<NpmTask>("lintCss") {
     dependsOn(tasks.npmInstall)
     shouldRunAfter(lintJs)
     npmCommand = listOf("run", "lint:css")
+    printOutputOnlyOnFailure()
 }
 
 val lintHtml = tasks.register<NpmTask>("lintHtml") {
@@ -55,6 +86,7 @@ val lintHtml = tasks.register<NpmTask>("lintHtml") {
     dependsOn(tasks.npmInstall)
     shouldRunAfter(lintCss)
     npmCommand = listOf("run", "lint:html")
+    printOutputOnlyOnFailure()
 }
 
 tasks.check {
