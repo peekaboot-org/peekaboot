@@ -73,16 +73,12 @@ class StackTraceHtmlTest {
         assertThat(html).doesNotContain("<script>").contains("&lt;script&gt;");
     }
 
-    /**
-     * HtmlUtils.htmlEscape leaves "{{" alone, but PeekabootErrorView substitutes
-     * {@code {{REVEAL_SCRIPT_TAGS}}} against a page that already carries this trace, so a
-     * message spelling that placeholder must not survive into the markup unneutralised.
-     */
+    /** The page fills its placeholders in one pass, so the trace carries a placeholder-looking message as written. */
     @Test
-    void neutralisesAPlaceholderLookingMessageInTheTrace() {
+    void keepsAPlaceholderLookingMessageAsWritten() {
         String html = render("java.lang.IllegalStateException: {{REVEAL_SCRIPT_TAGS}}", List.of(), List.of());
 
-        assertThat(html).doesNotContain("{{REVEAL_SCRIPT_TAGS}}").contains("&#123;&#123;REVEAL_SCRIPT_TAGS}}");
+        assertThat(html).contains("{{REVEAL_SCRIPT_TAGS}}");
     }
 
     /** No packages registered - a plain context - classifies nothing rather than everything. */

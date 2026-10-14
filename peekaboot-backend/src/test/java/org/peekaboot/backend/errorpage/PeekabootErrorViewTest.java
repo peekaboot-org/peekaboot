@@ -142,21 +142,35 @@ class PeekabootErrorViewTest {
                 .contains("&lt;script&gt;");
     }
 
-    /**
-     * {@code {{DETAIL}}} is filled in last, so a raw "{{DETAIL}}" surviving into an earlier
-     * replacement (the path, here) would be caught by that later call too, stamping a second
-     * detail section where the request path is shown. escape() neutralises "{{" for exactly
-     * this reason.
-     */
+    /** One pass fills the page, so a path spelling a placeholder shows as written and fills nothing. */
     @Test
-    void neutralisesAPlaceholderLookingPathSoItCannotReopenAReplacement() throws Exception {
+    void showsAPlaceholderLookingPathVerbatim() throws Exception {
         request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/{{DETAIL}}");
 
         view.render(Map.of(), request, response);
 
         String html = response.getContentAsString();
-        assertThat(html).doesNotContain("{{DETAIL}}").contains("&#123;&#123;DETAIL}}");
+        assertThat(html).contains("<span class=\"pk-error__path\">/{{DETAIL}}</span>");
         assertThat(html).containsOnlyOnce("class=\"pk-error__detail\"");
+    }
+
+    @Test
+    void leavesNoPlaceholderUnfilled() throws Exception {
+        view.render(Map.of(), request, response);
+        String messageOnly = response.getContentAsString();
+
+        assertThat(messageOnly).doesNotContain("{{");
+        assertThat(render(view(List.of("org.springframework"), true))).doesNotContain("{{");
+    }
+
+    @Test
+    void showsAMessageWithRegexReplacementCharactersVerbatim() {
+        IllegalStateException exception = new IllegalStateException("costs $1 \\ more");
+        exception.setStackTrace(
+                new StackTraceElement[] {new StackTraceElement("com.example.Widget", "process", "Widget.java", 10)});
+
+        assertThat(render(view(List.of(), false), exception))
+                .contains("<p class=\"pk-error__message\">costs $1 \\ more</p>");
     }
 
     /** The message on the no-exception branch is exactly as attacker-controllable as the path. */
@@ -271,22 +285,14 @@ class PeekabootErrorViewTest {
                 .doesNotContain("reveal.js");
     }
 
-    /**
-     * {@code {{REVEAL_SCRIPT_TAGS}}} is substituted last, against a page that already carries
-     * the trace - and the trace's own first line repeats the exception's message, which is
-     * exactly the kind of request-influenced text that could spell that placeholder.
-     * {@code StackTraceHtml} neutralises a double brace for this reason; this pins the whole
-     * path end to end, the way {@link #neutralisesAPlaceholderLookingPathSoItCannotReopenAReplacement()}
-     * pins it for the request path.
-     */
+    /** The trace's first line repeats the message, so a message spelling the script placeholder must ship no extra script. */
     @Test
-    void doesNotReopenTheScriptPlaceholderFromAPlaceholderLookingMessage() {
+    void shipsNoExtraScriptForAPlaceholderLookingMessage() {
         String page = render(
                 view(List.of("org.springframework"), true), exceptionWithFrameworkFrames("{{REVEAL_SCRIPT_TAGS}}"));
 
         assertThat(page)
-                .doesNotContain("{{REVEAL_SCRIPT_TAGS}}")
-                .contains("&#123;&#123;REVEAL_SCRIPT_TAGS}}")
+                .contains("{{REVEAL_SCRIPT_TAGS}}")
                 .containsOnlyOnce("<script>")
                 .containsOnlyOnce("<script src=\"/peekaboot/ui/error-page/reveal.js\">");
     }

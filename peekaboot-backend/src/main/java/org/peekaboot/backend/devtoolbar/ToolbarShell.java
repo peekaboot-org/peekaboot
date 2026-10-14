@@ -1,7 +1,9 @@
 package org.peekaboot.backend.devtoolbar;
 
 import java.util.List;
+import java.util.Map;
 import org.peekaboot.backend.ui.InlinedStylesheets;
+import org.peekaboot.backend.ui.Placeholders;
 
 /**
  * The dev toolbar's server-rendered shell: the bar's markup, in a declarative shadow root,
@@ -85,7 +87,7 @@ public class ToolbarShell {
     private final String shell;
 
     public ToolbarShell() {
-        this.shell = TEMPLATE.replace("{{CSS}}", STYLESHEETS.css()).replace("{{LINKS}}", STYLESHEETS.links());
+        this.shell = Placeholders.fill(TEMPLATE, Map.of("CSS", STYLESHEETS.css(), "LINKS", STYLESHEETS.links()));
     }
 
     /**
@@ -100,10 +102,10 @@ public class ToolbarShell {
      * reachable - and a link nested inside a button would be invalid HTML the parser moves.
      *
      * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
-     *     prefix behind the request's context path
+     *     prefix behind the request's context path and the DispatcherServlet's prefix
      * @param dataJson the toolbar data blob, already script-safe (see ToolbarDataProvider)
      */
     public String render(String basePath, String dataJson) {
-        return shell.replace(InlinedStylesheets.BASE_TOKEN, basePath).replace("{{DATA}}", dataJson);
+        return Placeholders.fill(shell, Map.of("BASE", basePath, "DATA", dataJson));
     }
 }
