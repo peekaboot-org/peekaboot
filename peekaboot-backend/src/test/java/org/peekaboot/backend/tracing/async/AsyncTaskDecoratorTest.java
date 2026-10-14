@@ -5,24 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationHandler;
-import io.micrometer.observation.ObservationRegistry;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
+import org.peekaboot.backend.testsupport.RecordingObservations;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskDecorator;
@@ -33,46 +27,15 @@ import org.springframework.util.ErrorHandler;
 
 class AsyncTaskDecoratorTest {
 
-    private final ObservationRegistry registry = ObservationRegistry.create();
-    private final List<Observation.Context> recorded = new CopyOnWriteArrayList<>();
-    private final AtomicInteger errorsRecorded = new AtomicInteger();
-    private final BlockingQueue<Observation.Context> stopped = new LinkedBlockingQueue<>();
-    private AsyncTaskDecorator decorator;
-
-    @BeforeEach
-    void setUp() {
-        // a handler that supports every context, so observations are real rather than no-ops
-        // and getCurrentObservation() has something to return
-        registry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
-            @Override
-            public boolean supportsContext(Observation.Context context) {
-                return true;
-            }
-
-            @Override
-            public void onStart(Observation.Context context) {
-                recorded.add(context);
-            }
-
-            @Override
-            public void onError(Observation.Context context) {
-                errorsRecorded.incrementAndGet();
-            }
-
-            @Override
-            public void onStop(Observation.Context context) {
-                stopped.add(context);
-            }
-        });
-        decorator = new AsyncTaskDecorator(registry);
-    }
+    private final RecordingObservations observations = new RecordingObservations();
+    private final AsyncTaskDecorator decorator = new AsyncTaskDecorator(observations.registry());
 
     @Test
     void observesATaskDispatchedWithAnObservationInScope() {
         AtomicInteger runs = new AtomicInteger();
         Runnable decorated = decorator.decorate(runs::incrementAndGet);
 
-        runWithParentObservationInScope(decorated);
+        observations.runInsideParentObservation(decorated);
 
         assertThat(runs).hasValue(1);
         assertThat(asyncContexts()).hasSize(1);
@@ -84,7 +47,7 @@ class AsyncTaskDecoratorTest {
     void namesTheThreadTheTaskRanOn() {
         Runnable decorated = decorator.decorate(() -> {});
 
-        runWithParentObservationInScope(decorated);
+        observations.runInsideParentObservation(decorated);
 
         assertThat(highCardinalityValue(asyncContexts().get(0), AsyncTaskMarker.THREAD_TAG_KEY))
                 .isEqualTo(Thread.currentThread().getName());
@@ -142,7 +105,8 @@ class AsyncTaskDecoratorTest {
             throw boom;
         });
 
-        assertThatThrownBy(() -> runWithParentObservationInScope(decorated)).isSameAs(boom);
+        assertThatThrownBy(() -> observations.runInsideParentObservation(decorated))
+                .isSameAs(boom);
 
         assertThat(asyncContexts()).hasSize(1);
         assertThat(asyncContexts().get(0).getError()).isSameAs(boom);
@@ -156,7 +120,7 @@ class AsyncTaskDecoratorTest {
             throw boom;
         });
 
-        runWithParentObservationInScope(decorator.decorate(submitted));
+        observations.runInsideParentObservation(decorator.decorate(submitted));
 
         assertThat(asyncContexts())
                 .singleElement()
@@ -174,12 +138,15 @@ class AsyncTaskDecoratorTest {
         AsyncTaskExecutor executor = executorDecoratedAsBootDoes(threadPool);
 
         try {
-            Future<Object> future = runWithParentObservationInScope(() -> executor.submit(() -> {
+            Future<Object> future = observations.insideParentObservation(() -> executor.submit(() -> {
                 throw boom;
             }));
 
             assertThatThrownBy(future::get).hasCause(boom);
-            assertThat(stoppedAsyncTask().getError()).isSameAs(boom);
+            assertThat(observations
+                            .awaitStopped(AsyncTaskMarker.OBSERVATION_NAME)
+                            .getError())
+                    .isSameAs(boom);
         } finally {
             if (executor instanceof ThreadPoolTaskExecutor pool) {
                 pool.shutdown();
@@ -191,7 +158,7 @@ class AsyncTaskDecoratorTest {
     void recordsNothingForASubmittedTaskThatSucceeds() {
         FutureTask<String> submitted = new FutureTask<>(() -> "enriched");
 
-        runWithParentObservationInScope(decorator.decorate(submitted));
+        observations.runInsideParentObservation(decorator.decorate(submitted));
 
         assertThat(asyncContexts())
                 .singleElement()
@@ -204,7 +171,7 @@ class AsyncTaskDecoratorTest {
         FutureTask<String> submitted = new FutureTask<>(() -> "enriched");
         submitted.cancel(false);
 
-        runWithParentObservationInScope(decorator.decorate(submitted));
+        observations.runInsideParentObservation(decorator.decorate(submitted));
 
         assertThat(asyncContexts())
                 .singleElement()
@@ -223,33 +190,17 @@ class AsyncTaskDecoratorTest {
             throw boom;
         });
 
-        runWithParentObservationInScope(decorator.decorate(submitted));
+        observations.runInsideParentObservation(decorator.decorate(submitted));
 
         assertThat(asyncContexts())
                 .singleElement()
                 .satisfies(task -> assertThat(task.getError()).isSameAs(boom));
-        assertThat(errorsRecorded).hasValue(1);
-    }
-
-    private void runWithParentObservationInScope(Runnable task) {
-        runWithParentObservationInScope(() -> {
-            task.run();
-            return null;
-        });
-    }
-
-    private <T> T runWithParentObservationInScope(Supplier<T> call) {
-        Observation parent = Observation.createNotStarted("parent", registry).start();
-        try (Observation.Scope scope = parent.openScope()) {
-            return call.get();
-        } finally {
-            parent.stop();
-        }
+        assertThat(observations.erroredNamed(AsyncTaskMarker.OBSERVATION_NAME)).hasSize(1);
     }
 
     private AsyncTaskExecutor executorDecoratedAsBootDoes(boolean threadPool) {
-        TaskDecorator decorators = new CompositeTaskDecorator(
-                List.<TaskDecorator>of(decorator, task -> continueObservation(registry.getCurrentObservation(), task)));
+        TaskDecorator decorators = new CompositeTaskDecorator(List.<TaskDecorator>of(
+                decorator, task -> continueObservation(observations.registry().getCurrentObservation(), task)));
         if (!threadPool) {
             SimpleAsyncTaskExecutor executor = new SimpleAsyncTaskExecutor();
             executor.setTaskDecorator(decorators);
@@ -265,21 +216,8 @@ class AsyncTaskDecoratorTest {
         return submitting == null ? task : () -> submitting.scoped(task);
     }
 
-    /** The task's observation stops after the caller's future completes, so wait for it. */
-    private Observation.Context stoppedAsyncTask() throws InterruptedException {
-        while (true) {
-            Observation.Context context = stopped.poll(10, TimeUnit.SECONDS);
-            assertThat(context).as("an async task observation stopped").isNotNull();
-            if (AsyncTaskMarker.OBSERVATION_NAME.equals(context.getName())) {
-                return context;
-            }
-        }
-    }
-
     private List<Observation.Context> asyncContexts() {
-        return recorded.stream()
-                .filter(context -> AsyncTaskMarker.OBSERVATION_NAME.equals(context.getName()))
-                .toList();
+        return observations.startedNamed(AsyncTaskMarker.OBSERVATION_NAME);
     }
 
     private static String lowCardinalityValue(Observation.Context context, String key) {
