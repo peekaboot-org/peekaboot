@@ -979,22 +979,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
     }
 
-    /**
-     * Fires the partner feed import until its trace carries both throwables it logs, and returns
-     * that trace's id. A run served while a concurrent context boot had the capture appender
-     * detached is traced without its logs, the window {@link #openPageThatLogsAnError()} reloads
-     * for; the root span being stored settles it, since logs are captured synchronously.
-     */
-    private String awaitPartnerFeedImportTrace() {
-        for (int attempt = 0; attempt < TRACE_SHAPE_ATTEMPTS; attempt++) {
-            String traceId = traceIdOf(page.navigate(baseUrl + "/orders/import"));
-            JsonNode trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
-            if (thrownLogsByMessage(trace).size() == 2) {
-                return traceId;
-            }
-            log.info("partner feed trace {} lacks a logged throwable, importing again", traceId);
-        }
-        throw new AssertionError("no partner feed import produced a trace carrying both of its throwables");
+    /** Imports the partner feed and returns its trace's id once the root span is stored; its logs arrive with the request. */
+    private String importPartnerFeed() {
+        String traceId = traceIdOf(page.navigate(baseUrl + "/orders/import"));
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+        return traceId;
     }
 
     private static Map<String, JsonNode> thrownLogsByMessage(JsonNode trace) {
@@ -1064,11 +1053,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void everyThrowableInATraceTravelsOnceAndFoldsByItsOwnRanges() {
-        String traceId = awaitPartnerFeedImportTrace();
+        String traceId = importPartnerFeed();
         String payload = page.request()
                 .get(baseUrl + "/peekaboot/api/traces/" + traceId + "/insights")
                 .text();
         Map<String, JsonNode> thrownLogs = thrownLogsByMessage(readJson(payload));
+        assertThat(thrownLogs).containsOnlyKeys(REJECTED_ROW_LOG, BROKEN_FEED_LOG);
         assertThat(thrownLogs.get(REJECTED_ROW_LOG).path("stackTrace").asString())
                 .contains("Caused by: java.lang.NumberFormatException");
         assertThat(thrownLogs.get(BROKEN_FEED_LOG).path("stackTrace").asString())

@@ -116,8 +116,8 @@ shadow-root lookup goes through them; a test never spells
 `document.getElementById(...).shadowRoot` itself. The base also offers
 `openDashboard(hash, readySelector)`, `awaitTrace(traceId, jsPredicate)` and
 `awaitListedTrace(query, jsPredicate)` (see `docs/TESTING.md`, *Isolation in shared Spring
-contexts*), `openPageThatLogsAnError()` and `awaitErrorLoggingJobRun(run)` for the two traces
-that only exist if their log was captured, `importModule(path, expression)` to evaluate an
+contexts*), `openPageThatLogsAnError()` for the persons page that logs an ERROR
+(`/?error=true`) once its trace carries the log, `importModule(path, expression)` to evaluate an
 expression over an ES module imported into the blank fixture page, `serveWithCsp(urlGlob,
 policy)` and `emulateOsColorScheme(scheme)`.
 

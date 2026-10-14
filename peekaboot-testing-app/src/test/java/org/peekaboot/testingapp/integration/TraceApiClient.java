@@ -10,13 +10,10 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.awaitility.core.ConditionTimeoutException;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -42,27 +39,11 @@ class TraceApiClient {
             .name()
             .equals(trace.path("rootActionType").asString(""));
 
-    /** The trace carries at least one captured log; see {@link #awaitTrace(Supplier, Predicate)}. */
-    static final Predicate<JsonNode> LOG_CAPTURED = trace -> !trace.path("logs").isEmpty();
-
-    /**
-     * The trace carries a log with a stack trace on it. Narrower than {@link #LOG_CAPTURED}:
-     * {@code /?error=true} logs an INFO before its ERROR, so under the appender-detach race
-     * documented on {@link LogCaptureIT} a retry could otherwise stop on the INFO alone and
-     * never reach the one log a stack-trace assertion needs.
-     */
-    static final Predicate<JsonNode> STACK_TRACE_CAPTURED = trace -> trace.path("logs")
-            .valueStream()
-            .anyMatch(log -> !log.path("stackTrace").isNull());
-
-    private static final Logger log = LoggerFactory.getLogger(TraceApiClient.class);
-
     /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
     private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
-    private static final int RETRIGGER_ATTEMPTS = 5;
 
     private final PeekabootApi api;
     private final RestClient restClient;
@@ -130,27 +111,6 @@ class TraceApiClient {
                     "trace " + traceId + " never became ready within " + TIMEOUT + "; last response: " + lastSeen.get(),
                     e);
         }
-    }
-
-    /**
-     * Fires {@code request}, which answers with its trace id, waits for that trace's root
-     * span, and fires again while the stored trace does not satisfy {@code captured}. For a
-     * fact that is final once the root span is stored yet can be lost for good: a log written
-     * while a concurrent context boot had detached the capture appender (see
-     * {@code LogbackCaptureReinstaller}) is gone, and only a fresh request can produce one.
-     */
-    JsonNode awaitTrace(Supplier<String> request, Predicate<JsonNode> captured) {
-        JsonNode trace = null;
-        for (int attempt = 0; attempt < RETRIGGER_ATTEMPTS; attempt++) {
-            String traceId = request.get();
-            trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
-            if (captured.test(trace)) {
-                return trace;
-            }
-            log.info("trace {} lacks what its request should have captured, requesting again", traceId);
-        }
-        throw new AssertionError(RETRIGGER_ATTEMPTS
-                + " requests produced no trace carrying what they should have captured; last response: " + trace);
     }
 
     /**

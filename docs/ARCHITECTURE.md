@@ -1184,15 +1184,16 @@ Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, w
 `DevToolbarAutoConfiguration` registers, so correlated logs require `peekaboot.dev-toolbar=true`.
 A trace's Logs tab stays empty without it, independent of `peekaboot.tracing.enabled`.
 
-Capture is off for as long as any application in the JVM is re-initialising Logback. Boot
-resets the JVM-wide logger context on every application start, which detaches the appender.
-`LogbackCaptureReinstaller` reattaches it on that same event, but a request served in between
-is traced with no logs against it. One application never sees this, since its re-initialisation
-happens before it serves anything, so this belongs to test suites, where contexts start while
-other contexts serve requests. A test asserting on a specific request's log must establish that
-the trace carries it rather than assume it (see `docs/TESTING.md`). Closing the window from
-outside Logback is not possible: Boot stops the logger context before resetting it, which drops
-even reset-resistant listeners.
+Capture is off for as long as any application in the JVM is re-initialising Logback. Boot does
+that on the first start in a JVM and on the first start after any application closed or failed
+to start. From `ApplicationStartingEvent` it denies every log event JVM-wide, then resets the
+logger context, which detaches the appender. `LogbackCaptureReinstaller` reattaches it once
+logging is initialised, but a request another application served in between is traced with no
+logs against it. One application never sees this, since its re-initialisation happens before it
+serves anything, so this belongs to test suites, where contexts start while other contexts serve
+requests; the testing app's suite keeps Logback configured for the life of its JVM (see
+`docs/TESTING.md`). The product cannot close the window from outside Logback: Boot stops the
+logger context before resetting it, which drops even reset-resistant listeners.
 
 ### Trace Assembly and Enrichment
 

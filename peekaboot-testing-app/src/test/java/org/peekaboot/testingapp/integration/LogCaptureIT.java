@@ -27,12 +27,9 @@ import tools.jackson.databind.JsonNode;
  * instead, and pins the boundary: green here plus red there means the regression is in the
  * frontend render, not in capture.
  *
- * <p>Waiting for the spans is enough to know the logs are in: spans arrive via the OTel
- * BatchSpanProcessor whereas logs are published synchronously during the request, so a
- * trace that has spans has necessarily already received any log it will ever get. A trace
- * that has spans and no log was served while a concurrent context boot had detached the
- * capture appender (see {@code LogbackCaptureReinstaller}), so the request is repeated
- * until one lands outside that window; only then is the count itself asserted.
+ * <p>Waiting for the root span is enough to know the logs are in: spans arrive via the OTel
+ * BatchSpanProcessor whereas logs are published synchronously during the request, so a trace
+ * whose root span is stored has already received every log it will ever get.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -50,7 +47,7 @@ class LogCaptureIT {
 
     @Test
     void errorLoggedInsideRequestIsCapturedAgainstThatRequestsTrace() {
-        JsonNode trace = traces.awaitTrace(() -> traces.get("/?error=true"), TraceApiClient.LOG_CAPTURED);
+        JsonNode trace = traces.awaitTrace(traces.get("/?error=true"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("summary").path("logs").path("errorCount").asInt())
                 .as(
@@ -67,7 +64,7 @@ class LogCaptureIT {
      */
     @Test
     void theCapturedErrorCarriesItsStackTrace() {
-        JsonNode trace = traces.awaitTrace(() -> traces.get("/?error=true"), TraceApiClient.STACK_TRACE_CAPTURED);
+        JsonNode trace = traces.awaitTrace(traces.get("/?error=true"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         JsonNode withTrace = trace.path("logs")
                 .valueStream()

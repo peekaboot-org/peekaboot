@@ -1,0 +1,2 @@
+org.springframework.boot.logging.LoggingSystemFactory=\
+org.peekaboot.testingapp.SharedJvmLogbackLoggingSystem$Factory

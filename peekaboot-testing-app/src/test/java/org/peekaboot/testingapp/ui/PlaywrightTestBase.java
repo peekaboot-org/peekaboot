@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
@@ -57,13 +56,15 @@ abstract class PlaywrightTestBase {
                     + AsyncTaskMarker.CONTEXTUAL_NAME
                     + "' || (span.children || []).some(hasAsyncSpan); return hasAsyncSpan(trace.rootSpan); }";
 
+    /** A JS predicate on the trace JSON: the trace carries an ERROR log. */
+    protected static final String ERROR_LOGGED = "trace => (trace.logs || []).some(log => log.level === 'ERROR')";
+
     /** Same pattern TraceApiClient.traceIdOf reads Server-Timing with - duplicated here since that class is package-private to integration. */
     private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final int API_TIMEOUT_MS = 15_000;
     private static final int API_POLL_INTERVAL_MS = 100;
-    private static final int LOG_CAPTURE_ATTEMPTS = 5;
 
     /**
      * One browser per worker thread, launched on first use. Playwright's Java objects are
@@ -329,67 +330,17 @@ abstract class PlaywrightTestBase {
     }
 
     /**
-     * Loads the page that logs one ERROR line, and returns its trace id once that trace
-     * actually carries the log.
-     *
-     * <p>Reloads until it does. Every application context that starts in this JVM has Spring
-     * Boot re-initialise Logback, which detaches peekaboot's capture appender until
-     * {@code LogbackCaptureReinstaller} puts it back; a request served in that window is
-     * traced with no logs against it. Test classes run concurrently here, so contexts start
-     * throughout a suite run. The toolbar publishes its trace id from the server-rendered
-     * blob before it has fetched anything, and the overlay fetches its trace once and never
-     * refreshes - so a caller that navigates and opens the Logs tab on that signal alone
-     * renders a tab that stays empty, with nothing left to bring the rows in. Once the root
-     * span is stored the verdict is final, since logs are captured synchronously.
+     * Loads the page that logs one ERROR line, and returns its trace id once the overlay's own
+     * endpoint serves that trace with its root span and the log. The toolbar publishes its trace
+     * id from the server-rendered blob before it has fetched anything, and the overlay fetches its
+     * trace once and never refreshes, so a caller that opened the Logs tab on that signal alone
+     * could render a tab with nothing left to bring the rows in.
      */
     protected String openPageThatLogsAnError() {
-        for (int attempt = 0; attempt < LOG_CAPTURE_ATTEMPTS; attempt++) {
-            page.navigate(baseUrl + "/?error=true");
-            String traceId = toolbar.traceId();
-            if (!awaitTrace(traceId, ROOT_SPAN_EXPORTED).path("logs").isEmpty()) {
-                return traceId;
-            }
-            log.info(
-                    "trace {} of /?error=true carries no log (capture appender detached by a context boot), reloading",
-                    traceId);
-        }
-        throw new AssertionError("no /?error=true request produced a trace carrying its own ERROR log");
-    }
-
-    /**
-     * Fires {@code run}, which answers with the trace id of the run it made, and repeats until
-     * that run's trace carries the ERROR line it logged. Returns that trace's id.
-     *
-     * <p>{@code Scheduler.fixedRate} throws nothing, so its trace reaches the Errors bucket
-     * through the captured log alone. A run served while a concurrent context boot had the
-     * capture appender detached (see {@code LogbackCaptureReinstaller}) leaves a trace that
-     * never reaches the bucket, and only a fresh run can produce one - the same window
-     * {@link #openPageThatLogsAnError()} reloads for. Waiting for the root span is enough to
-     * decide: logs are captured synchronously during the run, so a trace whose root span has
-     * been exported carries every log it will ever have.
-     */
-    protected String awaitErrorLoggingJobRun(Supplier<String> run) {
-        for (int attempt = 0; attempt < LOG_CAPTURE_ATTEMPTS; attempt++) {
-            String traceId = run.get();
-            JsonNode trace = awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
-            if (carriesAnErrorLog(trace)) {
-                return traceId;
-            }
-            log.info(
-                    "trace {} of the failing job carries no ERROR log (capture appender detached by a "
-                            + "context boot), firing it again",
-                    traceId);
-        }
-        throw new AssertionError("no run of the failing job produced a trace carrying its own ERROR log");
-    }
-
-    private static boolean carriesAnErrorLog(JsonNode trace) {
-        for (JsonNode entry : trace.path("logs")) {
-            if ("ERROR".equals(entry.path("level").asString(""))) {
-                return true;
-            }
-        }
-        return false;
+        page.navigate(baseUrl + "/?error=true");
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, "trace => (" + ROOT_SPAN_EXPORTED + ")(trace) && (" + ERROR_LOGGED + ")(trace)");
+        return traceId;
     }
 
     /**

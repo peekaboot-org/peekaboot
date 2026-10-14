@@ -178,8 +178,7 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
 - Three more entries cover product warnings. The `DashboardAuthenticationFilter` challenge is
   asserted in `AutoSecuredDashboardIT` on a fresh application; the entry hides the first
   challenge on the shared one, which other tests only trigger. The `SecurityPostureListener`
-  banner is logged while the context loads, and Boot reinitialises Logback on the first start
-  after another context closed, which detaches any earlier `LogCapture`. Only
+  banner is logged once per context, by whichever class happens to load it first. Only
   `SecurityPostureListenerTest` asserts the banner. `SeriesSampler` warns about the
   `absent-subsystem` panel that `insights-test-panels.yml` adds on purpose, a few ticks after each
   test-profile context starts, too early to catch reliably; `InsightsServiceTest` asserts it.
@@ -341,13 +340,16 @@ SERVER root classifies HTTP_REQUEST, that root is the last span of a request to 
 exporter hands spans over in the order they ended. The listing endpoint leaves a trace out
 until its root has arrived, so a listed match already carries its spans.
 
-Two shared things have no lock and need care instead. The JVM-wide Logback context is one. Every
-context that starts re-initialises it, detaching Peekaboot's capture appender until
-`LogbackCaptureReinstaller` puts it back (see `docs/ARCHITECTURE.md`, *Log Capture*), so a
-request served in that window is traced with no logs against it. A test must establish that its
-trace carries the log rather than assume it: `PlaywrightTestBase.openPageThatLogsAnError()`
-reloads until it does, checked with `awaitTrace` against the endpoint the overlay itself reads,
-and logs each reload at INFO so the window's size stays visible. The same context is
+Two shared things have no lock and need care instead. The JVM-wide Logback context is one. Boot
+assumes one application per JVM. Closing a context marks Logback uninitialised, and the next
+context to start then denies every log event JVM-wide until it has reset Logback, which also
+detaches Peekaboot's capture appender. Even a start that finds Logback configured denies every
+event for a moment. A request another context serves in such a window is traced with no logs
+against it. `SharedJvmLogbackLoggingSystem`, registered in the module's test
+`META-INF/spring.factories`, configures Logback on the JVM's first start and makes every later
+start leave it alone, so after that first start no start denies a log event or detaches an
+appender. `ContextBootLoggingIT` pins both. A trace's logs are therefore final once its root span
+is stored, and a test waits for the log it asserts on like any other fact. The same context is
 why `PeekabootActuatorServiceIT` re-levels and redirects one logger for the length of each of its
 methods, which every concurrently running class sees. That is inert there because only its own
 context has an endpoint that throws, and the only real remedy, `@Isolated`, stops the whole suite

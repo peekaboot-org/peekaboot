@@ -37,11 +37,11 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      * to be found. TracesTabIT fires the same job against the same store, so the wait
      * names the run this call fired rather than any trace of that job. The listing names a
      * trace by its root span, so a listed match proves the spans - exported asynchronously,
-     * unlike the logs - have landed.
+     * unlike the logs - have landed. The job throws nothing, so only its captured ERROR line
+     * puts the trace in the Errors bucket.
      */
     private String freshFixedRateSchedulerTraceId() {
-        String traceId =
-                awaitErrorLoggingJobRun(() -> ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate"));
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
         return awaitListedTrace("bucket=errors&limit=50", "trace => trace.traceId === '" + traceId + "'");
     }
 

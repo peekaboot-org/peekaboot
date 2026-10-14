@@ -192,7 +192,7 @@ class OrderTraceCaptureIT {
     @Test
     void failingEndpointsLoggedErrorIsCapturedAgainstItsTrace() {
         traces.awaitTrace(
-                () -> traces.get("/boom"), TraceApiClient.errorLogged("order reconciliation gateway is unreachable"));
+                traces.get("/boom"), TraceApiClient.errorLogged("order reconciliation gateway is unreachable"));
     }
 
     @Test

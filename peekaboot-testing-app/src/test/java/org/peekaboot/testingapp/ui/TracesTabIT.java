@@ -65,8 +65,7 @@ class TracesTabIT extends PlaywrightTestBase {
      * against the same store, so the wait names the run this call fired.
      */
     private String seedAnErrorTrace() {
-        String traceId =
-                awaitErrorLoggingJobRun(() -> ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate"));
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
         return awaitListedTrace("bucket=errors", "trace => trace.traceId === '" + traceId + "'");
     }
 
@@ -235,17 +234,18 @@ class TracesTabIT extends PlaywrightTestBase {
      * disables Flyway, so V4__order-data.sql's fixture rows never load here), it issues one
      * query (findAll()), logs an INFO summary and a WARN for that order, so its own trace
      * carries every part this row can show except an error badge - reconcileOrders() logs
-     * no ERROR. The order is seeded once, outside the retry loop below, and removed in a
-     * {@code finally}: {@code reconcileOrders()} never moves an order out of PLACED, and the
-     * H2 database is shared by every IT the context cache reuses, so leaving it behind would
-     * permanently raise every later real run's warning count.
+     * no ERROR. The order is seeded first and removed in a {@code finally}:
+     * {@code reconcileOrders()} never moves an order out of PLACED, and the H2 database is
+     * shared by every IT the context cache reuses, so leaving it behind would permanently raise
+     * every later real run's warning count.
      */
     @Test
     void tracesRowStatsFitAPhoneViewportWithoutWrappingOrClippingAPart() {
         page.setViewportSize(375, 800);
         CustomerOrder order = seedAnOrder();
         try {
-            String traceId = awaitReconcilerRunThatLogsAWarning();
+            String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
+            awaitTrace(traceId, warnedAbout(order));
 
             openDashboard();
             dashboard.openTracesTab();
@@ -272,24 +272,11 @@ class TracesTabIT extends PlaywrightTestBase {
         }
     }
 
-    /**
-     * Fires {@code OrderReconciler.reconcileOrders()} until its own trace carries a WARN log
-     * - the same capture-appender-detached-by-a-context-boot race
-     * {@link PlaywrightTestBase#awaitErrorLoggingJobRun} guards against for an ERROR line,
-     * here for a WARN one instead. Retries the run, not the seed: the caller's PLACED order
-     * stays PLACED for every attempt, so only the log capture itself needs a second try.
-     */
-    private String awaitReconcilerRunThatLogsAWarning() {
-        for (int attempt = 0; attempt < 5; attempt++) {
-            String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
-            JsonNode trace = awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
-            for (JsonNode entry : trace.path("logs")) {
-                if ("WARN".equals(entry.path("level").asString(""))) {
-                    return traceId;
-                }
-            }
-        }
-        throw new AssertionError("no run of reconcileOrders produced a trace carrying its own WARN log");
+    /** A JS predicate on the trace JSON: a reconciler run's own trace, carrying its WARN about {@code order}. */
+    private static String warnedAbout(CustomerOrder order) {
+        return "trace => trace.rootActionType === 'SCHEDULED_JOB' && (trace.logs || []).some(log => "
+                + "log.level === 'WARN' && log.message === 'order " + order.getReference()
+                + " is still PLACED and has not been acknowledged')";
     }
 
     /** Undoes {@link #seedAnOrder()}, so a test that seeds its own order leaves the shared H2 database as it found it. */

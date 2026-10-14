@@ -35,8 +35,8 @@ import org.springframework.web.client.RestClient;
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("auto-security")
-// Its own SpringApplicationBuilder boots skip spring-test's context-load lock; concurrent Logback resets throw
-// ConcurrentModificationException.
+// Its own SpringApplicationBuilder boots skip spring-test's context-load lock; if one is the JVM's first start, a
+// concurrent Logback configuration throws ConcurrentModificationException.
 @Isolated
 class AutoSecuredDashboardIT {
 
@@ -87,8 +87,7 @@ class AutoSecuredDashboardIT {
 
     /**
      * A fresh application, because the filter warns on its first challenge only and the shared
-     * one may already have spent it. The capture is attached after the boot: Boot reinitialises
-     * Logback on the first start after a context closed, which detaches an earlier capture.
+     * one may already have spent it.
      */
     @Test
     void warnsOnceOnTheFirstChallenge(@TempDir Path dir) {
