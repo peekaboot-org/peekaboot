@@ -6,8 +6,9 @@
 # Needs `git-cliff` and `jq` on PATH.
 set -euo pipefail
 
-readonly HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-readonly WORK="$(mktemp -d)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+WORK="$(mktemp -d)"
+readonly HERE WORK
 readonly FIXTURE="$WORK/fixture"
 # The fixture's one untagged commit is a feat:, so the next version off 1.2.0 is a minor bump.
 readonly BUMPED="1.3.0"
