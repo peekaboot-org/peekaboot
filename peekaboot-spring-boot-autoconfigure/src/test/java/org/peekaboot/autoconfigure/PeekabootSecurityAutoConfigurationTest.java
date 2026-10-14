@@ -3,7 +3,6 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
-import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -223,18 +222,6 @@ class PeekabootSecurityAutoConfigurationTest {
         runner(storageDir)
                 .withPropertyValues("spring.security.filter.order=500")
                 .run(context -> assertThat(registration(context).getOrder()).isEqualTo(0));
-    }
-
-    /** A forward or include from an application path into the dashboard meets the guard like a direct request. */
-    @Test
-    void guardsForwardedAndIncludedRequestsAsWellAsDirectOnes(@TempDir Path storageDir) {
-        runner(storageDir)
-                .run(context -> assertThat(registration(context).determineDispatcherTypes())
-                        .containsExactlyInAnyOrder(
-                                DispatcherType.REQUEST,
-                                DispatcherType.FORWARD,
-                                DispatcherType.INCLUDE,
-                                DispatcherType.ASYNC));
     }
 
     /**

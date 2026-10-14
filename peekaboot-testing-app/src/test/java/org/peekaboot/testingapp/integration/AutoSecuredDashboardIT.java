@@ -12,6 +12,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.fixtures.DashboardAsyncDispatchController;
 import org.peekaboot.fixtures.DashboardForwardController;
+import org.peekaboot.fixtures.DashboardIncludeController;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -36,7 +37,12 @@ import org.springframework.web.client.RestClient;
  * excludes the servlet security auto-configuration - see application-test.yml.
  */
 @SpringBootTest(
-        classes = {TestingApp.class, DashboardForwardController.class, DashboardAsyncDispatchController.class},
+        classes = {
+            TestingApp.class,
+            DashboardForwardController.class,
+            DashboardIncludeController.class,
+            DashboardAsyncDispatchController.class
+        },
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("auto-security")
 // Its own SpringApplicationBuilder boots skip spring-test's context-load lock; if one is the JVM's first start, a
@@ -92,6 +98,13 @@ class AutoSecuredDashboardIT {
     @Test
     void challengesARequestForwardedIntoTheDashboard() {
         assertThat(api().statusOf(DashboardForwardController.PATH)).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    /** An include ignores the guard's 401, so what proves the guard ran is that the dashboard wrote nothing. */
+    @Test
+    void challengesAnIncludeIntoTheDashboard() {
+        assertThat(api().get(DashboardIncludeController.PATH))
+                .isEqualTo(DashboardIncludeController.BEFORE + DashboardIncludeController.AFTER);
     }
 
     @Test
