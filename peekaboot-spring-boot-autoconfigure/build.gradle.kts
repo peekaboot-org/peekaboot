@@ -14,6 +14,9 @@ dependencies {
     api("org.springframework.boot:spring-boot-actuator-autoconfigure")
     api("jakarta.annotation:jakarta.annotation-api")
 
+    // OtelSpanExporter implements the SDK's SpanExporter, and backend keeps the SDK
+    // compile-only, so without it SpotBugs cannot resolve that supertype
+    compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
     // compile-only reference for @ConditionalOnClass(HealthEndpoint)
     compileOnly("org.springframework.boot:spring-boot-health")
     compileOnly("org.springframework.boot:spring-boot-flyway")

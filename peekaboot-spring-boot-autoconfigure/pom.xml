@@ -33,6 +33,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-actuator-autoconfigure</artifactId>
         </dependency>
+        <!-- compile-only: OtelSpanExporter implements the SDK's SpanExporter, and backend keeps the
+             SDK optional, so without it SpotBugs cannot resolve that supertype -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-trace</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- compile-only reference for @ConditionalOnClass(HealthEndpoint) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
