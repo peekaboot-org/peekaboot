@@ -156,8 +156,9 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   things that logger silences, and the application's own error logging is unaffected. A real
   failure still prints and is still asserted.
 - `peekaboot-spring-boot-autoconfigure`'s `logback-test.xml` silences the same logger for the same
-  reason, there for `ErrorDispatchIT`'s deliberately failing `/throwing` endpoint. That file
-  silences nothing else.
+  reason, there for `ErrorDispatchIT`'s deliberately failing `/throwing` endpoint. It also raises
+  `org.flywaydb.core.internal.database.base.Database` to `ERROR`, for the H2-version warning
+  described below.
 - `peekaboot-testing-app`'s `logback-test.xml` raises
   `org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver`
   to `ERROR`. Playwright teardown aborts in-flight JSON responses, and the resolver WARNs
@@ -187,8 +188,8 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   macOS-only native jar. The second warns that H2 is newer than the version Flyway has verified.
 
 ### Accepted, unavoidable noise
-Third-party output and deliberate demo signal. This is not a list of known flaky tests, and
-Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
+Third-party output no setting in this build can switch off. This is not a list of known flaky
+tests, and Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
 
 - `OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because
   bootstrap classpath has been appended`. A lowercase-`warning` JVM CDS notice printed once per
@@ -201,26 +202,6 @@ Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
   this project's class path, and depends only on which `mvn` runs the build. The pinned
   Maven `./mvnw` downloads ships a guava that no longer calls it, so a wrapper build is
   silent and an older `mvn` on the PATH is not.
-- `ERROR ... o.p.testingapp.Scheduler : fixedRate failed` from `Scheduler.fixedRate()`, fired by
-  the tests that need an error trace. Deliberate demo signal in `peekaboot-testing-app`, giving
-  the dashboard's Errors bucket a scheduled-job failure to show. Its sibling
-  `Scheduler.fixedDelay()`, which throws, cannot fire under `test` or `security` at all:
-  `DeferredSchedulingConfig` parks every timer, and no test runs that job. Only the screenshot
-  profile, which deliberately lets the timers run, sees its stack trace.
-- `WARN ... o.p.testingapp.order.OrderReconciler : order <reference> is still PLACED and has not
-  been acknowledged`. Deliberate demo signal giving the Logs tab WARN content on a non-HTTP
-  (`SCHEDULED_JOB`) trace. One line per order the context holds, on every run. Nothing ever
-  moves an order out of `PLACED`, so the count grows with the orders a run places.
-- `ERROR ... o.p.t.controller.OrderController : order reconciliation gateway is unreachable`.
-  From `OrderController`'s deliberately failing `/boom` endpoint, exercised to populate the
-  Errors bucket. The throw is handled by the error dispatch, which renders Peekaboot's error
-  page carrying the bar for the request that failed.
-- `ERROR ... o.p.t.controller.PersonController : An error occurred while trying to find all
-  persons`. From `PersonController`'s deliberate error path (`/?error=true`), same purpose.
-- `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than the
-  version Flyway has been verified with. The latest verified version of H2 is <version>.` A
-  Flyway/H2 compatibility `WARN` printed by `FlywayTabIT`'s context, the only test in the
-  default suite that enables Flyway (both shared profiles set `spring.flyway.enabled: false`).
 
 ## Teardown and the toolbar's fetch ladder
 `PlaywrightTestBase.closePage()` navigates to `about:blank` before `context().close()`, and
