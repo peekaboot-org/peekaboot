@@ -1,5 +1,6 @@
 package org.peekaboot.autoconfigure;
 
+import jakarta.servlet.DispatcherType;
 import java.nio.file.Path;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -130,6 +131,10 @@ public class PeekabootSecurityAutoConfiguration {
             registration.setFilter(new DashboardAuthenticationFilter(credentials, credentialCache));
             // under the DispatcherServlet's prefix, where spring.mvc.servlet.path moves the dashboard's controllers
             registration.addUrlPatterns(paths.dashboardPath() + "/*");
+            // an application path that forwards or includes into the dashboard, or an async dispatch
+            // resuming one, must not carry a request past the guard
+            registration.setDispatcherTypes(
+                    DispatcherType.REQUEST, DispatcherType.FORWARD, DispatcherType.INCLUDE, DispatcherType.ASYNC);
             // fixed, since the guard answers for the path whatever Spring Security's filter order is
             registration.setOrder(0);
             registration.setName("dashboardAuthenticationFilter");

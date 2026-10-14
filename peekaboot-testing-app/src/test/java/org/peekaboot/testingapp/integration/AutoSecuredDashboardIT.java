@@ -12,6 +12,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
+import org.peekaboot.fixtures.DashboardAsyncDispatchController;
+import org.peekaboot.fixtures.DashboardForwardController;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,7 +38,9 @@ import org.springframework.web.client.RestClient;
  * <p>Runs under the {@code auto-security} profile because every other test in this module
  * excludes the servlet security auto-configuration - see application-test.yml.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        classes = {TestingApp.class, DashboardForwardController.class, DashboardAsyncDispatchController.class},
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("auto-security")
 // Its own SpringApplicationBuilder boots skip spring-test's context-load lock; if one is the JVM's first start, a
 // concurrent Logback configuration throws ConcurrentModificationException.
@@ -88,6 +92,11 @@ class AutoSecuredDashboardIT {
         assertThat(api().statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void challengesARequestForwardedIntoTheDashboard() {
+        assertThat(api().statusOf(DashboardForwardController.PATH)).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
     /**
      * A fresh application, because the filter warns on its first challenge only and the shared
      * one may already have spent it.
@@ -109,6 +118,11 @@ class AutoSecuredDashboardIT {
                         .contains("without Peekaboot's credentials");
             });
         }
+    }
+
+    @Test
+    void challengesAnAsyncDispatchIntoTheDashboard() {
+        assertThat(api().statusOf(DashboardAsyncDispatchController.PATH)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test

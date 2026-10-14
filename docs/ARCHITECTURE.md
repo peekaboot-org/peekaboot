@@ -257,6 +257,8 @@ rather than `/*`, at a fixed order of `0`. With `spring.mvc.servlet.path=/app` t
 controllers sit under `/app/peekaboot/**`, and Boot's `DispatcherServletPath` bean is what says
 so; without Spring MVC on the class path the guard keeps `/peekaboot/*`. The prefix comes from
 `PeekabootPaths.dashboardPath()`, so the guard and everything below agree on where the dashboard is.
+It runs on `REQUEST`, `FORWARD`, `INCLUDE` and `ASYNC` dispatches, so an application path that
+forwards or includes into the dashboard, and an async dispatch resuming one, meet it too.
 Nothing depends on where Spring Security's filter sits: a request carries Peekaboot's
 credentials or is challenged, whatever the application's security decided first. With both armed
 they lock each other out, so an application that secures `/peekaboot/**` itself sets
