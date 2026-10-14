@@ -190,7 +190,7 @@ class SecuredPeekabootIT {
          * {@code DashboardAuthenticationFilter}), and this one does not.
          */
         @Test
-        void peekabootsOwnGeneratedCredentialsAreNeverRequired() {
+        void peekabootsOwnCredentialsAreRefusedByTheApplicationsChain() {
             PeekabootApi withGeneratedCredentials =
                     nestedApi.withBasicAuth(credentials.username(), credentials.plaintext());
 
