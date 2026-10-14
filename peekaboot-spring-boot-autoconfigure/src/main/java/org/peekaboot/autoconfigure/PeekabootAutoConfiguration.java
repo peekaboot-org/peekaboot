@@ -1,7 +1,6 @@
 package org.peekaboot.autoconfigure;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.List;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -20,11 +19,10 @@ import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.backend.service.TraceInsightsService;
-import org.peekaboot.backend.stacktrace.ExclusionPatterns;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
-import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -35,7 +33,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
+import org.springframework.context.annotation.Import;
 
 /**
  * Core auto-configuration: the dashboard controller, the actuator/trace services, their
@@ -50,6 +48,7 @@ import org.springframework.core.env.Environment;
 @ConditionalOnClass(HealthEndpoint.class)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})
+@Import(StackTraceRulesConfiguration.class)
 public class PeekabootAutoConfiguration {
 
     /** The one rule set every masking site shares: the actuator mappers, MetricsService and the maskers they build on it. */
@@ -126,22 +125,9 @@ public class PeekabootAutoConfiguration {
             TraceTreeMapper traceTreeMapper,
             IssueDetector issueDetector,
             QueryExtractor queryExtractor,
-            BeanFactory beanFactory,
-            PeekabootProperties properties,
-            Environment environment) {
-        List<String> exclusions = ExclusionPatterns.resolve(
-                properties.getStackTrace().getExclude(), environment.getProperty("logging.exception-conversion-word"));
-        // Mirrors the error page exactly: fold=false empties the exclusion list rather than
-        // being carried as a flag of its own, so hiddenFrames comes back empty and the browser
-        // still decides nothing - it just renders whatever ranges (if any) it was given.
-        boolean fold = properties.getStackTrace().isFold();
+            StackTraceRules stackTraceRules) {
         return new TraceInsightsService(
-                traceStore.getIfAvailable(),
-                traceTreeMapper,
-                issueDetector,
-                queryExtractor,
-                fold ? exclusions : List.of(),
-                ApplicationPackages.resolve(beanFactory));
+                traceStore.getIfAvailable(), traceTreeMapper, issueDetector, queryExtractor, stackTraceRules);
     }
 
     @Bean

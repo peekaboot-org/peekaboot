@@ -11,6 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -23,7 +24,9 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class PeekabootErrorViewTest {
 
     private final PeekabootErrorView view = new PeekabootErrorView(
-            new DefaultErrorAttributes(), List.of(), List.of("com.example"), false, PeekabootPaths.defaults());
+            new DefaultErrorAttributes(),
+            new StackTraceRules(List.of(), List.of("com.example")),
+            PeekabootPaths.defaults());
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -184,9 +187,7 @@ class PeekabootErrorViewTest {
     void prefixesItsUrlsWithTheDispatcherServletsPrefix() throws Exception {
         PeekabootErrorView underApp = new PeekabootErrorView(
                 new DefaultErrorAttributes(),
-                List.of(),
-                List.of("com.example"),
-                false,
+                new StackTraceRules(List.of(), List.of("com.example")),
                 new PeekabootPaths("/actuator", "", "/app"));
 
         underApp.render(Map.of(), request, response);
@@ -299,7 +300,9 @@ class PeekabootErrorViewTest {
 
     private PeekabootErrorView view(List<String> exclusions, boolean fold) {
         return new PeekabootErrorView(
-                new DefaultErrorAttributes(), exclusions, List.of("com.example"), fold, PeekabootPaths.defaults());
+                new DefaultErrorAttributes(),
+                StackTraceRules.resolve(fold, exclusions, null, List.of("com.example")),
+                PeekabootPaths.defaults());
     }
 
     /**

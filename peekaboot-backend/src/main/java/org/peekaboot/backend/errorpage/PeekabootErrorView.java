@@ -9,8 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.ui.InlinedStylesheets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -137,39 +137,19 @@ public class PeekabootErrorView implements View {
 
     private final ErrorAttributes errorAttributes;
 
-    private final List<String> exclusions;
-
-    private final List<String> applicationPackages;
-
-    private final boolean fold;
+    private final StackTraceRules stackTraceRules;
 
     private final PeekabootPaths paths;
 
     /**
-     * {@code exclusions} and {@code applicationPackages} are kept in the same order
-     * {@link StackTraceFolding#fold} takes them, so a reader can't swap two adjacent
-     * same-typed parameters and have it silently compile as marking framework frames
-     * application code.
-     *
      * @param errorAttributes the application's own, so this page and its error responses
      *     describe the same failure
-     * @param exclusions the frames folding hides, resolved by {@code ExclusionPatterns}
-     * @param applicationPackages the packages {@code AutoConfigurationPackages} registered,
-     *     which is what marks a frame as the application's own; empty where none are
-     * @param fold whether framework frames fold behind a disclosure at all; {@code false}
-     *     renders exactly what shipped before folding existed
+     * @param stackTraceRules the folding the Logs tab uses too
      * @param paths where the page's own URLs point, which the DispatcherServlet's prefix moves
      */
-    public PeekabootErrorView(
-            ErrorAttributes errorAttributes,
-            List<String> exclusions,
-            List<String> applicationPackages,
-            boolean fold,
-            PeekabootPaths paths) {
+    public PeekabootErrorView(ErrorAttributes errorAttributes, StackTraceRules stackTraceRules, PeekabootPaths paths) {
         this.errorAttributes = errorAttributes;
-        this.exclusions = List.copyOf(exclusions);
-        this.applicationPackages = List.copyOf(applicationPackages);
-        this.fold = fold;
+        this.stackTraceRules = stackTraceRules;
         this.paths = paths;
     }
 
@@ -216,8 +196,7 @@ public class PeekabootErrorView implements View {
         if (trace == null) {
             return new Detail(MESSAGE_DETAIL.replace("{{MESSAGE}}", escape(attributes.get("message"))), false);
         }
-        FoldedTrace folded =
-                StackTraceFolding.fold(trace.toString(), fold ? exclusions : List.of(), applicationPackages);
+        FoldedTrace folded = stackTraceRules.fold(trace.toString());
         boolean revealsSomething = !folded.hidden().isEmpty();
         String html = EXCEPTION_DETAIL
                 .replace("{{EXCEPTION}}", escape(attributes.get("exception")))

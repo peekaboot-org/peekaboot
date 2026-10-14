@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import jakarta.servlet.RequestDispatcher;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -51,6 +53,25 @@ class ErrorPageAutoConfigurationTest {
             assertThat(context).hasSingleBean(BeanNameViewResolver.class);
             assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
         });
+    }
+
+    /** One set of rules for both surfaces, so the page and the Logs tab cannot fold one trace two ways. */
+    @Test
+    void sharesOneStackTraceRulesBeanWithTheTraceService() {
+        contextRunner
+                .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .run(context -> assertThat(context).hasSingleBean(StackTraceRules.class));
+    }
+
+    @Test
+    void anApplicationsOwnStackTraceRulesReplaceTheResolvedOnes() {
+        StackTraceRules own = new StackTraceRules(List.of("com.acme.vendor"), List.of());
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true")
+                .withBean(StackTraceRules.class, () -> own)
+                .run(context ->
+                        assertThat(context.getBean(StackTraceRules.class)).isSameAs(own));
     }
 
     /**

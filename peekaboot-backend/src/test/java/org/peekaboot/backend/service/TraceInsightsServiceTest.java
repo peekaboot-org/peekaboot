@@ -33,6 +33,7 @@ import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.Spans;
 import org.peekaboot.backend.testsupport.TraceStores;
@@ -845,7 +846,11 @@ class TraceInsightsServiceTest {
     private TraceInsightsService newService(
             TraceStore store, List<String> exclusions, List<String> applicationPackages) {
         return new TraceInsightsService(
-                store, traceTreeMapper, issueDetector, queryExtractor, exclusions, applicationPackages);
+                store,
+                traceTreeMapper,
+                issueDetector,
+                queryExtractor,
+                new StackTraceRules(exclusions, applicationPackages));
     }
 
     /** A single SERVER root span of the given duration. */

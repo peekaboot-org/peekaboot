@@ -169,9 +169,9 @@ class PeekabootAutoConfigurationTest {
     }
 
     /**
-     * PeekabootAutoConfiguration resolves {@code peekaboot.stack-trace.fold} for the trace
-     * store's own folding the same way {@code ErrorPageAutoConfiguration} does for the error
-     * page: off must empty the exclusion list rather than leave it unread, so no frame is ever
+     * StackTraceRulesConfiguration resolves {@code peekaboot.stack-trace.fold} once, for the trace
+     * store's folding and the error page alike: off must empty the exclusion list rather than
+     * leave it unread, so no frame is ever
      * hidden regardless of what {@code peekaboot.stack-trace.exclude} names. Drives a real
      * captured log through the actual bean rather than asserting on construction alone, since a
      * bean existing proves nothing about what reached its constructor.

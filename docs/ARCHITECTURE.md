@@ -539,7 +539,7 @@ the resolver logs it on its own logger as `Request processing failed: <exception
 `ERROR_METHOD` on the request (nothing else sets that last one on a REQUEST dispatch), so
 `PeekabootErrorView` renders the same request line, status and reason it would off a real ERROR
 dispatch, and returns a `ModelAndView` carrying that status and a `PeekabootErrorView` built the
-same way the `ErrorViewResolver`'s is, from a separate call to the same `errorView(...)` helper.
+same way the `ErrorViewResolver`'s is, from the shared `StackTraceRules` and `PeekabootPaths` beans.
 
 All three paths sit behind `@ConditionalOnWebApplication(SERVLET)`,
 `@ConditionalOnClass({DispatcherServlet.class, ErrorAttributes.class})`, `peekaboot.enabled` and
@@ -607,15 +607,14 @@ unfolded, capped at 1000 lines with a `... N lines omitted` marker so a `StackOv
 `StackTraceFolding.fold` over that stored trace on every read, and `PeekabootErrorView` runs it
 fresh on every request. The full trace is therefore always present on the wire.
 
-`peekaboot.stack-trace.fold=false` produces an empty result on both surfaces, by two different
-mechanisms. `TraceInsightsService` never sees the flag itself. `PeekabootAutoConfiguration`'s
-bean method computes `fold ? exclusions : List.of()` once, at wiring time, so a disabled fold
-hands the service an already-empty exclusion list, and `hiddenFrames` comes back empty from
-asking the same question with nothing to match. `fold` reaches the error page as a real
-parameter instead - `StackTraceHtml.render` takes it and applies that same
-`fold ? exclusions : List.of()` internally, and `PeekabootErrorView.detail` branches on it
-again to decide whether the reveal control renders at all. Either way the error page ends up
-rendering every frame inline. The browser classifies nothing on either surface; `log-entry.js`
+Both surfaces fold with one `StackTraceRules` bean. `StackTraceRulesConfiguration` resolves it
+once from `peekaboot.stack-trace.fold`, `peekaboot.stack-trace.exclude`,
+`logging.exception-conversion-word` and `AutoConfigurationPackages`, and both
+`PeekabootAutoConfiguration` and `ErrorPageAutoConfiguration` import it, so either runs without
+the other. `peekaboot.stack-trace.fold=false` empties the exclusion list rather than travelling
+as a flag, so `TraceInsightsService` and `PeekabootErrorView` ask the same question with nothing
+to match: `hiddenFrames` comes back empty, and the page renders no reveal control because
+nothing was hidden. The browser classifies nothing on either surface; `log-entry.js`
 renders the ranges it is given, the same way `StackTraceHtml` does server-side.
 
 The error page's reveal script ships twice, inline in a `<script>` tag and linked via

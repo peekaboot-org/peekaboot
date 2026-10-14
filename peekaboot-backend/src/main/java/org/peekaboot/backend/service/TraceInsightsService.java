@@ -21,8 +21,7 @@ import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.service.RowSources.RowSource;
-import org.peekaboot.backend.stacktrace.StackTraceFolding;
-import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -53,28 +52,19 @@ public class TraceInsightsService {
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
     private final QueryExtractor queryExtractor;
-    private final List<String> exclusions;
-    private final List<String> applicationPackages;
+    private final StackTraceRules stackTraceRules;
 
-    /**
-     * {@code exclusions} and {@code applicationPackages} are kept in the same order
-     * {@link StackTraceFolding#fold} takes them, so a reader can't swap two adjacent
-     * same-typed parameters and have it silently compile as marking framework frames
-     * application code.
-     */
     public TraceInsightsService(
             @Nullable TraceStore traceStore,
             TraceTreeMapper traceTreeMapper,
             IssueDetector issueDetector,
             QueryExtractor queryExtractor,
-            List<String> exclusions,
-            List<String> applicationPackages) {
+            StackTraceRules stackTraceRules) {
         this.traceStore = traceStore;
         this.traceTreeMapper = traceTreeMapper;
         this.issueDetector = issueDetector;
         this.queryExtractor = queryExtractor;
-        this.exclusions = List.copyOf(exclusions);
-        this.applicationPackages = List.copyOf(applicationPackages);
+        this.stackTraceRules = stackTraceRules;
     }
 
     /**
@@ -254,7 +244,7 @@ public class TraceInsightsService {
                     List.of(),
                     List.of());
         }
-        FoldedTrace folded = StackTraceFolding.fold(e.stackTrace(), exclusions, applicationPackages);
+        var folded = stackTraceRules.fold(e.stackTrace());
         // The ranges index into folded.lines(), not the raw captured string: String.lines() splits
         // on a lone \r where the browser's split('\n') would not, so sending anything else back
         // would leave the two disagreeing about which line a given index names.
