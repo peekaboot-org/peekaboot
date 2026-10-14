@@ -5,7 +5,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLongArray;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 
@@ -17,9 +16,9 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
  * <p>Written by one collector thread per level, and once by {@link #restore} ahead of their
  * first write; read by the API and the snapshot writer. A tick or roll-up lands as one write
  * under one lock: its gap fill, every series' sample and the stamp that dates them. A restore
- * holds the same lock, and {@link #snapshot(int)} and {@link #capture()} read under it, so a
- * reader sees whole ticks only. Meters are sampled before the write, so the lock covers
- * in-memory appends and nothing slower.
+ * holds the same lock, and {@link #snapshot(int)}, {@link #capture()} and the roll-up window
+ * reads run under it, so a reader sees whole ticks only. Meters are sampled before the write, so
+ * the lock covers in-memory appends and nothing slower.
  */
 final class SeriesRings {
 
@@ -52,11 +51,6 @@ final class SeriesRings {
         }
     }
 
-    /** The configured series, in the order every snapshot and capture carries them. */
-    Set<String> seriesIds() {
-        return level0Rings.keySet();
-    }
-
     /**
      * Appends one sample to every series' level-0 ring and dates them {@code epochMs}, as one
      * write. A series {@code values} lacks gets a gap, and ids no series carries are ignored,
@@ -87,14 +81,28 @@ final class SeriesRings {
         }
     }
 
-    /** The last {@code n} level-0 samples of a series, oldest first. */
-    double[] tickWindow(String seriesId, int n) {
-        return level0Rings.get(seriesId).last(n);
+    /**
+     * Per series, its last {@code n} level-0 samples, oldest first. Read under the same lock
+     * as {@link #appendTick}, so every window ends at the same tick.
+     */
+    Map<String, double[]> tickWindows(int n) {
+        synchronized (lock) {
+            Map<String, double[]> windows = new LinkedHashMap<>();
+            level0Rings.forEach((id, ring) -> windows.put(id, ring.last(n)));
+            return windows;
+        }
     }
 
-    /** The last {@code n} aggregated windows of a series at {@code level}, oldest first. */
-    List<AggregateStats> statsWindow(String seriesId, int level, int n) {
-        return statsRings.get(seriesId)[level].last(n);
+    /**
+     * Per series, its last {@code n} aggregated windows at {@code level}, oldest first. Read
+     * under the same lock as {@link #appendStats}, so every window ends at the same roll-up.
+     */
+    Map<String, List<AggregateStats>> statsWindows(int level, int n) {
+        synchronized (lock) {
+            Map<String, List<AggregateStats>> windows = new LinkedHashMap<>();
+            statsRings.forEach((id, rings) -> windows.put(id, rings[level].last(n)));
+            return windows;
+        }
     }
 
     /** The boundary this level's newest sample is dated with; 0 before the level's first write. */

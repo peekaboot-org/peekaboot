@@ -242,6 +242,70 @@ class InsightsCollectorTest {
     }
 
     /**
+     * A roll-up fires half a tick after its boundary, but a late one meets the next tick. Every
+     * series must then aggregate the same ticks, or the level-1 entries offset one series
+     * against the others by a sample. Each tick stamps every series with its own number, so a
+     * roll-up that read its windows across a tick sees two different newest values. The test
+     * races rather than parks because a window read has no seam to park in; 64 series widen
+     * the read enough that an unlocked one straddles a tick dozens of times per run. It can
+     * only fail on a broken lock, never on a correct one.
+     */
+    @Test
+    void rollUpRacingATickAggregatesTheSameTicksForEverySeries() throws Exception {
+        AtomicLong tickNumber = new AtomicLong();
+        List<SeriesDef> series = new ArrayList<>();
+        for (int i = 0; i < 64; i++) {
+            Gauge.builder("series." + i, tickNumber::get).register(registry);
+            series.add(value("s" + i, "series." + i));
+        }
+        AtomicLong rollUps = new AtomicLong();
+        AtomicLong straddling = new AtomicLong();
+        InsightsCollector racing = new InsightsCollector(
+                levels,
+                series,
+                Set.of(),
+                List.of(),
+                registry,
+                new InsightsCollector.Listener() {
+                    @Override
+                    public void onTick(long epochMs, Map<String, Double> values) {}
+
+                    @Override
+                    public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
+                        rollUps.incrementAndGet();
+                        long newestTicks = entries.values().stream()
+                                .map(AggregateStats::max)
+                                .distinct()
+                                .count();
+                        if (newestTicks > 1) {
+                            straddling.incrementAndGet();
+                        }
+                    }
+                },
+                InsightsCollectors.noSnapshot());
+        int tickCount = 500;
+        Thread ticker = new Thread(
+                () -> {
+                    for (int i = 1; i <= tickCount; i++) {
+                        tickNumber.set(i);
+                        racing.tick(i * 10_000L);
+                    }
+                },
+                "ticker");
+        ticker.start();
+        long epochMs = 60_000;
+        while (ticker.isAlive()) {
+            racing.rollUp(1, epochMs);
+            epochMs += 60_000;
+        }
+        assertThat(ticker.join(Duration.ofSeconds(5))).isTrue();
+
+        assertThat(straddling)
+                .as("roll-ups out of %s that read their windows across a tick", rollUps)
+                .hasValue(0);
+    }
+
+    /**
      * The snapshot writer wakes on the persistence-interval boundary, which is a level-0
      * boundary too, so a capture often lands while a tick is running. The codec refuses a
      * column longer than its level's count, so such a capture must carry one count for every

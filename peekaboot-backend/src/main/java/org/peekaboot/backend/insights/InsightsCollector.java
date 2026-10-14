@@ -206,11 +206,10 @@ public final class InsightsCollector implements SmartLifecycle {
         }
         int n = (int) (intervalMillis[level] / intervalMillis[level - 1]);
         Map<String, AggregateStats> entries = new LinkedHashMap<>();
-        for (String id : rings.seriesIds()) {
-            AggregateStats stats = level == 1
-                    ? AggregateStats.of(rings.tickWindow(id, n))
-                    : aggregateFromFinerLevel(rings.statsWindow(id, level - 1, n));
-            entries.put(id, stats);
+        if (level == 1) {
+            rings.tickWindows(n).forEach((id, window) -> entries.put(id, AggregateStats.of(window)));
+        } else {
+            rings.statsWindows(level - 1, n).forEach((id, window) -> entries.put(id, aggregateFromFinerLevel(window)));
         }
         rings.appendStats(level, epochMs, entries);
 
