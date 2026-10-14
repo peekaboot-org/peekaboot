@@ -13,7 +13,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Set;
-import java.util.function.Supplier;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.devtoolbar.ToolbarShell;
@@ -94,7 +93,7 @@ public class DevToolbarFilter implements Filter {
             // LOWEST_PRECEDENCE, so Spring Security's own filters, a 401/403 chief among
             // them, can already have short-circuited the chain before that pass ever runs.
             if (httpRequest.getAttribute(ORIGINAL_REQUEST_ATTRIBUTE) instanceof OriginalRequest original) {
-                inject(httpRequest, httpResponse, chain, original.method(), original.uri(), original::traceId);
+                inject(httpRequest, httpResponse, chain, original);
             } else {
                 chain.doFilter(request, response);
             }
@@ -108,38 +107,21 @@ public class DevToolbarFilter implements Filter {
 
         // Read here, not after the chain: an exception never comes back through this filter,
         // and the error dispatch that renders the page has no observation scope of its own.
-        httpRequest.setAttribute(
-                ORIGINAL_REQUEST_ATTRIBUTE,
-                new OriginalRequest(httpRequest.getMethod(), httpRequest.getRequestURI(), currentTraceId()));
+        OriginalRequest original =
+                new OriginalRequest(httpRequest.getMethod(), httpRequest.getRequestURI(), currentTraceId());
+        httpRequest.setAttribute(ORIGINAL_REQUEST_ATTRIBUTE, original);
 
         log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), httpRequest.getRequestURI());
-        inject(
-                httpRequest,
-                httpResponse,
-                chain,
-                httpRequest.getMethod(),
-                httpRequest.getRequestURI(),
-                this::currentTraceId);
+        inject(httpRequest, httpResponse, chain, original);
     }
 
     /**
-     * Buffers the response, runs the chain, and injects the bar - reporting the given method,
-     * URI and trace id rather than whatever the current dispatch's own request says, so the
-     * ERROR dispatch can report the REQUEST dispatch that actually failed.
-     *
-     * <p>{@code traceId} is resolved lazily, after the chain has run: the REQUEST dispatch
-     * still reads it fresh off the current span at that point, unchanged from before, while
-     * the ERROR dispatch supplies the trace id stashed earlier without touching the tracer -
-     * Spring opens no observation scope for that dispatch, so {@link Tracer#currentSpan()}
-     * would be null there.
+     * Buffers the response, runs the chain, and injects the bar for {@code original} rather than
+     * whatever the current dispatch's own request says, so the ERROR dispatch reports the REQUEST
+     * dispatch that actually failed.
      */
     private void inject(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain chain,
-            String method,
-            String uri,
-            Supplier<String> traceId)
+            HttpServletRequest request, HttpServletResponse response, FilterChain chain, OriginalRequest original)
             throws IOException, ServletException {
 
         ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(response);
@@ -155,11 +137,14 @@ public class DevToolbarFilter implements Filter {
                 // hand the response over and skip injection
                 wrappedResponse.enablePassthrough();
             } else if (!wrappedResponse.isPassthrough()) {
-                processResponse(request, wrappedResponse, method, uri, traceId.get());
+                processResponse(request, wrappedResponse, original.method(), original.uri(), original.traceId());
             }
         } catch (Exception e) {
             if (isClientAbort(e)) {
-                log.debug("Client closed the connection before the toolbar could be written: {} {}", method, uri);
+                log.debug(
+                        "Client closed the connection before the toolbar could be written: {} {}",
+                        original.method(),
+                        original.uri());
             } else {
                 log.warn("Failed to inject dev toolbar, returning original response", e);
                 if (!response.isCommitted()) {

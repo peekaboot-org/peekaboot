@@ -188,6 +188,21 @@ class DevToolbarFilterTest {
         assertThat(response.getContentAsString()).contains("abc123traceid");
     }
 
+    /** Read once, as the request arrives: a handler that closes the scope must not cost the bar its trace id. */
+    @Test
+    void reportsTheTraceIdCurrentWhenTheRequestArrived() throws Exception {
+        Span span = mock(Span.class);
+        TraceContext context = mock(TraceContext.class);
+        when(context.traceId()).thenReturn("abc123traceid");
+        when(span.context()).thenReturn(context);
+        when(tracer.currentSpan()).thenReturn(span, (Span) null);
+        chainWritesHtml("<html><body><h1>Hello</h1></body></html>");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).contains("\"traceId\":\"abc123traceid\"");
+    }
+
     @Test
     void injectsBeforeBodyTagDespiteLengthChangingLowercase() throws Exception {
         // 'İ' (U+0130) lowercases to two characters; the </body> index must be
