@@ -1,4 +1,4 @@
-package org.peekaboot.autoconfigure;
+package org.peekaboot.backend.tracing.query;
 
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;

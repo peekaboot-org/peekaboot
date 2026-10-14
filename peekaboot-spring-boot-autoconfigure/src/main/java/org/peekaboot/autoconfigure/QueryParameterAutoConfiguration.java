@@ -1,5 +1,6 @@
 package org.peekaboot.autoconfigure;
 
+import org.peekaboot.backend.tracing.query.QueryParameterObservationFilter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;

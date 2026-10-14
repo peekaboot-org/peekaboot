@@ -80,6 +80,14 @@
             <artifactId>opentelemetry-sdk-trace</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- QueryParameterObservationFilter reads datasource-micrometer's QueryContext; the starter
+             brings the library, and the filter's auto-configuration stays away without it -->
+        <dependency>
+            <groupId>net.ttddyy.observation</groupId>
+            <artifactId>datasource-micrometer</artifactId>
+            <version>${datasource-micrometer.version}</version>
+            <optional>true</optional>
+        </dependency>
 
         <dependency>
             <groupId>net.osslabz</groupId>

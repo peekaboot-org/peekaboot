@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import net.ttddyy.observation.tracing.QueryContext;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.query.QueryParameterObservationFilter;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;

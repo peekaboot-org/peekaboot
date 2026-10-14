@@ -30,9 +30,6 @@ dependencies {
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
-    // QueryParameterObservationFilter reads datasource-micrometer's QueryContext; the starter
-    // brings the library, and the filter's auto-configuration stays away without it
-    compileOnly("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
 
     // shared test support (LogCapture)
     testImplementation(project(":peekaboot-test-support"))
@@ -46,6 +43,8 @@ dependencies {
     // database metadata path against an auto-configured DataSource
     testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
     testImplementation("com.h2database:h2")
+    // QueryParameterAutoConfigurationTest proves the class condition with and without QueryContext
+    testImplementation("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
     // the SQL formatter's condition, proven with Hibernate present and filtered away
     testImplementation("org.hibernate.orm:hibernate-core")
 }

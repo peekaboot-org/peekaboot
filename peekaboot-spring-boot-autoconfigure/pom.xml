@@ -106,17 +106,15 @@
             <artifactId>spring-boot-micrometer-observation</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- compile-only: QueryParameterObservationFilter reads datasource-micrometer's
-             QueryContext; the starter brings the library, and the filter's
-             auto-configuration stays away without it -->
+
+        <!-- Test dependencies -->
+        <!-- QueryParameterAutoConfigurationTest proves the class condition with and without QueryContext -->
         <dependency>
             <groupId>net.ttddyy.observation</groupId>
             <artifactId>datasource-micrometer</artifactId>
             <version>${datasource-micrometer.version}</version>
-            <optional>true</optional>
+            <scope>test</scope>
         </dependency>
-
-        <!-- Test dependencies -->
         <!-- shared test support (LogCapture) -->
         <dependency>
             <groupId>org.peekaboot</groupId>

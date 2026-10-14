@@ -223,6 +223,7 @@ org.peekaboot.backend/
 │   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
+│   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
 │   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
 │                           # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
 ```

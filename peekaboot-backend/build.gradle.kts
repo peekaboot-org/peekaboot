@@ -4,6 +4,8 @@ plugins {
 
 description = "Peekaboot Backend - Spring Boot controllers, services, and lifecycle listeners"
 
+val datasourceMicrometerVersion = providers.gradleProperty("datasourceMicrometerVersion").get()
+
 dependencies {
     api("org.springframework.boot:spring-boot")
     api("tools.jackson.core:jackson-databind")
@@ -23,6 +25,9 @@ dependencies {
     compileOnly("com.zaxxer:HikariCP")
     compileOnly("org.hibernate.orm:hibernate-core")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
+    // QueryParameterObservationFilter reads datasource-micrometer's QueryContext; the starter
+    // brings the library, and the filter's auto-configuration stays away without it
+    compileOnly("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
 
     // The toolbar shell inlines stylesheets that ship in peekaboot-frontend, read off
     // the runtime classpath. Test scope only: a compile-scope edge would invert the
@@ -37,6 +42,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-web")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator")
     testImplementation("io.micrometer:micrometer-observation-test")
+    testImplementation("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
     // the SDK's own SpanData fixture for the exporter tests; versioned by the BOM
     testImplementation("io.opentelemetry:opentelemetry-sdk-testing")
     testImplementation("com.h2database:h2")
