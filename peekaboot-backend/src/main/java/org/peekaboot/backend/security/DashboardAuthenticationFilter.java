@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,9 +40,6 @@ public class DashboardAuthenticationFilter implements Filter {
     private final DashboardCredentials credentials;
     private final CredentialCache cache;
 
-    /** Guards the one-time WARN on the first challenge. */
-    private final AtomicBoolean challengeLogged = new AtomicBoolean();
-
     public DashboardAuthenticationFilter(DashboardCredentials credentials, CredentialCache cache) {
         this.credentials = credentials;
         this.cache = cache;
@@ -65,7 +61,7 @@ public class DashboardAuthenticationFilter implements Filter {
             if (header != null) {
                 logFailedVerification(httpRequest, header);
             }
-            challenge(httpRequest, httpResponse);
+            challenge(httpResponse);
             return;
         }
 
@@ -106,7 +102,7 @@ public class DashboardAuthenticationFilter implements Filter {
         return new Presented(decoded.substring(0, separator), decoded.substring(separator + 1));
     }
 
-    /** DEBUG rather than WARN: the first challenge already logged once at WARN. */
+    /** DEBUG: a mistyped password is routine, and an operator chasing a brute-force attempt can turn this logger up. */
     private static void logFailedVerification(HttpServletRequest request, String header) {
         Presented presented = parse(header);
         log.debug(
@@ -118,13 +114,7 @@ public class DashboardAuthenticationFilter implements Filter {
     private record Presented(String username, String password) {}
 
     /** A bare 401 rather than {@code sendError}, which would dispatch to the error page and re-enter the chain. */
-    private void challenge(HttpServletRequest request, HttpServletResponse response) {
-        if (challengeLogged.compareAndSet(false, true)) {
-            log.warn(
-                    "Challenged a request for {} without Peekaboot's credentials."
-                            + " See https://www.peekaboot.org/docs/security/",
-                    request.getRequestURI());
-        }
+    private static void challenge(HttpServletResponse response) {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setHeader(CHALLENGE_HEADER, CHALLENGE);
         response.setContentLength(0);

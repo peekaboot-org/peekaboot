@@ -29,9 +29,8 @@ class DashboardAuthenticationFilterTest {
 
     private LogCapture logs;
 
-    // Every challenge-path test emits the filter's one-time WARN, and a wrong-credentials one
-    // also emits the per-attempt DEBUG line; captured here so neither leaves a stray line in the
-    // test output, with both asserted separately where a test cares.
+    // A wrong-credentials test emits the per-attempt DEBUG line; captured here so it leaves no
+    // stray line in the test output, and asserted where a test cares.
     @BeforeEach
     void captureLogs() {
         logs = LogCapture.attach(DashboardAuthenticationFilter.class, Level.DEBUG);
@@ -183,17 +182,12 @@ class DashboardAuthenticationFilterTest {
         assertThat(chainCalls).hasValue(0);
     }
 
+    /** A challenge is the first step of every browser's Basic handshake, not news. */
     @Test
-    void warnsOnlyOnceAcrossRepeatedChallenges() throws Exception {
-        var filter = filter();
+    void logsNothingWhenItChallengesARequestWithoutCredentials() throws Exception {
+        filter().doFilter(get("/peekaboot/"), new MockHttpServletResponse(), chain);
 
-        filter.doFilter(get("/peekaboot/"), new MockHttpServletResponse(), chain);
-        filter.doFilter(get("/peekaboot/api/insights"), new MockHttpServletResponse(), chain);
-
-        assertThat(logs.appender().list).singleElement().satisfies(event -> {
-            assertThat(event.getLevel()).isEqualTo(Level.WARN);
-            assertThat(event.getFormattedMessage()).contains("/peekaboot/").doesNotContain("/peekaboot/api/insights");
-        });
+        assertThat(logs.appender().list).isEmpty();
     }
 
     private static DashboardAuthenticationFilter filter() {

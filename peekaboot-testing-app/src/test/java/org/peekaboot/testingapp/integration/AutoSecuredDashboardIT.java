@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import ch.qos.logback.classic.Level;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,12 +9,10 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
-import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.fixtures.DashboardAsyncDispatchController;
 import org.peekaboot.fixtures.DashboardForwardController;
 import org.peekaboot.testingapp.TestingApp;
-import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -95,29 +92,6 @@ class AutoSecuredDashboardIT {
     @Test
     void challengesARequestForwardedIntoTheDashboard() {
         assertThat(api().statusOf(DashboardForwardController.PATH)).isEqualTo(HttpStatus.UNAUTHORIZED);
-    }
-
-    /**
-     * A fresh application, because the filter warns on its first challenge only and the shared
-     * one may already have spent it.
-     */
-    @Test
-    void warnsOnceOnTheFirstChallenge(@TempDir Path dir) {
-        try (ConfigurableApplicationContext app = boot(dir.resolve("security.properties"));
-                LogCapture capture = LogCapture.attach(DashboardAuthenticationFilter.class)) {
-            PeekabootApi freshApi = new PeekabootApi(
-                    ((WebServerApplicationContext) app).getWebServer().getPort());
-
-            freshApi.statusOf(INSIGHTS_API);
-            freshApi.statusOf(INSIGHTS_API);
-
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage())
-                        .startsWith("Challenged a request for /peekaboot/")
-                        .contains("without Peekaboot's credentials");
-            });
-        }
     }
 
     @Test

@@ -39,14 +39,10 @@
             <logger>org.peekaboot.backend.insights.SeriesSampler</logger>
             <message>Peekaboot insights: series 'absent-subsystem\.gauge': meter 'no\.such\.meter' did not resolve to any meter across 3 ticks</message>
         </filter>
-        <!-- Banner: logged once per context by whichever class loads it first, so no test can capture it here. Challenge: AutoSecuredDashboardIT asserts it on a fresh app. -->
+        <!-- Banner: logged once per context by whichever class loads it first, so no test can capture it here. -->
         <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
             <logger>org.peekaboot.backend.security.SecurityPostureListener</logger>
             <message>(?s)\s*=+\s*:: Peekaboot Security ::.*</message>
-        </filter>
-        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
-            <logger>org.peekaboot.backend.security.DashboardAuthenticationFilter</logger>
-            <message>Challenged a request for (/app)?/peekaboot(/\S*)? without Peekaboot's credentials\. .*</message>
         </filter>
         <encoder>
             <pattern>${CONSOLE_LOG_PATTERN}</pattern>

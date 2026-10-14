@@ -177,9 +177,7 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   page's `PeekabootErrorExceptionResolver` error (`ErrorPageContentNegotiationIT`). A filter on the console appender leaves Peekaboot's appender on the root
   logger receiving the event. `LogCapture` detaches the logger from the root, so Peekaboot would
   never see the line. A logger level would hide it from Peekaboot too.
-- Three more entries cover product warnings. The `DashboardAuthenticationFilter` challenge is
-  asserted in `AutoSecuredDashboardIT` on a fresh application; the entry hides the first
-  challenge on the shared one, which other tests only trigger. The `SecurityPostureListener`
+- Two more entries cover product warnings. The `SecurityPostureListener`
   banner is logged once per context, by whichever class happens to load it first. Only
   `SecurityPostureListenerTest` asserts the banner. `SeriesSampler` warns about the
   `absent-subsystem` panel that `insights-test-panels.yml` adds on purpose, a few ticks after each
