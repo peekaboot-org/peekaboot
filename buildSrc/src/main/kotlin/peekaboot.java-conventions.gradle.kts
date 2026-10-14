@@ -78,6 +78,8 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Boot prints its banner to stdout, past the console appender's WARN threshold.
+    systemProperty("spring.main.banner-mode", "off")
     jvmArgumentProviders.add(CommandLineArgumentProvider {
         listOf("-javaagent:${mockitoAgentJar.singleFile}")
     })
