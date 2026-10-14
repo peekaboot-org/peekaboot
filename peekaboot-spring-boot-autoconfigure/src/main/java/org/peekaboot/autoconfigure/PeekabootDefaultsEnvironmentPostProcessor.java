@@ -64,11 +64,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
-        // Before the read of peekaboot.enabled below, whose conversion would take yes for true.
-        BooleanSwitches.requireUnambiguous(environment);
         LocalDevDetector.LaunchKind launchKind = launchKind();
         boolean localDevelopment = launchKind == LocalDevDetector.LaunchKind.LOCAL_DEV;
-        boolean enabled = environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, localDevelopment);
         boolean servlet = webApplicationType(environment, application) == WebApplicationType.SERVLET;
         boolean deploymentLaunch = launchKind == LocalDevDetector.LaunchKind.DEPLOYMENT;
 
@@ -91,6 +88,12 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         // never appears at all.
         detected.put(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, deploymentLaunch);
         contribute(environment, new MapPropertySource(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME, detected));
+        // After the detected defaults, which a blank detected switch falls back to.
+        BooleanSwitches.treatBlanksAsUnset(environment, detected);
+        // After the blanks give way, so a yes beneath one is checked too, and before the read of
+        // peekaboot.enabled below, whose conversion would take yes for true.
+        BooleanSwitches.requireUnambiguous(environment);
+        boolean enabled = environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, localDevelopment);
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
                 + " dev toolbar, storage, error page and stack-trace folding "
                 + (localDevelopment ? "enabled" : "disabled")

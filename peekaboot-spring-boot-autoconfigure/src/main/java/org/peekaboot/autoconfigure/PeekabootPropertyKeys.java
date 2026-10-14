@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import java.util.List;
+import java.util.Map;
 
 /** Property keys read outside a {@code @ConfigurationProperties} binding. */
 final class PeekabootPropertyKeys {
@@ -72,6 +73,19 @@ final class PeekabootPropertyKeys {
      * {@code 0} on these too.
      */
     static final List<String> SWITCHES_ALSO_GATED_ON_FALSE = List.of(ERROR_PAGE_OVERRIDE);
+
+    /**
+     * What a switch the detection does not default reads as when nothing sets it: the value its
+     * {@code matchIfMissing} condition and its bound property both take. A detected switch falls
+     * back to its detected value instead, which is always in the environment.
+     */
+    static final Map<String, String> UNSET_SWITCH_DEFAULTS = Map.of(
+            LIFECYCLE_ENABLED, "true",
+            TRACING_ENABLED, "true",
+            TRACING_ASYNC, "true",
+            TRACING_EVENT_LISTENERS, "true",
+            INSIGHTS_ENABLED, "true",
+            ERROR_PAGE_OVERRIDE, "false");
 
     /**
      * The property source carrying the launch-context defaults - present under this name only

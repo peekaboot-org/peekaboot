@@ -832,10 +832,18 @@ so `peekaboot.error-page.override=yes` would leave the page off with the Config 
 `no`, `off` and `0` read as off both ways and are accepted, except on
 `PeekabootPropertyKeys.SWITCHES_ALSO_GATED_ON_FALSE`: `peekaboot.error-page.override` is also
 gated with `havingValue = false`, which matches only `false`, so `no` would drop the page entirely.
-An empty or unconvertible value has no binder reading at all and is refused too. `BooleanSwitches`
-checks every key in `PeekabootPropertyKeys.BOOLEAN_SWITCHES` first thing in
-`PeekabootDefaultsEnvironmentPostProcessor`, before the detection reads `peekaboot.enabled`
-through the same lenient conversion, and throws Boot's `FailureAnalyzedException`, so startup ends
+An unconvertible value has no binder reading at all and is refused too. A blank one, which compose
+or Helm templating leaves for an unset variable, reads as unset: `BooleanSwitches.treatBlanksAsUnset`
+puts the value the next property source down holds (placeholders resolved), or else the detected
+value, or else the switch's entry in `PeekabootPropertyKeys.UNSET_SWITCH_DEFAULTS`, into a
+`peekabootBlankSwitches` source at the highest precedence. It covers the detected keys too, since
+`peekaboot.storage.enabled` binds to a primitive `boolean` as well, and the conditions and the
+binder both read the value it puts there. That source is a startup snapshot; a later environment
+refresh does not update it. `BooleanSwitches`
+checks every key in `PeekabootPropertyKeys.BOOLEAN_SWITCHES` in
+`PeekabootDefaultsEnvironmentPostProcessor` once the blanks have given way, so a `yes` beneath a
+blank is checked too, and before the detection reads `peekaboot.enabled` through the same lenient
+conversion, and throws Boot's `FailureAnalyzedException`, so startup ends
 with a failure report naming each offending property and value. Both lists are hand-kept because
 a native image has no class files to scan for the conditions at startup; `BooleanSwitchesTest`
 reads every `@ConditionalOnBooleanProperty` on a registered auto-configuration and fails when a

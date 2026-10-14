@@ -6,9 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.diagnostics.FailureAnalyzedException;
@@ -602,6 +605,90 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .hasMessageContaining("peekaboot.enabled = 'yes'");
         assertThat(environment.getPropertySources().contains("peekabootDefaults"))
                 .isFalse();
+    }
+
+    static Stream<Arguments> everySwitchOnEveryLaunch() {
+        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
+                .flatMap(key -> Stream.of(LocalDevDetector.LaunchKind.values())
+                        .map(launchKind -> Arguments.of(key, launchKind)));
+    }
+
+    /** Every switch has a reading once its blank is set aside, whichever launch detected what. */
+    @ParameterizedTest(name = "{0}='''' on {1}")
+    @MethodSource("everySwitchOnEveryLaunch")
+    void readsABlankSwitchAsABoolean(String key, LocalDevDetector.LaunchKind launchKind) {
+        MockEnvironment environment = new MockEnvironment().withProperty(key, "");
+
+        postProcessor(launchKind).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty(key)).matches("(?i)true|false");
+    }
+
+    /** compose leaves PEEKABOOT_ENABLED= for an unset variable; a local run still turns Peekaboot on. */
+    @Test
+    void aBlankMasterSwitchFollowsTheLaunchContext() {
+        MockEnvironment localDev = new MockEnvironment().withProperty(PeekabootPropertyKeys.ENABLED, "");
+        MockEnvironment deployment = new MockEnvironment().withProperty(PeekabootPropertyKeys.ENABLED, "");
+
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(localDev, servletApplication());
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(deployment, servletApplication());
+
+        assertThat(localDev.getProperty(PeekabootPropertyKeys.ENABLED)).isEqualToIgnoringCase("true");
+        assertThat(localDev.getPropertySources().contains("peekabootDefaults")).isTrue();
+        assertThat(deployment.getProperty(PeekabootPropertyKeys.ENABLED)).isEqualToIgnoringCase("false");
+    }
+
+    /** The value a blank gives way to is checked like any other, so a yes beneath still stops startup. */
+    @Test
+    void refusesAnAmbiguousValueBeneathABlank() {
+        MockEnvironment environment = new MockEnvironment().withProperty(PeekabootPropertyKeys.ENABLED, "");
+        environment
+                .getPropertySources()
+                .addLast(new MapPropertySource("applicationYml", Map.of(PeekabootPropertyKeys.ENABLED, "yes")));
+
+        assertThatThrownBy(() -> postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT)
+                        .postProcessEnvironment(environment, servletApplication()))
+                .isInstanceOf(FailureAnalyzedException.class)
+                .hasMessageContaining("peekaboot.enabled = 'yes'");
+    }
+
+    /** storage.enabled binds to a primitive boolean too; a blank reads as its detected value. */
+    @Test
+    void readsABlankDetectedKeyAsItsDetectedValue() {
+        MockEnvironment environment = new MockEnvironment().withProperty(PeekabootPropertyKeys.STORAGE_ENABLED, "");
+
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty(PeekabootPropertyKeys.STORAGE_ENABLED))
+                .isEqualToIgnoringCase("true");
+    }
+
+    /** An application's own defaultProperties blank leaves nothing beneath; the detection still decides. */
+    @Test
+    void aBlankInTheApplicationsDefaultPropertiesFallsBackToTheDetection() {
+        MockEnvironment environment = new MockEnvironment();
+        environment
+                .getPropertySources()
+                .addLast(new DefaultPropertiesPropertySource(Map.of(PeekabootPropertyKeys.ENABLED, "")));
+
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty(PeekabootPropertyKeys.ENABLED)).isEqualToIgnoringCase("true");
+    }
+
+    /** An application.yml value beneath the blank wins, exactly as if the variable were unset. */
+    @Test
+    void aValueBeneathTheBlankWins() {
+        MockEnvironment environment = new MockEnvironment().withProperty(PeekabootPropertyKeys.ENABLED, "");
+        environment
+                .getPropertySources()
+                .addLast(new MapPropertySource("applicationYml", Map.of(PeekabootPropertyKeys.ENABLED, "true")));
+
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty(PeekabootPropertyKeys.ENABLED)).isEqualTo("true");
+        assertThat(environment.getPropertySources().contains("peekabootDefaults"))
+                .isTrue();
     }
 
     /** The seam for the two tests above: what the post-processor finds under a bundled file's name. */
