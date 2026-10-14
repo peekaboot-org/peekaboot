@@ -2,19 +2,27 @@ package org.peekaboot.backend.errorpage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import jakarta.servlet.RequestDispatcher;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.peekaboot.testsupport.LogCapture;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver;
 
 /**
  * Beats an application's {@code @ControllerAdvice}, which resolves inside the REQUEST dispatch
@@ -30,11 +38,20 @@ class PeekabootErrorExceptionResolverTest {
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
+    private LogCapture springLogs;
 
+    // Spring's own resolver WARNs for each exception it maps; captured so it never prints, and asserted where a test is
+    // about it.
     @BeforeEach
     void setUp() {
         request = new MockHttpServletRequest("GET", "/throwing");
         response = new MockHttpServletResponse();
+        springLogs = LogCapture.attach(DefaultHandlerExceptionResolver.class);
+    }
+
+    @AfterEach
+    void closeLogs() {
+        springLogs.close();
     }
 
     /** An XHR or API client asking for JSON must keep getting the application's own error response. */
@@ -153,11 +170,12 @@ class PeekabootErrorExceptionResolverTest {
 
     /**
      * Built without Throwable.initCause's self-causation guard: two exceptions, each other's
-     * cause, so walking it without a depth cap would recurse forever. The timeout is the test
-     * itself: remove the cap and this spins rather than fails.
+     * cause, so a cause walk without cycle detection never ends. Spring's own walk is one of
+     * those, so the chain must never reach it. The timeout is the test itself, on its own
+     * thread, because a spinning test thread would otherwise hang the build instead of failing.
      */
     @Test
-    @Timeout(5)
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void terminatesOnACyclicCauseChainInsteadOfOverflowing() {
         request.addHeader("Accept", "text/html");
         RuntimeException first = new RuntimeException("first");
@@ -202,18 +220,93 @@ class PeekabootErrorExceptionResolverTest {
     }
 
     /**
-     * DefaultHandlerExceptionResolver returns an empty ModelAndView for this one so that nothing
-     * is written to a connection the client already dropped; rendering here would call
-     * getWriter() on that same dead connection and raise the same exception again.
+     * Spring answers a client that already hung up with an empty ModelAndView, so nothing is
+     * written to the dead connection; rendering would call getWriter() on it and fail again.
      */
     @Test
-    void fallsThroughForADeadAsyncConnectionRegardlessOfAccept() {
+    void writesNothingForADeadAsyncConnection() {
         request.addHeader("Accept", "text/html");
 
         ModelAndView modelAndView =
                 resolver.resolveException(request, response, null, new AsyncRequestNotUsableException("gone"));
 
-        assertThat(modelAndView).isNull();
+        assertThat(modelAndView).isNotNull();
+        assertThat(modelAndView.isEmpty()).isTrue();
+    }
+
+    /** Spring answers a path variable that does not convert with 400; the page must not turn it into a 500. */
+    @Test
+    void keepsSpringsBadRequestForATypeMismatch() {
+        request.addHeader("Accept", "text/html");
+
+        ModelAndView modelAndView =
+                resolver.resolveException(request, response, null, new TypeMismatchException("abc", Long.class));
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(request.getAttribute(RequestDispatcher.ERROR_STATUS_CODE)).isEqualTo(400);
+    }
+
+    @Test
+    void keepsSpringsBadRequestForAnUnreadableBody() {
+        request.addHeader("Accept", "text/html");
+        Exception unreadable = new HttpMessageNotReadableException("unreadable", new MockHttpInputMessage(new byte[0]));
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, unreadable);
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * Spring's mapping also sets headers and a message. Both reach the page; the error itself is
+     * never sent, or the container would commit the response before the page renders.
+     */
+    @Test
+    void keepsTheHeadersAndMessageSpringsMappingSets() {
+        request.addHeader("Accept", "text/html");
+        Exception notSupported = new HttpRequestMethodNotSupportedException("POST", List.of("GET"));
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, notSupported);
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(response.getHeader("Allow")).isEqualTo("GET");
+        assertThat(request.getAttribute(RequestDispatcher.ERROR_MESSAGE)).isEqualTo("Method 'POST' is not supported.");
+        assertThat(response.isCommitted()).isFalse();
+    }
+
+    /** The line Spring's own resolver logs for an exception it maps, had this one not run first. */
+    @Test
+    void leavesSpringsWarningForAMappedException() {
+        request.addHeader("Accept", "text/html");
+
+        resolver.resolveException(request, response, null, new TypeMismatchException("abc", Long.class));
+
+        assertThat(springLogs.appender().list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage())
+                    .startsWith("Resolved [org.springframework.beans.TypeMismatchException");
+        });
+    }
+
+    /** Spring's mapping reads the exception itself, not its causes, so a wrapped one is a 500 there too. */
+    @Test
+    void leavesAWrappedSpringExceptionAtInternalServerErrorAsSpringDoes() {
+        request.addHeader("Accept", "text/html");
+        Exception wrapper = new RuntimeException("wrapper", new TypeMismatchException("abc", Long.class));
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, wrapper);
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /** Spring walks causes only for ResponseStatusException and @ResponseStatus; any other ErrorResponse counts at the top alone. */
+    @Test
+    void leavesAWrappedErrorResponseAtInternalServerErrorAsSpringDoes() {
+        request.addHeader("Accept", "text/html");
+        Exception wrapper = new RuntimeException("wrapper", new HttpRequestMethodNotSupportedException("POST"));
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, wrapper);
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     /**

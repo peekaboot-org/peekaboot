@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.util.StreamUtils;
@@ -20,16 +22,21 @@ import org.springframework.web.client.RestClient;
  */
 class ErrorPageContentNegotiationIT {
 
-    private record ErrorResponse(MediaType contentType, String body) {}
+    private record ErrorResponse(HttpStatusCode status, MediaType contentType, String body) {}
 
-    private static ErrorResponse fetchBoom(int port, String accept) {
+    private static ErrorResponse fetch(int port, String path, String accept) {
         return RestClient.create("http://localhost:" + port)
                 .get()
-                .uri("/boom")
+                .uri(path)
                 .header("Accept", accept)
                 .exchange((request, response) -> new ErrorResponse(
+                        response.getStatusCode(),
                         response.getHeaders().getContentType(),
                         StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8)));
+    }
+
+    private static ErrorResponse fetchBoom(int port, String accept) {
+        return fetch(port, "/boom", accept);
     }
 
     @Nested
@@ -80,6 +87,15 @@ class ErrorPageContentNegotiationIT {
         @Test
         void anHtmlClientGetsThePage() {
             assertThat(fetchBoom(port, "text/html").body()).contains("pk-error");
+        }
+
+        /** PersonController's id is a long; Spring answers "abc" with 400, and so must the page that outranks it. */
+        @Test
+        void anHtmlClientKeepsSpringsBadRequestForAnUnconvertiblePathVariable() {
+            ErrorResponse response = fetch(port, "/persons/abc", "text/html");
+
+            assertThat(response.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.body()).contains("pk-error");
         }
     }
 }

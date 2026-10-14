@@ -503,18 +503,20 @@ Peekaboot's page win where an application renders its own from a `@ControllerAdv
 advice resolves inside the REQUEST dispatch, so no ERROR dispatch ever follows it,
 `BasicErrorController` never runs and no `ErrorViewResolver` is ever consulted. It outranks the
 `HandlerExceptionResolverComposite` that holds `ExceptionHandlerExceptionResolver` among Boot's
-own resolvers, so it intercepts the exception first. It returns
-null for an `AsyncRequestNotUsableException` before anything else. `DefaultHandlerExceptionResolver`
-answers that one with an empty `ModelAndView` on purpose, so nothing is written to a connection
-the client already dropped, and rendering here would call `getWriter()` on that same dead
-connection and raise the exception again. It also returns null, falling through to the
+own resolvers, so it intercepts the exception first. It returns null, falling through to the
 application's own handling, unless the `Accept` header names `text/html` with a quality above
 zero. A bare `*/*` or a missing header does not count, so Swagger UI, curl and `fetch()` keep
-getting the application's own error response, as does an XHR asking for JSON. It derives a
-status from the exception (an `ErrorResponse`'s own status, a merged `@ResponseStatus` on its
-class, or the same on a cause, walked iteratively with a small depth cap so a cyclic cause
-chain cannot overflow the stack; 500 otherwise), sets `RequestDispatcher.ERROR_STATUS_CODE`,
-`ERROR_REQUEST_URI` and
+getting the application's own error response, as does an XHR asking for JSON. The status is
+Spring's own, asked in Spring's order. A `ResponseStatusException` or a merged `@ResponseStatus`
+on the exception or a cause comes first, read the way `ResponseStatusExceptionResolver` reads it
+but over a chain walked once with cycle detection; a cyclic chain is a 500 right there, because
+Spring's own cause walk would never return from it.
+A private `DefaultHandlerExceptionResolver` comes next, answering against a response wrapper that
+records `sendError` instead of sending it: a `TypeMismatchException` or an unreadable body keeps
+its 400, the headers that mapping sets (`Allow` on a 405) reach the real response, and its
+message becomes `ERROR_MESSAGE`. Where that mapping answers without a status, a client that
+already hung up, the resolver returns its empty `ModelAndView`, so nothing is written to the dead
+connection. Anything left is a 500. It sets `RequestDispatcher.ERROR_STATUS_CODE`, `ERROR_REQUEST_URI` and
 `ERROR_METHOD` on the request (nothing else sets that last one on a REQUEST dispatch), so
 `PeekabootErrorView` renders the same request line, status and reason it would off a real ERROR
 dispatch, and returns a `ModelAndView` carrying that status and a `PeekabootErrorView` built the
