@@ -285,6 +285,16 @@ class TracesTabIT extends PlaywrightTestBase {
         orderRepository.delete(order);
     }
 
+    /** The positive control for TracesTabWithoutSpanSourceIT: with a span exporter wired, the tab lists as usual. */
+    @Test
+    void theTracesTabListsAsUsualWhenSpansArePossible() {
+        openDashboard();
+        dashboard.openTracesTab();
+
+        assertThat(page.isVisible("#traces-bucket")).isTrue();
+        assertThat(page.isVisible("#traces-unavailable")).isFalse();
+    }
+
     @Test
     void clickingATraceOpensTheOverlayAndDeepLinks() {
         String traceId = openTracesTabWithATrace();

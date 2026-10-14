@@ -2,34 +2,42 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.APIResponse;
-import com.microsoft.playwright.Route;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.TestPropertySource;
+import tools.jackson.databind.node.BooleanNode;
 
 /**
  * An application without the OpenTelemetry SDK still has a trace store, so the Traces tab
  * shows, but nothing can ever fill it. The tab says why and what to add instead of listing
  * nothing forever.
  *
- * <p>The sample app has the SDK, so the real /api/features response is served with
- * {@code tracingSpansPossible} flipped; that the backend reports false without the SDK is
- * PeekabootAutoConfigurationTest's to prove.
+ * <p>The sample app has the SDK, so this context leaves out {@code OtelTracingAutoConfiguration},
+ * whose span exporter is the one thing {@code tracingSpansPossible} is read from. An inlined
+ * exclusion replaces application-test.yml's list rather than merging with it, so the servlet
+ * security exclusions are repeated; anything added there belongs here as well.
  */
+@TestPropertySource(
+        properties = "spring.autoconfigure.exclude="
+                + "org.peekaboot.autoconfigure.OtelTracingAutoConfiguration,"
+                + "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration,"
+                + "org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,"
+                + "org.springframework.boot.security.autoconfigure.actuate.web.servlet"
+                + ".ManagementWebSecurityAutoConfiguration")
 class TracesTabWithoutSpanSourceIT extends PlaywrightTestBase {
 
     private static final String MARKER_REQUEST = "/peekaboot/api/features?after-traces-tab";
 
     @Test
     void theTracesTabExplainsWhatToAddInsteadOfListing() {
-        page.route("**/peekaboot/api/features", route -> {
-            APIResponse features = route.fetch();
-            route.fulfill(new Route.FulfillOptions()
-                    .setResponse(features)
-                    .setBody(features.text()
-                            .replace("\"tracingSpansPossible\":true", "\"tracingSpansPossible\":false")));
-        });
+        assertThat(awaitJson(
+                                contextPath() + "/peekaboot/api/features",
+                                "features => features",
+                                "/api/features answered nothing")
+                        .path("tracingSpansPossible"))
+                .as("this context wires no span exporter")
+                .isEqualTo(BooleanNode.FALSE);
         List<String> requests = new CopyOnWriteArrayList<>();
         page.onRequest(request -> requests.add(request.url()));
 
@@ -55,15 +63,5 @@ class TracesTabWithoutSpanSourceIT extends PlaywrightTestBase {
         assertThat(requests)
                 .as("a listing that can never hold anything is not fetched")
                 .noneMatch(url -> url.contains("/peekaboot/api/traces"));
-    }
-
-    /** The positive control for the flip: with spans possible the tab lists as usual. */
-    @Test
-    void theTracesTabListsAsUsualWhenSpansArePossible() {
-        openDashboard();
-        dashboard.openTracesTab();
-
-        assertThat(page.isVisible("#traces-bucket")).isTrue();
-        assertThat(page.isVisible("#traces-unavailable")).isFalse();
     }
 }
