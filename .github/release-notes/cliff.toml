@@ -56,7 +56,7 @@ tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
 # The first matching parser wins. Test-harness scopes stay above `^feat`, `^build\(deps-dev\)`
 # above `^build\(deps`, and `^build\(deps` above the generic `^build`. The numbers stay
 # zero-padded two digits because git-cliff sorts group names as strings. site.jq shows groups
-# 01-03 on the website, so renumbering those means editing it too.
+# 01-04 on the website, so renumbering those means editing it too.
 commit_parsers = [
     # Shipped commits typed fix: that fix no bug a user could hit. History is not rewritten.
     # ca362a2e and 76fc2537 changed tests only.

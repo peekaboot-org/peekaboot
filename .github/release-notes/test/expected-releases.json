@@ -68,6 +68,17 @@
             "detail": null
           }
         ]
+      },
+      {
+        "title": "Dependency upgrades",
+        "entries": [
+          {
+            "text": "Bump com.example:thing",
+            "scope": "deps",
+            "breaking": false,
+            "detail": null
+          }
+        ]
       }
     ]
   },

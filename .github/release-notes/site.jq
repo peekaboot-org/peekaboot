@@ -3,9 +3,10 @@
 
 def strip_group_prefix: sub("^<!-- [0-9]+ -->"; "");
 
-# Groups 01-03, features, fixes and performance, are what the website shows. Breaking changes
-# are synthesised below from the `breaking` flag; no commit parser emits a group 00.
-def is_user_facing: test("^<!-- 0[1-3] -->");
+# Groups 01-04, features, fixes, performance and dependency upgrades, are what the website
+# shows. Breaking changes are synthesised below from the `breaking` flag; no commit parser
+# emits a group 00.
+def is_user_facing: test("^<!-- 0[1-4] -->");
 
 # Matches the release body's `upper_first`, so both renderings read the same.
 def upper_first: (.[0:1] | ascii_upcase) + .[1:];

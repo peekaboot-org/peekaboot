@@ -754,9 +754,9 @@ rewritten, so the generator regroups or skips them, and the harness checks those
 real history.
 
 The website shows released versions only. `site.jq` builds a "Breaking changes" section from
-the `breaking` flag, then groups `01`-`03`, features, bug fixes and performance. `site.jq`
-hardcodes that cutoff, so renumbering those groups means editing both files. A breaking commit
-appears under Breaking changes alone on the website. Dependency upgrades, reverts and the
+the `breaking` flag, then groups `01`-`04`, features, bug fixes, performance and dependency
+upgrades. `site.jq` hardcodes that cutoff, so renumbering those groups means editing both
+files. A breaking commit appears under Breaking changes alone on the website. Reverts and the
 internal groups stay in the GitHub release notes and `CHANGELOG.md`.
 
 The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
