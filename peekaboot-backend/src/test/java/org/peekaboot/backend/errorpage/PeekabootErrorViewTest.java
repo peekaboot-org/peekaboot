@@ -243,21 +243,12 @@ class PeekabootErrorViewTest {
      */
     @Test
     void offersNoControlWhenTheMessageSpellsTheHiddenRunsOwnClassName() {
-        String page = render(view(List.of("no.such.package"), true), exceptionSpellingTheHiddenRunClass());
+        String page =
+                render(view(List.of("no.such.package"), true), exceptionWithFrameworkFrames("pk-stack-trace__hidden"));
 
         assertThat(page)
                 .doesNotContain("class=\"pk-btn pk-btn--small pk-error__reveal\"")
                 .doesNotContain("reveal.js");
-    }
-
-    private static Throwable exceptionSpellingTheHiddenRunClass() {
-        IllegalStateException exception = new IllegalStateException("pk-stack-trace__hidden");
-        exception.setStackTrace(new StackTraceElement[] {
-            new StackTraceElement("com.example.Widget", "process", "Widget.java", 10),
-            new StackTraceElement(
-                    "org.springframework.web.servlet.DispatcherServlet", "doDispatch", "DispatcherServlet.java", 1234)
-        });
-        return exception;
     }
 
     /**
@@ -270,23 +261,14 @@ class PeekabootErrorViewTest {
      */
     @Test
     void doesNotReopenTheScriptPlaceholderFromAPlaceholderLookingMessage() {
-        String page = render(view(List.of("org.springframework"), true), exceptionSpellingTheScriptPlaceholder());
+        String page = render(
+                view(List.of("org.springframework"), true), exceptionWithFrameworkFrames("{{REVEAL_SCRIPT_TAGS}}"));
 
         assertThat(page)
                 .doesNotContain("{{REVEAL_SCRIPT_TAGS}}")
                 .contains("&#123;&#123;REVEAL_SCRIPT_TAGS}}")
                 .containsOnlyOnce("<script>")
                 .containsOnlyOnce("<script src=\"/peekaboot/ui/error-page/reveal.js\">");
-    }
-
-    private static Throwable exceptionSpellingTheScriptPlaceholder() {
-        IllegalStateException exception = new IllegalStateException("{{REVEAL_SCRIPT_TAGS}}");
-        exception.setStackTrace(new StackTraceElement[] {
-            new StackTraceElement("com.example.Widget", "process", "Widget.java", 10),
-            new StackTraceElement(
-                    "org.springframework.web.servlet.DispatcherServlet", "doDispatch", "DispatcherServlet.java", 1234)
-        });
-        return exception;
     }
 
     private static String revealScript() throws IOException {
@@ -306,7 +288,7 @@ class PeekabootErrorViewTest {
      * on whatever frames the JUnit runner itself happens to be on the stack with.
      */
     private String render(PeekabootErrorView view) {
-        return render(view, exceptionWithFrameworkFrames());
+        return render(view, exceptionWithFrameworkFrames("boom"));
     }
 
     private String render(PeekabootErrorView view, Throwable exception) {
@@ -324,8 +306,9 @@ class PeekabootErrorViewTest {
         }
     }
 
-    private static Throwable exceptionWithFrameworkFrames() {
-        IllegalStateException exception = new IllegalStateException("boom");
+    /** One application frame and a run of framework frames, thrown with {@code message}. */
+    private static Throwable exceptionWithFrameworkFrames(String message) {
+        IllegalStateException exception = new IllegalStateException(message);
         exception.setStackTrace(new StackTraceElement[] {
             new StackTraceElement("com.example.Widget", "process", "Widget.java", 10),
             new StackTraceElement(
