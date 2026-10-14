@@ -44,19 +44,17 @@ import tools.jackson.databind.JsonNode;
  * <p>The testing app switches {@code spring.task.execution.propagate-context} on in its
  * {@code application.yml}. That is the consuming application's choice, not Peekaboot's, and it
  * is what makes the async span a child of the request that dispatched it rather than a trace of
- * its own. Declared inline below (redundantly with the app's default) because this class's every
- * assertion rests on it: restating it here is what this class means by "the property under
- * test", and it also gives this class's context a different Spring test-context cache key from
- * {@code ui.PlaywrightTestBase}'s otherwise-identical one. Without that, this class would
- * share one {@code TraceStore} with the whole Playwright UI suite, and {@code TraceOverlayIT}
- * - the only other class hitting the same {@code /orders/enrich} endpoint - can insert an
- * async row inside this class's before/after snapshot window (see
- * {@link #anAsyncTaskDispatchedOutsideARequestIsNotObserved()}) and fail it intermittently.
+ * its own.
+ *
+ * <p>The property below is read by nothing. It gives this class a test-context cache key, and so
+ * a {@code TraceStore}, of its own: {@code TraceOverlayIT} also hits {@code /orders/enrich} and
+ * could insert an async row inside this class's before/after snapshot window (see
+ * {@link #anAsyncTaskDispatchedOutsideARequestIsNotObserved()}).
  */
 @SpringBootTest(
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.task.execution.propagate-context=true")
+        properties = "isolated-trace-store=AsyncTraceCaptureIT")
 @ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AsyncTraceCaptureIT {
