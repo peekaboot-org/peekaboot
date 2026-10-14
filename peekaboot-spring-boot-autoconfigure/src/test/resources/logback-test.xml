@@ -2,6 +2,8 @@
 <configuration>
 
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <!-- Feeds the ThresholdFilter on Boot's console appender rather than raising root's level: Peekaboot's appender must keep receiving INFO events. -->
+    <property name="CONSOLE_LOG_THRESHOLD" value="WARN"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
     <!-- ErrorDispatchIT's /throwing endpoint escapes as an unhandled exception, which embedded

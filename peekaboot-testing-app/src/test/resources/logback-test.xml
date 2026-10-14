@@ -5,6 +5,10 @@
 
     <!-- Boot's console appender plus filters hiding lines the tests provoke on purpose; Peekaboot's root appender still gets them. -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- The threshold sits here, not on root: Peekaboot's appender must keep receiving the INFO events tests assert through its API. -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
         <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
             <logger>org.peekaboot.testingapp.controller.PersonController</logger>
             <message>An error occurred while trying to find all persons</message>

@@ -132,8 +132,16 @@ requires a stub. The rule targets cheap in-module collaborators asked to compute
 never this pass-through shape.
 
 ## Pristine output
-Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN.
+Test output must be silent. The console shows WARN and ERROR only, and every such line a test
+provokes is asserted and filtered, or silenced by a logger level listed below, so a green build
+prints none. No stack traces.
 
+- `peekaboot-testing-app`'s and `peekaboot-spring-boot-autoconfigure`'s `logback-test.xml` put a
+  `ThresholdFilter` at `WARN` on the console appender, so a test that boots an application does
+  not print its startup log. The threshold sits on the appender, never on a logger or the
+  root: Peekaboot's appender on the root logger must keep receiving INFO events, which tests
+  assert through Peekaboot's trace API. `peekaboot-backend` and `peekaboot-test-support` carry
+  no `logback-test.xml`, and their tests print nothing.
 - Where a test's subject is the JavaScript itself, `page.onPageError` collects browser errors
   into a list the test asserts on. Classes whose subject fails invisibly (the charts, the
   lifecycle table) opt into `PlaywrightTestBase.captureBrowserSignals()`, which collects every
