@@ -28,6 +28,7 @@ import org.springframework.boot.test.context.assertj.AssertableWebApplicationCon
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
@@ -289,6 +290,7 @@ class PeekabootAutoConfigurationTest {
                         PeekabootAutoConfiguration.class,
                         PeekabootTracingAutoConfiguration.class,
                         OtelTracingAutoConfiguration.class,
+                        DispatcherServletAutoConfiguration.class,
                         PeekabootPathsAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true");
 

@@ -124,11 +124,12 @@ public class PeekabootSecurityAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         FilterRegistrationBean<DashboardAuthenticationFilter> dashboardAuthenticationFilter(
-                DashboardCredentials credentials, CredentialCache credentialCache) {
+                DashboardCredentials credentials, CredentialCache credentialCache, PeekabootPaths paths) {
 
             FilterRegistrationBean<DashboardAuthenticationFilter> registration = new FilterRegistrationBean<>();
             registration.setFilter(new DashboardAuthenticationFilter(credentials, credentialCache));
-            registration.addUrlPatterns(PeekabootPaths.BASE_PATH + "/*");
+            // under the DispatcherServlet's prefix, where spring.mvc.servlet.path moves the dashboard's controllers
+            registration.addUrlPatterns(paths.dashboardPath() + "/*");
             // fixed, since the guard answers for the path whatever Spring Security's filter order is
             registration.setOrder(0);
             registration.setName("dashboardAuthenticationFilter");

@@ -143,6 +143,8 @@ public class PeekabootErrorView implements View {
 
     private final boolean fold;
 
+    private final PeekabootPaths paths;
+
     /**
      * {@code exclusions} and {@code applicationPackages} are kept in the same order
      * {@link StackTraceFolding#fold} takes them, so a reader can't swap two adjacent
@@ -156,13 +158,19 @@ public class PeekabootErrorView implements View {
      *     which is what marks a frame as the application's own; empty where none are
      * @param fold whether framework frames fold behind a disclosure at all; {@code false}
      *     renders exactly what shipped before folding existed
+     * @param paths where the page's own URLs point, which the DispatcherServlet's prefix moves
      */
     public PeekabootErrorView(
-            ErrorAttributes errorAttributes, List<String> exclusions, List<String> applicationPackages, boolean fold) {
+            ErrorAttributes errorAttributes,
+            List<String> exclusions,
+            List<String> applicationPackages,
+            boolean fold,
+            PeekabootPaths paths) {
         this.errorAttributes = errorAttributes;
         this.exclusions = List.copyOf(exclusions);
         this.applicationPackages = List.copyOf(applicationPackages);
         this.fold = fold;
+        this.paths = paths;
     }
 
     @Override
@@ -177,7 +185,7 @@ public class PeekabootErrorView implements View {
                 errorAttributes.getErrorAttributes(new ServletWebRequest(request), ALL_DETAILS);
         response.setContentType(getContentType());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write(render(PeekabootPaths.basePath(request), method(request), attributes));
+        response.getWriter().write(render(paths.basePath(request), method(request), attributes));
     }
 
     /**

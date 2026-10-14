@@ -300,18 +300,19 @@ public class DevToolbarFilter implements Filter {
             String method,
             String uri,
             String traceId) {
-        String basePath = PeekabootPaths.basePath(request);
+        String basePath = paths.basePath(request);
         String summaryJson =
                 toolbarDataProvider.getToolbarSummaryJson(basePath, method, uri, response.getStatus(), traceId);
         return toolbarShell.render(basePath, summaryJson);
     }
 
     private boolean isSwaggerUi(HttpServletRequest request) {
-        return PeekabootPaths.pathWithinApplication(request).startsWith(swaggerUiPrefix);
+        String path = paths.pathWithinDispatcherServlet(PeekabootPaths.pathWithinApplication(request));
+        return path != null && path.startsWith(swaggerUiPrefix);
     }
 
     private String generateSwaggerToolbarHtml(HttpServletRequest request) {
-        String basePath = PeekabootPaths.basePath(request);
+        String basePath = paths.basePath(request);
         return toolbarShell.render(basePath, toolbarDataProvider.getIdleModeJson(basePath));
     }
 }

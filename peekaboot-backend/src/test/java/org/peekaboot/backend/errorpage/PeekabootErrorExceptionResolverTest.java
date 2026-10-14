@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
@@ -34,8 +35,8 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
  */
 class PeekabootErrorExceptionResolverTest {
 
-    private final PeekabootErrorView view =
-            new PeekabootErrorView(new DefaultErrorAttributes(), List.of(), List.of(), false);
+    private final PeekabootErrorView view = new PeekabootErrorView(
+            new DefaultErrorAttributes(), List.of(), List.of(), false, PeekabootPaths.defaults());
 
     private final StaticMessageSource messages = new StaticMessageSource();
 

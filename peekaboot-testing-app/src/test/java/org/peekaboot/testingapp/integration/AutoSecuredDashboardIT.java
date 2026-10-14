@@ -3,8 +3,10 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -18,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -169,10 +172,57 @@ class AutoSecuredDashboardIT {
         }
     }
 
-    private static ConfigurableApplicationContext boot(Path credentialsFile) {
+    /** spring.mvc.servlet.path moves the dashboard under the DispatcherServlet's prefix; the guard moves with it. */
+    @Test
+    void challengesTheDashboardUnderTheServletPath(@TempDir Path dir) {
+        try (ConfigurableApplicationContext app =
+                boot(dir.resolve("security.properties"), "--spring.mvc.servlet.path=/app")) {
+            DashboardCredentials appCredentials = app.getBean(DashboardCredentials.class);
+            PeekabootApi appApi = new PeekabootApi(
+                    ((WebServerApplicationContext) app).getWebServer().getPort());
+
+            assertThat(appApi.statusOf("/app" + INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(appApi.withBasicAuth(appCredentials.username(), appCredentials.plaintext())
+                            .statusOf("/app" + INSIGHTS_API))
+                    .isEqualTo(HttpStatus.OK);
+        }
+    }
+
+    /**
+     * The rest of the dashboard moves with it: the entry redirect lands under the prefix, the
+     * toolbar leaves the dashboard's own pages alone and loads from where the dashboard now is.
+     */
+    @Test
+    void servesTheDashboardAndToolbarUnderTheServletPath(@TempDir Path dir) {
+        try (ConfigurableApplicationContext app = boot(
+                dir.resolve("security.properties"), "--spring.mvc.servlet.path=/app", "--peekaboot.dev-toolbar=true")) {
+            DashboardCredentials appCredentials = app.getBean(DashboardCredentials.class);
+            PeekabootApi anonymous = new PeekabootApi(
+                    ((WebServerApplicationContext) app).getWebServer().getPort());
+            PeekabootApi signedIn = anonymous.withBasicAuth(appCredentials.username(), appCredentials.plaintext());
+
+            assertThat(redirectTarget(signedIn, "/app/peekaboot/")).isEqualTo("/app/peekaboot/ui/dashboard/index.html");
+            assertThat(redirectTarget(signedIn, "/app/peekaboot")).isEqualTo("/app/peekaboot/ui/dashboard/index.html");
+            assertThat(signedIn.get("/app/peekaboot/ui/dashboard/index.html")).doesNotContain("peekaboot-toolbar-data");
+            assertThat(anonymous.get("/app/persons")).contains("src=\"/app/peekaboot/ui/toolbar/toolbar.js\"");
+        }
+    }
+
+    /** Where a browser following the redirect from {@code entry} lands, relative or absolute as the server wrote it. */
+    private static String redirectTarget(PeekabootApi api, String entry) {
+        String location = api.headersOf(entry).getFirst(HttpHeaders.LOCATION);
+        assertThat(location).as("redirect from " + entry).isNotNull();
+        return URI.create("http://localhost" + entry).resolve(location).getPath();
+    }
+
+    private static ConfigurableApplicationContext boot(Path credentialsFile, String... extraArgs) {
+        String[] args = Stream.concat(
+                        Stream.of("--server.port=0", "--peekaboot.security.credentials-file=" + credentialsFile),
+                        Stream.of(extraArgs))
+                .toArray(String[]::new);
         return new SpringApplicationBuilder(TestingApp.class)
                 .profiles("auto-security")
-                .run("--server.port=0", "--peekaboot.security.credentials-file=" + credentialsFile);
+                .run(args);
     }
 
     private PeekabootApi api() {

@@ -252,7 +252,11 @@ innermost; it wraps the response in a `ContentBufferingResponseWrapper` and inje
 into the buffered body. Both registrations live only in `DevToolbarAutoConfiguration`, so
 neither filter runs while `peekaboot.dev-toolbar` is off.
 
-`DashboardAuthenticationFilter` maps `/peekaboot/*` rather than `/*`, at a fixed order of `0`.
+`DashboardAuthenticationFilter` maps `/peekaboot/*` under the `DispatcherServlet`'s own prefix
+rather than `/*`, at a fixed order of `0`. With `spring.mvc.servlet.path=/app` the dashboard's
+controllers sit under `/app/peekaboot/**`, and Boot's `DispatcherServletPath` bean is what says
+so; without Spring MVC on the class path the guard keeps `/peekaboot/*`. The prefix comes from
+`PeekabootPaths.dashboardPath()`, so the guard and everything below agree on where the dashboard is.
 Nothing depends on where Spring Security's filter sits: a request carries Peekaboot's
 credentials or is challenged, whatever the application's security decided first. With both armed
 they lock each other out, so an application that secures `/peekaboot/**` itself sets
@@ -289,17 +293,24 @@ matched on the path, which only ever governs the first dispatch of a request; th
 dispatch a failure triggers afterwards is recognised by its `DispatcherType`, never by
 re-matching `/error`, so relocating `spring.web.error.path` needs no configuration here.
 
-Everything in `PeekabootPaths` is relative to the servlet context. The filters match on the
-container's mapped path (`getServletPath() + getPathInfo()`, decoded and normalised) rather
+Everything in `PeekabootPaths` is relative to the `DispatcherServlet`, which serves every
+excluded prefix, so the same prefixes double as the interceptor's MVC patterns. The filters match
+on the container's mapped path (`getServletPath() + getPathInfo()`, decoded and normalised) rather
 than the raw request URI, so neither a `server.servlet.context-path` nor a
-`/x/../peekaboot/...` spelling can hide the dashboard's own calls from the exclusion. Every URL
-the toolbar writes into a page (script, stylesheets, dashboard links, the `basePath` in its
-data blob) is prefixed with `request.getContextPath()`, and `shared/api.js` derives the same
-base path from its own module URL, so neither surface needs configuring.
+`/x/../peekaboot/...` spelling can hide the dashboard's own calls from the exclusion; the
+`DispatcherServlet`'s prefix from `spring.mvc.servlet.path` is stripped from that path before
+matching. Every URL the toolbar and the error page write into a page (script, stylesheets,
+dashboard links, the `basePath` in the bar's data blob) is prefixed with `request.getContextPath()`
+and that same `DispatcherServlet` prefix, and `shared/api.js` derives the same base path from its
+own module URL, so neither surface needs configuring. The dashboard's entry redirects are
+relative for the same reason: Spring's context-relative redirect would drop the prefix.
 
 `PeekabootPathsAutoConfiguration` constructs the single bean with the resolved
-`management.endpoints.web.base-path` and threads it into both filters, the interceptor
-registration and `OtelSpanExporter`'s span skip. A base path of `/` excludes nothing extra:
+`management.endpoints.web.base-path` and the `DispatcherServlet`'s prefix, and threads it into the
+guard, both filters, the error page, the interceptor registration and `OtelSpanExporter`'s span
+skip. The prefix is read from Boot's `DispatcherServletPath`, which lives in `spring-boot-webmvc`;
+a nested configuration conditional on that class reads it, and its `@ConditionalOnMissingClass`
+twin uses the root. A base path of `/` excludes nothing extra:
 there is no prefix to tell those requests apart by. The bean also carries the resolved
 `server.servlet.context-path`, because a span's HTTP path tag still has that prefix in front;
 `isExcludedRequestPath` strips it before matching, so actuator and Peekaboot spans are skipped

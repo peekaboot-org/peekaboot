@@ -2,18 +2,26 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import jakarta.servlet.Filter;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.security.CredentialsFile;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.backend.security.SecurityPosture;
 import org.peekaboot.backend.security.SecurityPostureListener;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletPath;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +37,10 @@ class PeekabootSecurityAutoConfigurationTest {
     private static WebApplicationContextRunner runner(Path storageDir) {
         return new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        PeekabootStorageAutoConfiguration.class, PeekabootSecurityAutoConfiguration.class))
+                        DispatcherServletAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class,
+                        PeekabootStorageAutoConfiguration.class,
+                        PeekabootSecurityAutoConfiguration.class))
                 .withPropertyValues(
                         "peekaboot.enabled=true",
                         "peekaboot.security.enabled=true",
@@ -83,7 +94,10 @@ class PeekabootSecurityAutoConfigurationTest {
     void registersExactlyOnePostureBeanWithNoSecurityPropertyAtAll(@TempDir Path storageDir) {
         new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        PeekabootStorageAutoConfiguration.class, PeekabootSecurityAutoConfiguration.class))
+                        DispatcherServletAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class,
+                        PeekabootStorageAutoConfiguration.class,
+                        PeekabootSecurityAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true", "peekaboot.storage.dir=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -141,6 +155,65 @@ class PeekabootSecurityAutoConfigurationTest {
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
                         .isPresent());
+    }
+
+    /** The controllers sit under the DispatcherServlet's path, so the guard has to sit there too. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/app", "/app/"})
+    void guardsTheDashboardUnderTheDispatcherServletsPath(String servletPath, @TempDir Path storageDir) {
+        runner(storageDir)
+                .withConfiguration(AutoConfigurations.of(DispatcherServletAutoConfiguration.class))
+                .withPropertyValues("spring.mvc.servlet.path=" + servletPath)
+                .run(context ->
+                        assertThat(registration(context).getUrlPatterns()).containsExactly("/app/peekaboot/*"));
+    }
+
+    @Test
+    void guardsTheRootMappingUnderTheDefaultServletPath(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withConfiguration(AutoConfigurations.of(DispatcherServletAutoConfiguration.class))
+                .run(context ->
+                        assertThat(registration(context).getUrlPatterns()).containsExactly("/peekaboot/*"));
+    }
+
+    /** Spring MVC without a DispatcherServletPath bean: the root mapping is an assumption, and startup says so. */
+    @Test
+    void warnsThatItAssumesTheRootMappingWithoutADispatcherServletPath(@TempDir Path storageDir) {
+        try (LogCapture logs = LogCapture.attach(PeekabootPathsAutoConfiguration.class)) {
+            new WebApplicationContextRunner()
+                    .withConfiguration(AutoConfigurations.of(PeekabootPathsAutoConfiguration.class))
+                    .withPropertyValues("peekaboot.enabled=true", "peekaboot.storage.dir=" + storageDir)
+                    .run(context -> assertThat(
+                                    context.getBean(PeekabootPaths.class).dashboardPath())
+                            .isEqualTo("/peekaboot"));
+
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .contains("DispatcherServletPath")
+                        .contains("/peekaboot/*");
+            });
+        }
+    }
+
+    @Test
+    void saysNothingWhereTheDispatcherServletPathIsKnown(@TempDir Path storageDir) {
+        try (LogCapture logs = LogCapture.attach(PeekabootPathsAutoConfiguration.class)) {
+            runner(storageDir).run(context -> assertThat(context).hasNotFailed());
+
+            assertThat(logs.appender().list).isEmpty();
+        }
+    }
+
+    /** No Spring MVC, nothing moves the dashboard: the guard still registers, at the root mapping. */
+    @Test
+    void keepsTheRootMappingWithoutSpringMvc(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withClassLoader(new FilteredClassLoader(DispatcherServletPath.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(registration(context).getUrlPatterns()).containsExactly("/peekaboot/*");
+                });
     }
 
     /** A moved Spring Security filter does not move the guard: it answers for the path on its own. */

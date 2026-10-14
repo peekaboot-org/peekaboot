@@ -18,6 +18,7 @@ import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -30,13 +31,16 @@ class PeekabootTracingAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(
                     PeekabootTracingAutoConfiguration.class,
                     OtelTracingAutoConfiguration.class,
+                    DispatcherServletAutoConfiguration.class,
                     PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
     /** The interceptor auto-configuration is covered here as well; it shares the paths bean. */
     private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
-                    TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
+                    TracingInterceptorAutoConfiguration.class,
+                    DispatcherServletAutoConfiguration.class,
+                    PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
@@ -77,6 +81,7 @@ class PeekabootTracingAutoConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(
                         PeekabootTracingAutoConfiguration.class,
                         OtelTracingAutoConfiguration.class,
+                        DispatcherServletAutoConfiguration.class,
                         PeekabootPathsAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true")
                 .run(context -> {
@@ -137,7 +142,9 @@ class PeekabootTracingAutoConfigurationTest {
     void doesNotRegisterInterceptorWhenNotAWebApplication() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
+                        TracingInterceptorAutoConfiguration.class,
+                        DispatcherServletAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true")
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .run(context -> {

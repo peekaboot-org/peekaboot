@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
@@ -72,7 +73,8 @@ public class ErrorPageAutoConfiguration {
                 errorAttributes,
                 exclusions,
                 ApplicationPackages.resolve(beanFactory),
-                properties.getStackTrace().isFold());
+                properties.getStackTrace().isFold(),
+                beanFactory.getBean(PeekabootPaths.class));
     }
 
     @Bean(name = "error")

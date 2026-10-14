@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.testsupport.FailingWriteResponse;
 import org.peekaboot.testsupport.LogCapture;
@@ -506,6 +507,53 @@ class DevToolbarFilterTest {
         chainWritesHtml("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).contains("\"idle\":true");
+    }
+
+    /** Under spring.mvc.servlet.path the container maps the DispatcherServlet's prefix as the servlet path. */
+    private static MockHttpServletRequest underTheDispatcherServletsPrefix(String pathInfo) {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/app" + pathInfo);
+        request.setServletPath("/app");
+        request.setPathInfo(pathInfo);
+        return request;
+    }
+
+    private DevToolbarFilter filterUnderTheDispatcherServletsPrefix() {
+        return new DevToolbarFilter(
+                toolbarDataProvider,
+                tracer,
+                new PeekabootPaths("/actuator", "", "/app"),
+                PeekabootPaths.DEFAULT_SWAGGER_UI_PATH);
+    }
+
+    @Test
+    void skipsTheDashboardUnderTheDispatcherServletsPrefix() throws Exception {
+        request = underTheDispatcherServletsPrefix("/peekaboot/ui/dashboard/index.html");
+
+        filterUnderTheDispatcherServletsPrefix().doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+    }
+
+    /** The bar loads from where the dashboard is served, which the DispatcherServlet's prefix moves. */
+    @Test
+    void pointsTheBarAtTheDashboardUnderTheDispatcherServletsPrefix() throws Exception {
+        request = underTheDispatcherServletsPrefix("/users/123");
+        chainWritesHtml("<html><body></body></html>");
+
+        filterUnderTheDispatcherServletsPrefix().doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString())
+                .contains("<script src=\"/app/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
+    }
+
+    @Test
+    void idleModeFollowsSwaggerUiUnderTheDispatcherServletsPrefix() throws Exception {
+        request = underTheDispatcherServletsPrefix("/swagger-ui/index.html");
+        chainWritesHtml("<html><body></body></html>");
+
+        filterUnderTheDispatcherServletsPrefix().doFilter(request, response, chain);
 
         assertThat(response.getContentAsString()).contains("\"idle\":true");
     }

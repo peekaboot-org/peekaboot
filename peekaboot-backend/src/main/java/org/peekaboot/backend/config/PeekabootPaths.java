@@ -3,23 +3,26 @@ package org.peekaboot.backend.config;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Peekaboot's own URL space: the prefix its UI and API live under, and the prefixes its
  * filters, interceptor and span exporter leave alone.
  *
- * <p>The exclusions are relative to the servlet context. Requests are matched on their
+ * <p>The exclusions are relative to the DispatcherServlet, which serves every one of them, so
+ * they are also the path patterns Spring MVC matches. Requests are matched on their
  * {@linkplain #pathWithinApplication path within the application}, which the container
  * has already decoded and normalised, so neither a {@code server.servlet.context-path}
  * nor a {@code /x/../peekaboot/...} spelling hides Peekaboot's own endpoints from the
- * prefix check. A path that still carries the context path - a span's HTTP path tag -
- * goes through {@link #isExcludedRequestPath}, which strips it first. URLs written into
- * a page get the context path put back in front via {@link #basePath}.
+ * prefix check; the DispatcherServlet's own prefix, set by {@code spring.mvc.servlet.path},
+ * is stripped from it first. A path that still carries the context path - a span's HTTP
+ * path tag - goes through {@link #isExcludedRequestPath}, which strips that too. URLs
+ * written into a page get both put back in front via {@link #basePath}.
  *
  * <p>One instance per application: the auto-configuration constructs it with the resolved
  * {@code management.endpoints.web.base-path}, so the actuator exclusion follows a
- * relocated management base path, and with the resolved {@code server.servlet.context-path}
- * for the stripping above.
+ * relocated management base path, the resolved {@code server.servlet.context-path} and the
+ * DispatcherServlet's prefix.
  */
 public final class PeekabootPaths {
 
@@ -44,11 +47,16 @@ public final class PeekabootPaths {
     /** The effective servlet context path, {@code ""} at the root; see {@link #isExcludedRequestPath}. */
     private final String contextPath;
 
+    /** Where the DispatcherServlet is mapped below the context path, {@code ""} at the root. */
+    private final String dispatcherServletPrefix;
+
     /**
      * @param managementBasePath the effective {@code management.endpoints.web.base-path}
      * @param contextPath the effective {@code server.servlet.context-path}; empty or {@code /} at the root
+     * @param dispatcherServletPrefix the DispatcherServlet's mapping without its trailing {@code /*}, as
+     *     Boot's {@code DispatcherServletPath.getPrefix()} gives it; {@code ""} at the root
      */
-    public PeekabootPaths(String managementBasePath, String contextPath) {
+    public PeekabootPaths(String managementBasePath, String contextPath, String dispatcherServletPrefix) {
         Set<String> prefixes = new LinkedHashSet<>(Set.of("/static/", "/webjars/", BASE_PATH + "/", "/error/"));
         String managementPrefix = managementPrefix(managementBasePath);
         if (managementPrefix != null) {
@@ -56,11 +64,12 @@ public final class PeekabootPaths {
         }
         this.excludedPrefixes = Set.copyOf(prefixes);
         this.contextPath = normaliseContextPath(contextPath);
+        this.dispatcherServletPrefix = dispatcherServletPrefix;
     }
 
-    /** The exclusions at Spring Boot's defaults - {@code /actuator}, root context path - for plain construction in tests. */
+    /** The exclusions at Spring Boot's defaults - {@code /actuator}, everything at the root - for plain construction in tests. */
     public static PeekabootPaths defaults() {
-        return new PeekabootPaths(DEFAULT_MANAGEMENT_BASE_PATH, "");
+        return new PeekabootPaths(DEFAULT_MANAGEMENT_BASE_PATH, "", "");
     }
 
     /**
@@ -95,12 +104,33 @@ public final class PeekabootPaths {
 
     /** True for the prefix itself ({@code /peekaboot}) and everything below it; {@code /errors} stays an application path. */
     public boolean isExcluded(String pathWithinApplication) {
+        String path = pathWithinDispatcherServlet(pathWithinApplication);
+        if (path == null) {
+            return false;
+        }
         for (String prefix : excludedPrefixes) {
-            if (pathWithinApplication.startsWith(prefix) || prefix.equals(pathWithinApplication + "/")) {
+            if (path.startsWith(prefix) || prefix.equals(path + "/")) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * The path as the DispatcherServlet's own mappings see it, or null for a path outside its
+     * prefix, which none of Peekaboot's endpoints can be.
+     */
+    public @Nullable String pathWithinDispatcherServlet(String pathWithinApplication) {
+        if (dispatcherServletPrefix.isEmpty()) {
+            return pathWithinApplication;
+        }
+        if (pathWithinApplication.equals(dispatcherServletPrefix)) {
+            return "/";
+        }
+        if (pathWithinApplication.startsWith(dispatcherServletPrefix + "/")) {
+            return pathWithinApplication.substring(dispatcherServletPrefix.length());
+        }
+        return null;
     }
 
     /**
@@ -130,8 +160,13 @@ public final class PeekabootPaths {
         return pathInfo == null ? request.getServletPath() : request.getServletPath() + pathInfo;
     }
 
-    /** {@link #BASE_PATH} as the browser has to address it: behind the request's context path. */
-    public static String basePath(HttpServletRequest request) {
-        return request.getContextPath() + BASE_PATH;
+    /** {@link #BASE_PATH} below the context path: behind the DispatcherServlet's prefix, where its controllers sit. */
+    public String dashboardPath() {
+        return dispatcherServletPrefix + BASE_PATH;
+    }
+
+    /** {@link #BASE_PATH} as the browser has to address it: behind the request's context path and the DispatcherServlet's prefix. */
+    public String basePath(HttpServletRequest request) {
+        return request.getContextPath() + dashboardPath();
     }
 }

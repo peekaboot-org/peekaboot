@@ -348,7 +348,8 @@ class OtelSpanExporterTest {
      */
     @Test
     void skipsTheSameSpansBehindAContextPath() {
-        OtelSpanExporter behindContext = new OtelSpanExporter(eventPublisher, new PeekabootPaths("/actuator", "/app"));
+        OtelSpanExporter behindContext =
+                new OtelSpanExporter(eventPublisher, new PeekabootPaths("/actuator", "/app", ""));
         String traceId = "0123456789abcdef0123456789abcdef";
 
         behindContext.export(List.of(

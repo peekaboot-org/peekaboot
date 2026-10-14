@@ -22,8 +22,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
  */
 class PeekabootErrorViewTest {
 
-    private final PeekabootErrorView view =
-            new PeekabootErrorView(new DefaultErrorAttributes(), List.of(), List.of("com.example"), false);
+    private final PeekabootErrorView view = new PeekabootErrorView(
+            new DefaultErrorAttributes(), List.of(), List.of("com.example"), false, PeekabootPaths.defaults());
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -179,6 +179,23 @@ class PeekabootErrorViewTest {
         assertThat(response.getContentAsString()).contains("href=\"/app/peekaboot/ui/assets/tokens.css\"");
     }
 
+    /** spring.mvc.servlet.path moves the dashboard, and with it every URL the page writes. */
+    @Test
+    void prefixesItsUrlsWithTheDispatcherServletsPrefix() throws Exception {
+        PeekabootErrorView underApp = new PeekabootErrorView(
+                new DefaultErrorAttributes(),
+                List.of(),
+                List.of("com.example"),
+                false,
+                new PeekabootPaths("/actuator", "", "/app"));
+
+        underApp.render(Map.of(), request, response);
+
+        assertThat(response.getContentAsString())
+                .contains("href=\"/app/peekaboot/ui/assets/tokens.css\"")
+                .contains("href=\"/app/peekaboot/\"");
+    }
+
     /** The page is Peekaboot's, not the application's: it says so and names the way out. */
     @Test
     void saysWhereThePageCameFromAndHowToTurnItOff() throws Exception {
@@ -281,7 +298,8 @@ class PeekabootErrorViewTest {
     }
 
     private PeekabootErrorView view(List<String> exclusions, boolean fold) {
-        return new PeekabootErrorView(new DefaultErrorAttributes(), exclusions, List.of("com.example"), fold);
+        return new PeekabootErrorView(
+                new DefaultErrorAttributes(), exclusions, List.of("com.example"), fold, PeekabootPaths.defaults());
     }
 
     /**

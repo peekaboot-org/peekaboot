@@ -32,6 +32,7 @@ class ErrorPageResolutionOrderTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
+                    PeekabootPathsAutoConfiguration.class,
                     ErrorPageAutoConfiguration.class,
                     ErrorMvcAutoConfiguration.class,
                     DispatcherServletAutoConfiguration.class))

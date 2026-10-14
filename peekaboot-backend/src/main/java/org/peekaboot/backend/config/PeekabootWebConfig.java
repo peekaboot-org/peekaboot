@@ -47,11 +47,15 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
         builder.addCustomConverter(new PeekabootJsonMessageConverter());
     }
 
+    /**
+     * Relative targets, resolved by the browser against the URL it asked for: a context-relative
+     * redirect carries the context path but not the DispatcherServlet's prefix, so it would leave
+     * a dashboard under {@code spring.mvc.servlet.path} behind.
+     */
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        String dashboard = PeekabootPaths.BASE_PATH + "/ui/dashboard/index.html";
-        registry.addRedirectViewController(PeekabootPaths.BASE_PATH, dashboard);
-        registry.addRedirectViewController(PeekabootPaths.BASE_PATH + "/", dashboard);
+        registry.addRedirectViewController(PeekabootPaths.BASE_PATH, "peekaboot/ui/dashboard/index.html");
+        registry.addRedirectViewController(PeekabootPaths.BASE_PATH + "/", "ui/dashboard/index.html");
     }
 
     @Override

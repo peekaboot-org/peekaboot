@@ -19,6 +19,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.annotation.ImportCandidates;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -38,6 +39,8 @@ class PeekabootOffByDefaultTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(registeredAutoConfigurations()))
+            // the DispatcherServlet a servlet application brings, which tells Peekaboot where its dashboard sits
+            .withConfiguration(AutoConfigurations.of(DispatcherServletAutoConfiguration.class))
             // the beans the conditional halves look for, so nothing is off for lack of them
             .withBean(Tracer.class, () -> mock(Tracer.class))
             .withBean(ObservationRegistry.class, ObservationRegistry::create)

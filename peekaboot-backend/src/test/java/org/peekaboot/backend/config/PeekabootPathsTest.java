@@ -75,7 +75,7 @@ class PeekabootPathsTest {
     /** The actuator exclusion follows {@code management.endpoints.web.base-path}, not a fixed prefix. */
     @Test
     void aCustomManagementBasePathReplacesTheActuatorExclusion() {
-        PeekabootPaths custom = new PeekabootPaths("/manage", "");
+        PeekabootPaths custom = new PeekabootPaths("/manage", "", "");
 
         assertThat(custom.isExcluded("/manage/health")).isTrue();
         assertThat(custom.isExcluded("/actuator/health")).isFalse();
@@ -84,7 +84,7 @@ class PeekabootPathsTest {
 
     @Test
     void theManagementBasePathIsNormalisedToAPrefix() {
-        PeekabootPaths custom = new PeekabootPaths("manage/", "");
+        PeekabootPaths custom = new PeekabootPaths("manage/", "", "");
 
         assertThat(custom.isExcluded("/manage/health")).isTrue();
         assertThat(custom.isExcluded("/managed")).isFalse();
@@ -93,7 +93,7 @@ class PeekabootPathsTest {
     /** Management endpoints at the application root have no prefix of their own; nothing extra is excluded - never everything. */
     @Test
     void aRootManagementBasePathExcludesNothingExtra() {
-        PeekabootPaths custom = new PeekabootPaths("/", "");
+        PeekabootPaths custom = new PeekabootPaths("/", "", "");
 
         assertThat(custom.isExcluded("/health")).isFalse();
         assertThat(custom.isExcluded("/peekaboot/api/v1/traces")).isTrue();
@@ -139,19 +139,19 @@ class PeekabootPathsTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/app/persons");
         request.setContextPath("/app");
 
-        assertThat(PeekabootPaths.basePath(request)).isEqualTo("/app/peekaboot");
+        assertThat(paths.basePath(request)).isEqualTo("/app/peekaboot");
     }
 
     @Test
     void basePathIsThePrefixItselfWithoutAContextPath() {
-        assertThat(PeekabootPaths.basePath(new MockHttpServletRequest("GET", "/persons")))
+        assertThat(paths.basePath(new MockHttpServletRequest("GET", "/persons")))
                 .isEqualTo("/peekaboot");
     }
 
     /** An HTTP span's path tag carries the context path; the exclusions must hold behind it too. */
     @Test
     void requestPathsBehindAContextPathAreExcludedTheSameWay() {
-        PeekabootPaths behindContext = new PeekabootPaths("/actuator", "/app");
+        PeekabootPaths behindContext = new PeekabootPaths("/actuator", "/app", "");
 
         assertThat(behindContext.isExcludedRequestPath("/app/actuator/health")).isTrue();
         assertThat(behindContext.isExcludedRequestPath("/app/peekaboot/api/v1/traces"))
@@ -161,7 +161,7 @@ class PeekabootPathsTest {
 
     @Test
     void aPathMerelyStartingWithTheContextPathTextIsNotStripped() {
-        PeekabootPaths behindContext = new PeekabootPaths("/actuator", "/app");
+        PeekabootPaths behindContext = new PeekabootPaths("/actuator", "/app", "");
 
         assertThat(behindContext.isExcludedRequestPath("/application/actuator/health"))
                 .isFalse();
@@ -185,9 +185,66 @@ class PeekabootPathsTest {
     /** Tolerates the trailing-slash and bare-root spellings the context-path property can carry. */
     @Test
     void theContextPathIsNormalisedToItsPrefixForm() {
-        assertThat(new PeekabootPaths("/actuator", "/app/").isExcludedRequestPath("/app/actuator/health"))
+        assertThat(new PeekabootPaths("/actuator", "/app/", "").isExcludedRequestPath("/app/actuator/health"))
                 .isTrue();
-        assertThat(new PeekabootPaths("/actuator", "/").isExcludedRequestPath("/actuator/health"))
+        assertThat(new PeekabootPaths("/actuator", "/", "").isExcludedRequestPath("/actuator/health"))
                 .isTrue();
+    }
+
+    /** spring.mvc.servlet.path moves every path Spring MVC serves; the exclusions move with them. */
+    @Test
+    void excludesUnderTheDispatcherServletsPrefix() {
+        PeekabootPaths underApp = new PeekabootPaths("/actuator", "", "/app");
+
+        assertThat(underApp.isExcluded("/app/peekaboot/ui/dashboard/index.html"))
+                .isTrue();
+        assertThat(underApp.isExcluded("/app/peekaboot")).isTrue();
+        assertThat(underApp.isExcluded("/app/actuator/health")).isTrue();
+        assertThat(underApp.isExcluded("/app/persons")).isFalse();
+        assertThat(underApp.isExcluded("/peekaboot/api/traces")).isFalse();
+        assertThat(underApp.isExcluded("/application/peekaboot/api/traces")).isFalse();
+    }
+
+    @Test
+    void requestPathsBehindAContextPathAndTheDispatcherServletsPrefixAreExcluded() {
+        PeekabootPaths both = new PeekabootPaths("/actuator", "/ctx", "/app");
+
+        assertThat(both.isExcludedRequestPath("/ctx/app/peekaboot/api/v1/traces"))
+                .isTrue();
+        assertThat(both.isExcludedRequestPath("/ctx/app/persons")).isFalse();
+    }
+
+    /** Spring MVC matches its path patterns below the DispatcherServlet's prefix already. */
+    @Test
+    void excludePatternsStayRelativeToTheDispatcherServlet() {
+        assertThat(new PeekabootPaths("/actuator", "", "/app").excludePatterns())
+                .containsExactlyInAnyOrder("/static/**", "/webjars/**", "/peekaboot/**", "/error/**", "/actuator/**");
+    }
+
+    @Test
+    void theDashboardSitsUnderTheDispatcherServletsPrefix() {
+        assertThat(new PeekabootPaths("/actuator", "", "/app").dashboardPath()).isEqualTo("/app/peekaboot");
+        assertThat(paths.dashboardPath()).isEqualTo("/peekaboot");
+    }
+
+    @Test
+    void basePathSitsBehindTheContextPathAndTheDispatcherServletsPrefix() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/ctx/app/persons");
+        request.setContextPath("/ctx");
+
+        assertThat(new PeekabootPaths("/actuator", "/ctx", "/app").basePath(request))
+                .isEqualTo("/ctx/app/peekaboot");
+    }
+
+    @Test
+    void aPathWithinTheDispatcherServletDropsItsPrefix() {
+        PeekabootPaths underApp = new PeekabootPaths("/actuator", "", "/app");
+
+        assertThat(underApp.pathWithinDispatcherServlet("/app/swagger-ui/index.html"))
+                .isEqualTo("/swagger-ui/index.html");
+        assertThat(underApp.pathWithinDispatcherServlet("/app")).isEqualTo("/");
+        assertThat(underApp.pathWithinDispatcherServlet("/application/swagger-ui/index.html"))
+                .isNull();
+        assertThat(paths.pathWithinDispatcherServlet("/swagger-ui/index.html")).isEqualTo("/swagger-ui/index.html");
     }
 }
