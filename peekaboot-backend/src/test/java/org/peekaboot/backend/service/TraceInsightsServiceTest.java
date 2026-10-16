@@ -7,9 +7,11 @@ import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
@@ -237,6 +239,48 @@ class TraceInsightsServiceTest {
 
         assertThat(json.path("logs").size()).isEqualTo(1);
         assertThat(json.path("rootSpan").has("logs")).isFalse();
+    }
+
+    /**
+     * An {@code @Async} task can log while the detail is being built, so the badge counts and the
+     * list must come from one read of the bundle's logs. The task logs every few microseconds
+     * throughout, so a detail that read them twice disagrees with itself on about every other
+     * request. The first detail runs before the task starts, so the race is not spent loading
+     * classes.
+     */
+    @Test
+    void theDetailsLogCountMatchesItsLogListWhileATaskKeepsLogging() throws Exception {
+        InMemoryTraceStore loggingStore = TraceStores.with(p -> p.setMaxLogsPerTrace(Integer.MAX_VALUE));
+        loggingStore.addSpan(
+                rootSpan("trace1", "test-operation", Span.Kind.SERVER, 100).build());
+        TraceInsightsService loggingService = newService(loggingStore);
+        loggingService.getTraceInsights("trace1");
+        Thread task = new Thread(
+                () -> {
+                    for (int i = 0; i < 5_000; i++) {
+                        loggingStore.addLog(log("trace1").inSpan("span-trace1").build());
+                        LockSupport.parkNanos(10_000);
+                    }
+                },
+                "async-task");
+        int detailsWhileLogging = 0;
+        int disagreeing = 0;
+        task.start();
+        while (task.isAlive()) {
+            TraceTree detail = loggingService.getTraceInsights("trace1").orElseThrow();
+            if (detail.summary().logs().count() != detail.logs().size()) {
+                disagreeing++;
+            }
+            if (task.isAlive()) {
+                detailsWhileLogging++;
+            }
+        }
+        assertThat(task.join(Duration.ofSeconds(5))).isTrue();
+
+        assertThat(detailsWhileLogging).isPositive();
+        assertThat(disagreeing)
+                .as("details out of %s built while the task logged", detailsWhileLogging)
+                .isZero();
     }
 
     @Test

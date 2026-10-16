@@ -24,8 +24,9 @@ final class TraceLogMapper {
         this.stackTraceRules = stackTraceRules;
     }
 
-    List<TraceLog> map(TraceDataBundle bundle) {
-        return bundle.logs().stream().map(e -> toTraceLog(bundle, e)).toList();
+    /** {@code logs} is one read of {@code bundle.logs()}, so the caller can count the same list it maps. */
+    List<TraceLog> map(TraceDataBundle bundle, List<LogCapturedEvent> logs) {
+        return logs.stream().map(e -> toTraceLog(bundle, e)).toList();
     }
 
     /**

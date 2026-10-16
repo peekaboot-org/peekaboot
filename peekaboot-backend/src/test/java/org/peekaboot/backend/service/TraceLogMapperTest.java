@@ -48,7 +48,7 @@ class TraceLogMapperTest {
                 .saying("careful")
                 .build());
 
-        TraceLog result = mapper.map(bundle()).getFirst();
+        TraceLog result = mapped(mapper).getFirst();
 
         assertThat(result.spanId()).isEqualTo("root");
         assertThat(result.level()).isEqualTo("WARN");
@@ -61,7 +61,7 @@ class TraceLogMapperTest {
     void aLogWithoutAThrowableCarriesNoStackTraceOrRanges() {
         store.addLog(log("t1").inSpan("root").saying("no trouble here").build());
 
-        TraceLog result = mapper.map(bundle()).getFirst();
+        TraceLog result = mapped(mapper).getFirst();
 
         assertThat(result.stackTrace()).isNull();
         assertThat(result.hiddenFrames()).isEmpty();
@@ -87,7 +87,7 @@ class TraceLogMapperTest {
                 new TraceLogMapper(new StackTraceRules(List.of("org.springframework"), List.of("org.peekaboot.app")));
         store.addLog(log("t1").inSpan("root").withStackTrace(trace).build());
 
-        TraceLog result = folding.map(bundle()).getFirst();
+        TraceLog result = mapped(folding).getFirst();
 
         assertThat(result.stackTrace()).isEqualTo("""
                         java.lang.IllegalStateException: boom
@@ -101,7 +101,7 @@ class TraceLogMapperTest {
     void aLogWithoutASpanIdNamesNoSpan() {
         store.addLog(log("t1").inSpan(null).saying("spanless").build());
 
-        assertThat(mapper.map(bundle())).extracting(TraceLog::spanId).containsOnlyNulls();
+        assertThat(mapped(mapper)).extracting(TraceLog::spanId).containsOnlyNulls();
     }
 
     @Test
@@ -120,7 +120,7 @@ class TraceLogMapperTest {
                 .build());
         store.addLog(log("t1").inSpan("grandchild").saying("deep").build());
 
-        assertThat(mapper.map(bundle())).extracting(TraceLog::spanId).containsExactly("grandchild");
+        assertThat(mapped(mapper)).extracting(TraceLog::spanId).containsExactly("grandchild");
     }
 
     /** A log emitted inside a duplicate's MDC scope carries the duplicate's id, which folding removed. */
@@ -130,7 +130,7 @@ class TraceLogMapperTest {
         store.addSpan(jdbcQuery("db", "SELECT 1").in("t1").parent("root").build());
         store.addLog(log("t1").inSpan("db-dup").saying("Datasource log").build());
 
-        assertThat(mapper.map(bundle())).extracting(TraceLog::spanId).containsExactly("db");
+        assertThat(mapped(mapper)).extracting(TraceLog::spanId).containsExactly("db");
     }
 
     @Test
@@ -171,5 +171,10 @@ class TraceLogMapperTest {
 
     private TraceDataBundle bundle() {
         return store.getTrace("t1").orElseThrow();
+    }
+
+    private List<TraceLog> mapped(TraceLogMapper logMapper) {
+        TraceDataBundle bundle = bundle();
+        return logMapper.map(bundle, bundle.logs());
     }
 }

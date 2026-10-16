@@ -18,6 +18,7 @@ import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
@@ -178,9 +179,11 @@ public class TraceInsightsService {
     private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
         RequestCompletedEvent reqEvent = bundle.request();
         HttpExchange httpExchange = reqEvent != null ? HttpExchange.from(reqEvent) : null;
+        // an @Async task may log meanwhile, so the badges and the list count one read
+        List<LogCapturedEvent> logs = bundle.logs();
 
         return traceLogMapper
-                .withLogsSummary(tree, bundle.logs())
-                .withDetails(httpExchange, traceLogMapper.map(bundle), queries);
+                .withLogsSummary(tree, logs)
+                .withDetails(httpExchange, traceLogMapper.map(bundle, logs), queries);
     }
 }
