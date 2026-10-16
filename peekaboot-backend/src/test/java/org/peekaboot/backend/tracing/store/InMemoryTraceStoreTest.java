@@ -249,9 +249,9 @@ class InMemoryTraceStoreTest {
     }
 
     /**
-     * A truncated trace never drops out of Slow. The late
-     * entry shows "background" was async work, but the evicted "slow" span is still time the
-     * caller waited for, so the trace stays with the duration it was admitted by.
+     * A truncated trace never drops out of Slow. The late entry shows "background" was async
+     * work, but the evicted "slow" span is still time the caller waited for, so the trace stays
+     * with the duration it was admitted by.
      */
     @Test
     void aTruncatedTraceStaysSlowWhenALateAsyncEntryArrives() {
@@ -285,9 +285,7 @@ class InMemoryTraceStoreTest {
                 .build());
         store.addSpan(asyncSpan("t1", "root", START.plusMillis(90), Duration.ofMillis(3_010)));
 
-        assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(listed -> listed.bundle().traceId())
-                .containsExactly("t1");
+        assertThat(listedTraceIds(store, TraceBucket.SLOW, 10)).containsExactly("t1");
         TraceData snapshot = store.getTrace("t1").orElseThrow().snapshot();
         assertThat(snapshot.truncated()).isTrue();
         assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(1_500));
