@@ -54,12 +54,14 @@ jobs:
       # peekaboot-publish carries central-publishing-maven-plugin, which routes a -SNAPSHOT to
       # Central's snapshot repository by itself. The signature stays behind in
       # peekaboot-release: Central validates a release and takes a snapshot as it comes.
-      # Dependabot's runs reach no repository secrets, so they verify what the others publish.
+      # A run without the publishing secret, which covers every run GitHub hands Dependabot's
+      # secrets, verifies what the others publish. Keyed on the secret rather than the actor,
+      # because the actor of the dispatch that follows a Dependabot merge is unconfirmed.
       - name: maven-build-publish
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-          MAVEN_GOAL: ${{ github.actor == 'dependabot[bot]' && 'verify' || 'deploy' }}
+          MAVEN_GOAL: ${{ secrets.OSSRH_TOKEN != '' && 'deploy' || 'verify' }}
         run: ./mvnw --batch-mode clean "$MAVEN_GOAL" -P peekaboot-publish
 
       - name: install-git-cliff

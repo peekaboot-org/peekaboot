@@ -468,10 +468,12 @@ publishing authenticates to Central with the secrets the release uses rather tha
 `GITHUB_TOKEN`.
 See [Snapshots](#snapshots) and [Release notes](#release-notes).
 
-Dependabot's runs reach no repository secrets at all, so `github.actor` picks `verify` in
-place of `deploy` and they check what every other branch publishes. The dispatched build that
-follows a Dependabot merge has `github-actions[bot]` as its actor, so it deploys `dev`'s
-snapshot like any other push to `dev`.
+The goal follows the publishing secret. A run that can read `OSSRH_TOKEN` runs `deploy`, and a
+run that cannot runs `verify`, checking what every other branch publishes. Dependabot's runs
+get Dependabot secrets only, and none is set, so they verify. Whether the build dispatched
+after a Dependabot merge counts as Dependabot's run is GitHub's call: if it does, `dev`'s
+snapshot waits for the next push to `dev`. A deploy without the secret would fail on Central's
+401 instead.
 
 On a `dependabot/gradle/*` branch a second job, `gradle-build`, runs next to the Maven job,
 because the Maven build compiles nothing from the Gradle files those PRs change. It validates

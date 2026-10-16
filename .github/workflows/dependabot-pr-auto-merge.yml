@@ -107,8 +107,9 @@ jobs:
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
   # The merge pushed dev with GITHUB_TOKEN, which starts no workflow. The rebased combination
-  # on dev was never built as such, so it is built, published and drafted here. A job of its
-  # own, so `actions: write` stays away from the job that runs fetch-metadata.
+  # on dev was never built as such, so it is built and drafted here; build-on-push publishes it
+  # only if the dispatched run can read the publishing secret. A job of its own, so
+  # `actions: write` stays away from the job that runs fetch-metadata.
   build-merged-dev:
     needs: merge
     if: needs.merge.outputs.merged == 'true'
