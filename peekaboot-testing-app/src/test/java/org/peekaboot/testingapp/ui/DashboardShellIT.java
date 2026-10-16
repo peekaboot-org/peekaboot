@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -271,6 +272,36 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
         assertThat(documents).hasSize(2);
+    }
+
+    /**
+     * A reload the browser fails or cancels leaves the first document in place, still on the
+     * spinner the recovery exists to get the reader off. Linux WebKit does this to about one
+     * reload in a hundred on its own; here the reload's request for the page is lost every time.
+     */
+    @Test
+    void aReloadThatNeverNavigatesRaisesTheBanner() {
+        List<String> documents = recordDocumentLoads();
+        loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
+        AtomicInteger pageRequests = new AtomicInteger();
+        page.route("**/peekaboot/ui/dashboard/index.html", route -> {
+            if (pageRequests.incrementAndGet() == 2) {
+                // A cancelled navigation, not a failed one: Chromium commits an error page for a
+                // failed one, which replaces the document this test is about.
+                route.abort("aborted");
+            } else {
+                route.resume();
+            }
+        });
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+
+        page.waitForSelector("#error:not(.hidden)");
+        assertThat(page.textContent("#error .message")).contains("could not start");
+        assertThat(page.isVisible("#loading")).isFalse();
+        assertThat(documents)
+                .as("the boot document, which the reload never replaced")
+                .hasSize(1);
     }
 
     /**

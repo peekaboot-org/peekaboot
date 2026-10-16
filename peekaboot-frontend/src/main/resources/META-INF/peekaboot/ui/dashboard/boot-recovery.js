@@ -26,6 +26,10 @@
     // How long the reload waits for the load event before going without it.
     var RELOAD_WAIT_MS = 5000;
 
+    // A reload that goes through replaces this document once the server answers for the page,
+    // long before this; one the browser failed or cancelled leaves it here on the spinner.
+    var RELOAD_STALL_MS = 10000;
+
     // Read and cleared on every load, so the reload below finds itself marked and reports
     // instead of reloading again, while a load that works leaves the next one a retry of its
     // own. Storage that throws - private browsing, an embedder policy - reports straight away
@@ -55,6 +59,9 @@
             if (reloading) return;
             reloading = true;
             location.reload();
+            setTimeout(function () {
+                reportFailure(source, 'did not load and the reload never replaced the page');
+            }, RELOAD_STALL_MS);
         }
         // Not while the browser is still finishing this navigation: a reload started then
         // replaces it, which anything waiting on that navigation reads as an interrupted one.
@@ -67,8 +74,8 @@
         }
     }
 
-    function reportFailure(source) {
-        console.error('Peekaboot: ' + source + ' did not load on the retry either, giving up');
+    function reportFailure(source, reason) {
+        console.error('Peekaboot: ' + source + ' ' + reason + ', giving up');
         var loading = document.getElementById('loading');
         loading.classList.add('hidden');
         var banner = document.getElementById('error');
@@ -94,6 +101,6 @@
         // fetch under it failed - the browser does not say which.
         var source = script.src;
         if (!alreadyRetried && markRetry()) reloadOnce(source);
-        else reportFailure(source);
+        else reportFailure(source, 'did not load on the retry either');
     }, true);
 })();

@@ -435,7 +435,9 @@ away rather than looping on a marker that was never written.
 The reload waits for `load` first, since one started during the navigation replaces it, which
 anything waiting on that navigation reads as an interrupted one. That wait is bounded at five
 seconds: a half-connected network that loses a module usually leaves another request hanging
-too, and the document then sits at `readyState` "interactive" for good, so `load` never comes.
+too, and the document then sits at `readyState` "interactive" for good, so `load` never comes. A
+reload the browser fails or cancels leaves this document in place, so one still alive ten seconds
+after the reload started raises `#error` itself.
 
 It acts only while `#loading` is still showing, which is what keeps it the boot's recovery. The
 one remedy it has is a reload, and a dashboard that is up has an open overlay, filters and a
@@ -444,7 +446,7 @@ scroll position to lose, so a module script injected at runtime is left to whate
 The banner is the same `#error` element `main.js` raises, unhidden before its message is
 written, since a `role="alert"` populated while it is still `display: none` is not reliably
 announced. `boot-recovery.js` binds the close button too, because `main.js`, which normally
-binds it, is exactly what did not run. Both of its log lines name the module script whose graph
+binds it, is exactly what did not run. All of its log lines name the module script whose graph
 failed: the browser fires one error for the whole graph and never says which fetch under it
 broke, so that is as precise as a field report can be.
 
