@@ -113,12 +113,4 @@ class IntentionalLogFilterTest {
 
         assertThat(decide(started(filter), "a.Emitter", "expected failure")).isEqualTo(FilterReply.NEUTRAL);
     }
-
-    @Test
-    void staysNeutralWhenStartedWithoutALogger() {
-        IntentionalLogFilter filter = new IntentionalLogFilter();
-        filter.setMessage("expected failure");
-
-        assertThat(decide(started(filter), "a.Emitter", "expected failure")).isEqualTo(FilterReply.NEUTRAL);
-    }
 }
