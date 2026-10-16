@@ -162,7 +162,12 @@ public final class PeekabootPaths {
 
     /** {@link #BASE_PATH} below the context path: behind the DispatcherServlet's prefix, where its controllers sit. */
     public String dashboardPath() {
-        return dispatcherServletPrefix + BASE_PATH;
+        return belowDispatcherServlet(BASE_PATH);
+    }
+
+    /** A path the DispatcherServlet maps, as a path below the context path. */
+    public String belowDispatcherServlet(String pathWithinDispatcherServlet) {
+        return dispatcherServletPrefix + pathWithinDispatcherServlet;
     }
 
     /** {@link #BASE_PATH} as the browser has to address it: behind the request's context path and the DispatcherServlet's prefix. */

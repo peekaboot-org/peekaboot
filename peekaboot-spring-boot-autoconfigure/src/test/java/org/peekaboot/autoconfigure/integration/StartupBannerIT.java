@@ -40,6 +40,23 @@ class StartupBannerIT {
         }
     }
 
+    @Test
+    void bannerLinksTheDashboardBehindTheDispatcherServletPrefix() {
+        try (BannerCapture bannerCapture = new BannerCapture();
+                ConfigurableApplicationContext context = new SpringApplicationBuilder(TestApplication.class)
+                        .profiles("integration")
+                        .properties("server.port=0", "spring.mvc.servlet.path=/app")
+                        .listeners(bannerCapture)
+                        .run()) {
+
+            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
+
+            assertThat(bannerCapture.banners()).hasSize(1);
+            assertThat(bannerCapture.banners().get(0).getFormattedMessage())
+                    .contains(" Peekaboot Dashboard: http://localhost:" + port + "/app/peekaboot/");
+        }
+    }
+
     /**
      * Captures the banner. Attaches on {@link ApplicationStartedEvent} rather than before the
      * application starts, because Spring Boot initializes the logging system during startup and

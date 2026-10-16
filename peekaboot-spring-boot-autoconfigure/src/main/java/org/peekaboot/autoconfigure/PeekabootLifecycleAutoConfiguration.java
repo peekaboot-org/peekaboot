@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import java.util.ArrayList;
 import java.util.List;
 import javax.sql.DataSource;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
@@ -61,8 +62,8 @@ public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ServerUrlResolver serverUrlResolver(Environment environment) {
-        return new ServerUrlResolver(environment);
+    public ServerUrlResolver serverUrlResolver(Environment environment, ObjectProvider<PeekabootPaths> paths) {
+        return new ServerUrlResolver(environment, paths);
     }
 
     @Bean

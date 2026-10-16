@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.web.server.Ssl;
@@ -25,14 +26,22 @@ public class ServerUrlResolver {
 
     private final Environment environment;
 
+    /** Absent from a reactive application, where nothing sits behind a DispatcherServlet. */
+    private final ObjectProvider<PeekabootPaths> paths;
+
     private final BooleanSupplier swaggerUiOnClasspath;
 
-    public ServerUrlResolver(Environment environment) {
-        this(environment, () -> ClassUtils.isPresent(SPRINGDOC_MARKER_CLASS, ServerUrlResolver.class.getClassLoader()));
+    public ServerUrlResolver(Environment environment, ObjectProvider<PeekabootPaths> paths) {
+        this(
+                environment,
+                paths,
+                () -> ClassUtils.isPresent(SPRINGDOC_MARKER_CLASS, ServerUrlResolver.class.getClassLoader()));
     }
 
-    ServerUrlResolver(Environment environment, BooleanSupplier swaggerUiOnClasspath) {
+    ServerUrlResolver(
+            Environment environment, ObjectProvider<PeekabootPaths> paths, BooleanSupplier swaggerUiOnClasspath) {
         this.environment = environment;
+        this.paths = paths;
         this.swaggerUiOnClasspath = swaggerUiOnClasspath;
     }
 
@@ -52,14 +61,20 @@ public class ServerUrlResolver {
         if (!swaggerUiOnClasspath.getAsBoolean()) {
             return Optional.empty();
         }
-        return resolveServiceUrl(event).map(base -> base + swaggerUiPath());
+        return resolveServiceUrl(event).map(base -> base + belowDispatcherServlet(swaggerUiPath()));
     }
 
     public Optional<String> resolveDashboardUrl(ApplicationReadyEvent event) {
         if (!event.getApplicationContext().containsBean(DASHBOARD_CONFIG_BEAN_NAME)) {
             return Optional.empty();
         }
-        return resolveServiceUrl(event).map(base -> base + DASHBOARD_PATH);
+        return resolveServiceUrl(event).map(base -> base + belowDispatcherServlet(DASHBOARD_PATH));
+    }
+
+    /** Both the dashboard and springdoc's UI are Spring MVC controllers, so both move with the DispatcherServlet. */
+    private String belowDispatcherServlet(String path) {
+        PeekabootPaths known = paths.getIfAvailable();
+        return known == null ? path : known.belowDispatcherServlet(path);
     }
 
     private String buildBaseUrl(int port) {

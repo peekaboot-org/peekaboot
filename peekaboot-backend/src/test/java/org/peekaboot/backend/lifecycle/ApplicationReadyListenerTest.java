@@ -15,7 +15,9 @@ import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.testsupport.LogCapture;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.core.env.Environment;
@@ -193,7 +195,10 @@ class ApplicationReadyListenerTest {
         var listener = new ApplicationReadyListener(
                 new EnvironmentInfo(environment),
                 buildInfo,
-                new ServerUrlResolver(new MockEnvironment(), () -> true),
+                new ServerUrlResolver(
+                        new MockEnvironment(),
+                        new StaticListableBeanFactory().getBeanProvider(PeekabootPaths.class),
+                        () -> true),
                 metadata,
                 dataSources,
                 hikariPoolInfo);
