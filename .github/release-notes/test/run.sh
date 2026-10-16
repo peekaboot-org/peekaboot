@@ -70,8 +70,27 @@ while read -r sha; do
     fi
 done <<< "$override_shas"
 "$HERE/../render.sh" --repository "$REPOSITORY" --context > "$WORK/real.json"
-test "$(jq -r '[.[].commits[] | select(.id == "ca362a2ec9ef976392c84fe7dc6fc986509289c3")] | .[0].group' "$WORK/real.json")" = "<!-- 08 -->Tests"
-test "$(jq -r '[.[].commits[] | select(.id == "76fc25377de62e302c41447826f85580ccae0d8d")] | .[0].group' "$WORK/real.json")" = "<!-- 08 -->Tests"
-test "$(jq '[.[].commits[] | select(.id == "f5449589da9d6b7187d462028897cf0139850236")] | length' "$WORK/real.json")" = 0
+
+expect_group() {
+    local sha="$1" expected="$2" actual
+    actual="$(jq -r --arg sha "$sha" '[.[].commits[] | select(.id == $sha)] | .[0].group' "$WORK/real.json")"
+    if [ "$actual" != "$expected" ]; then
+        echo "expected $sha in group \"$expected\", got \"$actual\"" >&2
+        exit 1
+    fi
+}
+
+expect_skipped() {
+    local sha="$1" count
+    count="$(jq --arg sha "$sha" '[.[].commits[] | select(.id == $sha)] | length' "$WORK/real.json")"
+    if [ "$count" != 0 ]; then
+        echo "expected $sha to be skipped, found it $count time(s)" >&2
+        exit 1
+    fi
+}
+
+expect_group ca362a2ec9ef976392c84fe7dc6fc986509289c3 "<!-- 08 -->Tests"
+expect_group 76fc25377de62e302c41447826f85580ccae0d8d "<!-- 08 -->Tests"
+expect_skipped f5449589da9d6b7187d462028897cf0139850236
 
 echo "all release-notes checks passed"
