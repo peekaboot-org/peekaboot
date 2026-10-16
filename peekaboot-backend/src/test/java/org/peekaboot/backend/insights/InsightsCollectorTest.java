@@ -10,6 +10,7 @@ import java.io.DataOutputStream;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -247,62 +248,110 @@ class InsightsCollectorTest {
      * against the others by a sample. Each tick stamps every series with its own number, so a
      * roll-up that read its windows across a tick sees two different newest values. The test
      * races rather than parks because a window read has no seam to park in; 64 series widen
-     * the read enough that an unlocked one straddles a tick dozens of times per run. It can
+     * the read enough that an unlocked one straddles a tick several times per run. It can
      * only fail on a broken lock, never on a correct one.
      */
     @Test
     void rollUpRacingATickAggregatesTheSameTicksForEverySeries() throws Exception {
         AtomicLong tickNumber = new AtomicLong();
-        List<SeriesDef> series = new ArrayList<>();
-        for (int i = 0; i < 64; i++) {
-            Gauge.builder("series." + i, tickNumber::get).register(registry);
-            series.add(value("s" + i, "series." + i));
-        }
-        AtomicLong rollUps = new AtomicLong();
         AtomicLong straddling = new AtomicLong();
-        InsightsCollector racing = new InsightsCollector(
-                levels,
-                series,
-                Set.of(),
-                List.of(),
-                registry,
-                new InsightsCollector.Listener() {
-                    @Override
-                    public void onTick(long epochMs, Map<String, Double> values) {}
+        InsightsCollector racing = racingCollector(tickNumber, new InsightsCollector.Listener() {
+            @Override
+            public void onTick(long epochMs, Map<String, Double> values) {}
 
-                    @Override
-                    public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
-                        rollUps.incrementAndGet();
-                        long newestTicks = entries.values().stream()
-                                .map(AggregateStats::max)
-                                .distinct()
-                                .count();
-                        if (newestTicks > 1) {
-                            straddling.incrementAndGet();
-                        }
-                    }
-                },
-                InsightsCollectors.noSnapshot());
-        int tickCount = 500;
-        Thread ticker = new Thread(
-                () -> {
-                    for (int i = 1; i <= tickCount; i++) {
-                        tickNumber.set(i);
-                        racing.tick(i * 10_000L);
-                    }
-                },
-                "ticker");
-        ticker.start();
+            @Override
+            public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
+                long newestTicks = entries.values().stream()
+                        .map(AggregateStats::max)
+                        .distinct()
+                        .count();
+                if (newestTicks > 1) {
+                    straddling.incrementAndGet();
+                }
+            }
+        });
+        // a window read is short beside a tick's sampling, so this race needs the longest run
+        Thread ticker = startTicker(racing, tickNumber, 2_000);
+        int rollUpsWhileTicking = 0;
         long epochMs = 60_000;
         while (ticker.isAlive()) {
+            boolean ticking = tickNumber.get() > 0;
             racing.rollUp(1, epochMs);
             epochMs += 60_000;
+            if (ticking && ticker.isAlive()) {
+                rollUpsWhileTicking++;
+            }
         }
         assertThat(ticker.join(Duration.ofSeconds(5))).isTrue();
 
+        assertThat(rollUpsWhileTicking).isPositive();
         assertThat(straddling)
-                .as("roll-ups out of %s that read their windows across a tick", rollUps)
+                .as("roll-ups out of %s that read their windows across a tick", rollUpsWhileTicking)
                 .hasValue(0);
+    }
+
+    /**
+     * The API's snapshot races the level-0 thread the same way, and a snapshot that read its
+     * series across a tick would date their samples from an {@code endEpochMs} some of them do
+     * not end at. Like {@link #rollUpRacingATickAggregatesTheSameTicksForEverySeries}, this
+     * covers the lock {@code snapshot} takes, which no parked test can reach.
+     */
+    @Test
+    void snapshotRacingATickSeesWholeTicksOnly() throws Exception {
+        AtomicLong tickNumber = new AtomicLong();
+        InsightsCollector racing = racingCollector(tickNumber, InsightsCollectors.noOpListener());
+        Thread ticker = startTicker(racing, tickNumber, 500);
+        int snapshotsWhileTicking = 0;
+        int torn = 0;
+        while (ticker.isAlive()) {
+            boolean ticking = tickNumber.get() > 0;
+            LevelSnapshot snapshot = racing.snapshot(0);
+            if (!holdsWholeTicks(
+                    snapshot.endEpochMs(),
+                    snapshot.count(),
+                    snapshot.tickValues().values())) {
+                torn++;
+            }
+            if (ticking && ticker.isAlive()) {
+                snapshotsWhileTicking++;
+            }
+        }
+        assertThat(ticker.join(Duration.ofSeconds(5))).isTrue();
+
+        assertThat(snapshotsWhileTicking).isPositive();
+        assertThat(torn)
+                .as("snapshots out of %s that read their series across a tick", snapshotsWhileTicking)
+                .isZero();
+    }
+
+    /** The snapshot writer's capture, raced like {@link #snapshotRacingATickSeesWholeTicksOnly}. */
+    @Test
+    void captureRacingATickSeesWholeTicksOnly() throws Exception {
+        AtomicLong tickNumber = new AtomicLong();
+        InsightsCollector racing = racingCollector(tickNumber, InsightsCollectors.noOpListener());
+        Thread ticker = startTicker(racing, tickNumber, 500);
+        int capturesWhileTicking = 0;
+        int torn = 0;
+        while (ticker.isAlive()) {
+            boolean ticking = tickNumber.get() > 0;
+            InsightsSnapshot capture = racing.capture();
+            InsightsSnapshot.Level level0 = capture.levels().get(0);
+            List<double[]> level0Samples = capture.series().values().stream()
+                    .map(byLevel -> byLevel.get(0)[0])
+                    .toList();
+            if (!holdsWholeTicks(level0.endEpochMs(), level0.count(), level0Samples)) {
+                torn++;
+            }
+            if (ticking && ticker.isAlive()) {
+                capturesWhileTicking++;
+            }
+        }
+        assertThat(ticker.join(Duration.ofSeconds(5))).isTrue();
+
+        assertThat(capturesWhileTicking).isPositive();
+        assertThat(torn)
+                .as("captures out of %s that read their series across a tick", capturesWhileTicking)
+                .isZero();
     }
 
     /**
@@ -353,6 +402,49 @@ class InsightsCollectorTest {
         assertThat(snapshot.endEpochMs()).isEqualTo(10_000);
         assertThat(snapshot.tickValues())
                 .allSatisfy((id, values) -> assertThat(values).as(id).hasSize(snapshot.count()));
+    }
+
+    /**
+     * A collector over 64 series that all sample {@code tickNumber}, so each series' newest
+     * sample names the tick that wrote it. The width is what lets an unlocked read straddle a
+     * tick often enough to fail every run.
+     */
+    private InsightsCollector racingCollector(AtomicLong tickNumber, InsightsCollector.Listener listener) {
+        List<SeriesDef> series = new ArrayList<>();
+        for (int i = 0; i < 64; i++) {
+            Gauge.builder("series." + i, tickNumber::get).register(registry);
+            series.add(value("s" + i, "series." + i));
+        }
+        return new InsightsCollector(
+                levels, series, Set.of(), List.of(), registry, listener, InsightsCollectors.noSnapshot());
+    }
+
+    /** Ticks {@code racing} on its own thread, tick {@code n} dated {@code n * 10_000}. */
+    private static Thread startTicker(InsightsCollector racing, AtomicLong tickNumber, int ticks) {
+        Thread ticker = new Thread(
+                () -> {
+                    for (int i = 1; i <= ticks; i++) {
+                        tickNumber.set(i);
+                        racing.tick(i * 10_000L);
+                    }
+                },
+                "ticker");
+        ticker.start();
+        return ticker;
+    }
+
+    /**
+     * Whether level-0 samples read under one {@code endEpochMs} all end at the tick it dates:
+     * one count for every series, the ring's fill after that many ticks, and every series'
+     * newest sample written by that tick.
+     */
+    private boolean holdsWholeTicks(long endEpochMs, int count, Collection<double[]> samplesBySeries) {
+        long tick = endEpochMs / 10_000;
+        int expectedCount = (int) Math.min(tick, levels.get(0).getSize());
+        return samplesBySeries.stream()
+                .allMatch(samples -> samples.length == expectedCount
+                        && count == expectedCount
+                        && (expectedCount == 0 || samples[samples.length - 1] == tick));
     }
 
     /**
