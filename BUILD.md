@@ -163,7 +163,8 @@ version from that BOM, as Maven does.
 Every other shared literal is written on both sides and has to change on both: Error
 Prone, palantir, Checkstyle, SpotBugs, Spotless, JaCoCo, PMD, the coverage floors,
 datasource-micrometer (`datasourceMicrometerVersion` in `gradle.properties`), jdbc-url-parser,
-cron-utils, the testing-app's direct dependencies (springdoc, datasource-proxy, Playwright and
+cron-utils, the root pom's slf4j-api override (a constraint in the convention plugin), the
+testing-app's direct dependencies (springdoc, datasource-proxy, Playwright and
 axe-core), the compiler release level, the IT thread count, and the frontend gate's two: the
 pinned Node version and `npm ci`. `BuildVersionLockstepTest` compares every pair, JaCoCo's
 second Gradle declaration in `peekaboot-coverage` included. SpotBugs and Spotless compare

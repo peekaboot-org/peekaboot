@@ -333,6 +333,12 @@ class BuildVersionLockstepTest {
                         backendScript,
                         "cron-utils:([^\"]+)\""),
                 row(
+                        "slf4j-api",
+                        pom,
+                        "<artifactId>slf4j-api</artifactId>\\s*<version>([^<]+)</version>",
+                        conventions,
+                        "slf4j-api:([^\"]+)\""),
+                row(
                         "the IT thread count",
                         appPom,
                         "<peekaboot.it.threads>([^<]+)</peekaboot.it.threads>",
