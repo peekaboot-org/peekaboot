@@ -1336,9 +1336,11 @@ plus the children of each folded-away duplicate `redirectsPointingAt` lists for 
 spans already in the set, whose own descendants entered with them. Each span is walked once, and a
 trace with no marked span pays nothing. A min/max pair cannot drop one span, so the synchronous
 window is refolded over the stored spans only when a span on one of its edges leaves it. That
-happens when a stored span joins a subtree, and when a folded-away duplicate is dropped for a
-survivor that may. `asyncEntrySpans()` reads the subtree entry points off the same set, a member
-whose resolved parent is not itself a member, which keeps the listing pass off a tree walk.
+happens when a stored span joins a subtree, and when an arriving span enters one after absorbing
+a duplicate that counted as synchronous. A survivor that stays synchronous lies around its
+duplicates and covers their time. `asyncEntrySpans()` reads the subtree entry points off the same
+set, a member whose resolved parent is not itself a member, which keeps the listing pass off a
+tree walk.
 
 Each entry point is a listing row of its own, and the listing is newest first by arrival, the
 order the buckets already keep. A trace's row dates from when the trace entered the bucket; an

@@ -81,8 +81,7 @@ public class TraceDataBundle {
         synchronized (spansLock) {
             if (!isDuplicateOfStoredParent(span)) {
                 store(span);
-                absorbDuplicateChildrenOf(span);
-                placeInAsyncSubtrees(span);
+                placeInAsyncSubtrees(span, absorbDuplicateChildrenOf(span));
             }
             asyncMembership.refresh(spansById.values());
             if (spansById.size() > maxSpans) {
@@ -131,9 +130,9 @@ public class TraceDataBundle {
      * {@link #absorbDuplicateChildrenOf}, so a folded duplicate's children are reached through
      * the redirect.
      */
-    private void placeInAsyncSubtrees(SpanData span) {
+    private void placeInAsyncSubtrees(SpanData span, List<SpanData> absorbedDuplicates) {
         if (AsyncTaskMarker.isMarked(span.tags()) || asyncMembership.contains(resolve(span.parentId()))) {
-            asyncMembership.enter(span.spanId());
+            asyncMembership.enter(span.spanId(), absorbedDuplicates);
             joinDescendants(span.spanId());
             return;
         }
@@ -173,14 +172,15 @@ public class TraceDataBundle {
     /**
      * The span just stored may be the real span whose duplicate already arrived as one of
      * its direct children - the expected ordering, since a duplicate ends (and so exports)
-     * before the real span containing it does. Folds any such child away and redirects it
-     * here.
+     * before the real span containing it does. Folds any such child away, redirects it here
+     * and returns it, so the survivor's placement can settle whether its time stays synchronous.
      */
-    private void absorbDuplicateChildrenOf(SpanData survivor) {
+    private List<SpanData> absorbDuplicateChildrenOf(SpanData survivor) {
         List<String> children = childrenByParentId.get(survivor.spanId());
         if (children == null || children.isEmpty()) {
-            return;
+            return List.of();
         }
+        List<SpanData> absorbed = new ArrayList<>();
         Iterator<String> it = children.iterator();
         while (it.hasNext()) {
             String childId = it.next();
@@ -188,11 +188,12 @@ public class TraceDataBundle {
             if (candidate != null && SpanDuplicateMatcher.isDuplicate(candidate, survivor)) {
                 spansById.remove(childId);
                 recordRedirect(childId, survivor.spanId());
-                // placed after this fold, the survivor decides whether the duplicate's time stays
                 asyncMembership.forget(candidate);
+                absorbed.add(candidate);
                 it.remove();
             }
         }
+        return absorbed;
     }
 
     /**

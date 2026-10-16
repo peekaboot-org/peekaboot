@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.store;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -40,9 +41,13 @@ final class AsyncMembership {
         syncWindow = syncWindow.including(span);
     }
 
-    /** A span that enters a subtree as it arrives, so it never counted as synchronous. */
-    void enter(String spanId) {
+    /**
+     * A span that enters a subtree as it arrives, so it never counted as synchronous. The
+     * duplicates it absorbed on arrival did, and their time leaves with it.
+     */
+    void enter(String spanId, List<SpanData> absorbedDuplicates) {
         members.add(spanId);
+        absorbedDuplicates.forEach(this::leaveSyncWindow);
     }
 
     /** A stored span joining a subtree; false if it already belonged to one. */
@@ -50,21 +55,22 @@ final class AsyncMembership {
         if (!members.add(span.spanId())) {
             return false;
         }
-        if (syncWindow.isBoundedBy(span)) {
-            syncWindowStale = true;
-        }
+        leaveSyncWindow(span);
         return true;
     }
 
-    /**
-     * A duplicate folded into its survivor. The survivor covers the same window only while it
-     * stays synchronous, so a duplicate on an edge forces a refold once the survivor is placed.
-     */
-    void forget(SpanData span) {
-        members.remove(span.spanId());
+    private void leaveSyncWindow(SpanData span) {
         if (syncWindow.isBoundedBy(span)) {
             syncWindowStale = true;
         }
+    }
+
+    /**
+     * A duplicate folded into its survivor, which lies around it. A survivor that stays
+     * synchronous covers its time; one that enters a subtree takes it along (see {@link #enter}).
+     */
+    void forget(SpanData span) {
+        members.remove(span.spanId());
     }
 
     void evict(SpanData span) {
