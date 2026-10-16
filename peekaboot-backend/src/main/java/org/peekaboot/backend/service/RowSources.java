@@ -10,6 +10,7 @@ import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.tracing.store.ListedTrace;
+import org.peekaboot.backend.tracing.store.ListingRoots;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
@@ -68,15 +69,13 @@ final class RowSources {
      */
     private static List<RowSource> rowsOf(ListedTrace listed) {
         TraceDataBundle bundle = listed.bundle();
-        SpanData root = bundle.rootSpan();
+        ListingRoots roots = bundle.listingRoots();
+        SpanData root = roots.root();
         List<RowSource> rows = new ArrayList<>();
         if (!isIncompleteFragment(root)) {
             rows.add(new RowSource(bundle, root, false, listed.listedAt()));
         }
-        if (!bundle.hasAsyncSpans()) {
-            return rows;
-        }
-        for (SpanData entry : bundle.asyncEntrySpans()) {
+        for (SpanData entry : roots.asyncEntries()) {
             // a purely async bundle's entry span is its trace's own row, added above as a whole
             // trace with no SubtreeView; any other entry is a subtree row, which
             // TraceInsightsService maps through TraceTreeMapper.mapSubtree
@@ -103,7 +102,7 @@ final class RowSources {
 
     /**
      * Whether the bundle holds a piece of a trace rather than a trace of its own.
-     * {@link TraceDataBundle#rootSpan()} answers with the first span whose parent it does
+     * {@link TraceDataBundle#listingRoots()} answers with the first span whose parent it does
      * not hold, so a root still carrying a parent id is one whose real parent never
      * arrived.
      *

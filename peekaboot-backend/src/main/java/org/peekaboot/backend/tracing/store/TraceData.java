@@ -13,8 +13,9 @@ import java.util.Set;
  * @param duration      the window the bundle's non-async spans have covered, or every span's
  *                      while all of them are async; {@link TraceDataBundle#synchronousWindow()}.
  *                      What may lower it is in "Async Subtree Timing" in docs/ARCHITECTURE.md
- * @param rootSpan      the span the tree hangs from, chosen by the bundle (see
- *                      {@link TraceDataBundle#rootSpan()}); null for a trace with no spans
+ * @param rootSpan      the span the tree hangs from, chosen by the bundle: the earliest-created
+ *                      span whose parent is not stored, else the earliest-created span; null for
+ *                      a trace with no spans
  * @param spans         in creation order, never null
  * @param asyncSpanIds  the ids of spans belonging to an async subtree - the marked entry spans
  *                      and their descendants. Empty for the overwhelming majority of traces

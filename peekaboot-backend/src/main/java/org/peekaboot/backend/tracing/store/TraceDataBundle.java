@@ -360,20 +360,22 @@ public class TraceDataBundle {
     }
 
     /**
-     * The span the tree hangs from: the earliest-created stored span whose parent is not
-     * stored, else the earliest-created span. Read under the lock without copying, so the
-     * list filters can classify every bundle in a bucket by its root without a copy and sort
-     * per bundle.
+     * The root and the async entry spans, read under one lock so they describe the same moment:
+     * a root read before the request's span arrived would otherwise match an orphaned entry read
+     * after it and hide that entry's row. Read without copying, so the listing can classify
+     * every bundle in a bucket without a snapshot per bundle.
      */
-    public SpanData rootSpan() {
+    public ListingRoots listingRoots() {
         synchronized (spansLock) {
-            return rootOf(spansById.values());
+            return new ListingRoots(rootOf(spansById.values()), asyncEntrySpans());
         }
     }
 
     /**
-     * The one definition of the root, over stored spans or their resolved copies; must run
-     * under {@code spansLock}, as it consults {@link #parentRedirects}.
+     * The span the tree hangs from: the earliest-created stored span whose parent is not
+     * stored, else the earliest-created span. The one definition of the root, over stored
+     * spans or their resolved copies; must run under {@code spansLock}, as it consults
+     * {@link #parentRedirects}.
      */
     private SpanData rootOf(Collection<SpanData> spans) {
         SpanData root = null;
@@ -425,31 +427,22 @@ public class TraceDataBundle {
         }
     }
 
-    /** Whether any stored span belongs to an async subtree; the cheap short-circuit for readers. */
-    public boolean hasAsyncSpans() {
-        synchronized (spansLock) {
-            return !asyncMembership.isEmpty();
-        }
-    }
-
     /**
      * The spans that start an async subtree: an async span whose resolved parent is not itself
-     * async. Read off the maintained set, with no tree walk, and returning the spans rather
-     * than their ids so the trace listing can classify a row without snapshotting the bundle.
+     * async. Read off the maintained set, with no tree walk, and nothing at all for a bundle
+     * without async spans; must run under {@code spansLock}.
      */
-    public List<SpanData> asyncEntrySpans() {
-        synchronized (spansLock) {
-            List<SpanData> entries = new ArrayList<>();
-            for (SpanData stored : spansById.values()) {
-                if (!asyncMembership.contains(stored.spanId())) {
-                    continue;
-                }
-                if (!asyncMembership.contains(resolve(stored.parentId()))) {
-                    entries.add(stored);
-                }
-            }
-            return entries;
+    private List<SpanData> asyncEntrySpans() {
+        if (asyncMembership.isEmpty()) {
+            return List.of();
         }
+        List<SpanData> entries = new ArrayList<>();
+        for (SpanData stored : spansById.values()) {
+            if (asyncMembership.contains(stored.spanId()) && !asyncMembership.contains(resolve(stored.parentId()))) {
+                entries.add(stored);
+            }
+        }
+        return entries;
     }
 
     /** Transitive async-subtree membership, for the mapper to summarise and shape a tree by. */

@@ -240,13 +240,38 @@ class TraceDataBundleTest {
     @Test
     void rootSpanIsTheFirstStoredSpanWhoseParentIsNotStored() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        assertThat(bundle.rootSpan()).isNull();
+        assertThat(bundle.listingRoots().root()).isNull();
 
         bundle.addSpan(createSpan("child", 1, "parent"), 10);
-        assertThat(bundle.rootSpan().spanId()).isEqualTo("child");
+        assertThat(bundle.listingRoots().root().spanId()).isEqualTo("child");
 
         bundle.addSpan(createSpan("parent", 2, null), 10);
-        assertThat(bundle.rootSpan().spanId()).isEqualTo("parent");
+        assertThat(bundle.listingRoots().root().spanId()).isEqualTo("parent");
+    }
+
+    /** An orphaned task is its trace's root and its only entry, until the request it ran for arrives. */
+    @Test
+    void listingRootsNameTheRootAndTheAsyncEntriesOfOneMoment() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 500);
+
+        ListingRoots orphaned = bundle.listingRoots();
+        assertThat(orphaned.root().spanId()).isEqualTo("async");
+        assertThat(orphaned.asyncEntries()).extracting(SpanData::spanId).containsExactly("async");
+
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+
+        ListingRoots enclosed = bundle.listingRoots();
+        assertThat(enclosed.root().spanId()).isEqualTo("root");
+        assertThat(enclosed.asyncEntries()).extracting(SpanData::spanId).containsExactly("async");
+    }
+
+    @Test
+    void aBundleWithoutAsyncSpansListsNoAsyncEntries() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+
+        assertThat(bundle.listingRoots().asyncEntries()).isEmpty();
     }
 
     /**
@@ -331,7 +356,7 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("child", "root", 10, 20), 500);
 
         assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
-        assertThat(bundle.hasAsyncSpans()).isFalse();
+        assertThat(bundle.asyncSpanIds()).isEmpty();
     }
 
     /**
@@ -371,13 +396,15 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void asyncEntrySpansNamesTheSubtreeRootAndNotItsDescendants() {
+    void asyncEntriesNameTheSubtreeRootAndNotItsDescendants() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         bundle.addSpan(plainSpan("root", null, 0, 50), 500);
         bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 500);
         bundle.addSpan(plainSpan("deep", "async", 50, 900), 500);
 
-        assertThat(bundle.asyncEntrySpans()).extracting(SpanData::spanId).containsExactly("async");
+        assertThat(bundle.listingRoots().asyncEntries())
+                .extracting(SpanData::spanId)
+                .containsExactly("async");
         assertThat(bundle.asyncSpanIds()).containsExactlyInAnyOrder("async", "deep");
     }
 
@@ -392,7 +419,9 @@ class TraceDataBundleTest {
         bundle.addSpan(asyncSpan("outer", "root", 40, 2_000), 500);
         bundle.addSpan(asyncSpan("inner", "outer", 100, 1_000), 500);
 
-        assertThat(bundle.asyncEntrySpans()).extracting(SpanData::spanId).containsExactly("outer");
+        assertThat(bundle.listingRoots().asyncEntries())
+                .extracting(SpanData::spanId)
+                .containsExactly("outer");
     }
 
     /**
@@ -579,7 +608,7 @@ class TraceDataBundleTest {
         // evicts "real", the last async span stored
         bundle.addSpan(plainSpan("y", "root", 10, 10), 2);
 
-        assertThat(bundle.hasAsyncSpans()).isFalse();
+        assertThat(bundle.listingRoots().asyncEntries()).isEmpty();
         assertThat(bundle.asyncSpanIds()).isEmpty();
     }
 

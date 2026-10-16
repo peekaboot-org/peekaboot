@@ -26,7 +26,7 @@ none. A span's logs are the entries of `TraceTree.logs` naming its `spanId`.
 ### Root Span
 `TraceDataBundle` chooses it, once: the earliest-created stored span whose parent is not stored,
 with deduplication redirects resolved, else the earliest-created span. `snapshot()` carries that
-choice to `TraceTreeMapper` as `TraceData.rootSpan`, and `rootSpan()` answers the same rule
+choice to `TraceTreeMapper` as `TraceData.rootSpan`, and `listingRoots()` answers the same rule
 without a copy so the list filters can classify a bundle without building a tree.
 `TraceTree.rootSpan` is the mapped `SpanNode` at the top.
 
@@ -72,8 +72,8 @@ matches a bean-name span name.
 ### Async Subtree
 A span carrying the marker tag `AsyncTaskMarker.TAG_KEY` (`peekaboot.async`), plus every
 descendant of it. `AsyncMembership` holds that membership for each `TraceDataBundle`;
-`asyncEntrySpans()` returns the entry points alone, a member whose resolved parent is not a
-member. An entry point classifies as `RootActionType.ASYNC_TASK`, gets a listing row of
+`listingRoots()` returns the entry points alone, a member whose resolved parent is not a
+member, together with the root under the same lock. An entry point classifies as `RootActionType.ASYNC_TASK`, gets a listing row of
 its own carrying `TraceTree.subtree` as a `SubtreeView(rootSpanId, enclosedByStoredTrace)`, and
 is flagged on the tree as `SpanNode.asyncEntry`, which is what the Spans tab collapses and
 re-bases by. What a reader sees:

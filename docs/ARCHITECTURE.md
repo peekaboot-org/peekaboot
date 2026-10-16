@@ -1254,8 +1254,8 @@ so a stage names only the components it adds.
 `TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
 creation order, the root span, the trace window and the `truncated` flag. The root is chosen
 there and nowhere else: the earliest-created stored span whose parent is not stored, else the
-earliest-created span. `TraceDataBundle.rootSpan()` answers the same rule without a copy, which
-is what the listing filters classify by, so the row a filter admits and the tree the mapper
+earliest-created span. `TraceDataBundle.listingRoots()` answers the same rule without a copy,
+which is what the listing filters classify by, so the row a filter admits and the tree the mapper
 builds agree on what started the trace. `attachOrphansToRoot` then re-parents every other span
 whose parent is not in the trace onto that root, so a subtree whose parent has not been exported
 yet does not silently vanish. What moves the window is in *Async Subtree Timing*. `truncated` travels on the snapshot rather than being derived
@@ -1339,9 +1339,10 @@ trace with no marked span pays nothing. A min/max pair cannot drop one span, so 
 window is refolded over the stored spans only when a span on one of its edges leaves it. That
 happens when a stored span joins a subtree, and when an arriving span enters one after absorbing
 a duplicate that counted as synchronous. A survivor that stays synchronous lies around its
-duplicates and covers their time. `asyncEntrySpans()` reads the subtree entry points off the same
+duplicates and covers their time. `listingRoots()` reads the subtree entry points off the same
 set, a member whose resolved parent is not itself a member, which keeps the listing pass off a
-tree walk.
+tree walk. It reads the root under the same lock, so a request span arriving between the two
+reads cannot make an orphaned entry pass for the trace's root and lose its row.
 
 Each entry point is a listing row of its own, and the listing is newest first by arrival, the
 order the buckets already keep. A trace's row dates from when the trace entered the bucket; an
