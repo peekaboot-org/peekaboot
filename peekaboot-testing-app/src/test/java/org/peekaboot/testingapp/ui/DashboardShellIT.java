@@ -286,8 +286,8 @@ class DashboardShellIT extends PlaywrightTestBase {
         AtomicInteger pageRequests = new AtomicInteger();
         page.route("**/peekaboot/ui/dashboard/index.html", route -> {
             if (pageRequests.incrementAndGet() == 2) {
-                // A cancelled navigation, not a failed one: Chromium commits an error page for a
-                // failed one, which replaces the document this test is about.
+                // Cancelled leaves the document in place on all three engines; for a failed
+                // navigation Chromium commits an error page, which replaces it.
                 route.abort("aborted");
             } else {
                 route.resume();
