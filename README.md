@@ -10,8 +10,8 @@
 > [!WARNING]
 > Peekaboot is beta software and may expose security-relevant settings. Use it at your own risk.
 
-Embedded application introspection for Spring Boot. Health, config, migrations, logs,
-schedules, metrics and traces in one dashboard, with no external infrastructure.
+Peekaboot lets you peek inside your Spring Boot application while it runs. Health, config,
+migrations, logs, schedules, metrics and traces in one dashboard, with no external infrastructure.
 
 ## Why Peekaboot?
 
