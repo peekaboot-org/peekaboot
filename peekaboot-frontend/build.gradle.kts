@@ -1,6 +1,5 @@
 import com.github.gradle.node.npm.task.NpmTask
 import java.io.ByteArrayOutputStream
-import java.io.OutputStream
 
 plugins {
     id("peekaboot.java-conventions")
@@ -33,18 +32,23 @@ node {
     npmInstallCommand = "ci"
 }
 
-// Maven's -q hides npm's output because frontend-maven-plugin logs it at INFO; Gradle passes
-// it straight through. npm ci's install summary goes to stdout and only --silent hides it,
-// which would hide npm's errors too, so stdout is dropped and stderr still carries them.
+// frontend-maven-plugin logs npm's output at INFO, which Maven's -q hides; Gradle passes it
+// straight through. npm ci's install summary goes to stdout and only --silent hides it, which
+// would hide npm's errors too, so stdout goes to INFO and stderr still carries the errors.
 tasks.npmInstall {
+    val output = ByteArrayOutputStream()
     execOverrides {
-        standardOutput = OutputStream.nullOutputStream()
+        standardOutput = output
+    }
+    doLast {
+        logger.info(output.toString(Charsets.UTF_8))
     }
 }
 
-// A lint run that passes prints nothing; one that fails prints everything npm and the linter
-// wrote, since npm's own errors (a missing script, a broken package.json) come only on its output.
-fun NpmTask.printOutputOnlyOnFailure() {
+// A lint run that passes logs its output at INFO; one that fails prints everything npm and the
+// linter wrote, since npm's own errors (a missing script, a broken package.json) come only on
+// its output.
+fun NpmTask.logOutputAtInfoUnlessItFails() {
     val output = ByteArrayOutputStream()
     ignoreExitValue = true
     execOverrides {
@@ -57,6 +61,7 @@ fun NpmTask.printOutputOnlyOnFailure() {
             logger.error(output.toString(Charsets.UTF_8))
             throw GradleException("npm ${npmCommand.get().joinToString(" ")} exited with $exitValue")
         }
+        logger.info(output.toString(Charsets.UTF_8))
     }
 }
 
@@ -68,7 +73,7 @@ val lintJs = tasks.register<NpmTask>("lintJs") {
     description = "Runs ESLint over the frontend's ES modules."
     dependsOn(tasks.npmInstall)
     npmCommand = listOf("run", "lint:js")
-    printOutputOnlyOnFailure()
+    logOutputAtInfoUnlessItFails()
 }
 
 val lintCss = tasks.register<NpmTask>("lintCss") {
@@ -77,7 +82,7 @@ val lintCss = tasks.register<NpmTask>("lintCss") {
     dependsOn(tasks.npmInstall)
     shouldRunAfter(lintJs)
     npmCommand = listOf("run", "lint:css")
-    printOutputOnlyOnFailure()
+    logOutputAtInfoUnlessItFails()
 }
 
 val lintHtml = tasks.register<NpmTask>("lintHtml") {
@@ -86,7 +91,7 @@ val lintHtml = tasks.register<NpmTask>("lintHtml") {
     dependsOn(tasks.npmInstall)
     shouldRunAfter(lintCss)
     npmCommand = listOf("run", "lint:html")
-    printOutputOnlyOnFailure()
+    logOutputAtInfoUnlessItFails()
 }
 
 tasks.check {
