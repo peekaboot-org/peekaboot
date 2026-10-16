@@ -33,8 +33,9 @@ import org.springframework.web.client.RestClient;
  * covers the other half: the guard still challenges a user the application's own chain signed
  * in.
  *
- * <p>Runs under the {@code auto-security} profile because every other test in this module
- * excludes the servlet security auto-configuration - see application-test.yml.
+ * <p>Runs under the {@code auto-security} profile, the only one in this module that arms
+ * Peekaboot's guard. Spring Security's servlet auto-configuration stays excluded there, as in
+ * application-test.yml, so the guard is the only thing that challenges a request.
  */
 @SpringBootTest(
         classes = {
