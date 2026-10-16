@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.ui.InlinedStylesheets;
 import org.peekaboot.backend.ui.Placeholders;
+import org.springframework.web.util.HtmlUtils;
 
 /**
  * The dev toolbar's server-rendered shell: the bar's markup, in a declarative shadow root,
@@ -106,6 +107,6 @@ public class ToolbarShell {
      * @param dataJson the toolbar data blob, already script-safe (see ToolbarDataProvider)
      */
     public String render(String basePath, String dataJson) {
-        return Placeholders.fill(shell, Map.of("BASE", basePath, "DATA", dataJson));
+        return Placeholders.fill(shell, Map.of("BASE", HtmlUtils.htmlEscape(basePath), "DATA", dataJson));
     }
 }

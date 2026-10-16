@@ -57,6 +57,16 @@ class ToolbarShellTest {
         assertThat(html).doesNotContain("\"/peekaboot/ui/");
     }
 
+    /** The base path carries the request's context path, so it is escaped before it lands in an attribute. */
+    @Test
+    void escapesMarkupInTheBasePath() {
+        String html = shell.render("/a\"b<c>/peekaboot", DATA_JSON);
+
+        assertThat(html)
+                .contains("<script src=\"/a&quot;b&lt;c&gt;/peekaboot/ui/toolbar/toolbar.js\" type=\"module\">")
+                .doesNotContain("/a\"b<c>");
+    }
+
     /**
      * The whole point of inlining. tokens.css carries the custom properties every rule in
      * toolbar.css resolves against, so a gate that refuses one refuses the bar's entire

@@ -168,14 +168,15 @@ public class PeekabootErrorView implements View {
 
     /** @param method the failing request's method, or {@code null} to leave it off the request line */
     String render(String basePath, String method, Map<String, Object> attributes) {
+        String base = escape(basePath);
         Detail detail = detail(attributes);
         String scriptTags = detail.revealsSomething()
-                ? Placeholders.fill(REVEAL_SCRIPT_TAGS, Map.of("BASE", basePath, "REVEAL_SCRIPT", REVEAL_SCRIPT))
+                ? Placeholders.fill(REVEAL_SCRIPT_TAGS, Map.of("BASE", base, "REVEAL_SCRIPT", REVEAL_SCRIPT))
                 : "";
         return Placeholders.fill(
                 PAGE,
                 Map.of(
-                        "BASE", basePath,
+                        "BASE", base,
                         "STATUS_VARIANT", statusVariant(attributes),
                         "STATUS", escape(attributes.get("status")),
                         "REASON", escape(attributes.get("error")),

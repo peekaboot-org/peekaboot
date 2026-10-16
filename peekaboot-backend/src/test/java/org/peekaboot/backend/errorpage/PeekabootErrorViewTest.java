@@ -196,6 +196,18 @@ class PeekabootErrorViewTest {
         assertThat(response.getContentAsString()).contains("href=\"/app/peekaboot/ui/assets/tokens.css\"");
     }
 
+    /** The context path is the one request-derived value in its URLs, so it is escaped like every other. */
+    @Test
+    void escapesMarkupInTheContextPath() throws Exception {
+        request.setContextPath("/a\"b<c>");
+
+        view.render(Map.of(), request, response);
+
+        assertThat(response.getContentAsString())
+                .contains("href=\"/a&quot;b&lt;c&gt;/peekaboot/ui/assets/tokens.css\"")
+                .doesNotContain("/a\"b<c>");
+    }
+
     /** spring.mvc.servlet.path moves the dashboard, and with it every URL the page writes. */
     @Test
     void prefixesItsUrlsWithTheDispatcherServletsPrefix() throws Exception {
