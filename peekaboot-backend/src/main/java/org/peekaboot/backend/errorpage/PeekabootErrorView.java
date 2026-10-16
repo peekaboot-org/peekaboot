@@ -30,7 +30,7 @@ import org.springframework.web.util.HtmlUtils;
  * every {@code Include} switched on. The application's {@code spring.web.error.include-*}
  * settings are therefore neither read nor changed by this page. They govern what its error
  * <em>responses</em> carry; this page is for the developer debugging the failure, which is why
- * {@code SecurityPosture} warns when it is on outside local development.
+ * {@code SecurityPosture} warns when a deployment has it on.
  *
  * <p>Like the dev toolbar's shell, the stylesheets travel with the markup as well as being
  * linked, so a reader who has put an authorization gate in front of {@code /peekaboot/**} -

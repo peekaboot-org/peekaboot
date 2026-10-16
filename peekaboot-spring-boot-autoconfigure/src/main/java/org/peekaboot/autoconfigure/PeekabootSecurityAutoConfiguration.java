@@ -64,6 +64,7 @@ public class PeekabootSecurityAutoConfiguration {
     public SecurityPosture securityPosture(
             ObjectProvider<DashboardCredentials> credentials,
             ObjectProvider<CredentialsFile> credentialsFile,
+            PeekabootPaths paths,
             ListableBeanFactory beanFactory,
             Environment environment) {
         DashboardCredentials resolvedCredentials = credentials.getIfAvailable();
@@ -73,13 +74,14 @@ public class PeekabootSecurityAutoConfiguration {
                 && environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, Boolean.class, false);
         if (resolvedCredentials != null && resolvedCredentialsFile != null && guardRegistered(beanFactory)) {
             return SecurityPosture.armed(
+                    paths.dashboardPath(),
                     resolvedCredentials,
                     resolvedCredentialsFile.path().orElse(null),
                     environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false),
                     errorPageOnADeployment);
         }
         return deploymentLaunch
-                ? SecurityPosture.disabledOnADeployment(errorPageOnADeployment)
+                ? SecurityPosture.disabledOnADeployment(paths.dashboardPath(), errorPageOnADeployment)
                 : SecurityPosture.quiet();
     }
 

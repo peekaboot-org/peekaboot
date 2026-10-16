@@ -23,7 +23,7 @@ class SecurityPostureListenerTest {
 
     @Test
     void onApplicationEvent_logsAWarnPostureAtWarn() {
-        var posture = SecurityPosture.disabledOnADeployment(false);
+        var posture = SecurityPosture.disabledOnADeployment("/peekaboot", false);
         var expectedText = posture.report().orElseThrow().text();
 
         try (var logs = LogCapture.attach(SecurityPostureListener.class)) {
@@ -38,7 +38,7 @@ class SecurityPostureListenerTest {
 
     @Test
     void onApplicationEvent_logsAnInfoPostureAtInfo() {
-        var posture = SecurityPosture.armed(generated(), FILE, false, false);
+        var posture = SecurityPosture.armed("/peekaboot", generated(), FILE, false, false);
         var expectedText = posture.report().orElseThrow().text();
 
         try (var logs = LogCapture.attach(SecurityPostureListener.class)) {

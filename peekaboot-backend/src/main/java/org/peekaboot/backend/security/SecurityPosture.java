@@ -21,7 +21,7 @@ public final class SecurityPosture {
     private static final String DOCS = "https://www.peekaboot.org/docs/security/";
 
     private static final String ERROR_PAGE_ON_A_DEPLOYMENT =
-            "peekaboot.error-page.enabled=true outside local development: any client that asks for HTML"
+            "peekaboot.error-page.enabled=true on a deployment: any client that asks for HTML"
                     + " gets full stack traces, and no guard covers the error page.";
 
     public enum Level {
@@ -47,23 +47,33 @@ public final class SecurityPosture {
         return new SecurityPosture(null);
     }
 
-    /** The operator switched the guard off on a deployment launch. One reminder, not a banner. */
-    public static SecurityPosture disabledOnADeployment(boolean errorPageOn) {
-        String text = "Peekaboot is enabled with peekaboot.security.enabled=false outside local development."
-                + " Peekaboot does not authenticate /peekaboot/**, so your application's own security"
+    /**
+     * The operator switched the guard off on a deployment launch. One reminder, not a banner.
+     *
+     * @param dashboardPath where the dashboard sits below the context path, as {@code PeekabootPaths} resolves it
+     */
+    public static SecurityPosture disabledOnADeployment(String dashboardPath, boolean errorPageOn) {
+        String text = "Peekaboot is enabled with peekaboot.security.enabled=false on a deployment."
+                + " Peekaboot does not authenticate " + dashboardPath + "/**, so your application's own security"
                 + " must. See " + DOCS;
         return new SecurityPosture(
                 new Report(Level.WARN, errorPageOn ? text + "\n" + ERROR_PAGE_ON_A_DEPLOYMENT : text));
     }
 
+    /**
+     * The guard is armed: a banner with the credentials, at WARN while the toolbar or a deployed error page is on.
+     *
+     * @param dashboardPath where the dashboard sits below the context path, as {@code PeekabootPaths} resolves it
+     */
     public static SecurityPosture armed(
+            String dashboardPath,
             DashboardCredentials credentials,
             @Nullable Path credentialsFile,
             boolean devToolbarOn,
             boolean errorPageOnADeployment) {
 
         StringBuilder report = LifecycleBanner.open("Peekaboot Security");
-        LifecycleBanner.line(report, " Peekaboot challenges every /peekaboot/** request with HTTP Basic.");
+        LifecycleBanner.line(report, " Peekaboot challenges every " + dashboardPath + "/** request with HTTP Basic.");
         LifecycleBanner.line(report, " Username: " + credentials.username());
         LifecycleBanner.line(report, passwordLine(credentials, credentialsFile));
         if (devToolbarOn) {
