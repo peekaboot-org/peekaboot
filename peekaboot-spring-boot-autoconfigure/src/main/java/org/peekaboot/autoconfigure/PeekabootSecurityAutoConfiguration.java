@@ -2,8 +2,12 @@ package org.peekaboot.autoconfigure;
 
 import jakarta.servlet.DispatcherType;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
+import org.peekaboot.backend.errorpage.PeekabootErrorView;
+import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
 import org.peekaboot.backend.security.CredentialCache;
 import org.peekaboot.backend.security.CredentialsFile;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
@@ -25,6 +29,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.env.Environment;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -42,6 +47,8 @@ import org.springframework.util.StringUtils;
 public class PeekabootSecurityAutoConfiguration {
 
     private static final String CREDENTIALS_FILE_NAME = "security.properties";
+
+    private static final String ERROR_ATTRIBUTES_CLASS = "org.springframework.boot.webmvc.error.ErrorAttributes";
 
     private static final ResolvableType GUARD_TYPE =
             ResolvableType.forClassWithGenerics(FilterRegistrationBean.class, DashboardAuthenticationFilter.class);
@@ -70,8 +77,7 @@ public class PeekabootSecurityAutoConfiguration {
         DashboardCredentials resolvedCredentials = credentials.getIfAvailable();
         CredentialsFile resolvedCredentialsFile = credentialsFile.getIfAvailable();
         boolean deploymentLaunch = deploymentLaunch(environment);
-        boolean errorPageOnADeployment = deploymentLaunch
-                && environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, Boolean.class, false);
+        boolean errorPageOnADeployment = deploymentLaunch && errorPageRegistered(beanFactory);
         if (resolvedCredentials != null && resolvedCredentialsFile != null && guardRegistered(beanFactory)) {
             return SecurityPosture.armed(
                     paths.dashboardPath(),
@@ -164,6 +170,21 @@ public class PeekabootSecurityAutoConfiguration {
      */
     private static boolean guardRegistered(ListableBeanFactory beanFactory) {
         return beanFactory.getBeanNamesForType(GUARD_TYPE, true, false).length > 0;
+    }
+
+    /**
+     * Asked of the bean definitions, like {@link #guardRegistered}, so the posture never warns
+     * about a page nobody serves. The switch alone can be on while {@code ErrorPageAutoConfiguration}
+     * backs the page off for an application's own {@code templates/error.html}. The page's types
+     * need Spring MVC, so they are named only where its {@code ErrorAttributes} is present.
+     */
+    private static boolean errorPageRegistered(ListableBeanFactory beanFactory) {
+        return ClassUtils.isPresent(ERROR_ATTRIBUTES_CLASS, PeekabootSecurityAutoConfiguration.class.getClassLoader())
+                && Stream.of(
+                                PeekabootErrorView.class,
+                                PeekabootErrorViewResolver.class,
+                                PeekabootErrorExceptionResolver.class)
+                        .anyMatch(type -> beanFactory.getBeanNamesForType(type, true, false).length > 0);
     }
 
     /** Detected-only, so an explicit override of {@code peekaboot.security.enabled} does not hide what was detected. */

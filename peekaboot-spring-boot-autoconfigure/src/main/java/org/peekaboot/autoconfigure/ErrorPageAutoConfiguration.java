@@ -25,7 +25,6 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.web.servlet.DispatcherServlet;
-import org.springframework.web.servlet.View;
 
 /**
  * Peekaboot's error page, in the fallback slot Spring Boot leaves for one, or - where
@@ -62,7 +61,7 @@ public class ErrorPageAutoConfiguration {
             matchIfMissing = true)
     @ConditionalOnBooleanProperty(name = "spring.web.error.whitelabel.enabled", matchIfMissing = true)
     @Conditional(ErrorPageAutoConfiguration.ErrorTemplateMissingCondition.class)
-    public View peekabootErrorView(
+    public PeekabootErrorView peekabootErrorView(
             ErrorAttributes errorAttributes, StackTraceRules stackTraceRules, PeekabootPaths paths) {
         return new PeekabootErrorView(errorAttributes, stackTraceRules, paths);
     }

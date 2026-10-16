@@ -22,11 +22,16 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletPath;
+import org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 class PeekabootSecurityAutoConfigurationTest {
+
+    /** Peekaboot's error page and the ErrorAttributes it renders with. */
+    private static final AutoConfigurations ERROR_PAGE =
+            AutoConfigurations.of(ErrorPageAutoConfiguration.class, ErrorMvcAutoConfiguration.class);
 
     /**
      * Every case that resolves {@code DashboardCredentials} persists a password through
@@ -264,6 +269,7 @@ class PeekabootSecurityAutoConfigurationTest {
     @Test
     void warnsAboutTheErrorPageOnADeploymentWithTheGuardArmed(@TempDir Path storageDir) {
         runner(storageDir)
+                .withConfiguration(ERROR_PAGE)
                 .withPropertyValues(
                         "peekaboot.error-page.enabled=true",
                         PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
@@ -278,9 +284,43 @@ class PeekabootSecurityAutoConfigurationTest {
     @Test
     void warnsAboutTheErrorPageOnADeploymentWithTheGuardOff(@TempDir Path storageDir) {
         runner(storageDir)
+                .withConfiguration(ERROR_PAGE)
                 .withPropertyValues(
                         "peekaboot.security.enabled=false",
                         "peekaboot.error-page.enabled=true",
+                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(
+                                report -> assertThat(report.text()).contains("peekaboot.error-page.enabled=true")));
+    }
+
+    /** The application's own templates/error.html backs Peekaboot's page off, so no page escapes the guard. */
+    @Test
+    void saysNothingAboutAnErrorPageThatBackedOffForTheApplicationsTemplate(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withConfiguration(ERROR_PAGE)
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        "test.error-template=true",
+                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean("error");
+                    assertThat(context.getBean(SecurityPosture.class).report())
+                            .hasValueSatisfying(
+                                    report -> assertThat(report.text()).doesNotContain("peekaboot.error-page.enabled"));
+                });
+    }
+
+    /** The override registers the page whatever templates the application has, so the warning stands. */
+    @Test
+    void warnsAboutAnOverridingErrorPageDespiteTheApplicationsTemplate(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withConfiguration(ERROR_PAGE)
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        "peekaboot.error-page.override=true",
+                        "test.error-template=true",
                         PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
@@ -292,6 +332,7 @@ class PeekabootSecurityAutoConfigurationTest {
     @Test
     void saysNothingAboutTheErrorPageOnALocalRun(@TempDir Path storageDir) {
         runner(storageDir)
+                .withConfiguration(ERROR_PAGE)
                 .withPropertyValues("peekaboot.error-page.enabled=true")
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
