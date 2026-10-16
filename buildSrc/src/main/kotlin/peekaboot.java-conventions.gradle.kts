@@ -134,7 +134,7 @@ pmd {
 }
 
 spotbugs {
-    toolVersion = "4.10.4"
+    toolVersion = "4.10.5"
     excludeFilter = rootProject.file("config/spotbugs-exclude.xml")
 }
 
