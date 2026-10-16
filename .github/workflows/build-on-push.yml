@@ -82,11 +82,12 @@ jobs:
             .github/release-notes/render.sh --unreleased
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # The parallel Gradle build, for Gradle-ecosystem Dependabot branches only: the Maven job
-  # never reads a build.gradle.kts, so without this a Gradle bump would merge unbuilt.
+  # The parallel Gradle build, for Dependabot branches only: the Maven job never reads a
+  # build.gradle.kts, so without this a Gradle bump would merge unbuilt. Every ecosystem's
+  # branch, because a red Maven tool bump is fixed by a Gradle edit pushed onto it.
   # dependabot-pr-auto-merge waits on the whole run, this job included.
   gradle-build:
-    if: startsWith(github.ref_name, 'dependabot/gradle/')
+    if: startsWith(github.ref_name, 'dependabot/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

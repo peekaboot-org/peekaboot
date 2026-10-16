@@ -36,7 +36,7 @@ import org.xml.sax.SAXException;
  * {@code maven-release-plugin} rewrites the poms on every release and knows nothing about the
  * Gradle build. A second copy on the Gradle side goes stale the moment a release runs, and
  * nothing notices, because each build is internally consistent and CI builds Gradle only on
- * Gradle-ecosystem Dependabot branches.
+ * Dependabot branches.
  *
  * <p>Every value a Gradle script cannot read out of a pom is written on both sides instead:
  * the Spring Boot line, the static-analysis tool versions, the coverage floors, the library

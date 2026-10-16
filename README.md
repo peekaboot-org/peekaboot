@@ -102,7 +102,7 @@ on a Node the build downloads), the dependency and output checks, and the reacto
 JaCoCo coverage floor in `peekaboot-coverage`. Local builds format your sources for you; run
 `mvn spotless:apply` to do it by hand. A parallel Gradle build (`./gradlew build`) covers
 the same modules, tests and gates. Maven is the system of record, and CI builds Gradle only
-on Gradle-ecosystem Dependabot branches, so a change to one build has to be mirrored in the
+on Dependabot branches, so a change to one build has to be mirrored in the
 other.
 
 Further reading:

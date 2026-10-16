@@ -8,8 +8,8 @@ in the build needs it and nothing uses the machine's own Node.
 
 A parallel Gradle build covers the same modules, tests and gates (see
 [the Gradle build](#the-parallel-gradle-build) below). CI runs Maven, and Gradle only for
-Gradle-ecosystem Dependabot branches, so every Maven statement in this document is
-authoritative and the Gradle build must be kept in lockstep.
+Dependabot branches, so every Maven statement in this document is authoritative and the
+Gradle build must be kept in lockstep.
 
 ## Prerequisites
 
@@ -150,7 +150,7 @@ The module version and the build instant are *derived*, not copied. `settings.gr
 reads `<version>` and `project.build.outputTimestamp` out of the root `pom.xml` and hands
 both to every Gradle project. `maven-release-plugin` rewrites the poms alone, so a
 hand-kept copy on the Gradle side went stale at every release and nothing noticed, because
-CI builds Gradle only on Gradle-ecosystem Dependabot branches. `BuildVersionLockstepTest`
+CI builds Gradle only on Dependabot branches. `BuildVersionLockstepTest`
 fails if such a copy reappears.
 
 `gradle.properties` holds `springBootVersion`, matching the root
@@ -179,9 +179,10 @@ datasource-proxy, jdbc-url-parser, cron-utils, Playwright, axe-core) gets a `gra
 to the `maven` one, and the human lands the two together. A tool Gradle pins through
 `toolVersion`, `palantirJavaFormat(...)` or the Node `version =` has no Gradle PR, because
 Dependabot's `gradle` ecosystem bumps dependency coordinates only. The Maven PR goes red alone,
-and the human adds the Gradle edit on that branch. On a `dependabot/gradle/*` branch
-`build-on-push` adds a `gradle-build` job next to the Maven job, and a Gradle bump with no
-Maven twin, such as a `buildSrc` plugin or the wrapper, auto-merges once both jobs are green.
+and the human adds the Gradle edit on that branch. On every `dependabot/*` branch
+`build-on-push` adds a `gradle-build` job next to the Maven job, so that Gradle edit builds
+before the merge. A Gradle bump with no Maven twin, such as a `buildSrc` plugin or the
+wrapper, auto-merges once both jobs are green.
 
 ### Reproducibility and artifact parity
 
@@ -475,10 +476,12 @@ after a Dependabot merge counts as Dependabot's run is GitHub's call: if it does
 snapshot waits for the next push to `dev`. A deploy without the secret would fail on Central's
 401 instead.
 
-On a `dependabot/gradle/*` branch a second job, `gradle-build`, runs next to the Maven job,
-because the Maven build compiles nothing from the Gradle files those PRs change. It validates
-the wrapper jar with `gradle/actions/wrapper-validation` first, since those branches can
-replace the jar `./gradlew` executes, then runs `prepare-build` and `./gradlew build`. See
+On a `dependabot/*` branch a second job, `gradle-build`, runs next to the Maven job, because
+the Maven build compiles nothing from the Gradle files. A Gradle-ecosystem PR changes them,
+and a red Maven tool bump gets its Gradle twin pushed onto the Maven PR's branch by hand, so
+every Dependabot ecosystem runs it. It validates the wrapper jar with
+`gradle/actions/wrapper-validation` first, since those branches can replace the jar
+`./gradlew` executes, then runs `prepare-build` and `./gradlew build`. See
 [Lockstep](#lockstep).
 
 ### `draft-release-notes.yml`
@@ -529,8 +532,8 @@ leaves the pull request open and unapproved for a human. The merge condition is 
 allow-list. It admits a patch or minor update from the `github_actions`, `maven`, `gradle` or
 `npm_and_yarn` ecosystem, outside the `spring-boot` dependency group. Anything else waits for
 a human, so a semver-major update does, and so does a pull request whose update type
-Dependabot did not report. The watch covers every job in the run, so a Gradle-ecosystem PR
-also waits for the `gradle-build` job. Boot is a
+Dependabot did not report. The watch covers every job in the run, so every PR also waits for
+the `gradle-build` job. Boot is a
 compatibility event rather than a bump, because peekaboot implements
 `EndpointExposureOutcomeContributor`, constructs actuator endpoint objects directly and
 depends on Boot's property-source ordering. That whole line
