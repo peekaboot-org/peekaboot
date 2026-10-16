@@ -279,7 +279,7 @@ one ordered below has nowhere to go, since an unordered application chain alread
 Spring Security on the class path.
 
 An application that wants to supply its own guard overrides the registration by declaring a
-`FilterRegistrationBean<DashboardAuthenticationFilter>` bean of its own -
+`FilterRegistrationBean<DashboardAuthenticationFilter>` bean of its own.
 `@ConditionalOnMissingBean` matches on that type, not on the filter class, so Peekaboot's
 registration backs off. A bare `DashboardAuthenticationFilter` bean does the opposite of what a
 consumer reaching for it wants: it does not stop Peekaboot's own `FilterRegistrationBean`, and
@@ -1043,9 +1043,9 @@ request: `preHandle` pushes one frame, `afterCompletion` pops one. A handler tha
 `forward:` (or an include) has DispatcherServlet run a second dispatch *inside* the first one's
 view rendering, so both dispatches call every callback against the same request. One attribute
 per observation would have the inner dispatch overwrite the outer one's view observation, which
-is then never stopped: no `spring.view.render` span for the forward, and - the part that reaches
-beyond the request - its scope left open on the request thread, so every later request that
-pooled thread served inherited the leftover context and was captured into that same trace.
+is then never stopped. The forward gets no `spring.view.render` span, and its scope stays open on
+the request thread. That part reaches beyond the request: every later request that pooled thread
+served inherited the leftover context and was captured into that same trace.
 `TracingHandlerInterceptorTest` pins the scope, `NestedDispatchTraceCaptureIT` the captured
 shape. Nesting is strictly LIFO on one thread, which is what lets a plain stack be right here.
 
@@ -1382,7 +1382,7 @@ Database queries aren't captured specially. A query shows up in a trace because 
 JDBC/datasource instrumentation on the classpath already emits a span for it, tagged with
 `db.*` or `jdbc.query*` attributes. That instrumentation is
 `datasource-micrometer-spring-boot` plus `datasource-micrometer-opentelemetry`, which
-`peekaboot-spring-boot-starter` depends on - an uninstrumented DataSource emits no query
+`peekaboot-spring-boot-starter` depends on. An uninstrumented DataSource emits no query
 spans, and nothing downstream can tell that apart from an endpoint that runs no queries, so
 the starter carries the instrumentation rather than leaving both cases reading as `0`.
 `DbSpans.isQuery` is the one definition of a query span:

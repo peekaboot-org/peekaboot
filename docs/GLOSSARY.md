@@ -32,7 +32,7 @@ without a copy so the list filters can classify a bundle without building a tree
 
 ### Root Action Type
 `RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
-assigns one from the root span's kind and tag prefixes - and, for CONNECTION_POOL alone, its
+assigns one from the root span's kind and tag prefixes. CONNECTION_POOL alone also reads its
 fixed contextual name. Labels and icons live only in the frontend's `shared/root-actions.js`,
 keyed by constant name. A reader's view of the types is on the site:
 [trace types](https://www.peekaboot.org/docs/traces/#root-action-type).
