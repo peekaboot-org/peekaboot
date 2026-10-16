@@ -167,7 +167,6 @@ class PeekabootSecurityAutoConfigurationTest {
     @ValueSource(strings = {"/app", "/app/"})
     void guardsTheDashboardUnderTheDispatcherServletsPath(String servletPath, @TempDir Path storageDir) {
         runner(storageDir)
-                .withConfiguration(AutoConfigurations.of(DispatcherServletAutoConfiguration.class))
                 .withPropertyValues("spring.mvc.servlet.path=" + servletPath)
                 .run(context ->
                         assertThat(registration(context).getUrlPatterns()).containsExactly("/app/peekaboot/*"));
@@ -187,7 +186,6 @@ class PeekabootSecurityAutoConfigurationTest {
     @Test
     void guardsTheRootMappingUnderTheDefaultServletPath(@TempDir Path storageDir) {
         runner(storageDir)
-                .withConfiguration(AutoConfigurations.of(DispatcherServletAutoConfiguration.class))
                 .run(context ->
                         assertThat(registration(context).getUrlPatterns()).containsExactly("/peekaboot/*"));
     }
