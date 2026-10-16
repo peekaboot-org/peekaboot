@@ -49,9 +49,6 @@ class BooleanSwitchesTest {
     /** The binder cannot convert these. */
     private static final List<String> UNREADABLE_BY_THE_BINDER = List.of("enabled", "maybe");
 
-    /** What compose or Helm templating leaves for an unset variable. */
-    private static final List<String> BLANK = List.of("", "  ", "\t");
-
     /** Both read these as false, except where a condition also matches only {@code false}. */
     private static final List<String> READ_AS_FALSE_LENIENTLY = List.of("no", "OFF", "0", " false", "false ");
 
@@ -128,19 +125,6 @@ class BooleanSwitchesTest {
     void acceptsSwitchesLeftUnset() {
         assertThatCode(() -> BooleanSwitches.requireUnambiguous(new MockEnvironment()))
                 .doesNotThrowAnyException();
-    }
-
-    static Stream<Arguments> everySwitchWithEveryBlank() {
-        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
-                .flatMap(key -> BLANK.stream().map(value -> Arguments.of(key, value)));
-    }
-
-    @ParameterizedTest(name = "{0}=''{1}''")
-    @MethodSource("everySwitchWithEveryBlank")
-    void acceptsABlankValue(String key, String value) {
-        MockEnvironment environment = new MockEnvironment().withProperty(key, value);
-
-        assertThatCode(() -> BooleanSwitches.requireUnambiguous(environment)).doesNotThrowAnyException();
     }
 
     /** A blank switch takes the value the next source down holds, as if the blank were not there. */

@@ -39,8 +39,7 @@ final class BooleanSwitches {
 
     /**
      * Reads each switch as the conditions do, as a string, and as the binder does, through Boot's
-     * shared conversion service, and accepts it only where the two agree. A blank is left to
-     * {@link #treatBlanksAsUnset}.
+     * shared conversion service, and accepts it only where the two agree.
      *
      * @throws FailureAnalyzedException naming every offending switch and its value, which Boot
      *     reports as a failure analysis rather than a stack trace
@@ -48,7 +47,6 @@ final class BooleanSwitches {
     static void requireUnambiguous(PropertyResolver properties) {
         List<String> offending = PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
                 .filter(properties::containsProperty)
-                .filter(key -> !isBlank(properties.getProperty(key)))
                 .filter(key -> !readAlike(key, properties.getProperty(key)))
                 .toList();
         if (offending.isEmpty()) {
