@@ -6,6 +6,7 @@ import ch.qos.logback.classic.Level;
 import jakarta.servlet.RequestDispatcher;
 import java.util.List;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,11 +86,7 @@ class PeekabootErrorExceptionResolverTest {
     @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void logsACyclicCauseChainAtErrorToo() {
         request.addHeader("Accept", "text/html");
-        RuntimeException first = new RuntimeException("first");
-        RuntimeException second = new RuntimeException("second", first);
-        first.initCause(second);
-
-        resolver.resolveException(request, response, null, first);
+        resolver.resolveException(request, response, null, cycle());
 
         assertThat(logs.appender().list).singleElement().satisfies(event -> {
             assertThat(event.getLevel()).isEqualTo(Level.ERROR);
@@ -225,7 +222,14 @@ class PeekabootErrorExceptionResolverTest {
     @Test
     void keepsTheHeadersOfAResponseStatusException() {
         request.addHeader("Accept", "text/html");
-        ResponseStatusException tooMany = new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS) {
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, tooManyRequests(null));
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("30");
+    }
+
+    private static ResponseStatusException tooManyRequests(@Nullable Throwable cause) {
+        return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, null, cause) {
             @Override
             public HttpHeaders getHeaders() {
                 HttpHeaders headers = new HttpHeaders();
@@ -233,11 +237,6 @@ class PeekabootErrorExceptionResolverTest {
                 return headers;
             }
         };
-
-        ModelAndView modelAndView = resolver.resolveException(request, response, null, tooMany);
-
-        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
-        assertThat(response.getHeader("Retry-After")).isEqualTo("30");
     }
 
     @Test
@@ -299,13 +298,44 @@ class PeekabootErrorExceptionResolverTest {
     @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void terminatesOnACyclicCauseChainInsteadOfOverflowing() {
         request.addHeader("Accept", "text/html");
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, cycle());
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /**
+     * Even with a status above the cycle, Spring's resolvers cannot be asked: every resolution
+     * they make ends in a disconnected-client check that walks the whole chain. The status is
+     * read here instead.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void keepsTheStatusOfAResponseStatusExceptionAboveACycle() {
+        request.addHeader("Accept", "text/html");
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, tooManyRequests(cycle()));
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void keepsTheStatusOfAResponseStatusAnnotationAboveACycle() {
+        request.addHeader("Accept", "text/html");
+        Exception annotated = new AnnotatedException();
+        annotated.initCause(cycle());
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, null, annotated);
+
+        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    /** Two exceptions, each other's cause: Throwable.initCause refuses only self-causation. */
+    private static RuntimeException cycle() {
         RuntimeException first = new RuntimeException("first");
         RuntimeException second = new RuntimeException("second", first);
         first.initCause(second);
-
-        ModelAndView modelAndView = resolver.resolveException(request, response, null, first);
-
-        assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        return first;
     }
 
     @Test
