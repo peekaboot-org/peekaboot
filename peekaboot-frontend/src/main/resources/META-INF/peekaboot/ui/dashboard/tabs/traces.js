@@ -208,8 +208,9 @@ function wireControls(container) {
 
 /**
  * Generated from ROOT_ACTION_TYPES rather than hardcoded in index.html, so adding a
- * root action type means no HTML edit. Each checkbox's accessible name comes
- * from the wrapping <label>, matching the loggers tab's checkbox-label convention.
+ * root action type means no HTML edit. Each type checkbox's accessible name comes
+ * from the wrapping <label>, matching the loggers tab's checkbox-label convention; the
+ * exclusion checkbox's aria-label overrides it.
  */
 function renderTypeFilterCheckboxes(container) {
     const filterEl = container.querySelector('#traces-filter');
