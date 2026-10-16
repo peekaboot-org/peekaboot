@@ -178,8 +178,8 @@ class BuildVersionLockstepTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("valuesBothBuildsSpellOut")
     @Timeout(10)
-    void gradleSpellsOutTheSameValueAsMaven(String maven, String gradle) {
-        assertThat(gradle).isEqualTo(maven);
+    void gradleSpellsOutTheSameValueAsMaven(Declaration maven, Declaration gradle) {
+        assertThat(gradle.value()).isEqualTo(maven.value());
     }
 
     /**
@@ -228,7 +228,7 @@ class BuildVersionLockstepTest {
     }
 
     static Stream<Arguments> valuesBothBuildsSpellOut() {
-        Path root = Path.of("..").toAbsolutePath().normalize();
+        Path root = reactorRoot();
         Path pom = root.resolve("pom.xml");
         Path conventions = root.resolve("buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts");
         Path coveragePom = root.resolve("peekaboot-coverage/pom.xml");
@@ -361,10 +361,18 @@ class BuildVersionLockstepTest {
     private static Arguments row(
             String what, Path mavenFile, String mavenPattern, Path gradleFile, String gradlePattern) {
         return Arguments.of(
-                Named.of(what, declaredValue(mavenFile, mavenPattern)), declaredValue(gradleFile, gradlePattern));
+                Named.of(what, new Declaration(mavenFile, mavenPattern)), new Declaration(gradleFile, gradlePattern));
     }
 
-    /** The first capture group of {@code pattern} in {@code file}; a miss fails the row rather than the suite. */
+    /** A value one build file spells out, read when its row runs so that a miss fails that row alone. */
+    record Declaration(Path file, String pattern) {
+
+        String value() {
+            return declaredValue(file, pattern);
+        }
+    }
+
+    /** The first capture group of {@code pattern} in {@code file}. */
     private static String declaredValue(Path file, String pattern) {
         String content;
         try {
@@ -380,7 +388,7 @@ class BuildVersionLockstepTest {
     }
 
     /** The reactor root, reached from this module rather than from an assumed working directory. */
-    private Path reactorRoot() {
+    private static Path reactorRoot() {
         return Path.of("..").toAbsolutePath().normalize();
     }
 
