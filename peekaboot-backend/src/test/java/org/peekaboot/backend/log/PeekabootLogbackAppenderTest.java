@@ -182,4 +182,22 @@ class PeekabootLogbackAppenderTest {
         assertThat(lines.get(999)).startsWith("\tat com.example.Recursor.recurse");
         assertThat(lines.getLast()).contains("501").contains("omitted");
     }
+
+    @Test
+    @DisplayName("counts a single dropped line in the singular")
+    void countsASingleDroppedLineInTheSingular() {
+        MDC.put("traceId", TRACE_ID);
+        IllegalStateException deep = new IllegalStateException("one too deep");
+        StackTraceElement[] frames = new StackTraceElement[1000];
+        for (int i = 0; i < frames.length; i++) {
+            frames[i] = new StackTraceElement("com.example.Recursor", "recurse", "Recursor.java", i);
+        }
+        deep.setStackTrace(frames);
+
+        logger.error("recursion blew the stack", deep);
+
+        // one header line + 1000 frame lines = 1001, one over the cap
+        List<String> lines = captured.getFirst().stackTrace().lines().toList();
+        assertThat(lines.getLast()).isEqualTo("... 1 line omitted");
+    }
 }

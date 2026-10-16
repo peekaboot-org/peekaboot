@@ -7,6 +7,7 @@ import ch.qos.logback.core.UnsynchronizedAppenderBase;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.text.CountFormat;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -76,6 +77,7 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
             return trace;
         }
         int omitted = lines.size() - MAX_CAPTURED_LINES;
-        return String.join("\n", lines.subList(0, MAX_CAPTURED_LINES)) + "\n... " + omitted + " lines omitted";
+        return String.join("\n", lines.subList(0, MAX_CAPTURED_LINES)) + "\n... " + CountFormat.of(omitted, "line")
+                + " omitted";
     }
 }

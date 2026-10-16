@@ -611,7 +611,8 @@ elision (`... N more` from `printStackTrace`, `... N common frames omitted` from
 Only a tab-led line that starts `at ` once its own leading tabs are gone is a candidate.
 
 Folding is a render-time decision. `PeekabootLogbackAppender` captures a throwable's full trace
-unfolded, capped at 1000 lines with a `... N lines omitted` marker so a `StackOverflowError`'s
+unfolded, capped at 1000 lines with a `... N lines omitted` marker (`... 1 line omitted` for
+one) so a `StackOverflowError`'s
 1024-frame trace can't dominate retention; `TraceLogMapper` runs
 `StackTraceFolding.fold` over that stored trace on every read, and `PeekabootErrorView` runs it
 fresh on every request. The full trace is therefore always present on the wire.
