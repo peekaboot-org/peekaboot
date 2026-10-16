@@ -723,13 +723,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         overlay.click(".pk-query-span-link");
 
         overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
-        overlay.waitFor(".pk-gantt-row.pk-jump-flash");
-        String highlighted =
-                (String) overlay.evaluate("root => root.querySelector('.pk-gantt-row.pk-jump-flash')?.dataset.spanId");
-        assertThat(highlighted).isEqualTo(spanId);
-        String focusedRowSpanId =
-                (String) overlay.evaluate("root => root.activeElement?.closest('.pk-gantt-row')?.dataset.spanId");
-        assertThat(focusedRowSpanId).isEqualTo(spanId);
+        assertThat(awaitJumpLanding()).containsEntry("flashed", spanId).containsEntry("focused", spanId);
     }
 
     /**
@@ -787,20 +781,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
         overlay.click(".pk-log__goto-span");
 
         overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
-        overlay.waitFor(".pk-gantt-row.pk-jump-flash");
-        String highlighted =
-                (String) overlay.evaluate("root => root.querySelector('.pk-gantt-row.pk-jump-flash')?.dataset.spanId");
-        assertThat(highlighted).isEqualTo(spanId);
-        String focusedRowSpanId =
-                (String) overlay.evaluate("root => root.activeElement?.closest('.pk-gantt-row')?.dataset.spanId");
-        assertThat(focusedRowSpanId).isEqualTo(spanId);
+        assertThat(awaitJumpLanding()).containsEntry("flashed", spanId).containsEntry("focused", spanId);
     }
 
     /**
      * An async subtree starts collapsed, so a Queries link to a span inside one points at a
      * hidden row: the scroll and the focus do nothing there and the flash lands out of sight.
-     * The jump opens the subtree first. Read in one poll, so the flash's 2s timer cannot end
-     * between the reads.
+     * The jump opens the subtree first.
      */
     @Test
     void aQueryLinkRevealsItsSpanInsideACollapsedAsyncSubtree() {
@@ -810,24 +797,32 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         overlay.click(".pk-query-span-link[data-span-id='async-query']");
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> landed = (Map<String, Object>) overlay.waitUntil("""
+        assertThat(awaitJumpLanding())
+                .containsEntry("flashed", "async-query")
+                .containsEntry("focused", "async-query")
+                .containsEntry("visible", true);
+        assertThat(
+                        overlay.evaluate(
+                                "root => root.querySelector('.pk-gantt-span--async .pk-gantt-toggle').getAttribute('aria-expanded')"))
+                .isEqualTo("true");
+    }
+
+    /**
+     * The row a span jump flashed, the row holding focus and whether the flashed row shows, read
+     * in one poll so the flash's 2s timer cannot end between the reads.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> awaitJumpLanding() {
+        return (Map<String, Object>) overlay.waitUntil("""
                 root => {
                     const row = root.querySelector('.pk-gantt-row.pk-jump-flash');
                     return row && {
                         flashed: row.dataset.spanId,
                         focused: root.activeElement?.closest('.pk-gantt-row')?.dataset.spanId ?? null,
-                        visible: row.checkVisibility(),
-                        asyncEntryExpanded: root.querySelector('.pk-gantt-span--async .pk-gantt-toggle').getAttribute('aria-expanded')
+                        visible: row.checkVisibility()
                     };
                 }
                 """);
-
-        assertThat(landed)
-                .containsEntry("flashed", "async-query")
-                .containsEntry("focused", "async-query")
-                .containsEntry("visible", true)
-                .containsEntry("asyncEntryExpanded", "true");
     }
 
     /**
