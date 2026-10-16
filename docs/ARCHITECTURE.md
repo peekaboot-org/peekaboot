@@ -221,6 +221,7 @@ org.peekaboot.backend/
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
 ├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page and the Logs tab fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
+├── text/                   # CountFormat: a count with its unit, singular for one
 ├── tracing/                # In-memory tracing
 │   ├── async/              # AsyncTaskDecorator, AsyncTaskFailurePostProcessor, AsyncTaskFailureInterceptor, RunningAsyncTask
 │   ├── bridge/otel/        # OtelSpanExporter

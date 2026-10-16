@@ -5,6 +5,7 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.HexFormat;
+import org.peekaboot.backend.text.CountFormat;
 
 /**
  * A JDBC bind value as the SQL literal a reader would type for it. Display only: the
@@ -39,7 +40,7 @@ final class SqlLiterals {
 
     /** The SQL block comment a cap leaves behind, counting the units it dropped. */
     static String omitted(int count, String unit) {
-        return "/* " + count + " " + unit + (count == 1 ? "" : "s") + " omitted */";
+        return "/* " + CountFormat.of(count, unit) + " omitted */";
     }
 
     /** Dates and times as ISO-8601; the JDBC types' own toString is the JDBC escape format. */

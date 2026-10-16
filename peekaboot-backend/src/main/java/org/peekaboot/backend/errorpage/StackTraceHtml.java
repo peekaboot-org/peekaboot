@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
+import org.peekaboot.backend.text.CountFormat;
 import org.springframework.web.util.HtmlUtils;
 
 /**
@@ -50,7 +51,7 @@ final class StackTraceHtml {
             frames.append(span(lines.get(i), applicationFrames.contains(i)));
         }
         return "<details class=\"pk-stack-trace__hidden\"><summary class=\"pk-stack-trace__hidden-summary\">"
-                + count + (count == 1 ? " frame" : " frames") + " hidden</summary>"
+                + CountFormat.of(count, "frame") + " hidden</summary>"
                 + frames + "</details>";
     }
 

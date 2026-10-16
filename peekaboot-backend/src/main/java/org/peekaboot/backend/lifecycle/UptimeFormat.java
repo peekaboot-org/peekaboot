@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import org.peekaboot.backend.text.CountFormat;
 
 /**
  * Renders how long something ran the way a person would say it: the three largest
@@ -32,7 +33,7 @@ public final class UptimeFormat {
 
     private static void append(List<String> parts, long value, String unit) {
         if (value > 0) {
-            parts.add(value + " " + unit + (value == 1 ? "" : "s"));
+            parts.add(CountFormat.of(value, unit));
         }
     }
 }
