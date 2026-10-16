@@ -45,7 +45,7 @@ public class PeekabootPathsAutoConfiguration {
             DispatcherServletPath known = dispatcherServletPath.getIfAvailable();
             if (known == null) {
                 log.warn("No DispatcherServletPath bean: Peekaboot assumes the DispatcherServlet is mapped at /"
-                        + " and guards and serves its dashboard under /peekaboot/*");
+                        + " and guards and serves its dashboard under " + PeekabootPaths.BASE_PATH + "/*");
                 return paths(environment, "");
             }
             return paths(environment, known.getPrefix());

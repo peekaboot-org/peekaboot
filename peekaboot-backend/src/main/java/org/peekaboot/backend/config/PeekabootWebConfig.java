@@ -24,6 +24,9 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
      */
     private static final String FONT_PATTERN = PeekabootPaths.BASE_PATH + "/ui/vendor/geist/*-*.*.*.woff2";
 
+    /** The dashboard's page, relative to {@link PeekabootPaths#BASE_PATH}. */
+    private static final String DASHBOARD_INDEX = "ui/dashboard/index.html";
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // The dev toolbar rides on every page of the host application, so a font that
@@ -54,8 +57,10 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
      */
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addRedirectViewController(PeekabootPaths.BASE_PATH, "peekaboot/ui/dashboard/index.html");
-        registry.addRedirectViewController(PeekabootPaths.BASE_PATH + "/", "ui/dashboard/index.html");
+        // the browser replaces the last segment of /peekaboot, so that target has to repeat it
+        registry.addRedirectViewController(
+                PeekabootPaths.BASE_PATH, PeekabootPaths.BASE_PATH.substring(1) + "/" + DASHBOARD_INDEX);
+        registry.addRedirectViewController(PeekabootPaths.BASE_PATH + "/", DASHBOARD_INDEX);
     }
 
     @Override
