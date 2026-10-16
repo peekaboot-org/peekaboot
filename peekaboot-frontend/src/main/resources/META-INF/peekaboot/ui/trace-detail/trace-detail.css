@@ -2,7 +2,7 @@
    the empty-state message, the coloured durations, labels, icon buttons and the stack
    trace reuse ../assets/components.css, the focus ring and the button reset
    ../assets/base.css. The host's own fixed-fullscreen sizing is set inline by
-   trace-detail.js (see the comment at that call site); .pk-overlay simply fills it. */
+   trace-detail.js (see the comment at that call site); .pk-overlay fills it. */
 
 .pk-overlay {
     position: absolute;
