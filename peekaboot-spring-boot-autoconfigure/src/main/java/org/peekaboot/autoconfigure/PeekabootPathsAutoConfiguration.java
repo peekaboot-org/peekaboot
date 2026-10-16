@@ -16,13 +16,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 /**
- * The single {@link PeekabootPaths} instance every consumer shares - the guard, both toolbar
- * filters, the error page, the tracing interceptor's exclusions and the span exporter's skip -
- * constructed once with the resolved {@code management.endpoints.web.base-path}, so the actuator
- * exclusion follows a relocated management base path, the resolved
- * {@code server.servlet.context-path}, so the exporter's skip holds for span path tags that carry
- * the context path, and the DispatcherServlet's prefix, which {@code spring.mvc.servlet.path}
- * moves the whole dashboard under.
+ * The single {@link PeekabootPaths} instance every consumer shares. The guard, both toolbar
+ * filters, the error page, the tracing interceptor's exclusions and the span exporter's skip all
+ * read it.
+ *
+ * <p>It is built once from three resolved values. {@code management.endpoints.web.base-path}
+ * moves the actuator exclusion. {@code server.servlet.context-path} keeps the exporter's skip
+ * working for span path tags that carry it. The DispatcherServlet's prefix, set by
+ * {@code spring.mvc.servlet.path}, moves the whole dashboard.
  */
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)

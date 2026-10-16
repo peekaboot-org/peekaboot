@@ -11,17 +11,17 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>The exclusions are relative to the DispatcherServlet, which serves every one of them, so
  * they are also the path patterns Spring MVC matches. Requests are matched on their
- * {@linkplain #pathWithinApplication path within the application}, which the container
- * has already decoded and normalised, so neither a {@code server.servlet.context-path}
- * nor a {@code /x/../peekaboot/...} spelling hides Peekaboot's own endpoints from the
- * prefix check; the DispatcherServlet's own prefix, set by {@code spring.mvc.servlet.path},
- * is stripped from it first. A path that still carries the context path - a span's HTTP
- * path tag - goes through {@link #isExcludedRequestPath}, which strips that too. URLs
- * written into a page get both put back in front via {@link #basePath}.
+ * {@linkplain #pathWithinApplication path within the application}, which the container has
+ * already decoded and normalised. Neither a {@code server.servlet.context-path} nor a
+ * {@code /x/../peekaboot/...} spelling hides Peekaboot's own endpoints from the prefix check.
+ * The DispatcherServlet's own prefix, set by {@code spring.mvc.servlet.path}, is stripped first.
+ * A span's HTTP path tag still carries the context path, so it goes through
+ * {@link #isExcludedRequestPath}, which strips that too. URLs written into a page get both put
+ * back in front via {@link #basePath}.
  *
- * <p>One instance per application: the auto-configuration constructs it with the resolved
- * {@code management.endpoints.web.base-path}, so the actuator exclusion follows a
- * relocated management base path, the resolved {@code server.servlet.context-path} and the
+ * <p>One instance per application. The auto-configuration constructs it with the resolved
+ * {@code management.endpoints.web.base-path}, so the actuator exclusion follows a relocated
+ * management base path. It also passes the resolved {@code server.servlet.context-path} and the
  * DispatcherServlet's prefix.
  */
 public final class PeekabootPaths {
@@ -67,7 +67,7 @@ public final class PeekabootPaths {
         this.dispatcherServletPrefix = dispatcherServletPrefix;
     }
 
-    /** The exclusions at Spring Boot's defaults - {@code /actuator}, everything at the root - for plain construction in tests. */
+    /** The exclusions at Spring Boot's defaults, {@code /actuator} and everything at the root, for plain construction in tests. */
     public static PeekabootPaths defaults() {
         return new PeekabootPaths(DEFAULT_MANAGEMENT_BASE_PATH, "", "");
     }
@@ -91,9 +91,9 @@ public final class PeekabootPaths {
 
     /**
      * {@code /manage} as the prefix {@code /manage/}, tolerating a missing leading or an
-     * extra trailing slash. A base path of {@code /} - management endpoints at the
-     * application root - has no prefix of its own to match by, so nothing extra is
-     * excluded (null), rather than a {@code /} prefix that would exclude every request.
+     * extra trailing slash. A base path of {@code /} puts the management endpoints at the
+     * application root. It has no prefix of its own to match by, so nothing extra is excluded
+     * (null). A {@code /} prefix would exclude every request.
      */
     private static String managementPrefix(String managementBasePath) {
         String path = managementBasePath == null ? "" : managementBasePath.strip();
@@ -135,7 +135,7 @@ public final class PeekabootPaths {
 
     /**
      * {@link #isExcluded}, for a server-absolute path that still carries the servlet context
-     * path - the shape an HTTP span's path tag has. The context path is stripped before
+     * path, as an HTTP span's path tag does. The context path is stripped before
      * matching, so the exclusions hold the same with and without a
      * {@code server.servlet.context-path}.
      */
@@ -152,8 +152,8 @@ public final class PeekabootPaths {
     }
 
     /**
-     * The request's path below the context path, as the container mapped it - decoded and
-     * normalised, unlike {@link HttpServletRequest#getRequestURI()}.
+     * The request's path below the context path, as the container mapped it. Unlike
+     * {@link HttpServletRequest#getRequestURI()}, it is decoded and normalised.
      */
     public static String pathWithinApplication(HttpServletRequest request) {
         String pathInfo = request.getPathInfo();
