@@ -29,9 +29,10 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
 
 /**
  * Beats an application's own {@code @ControllerAdvice}, which resolves inside the REQUEST
- * dispatch and so never reaches {@code BasicErrorController} or anything that would consult an
- * {@code ErrorViewResolver} - the mechanism {@link PeekabootErrorView}'s other two paths rely on.
- * Registered only where {@code peekaboot.error-page.override} is set, alongside those paths.
+ * dispatch and so never reaches {@code BasicErrorController}. {@link PeekabootErrorView}'s other
+ * two paths, the fallback {@code error} view and {@link PeekabootErrorViewResolver}, both go
+ * through it. Registered only where {@code peekaboot.error-page.override} is set, alongside
+ * {@link PeekabootErrorViewResolver}; the fallback view stands back then.
  *
  * <p>The status, headers and reason are the ones Spring's own resolvers would send, asked in their
  * order: {@link ResponseStatusExceptionResolver}, then {@link DefaultHandlerExceptionResolver},

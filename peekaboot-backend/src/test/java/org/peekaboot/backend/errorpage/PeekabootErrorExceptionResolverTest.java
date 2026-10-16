@@ -33,8 +33,8 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
 
 /**
  * Beats an application's {@code @ControllerAdvice}, which resolves inside the REQUEST dispatch
- * and never reaches an {@code ErrorViewResolver} at all - the mechanism the other two override
- * paths rely on.
+ * and never reaches an {@code ErrorViewResolver} at all. The other override path,
+ * {@code PeekabootErrorViewResolver}, relies on one.
  */
 class PeekabootErrorExceptionResolverTest {
 
