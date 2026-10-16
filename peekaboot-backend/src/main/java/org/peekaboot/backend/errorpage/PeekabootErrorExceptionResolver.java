@@ -36,9 +36,11 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
  * <p>The status, headers and reason are the ones Spring's own resolvers would send, asked in their
  * order: {@link ResponseStatusExceptionResolver}, then {@link DefaultHandlerExceptionResolver},
  * then 500. Running ahead of both, this resolver would otherwise turn every client error Spring
- * knows into a server error. A cyclic cause chain never reaches either, since their cause walks
- * would never return from it: only the status of a {@code ResponseStatusException} or a
- * {@code @ResponseStatus} on it counts, without headers or reason, and anything else is a 500.
+ * knows into a server error. A cyclic cause chain never reaches either. Every answer they give
+ * ends in {@code AbstractHandlerExceptionResolver}'s disconnected-client check, which walks the
+ * whole chain and never returns from a cycle. Only the status of a
+ * {@code ResponseStatusException} or a {@code @ResponseStatus} on it counts, without headers or
+ * reason, and anything else is a 500.
  *
  * <p>Sets the request attributes an ERROR dispatch would have set, so {@link PeekabootErrorView}
  * reads the same status, reason, path and method off this REQUEST dispatch that it would off a
@@ -70,7 +72,7 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
         }
         CauseChain chain = CauseChain.of(ex);
         if (chain.cyclic()) {
-            // Spring's own cause walks never end on a cycle, so only a status is read here, without headers or reason.
+            // Spring checks every answer for a disconnected client by walking the whole chain, which never ends here.
             HttpStatusCode annotated = annotatedStatusOf(chain.links());
             return annotated != null ? page(request, annotated) : unmappedPage(request, ex);
         }
