@@ -53,10 +53,10 @@ filter_unconventional = true
 protect_breaking_commits = true
 # Only semver tags are release boundaries, so a stray `unreleased` tag cannot become one.
 tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
-# The first matching parser wins. Test-harness scopes stay above `^feat`, `^build\(deps-dev\)`
-# above `^build\(deps`, and `^build\(deps` above the generic `^build`. The numbers stay
-# zero-padded two digits because git-cliff sorts group names as strings. site.jq shows groups
-# 01-04 on the website, so renumbering those means editing it too.
+# The first matching parser wins. Test-harness scopes stay above `^feat`, and the runtime
+# dependency allow-list above the generic `^build`. The numbers stay zero-padded two digits
+# because git-cliff sorts group names as strings. site.jq shows groups 01-04 on the website,
+# so renumbering those means editing it too.
 commit_parsers = [
     # Commits typed fix: or feat: that change nothing a user could hit. History is not rewritten.
     # ca362a2e and 76fc2537 changed tests only.
@@ -73,8 +73,9 @@ commit_parsers = [
     { message = '^feat', group = "<!-- 01 -->Features" },
     { message = '^fix', group = "<!-- 02 -->Bug fixes" },
     { message = '^perf', group = "<!-- 03 -->Performance" },
-    { message = '^build\(deps-dev\)', group = "<!-- 09 -->Build, CI and chores" },
-    { message = '^build\(deps', group = "<!-- 04 -->Dependency upgrades" },
+    # Bumps of what a release puts on a user's classpath. Every other dependency bump is build
+    # tooling. RuntimeDependencyAllowListTest fails when a published module outgrows this list.
+    { message = '^build\(deps(-dev)?\): .*\b(the spring-boot group|spring-boot-dependencies|datasource-micrometer|jdbc-url-parser|cron-utils)\b', group = "<!-- 04 -->Dependency upgrades" },
     { message = '^revert', group = "<!-- 05 -->Reverts" },
     { message = '^docs', group = "<!-- 06 -->Documentation" },
     { message = '^refactor', group = "<!-- 07 -->Internal changes" },

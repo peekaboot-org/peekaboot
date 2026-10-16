@@ -2,8 +2,8 @@
 #
 # Builds a throwaway repo covering the cases the real history cannot: both spellings of a
 # breaking change, a breaking change of an internal type, user-facing types that classify as
-# internal, a subject repeated with a different body, a non-conventional subject, and two tags
-# cut in the same second.
+# internal, a runtime and a build-only dependency bump, a subject repeated with a different body,
+# a non-conventional subject, and two tags cut in the same second.
 #
 # Commit dates are fixed so the generated notes are byte-comparable against the golden files.
 set -euo pipefail
@@ -51,7 +51,9 @@ commit "$SECOND" "refactor(store)!: key traces by id"
 commit "$SECOND" "refactor: tidy the helpers"
 commit "$SECOND" "refactor: tidy the helpers" -m "a different body, the same subject"
 commit "$SECOND" "test: cover the new endpoint"
-commit "$SECOND" "build(deps): bump com.example:thing"
+# A bump of a library the starter puts on the classpath, then one of a build plugin.
+commit "$SECOND" "build(deps): bump com.cronutils:cron-utils from 9.2.1 to 9.2.2"
+commit "$SECOND" "build(deps): bump org.apache.maven.plugins:maven-surefire-plugin"
 commit "$SECOND" "build(deps-dev): bump com.example:plugin"
 commit "$SECOND" "docs: explain the new endpoint"
 commit "$SECOND" "this subject is not conventional at all"

@@ -1,6 +1,8 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.autoconfigure.BuildFiles.pom;
+import static org.peekaboot.autoconfigure.BuildFiles.reactorRoot;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,8 +19,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 import org.junit.jupiter.api.Named;
@@ -28,8 +28,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.SpringBootVersion;
-import org.w3c.dom.Document;
-import org.xml.sax.SAXException;
 
 /**
  * Build metadata both build systems need is declared once, in the poms, because
@@ -127,17 +125,15 @@ class BuildVersionLockstepTest {
                 .isEqualTo(pomValue(reactorRoot().resolve("pom.xml"), rootExpression));
     }
 
-    private String pomValue(Path pom, String expression) throws IOException {
+    private String pomValue(Path file, String expression) throws IOException {
         try {
-            Document document =
-                    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(pom.toFile());
-            String value = XPathFactory.newInstance().newXPath().evaluate(expression, document);
+            String value = XPathFactory.newInstance().newXPath().evaluate(expression, pom(file));
             assertThat(value)
-                    .as("%s in %s", expression, reactorRoot().relativize(pom))
+                    .as("%s in %s", expression, reactorRoot().relativize(file))
                     .isNotBlank();
             return value.strip();
-        } catch (ParserConfigurationException | SAXException | XPathExpressionException e) {
-            throw new IllegalStateException(pom + " is not a readable pom", e);
+        } catch (XPathExpressionException e) {
+            throw new IllegalArgumentException(expression, e);
         }
     }
 
@@ -385,11 +381,6 @@ class BuildVersionLockstepTest {
                 .as("%s declares no value matching %s", file.getFileName(), pattern)
                 .isTrue();
         return matcher.group(1).strip();
-    }
-
-    /** The reactor root, reached from this module rather than from an assumed working directory. */
-    private static Path reactorRoot() {
-        return Path.of("..").toAbsolutePath().normalize();
     }
 
     private Properties gradleProperties() throws IOException {

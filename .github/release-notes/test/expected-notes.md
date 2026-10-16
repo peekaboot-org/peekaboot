@@ -28,7 +28,7 @@
 - Cache the lookups
 
 ### Dependency upgrades
-- **deps**: Bump com.example:thing
+- **deps**: Bump com.cronutils:cron-utils from 9.2.1 to 9.2.2
 
 ### Reverts
 - Restore the old rule
@@ -46,6 +46,7 @@
 - Cover the new endpoint
 
 ### Build, CI and chores
+- **deps**: Bump org.apache.maven.plugins:maven-surefire-plugin
 - **deps-dev**: Bump com.example:plugin
 
 **Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.0.0...1.1.0

@@ -73,7 +73,7 @@
         "title": "Dependency upgrades",
         "entries": [
           {
-            "text": "Bump com.example:thing",
+            "text": "Bump com.cronutils:cron-utils from 9.2.1 to 9.2.2",
             "scope": "deps",
             "breaking": false,
             "detail": null

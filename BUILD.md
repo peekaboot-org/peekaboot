@@ -749,9 +749,8 @@ routinely exceed it.
 
 Parser order in `cliff.toml` is load-bearing, because the first matching parser wins. The
 `testing-app` and `test` scopes of `feat`, `fix` and `perf` must stay above `^feat`, so test
-harness work lands under Tests. `^build\(deps-dev\)` must stay above `^build\(deps`, so
-build-only dependency bumps land under "Build, CI and chores". And `^build\(deps` must stay
-above the generic `^build`, or every Dependabot commit lands in "Build, CI and chores". Group
+harness work lands under Tests. The runtime dependency allow-list must stay above the
+generic `^build`, or every dependency bump lands in "Build, CI and chores". Group
 numbers must stay zero-padded to two digits, because git-cliff sorts group names as strings.
 An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`. The parsers at the top of the list
 name a commit by its sha. Each is a commit typed `fix:` or `feat:` that changed nothing a user
@@ -764,6 +763,15 @@ upgrades. `site.jq` hardcodes that cutoff, so renumbering those groups means edi
 files. A breaking commit appears under Breaking changes alone on the website. Reverts and the
 internal groups stay in the GitHub release notes and `CHANGELOG.md`.
 
+"Dependency upgrades" lists only bumps of what a release puts on a user's classpath: the
+Spring Boot line, datasource-micrometer, jdbc-url-parser and cron-utils. The `04` parser names
+them in an allow-list. Every other `build(deps)` commit lands in "Build, CI and chores", which
+covers Maven and Gradle plugins, wrappers, GitHub Actions and test libraries. Dependabot's
+`deps-dev` scope cannot draw that line, because it labels many plugin and action bumps `deps`.
+`RuntimeDependencyAllowListTest` in `peekaboot-spring-boot-autoconfigure` reads the published
+modules' compile and runtime dependencies out of the poms and fails when the allow-list misses
+one. A dependency without a version counts as the BOM that manages it.
+
 The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
 `.github/actions/install-git-cliff`.
 
@@ -773,8 +781,8 @@ The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
 
 Its expectations are golden files rendered from a fixture repo with fixed commit dates, so
 they do not drift as `dev` grows. The fixture carries both spellings of a breaking change, a
-breaking change of an internal type, user-facing types scoped to the test harness, a
-development dependency bump, a subject repeated with a different body, a non-conventional
+breaking change of an internal type, user-facing types scoped to the test harness, a runtime
+and a build-only dependency bump, a subject repeated with a different body, a non-conventional
 subject, and two tags cut in the same second.
 
 ### How the next version is chosen
