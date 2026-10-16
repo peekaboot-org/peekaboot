@@ -58,12 +58,17 @@ tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
 # zero-padded two digits because git-cliff sorts group names as strings. site.jq shows groups
 # 01-04 on the website, so renumbering those means editing it too.
 commit_parsers = [
-    # Shipped commits typed fix: that fix no bug a user could hit. History is not rewritten.
+    # Commits typed fix: or feat: that change nothing a user could hit. History is not rewritten.
     # ca362a2e and 76fc2537 changed tests only.
     { sha = "ca362a2ec9ef976392c84fe7dc6fc986509289c3", group = "<!-- 08 -->Tests" },
     { sha = "76fc25377de62e302c41447826f85580ccae0d8d", group = "<!-- 08 -->Tests" },
     # f5449589 is the wording follow-up of 6d1ba5aa, which carries the entry.
     { sha = "f5449589da9d6b7187d462028897cf0139850236", skip = true },
+    # 07169ce4, efe80824 and 1fb67d2d changed release tooling and CI, 68b4f1f1 the testing app's port.
+    { sha = "07169ce4c348171a3ddb44060d964232fab34cea", group = "<!-- 09 -->Build, CI and chores" },
+    { sha = "efe80824ac0ff830809bf26b97eb5af5caf6dd74", group = "<!-- 09 -->Build, CI and chores" },
+    { sha = "68b4f1f15698ca9ef483782e847eff199c19e21b", group = "<!-- 09 -->Build, CI and chores" },
+    { sha = "1fb67d2dbfe425c7d454f20d46852d57fe5e3e6f", group = "<!-- 09 -->Build, CI and chores" },
     { message = '^(feat|fix|perf)\((testing-app|test)\)', group = "<!-- 08 -->Tests" },
     { message = '^feat', group = "<!-- 01 -->Features" },
     { message = '^fix', group = "<!-- 02 -->Bug fixes" },

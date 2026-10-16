@@ -748,10 +748,10 @@ harness work lands under Tests. `^build\(deps-dev\)` must stay above `^build\(de
 build-only dependency bumps land under "Build, CI and chores". And `^build\(deps` must stay
 above the generic `^build`, or every Dependabot commit lands in "Build, CI and chores". Group
 numbers must stay zero-padded to two digits, because git-cliff sorts group names as strings.
-An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`. Two parsers name a commit by its
-sha. Those are shipped commits typed `fix:` that fixed no bug a user could hit. History is not
-rewritten, so the generator regroups or skips them, and the harness checks those two on the
-real history.
+An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`. The parsers at the top of the list
+name a commit by its sha. Each is a commit typed `fix:` or `feat:` that changed nothing a user
+could hit, such as a test or CI fix. History is not rewritten, so the generator regroups or
+skips them, and the harness checks every one of them on the real history.
 
 The website shows released versions only. `site.jq` builds a "Breaking changes" section from
 the `breaking` flag, then groups `01`-`04`, features, bug fixes, performance and dependency

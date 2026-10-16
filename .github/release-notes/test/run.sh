@@ -92,5 +92,9 @@ expect_skipped() {
 expect_group ca362a2ec9ef976392c84fe7dc6fc986509289c3 "<!-- 08 -->Tests"
 expect_group 76fc25377de62e302c41447826f85580ccae0d8d "<!-- 08 -->Tests"
 expect_skipped f5449589da9d6b7187d462028897cf0139850236
+expect_group 07169ce4c348171a3ddb44060d964232fab34cea "<!-- 09 -->Build, CI and chores"
+expect_group efe80824ac0ff830809bf26b97eb5af5caf6dd74 "<!-- 09 -->Build, CI and chores"
+expect_group 68b4f1f15698ca9ef483782e847eff199c19e21b "<!-- 09 -->Build, CI and chores"
+expect_group 1fb67d2dbfe425c7d454f20d46852d57fe5e3e6f "<!-- 09 -->Build, CI and chores"
 
 echo "all release-notes checks passed"
