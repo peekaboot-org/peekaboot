@@ -4,8 +4,9 @@
 # 0.0.0 never will be.
 set -euo pipefail
 
-readonly HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-readonly WORK="$(mktemp -d)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+WORK="$(mktemp -d)"
+readonly HERE WORK
 trap 'rm -rf "$WORK"' EXIT
 
 echo "checking a published version passes"

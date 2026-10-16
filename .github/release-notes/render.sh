@@ -9,7 +9,8 @@
 # Usage: render.sh [git-cliff args...]
 set -euo pipefail
 
-readonly HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly HERE
 readonly CONFIG="$HERE/cliff.toml"
 
 if [ ! -f "$CONFIG" ]; then
