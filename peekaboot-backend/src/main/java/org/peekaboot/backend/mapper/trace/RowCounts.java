@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.store.TraceData;
 
 /**
  * Pairs each query span with the row count of its result set - the one pairing behind both the
@@ -19,29 +20,24 @@ final class RowCounts {
 
     private RowCounts() {}
 
-    /** Row count by query span id; a query whose result set reported none is absent. */
+    /**
+     * Row count by query span id; a query whose result set reported none is absent. One pass,
+     * since {@code spans} come in creation order, as {@link TraceData#spans()} carries them.
+     */
     static Map<String, Long> byQuerySpanId(List<SpanData> spans) {
-        List<SpanData> resultSets = spans.stream().filter(DbSpans::isResultSet).toList();
-        List<SpanData> queries = spans.stream().filter(DbSpans::isQuery).toList();
-
         Map<String, Long> rowCounts = new HashMap<>();
-        for (int i = 0; i < queries.size(); i++) {
-            SpanData query = queries.get(i);
-            long nextQueryOrder = i + 1 < queries.size() ? queries.get(i + 1).creationOrder() : Long.MAX_VALUE;
-            Long rowCount = rowCountBetween(resultSets, query.creationOrder(), nextQueryOrder);
-            if (rowCount != null) {
-                rowCounts.put(query.spanId(), rowCount);
+        SpanData awaitingResultSet = null;
+        for (SpanData span : spans) {
+            if (DbSpans.isQuery(span)) {
+                awaitingResultSet = span;
+            } else if (awaitingResultSet != null && DbSpans.isResultSet(span)) {
+                Long rowCount = DbSpans.rowCount(span);
+                if (rowCount != null) {
+                    rowCounts.put(awaitingResultSet.spanId(), rowCount);
+                }
+                awaitingResultSet = null;
             }
         }
         return rowCounts;
-    }
-
-    private static Long rowCountBetween(List<SpanData> resultSets, long queryOrder, long nextQueryOrder) {
-        return resultSets.stream()
-                .filter(resultSet ->
-                        resultSet.creationOrder() > queryOrder && resultSet.creationOrder() < nextQueryOrder)
-                .findFirst()
-                .map(DbSpans::rowCount)
-                .orElse(null);
     }
 }
