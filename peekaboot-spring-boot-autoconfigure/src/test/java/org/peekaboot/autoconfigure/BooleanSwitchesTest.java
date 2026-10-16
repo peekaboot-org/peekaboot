@@ -22,11 +22,14 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.context.annotation.ImportCandidates;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.diagnostics.FailureAnalysis;
 import org.springframework.boot.diagnostics.FailureAnalyzedException;
 import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.util.StringUtils;
 
@@ -152,6 +155,27 @@ class BooleanSwitchesTest {
 
         assertThat(environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_OVERRIDE))
                 .isEqualTo("true");
+    }
+
+    /**
+     * Compose leaves {@code PEEKABOOT_ENABLED=} for an unset variable. Read through its relaxed
+     * name, that blank must give way to what application.yml says beneath it, not to the detection.
+     */
+    @Test
+    void aBlankEnvironmentVariableTakesTheValueBeneathItsRelaxedName() {
+        MockEnvironment environment = new MockEnvironment();
+        environment
+                .getPropertySources()
+                .addFirst(new SystemEnvironmentPropertySource(
+                        StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, Map.of("PEEKABOOT_ENABLED", "")));
+        environment
+                .getPropertySources()
+                .addLast(new MapPropertySource("applicationYml", Map.of(PeekabootPropertyKeys.ENABLED, "true")));
+        ConfigurationPropertySources.attach(environment);
+
+        BooleanSwitches.treatBlanksAsUnset(environment, Map.of(PeekabootPropertyKeys.ENABLED, false));
+
+        assertThat(environment.getProperty(PeekabootPropertyKeys.ENABLED)).isEqualTo("true");
     }
 
     static Stream<Arguments> everyUnsetDefault() {
