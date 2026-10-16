@@ -1,9 +1,8 @@
 package org.peekaboot.backend.insights;
 
 /**
- * Fixed-capacity ring of primitive doubles, oldest entries overwritten first.
- * Writers and readers are different virtual threads (collector vs. API/SSE),
- * hence the coarse synchronization - contention is a handful of ops per tick.
+ * Fixed-capacity ring of primitive doubles, oldest entries overwritten first. Not thread-safe:
+ * {@link SeriesRings} reaches every ring under its own lock.
  */
 public final class DoubleRing {
 
@@ -15,7 +14,7 @@ public final class DoubleRing {
         this.values = new double[capacity];
     }
 
-    public synchronized void add(double value) {
+    public void add(double value) {
         values[next] = value;
         next = (next + 1) % values.length;
         if (size < values.length) {
@@ -23,15 +22,15 @@ public final class DoubleRing {
         }
     }
 
-    public synchronized int size() {
+    public int size() {
         return size;
     }
 
-    public synchronized double[] toArray() {
+    public double[] toArray() {
         return last(size);
     }
 
-    public synchronized double[] last(int n) {
+    public double[] last(int n) {
         int count = Math.min(n, size);
         double[] result = new double[count];
         int start = (next - count + values.length * 2) % values.length;
@@ -42,7 +41,7 @@ public final class DoubleRing {
     }
 
     /** Refills an empty ring from persisted values, oldest first. */
-    public synchronized void restore(double[] values) {
+    public void restore(double[] values) {
         for (double value : values) {
             add(value);
         }

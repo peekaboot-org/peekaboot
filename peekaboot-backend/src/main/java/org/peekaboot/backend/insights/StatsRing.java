@@ -6,7 +6,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Fixed-capacity ring of aggregated windows, stored as parallel primitive columns. */
+/**
+ * Fixed-capacity ring of aggregated windows, stored as parallel primitive columns. Not
+ * thread-safe: {@link SeriesRings} reaches every ring under its own lock.
+ */
 public final class StatsRing {
 
     /** One column per statistic, keyed and ordered like {@link AggregateStats#byName()}. */
@@ -21,17 +24,17 @@ public final class StatsRing {
         samples = new DoubleRing(capacity);
     }
 
-    public synchronized void add(AggregateStats entry) {
+    public void add(AggregateStats entry) {
         entry.byName().forEach((name, value) -> stats.get(name).add(value));
         samples.add(entry.samples());
     }
 
-    public synchronized int size() {
+    public int size() {
         return samples.size();
     }
 
     /** Column arrays for the API - the internal samples column is deliberately excluded. */
-    public synchronized Map<String, double[]> toArrays() {
+    public Map<String, double[]> toArrays() {
         Map<String, double[]> columns = new LinkedHashMap<>();
         stats.forEach((name, ring) -> columns.put(name, ring.toArray()));
         return columns;
@@ -42,7 +45,7 @@ public final class StatsRing {
      * from the API - persistence needs it, because the next roll-up weights its average
      * by it. Order matches {@link InsightsSnapshot#STAT_COLUMNS}.
      */
-    public synchronized double[][] toColumns() {
+    public double[][] toColumns() {
         double[][] columns = new double[InsightsSnapshot.STAT_COLUMNS.size()][];
         int column = 0;
         for (DoubleRing ring : stats.values()) {
@@ -54,7 +57,7 @@ public final class StatsRing {
     }
 
     /** Refills an empty ring from {@link #toColumns()} output, oldest entry first. */
-    public synchronized void restore(double[][] columns) {
+    public void restore(double[][] columns) {
         int statCount = AggregateStats.STAT_NAMES.size();
         double[][] statColumns = Arrays.copyOf(columns, statCount);
         for (int i = 0; i < columns[0].length; i++) {
@@ -62,7 +65,7 @@ public final class StatsRing {
         }
     }
 
-    public synchronized List<AggregateStats> last(int n) {
+    public List<AggregateStats> last(int n) {
         double[][] statColumns =
                 stats.values().stream().map(ring -> ring.last(n)).toArray(double[][]::new);
         double[] counts = samples.last(n);
