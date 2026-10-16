@@ -1245,7 +1245,8 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    `TraceLogMapper`, to which it delegates. It runs on
    `GET /peekaboot/api/traces/{traceId}/insights` only. The listing endpoint gets step 1, a log
    *count* for the row badges, and step 2, so its trees carry issues but no log list and no
-   queries.
+   queries. An async row takes `TraceTreeMapper.mapSubtree` for step 1 and counts only the logs
+   `TraceLogMapper.logsWithin` finds in its own subtree.
 
 Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
 output through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`,
