@@ -15,16 +15,13 @@ import tools.jackson.databind.node.BooleanNode;
  *
  * <p>The sample app has the SDK, so this context leaves out {@code OtelTracingAutoConfiguration},
  * whose span exporter is the one thing {@code tracingSpansPossible} is read from. An inlined
- * exclusion replaces application-test.yml's list rather than merging with it, so the servlet
- * security exclusions are repeated; anything added there belongs here as well.
+ * exclusion replaces application-test.yml's list rather than merging with it, so this one
+ * appends that file's servlet security exclusions.
  */
 @TestPropertySource(
         properties = "spring.autoconfigure.exclude="
                 + "org.peekaboot.autoconfigure.OtelTracingAutoConfiguration,"
-                + "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration,"
-                + "org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,"
-                + "org.springframework.boot.security.autoconfigure.actuate.web.servlet"
-                + ".ManagementWebSecurityAutoConfiguration")
+                + "${servlet-security-exclusions}")
 class TracesTabWithoutSpanSourceIT extends PlaywrightTestBase {
 
     private static final String MARKER_REQUEST = "/peekaboot/api/features?after-traces-tab";

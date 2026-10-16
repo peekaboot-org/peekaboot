@@ -33,19 +33,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(
-        classes = TestingApp.class,
-        properties = {
-            // An inlined property replaces application-test.yml's value for the same key
-            // rather than merging with it, so this list has to repeat that file's servlet
-            // security exclusions too - without them this context alone would start with
-            // Spring Security auto-configured. Anything added there belongs here as well.
-            "spring.autoconfigure.exclude="
-                    + "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration,"
-                    + "org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,"
-                    + "org.springframework.boot.security.autoconfigure.actuate.web.servlet"
-                    + ".ManagementWebSecurityAutoConfiguration"
-        })
+@SpringBootTest(classes = TestingApp.class)
 @ActiveProfiles("test")
 @Import({
     PeekabootActuatorServiceIT.DataSourceMetadataFixtureConfig.class,
