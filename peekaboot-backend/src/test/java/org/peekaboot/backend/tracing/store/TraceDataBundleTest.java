@@ -431,15 +431,24 @@ class TraceDataBundleTest {
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
     }
 
-    /** Eviction must not open a gap between the two windows where no async span exists. */
+    /**
+     * Eviction must not open a gap between the two windows where the async work adds no time of
+     * its own. The late entry refolds the synchronous window after "first" was evicted, and that
+     * refold has to start from the evicted span.
+     */
     @Test
-    void withoutAsyncSpansBothWindowsStayEqualUnderEviction() {
+    void asyncWorkInsideTheSynchronousWindowKeepsBothWindowsEqualUnderEviction() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("first", "root", 0, 1_500), 2);
-        bundle.addSpan(plainSpan("second", "root", 10, 10), 2);
-        bundle.addSpan(plainSpan("third", "root", 30, 10), 2);
+        bundle.addSpan(plainSpan("first", "root", 0, 1_500), 3);
+        // shares the window's start, so its joining the subtree forces a refold
+        bundle.addSpan(plainSpan("background", "async", 0, 800), 3);
+        bundle.addSpan(plainSpan("quick", "root", 10, 10), 3);
+        // evicts "first"
+        bundle.addSpan(plainSpan("later", "root", 30, 10), 3);
+        bundle.addSpan(asyncSpan("async", "root", 0, 900), 3);
 
         assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
         assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
     }
 
