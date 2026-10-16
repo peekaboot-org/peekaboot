@@ -201,6 +201,8 @@ org.peekaboot.backend/
 │   ├── insights/ (incl. ActuatorInsightsResponse, the dashboard's aggregate DTO), lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
+├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
+│                           # (peekaboot.error-page.override), StackTraceHtml
 ├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
 ├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
@@ -210,22 +212,27 @@ org.peekaboot.backend/
 ├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
-│   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate)
+│   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate),
+│                           # SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, ...
 ├── masking/                # MaskingEngine (one bean, declared by PeekabootAutoConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
 │                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
+├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page and the Logs tab fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
 ├── tracing/                # In-memory tracing
+│   ├── async/              # AsyncTaskDecorator, AsyncTaskFailurePostProcessor, AsyncTaskFailureInterceptor, RunningAsyncTask
 │   ├── bridge/otel/        # OtelSpanExporter
 │   ├── config/             # PeekabootTracingProperties
-│   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent
+│   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent, TraceDiscardedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
 │   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
 │   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
+│                           # AsyncMembership, Window, ListingRoots, ListedTrace,
 │                           # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
+└── ui/                     # InlinedStylesheets, Placeholders: shared by the server-rendered toolbar and error page
 ```
 
 ### Tracing Flow
