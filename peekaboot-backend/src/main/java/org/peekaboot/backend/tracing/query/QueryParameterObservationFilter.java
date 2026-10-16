@@ -64,7 +64,7 @@ public final class QueryParameterObservationFilter implements ObservationFilter 
             return kept;
         }
         List<List<String>> marked = new ArrayList<>(kept);
-        marked.add(List.of("/* " + omitted + (omitted == 1 ? " parameter set" : " parameter sets") + " omitted */"));
+        marked.add(List.of(SqlLiterals.omitted(omitted, "parameter set")));
         return marked;
     }
 

@@ -75,4 +75,18 @@ class SqlLiteralsTest {
 
         assertThat(literal).isEqualTo("X'" + "00".repeat(SqlLiterals.MAX_LITERAL_LENGTH) + "' /* 3 bytes omitted */");
     }
+
+    @Test
+    void countsASingleDroppedCharacterInTheSingular() {
+        String literal = SqlLiterals.render("x".repeat(SqlLiterals.MAX_LITERAL_LENGTH + 1));
+
+        assertThat(literal).endsWith("' /* 1 character omitted */");
+    }
+
+    @Test
+    void countsASingleDroppedByteInTheSingular() {
+        String literal = SqlLiterals.render(new byte[SqlLiterals.MAX_LITERAL_LENGTH + 1]);
+
+        assertThat(literal).endsWith("' /* 1 byte omitted */");
+    }
 }

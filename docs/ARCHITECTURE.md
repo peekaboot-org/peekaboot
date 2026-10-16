@@ -1459,7 +1459,8 @@ Two caps bound what a single query can add. `SqlLiterals.MAX_LITERAL_LENGTH` (10
 literal past that many source characters, or bytes for a `byte[]`. A `byte[]` is capped before
 hex-encoding, so the cap bounds the source data rather than the doubled hex output. The cut
 literal ends with the count dropped as a trailing SQL block comment,
-`'...' /* N characters omitted */` or `X'...' /* N bytes omitted */`. A truncated literal
+`'...' /* N characters omitted */` or `X'...' /* N bytes omitted */`, singular for a count of
+one. A truncated literal
 therefore stays one well-formed literal followed by a comment, rather than a closed string
 trailing bare, unquoted text. A literal must keep that shape if it is ever substituted into
 query text in place of a placeholder.

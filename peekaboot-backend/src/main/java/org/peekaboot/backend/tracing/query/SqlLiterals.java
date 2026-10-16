@@ -37,6 +37,11 @@ final class SqlLiterals {
         };
     }
 
+    /** The SQL block comment a cap leaves behind, counting the units it dropped. */
+    static String omitted(int count, String unit) {
+        return "/* " + count + " " + unit + (count == 1 ? "" : "s") + " omitted */";
+    }
+
     /** Dates and times as ISO-8601; the JDBC types' own toString is the JDBC escape format. */
     @SuppressWarnings("JavaUtilDate") // the driver hands these types in; converting them to java.time is the point
     private static String text(Object value) {
@@ -58,7 +63,7 @@ final class SqlLiterals {
             return "'" + text.replace("'", "''") + "'";
         }
         String kept = text.substring(0, MAX_LITERAL_LENGTH).replace("'", "''");
-        return "'" + kept + "' /* " + (text.length() - MAX_LITERAL_LENGTH) + " characters omitted */";
+        return "'" + kept + "' " + omitted(text.length() - MAX_LITERAL_LENGTH, "character");
     }
 
     /**
@@ -71,6 +76,6 @@ final class SqlLiterals {
             return "X'" + HEX.formatHex(bytes) + "'";
         }
         String kept = HEX.formatHex(bytes, 0, MAX_LITERAL_LENGTH);
-        return "X'" + kept + "' /* " + (bytes.length - MAX_LITERAL_LENGTH) + " bytes omitted */";
+        return "X'" + kept + "' " + omitted(bytes.length - MAX_LITERAL_LENGTH, "byte");
     }
 }
