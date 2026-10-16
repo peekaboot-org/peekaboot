@@ -1464,8 +1464,9 @@ therefore stays one well-formed literal followed by a comment, rather than a clo
 trailing bare, unquoted text. A literal must keep that shape if it is ever substituted into
 query text in place of a placeholder.
 `QueryParameterObservationFilter.MAX_PARAMETER_SETS` (100) drops the parameter sets of a batch
-past that many entries and appends one set holding `/* N parameter sets omitted */`, the way a
-capped literal is marked, rather than rendering and serialising all of them. Both exist
+past that many entries and appends one set holding `/* N parameter sets omitted */`
+(`/* 1 parameter set omitted */` for a single one), the way a capped literal is marked, rather
+than rendering and serialising all of them. Both exist
 because the capture is always on, unlike datasource-micrometer's own `jdbc.params`, which is
 off by default. Nothing else on the ingestion path bounds a tag's size, so an unbounded literal
 or batch would cost time on the application's query thread, bloat the in-memory trace store,
