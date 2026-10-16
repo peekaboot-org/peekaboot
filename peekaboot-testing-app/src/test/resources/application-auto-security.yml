@@ -1,17 +1,14 @@
 # The only profile in this module that arms Peekaboot's own guard, used by
 # AutoSecuredDashboardIT. A test launch never arms it by detection, so the switch is explicit
 # here; the credentials file is redirected per test so nothing is written to a developer's home.
-# It stands alone and repeats application-test.yml's Spring Security exclusions, so Peekaboot's
-# guard is the only thing that challenges a request.
+# It stands alone, importing only the Spring Security exclusions, so Peekaboot's guard is the
+# only thing that challenges a request.
 spring:
   cache:
     # No Redis server under this profile; RedisTraceIT brings a container and switches the cache on.
     type: none
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
-      - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
-      - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
+  config:
+    import: classpath:servlet-security-exclusions.yml
   jpa:
     hibernate:
       ddl-auto: create-drop

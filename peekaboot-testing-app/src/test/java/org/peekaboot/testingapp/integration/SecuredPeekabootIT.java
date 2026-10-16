@@ -33,7 +33,7 @@ import tools.jackson.databind.JsonNode;
  * merely required a login rather than the role the page tells readers to gate on.
  *
  * <p>Runs under the {@code security} profile because every other test in this module
- * excludes the servlet security auto-configuration - see application-test.yml.
+ * excludes the servlet security auto-configuration - see servlet-security-exclusions.yml.
  */
 @SpringBootTest(
         classes = {TestingApp.class, PeekabootSecurityConfig.class},

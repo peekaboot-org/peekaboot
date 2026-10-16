@@ -359,17 +359,17 @@ website's security page publishes. Test scope keeps it out of the repackaged jar
 `spring-boot:run`, so the sample app itself still starts unsecured.
 
 Left auto-configured, it would put `anyRequest().authenticated()` in front of every
-`@SpringBootTest` in the module. So `application-test.yml` and `application-screenshots.yml` both
-exclude the servlet security auto-configuration (`UserDetailsServiceAutoConfiguration`,
-`ServletWebSecurityAutoConfiguration`, `ManagementWebSecurityAutoConfiguration`). Two files
-rather than one, because `ScreenshotCapture` runs with `inheritProfiles = false` and never sees
-the first. The security tests run under their own `security` profile, which excludes nothing,
-so neither has to undo a module-wide setting.
+`@SpringBootTest` in the module. So `servlet-security-exclusions.yml` excludes the servlet
+security auto-configuration (`UserDetailsServiceAutoConfiguration`,
+`ServletWebSecurityAutoConfiguration`, `ManagementWebSecurityAutoConfiguration`), and the `test`,
+`auto-security` and `screenshots` profiles each import it with `spring.config.import`, since
+`AutoSecuredDashboardIT` and `ScreenshotCapture` never load `application-test.yml`. The security
+tests run under their own `security` profile, which imports nothing, so neither has to undo a
+module-wide setting.
 
-One gotcha: an inlined `@SpringBootTest(properties = "spring.autoconfigure.exclude=...")`
-*replaces* the profile's value for that key rather than merging with it, so a context setting its
-own exclusion list has to repeat the security exclusions too. `PeekabootActuatorServiceIT` is the
-one that does; anything added to the profile's list belongs in its list as well. Symptom when it
+One gotcha: an inlined `spring.autoconfigure.exclude=...` property *replaces* the profile's
+value for that key rather than merging with it, so a context setting its own exclusion list
+appends `${servlet-security-exclusions}`, as `TracesTabWithoutSpanSourceIT` does. Symptom when it
 is missed: Boot logs `Using generated security password` for that context.
 
 The example config itself, `PeekabootSecurityConfig`, lives in `org.peekaboot.example.security`,

@@ -14,13 +14,8 @@ spring:
   # compose.yml's own POSTGRES_PASSWORD so it stays honest about what it is.
   datasource:
     password: sample_app_db_pwd
-  # Same servlet-security exclusion as application-test.yml, repeated because
-  # ScreenshotCapture runs with inheritProfiles = false and so never sees that file.
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
-      - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
-      - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
+  config:
+    import: classpath:servlet-security-exclusions.yml
   jpa:
     hibernate:
       ddl-auto: validate

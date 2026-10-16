@@ -1,0 +1,14 @@
+# spring-boot-starter-security is on this module's test classpath for SecuredPeekabootIT and
+# SecuredDashboardIT only (see pom.xml). Left auto-configured it would put
+# `anyRequest().authenticated()` in front of every test in this module, so every profile
+# imports this file except `security`, which those two run under and which excludes nothing.
+spring:
+  autoconfigure:
+    exclude: ${servlet-security-exclusions}
+
+# A test that excludes one more auto-configuration inlines spring.autoconfigure.exclude, which
+# replaces the list above rather than merging with it; it appends ${servlet-security-exclusions}.
+servlet-security-exclusions: >-
+  org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration,
+  org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,
+  org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration

@@ -2,13 +2,8 @@ spring:
   cache:
     # No Redis server under this profile; RedisTraceIT brings a container and switches the cache on.
     type: none
-  # spring-boot-starter-security is on this module's test classpath for
-  # SecuredPeekabootIT and SecuredDashboardIT only (see pom.xml). Left
-  # auto-configured it would put `anyRequest().authenticated()` in front of every test in
-  # this module. Those two tests run under the `security` profile instead, which excludes
-  # nothing.
-  autoconfigure:
-    exclude: ${servlet-security-exclusions}
+  config:
+    import: classpath:servlet-security-exclusions.yml
   # No url: Boot's generate-unique-name default gives every Spring context its own
   # jdbc:h2:mem:<uuid>, so the dozen contexts this suite caches never drop and re-create
   # each other's schema mid-test (H2 keys in-memory databases by name per JVM).
@@ -54,13 +49,6 @@ peekaboot:
         size: 100
       - interval: 9s
         size: 50
-
-# A test that excludes one more auto-configuration inlines spring.autoconfigure.exclude, which
-# replaces the list above rather than merging with it; it appends ${servlet-security-exclusions}.
-servlet-security-exclusions: >-
-  org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration,
-  org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,
-  org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
 
 # Bound to NestedConfigPropertiesFixture purely so ActuatorMaskingIT can prove
 # ConfigMapper masks a sensitive key nested inside a @ConfigurationProperties tree - the

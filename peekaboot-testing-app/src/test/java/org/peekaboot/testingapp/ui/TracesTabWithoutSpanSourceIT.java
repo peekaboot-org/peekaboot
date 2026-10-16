@@ -15,8 +15,8 @@ import tools.jackson.databind.node.BooleanNode;
  *
  * <p>The sample app has the SDK, so this context leaves out {@code OtelTracingAutoConfiguration},
  * whose span exporter is the one thing {@code tracingSpansPossible} is read from. An inlined
- * exclusion replaces application-test.yml's list rather than merging with it, so this one
- * appends that file's servlet security exclusions.
+ * exclusion replaces the profile's list rather than merging with it, so this one appends
+ * the servlet security exclusions.
  */
 @TestPropertySource(
         properties = "spring.autoconfigure.exclude="

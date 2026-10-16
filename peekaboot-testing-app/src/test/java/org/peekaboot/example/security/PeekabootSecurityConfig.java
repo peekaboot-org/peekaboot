@@ -20,7 +20,7 @@ import org.springframework.security.web.SecurityFilterChain;
  *
  * <p>Deliberately outside {@code org.peekaboot.testingapp} so {@code TestingApp}'s
  * component scan does not pick it up: the rest of this module's tests run with the servlet
- * security auto-configuration excluded (see {@code application-test.yml}), and a stray
+ * security auto-configuration excluded (see {@code servlet-security-exclusions.yml}), and a stray
  * {@link SecurityFilterChain} bean would fail their contexts. The two tests that want it
  * name it in {@code @SpringBootTest(classes = ...)} instead.
  */

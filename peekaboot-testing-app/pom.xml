@@ -166,7 +166,7 @@
              SecuredPeekabootIT and SecuredDashboardIT can prove the
              SecurityFilterChain the website's security page tells readers to write. Every
              other test in this module runs with the servlet security auto-configuration
-             excluded - see application-test.yml. -->
+             excluded - see servlet-security-exclusions.yml. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
