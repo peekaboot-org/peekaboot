@@ -5,12 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.AnnotatedElement;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -287,32 +288,59 @@ class BooleanSwitchesTest {
                 .containsExactlyInAnyOrderElementsOf(gatedOnFalse);
     }
 
+    /**
+     * What a switch reads as when unset is what its conditions match then, so the map is checked
+     * against them rather than kept by hand. A detected switch never relies on that match.
+     */
+    @Test
+    void unsetDefaultsAreWhatTheConditionsMatchWhenNothingIsSet() throws ClassNotFoundException {
+        Map<String, String> matchedWhenUnset = gates().stream()
+                .filter(gate -> gate.condition().matchIfMissing())
+                .collect(Collectors.toMap(
+                        Gate::key, gate -> String.valueOf(gate.condition().havingValue()), (one, other) -> {
+                            assertThat(one)
+                                    .as("conditions agree on the unset value")
+                                    .isEqualTo(other);
+                            return one;
+                        }));
+
+        assertThat(matchedWhenUnset).isNotEmpty();
+        assertThat(PeekabootPropertyKeys.UNSET_SWITCH_DEFAULTS).isEqualTo(matchedWhenUnset);
+    }
+
+    /** One {@code @ConditionalOnBooleanProperty} on one {@code peekaboot.*} key. */
+    private record Gate(String key, ConditionalOnBooleanProperty condition) {}
+
     private Set<String> gatedSwitches(Predicate<ConditionalOnBooleanProperty> which) throws ClassNotFoundException {
-        Set<String> gatedSwitches = new HashSet<>();
+        return gates().stream()
+                .filter(gate -> which.test(gate.condition()))
+                .map(Gate::key)
+                .collect(Collectors.toSet());
+    }
+
+    private List<Gate> gates() throws ClassNotFoundException {
+        List<Gate> gates = new ArrayList<>();
         for (String className :
                 ImportCandidates.load(AutoConfiguration.class, getClass().getClassLoader())) {
             if (className.startsWith("org.peekaboot.")) {
-                collectGatedSwitches(Class.forName(className), which, gatedSwitches);
+                collectGates(Class.forName(className), gates);
             }
         }
-        return gatedSwitches;
+        return gates;
     }
 
-    private static void collectGatedSwitches(
-            Class<?> type, Predicate<ConditionalOnBooleanProperty> which, Set<String> gatedSwitches) {
-        collectGatedSwitches((AnnotatedElement) type, which, gatedSwitches);
-        Arrays.stream(type.getDeclaredMethods()).forEach(method -> collectGatedSwitches(method, which, gatedSwitches));
-        Arrays.stream(type.getDeclaredClasses()).forEach(nested -> collectGatedSwitches(nested, which, gatedSwitches));
+    private static void collectGates(Class<?> type, List<Gate> gates) {
+        collectGates((AnnotatedElement) type, gates);
+        Arrays.stream(type.getDeclaredMethods()).forEach(method -> collectGates(method, gates));
+        Arrays.stream(type.getDeclaredClasses()).forEach(nested -> collectGates(nested, gates));
     }
 
-    private static void collectGatedSwitches(
-            AnnotatedElement element, Predicate<ConditionalOnBooleanProperty> which, Set<String> gatedSwitches) {
+    private static void collectGates(AnnotatedElement element, List<Gate> gates) {
         MergedAnnotations.from(element).stream(ConditionalOnBooleanProperty.class)
                 .map(MergedAnnotation::synthesize)
-                .filter(which)
-                .flatMap(BooleanSwitchesTest::keys)
-                .filter(key -> key.startsWith("peekaboot."))
-                .forEach(gatedSwitches::add);
+                .forEach(condition -> keys(condition)
+                        .filter(key -> key.startsWith("peekaboot."))
+                        .forEach(key -> gates.add(new Gate(key, condition))));
     }
 
     private static Stream<String> keys(ConditionalOnBooleanProperty condition) {
