@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.web.servlet.DispatcherServlet;
 
@@ -81,9 +82,12 @@ public class ErrorPageAutoConfiguration {
             ErrorAttributes errorAttributes,
             StackTraceRules stackTraceRules,
             PeekabootPaths paths,
-            MessageSource messageSource) {
+            MessageSource messageSource,
+            Environment environment) {
         return new PeekabootErrorExceptionResolver(
-                new PeekabootErrorView(errorAttributes, stackTraceRules, paths), messageSource);
+                new PeekabootErrorView(errorAttributes, stackTraceRules, paths),
+                messageSource,
+                environment.getProperty("spring.mvc.log-resolved-exception", Boolean.class, false));
     }
 
     /**

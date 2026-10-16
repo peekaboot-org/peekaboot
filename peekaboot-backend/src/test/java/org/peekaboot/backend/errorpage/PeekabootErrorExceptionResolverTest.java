@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolver;
 import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver;
 
 /**
@@ -42,7 +43,7 @@ class PeekabootErrorExceptionResolverTest {
 
     private final StaticMessageSource messages = new StaticMessageSource();
 
-    private final PeekabootErrorExceptionResolver resolver = new PeekabootErrorExceptionResolver(view, messages);
+    private final PeekabootErrorExceptionResolver resolver = new PeekabootErrorExceptionResolver(view, messages, false);
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -422,6 +423,37 @@ class PeekabootErrorExceptionResolverTest {
         assertThat(response.getHeader("Allow")).isEqualTo("GET");
         assertThat(request.getAttribute(RequestDispatcher.ERROR_MESSAGE)).isEqualTo("Method 'POST' is not supported.");
         assertThat(response.isCommitted()).isFalse();
+    }
+
+    /**
+     * {@code spring.mvc.log-resolved-exception} gives Spring's own ResponseStatusExceptionResolver
+     * a warn log category, so the one asked here takes it too.
+     */
+    @Test
+    void logsAResolvedStatusAtWarnWhereBootWouldHaveSpringLogIt() {
+        request.addHeader("Accept", "text/html");
+        var logging = new PeekabootErrorExceptionResolver(view, messages, true);
+
+        try (LogCapture statusLogs = LogCapture.attach(ResponseStatusExceptionResolver.class)) {
+            logging.resolveException(request, response, null, new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+            assertThat(statusLogs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .startsWith("Resolved [org.springframework.web.server.ResponseStatusException");
+            });
+        }
+    }
+
+    @Test
+    void logsNoResolvedStatusAtWarnByDefault() {
+        request.addHeader("Accept", "text/html");
+
+        try (LogCapture statusLogs = LogCapture.attach(ResponseStatusExceptionResolver.class)) {
+            resolver.resolveException(request, response, null, new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+            assertThat(statusLogs.appender().list).noneMatch(event -> event.getLevel() == Level.WARN);
+        }
     }
 
     /** The line Spring's own resolver logs for an exception it maps, had this one not run first. */

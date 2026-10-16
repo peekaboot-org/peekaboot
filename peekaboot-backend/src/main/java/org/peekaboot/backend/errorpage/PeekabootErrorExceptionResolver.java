@@ -57,10 +57,19 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
 
     private final ResponseStatusExceptionResolver responseStatusMapping = new ResponseStatusExceptionResolver();
 
-    /** @param messageSource the application's, so an {@code @ResponseStatus} reason that is a message code resolves as Spring resolves it */
-    public PeekabootErrorExceptionResolver(PeekabootErrorView view, MessageSource messageSource) {
+    /**
+     * Asks Spring's own resolvers for the status, headers and reason they would send.
+     *
+     * @param messageSource the application's, so an {@code @ResponseStatus} reason that is a message code resolves as Spring resolves it
+     * @param logResolvedException Boot's {@code spring.mvc.log-resolved-exception}, which gives Spring's own resolvers a warn log category
+     */
+    public PeekabootErrorExceptionResolver(
+            PeekabootErrorView view, MessageSource messageSource, boolean logResolvedException) {
         this.view = view;
         this.responseStatusMapping.setMessageSource(messageSource);
+        if (logResolvedException) {
+            this.responseStatusMapping.setWarnLogCategory(ResponseStatusExceptionResolver.class.getName());
+        }
     }
 
     @Override

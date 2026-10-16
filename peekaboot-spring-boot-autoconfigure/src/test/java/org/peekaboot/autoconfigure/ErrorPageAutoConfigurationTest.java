@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import ch.qos.logback.classic.Level;
 import jakarta.servlet.RequestDispatcher;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -23,10 +25,13 @@ import org.springframework.boot.webmvc.error.ErrorAttributes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.support.StaticMessageSource;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.View;
+import org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolver;
 import org.springframework.web.servlet.view.BeanNameViewResolver;
 
 /**
@@ -345,10 +350,37 @@ class ErrorPageAutoConfigurationTest {
         }
     }
 
+    /** Boot hands this switch to Spring's own resolvers; Peekaboot's, which runs ahead of them, follows it too. */
+    @Test
+    void theExceptionResolverFollowsSpringMvcLogResolvedException() {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        "peekaboot.error-page.override=true",
+                        "spring.mvc.log-resolved-exception=true")
+                .run(context -> {
+                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/missing");
+                    request.addHeader("Accept", "text/html");
+                    try (LogCapture statusLogs = LogCapture.attach(ResponseStatusExceptionResolver.class)) {
+                        context.getBean(PeekabootErrorExceptionResolver.class)
+                                .resolveException(
+                                        request,
+                                        new MockHttpServletResponse(),
+                                        null,
+                                        new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+                        assertThat(statusLogs.appender().list)
+                                .singleElement()
+                                .satisfies(event -> assertThat(event.getLevel()).isEqualTo(Level.WARN));
+                    }
+                });
+    }
+
     /** An application that brings its own replaces Peekaboot's, like every other Peekaboot bean. */
     @Test
     void backsOffForAnApplicationsOwnExceptionResolver() {
-        PeekabootErrorExceptionResolver own = new PeekabootErrorExceptionResolver(ownView(), new StaticMessageSource());
+        PeekabootErrorExceptionResolver own =
+                new PeekabootErrorExceptionResolver(ownView(), new StaticMessageSource(), false);
         contextRunner
                 .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
                 .withBean("ownExceptionResolver", PeekabootErrorExceptionResolver.class, () -> own)
