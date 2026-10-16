@@ -541,12 +541,16 @@ arrives as one grouped PR: its version is declared twice on the Maven side, and 
 landing in one place only leaves the reactor building two Boot versions. Dependabot watches
 Maven, Gradle and the frontend's npm packages daily, GitHub Actions weekly.
 
-The workflow has the three jobs of `osslabz/github-actions`' shared
-`dependabot-auto-merge.yml`. It keeps its own copy because the shared one merges only Maven and
-GitHub Actions updates and does not hold the `spring-boot` group back. `metadata` runs
+The workflow derives from `osslabz/github-actions`' shared
+`.github/workflows/dependabot-auto-merge.yml` and keeps its structure. It keeps its own copy
+because the shared one merges only Maven and GitHub Actions updates, merges action majors and
+does not hold the `spring-boot` group back. Action majors wait here because `release.yml` and
+this workflow run actions `build-on-push` never exercises. `metadata` runs
 `dependabot/fetch-metadata` with `pull-requests: read` alone. `merge` holds the write
-permissions and runs only for a pull request Dependabot opened and pushed. `build-merged-dev`
-dispatches `build-on-push` and `draft-release-notes` on `dev` once the merge succeeded. The
+permissions and runs only for a pull request Dependabot opened and pushed; the allow-list
+sits on its merge step. `build-merged-dev` dispatches `build-on-push` and
+`draft-release-notes` on `dev` once the merge succeeded, where the shared one dispatches the
+build alone. The
 merge pushes `dev` with `GITHUB_TOKEN`, and a push with that token starts no workflow, so
 without the dispatch the merged `dev` would get no build, no snapshot and no draft notes.
 
