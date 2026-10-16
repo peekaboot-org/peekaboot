@@ -151,15 +151,11 @@ public class TraceTreeMapper {
      * rooted at an async entry reports what that entry point's own work did. Unlike
      * {@link #calculateSummary}, nothing here is excluded for being async: every span in a
      * subtree rooted at an async entry is async-marked or a descendant of one, so that
-     * exclusion would report zero. The one exclusion that still applies is a nested async
-     * entry - a node whose {@link SpanNode#asyncEntry()} is set and which isn't the
-     * subtree's own root - together with everything under it, since that work is reachable
-     * as a subtree of its own and must not be counted twice. No request part: a subtree is
-     * not a request.
+     * exclusion would report zero. No request part: a subtree is not a request.
      */
     private static TraceTabSummary subtreeSummary(SpanNode subtreeRoot) {
         SubtreeTotals totals = new SubtreeTotals();
-        accumulateSubtree(subtreeRoot, true, totals);
+        accumulateSubtree(subtreeRoot, totals);
         return new TraceTabSummary(
                 null,
                 new TraceTabSummary.SpansSummary(totals.spanCount, totals.totalDurationMs, totals.errorCount),
@@ -167,10 +163,7 @@ public class TraceTreeMapper {
                 new TraceTabSummary.LogsSummary(0, 0, 0));
     }
 
-    private static void accumulateSubtree(SpanNode node, boolean isSubtreeRoot, SubtreeTotals totals) {
-        if (!isSubtreeRoot && node.asyncEntry()) {
-            return;
-        }
+    private static void accumulateSubtree(SpanNode node, SubtreeTotals totals) {
         totals.spanCount++;
         if (node.status() == SpanStatus.ERROR) {
             totals.errorCount++;
@@ -181,7 +174,7 @@ public class TraceTreeMapper {
             totals.queryDurationMs += node.durationMs();
         }
         for (SpanNode child : node.children()) {
-            accumulateSubtree(child, false, totals);
+            accumulateSubtree(child, totals);
         }
     }
 
