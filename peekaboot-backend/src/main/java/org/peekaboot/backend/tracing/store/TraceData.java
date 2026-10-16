@@ -10,10 +10,9 @@ import java.util.Set;
  *
  * @param startTime     the earliest span start the bundle ever saw, or null while no timed span
  *                      has arrived
- * @param duration      the window the bundle's non-async spans have covered. Eviction never
- *                      lowers it, so it stays the number the Slow bucket admitted the trace by
- *                      once the span cap has dropped the earliest spans; only a late async entry,
- *                      showing that spans already counted were background work, can lower it
+ * @param duration      the window the bundle's non-async spans have covered, or every span's
+ *                      while all of them are async; {@link TraceDataBundle#synchronousWindow()}.
+ *                      What may lower it is in "Async Subtree Timing" in docs/ARCHITECTURE.md
  * @param rootSpan      the span the tree hangs from, chosen by the bundle (see
  *                      {@link TraceDataBundle#rootSpan()}); null for a trace with no spans
  * @param spans         in creation order, never null

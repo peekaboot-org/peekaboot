@@ -140,11 +140,11 @@ view of its spans that the mappers consume.
 
 ### Synchronous Window
 `TraceDataBundle.synchronousWindow()`, the window over the spans outside any async subtree, held
-by `AsyncMembership` beside the bundle's full window. Eviction never lowers it; a late async entry
-can. `snapshot()` carries it as `TraceData.duration`, so a trace's
-duration in the listing, the detail header, the waterfall denominator and Slow-bucket admission
-is this number rather than `spanWindow()`. The two agree for every trace with no async span. The
-maintenance rules are in *Async Subtree Timing* in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+by `AsyncMembership` beside the bundle's full window. `snapshot()` carries it as
+`TraceData.duration`, so a trace's duration in the listing, the detail header, the waterfall
+denominator and Slow-bucket admission is this number rather than the full window. The two agree
+for every trace with no async span. What may lower it, and the maintenance rules, are in *Async
+Subtree Timing* in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ### Insights rings
 The Insights tab's history is ring buffers, not a time-series database. Per series,

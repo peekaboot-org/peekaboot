@@ -14,8 +14,8 @@ import org.jspecify.annotations.Nullable;
 final class AsyncMembership {
 
     private final Set<String> members = new HashSet<>();
-    // Spans the cap evicted while synchronous. Every refresh starts from here, so eviction never
-    // lowers the window: TraceData.duration must stay the number the Slow bucket admitted by.
+    // Spans the cap evicted while synchronous, the floor every refresh starts from; see "Async
+    // Subtree Timing" in docs/ARCHITECTURE.md
     private Window evictedSyncWindow = Window.EMPTY;
     private Window syncWindow = Window.EMPTY;
     private boolean syncWindowStale;

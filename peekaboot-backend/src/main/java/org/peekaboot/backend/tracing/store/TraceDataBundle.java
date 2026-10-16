@@ -52,10 +52,9 @@ public class TraceDataBundle {
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
     private boolean truncated = false;
     // Classification signals, maintained span by span in store() so InMemoryTraceStore's
-    // classify() never has to copy and sort the whole trace per arriving span. Eviction never
-    // lowers fullWindow, so the trace keeps the start and duration it was admitted by. A
-    // folded-away duplicate carries its survivor's name and tags and lies inside it, so skipping
-    // it changes nothing.
+    // classify() never has to copy and sort the whole trace per arriving span. fullWindow gives
+    // the trace's start and the all-async fallback. A folded-away duplicate carries its
+    // survivor's name and tags and lies inside it, so skipping it changes nothing.
     private boolean hasErrorSpan;
     private Window fullWindow = Window.EMPTY;
     private final AsyncMembership asyncMembership = new AsyncMembership();
@@ -101,7 +100,7 @@ public class TraceDataBundle {
         SpanData parent = resolvedParentId != null ? spansById.get(resolvedParentId) : null;
         if (parent != null && SpanDuplicateMatcher.isDuplicate(span, parent)) {
             recordRedirect(span.spanId(), parent.spanId());
-            // the duplicate's stored children hang under parent from now on, and share its subtree
+            // the duplicate's stored children resolve to parent, so they share its subtree
             if (asyncMembership.contains(parent.spanId())) {
                 joinDescendants(span.spanId());
             }
@@ -404,12 +403,8 @@ public class TraceDataBundle {
         return hasErrorLog;
     }
 
-    /**
-     * The wall-clock window the trace's spans have covered so far - the duration the slow
-     * classification compares, read off the running min/max instead of copying and
-     * sorting the spans. Null while no timed span has arrived.
-     */
-    public Duration spanWindow() {
+    /** The window every span stored so far has covered, async ones included; null before a timed span. */
+    Duration spanWindow() {
         synchronized (spansLock) {
             return fullWindow.duration();
         }
@@ -420,7 +415,8 @@ public class TraceDataBundle {
      * detail header and the Slow classification all read, so background work a caller never
      * waited for does not lengthen the work that triggered it. Falls back to
      * {@link #spanWindow()} for a bundle whose every span is async, where that work is the
-     * whole trace and its own duration is the honest answer.
+     * whole trace and its own duration is the honest answer. What may lower it is in "Async
+     * Subtree Timing" in docs/ARCHITECTURE.md.
      */
     public Duration synchronousWindow() {
         synchronized (spansLock) {

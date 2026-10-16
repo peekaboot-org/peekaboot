@@ -1258,9 +1258,7 @@ earliest-created span. `TraceDataBundle.rootSpan()` answers the same rule withou
 is what the listing filters classify by, so the row a filter admits and the tree the mapper
 builds agree on what started the trace. `attachOrphansToRoot` then re-parents every other span
 whose parent is not in the trace onto that root, so a subtree whose parent has not been exported
-yet does not silently vanish. Eviction never lowers the window, so it stays the number the Slow
-bucket admitted the trace by, and a truncated trace never lists a duration below the threshold
-that put it there. `truncated` travels on the snapshot rather than being derived
+yet does not silently vanish. What moves the window is in *Async Subtree Timing*. `truncated` travels on the snapshot rather than being derived
 from the span list: the list is already deduplicated and already capped, so nothing in it can
 say whether real spans were dropped.
 
@@ -1306,20 +1304,23 @@ Background work must not lengthen the trace that triggered it, so `TraceDataBund
 windows rather than one, each a `Window` record of earliest start and latest end. `fullWindow`
 stays the true window over every span ever stored. The second covers only the spans outside an
 async subtree. It lives in `AsyncMembership`, the bundle's collaborator that also holds which
-spans are async, and `synchronousWindow()` is an O(1) read off it. It falls back to
-`spanWindow()` for a bundle whose every span is async: an orphaned task, where the background
-work is the whole trace and its own duration is the honest answer.
+spans are async, and `synchronousWindow()` is an O(1) read off it. It falls back to the full
+window for a bundle whose every span is async: an orphaned task, where the background work is
+the whole trace and its own duration is the honest answer.
 
 `snapshot()` passes `synchronousWindow()` as `TraceData.duration`, so the listing, the detail
 header and the waterfall denominator in `trace-detail/tabs/spans.js` all read it, and
-`InMemoryTraceStore` admits to the Slow bucket by the same method. Eviction never lowers either
-window, for the reason `TraceData.duration`'s Javadoc states: the duration shown has to be the
-number the Slow bucket admitted the trace by, even once the span cap has dropped the earliest
-spans. Eviction never lowers the full window. The synchronous one falls when a late async
-entry shows that spans already counted were background work, and the Slow bucket follows it
-down. Its recomputation therefore starts from the window of every span the cap evicted while it
-counted as synchronous, never from nothing. A window recomputed from the stored spans alone would
-shrink as spans are evicted and take the trace out of Slow on lost spans.
+`InMemoryTraceStore` admits to the Slow bucket by the same method.
+
+Eviction never lowers either window, so a trace keeps listing the duration the Slow bucket
+admitted it by once the span cap has dropped its earliest spans. The synchronous window's
+recomputation therefore starts from the window of every span the cap evicted while it counted as
+synchronous, never from nothing. A window recomputed from the stored spans alone would shrink as
+spans are evicted and take the trace out of Slow on lost spans. Two arrivals do lower the
+duration, and the Slow bucket follows it down. A late async entry shows that spans already
+counted were background work. The first synchronous span of a bundle that held only async spans
+ends the fallback to the full window, so an orphaned task's minutes give way to the request that
+dispatched it.
 
 `TraceTabSummary.SpansSummary.totalDurationMs`, the sum of per-span durations rather than a
 window, excludes async spans too. `count`, `errorCount` and the query figures deliberately still
@@ -1481,7 +1482,7 @@ photographs both, so `trace-detail-queries-*` is the shipped image demonstrating
 ```
 TraceData
 ├── traceId: String
-├── startTime, duration      # eviction never lowers it
+├── startTime, duration      # see Async Subtree Timing
 ├── rootSpan: SpanData       # chosen once by the bundle
 ├── spans: List<SpanData>    # creation order
 └── truncated: boolean
