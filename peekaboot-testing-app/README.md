@@ -21,7 +21,7 @@ label; `application.yml` points `app.datasource.inventory.url` at it. Docker nee
 running. Flyway, Liquibase and a `@Scheduled` job give the Flyway, Liquibase and Scheduled
 Tasks tabs real data to show.
 Product lookups are cached in Redis (`@Cacheable("products")`, 30 s TTL, unknown SKUs not
-cached), a third compose service on a random port that Boot wires up itself.
+cached, written synchronously), a third compose service on a random port that Boot wires up itself.
 A fourth compose service, go-httpbin (`ghcr.io/mccutchen/go-httpbin:2.25.0`), publishes the
 fixed port `127.0.0.1:18093` with the `org.springframework.boot.ignore` label, and
 `app.profile-service.url` points `ProfileClient` at it.
@@ -40,7 +40,7 @@ looking at.
 | --- | --- |
 | `GET /orders` | A deliberate N+1: one query for all orders, then three more per order and one inventory lookup per line on the second DataSource, plus an outbound HTTP call per page load. Its Queries tab shows both pools, `POSTGRESQL · orders-db` and `MYSQL · inventory-db`. The Traces tab lists it with all of those counted in the row's query stat. |
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time went. |
-| `POST /api/orders` | Looks the SKU up in the inventory (unknown SKU: 400), reserves its stock with one conditional `UPDATE` (not enough: 409), then writes the order and its line in one transaction, so the trace shows a single `orders-db` connection for both writes. The reservation is outside that transaction: a failed order insert keeps the stock reserved. Three listeners react to the `OrderPlacedEvent`. `OrderPlacedListener` is `@Observed`, so its span is the application's own `order.placed` and Peekaboot adds none. `OrderConfirmationListener` runs inside the request and its transaction; Peekaboot's span `OrderConfirmationListener#onOrderPlaced` holds its `order_line` count. `StockLevelListener` is `@Async @TransactionalEventListener`: after the commit it reads the remaining stock from MySQL on a task executor, so `StockLevelListener#onOrderPlaced` sits inside the request's `async task` span. That needs `spring.task.execution.propagate-context`, which `application.yml` sets. A second order for the same SKU within 30 s reads the product from Redis, so its trace has Redis's `get` but no inventory `SELECT`. The first order's `get` misses and is followed by the `SELECT`. |
+| `POST /api/orders` | Looks the SKU up in the inventory (unknown SKU: 400), reserves its stock with one conditional `UPDATE` (not enough: 409), then writes the order and its line in one transaction, so the trace shows a single `orders-db` connection for both writes. The reservation is outside that transaction: a failed order insert keeps the stock reserved. Three listeners react to the `OrderPlacedEvent`. `OrderPlacedListener` is `@Observed`, so its span is the application's own `order.placed` and Peekaboot adds none. `OrderConfirmationListener` runs inside the request and its transaction; Peekaboot's span `OrderConfirmationListener#onOrderPlaced` holds its `order_line` count. `StockLevelListener` is `@Async @TransactionalEventListener`: after the commit it reads the remaining stock from MySQL on a task executor, so `StockLevelListener#onOrderPlaced` sits inside the request's `async task` span. That needs `spring.task.execution.propagate-context`, which `application.yml` sets. A second order for the same SKU within 30 s reads the product from Redis, so its trace has Redis's `get` but no inventory `SELECT`. The first order's `get` misses and is followed by the `SELECT` and the `set` that caches the product. |
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
 | `GET /persons/{id}`, `GET /persons/{id}/edit` | One person, through an `@Observed` lookup by id, so the trace carries a query with one bind parameter under a span of its own. The list's View and Edit buttons lead here; an unknown id answers 404. The detail page calls the profile service and shows the echoed method, URL, `email` argument and the `traceparent` header the server received, whose trace id matches the toolbar's. `?profile=slow` calls `/delay/1.2` and lands the page in the Slow bucket. `?profile=unavailable` calls `/status/503`, so the CLIENT span fails, `ProfileClient` logs a WARN and the section reads "unreachable". Any other value answers 400, and with no URL configured the section reads "not configured". |
 | `PUT /persons/{id}` | The edit form's save, sent as a POST with a hidden `_method=put` (`spring.mvc.hiddenmethod.filter.enabled`). Hibernate flushes one `UPDATE` with four bind parameters, then the page redirects to the detail page. |
@@ -67,21 +67,25 @@ what it does with Lettuce's spans today, for a decision on whether it should.
 
 - Spans: one CLIENT span per command, named after it in lower case (`get`, `set`, `hello`,
   `client`, `info`), tagged `db.system=redis`, `db.operation=<COMMAND>`, `peer.service=Redis`
-  and `net.sock.peer.*`. No `db.statement` or `db.query.text`. The cache lookup's `get` sits
-  in the request's trace on a hit and on a miss. The cache write after a miss (`set`) and
-  Lettuce's other commands (`hello`, `client`, `info`) arrive without a parent, and each
-  becomes a one-span trace of its own. After two orders for one SKU, one `/orders` and two
-  rejected orders (409, 400) the store held 8 `set`, 6 `client`, 2 `hello` and 1 `info` traces.
-- Query count: every Redis span counts as a query. The first order for a SKU counted 5
-  (`get`, the product `SELECT`, the stock `UPDATE`, two inserts), the second 4 (`get` in
-  place of the `SELECT`). `GET /orders` counted 55: 32 PostgreSQL, 6 MySQL and 17 Redis.
+  and `net.sock.peer.*`. No `db.statement` or `db.query.text`. The cache lookup's `get` and
+  the cache write after a miss (`set`) sit in the request's trace. Lettuce's other commands
+  (`hello`, `client`, `info`) arrive without a parent, and each becomes a one-span trace of
+  its own.
+- Synchronous writes: Spring Data Redis writes the cache with a reactive `SET` on Lettuce by
+  default. A reactive command takes its parent span only from the Reactor context, so that
+  `set` arrives without a parent. `ProductCacheConfiguration` switches the writer to
+  immediate writes, and `RedisTraceIT` pins the `set` inside the request's trace.
+- Query count: every Redis span counts as a query. The first order for a SKU counts 6
+  (`get`, the product `SELECT`, `set`, the stock `UPDATE`, two inserts), the second 4 (`get`
+  in place of the `SELECT` and `set`). `GET /orders` counts its PostgreSQL, MySQL and Redis
+  queries alike.
 - Queries tab: each Redis entry is labelled `REDIS`, without a pool name, and reads
-  "Unknown query", since there is no statement to show (17 of the 55 entries on `/orders`).
+  "Unknown query", since there is no statement to show.
 - Issues: none on a Redis span; the slowest took 20 ms against the 50 ms `SLOW_QUERY`
   threshold. A slower one would be flagged with no statement to show for it.
 - Trace category: the cached order stays `HTTP_REQUEST`; its Traces-tab row reads
   `http post /api/orders 44ms ... 11 spans | 4 queries 19ms | 5 logs`. Each detached Redis
-  trace is categorised `DATABASE` and listed as its own row (`set`, 1 span, 1 query).
+  trace is categorised `DATABASE` and listed as its own row (`client`, 1 span, 1 query).
 
 A span counts as a query when it is a CLIENT span with any `db.*` or `jdbc.query*` tag:
 `isQuery` in `peekaboot-backend/src/main/java/org/peekaboot/backend/mapper/trace/DbSpans.java`.

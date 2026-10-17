@@ -82,6 +82,18 @@ class RedisTraceIT {
                 trace.path("rootActionType").asString(""));
     }
 
+    @Test
+    void aCacheMissWritesTheProductInsideTheRequestTrace() {
+        ResponseEntity<String> first = placeOrder("WIDGET-3");
+
+        JsonNode trace =
+                traces.awaitTrace(TraceApiClient.traceIdOf(first.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        assertThat(SpanTree.names(trace))
+                .as("the lookup's get and the write after the miss")
+                .contains("get", "set");
+    }
+
     /** A cached miss would hide a product added within the TTL. */
     @Test
     void aLookupOfAnUnknownSkuIsNotCached() {
