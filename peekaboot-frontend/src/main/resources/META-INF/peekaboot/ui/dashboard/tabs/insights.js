@@ -165,8 +165,8 @@ async function init(container, context) {
         // the stream is opened before the first snapshot is fetched: the panel
         // readouts then go live with the next tick instead of waiting on a
         // request that carries every series' whole ring. A tick arriving before
-        // the snapshot lands has nowhere to go and is dropped - the snapshot it
-        // is waiting for already contains that sample.
+        // the snapshot lands is replayed onto it, since the server may have served
+        // the snapshot before that sample (see insights-stream.js).
         stream.connect();
         await stream.loadLifecycleEvents();
         // level 0 backs the panel readouts and is where every tick lands, so it

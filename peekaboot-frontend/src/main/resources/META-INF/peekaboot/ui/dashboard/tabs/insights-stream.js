@@ -16,14 +16,33 @@ import {normalizeLevel, appendTick, appendRollup} from './insights-store.js';
 export function createInsightsStream({client, sizeOf, onDirty, onResynced, onClosed, onOpen}) {
     const levels = new Map();       // level index -> snapshot (see normalizeLevel)
     const levelLoads = new Map();   // level index -> in-flight load promise
+    const pendingDeltas = new Map();   // level index -> deltas that arrived during its /data request
     let lifecycleEvents = [];
     let source = null;
     let resyncPending = false;
 
     /** One dedupe key per level, so a level-1 load cannot cancel an in-flight level-0 load (see shared/api.js). */
     async function loadLevel(level) {
-        const body = await client.get('/api/insights/data', {params: {level}, dedupeKey: `insights-data-${level}`});
-        if (body) levels.set(level, normalizeLevel(body, sizeOf(level)));
+        const deltas = [];
+        pendingDeltas.set(level, deltas);
+        try {
+            const body = await client.get('/api/insights/data', {params: {level}, dedupeKey: `insights-data-${level}`});
+            if (!body) return;
+            const snapshot = normalizeLevel(body, sizeOf(level));
+            levels.set(level, snapshot);
+            // the snapshot may predate a delta streamed meanwhile; the store skips those it already holds
+            deltas.forEach(append => append(snapshot));
+        } finally {
+            // an overlapping resync of this level may have taken the entry over
+            if (pendingDeltas.get(level) === deltas) pendingDeltas.delete(level);
+        }
+    }
+
+    /** Applies a delta to the level's mirror, and again to the snapshot a pending load is about to replace it with. */
+    function applyDelta(level, append) {
+        append(levels.get(level));
+        pendingDeltas.get(level)?.push(append);
+        onDirty(level);
     }
 
     /** Loads a level at most once; concurrent callers share the in-flight request. */
@@ -55,14 +74,13 @@ export function createInsightsStream({client, sizeOf, onDirty, onResynced, onClo
         // a tick carries this level's series values and nothing else - the stat tiles come
         // from /api/insights/config, on the Overview tab's own 30s cycle
         source.addEventListener('tick', event => {
-            appendTick(levels.get(0), JSON.parse(event.data));
-            onDirty(0);
+            const tick = JSON.parse(event.data);
+            applyDelta(0, snapshot => appendTick(snapshot, tick));
         });
 
         source.addEventListener('rollup', event => {
             const rollup = JSON.parse(event.data);
-            appendRollup(levels.get(rollup.level), rollup);
-            onDirty(rollup.level);
+            applyDelta(rollup.level, snapshot => appendRollup(snapshot, rollup));
         });
 
         // EventSource reconnects on its own, but the deltas missed while it was down
