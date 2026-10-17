@@ -31,13 +31,13 @@ public class TraceInsightsService {
             new TraceInsightsResponse(List.of(), BucketCounts.empty(), null);
 
     /**
-     * The types a request that names none asks for. A connection-pool trace is routine
-     * maintenance - a HikariCP refill or keepalive acquiring a connection outside any
-     * traced work - and enough of them arrive to drown everything else, so they are kept
-     * in the store but out of the default view.
+     * The types a request that names none asks for. A maintenance trace is upkeep no traced
+     * work caused, such as a HikariCP refill or keepalive acquiring a connection. Enough of
+     * them arrive to drown everything else, so they are kept in the store but out of the
+     * default view.
      */
     private static final Set<RootActionType> DEFAULT_VIEW_TYPES =
-            Collections.unmodifiableSet(EnumSet.complementOf(EnumSet.of(RootActionType.CONNECTION_POOL)));
+            Collections.unmodifiableSet(EnumSet.complementOf(EnumSet.of(RootActionType.MAINTENANCE)));
 
     /** The one {@code rootActionType} value that asks for every type, the hidden ones included. */
     private static final String EVERY_TYPE = "*";

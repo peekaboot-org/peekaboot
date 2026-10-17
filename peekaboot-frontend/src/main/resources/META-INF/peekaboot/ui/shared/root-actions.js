@@ -5,7 +5,7 @@ const ROOT_ACTIONS = {
     MESSAGE_CONSUMER: {icon: '\u{1F4E9}', label: 'Messaging'},
     RPC_CALL:         {icon: '\u{1F517}', label: 'RPC Call'},
     DATABASE:         {icon: '\u{1F5C2}', label: 'Database'},
-    CONNECTION_POOL:  {icon: '\u{1F50C}', label: 'Connection Pool'},
+    MAINTENANCE:      {icon: '\u{1F527}', label: 'Maintenance'},
     ASYNC_TASK:       {icon: '\u{26A1}', label: 'Async Task'},
     UNKNOWN:          {icon: '❓',    label: 'Unknown'}
 };

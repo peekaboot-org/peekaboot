@@ -163,15 +163,15 @@ class DashboardShellIT extends PlaywrightTestBase {
         assertThat(page.url()).endsWith("#traces");
     }
 
-    /** Connection Pool is an exclusion now, not a type chip, so a link naming it as a type falls back the same way. */
+    /** Maintenance is an exclusion, not a type chip, so a link naming it as a type falls back the same way. */
     @Test
-    void aTracesDeepLinkNamingConnectionPoolAsATypeFallsBackToTheDefaultFilter() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=CONNECTION_POOL");
+    void aTracesDeepLinkNamingMaintenanceAsATypeFallsBackToTheDefaultFilter() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=MAINTENANCE");
         page.waitForSelector("#traces-tab.active");
         page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
 
         assertThat(page.isVisible("#traces-active-filter")).isFalse();
-        assertThat(page.isChecked("#traces-filter-exclude-pool")).isTrue();
+        assertThat(page.isChecked("#traces-filter-exclude-maintenance")).isTrue();
         assertThat(page.url()).endsWith("#traces");
     }
 

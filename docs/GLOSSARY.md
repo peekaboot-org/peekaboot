@@ -32,7 +32,7 @@ without a copy so the list filters can classify a bundle without building a tree
 
 ### Root Action Type
 `RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
-assigns one from the root span's kind and tag prefixes. CONNECTION_POOL alone also reads its
+assigns one from the root span's kind and tag prefixes. MAINTENANCE alone also reads its
 fixed contextual name. Labels and icons live only in the frontend's `shared/root-actions.js`,
 keyed by constant name. A reader's view of the types is on the site:
 [trace types](https://www.peekaboot.org/docs/traces/#root-action-type).
@@ -51,14 +51,14 @@ The first rule that matches wins:
    fired by Spring's scheduler matches. Quartz or a plain `ScheduledExecutorService` falls
    through to `UNKNOWN` or whatever else its tags match.
 5. `DATABASE`: CLIENT kind with any `db.*` tag.
-6. `CONNECTION_POOL`: CLIENT kind, no parent id, the name `connection` and any
+6. `MAINTENANCE`: CLIENT kind, no parent id, the name `connection` and any
    `jdbc.datasource.*` tag. The parent check matters: a request on an excluded prefix has its
    root span skipped, so a connection acquired while serving it becomes the stored trace's
    apparent root while still carrying a parent id.
 7. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
    lands here on purpose: it is an outbound call whose caller has not been exported.
 
-`CONNECTION_POOL` is the one constant `TraceInsightsService.DEFAULT_VIEW_TYPES` leaves out, so a
+`MAINTENANCE` is the one constant `TraceInsightsService.DEFAULT_VIEW_TYPES` leaves out, so a
 listing request naming no type gets every other type. `rootActionType=*` asks for the store as
 it stands. Separately, `isIncompleteFragment` drops any bundle whose root still carries a parent
 id and is not SERVER-kind, which is a different suppression from the default view.

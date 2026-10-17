@@ -20,9 +20,9 @@ import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'traces';
 
-// Routine pool maintenance has no type chip: it is excluded by default through its own
-// checkbox, which adds it to whatever the chips select once unticked.
-const EXCLUDABLE_TYPE = 'CONNECTION_POOL';
+// Maintenance has no type chip: it is excluded by default through its own checkbox,
+// which adds it to whatever the chips select once unticked.
+const EXCLUDABLE_TYPE = 'MAINTENANCE';
 const SELECTABLE_TYPES = ROOT_ACTION_TYPES.filter(type => type !== EXCLUDABLE_TYPE);
 const TYPE_CHIPS = '#traces-filter input[name="type"]';
 const EXCLUSION_LIFTED = 'none';
@@ -30,7 +30,7 @@ const EXCLUSION_LIFTED = 'none';
 // Empty set with the exclusion in place means no type in the request, which the backend
 // answers with its default view - every type except the excludable one.
 let selectedRootActionTypes = new Set();
-let connectionPoolExcluded = true;
+let maintenanceExcluded = true;
 let currentRootOperationFilter = null;
 let currentBucket = 'all';
 
@@ -121,19 +121,19 @@ function seedFromUrl(container, params) {
         .map(type => type.toUpperCase())
         .filter(type => SELECTABLE_TYPES.includes(type));
     const urlOp = params.op || null;
-    const urlPoolExcluded = params.excluded !== EXCLUSION_LIFTED;
+    const urlMaintenanceExcluded = params.excluded !== EXCLUSION_LIFTED;
 
     const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
     const urlTypesJoined = [...urlTypes].sort().join(',');
     if (urlBucket === currentBucket && urlTypesJoined === currentTypesJoined && urlOp === currentRootOperationFilter
-        && urlPoolExcluded === connectionPoolExcluded) {
+        && urlMaintenanceExcluded === maintenanceExcluded) {
         return;
     }
 
     currentBucket = urlBucket;
     selectedRootActionTypes = new Set(urlTypes);
     currentRootOperationFilter = urlOp;
-    connectionPoolExcluded = urlPoolExcluded;
+    maintenanceExcluded = urlMaintenanceExcluded;
 
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn =>
         btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket)));
@@ -144,11 +144,11 @@ function syncFilterCheckboxes(container) {
     container.querySelectorAll(TYPE_CHIPS).forEach(cb => {
         cb.checked = selectedRootActionTypes.has(cb.value);
     });
-    container.querySelector('#traces-filter-exclude-pool').checked = connectionPoolExcluded;
+    container.querySelector('#traces-filter-exclude-maintenance').checked = maintenanceExcluded;
 }
 
 function isUserFiltered() {
-    return selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null || !connectionPoolExcluded;
+    return selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null || !maintenanceExcluded;
 }
 
 /**
@@ -160,7 +160,7 @@ function writeUrlParams() {
     if (currentBucket !== 'all') params.bucket = currentBucket;
     if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
     if (currentRootOperationFilter) params.op = currentRootOperationFilter;
-    if (!connectionPoolExcluded) params.excluded = EXCLUSION_LIFTED;
+    if (!maintenanceExcluded) params.excluded = EXCLUSION_LIFTED;
     tab.context().setUrlParams(params);
 }
 
@@ -176,7 +176,7 @@ function requestParams() {
 
 /** Null asks for the backend's default view, '*' for every type. */
 function requestedRootActionType() {
-    if (connectionPoolExcluded) {
+    if (maintenanceExcluded) {
         return selectedRootActionTypes.size > 0 ? Array.from(selectedRootActionTypes).join(',') : null;
     }
     return selectedRootActionTypes.size > 0 ? [...selectedRootActionTypes, EXCLUDABLE_TYPE].join(',') : '*';
@@ -226,12 +226,12 @@ function renderTypeFilterCheckboxes(container) {
     });
 
     const exclusion = filterCheckbox(EXCLUDABLE_TYPE, () => {
-        connectionPoolExcluded = exclusion.checked;
+        maintenanceExcluded = exclusion.checked;
     });
-    exclusion.id = 'traces-filter-exclude-pool';
+    exclusion.id = 'traces-filter-exclude-maintenance';
     // Checked excludes here and includes on every box beside it, so the verb is in the name.
     exclusion.setAttribute('aria-label', `Exclude ${rootActionLabel(EXCLUDABLE_TYPE)}`);
-    exclusion.checked = connectionPoolExcluded;
+    exclusion.checked = maintenanceExcluded;
     excludedGroup.append(exclusion.parentElement);
 }
 
@@ -263,7 +263,7 @@ function filterCheckbox(type, applyChange) {
 function resetFilter() {
     selectedRootActionTypes.clear();
     currentRootOperationFilter = null;
-    connectionPoolExcluded = true;
+    maintenanceExcluded = true;
     syncFilterCheckboxes(tab.container());
     writeUrlParams();
     tab.refetch();
@@ -335,7 +335,7 @@ function updateFilterIndicator(container) {
         if (currentRootOperationFilter !== null) {
             filterParts.push(`Target: ${currentRootOperationFilter.split('.').pop()}`);
         }
-        if (!connectionPoolExcluded) {
+        if (!maintenanceExcluded) {
             filterParts.push(`${rootActionLabel(EXCLUDABLE_TYPE)} included`);
         }
         filterText.textContent = `Filtering: ${filterParts.join(' | ')}`;

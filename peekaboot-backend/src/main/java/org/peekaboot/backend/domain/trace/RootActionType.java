@@ -11,7 +11,7 @@ public enum RootActionType {
     MESSAGE_CONSUMER,
     RPC_CALL,
     DATABASE,
-    CONNECTION_POOL,
+    MAINTENANCE,
     ASYNC_TASK,
     UNKNOWN
 }

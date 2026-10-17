@@ -391,12 +391,12 @@ class TraceInsightsServiceTest {
     }
 
     /**
-     * The default view: a request that names no type gets every type except the routine
-     * pool maintenance one, so those traces stay out of the list and out of the filtered
+     * The default view: a request that names no type gets every type except
+     * MAINTENANCE, so those traces stay out of the list and out of the filtered
      * counts until something asks for them by name.
      */
     @Test
-    void aRequestNamingNoTypeLeavesConnectionPoolTracesOut() {
+    void aRequestNamingNoTypeLeavesMaintenanceTracesOut() {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
@@ -516,7 +516,7 @@ class TraceInsightsServiceTest {
 
     /** The way past the default view's exclusion for a client that wants the store as it is. */
     @Test
-    void aWildcardTypeFilterListsConnectionPoolTracesAlongsideEveryOther() {
+    void aWildcardTypeFilterListsMaintenanceTracesAlongsideEveryOther() {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
@@ -526,11 +526,11 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void theListFiltersToConnectionPoolTracesWhenTheirChipAsksForThem() {
+    void theListFiltersToMaintenanceTracesWhenARequestNamesThem() {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "connection_pool", null);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "maintenance", null);
 
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("pool1");
     }

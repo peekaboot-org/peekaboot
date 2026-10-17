@@ -27,10 +27,9 @@ class TraceFiltersIT extends PlaywrightTestBase {
     /** A root action type's own chip in the traces filter row, as opposed to the exclusion box beside them. */
     private static final String TRACE_TYPE_CHIP = "#traces-filter input[name='type']";
 
-    private static final String CONNECTION_POOL_EXCLUSION = "#traces-filter-exclude-pool";
+    private static final String MAINTENANCE_EXCLUSION = "#traces-filter-exclude-maintenance";
 
-    private static final String CONNECTION_POOL_ROW_ICON =
-            "#traces-list .pk-trace-item__icon[aria-label='Connection Pool']";
+    private static final String MAINTENANCE_ROW_ICON = "#traces-list .pk-trace-item__icon[aria-label='Maintenance']";
 
     /**
      * A deep link into the traces tab must restore the bucket and type filter controls
@@ -100,16 +99,16 @@ class TraceFiltersIT extends PlaywrightTestBase {
     }
 
     /**
-     * Connection-pool traces sit in the store but not in the default view: with the
+     * Maintenance traces sit in the store but not in the default view: with the
      * exclusion ticked and no type chosen, traces.js names no type in its request and the
-     * backend answers with the default view. Pool maintenance has no type chip of its own;
+     * backend answers with the default view. Maintenance has no type chip of its own;
      * unticking its exclusion asks for every type and lands in the URL, so the revealed
      * view stays shareable.
      */
     @Test
-    void connectionPoolTracesAreExcludedByDefaultAndRevealedByUntickingTheirExclusion() throws SQLException {
+    void maintenanceTracesAreExcludedByDefaultAndRevealedByUntickingTheirExclusion() throws SQLException {
         // What HikariCP maintenance does: acquire a pooled connection outside any traced
-        // work, yielding a standalone CONNECTION_POOL trace.
+        // work, yielding a standalone MAINTENANCE trace.
         try (Connection connection = dataSource.getConnection()) {
             assertThat(connection.isValid(1)).isTrue();
         }
@@ -123,26 +122,25 @@ class TraceFiltersIT extends PlaywrightTestBase {
                 () -> page.click(Dashboard.tabButton("traces")));
         assertThat(rootActionTypeOf(defaultResponse)).isNull();
         dashboard.awaitListedTrace(httpTraceId);
-        assertThat(page.locator(CONNECTION_POOL_ROW_ICON).count()).isZero();
-        assertThat(page.isChecked(CONNECTION_POOL_EXCLUSION)).isTrue();
-        assertThat(page.locator(TRACE_TYPE_CHIP + "[value='CONNECTION_POOL']").count())
+        assertThat(page.locator(MAINTENANCE_ROW_ICON).count()).isZero();
+        assertThat(page.isChecked(MAINTENANCE_EXCLUSION)).isTrue();
+        assertThat(page.locator(TRACE_TYPE_CHIP + "[value='MAINTENANCE']").count())
                 .isZero();
 
         Response revealedResponse = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"),
-                () -> page.uncheck(CONNECTION_POOL_EXCLUSION));
+                response -> response.url().contains("/api/traces/insights"), () -> page.uncheck(MAINTENANCE_EXCLUSION));
 
         assertThat(rootActionTypeOf(revealedResponse)).isEqualTo("*");
         assertThat(page.url()).endsWith("#traces?excluded=none");
-        page.waitForSelector(CONNECTION_POOL_ROW_ICON);
+        page.waitForSelector(MAINTENANCE_ROW_ICON);
     }
 
     /**
-     * With a type chosen, unticking the exclusion adds pool traces to that type rather than
+     * With a type chosen, unticking the exclusion adds maintenance traces to that type rather than
      * replacing it, and Clear filter restores the exclusion along with everything else.
      */
     @Test
-    void untickingTheConnectionPoolExclusionAddsItToTheChosenTypes() {
+    void untickingTheMaintenanceExclusionAddsItToTheChosenTypes() {
         openDashboard();
         page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"),
@@ -152,37 +150,36 @@ class TraceFiltersIT extends PlaywrightTestBase {
                 () -> page.check(TRACE_TYPE_CHIP + "[value='HTTP_REQUEST']"));
 
         Response combinedResponse = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"),
-                () -> page.uncheck(CONNECTION_POOL_EXCLUSION));
+                response -> response.url().contains("/api/traces/insights"), () -> page.uncheck(MAINTENANCE_EXCLUSION));
 
-        assertThat(rootActionTypeOf(combinedResponse)).isEqualTo("HTTP_REQUEST,CONNECTION_POOL");
+        assertThat(rootActionTypeOf(combinedResponse)).isEqualTo("HTTP_REQUEST,MAINTENANCE");
         assertThat(page.url()).endsWith("#traces?type=HTTP_REQUEST&excluded=none");
         // the banner follows the rendered response, which lands after the response itself
         page.waitForFunction(
-                "() => document.querySelector('#traces-active-filter').textContent.includes('Connection Pool included')");
+                "() => document.querySelector('#traces-active-filter').textContent.includes('Maintenance included')");
         assertThat(page.textContent("#traces-active-filter"))
                 .contains("Type: HTTP |")
-                .contains("Connection Pool included");
+                .contains("Maintenance included");
 
         Response clearedResponse = page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"), () -> page.click("#traces-filter-clear"));
 
         assertThat(rootActionTypeOf(clearedResponse)).isNull();
-        assertThat(page.isChecked(CONNECTION_POOL_EXCLUSION)).isTrue();
+        assertThat(page.isChecked(MAINTENANCE_EXCLUSION)).isTrue();
         assertThat(page.isChecked(TRACE_TYPE_CHIP + "[value='HTTP_REQUEST']")).isFalse();
         assertThat(page.url()).endsWith("#traces");
     }
 
     /** A shared link with the exclusion lifted arrives with the box unticked and every type asked for. */
     @Test
-    void deepLinkRestoresTheLiftedConnectionPoolExclusion() {
+    void deepLinkRestoresTheLiftedMaintenanceExclusion() {
         Response listing = page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"),
                 () -> page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?excluded=none"));
 
         assertThat(rootActionTypeOf(listing)).isEqualTo("*");
         page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");
-        assertThat(page.isChecked(CONNECTION_POOL_EXCLUSION)).isFalse();
+        assertThat(page.isChecked(MAINTENANCE_EXCLUSION)).isFalse();
         assertThat(page.url()).endsWith("#traces?excluded=none");
     }
 
@@ -190,17 +187,17 @@ class TraceFiltersIT extends PlaywrightTestBase {
     @Test
     void traceFilterChipsShowTheirTypeIcon() {
         String httpIcon = (String) importModule("shared/root-actions.js", "m.rootActionIcon('HTTP_REQUEST')");
-        String poolIcon = (String) importModule("shared/root-actions.js", "m.rootActionIcon('CONNECTION_POOL')");
+        String maintenanceIcon = (String) importModule("shared/root-actions.js", "m.rootActionIcon('MAINTENANCE')");
 
         openDashboard();
         dashboard.openTab("traces");
-        page.waitForSelector(CONNECTION_POOL_EXCLUSION);
+        page.waitForSelector(MAINTENANCE_EXCLUSION);
 
         assertThat(page.textContent(
                         "#traces-filter label:has(input[name='type'][value='HTTP_REQUEST']) [aria-hidden='true']"))
                 .isEqualTo(httpIcon);
-        assertThat(page.textContent("#traces-filter label:has(" + CONNECTION_POOL_EXCLUSION + ") [aria-hidden='true']"))
-                .isEqualTo(poolIcon);
+        assertThat(page.textContent("#traces-filter label:has(" + MAINTENANCE_EXCLUSION + ") [aria-hidden='true']"))
+                .isEqualTo(maintenanceIcon);
         assertThat(page.getByRole(
                                 AriaRole.CHECKBOX,
                                 new Page.GetByRoleOptions().setName("HTTP").setExact(true))

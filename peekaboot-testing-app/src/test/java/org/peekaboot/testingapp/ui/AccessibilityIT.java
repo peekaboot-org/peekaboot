@@ -233,18 +233,18 @@ class AccessibilityIT extends PlaywrightTestBase {
     /**
      * Checked means included on every type checkbox but this one, where it means excluded. The
      * "Excluded:" caption beside it is not part of its name, so the verb has to be, or a screen
-     * reader announces "Connection Pool, checked" and means the opposite of its neighbours.
+     * reader announces "Maintenance, checked" and means the opposite of its neighbours.
      */
     @Test
-    void thePoolCheckboxNamesWhatCheckingItDoes() {
+    void theMaintenanceCheckboxNamesWhatCheckingItDoes() {
         openDashboard();
         dashboard.openTab("traces");
-        page.waitForSelector("#traces-filter-exclude-pool");
+        page.waitForSelector("#traces-filter-exclude-maintenance");
 
         assertThat(page.getByRole(
                                 AriaRole.CHECKBOX,
                                 new Page.GetByRoleOptions()
-                                        .setName("Exclude Connection Pool")
+                                        .setName("Exclude Maintenance")
                                         .setExact(true))
                         .count())
                 .isOne();

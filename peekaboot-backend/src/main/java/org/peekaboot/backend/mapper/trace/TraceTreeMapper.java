@@ -303,7 +303,7 @@ public class TraceTreeMapper {
                 && parentId == null
                 && "connection".equals(name)
                 && hasTagPrefix(tags, "jdbc.datasource.")) {
-            return RootActionType.CONNECTION_POOL;
+            return RootActionType.MAINTENANCE;
         }
         return RootActionType.UNKNOWN;
     }

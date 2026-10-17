@@ -1062,12 +1062,12 @@ class TraceTreeMapperTest {
      * - no {@code db.*}, no {@code jdbc.query[N]}.
      */
     @Test
-    void classifiesAStandaloneConnectionSpanAsConnectionPool() {
+    void classifiesAStandaloneConnectionSpanAsMaintenance() {
         var rootSpan = jdbcConnection("root").build();
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
 
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.CONNECTION_POOL);
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.MAINTENANCE);
     }
 
     /**
@@ -1076,10 +1076,10 @@ class TraceTreeMapperTest {
      * connection acquired inside such a request can be the only span stored under that trace
      * id - which makes it the bundle's apparent root. Its parent id says what the tags cannot:
      * the acquisition happened inside traced work, so it is not the standalone acquisition
-     * CONNECTION_POOL names.
+     * MAINTENANCE names.
      */
     @Test
-    void doesNotClassifyAConnectionSpanWithAnUnexportedParentAsConnectionPool() {
+    void doesNotClassifyAConnectionSpanWithAnUnexportedParentAsMaintenance() {
         var connectionSpan =
                 jdbcConnection("child").parent("root-span-never-exported").build();
 
@@ -1109,7 +1109,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void doesNotClassifyAConnectionNamedSpanWithoutDatasourceTagsAsConnectionPool() {
+    void doesNotClassifyAConnectionNamedSpanWithoutDatasourceTagsAsMaintenance() {
         // The name only counts together with the jdbc.datasource.* tags the
         // datasource-micrometer convention sets - a bare span that happens to share the
         // name says nothing about what started the trace.

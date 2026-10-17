@@ -154,7 +154,7 @@ class TracesTabIT extends PlaywrightTestBase {
      * checked against the count carried by the very response that rendered it: the
      * bucket count is app-global and uncapped, the list is capped at the page size, and
      * any class running alongside this one can log an ERROR between two requests. It has
-     * to be the <em>filtered</em> count: the backend's default view leaves CONNECTION_POOL
+     * to be the <em>filtered</em> count: the backend's default view leaves MAINTENANCE
      * out, and such a hidden trace that logs an ERROR is counted in {@code bucketCounts} but
      * never listed. The sanity assertion that the errors count is smaller than the all count
      * is what keeps this non-vacuous: the store always holds a mix of error and non-error
@@ -194,7 +194,7 @@ class TracesTabIT extends PlaywrightTestBase {
     /**
      * The bucket buttons' counts are counts like any other: grouped, and in the dashboard's
      * locale. A request naming no type still gets the backend's default view (every type but
-     * Connection Pool, see TraceInsightsService.parseRootActionTypes), which counts as a
+     * Maintenance, see TraceInsightsService.parseRootActionTypes), which counts as a
      * filter of its own - so {@code filteredBucketCounts} is what a bucket button reads even
      * on the very first, unfiltered load; the plain {@code bucketCounts} only ever reaches the
      * UI as the "/ total" denominator once the reader picks an explicit type or operation.
