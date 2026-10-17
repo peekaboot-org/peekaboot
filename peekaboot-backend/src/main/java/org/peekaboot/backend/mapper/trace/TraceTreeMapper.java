@@ -24,6 +24,10 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 public class TraceTreeMapper {
 
+    // What Lettuce's connection handshake (RedisHandshake) and Boot's Redis health indicators send.
+    private static final Set<String> REDIS_UPKEEP_COMMANDS =
+            Set.of("HELLO", "AUTH", "PING", "SELECT", "READONLY", "CLIENT", "INFO", "CLUSTER");
+
     private final MaskingEngine maskingEngine;
     private final TagMasker tagMasker;
     private final SqlStatements sqlStatements;
@@ -282,6 +286,10 @@ public class TraceTreeMapper {
         if (hasScheduledTaskTags(tags)) {
             return RootActionType.SCHEDULED_JOB;
         }
+        // Before DATABASE, which every Redis command matches.
+        if (isRedisUpkeepRoot(kind, parentId, tags)) {
+            return RootActionType.MAINTENANCE;
+        }
         // CLIENT-kind, not merely db.* tagged: only the client side of a query is a span
         // Peekaboot ever sees, so any other kind carrying db.* is not a database action.
         if (kind == Span.Kind.CLIENT && hasTagPrefix(tags, "db.")) {
@@ -322,6 +330,14 @@ public class TraceTreeMapper {
             return RootActionType.RPC_CALL;
         }
         return RootActionType.HTTP_REQUEST;
+    }
+
+    /** Parentless for the reason the connection rule in {@link #detectNonServerActionType} gives. */
+    private static boolean isRedisUpkeepRoot(Span.Kind kind, String parentId, Map<String, String> tags) {
+        return kind == Span.Kind.CLIENT
+                && parentId == null
+                && "redis".equals(tags.get("db.system"))
+                && REDIS_UPKEEP_COMMANDS.contains(tags.getOrDefault("db.operation", ""));
     }
 
     private static boolean hasTagPrefix(Map<String, String> tags, String prefix) {

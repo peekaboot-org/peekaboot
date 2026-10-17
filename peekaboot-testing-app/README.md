@@ -70,7 +70,8 @@ what it does with Lettuce's spans today, for a decision on whether it should.
   and `net.sock.peer.*`. No `db.statement` or `db.query.text`. The cache lookup's `get` and
   the cache write after a miss (`set`) sit in the request's trace. Lettuce's other commands
   (`hello`, `client`, `info`) arrive without a parent, and each becomes a one-span trace of
-  its own.
+  its own. `hello` and `client` are the connection handshake; `info` is Boot's reactive Redis
+  health indicator, which runs whenever the dashboard reads health.
 - Synchronous writes: Spring Data Redis writes the cache with a reactive `SET` on Lettuce by
   default. A reactive command takes its parent span only from the Reactor context, so that
   `set` arrives without a parent. `ProductCacheConfiguration` switches the writer to
@@ -84,8 +85,11 @@ what it does with Lettuce's spans today, for a decision on whether it should.
 - Issues: none on a Redis span; the slowest took 20 ms against the 50 ms `SLOW_QUERY`
   threshold. A slower one would be flagged with no statement to show for it.
 - Trace category: the cached order stays `HTTP_REQUEST`; its Traces-tab row reads
-  `http post /api/orders 44ms ... 11 spans | 4 queries 19ms | 5 logs`. Each detached Redis
-  trace is categorised `DATABASE` and listed as its own row (`client`, 1 span, 1 query).
+  `http post /api/orders 44ms ... 11 spans | 4 queries 19ms | 5 logs`. The detached
+  handshake and health-check traces are categorised `MAINTENANCE` and hidden by default, as
+  pool maintenance is; unticking the Excluded checkbox under the Traces filters lists them.
+  `RedisTraceIT` pins both. A detached Redis command of the application's own, such as a
+  reactive `set`, stays `DATABASE` and listed.
 
 A span counts as a query when it is a CLIENT span with any `db.*` or `jdbc.query*` tag:
 `isQuery` in `peekaboot-backend/src/main/java/org/peekaboot/backend/mapper/trace/DbSpans.java`.

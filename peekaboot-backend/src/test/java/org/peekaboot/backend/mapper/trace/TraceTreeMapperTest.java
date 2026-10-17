@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
+import static org.peekaboot.backend.testsupport.Spans.redisCommand;
 import static org.peekaboot.backend.testsupport.Spans.resultSet;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
@@ -1122,6 +1124,62 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
+    }
+
+    /**
+     * Lettuce sends these while it sets a connection up (RedisHandshake) and Boot's Redis health
+     * indicators send INFO or CLUSTER INFO. Reactive commands take their parent only from the
+     * Reactor context, so each arrives parentless as a trace of its own.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"HELLO", "AUTH", "PING", "SELECT", "READONLY", "CLIENT", "INFO", "CLUSTER"})
+    void classifiesAParentlessRedisUpkeepCommandAsMaintenance(String command) {
+        var rootSpan = redisCommand("root", command).build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.MAINTENANCE);
+    }
+
+    /** The same fragment an excluded request leaves as the connection rule guards against. */
+    @Test
+    void keepsARedisUpkeepCommandWithAnUnexportedParentAsDatabase() {
+        var rootSpan =
+                redisCommand("child", "INFO").parent("root-span-never-exported").build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
+    }
+
+    /** A parentless command the application issued stays listed, as a parentless JDBC query does. */
+    @Test
+    void keepsAParentlessRedisDataCommandAsDatabase() {
+        var rootSpan = redisCommand("root", "SET").build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
+    }
+
+    @Test
+    void keepsAParentlessRedisSpanWithoutAnOperationAsDatabase() {
+        var rootSpan =
+                span("root").kind(Span.Kind.CLIENT).tag("db.system", "redis").build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
+    }
+
+    /** The command names are Redis's; another database's operation of the same name is the application's work. */
+    @Test
+    void keepsAParentlessUpkeepNamedOperationOfAnotherDatabaseAsDatabase() {
+        var rootSpan = redisCommand("root", "PING").tag("db.system", "mongodb").build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
     }
 
     /**

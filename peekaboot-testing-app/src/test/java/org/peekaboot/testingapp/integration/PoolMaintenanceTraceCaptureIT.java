@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import javax.sql.DataSource;
@@ -41,13 +39,13 @@ class PoolMaintenanceTraceCaptureIT {
 
     @Test
     void aStandaloneConnectionAcquisitionBecomesAMaintenanceTrace() throws SQLException {
-        PeekabootApi api = new PeekabootApi(port);
+        TraceApiClient traces = new TraceApiClient(port);
 
         // One trace listing serves every test running against this application, and HikariCP's
         // own maintenance acquires connections without any test asking. An id absent from the
         // listing before the acquisition below is the closest this test can get to naming the
         // trace it caused; matching on the type alone would assert about somebody else's.
-        Set<String> listedBeforeAcquisition = Set.copyOf(listedTraceIds(api, RootActionType.MAINTENANCE.name()));
+        Set<String> listedBeforeAcquisition = Set.copyOf(traces.listedTraceIds(RootActionType.MAINTENANCE.name()));
 
         try (Connection connection = dataSource.getConnection()) {
             assertThat(connection.isValid(1)).isTrue();
@@ -58,13 +56,12 @@ class PoolMaintenanceTraceCaptureIT {
                 .path("tags")
                 .path("jdbc.datasource.pool")
                 .asString("");
-        JsonNode trace = new TraceApiClient(port)
-                .awaitTraceOfType(
-                        RootActionType.MAINTENANCE,
-                        listed -> !listedBeforeAcquisition.contains(
-                                        listed.path("traceId").asString(""))
+        JsonNode trace = traces.awaitTraceOfType(
+                RootActionType.MAINTENANCE,
+                listed ->
+                        !listedBeforeAcquisition.contains(listed.path("traceId").asString(""))
                                 && "orders-db".equals(poolName.apply(listed)),
-                        poolName);
+                poolName);
 
         assertThat(trace.path("rootOperation").asString("")).isEqualTo("connection");
         assertThat(trace.path("rootSpan").path("kind").asString("")).isEqualTo("CLIENT");
@@ -73,19 +70,8 @@ class PoolMaintenanceTraceCaptureIT {
         // does the wildcard, while the default request does not. Asserting only the last would
         // hold just as well for a listing that came back empty.
         String traceId = trace.path("traceId").asString("");
-        assertThat(listedTraceIds(api, RootActionType.MAINTENANCE.name())).contains(traceId);
-        assertThat(listedTraceIds(api, "*")).contains(traceId);
-        assertThat(listedTraceIds(api, NO_TYPE_NAMED)).doesNotContain(traceId);
-    }
-
-    /** The ids the listing endpoint returns for one {@code rootActionType} value. */
-    private static List<String> listedTraceIds(PeekabootApi api, String rootActionType) {
-        String typeQuery = rootActionType.isEmpty() ? "" : "&rootActionType=" + rootActionType;
-        JsonNode response = api.getJson("/peekaboot/api/traces/insights?limit=10000" + typeQuery);
-        List<String> ids = new ArrayList<>();
-        for (JsonNode listed : response.path("traces")) {
-            ids.add(listed.path("traceId").asString(""));
-        }
-        return ids;
+        assertThat(traces.listedTraceIds(RootActionType.MAINTENANCE.name())).contains(traceId);
+        assertThat(traces.listedTraceIds("*")).contains(traceId);
+        assertThat(traces.listedTraceIds(NO_TYPE_NAMED)).doesNotContain(traceId);
     }
 }

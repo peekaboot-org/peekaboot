@@ -161,6 +161,22 @@ class TraceApiClient {
         return awaitListedTrace("rootActionType=" + type.name(), match, label, "a " + type + " trace");
     }
 
+    /** The traces the listing endpoint returns for one {@code rootActionType} value; an empty one names no type. */
+    List<JsonNode> listedTraces(String rootActionType) {
+        String typeQuery = rootActionType.isEmpty() ? "" : "&rootActionType=" + rootActionType;
+        List<JsonNode> listed = new ArrayList<>();
+        api.getJson("/peekaboot/api/traces/insights?limit=10000" + typeQuery)
+                .path("traces")
+                .forEach(listed::add);
+        return listed;
+    }
+
+    List<String> listedTraceIds(String rootActionType) {
+        return listedTraces(rootActionType).stream()
+                .map(trace -> trace.path("traceId").asString(""))
+                .toList();
+    }
+
     /**
      * Polls the listing endpoint with {@code query} until a listed trace satisfies
      * {@code match}. The listing leaves out a trace whose root span has not arrived, so a

@@ -1,10 +1,15 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.inventory.InventoryRepository;
 import org.peekaboot.testingapp.inventory.Product;
@@ -24,21 +29,28 @@ import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.scheduler.Schedulers;
 import tools.jackson.databind.JsonNode;
 
-/** A repeated product lookup is served by Redis; the dashboard's handling of Lettuce's spans is logged, not pinned. */
+/**
+ * A repeated product lookup is served by Redis. Lettuce's detached upkeep commands are pinned as
+ * maintenance; the rest of the dashboard's handling of its spans is logged, not pinned.
+ */
 // @Testcontainers must stay first: JUnit runs afterAll in reverse, so the context closes before the container stops.
 @Testcontainers
 @SpringBootTest(
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.cache.type=redis")
+        properties = {"spring.cache.type=redis", "management.health.redis.enabled=true"})
 @ActiveProfiles("test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @StartsContainers
 class RedisTraceIT {
 
     private static final Logger log = LoggerFactory.getLogger(RedisTraceIT.class);
+
+    private static final String EVERY_TYPE = "*";
+    private static final String NO_TYPE_NAMED = "";
 
     @Container
     @ServiceConnection
@@ -55,6 +67,18 @@ class RedisTraceIT {
     private JdbcClient inventoryJdbcClient;
 
     private TraceApiClient traces;
+
+    /**
+     * Boot's reactive Redis health indicator runs on Reactor's shared boundedElastic threads, which
+     * outlive this context and make Tomcat report a leak when it stops. JUnit runs this before the
+     * Spring extension closes the context, and {@link StartsContainers} keeps every other class away.
+     */
+    @AfterAll
+    static void stopReactorSchedulers() {
+        Schedulers.shutdownNow();
+        await().until(() -> Thread.getAllStackTraces().keySet().stream()
+                .noneMatch(thread -> thread.getName().startsWith("boundedElastic")));
+    }
 
     @BeforeEach
     void connect() {
@@ -94,6 +118,49 @@ class RedisTraceIT {
                 .contains("get", "set");
     }
 
+    /**
+     * The dashboard reads the actuator's health in-process, and Boot's reactive Redis health
+     * indicator sends INFO with no parent span, so it starts a one-span trace of its own. That
+     * trace is MAINTENANCE: listed when a request names the type or asks for every type, kept
+     * out of the default view.
+     */
+    @Test
+    void aDashboardHealthPollLeavesItsRedisInfoOutOfTheDefaultView() {
+        Set<String> infoTracesBeforePoll = traces.listedTraces(EVERY_TYPE).stream()
+                .filter(listed -> isRedisRootOf(listed, "INFO"))
+                .map(listed -> listed.path("traceId").asString(""))
+                .collect(Collectors.toSet());
+
+        traces.restClient()
+                .get()
+                .uri("/peekaboot/api/actuator/all/insights")
+                .retrieve()
+                .toBodilessEntity();
+
+        JsonNode trace = traces.awaitTraceOfType(
+                RootActionType.MAINTENANCE,
+                listed -> isRedisRootOf(listed, "INFO")
+                        && !infoTracesBeforePoll.contains(listed.path("traceId").asString("")),
+                RedisTraceIT::rootOperation);
+
+        String traceId = trace.path("traceId").asString("");
+        assertThat(traces.listedTraceIds(EVERY_TYPE)).contains(traceId);
+        assertThat(traces.listedTraces(NO_TYPE_NAMED)).noneMatch(listed -> isRedisRootOf(listed, "INFO"));
+    }
+
+    /** Lettuce's handshake on a new connection, HELLO and then CLIENT SETINFO, arrives without a parent too. */
+    @Test
+    void connectionSetupCommandsAreMaintenance() {
+        // Opens the cache's connection if no earlier test in this class did.
+        placeOrder("GADGET-2");
+
+        traces.awaitTraceOfType(
+                RootActionType.MAINTENANCE, listed -> isRedisRootOf(listed, "HELLO"), RedisTraceIT::rootOperation);
+
+        assertThat(traces.listedTraces(NO_TYPE_NAMED))
+                .noneMatch(listed -> isRedisRootOf(listed, "HELLO") || isRedisRootOf(listed, "CLIENT"));
+    }
+
     /** A cached miss would hide a product added within the TTL. */
     @Test
     void aLookupOfAnUnknownSkuIsNotCached() {
@@ -104,6 +171,16 @@ class RedisTraceIT {
                 .update();
 
         assertThat(inventory.findProduct("LATE-1")).map(Product::name).contains("Late Arrival");
+    }
+
+    private static boolean isRedisRootOf(JsonNode listed, String command) {
+        JsonNode tags = listed.path("rootSpan").path("tags");
+        return "redis".equals(tags.path("db.system").asString(""))
+                && command.equals(tags.path("db.operation").asString(""));
+    }
+
+    private static String rootOperation(JsonNode listed) {
+        return listed.path("rootOperation").asString("");
     }
 
     private ResponseEntity<String> placeOrder(String sku) {

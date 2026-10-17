@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -67,6 +68,21 @@ public final class Spans {
                 .tag("jdbc.datasource.name", "dataSource")
                 .tag("jdbc.datasource.pool", "HikariPool-1")
                 .tag("jdbc.datasource.driver", "org.h2.Driver");
+    }
+
+    /**
+     * The span Lettuce's observation exports for one Redis command: CLIENT kind, named after
+     * the command in lower case, tagged {@code db.system=redis} and {@code db.operation} with
+     * the command in upper case. No parent unless the test sets one.
+     */
+    public static SpanBuilder redisCommand(String spanId, String command) {
+        return span(spanId)
+                .named(command.toLowerCase(Locale.ROOT))
+                .kind(Span.Kind.CLIENT)
+                .at(0, 2)
+                .tag("db.system", "redis")
+                .tag("db.operation", command)
+                .tag("peer.service", "Redis");
     }
 
     public static final class SpanBuilder {

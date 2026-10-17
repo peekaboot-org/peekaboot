@@ -32,9 +32,9 @@ without a copy so the list filters can classify a bundle without building a tree
 
 ### Root Action Type
 `RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
-assigns one from the root span's kind and tag prefixes. MAINTENANCE alone also reads its
-fixed contextual name. Labels and icons live only in the frontend's `shared/root-actions.js`,
-keyed by constant name. A reader's view of the types is on the site:
+assigns one from the root span's kind and tag prefixes. MAINTENANCE alone also reads the parent
+id, the pool rule's fixed contextual name and the Redis rule's tag values. Labels and icons live
+only in the frontend's `shared/root-actions.js`, keyed by constant name. A reader's view of the types is on the site:
 [trace types](https://www.peekaboot.org/docs/traces/#root-action-type).
 
 The first rule that matches wins:
@@ -50,17 +50,25 @@ The first rule that matches wins:
    `DefaultScheduledTaskObservationConvention` sets that pair, so only a `@Scheduled` method
    fired by Spring's scheduler matches. Quartz or a plain `ScheduledExecutorService` falls
    through to `UNKNOWN` or whatever else its tags match.
-5. `DATABASE`: CLIENT kind with any `db.*` tag.
-6. `MAINTENANCE`: CLIENT kind, no parent id, the name `connection` and any
-   `jdbc.datasource.*` tag. The parent check matters: a request on an excluded prefix has its
-   root span skipped, so a connection acquired while serving it becomes the stored trace's
-   apparent root while still carrying a parent id.
-7. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
+5. `MAINTENANCE` for Redis connection upkeep: CLIENT kind, no parent id, `db.system=redis` and a
+   `db.operation` in `TraceTreeMapper.REDIS_UPKEEP_COMMANDS`. Those are what Lettuce's
+   connection handshake sends (`HELLO`, `AUTH`, `PING`, `SELECT`, `READONLY`, `CLIENT`) and what
+   Boot's Redis health indicators send (`INFO`, `CLUSTER`). The reactive health indicator's
+   command takes a parent only from the Reactor context and the handshake runs under no span, so
+   both arrive parentless whenever the dashboard reads health in-process or a connection opens.
+   Any other parentless Redis command stays `DATABASE`.
+6. `DATABASE`: CLIENT kind with any `db.*` tag.
+7. `MAINTENANCE` for connection pool upkeep: CLIENT kind, no parent id, the name `connection`
+   and any `jdbc.datasource.*` tag. The parent check matters in both `MAINTENANCE` rules: a
+   request on an excluded prefix has its root span skipped, so a span created while serving it
+   becomes the stored trace's apparent root while still carrying a parent id.
+8. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
    lands here on purpose: it is an outbound call whose caller has not been exported.
 
 `MAINTENANCE` is the one constant `TraceInsightsService.DEFAULT_VIEW_TYPES` leaves out, so a
-listing request naming no type gets every other type. `rootActionType=*` asks for the store as
-it stands. Separately, `isIncompleteFragment` drops any bundle whose root still carries a parent
+listing request naming no type gets every other type. The Traces tab lifts that exclusion with its
+Excluded checkbox (`#traces-filter-exclude-maintenance`, `excluded=none` in the URL).
+`rootActionType=*` asks for the store as it stands. Separately, `isIncompleteFragment` drops any bundle whose root still carries a parent
 id and is not SERVER-kind, which is a different suppression from the default view.
 
 ### Root Operation
