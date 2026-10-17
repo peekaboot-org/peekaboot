@@ -18,15 +18,18 @@ import org.junit.jupiter.api.Test;
 class DashboardShellIT extends PlaywrightTestBase {
 
     /**
-     * Collects the documents that load, minus the {@code about:blank} a fresh context starts
-     * on: Firefox fires a load event for that one and Chromium does not, and it is not a
-     * document any of these tests is counting.
+     * Collects the requests the main frame makes for a new document, which is how these tests
+     * count reloads. Load events miss one: boot-recovery.js reloads from inside the first
+     * document's load handler, and Playwright then sometimes never reports that document's
+     * load. A hash write requests
+     * nothing, so it does not count, and neither does the {@code about:blank} a fresh context
+     * starts on.
      */
-    private List<String> recordDocumentLoads() {
+    private List<String> recordDocumentRequests() {
         List<String> documents = new ArrayList<>();
-        page.onLoad(loaded -> {
-            if (!"about:blank".equals(loaded.url())) {
-                documents.add(loaded.url());
+        page.onRequest(request -> {
+            if (request.isNavigationRequest() && request.frame().parentFrame() == null) {
+                documents.add(request.url());
             }
         });
         return documents;
@@ -237,7 +240,7 @@ class DashboardShellIT extends PlaywrightTestBase {
      */
     @Test
     void aScriptThatNeverArrivesRaisesTheBannerAfterTheReloadFailsToo() {
-        List<String> documents = recordDocumentLoads();
+        List<String> documents = recordDocumentRequests();
         page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
@@ -253,19 +256,19 @@ class DashboardShellIT extends PlaywrightTestBase {
      * The transient itself: one module lost on the first attempt and served on the next. The
      * dashboard reloads itself out of it, which is what keeps every entry point covered - the
      * deep-link tests navigate to the page directly rather than through openDashboard().
-     * Two documents where this test asked for one is the reload. Documents rather than
+     * Two document requests where this test asked for one is the reload. Requests rather than
      * navigations: a hash write is a navigation too, so counting those would turn red on the
      * day any boot path writes one.
      */
     @Test
     void theDashboardReloadsItselfWhenAScriptIsLostOnTheFirstTry() {
-        List<String> documents = recordDocumentLoads();
+        List<String> documents = recordDocumentRequests();
         loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        // The first document satisfies both waits below on its own - it renders the shell and
-        // fires load even though meters.js was lost - so waiting only on those races the
-        // reload. The second document is what this test is about.
+        // The first document reaches the load state on its own even though meters.js was
+        // lost, so waiting only on that races the reload. The second document is what this
+        // test is about.
         page.waitForCondition(() -> documents.size() == 2);
         page.waitForSelector("#build-info > *");
         page.waitForLoadState();
@@ -281,7 +284,7 @@ class DashboardShellIT extends PlaywrightTestBase {
      */
     @Test
     void aReloadThatNeverNavigatesRaisesTheBanner() {
-        List<String> documents = recordDocumentLoads();
+        List<String> documents = recordDocumentRequests();
         loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
         AtomicInteger pageRequests = new AtomicInteger();
         page.route("**/peekaboot/ui/dashboard/index.html", route -> {
@@ -300,8 +303,8 @@ class DashboardShellIT extends PlaywrightTestBase {
         assertThat(page.textContent("#error .message")).contains("could not start");
         assertThat(page.isVisible("#loading")).isFalse();
         assertThat(documents)
-                .as("the boot document, which the reload never replaced")
-                .hasSize(1);
+                .as("the boot document and the reload that never replaced it")
+                .hasSize(2);
     }
 
     /**
@@ -329,7 +332,7 @@ class DashboardShellIT extends PlaywrightTestBase {
      */
     @Test
     void aModuleLostAfterTheDashboardIsUpDoesNotReloadIt() {
-        List<String> documents = recordDocumentLoads();
+        List<String> documents = recordDocumentRequests();
         openDashboard();
 
         page.evaluate("() => new Promise(resolve => {"
