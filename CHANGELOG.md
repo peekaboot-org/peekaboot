@@ -59,6 +59,7 @@
 - Count one omitted character or byte singular
 - Count one omitted stack-trace line singular
 - Keep insights time labels from overlapping
+- Keep insights deltas that race a snapshot
 
 ### Performance
 - Build span panels when first opened
@@ -104,6 +105,7 @@
 - Turn hyphen asides into plain sentences
 - Open the README with the site tagline
 - Recapture the README screenshot
+- Drop the stale wrapper version
 
 ### Internal changes
 - Let the overlay own its open target
@@ -196,6 +198,7 @@
 - Race snapshot and capture against ticks
 - Import the servlet security exclusions
 - **testing-app**: Write cache synchronously
+- Count reloads by document request
 
 ### Build, CI and chores
 - **deps-dev**: Bump html-validate in /peekaboot-frontend
@@ -238,6 +241,7 @@
 - **deps**: Bump com.github.spotbugs:spotbugs-maven-plugin
 - Run SpotBugs 4.10.5 in the Gradle build
 - **deps**: Bump actions/setup-java in /.github/actions/prepare-build
+- Bump central-publishing to 0.12.0
 
 **Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.0.0...1.1.0
 
