@@ -24,8 +24,8 @@ META-INF/peekaboot/ui/
 ├── shared/          the modules used by two or more surfaces; see the inventory below
 ├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (one per tab, plus the
 │                    Insights tab's own insights-stream.js, insights-panels.js,
-│                    insights-store.js, insights-chart.js, insights-markers.js and
-│                    insights-colors.js)
+│                    insights-store.js, insights-chart.js, insights-time-axis.js,
+│                    insights-markers.js and insights-colors.js)
 │                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 │                    log-entry.js: one captured log, for the Logs tab and a span's details
@@ -41,6 +41,9 @@ The Insights tab charts with [uPlot](https://github.com/leeoniya/uPlot), vendore
 `vendor/uplot/` (MIT, version pinned in `VERSION`) and the one exception to "plain ES
 modules". `insights-chart.js` injects the script and stylesheet the first time a chart has
 to be drawn, so a dashboard that never opens the tab never loads it.
+`insights-time-axis.js` replaces uPlot's own time labels: they follow the dashboard's locale
+and timezone, and the tick spacing is fitted to their measured width, so no two labels
+overlap.
 
 ## Linting
 

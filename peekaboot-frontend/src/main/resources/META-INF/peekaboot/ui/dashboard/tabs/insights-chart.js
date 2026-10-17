@@ -14,6 +14,7 @@
 import {formatMetricValue} from '../../shared/format.js';
 import {createMarkerLayer} from './insights-markers.js';
 import {themeToken, withAlpha} from './insights-colors.js';
+import {fittedTickSpace, timeLabels, zonedDate} from './insights-time-axis.js';
 
 const UPLOT_SCRIPT = new URL('../../vendor/uplot/uplot.iife.min.js', import.meta.url);
 const UPLOT_STYLES = new URL('../../vendor/uplot/uplot.min.css', import.meta.url);
@@ -91,9 +92,14 @@ function chartWidth(mount) {
     return Math.max(mount.clientWidth || 0, MIN_CHART_WIDTH);
 }
 
-function timeAxis(colors) {
+function timeAxis(colors, dateOptions) {
+    const measure = document.createElement('canvas').getContext('2d');
+    measure.font = colors.font;
+    const textWidth = text => measure.measureText(text).width;
     return {side: 2, stroke: colors.axis, font: colors.font,
-        grid: {stroke: colors.grid, width: 1}, ticks: {stroke: colors.grid}};
+        grid: {stroke: colors.grid, width: 1}, ticks: {stroke: colors.grid},
+        space: (u, axisIdx, min, max, plotDim) => fittedTickSpace(u, axisIdx, min, max, plotDim, dateOptions(), textWidth),
+        values: (u, splits, axisIdx, space, incr) => timeLabels(splits, incr, dateOptions())};
 }
 
 function valueAxis(scale, unit, side, colors, dateOptions) {
@@ -123,8 +129,8 @@ function valueAxis(scale, unit, side, colors, dateOptions) {
  * marker even when the chart has no second sample to derive a spacing from - and is
  * registered as a uPlot plugin rather than drawn separately, so it shares the
  * canvas and the draw/cursor hooks uPlot already runs. `dateOptions` is a function
- * returning the dashboard's current {locale, timeZone}, read at hover time so a
- * timezone toggle reaches a chart that is not rebuilt for it.
+ * returning the dashboard's current {locale, timeZone}, read at hover and draw time
+ * so a timezone toggle reaches a chart that is not rebuilt for it.
  */
 export function createChart({
     panel, mount, level, snapshot, showPercentiles, events, showMarkers, dateOptions, onZoom, onZoomReset
@@ -190,12 +196,13 @@ export function createChart({
         });
     });
 
-    const axes = [timeAxis(colors), valueAxis('y', panel.unit, 3, colors, dateOptions)];
+    const axes = [timeAxis(colors, dateOptions), valueAxis('y', panel.unit, 3, colors, dateOptions)];
     if (secondaryUnit) axes.push(valueAxis('2', secondaryUnit, 1, colors, dateOptions));
 
     const options = {
         width: chartWidth(mount),
         height: CHART_HEIGHT,
+        tzDate: zonedDate(dateOptions),
         series,
         bands,
         axes,
