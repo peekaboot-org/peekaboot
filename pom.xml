@@ -218,7 +218,7 @@
         <pluginManagement>
             <plugins>
                 <!-- The lifecycle plugins Maven binds by itself, pinned so a local Maven
-                     other than the wrapper's 3.9.16 builds the same way. clean, resources,
+                     other than the wrapper's builds the same way. clean, resources,
                      install and deploy sit at the versions spring-boot-dependencies
                      manages, so the testing-app (parented to spring-boot-starter-parent)
                      runs the same ones. surefire, failsafe, compiler and dependency have
