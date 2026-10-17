@@ -25,7 +25,7 @@ internals show up on a local run. Deploy the same jar and Peekaboot stays off.
 <dependency>
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-spring-boot-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
