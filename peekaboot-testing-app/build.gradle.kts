@@ -54,7 +54,7 @@ dependencies {
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("com.microsoft.playwright:playwright:1.63.0")
     // the axe-core rule engine, in lockstep with pom.xml
-    testImplementation("com.deque.html.axe-core:playwright:4.13.0")
+    testImplementation("com.deque.html.axe-core:playwright:4.14.0")
 }
 
 // Maven compiles this module with -parameters (spring-boot-starter-parent default).
