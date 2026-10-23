@@ -35,7 +35,8 @@ import org.springframework.web.servlet.HandlerMapping;
 
 /**
  * Filter that captures HTTP request/response details and publishes them via Spring events.
- * This enables the Request tab in the trace detail view.
+ * This enables the Request tab in the trace detail view. It also sets the Server-Timing header
+ * the toolbar's idle mode reads a trace id from.
  */
 public class RequestCaptureFilter implements Filter {
 
@@ -87,7 +88,10 @@ public class RequestCaptureFilter implements Filter {
             return;
         }
 
-        setServerTimingHeader(httpResponse);
+        // Resolved here, on the request thread, where the server span is current; an async
+        // completion callback runs on a container thread that has no span.
+        Span currentSpan = tracer.currentSpan();
+        setServerTimingHeader(httpResponse, currentSpan);
 
         long startTime = clock.getAsLong();
 
@@ -106,9 +110,7 @@ public class RequestCaptureFilter implements Filter {
                     : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
             throw failure;
         } finally {
-            // Resolved here, on the request thread, where the server span is current; an
-            // async completion callback runs on a container thread that has no span.
-            String traceId = currentTraceId();
+            String traceId = currentSpan == null ? null : currentSpan.context().traceId();
             if (traceId == null) {
                 log.trace("No current trace, skipping request capture");
             } else if (httpRequest.isAsyncStarted()) {
@@ -122,11 +124,6 @@ public class RequestCaptureFilter implements Filter {
                 capture(httpRequest, httpResponse, traceId, startTime, status);
             }
         }
-    }
-
-    private String currentTraceId() {
-        Span currentSpan = tracer.currentSpan();
-        return currentSpan == null ? null : currentSpan.context().traceId();
     }
 
     private void capture(
@@ -176,8 +173,7 @@ public class RequestCaptureFilter implements Filter {
         }
     }
 
-    private void setServerTimingHeader(HttpServletResponse response) {
-        Span currentSpan = tracer.currentSpan();
+    private static void setServerTimingHeader(HttpServletResponse response, Span currentSpan) {
         if (currentSpan == null) {
             return;
         }
