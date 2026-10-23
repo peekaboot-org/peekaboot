@@ -4,16 +4,24 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Merged updates run in the dev build, which holds the publishing token. A week gives a
+    # compromised release time to surface first; security updates are not delayed.
+    cooldown:
+      default-days: 7
   # "/" covers .github/workflows and a root action.yml only; the composite action's own
   # pins need their directory listed.
   - package-ecosystem: "github-actions"
     directory: "/.github/actions/prepare-build"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
     # One pull request for the whole Boot line: its version is declared twice on the Maven
     # side (the parent property and the testing-app's parent), and a bump that lands in one
     # place only leaves the reactor building two Boot versions. The auto-merge workflow
@@ -28,6 +36,8 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
   # The frontend lint gate's toolchain. package.json lives in the module, not at the repo
   # root, so the directory has to be named - the same reason the composite action's pins
   # need theirs above. No auto-merge exclusion: CI builds these, so a bump that breaks a
@@ -36,3 +46,5 @@ updates:
     directory: "/peekaboot-frontend"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7

@@ -540,7 +540,9 @@ compatibility event rather than a bump, because peekaboot implements
 depends on Boot's property-source ordering. That whole line
 arrives as one grouped PR: its version is declared twice on the Maven side, and a bump
 landing in one place only leaves the reactor building two Boot versions. Dependabot watches
-Maven, Gradle and the frontend's npm packages daily, GitHub Actions weekly.
+Maven, Gradle and the frontend's npm packages daily, GitHub Actions weekly. Every ecosystem
+holds an update back for seven days after its release, since a merged update runs in the `dev`
+build that holds the publishing token; security updates are not delayed.
 
 The workflow derives from `osslabz/github-actions`' shared
 `.github/workflows/dependabot-auto-merge.yml` and keeps its structure. It keeps its own copy
