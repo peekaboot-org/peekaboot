@@ -223,9 +223,6 @@ class ToolbarIT extends PlaywrightTestBase {
 
         toolbar.waitUntil("root => root.querySelector('#pk-metrics .pk-toolbar__pending') !== null");
 
-        boolean hasPendingElement =
-                (Boolean) toolbar.evaluate("root => !!root.querySelector('#pk-metrics .pk-toolbar__pending')");
-        assertThat(hasPendingElement).isTrue();
         // the stat line's own words, so a screen reader reads counts rather than emoji names
         assertThat(toolbar.evaluate("root => Array.from(root.querySelectorAll('#pk-metrics .pk-toolbar__pending'),"
                         + " stat => stat.textContent)"))
@@ -297,7 +294,9 @@ class ToolbarIT extends PlaywrightTestBase {
     /**
      * Idle mode (Swagger UI) wraps window.fetch and, on a real fetch to a real endpoint,
      * picks the trace id up from the response's real Server-Timing header - proving the
-     * interceptor is wired to the module-local loadTrace rather than a dropped global.
+     * interceptor is wired to the module-local loadTrace rather than a dropped global. The
+     * id has to be the fetched request's own: a bar tracking any other trace would show one
+     * too.
      */
     @Test
     void idleModeInterceptsFetchAndPicksUpTraceIdFromServerTiming() {
@@ -308,9 +307,11 @@ class ToolbarIT extends PlaywrightTestBase {
         assertThat(page.evaluate("() => window.fetch === window.__pkOriginalFetch"))
                 .isEqualTo(false);
 
-        page.evaluate("() => fetch('/api/person/all')");
+        String fetchedTraceId = traceIdOf(page.waitForResponse(
+                response -> response.url().endsWith("/api/person/all"),
+                () -> page.evaluate("() => fetch('/api/person/all')")));
 
-        toolbar.traceId();
+        assertThat(toolbar.traceId()).isEqualTo(fetchedTraceId);
     }
 
     /**
