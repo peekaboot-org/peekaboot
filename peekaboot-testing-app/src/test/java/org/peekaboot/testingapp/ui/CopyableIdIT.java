@@ -101,7 +101,7 @@ class CopyableIdIT extends PlaywrightTestBase {
 
     /**
      * Opens the overlay for a trace guaranteed to carry at least one log (the root
-     * span's own PersonController.index() error log - see TraceOverlayIT's
+     * span's own PersonController.persons() error log - see TraceOverlayIT's
      * logsFilterChipUsesTheContrastTunedForeground, which relies on the same /?error=true
      * path), then switches to the Logs tab.
      */
