@@ -41,6 +41,15 @@ public class TraceTreeMapper {
 
     /** Builds the {@link TraceTree} for a captured trace. */
     public TraceTree map(TraceData traceData) {
+        return map(traceData, queriesOf(traceData));
+    }
+
+    /** The statements and row counts of {@code traceData}'s query spans, to share with {@link QueryExtractor}. */
+    public TraceQueries queriesOf(TraceData traceData) {
+        return new TraceQueries(traceData, sqlStatements);
+    }
+
+    public TraceTree map(TraceData traceData, TraceQueries queries) {
         if (traceData.spans().isEmpty()) {
             return new TraceTree(
                     traceData.traceId(),
@@ -74,8 +83,7 @@ public class TraceTreeMapper {
         TraceTabSummary summary = calculateSummary(spans, rootSpanData, traceData.asyncSpanIds());
         TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
 
-        SpanNode rootSpan = buildSpanTree(
-                rootSpanData, childrenByParentId, RowCounts.byQuerySpanId(spans), traceData.asyncSpanIds(), false);
+        SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
 
         long startTimeMs = traceData.startTime() != null ? traceData.startTime().toEpochMilli() : 0L;
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
@@ -126,8 +134,8 @@ public class TraceTreeMapper {
         }
         Set<String> asyncSpanIds = traceData.asyncSpanIds();
         boolean parentIsAsync = parentId != null && asyncSpanIds.contains(parentId);
-        SpanNode subtreeRoot = buildSpanTree(
-                subtreeRootData, childrenByParentId, RowCounts.byQuerySpanId(spans), asyncSpanIds, parentIsAsync);
+        SpanNode subtreeRoot =
+                buildSpanTree(subtreeRootData, childrenByParentId, queriesOf(traceData), asyncSpanIds, parentIsAsync);
         TraceTabSummary summary = subtreeSummary(subtreeRoot);
         // the subtree's own errors, not the enclosing trace's: background work that succeeded
         // must not wear the ERROR badge of the request that dispatched it, which would also
@@ -357,7 +365,7 @@ public class TraceTreeMapper {
     private SpanNode buildSpanTree(
             SpanData spanData,
             Map<String, List<SpanData>> childrenByParentId,
-            Map<String, Long> rowCounts,
+            TraceQueries queries,
             Set<String> asyncSpanIds,
             boolean parentIsAsync) {
         if (spanData == null) {
@@ -368,7 +376,7 @@ public class TraceTreeMapper {
         List<SpanData> childSpans = childrenByParentId.getOrDefault(spanData.spanId(), List.of());
         List<SpanNode> children = childSpans.stream()
                 .sorted(Comparator.comparing(SpanData::startTime, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(child -> buildSpanTree(child, childrenByParentId, rowCounts, asyncSpanIds, isAsync))
+                .map(child -> buildSpanTree(child, childrenByParentId, queries, asyncSpanIds, isAsync))
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
@@ -389,8 +397,8 @@ public class TraceTreeMapper {
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
                 spanData.remoteServiceName(),
-                sqlStatements.of(spanData),
-                rowCounts.get(spanData.spanId()),
+                queries.statement(spanData),
+                queries.rowCount(spanData.spanId()),
                 isAsync && !parentIsAsync);
     }
 

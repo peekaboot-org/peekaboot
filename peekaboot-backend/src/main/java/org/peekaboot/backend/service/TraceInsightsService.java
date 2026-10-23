@@ -14,6 +14,7 @@ import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
+import org.peekaboot.backend.mapper.trace.TraceQueries;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
@@ -169,8 +170,9 @@ public class TraceInsightsService {
 
         return traceStore.getTrace(traceId).map(bundle -> {
             TraceData traceData = bundle.snapshot();
-            List<QueryInfo> queries = queryExtractor.extract(traceData);
-            TraceTree tree = traceTreeMapper.map(traceData);
+            TraceQueries traceQueries = traceTreeMapper.queriesOf(traceData);
+            List<QueryInfo> queries = queryExtractor.extract(traceData, traceQueries);
+            TraceTree tree = traceTreeMapper.map(traceData, traceQueries);
             tree = issueDetector.detectIssues(tree);
             return enrichWithDetails(tree, bundle, queries);
         });

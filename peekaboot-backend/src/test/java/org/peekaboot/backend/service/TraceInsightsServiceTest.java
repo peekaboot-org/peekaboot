@@ -9,6 +9,7 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,7 +59,7 @@ class TraceInsightsServiceTest {
         store = TraceStores.withDefaults();
         traceTreeMapper = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE);
         issueDetector = new IssueDetector(new UiTracingProperties());
-        queryExtractor = new QueryExtractor(new MaskingEngine(), SqlFormatter.NONE);
+        queryExtractor = new QueryExtractor();
         service = newService(store);
     }
 
@@ -87,6 +88,29 @@ class TraceInsightsServiceTest {
 
         assertThat(service.getTraceInsights("slow").orElseThrow().slow()).isTrue();
         assertThat(service.getTraceInsights("fast").orElseThrow().slow()).isFalse();
+    }
+
+    /** The span tree and the Queries list carry one statement per query, formatted and masked once. */
+    @Test
+    void theDetailFormatsEachQueryOnceForTheTreeAndTheQueriesList() {
+        List<String> formatted = new ArrayList<>();
+        SqlFormatter recording = sql -> {
+            formatted.add(sql);
+            return sql;
+        };
+        TraceInsightsService recordingService = new TraceInsightsService(
+                store,
+                new TraceTreeMapper(new MaskingEngine(), recording),
+                issueDetector,
+                queryExtractor,
+                new StackTraceRules(List.of(), List.of()));
+        addTraceWithDbSpan("t1", 100);
+
+        TraceTree detail = recordingService.getTraceInsights("t1").orElseThrow();
+
+        assertThat(formatted).containsExactly("SELECT * FROM users WHERE id = ?");
+        assertThat(detail.queries().getFirst().statement())
+                .isEqualTo(detail.rootSpan().children().getFirst().query());
     }
 
     @Test

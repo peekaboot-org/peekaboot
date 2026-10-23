@@ -396,8 +396,8 @@ class TraceTreeMapperTest {
                 httpCall);
 
         TraceTree result = mapper.map(traceData);
-        int queriesListed = new QueryExtractor(new MaskingEngine(), SqlFormatter.NONE)
-                .extract(traceData)
+        int queriesListed = new QueryExtractor()
+                .extract(traceData, mapper.queriesOf(traceData))
                 .size();
         long queryNodes =
                 result.rootSpan().children().stream().filter(DbSpans::isQuery).count();
@@ -1235,20 +1235,16 @@ class TraceTreeMapperTest {
                 .containsExactly(tuple(Map.of("db.statement", "select * from orders"), null));
     }
 
-    /** Both views build their statement through SqlStatements, so a query reads the same in the Spans and the Queries tab. */
+    /** Both views read their statement from one TraceQueries, so a query reads the same in the Spans and the Queries tab. */
     @Test
     void theSpanTreeAndTheQueriesListCarryTheSameStatement() {
         TraceData traceData = personLookupTrace();
-        SqlFormatter formatter = new HibernateSqlFormatter();
+        TraceTreeMapper formattingMapper = new TraceTreeMapper(new MaskingEngine(), new HibernateSqlFormatter());
+        TraceQueries queries = formattingMapper.queriesOf(traceData);
 
-        SpanNode node = new TraceTreeMapper(new MaskingEngine(), formatter)
-                .map(traceData)
-                .rootSpan()
-                .children()
-                .getFirst();
-        QueryInfo listed = new QueryExtractor(new MaskingEngine(), formatter)
-                .extract(traceData)
-                .getFirst();
+        SpanNode node =
+                formattingMapper.map(traceData, queries).rootSpan().children().getFirst();
+        QueryInfo listed = new QueryExtractor().extract(traceData, queries).getFirst();
 
         assertThat(node.query()).isEqualTo(listed.statement());
         assertThat(node.query().formatted()).isNotNull();

@@ -95,8 +95,8 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public QueryExtractor queryExtractor(MaskingEngine maskingEngine, ObjectProvider<SqlFormatter> sqlFormatter) {
-        return new QueryExtractor(maskingEngine, sqlFormatter.getIfAvailable(() -> SqlFormatter.NONE));
+    public QueryExtractor queryExtractor() {
+        return new QueryExtractor();
     }
 
     @Bean

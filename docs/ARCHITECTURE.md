@@ -213,7 +213,7 @@ org.peekaboot.backend/
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate),
-│                           # SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, ...
+│                           # SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
 ├── masking/                # MaskingEngine (one bean, declared by PeekabootAutoConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
@@ -1412,7 +1412,8 @@ the order and the reasons are here:
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
 `SqlStatements` builds one `SqlStatement` per query span for both `TraceTreeMapper` (`SpanNode.query`)
-and `QueryExtractor` (`QueryInfo.statement`), so the two tabs show the same statement. `text` is the
+and `QueryExtractor` (`QueryInfo.statement`), so the two tabs show the same statement. On the trace
+detail both read it from one `TraceQueries`, so each statement is formatted and masked once. `text` is the
 masked SQL. `formatted` is the raw SQL laid out by `HibernateSqlFormatter` (Hibernate's `format_sql`
 style, `FormatStyle.BASIC`, each statement of a batch on its own) and then masked.
 
@@ -1424,7 +1425,7 @@ Formatting runs before masking so masking sees the values it sees in the raw tex
 The statement tags and the parameters tag are dropped from `SpanNode.tags` rather than served a
 second time beside the statement. A datasource-proxy result-set span's `jdbc.row-count` tag is
 served parsed as `SpanNode.rowCount` (null when it does not parse), on the query span it belongs to.
-`RowCounts` pairs the two by creation order, and both mappers read that one pairing.
+`RowCounts` pairs the two by creation order, and both mappers read that one pairing through `TraceQueries`.
 
 The Spans tab therefore reads facts the backend decided instead of
 re-deriving them from tag and span names. `DbSpans.system` mirrors this priority for

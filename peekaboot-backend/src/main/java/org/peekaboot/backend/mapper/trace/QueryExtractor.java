@@ -2,31 +2,21 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.peekaboot.backend.domain.trace.QueryInfo;
-import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 public class QueryExtractor {
 
-    private final SqlStatements sqlStatements;
-
-    /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
-    public QueryExtractor(MaskingEngine maskingEngine, SqlFormatter sqlFormatter) {
-        this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
-    }
-
-    public List<QueryInfo> extract(TraceData traceData) {
-        Map<String, Long> rowCounts = RowCounts.byQuerySpanId(traceData.spans());
-
+    /** {@code queries} comes from {@link TraceTreeMapper#queriesOf} for the same {@code traceData}. */
+    public List<QueryInfo> extract(TraceData traceData, TraceQueries queries) {
         return traceData.spans().stream()
                 .filter(DbSpans::isQuery)
-                .map(span -> extractQuery(span, rowCounts.get(span.spanId())))
+                .map(span -> extractQuery(span, queries))
                 .toList();
     }
 
-    private QueryInfo extractQuery(SpanData span, Long rowCount) {
+    private QueryInfo extractQuery(SpanData span, TraceQueries queries) {
         String dbSystem = DbSpans.system(span.tags());
         String dataSourceName = DbSpans.dataSourceName(span.tags());
 
@@ -35,12 +25,12 @@ public class QueryExtractor {
 
         return new QueryInfo(
                 span.spanId(),
-                sqlStatements.of(span),
+                queries.statement(span),
                 dbSystem,
                 dataSourceName,
                 span.durationMs(),
                 timestamp,
-                rowCount,
+                queries.rowCount(span.spanId()),
                 creationOrder);
     }
 }

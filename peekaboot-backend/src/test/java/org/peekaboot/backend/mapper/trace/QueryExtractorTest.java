@@ -19,7 +19,8 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 class QueryExtractorTest {
 
-    private final QueryExtractor extractor = new QueryExtractor(new MaskingEngine(), SqlFormatter.NONE);
+    private final QueryExtractor extractor = new QueryExtractor();
+    private final SqlStatements sqlStatements = new SqlStatements(new MaskingEngine(), SqlFormatter.NONE);
 
     @Test
     void extract_shouldFindQueryWithDbStatementTag() {
@@ -32,7 +33,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM users WHERE id = ?");
@@ -49,7 +50,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).statement().text()).isEqualTo("INSERT INTO orders (user_id) VALUES (?)");
@@ -68,7 +69,7 @@ class QueryExtractorTest {
                 .order(20)
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", batchSpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", batchSpan));
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).statement().text())
@@ -88,7 +89,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM products");
@@ -108,7 +109,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan, resultSetSpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).rowCount()).isEqualTo(42L);
@@ -131,7 +132,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", update, select, rs);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(2);
         assertThat(queries.get(0).statement().text()).isEqualTo("UPDATE users SET active = true");
@@ -157,7 +158,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", query1, rs1, query2, rs2);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(2);
         assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM users");
@@ -178,7 +179,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", resultSetSpan, querySpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).rowCount()).isNull(); // No match
@@ -193,7 +194,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).rowCount()).isNull();
@@ -226,7 +227,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", httpSpan, internalSpan, sqlNamedSpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).isEmpty();
     }
@@ -240,7 +241,7 @@ class QueryExtractorTest {
         var querySpan =
                 query("span1").tags(Map.of("db.system", "postgresql")).order(10).build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries).hasSize(1);
         assertThat(queries.getFirst().statement()).isNull();
@@ -254,7 +255,7 @@ class QueryExtractorTest {
                 .tags(Map.of("db.statement", "SELECT 1"))
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", serverSpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", serverSpan));
 
         assertThat(queries).isEmpty();
     }
@@ -276,7 +277,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", query1, query2, query3);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(3);
         assertThat(queries.get(0).statement().text()).isEqualTo("SELECT 1");
@@ -293,7 +294,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).dbSystem()).isEqualTo("primary_db");
@@ -311,7 +312,7 @@ class QueryExtractorTest {
                 .order(10)
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries).singleElement().satisfies(query -> {
             assertThat(query.dbSystem()).isEqualTo("postgresql");
@@ -326,7 +327,7 @@ class QueryExtractorTest {
                 .order(10)
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries)
                 .singleElement()
@@ -344,7 +345,7 @@ class QueryExtractorTest {
                 .order(10)
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries)
                 .singleElement()
@@ -359,7 +360,7 @@ class QueryExtractorTest {
                 .order(10)
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries)
                 .singleElement()
@@ -374,7 +375,7 @@ class QueryExtractorTest {
                 .order(10)
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries)
                 .singleElement()
@@ -385,7 +386,7 @@ class QueryExtractorTest {
     @Test
     void extract_shouldHandleTraceWithEmptySpans() {
         var traceData = new TraceData("trace1", null, null, null, List.of(), Set.of(), false);
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
         assertThat(queries).isEmpty();
     }
 
@@ -405,7 +406,7 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan, resultSetSpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).rowCount()).isNull();
@@ -428,7 +429,7 @@ class QueryExtractorTest {
                 .order(10)
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries).extracting(q -> q.statement().text()).containsExactly(expected);
     }
@@ -445,9 +446,13 @@ class QueryExtractorTest {
 
         var traceData = TraceDatas.of("trace1", querySpan);
 
-        List<QueryInfo> queries = extractor.extract(traceData);
+        List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).dbSystem()).isEqualTo("postgresql");
+    }
+
+    private List<QueryInfo> extract(TraceData traceData) {
+        return extractor.extract(traceData, new TraceQueries(traceData, sqlStatements));
     }
 }
