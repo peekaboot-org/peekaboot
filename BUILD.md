@@ -17,8 +17,8 @@ Gradle build must be kept in lockstep.
 | --- | --- |
 | JDK | **25**, the root pom's `peekaboot.java.version`, which both builds compile against. No toolchains, no fallback |
 | Maven / Gradle | The checked-in wrappers. Each fetches its own build tool at the version and SHA-256 pinned in `.mvn/wrapper/maven-wrapper.properties` and `gradle/wrapper/gradle-wrapper.properties`. A local Maven 3.9+ works the same |
-| Docker | Only for running the sample app and for `ScreenshotCapture`. Not needed by `mvn verify` |
-| Network | First run only: the wrappers fetch their build tool, and Playwright fetches Chromium into `~/.cache/ms-playwright` |
+| Docker | Needed by `mvn verify`: three testing-app ITs start their engine through Testcontainers (see its [README](peekaboot-testing-app/README.md#the-automated-ui-suite-srctest)). Also for running the sample app and for `ScreenshotCapture` |
+| Network | First run only: the wrappers fetch their build tool, the frontend gate fetches Node and its npm packages, Playwright fetches Chromium into `~/.cache/ms-playwright`, and Testcontainers pulls the MySQL, Redis and go-httpbin images |
 
 ## Commands
 
@@ -389,7 +389,8 @@ covers only the build mechanics.
   harmless. `peekaboot-testing-app` carries its own copy, since it does not inherit the
   parent.
 - `peekaboot-testing-app`'s tests activate the `test` profile: H2 instead of PostgreSQL,
-  Docker Compose off. `mvn verify` therefore needs neither Docker nor a database.
+  Docker Compose off. Three ITs still start a container through Testcontainers, so
+  `mvn verify` needs Docker (see [Prerequisites](#prerequisites)).
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
   install it explicitly with the `exec:java` invocation in the module README if that fails.
 - `LogCapture` is the only shared test helper, and it lives in `peekaboot-test-support` as
