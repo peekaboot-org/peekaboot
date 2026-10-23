@@ -8,7 +8,7 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.peekaboot.autoconfigure.LocalDevDetector.LaunchKind;
 import org.peekaboot.autoconfigure.LocalDevDetector.LaunchSignals;
 
 class LocalDevDetectorTest {
@@ -34,8 +35,8 @@ class LocalDevDetectorTest {
 
     @Test
     void detectsLocalDevForMainThreadWithAppClassLoaderAndCleanStack() {
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, IDE_LAUNCH))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, IDE_LAUNCH))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     @Test
@@ -43,8 +44,8 @@ class LocalDevDetectorTest {
         // spring-boot:run forks a JVM whose classpath is target/classes plus the resolved dependencies
         LaunchSignals signals = signals("/home/dev/app/target/classes", "/home/dev/.m2/repository/a.jar");
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     @ParameterizedTest
@@ -63,24 +64,24 @@ class LocalDevDetectorTest {
         // relative classpath as some IDE launchers pass it
         LaunchSignals signals = signals(outputDirectory, "/home/dev/.gradle/caches/a.jar");
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     @Test
     void detectsLocalDevForAWindowsBuildOutputDirectory() {
         LaunchSignals signals = new LaunchSignals("C:\\dev\\app\\target\\classes", false);
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     @Test
     void detectsLocalDevForABuildOutputDirectoryWithATrailingSlash() {
         LaunchSignals signals = signals("/home/dev/app/target/classes/", "/home/dev/.m2/repository/a.jar");
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     /**
@@ -97,8 +98,8 @@ class LocalDevDetectorTest {
                 tempDir.resolve("lib/spring-core.jar").toUri().toString());
         LaunchSignals signals = signals(classpathJar.toString());
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     /**
@@ -111,8 +112,8 @@ class LocalDevDetectorTest {
         Path classpathJar = jarWithClassPath(tempDir.resolve("app/target"), "classes/", "lib/spring-core.jar");
         LaunchSignals signals = signals(classpathJar.toString());
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     /** One entry that is not a valid URI must not hide the jar's other entries. */
@@ -121,8 +122,8 @@ class LocalDevDetectorTest {
         Path classpathJar = jarWithClassPath(tempDir.resolve("app/target"), "%zz", "classes/");
         LaunchSignals signals = signals(classpathJar.toString());
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     /**
@@ -134,15 +135,15 @@ class LocalDevDetectorTest {
         Path classpathJar = jarWithClassPath(tempDir.resolve("app/target/classes"));
         LaunchSignals signals = signals(classpathJar.toString());
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
     void rejectsAJibShapedLaunch() {
         // same thread name and class loader as an IDE run - only the classpath tells them apart
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, JIB_LAUNCH))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, JIB_LAUNCH))
+                .isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
@@ -152,16 +153,16 @@ class LocalDevDetectorTest {
         Path thinJar = jarWithClassPath(tempDir, "lib/spring-core.jar", "lib/spring-boot.jar");
         LaunchSignals signals = signals(thinJar.toString());
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
     void rejectsAnIdeShapedLaunchInsideAContainer() {
         LaunchSignals signals = new LaunchSignals(IDE_LAUNCH.classPath(), true);
 
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
@@ -170,8 +171,8 @@ class LocalDevDetectorTest {
         // gate required a "main" thread, an AppClassLoader and a clean stack, so this branch
         // does not repeat those - but its class-path signal (any directory URL) is looser
         // than Peekaboot's, so an IDE-shaped launch is what proves this true
-        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, IDE_LAUNCH))
-                .isTrue();
+        assertThat(LocalDevDetector.launchKind(devToolsRestartedThread(), CLEAN_STACK, IDE_LAUNCH))
+                .isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     /**
@@ -182,8 +183,8 @@ class LocalDevDetectorTest {
      */
     @Test
     void rejectsADevToolsRestartWithoutBuildOutputOnClassPath() {
-        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, JIB_LAUNCH))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(devToolsRestartedThread(), CLEAN_STACK, JIB_LAUNCH))
+                .isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     /**
@@ -197,8 +198,8 @@ class LocalDevDetectorTest {
         // a Jib-shaped class path would pass through buildOutputOnClassPath() alone
         LaunchSignals signals = new LaunchSignals(IDE_LAUNCH.classPath(), true);
 
-        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, signals))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(devToolsRestartedThread(), CLEAN_STACK, signals))
+                .isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
@@ -206,8 +207,7 @@ class LocalDevDetectorTest {
         Thread thread = new Thread(() -> {}, "worker-1");
         thread.setContextClassLoader(new FakeAppClassLoader());
 
-        assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK, IDE_LAUNCH))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(thread, CLEAN_STACK, IDE_LAUNCH)).isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
@@ -217,8 +217,7 @@ class LocalDevDetectorTest {
         Thread thread = new Thread(() -> {}, "main");
         thread.setContextClassLoader(new PackagedArchiveClassLoader());
 
-        assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK, IDE_LAUNCH))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(thread, CLEAN_STACK, IDE_LAUNCH)).isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
@@ -226,8 +225,7 @@ class LocalDevDetectorTest {
         Thread thread = new Thread(() -> {}, "main");
         thread.setContextClassLoader(null);
 
-        assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK, IDE_LAUNCH))
-                .isFalse();
+        assertThat(LocalDevDetector.launchKind(thread, CLEAN_STACK, IDE_LAUNCH)).isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @ParameterizedTest
@@ -239,32 +237,31 @@ class LocalDevDetectorTest {
                 "cucumber.runtime.Runtime",
                 "org.springframework.boot.SpringApplicationAotProcessor"
             })
-    void rejectsTestAndAotFramesOnTheStack(String frameClassName) {
-        assertThat(LocalDevDetector.isLocalDevelopment(
-                        mainThreadWithAppClassLoader(), stackWith(frameClassName), IDE_LAUNCH))
-                .isFalse();
+    void readsTestAndAotFramesOnTheStackAsATest(String frameClassName) {
+        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stackWith(frameClassName), IDE_LAUNCH))
+                .isEqualTo(LaunchKind.TEST);
     }
 
     @Test
-    void oneArgOverloadRejectsJUnitTestInvocation() {
+    void readsTheRealStackOfAJUnitLaunchAsATest() {
         // called from a JUnit-launched test, the real stack contains JUnit frames
-        assertThat(LocalDevDetector.isLocalDevelopment(Thread.currentThread())).isFalse();
+        assertThat(LocalDevDetector.launchKind(Thread.currentThread())).isEqualTo(LaunchKind.TEST);
     }
 
     @Test
     void aSpawnedMainThreadHasACleanStackOfItsOwn() throws InterruptedException {
         // a thread spawned from a test has no JUnit frames on its own stack, so with the
         // right name, class loader and launch signals it must count as local dev
-        AtomicBoolean result = new AtomicBoolean(false);
+        AtomicReference<LaunchKind> result = new AtomicReference<>();
         Thread thread = new Thread(
-                () -> result.set(LocalDevDetector.isLocalDevelopment(
+                () -> result.set(LocalDevDetector.launchKind(
                         Thread.currentThread(), Thread.currentThread().getStackTrace(), IDE_LAUNCH)),
                 "main");
         thread.setContextClassLoader(new FakeAppClassLoader());
         thread.start();
         thread.join();
 
-        assertThat(result).isTrue();
+        assertThat(result).hasValue(LaunchKind.LOCAL_DEV);
     }
 
     @Test

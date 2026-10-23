@@ -48,8 +48,8 @@ import org.springframework.core.NativeDetector;
  * <p>A container marker is a container marker wherever it comes from, so a checkout worked on
  * inside a devcontainer - VS Code Dev Containers, GitHub Codespaces - is not a local launch by
  * this measure however it was started; what the detection would have switched on there
- * ({@code peekaboot.enabled}, {@code peekaboot.dev-toolbar}, {@code peekaboot.storage.enabled})
- * has to be set explicitly.
+ * ({@code peekaboot.enabled}, {@code peekaboot.dev-toolbar}, {@code peekaboot.storage.enabled},
+ * {@code peekaboot.error-page.enabled}) has to be set explicitly.
  */
 final class LocalDevDetector {
 
@@ -156,30 +156,6 @@ final class LocalDevDetector {
         }
     }
 
-    static boolean isLocalDevelopment(Thread thread) {
-        return isLocalDevelopment(thread, thread.getStackTrace(), LaunchSignals.fromRuntime());
-    }
-
-    static boolean isLocalDevelopment(Thread thread, StackTraceElement[] stackTrace, LaunchSignals signals) {
-        if (NativeDetector.inNativeImage()) {
-            return false;
-        }
-        ClassLoader classLoader = thread.getContextClassLoader();
-        if (classLoader == null) {
-            return false;
-        }
-        if (classLoader.getClass().getName().contains("RestartClassLoader")) {
-            return isDeveloperLaunch(signals);
-        }
-        if (!"main".equals(thread.getName())) {
-            return false;
-        }
-        if (!classLoader.getClass().getName().contains("AppClassLoader")) {
-            return false;
-        }
-        return !isTestLaunch(stackTrace) && isDeveloperLaunch(signals);
-    }
-
     /**
      * What kind of launch this is. {@code TEST} covers an AOT processing run as well as a
      * test: neither serves traffic, and both are recognised by the same stack frames.
@@ -198,7 +174,25 @@ final class LocalDevDetector {
         if (isTestLaunch(stackTrace)) {
             return LaunchKind.TEST;
         }
-        return isLocalDevelopment(thread, stackTrace, signals) ? LaunchKind.LOCAL_DEV : LaunchKind.DEPLOYMENT;
+        return isLocalLaunch(thread, signals) ? LaunchKind.LOCAL_DEV : LaunchKind.DEPLOYMENT;
+    }
+
+    /** The local-development checks past the stack scan, which {@link #launchKind} has already run. */
+    private static boolean isLocalLaunch(Thread thread, LaunchSignals signals) {
+        if (NativeDetector.inNativeImage()) {
+            return false;
+        }
+        ClassLoader classLoader = thread.getContextClassLoader();
+        if (classLoader == null) {
+            return false;
+        }
+        if (classLoader.getClass().getName().contains("RestartClassLoader")) {
+            return isDeveloperLaunch(signals);
+        }
+        if (!"main".equals(thread.getName())) {
+            return false;
+        }
+        return classLoader.getClass().getName().contains("AppClassLoader") && isDeveloperLaunch(signals);
     }
 
     private static boolean isTestLaunch(StackTraceElement[] stackTrace) {
