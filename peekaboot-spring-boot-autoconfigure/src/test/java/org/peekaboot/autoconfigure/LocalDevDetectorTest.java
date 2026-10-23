@@ -21,9 +21,8 @@ import org.peekaboot.autoconfigure.LocalDevDetector.LaunchSignals;
 
 class LocalDevDetectorTest {
 
-    private static final StackTraceElement[] CLEAN_STACK = {
-        frame("org.peekaboot.example.ExampleApplication"), frame("org.springframework.boot.SpringApplication")
-    };
+    private static final StackTraceElement[] CLEAN_STACK =
+            stackOf("org.peekaboot.example.ExampleApplication", "org.springframework.boot.SpringApplication");
 
     /** An IDE run of a Maven project: the module's own target/classes ahead of the local repository jars. */
     private static final LaunchSignals IDE_LAUNCH = signals(
@@ -70,7 +69,7 @@ class LocalDevDetectorTest {
 
     @Test
     void detectsLocalDevForAWindowsBuildOutputDirectory() {
-        LaunchSignals signals = new LaunchSignals("C:\\dev\\app\\target\\classes", false);
+        LaunchSignals signals = signals("C:\\dev\\app\\target\\classes");
 
         assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
                 .isEqualTo(LaunchKind.LOCAL_DEV);
@@ -238,7 +237,13 @@ class LocalDevDetectorTest {
                 "org.springframework.boot.SpringApplicationAotProcessor"
             })
     void readsTestAndAotFramesOnTheStackAsATest(String frameClassName) {
-        assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stackWith(frameClassName), IDE_LAUNCH))
+        assertThat(LocalDevDetector.launchKind(
+                        mainThreadWithAppClassLoader(),
+                        stackOf(
+                                "org.peekaboot.example.ExampleApplication",
+                                frameClassName,
+                                "org.springframework.boot.SpringApplication"),
+                        IDE_LAUNCH))
                 .isEqualTo(LaunchKind.TEST);
     }
 
@@ -265,64 +270,54 @@ class LocalDevDetectorTest {
     }
 
     @Test
-    void launchKind_isTestWhenAJunitFrameIsOnTheStack() {
+    void isATestLaunchWhenAJUnitFrameIsOnTheStack() {
         var stack = stackOf("org.junit.platform.launcher.core.DefaultLauncher", "com.acme.App");
-        var signals = new LaunchSignals("/home/dev/app/target/classes", false);
+        var signals = signals("/home/dev/app/target/classes");
 
-        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+        var kind = LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stack, signals);
 
-        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.TEST);
+        assertThat(kind).isEqualTo(LaunchKind.TEST);
     }
 
-    /** A test running under a loader the local-dev branch rejects is still a test. */
+    /** A test is a test even where the local-dev branch would reject the class path. */
     @Test
-    void launchKind_isTestEvenWhenNoBuildOutputIsOnTheClassPath() {
+    void isATestLaunchEvenWithoutBuildOutputOnTheClassPath() {
         var stack = stackOf("org.springframework.boot.test.context.SpringBootContextLoader", "com.acme.App");
-        var signals = new LaunchSignals("/opt/app/app.jar", false);
+        var signals = signals("/opt/app/app.jar");
 
-        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+        var kind = LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stack, signals);
 
-        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.TEST);
+        assertThat(kind).isEqualTo(LaunchKind.TEST);
     }
 
     @Test
-    void launchKind_isLocalDevForAnIdeLaunch() {
+    void isALocalLaunchFromAnIde() {
         var stack = stackOf("com.acme.App");
-        var signals = new LaunchSignals("/home/dev/app/target/classes", false);
+        var signals = signals("/home/dev/app/target/classes");
 
-        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+        var kind = LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stack, signals);
 
-        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.LOCAL_DEV);
+        assertThat(kind).isEqualTo(LaunchKind.LOCAL_DEV);
     }
 
     @Test
-    void launchKind_isDeploymentForAPackagedJar() {
+    void isADeploymentForAPackagedJar() {
         var stack = stackOf("com.acme.App");
-        var signals = new LaunchSignals("/opt/app/app.jar", false);
+        var signals = signals("/opt/app/app.jar");
 
-        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+        var kind = LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stack, signals);
 
-        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.DEPLOYMENT);
+        assertThat(kind).isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     @Test
-    void launchKind_isDeploymentInAContainerDespiteBuildOutput() {
+    void isADeploymentInAContainerDespiteBuildOutput() {
         var stack = stackOf("com.acme.App");
         var signals = new LaunchSignals("/app/target/classes", true);
 
-        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+        var kind = LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stack, signals);
 
-        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.DEPLOYMENT);
-    }
-
-    private static Thread mainThread() {
-        return Thread.currentThread().getName().equals("main") ? Thread.currentThread() : namedMainThread();
-    }
-
-    private static Thread namedMainThread() {
-        var thread = new Thread(() -> {}, "main");
-        thread.setContextClassLoader(ClassLoader.getSystemClassLoader());
-        return thread;
+        assertThat(kind).isEqualTo(LaunchKind.DEPLOYMENT);
     }
 
     private static StackTraceElement[] stackOf(String... classNames) {
@@ -358,18 +353,6 @@ class LocalDevDetectorTest {
         Thread thread = new Thread(() -> {}, "restartedMain");
         thread.setContextClassLoader(new FakeRestartClassLoader());
         return thread;
-    }
-
-    private static StackTraceElement[] stackWith(String className) {
-        return new StackTraceElement[] {
-            frame("org.peekaboot.example.ExampleApplication"),
-            frame(className),
-            frame("org.springframework.boot.SpringApplication")
-        };
-    }
-
-    private static StackTraceElement frame(String className) {
-        return new StackTraceElement(className, "run", className + ".java", 1);
     }
 
     /** Class name intentionally contains "AppClassLoader", like jdk.internal.loader.ClassLoaders$AppClassLoader. */
