@@ -109,7 +109,6 @@ public final class Spans {
         private List<SpanData.Event> events = List.of();
         private String errorMessage;
         private String errorClass;
-        private String remoteServiceName;
         private long creationOrder = NEXT_CREATION_ORDER.incrementAndGet();
 
         private SpanBuilder(String spanId) {
@@ -170,11 +169,6 @@ public final class Spans {
             return this;
         }
 
-        public SpanBuilder remoteServiceName(String remoteServiceName) {
-            this.remoteServiceName = remoteServiceName;
-            return this;
-        }
-
         public SpanBuilder order(long creationOrder) {
             this.creationOrder = creationOrder;
             return this;
@@ -193,7 +187,6 @@ public final class Spans {
                     events,
                     errorMessage,
                     errorClass,
-                    remoteServiceName,
                     creationOrder);
         }
     }

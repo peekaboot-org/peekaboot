@@ -27,8 +27,6 @@ import org.springframework.context.ApplicationEventPublisher;
  */
 public class OtelSpanExporter implements SpanExporter {
 
-    private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
-
     /** The event Micrometer's bridge records a thrown exception as, with the OTel semantic-convention attributes. */
     private static final String EXCEPTION_EVENT = "exception";
 
@@ -128,8 +126,6 @@ public class OtelSpanExporter implements SpanExporter {
             }
         }
 
-        String serviceName = extractServiceName(otelSpan);
-
         return new org.peekaboot.backend.tracing.store.SpanData(
                 otelSpan.getSpanContext().getTraceId(),
                 otelSpan.getSpanContext().getSpanId(),
@@ -142,7 +138,6 @@ public class OtelSpanExporter implements SpanExporter {
                 events,
                 errorMessage,
                 errorClass,
-                serviceName,
                 creationOrder.incrementAndGet());
     }
 
@@ -177,11 +172,6 @@ public class OtelSpanExporter implements SpanExporter {
     private org.peekaboot.backend.tracing.store.SpanData.Event convertEvent(EventData event) {
         return new org.peekaboot.backend.tracing.store.SpanData.Event(
                 event.getName(), nanosToInstant(event.getEpochNanos()));
-    }
-
-    private String extractServiceName(SpanData otelSpan) {
-        Object serviceName = otelSpan.getResource().getAttribute(SERVICE_NAME_KEY);
-        return serviceName != null ? String.valueOf(serviceName) : null;
     }
 
     private Span.Kind mapKind(SpanKind kind) {

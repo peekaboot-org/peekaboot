@@ -18,7 +18,6 @@ public record SpanNode(
         long creationOrder,
         String errorMessage,
         String errorClass,
-        String remoteServiceName,
         SqlStatement query,
         Long rowCount,
         boolean asyncEntry) {
@@ -47,7 +46,6 @@ public record SpanNode(
                 creationOrder,
                 errorMessage,
                 errorClass,
-                remoteServiceName,
                 query,
                 rowCount,
                 asyncEntry);

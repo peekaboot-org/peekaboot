@@ -48,7 +48,7 @@ class SpanDuplicateMatcherTest {
     void aSpanWithoutTagsMatchesOneWithNone() {
         // the record allows a null tag map; the builder never produces one
         SpanData untagged = new SpanData(
-                "t", "a", null, "connection", null, Instant.EPOCH, Instant.EPOCH, null, List.of(), null, null, null, 1);
+                "t", "a", null, "connection", null, Instant.EPOCH, Instant.EPOCH, null, List.of(), null, null, 1);
         SpanData empty = span("b").named("connection").build();
 
         assertThat(SpanDuplicateMatcher.isDuplicate(untagged, empty)).isTrue();

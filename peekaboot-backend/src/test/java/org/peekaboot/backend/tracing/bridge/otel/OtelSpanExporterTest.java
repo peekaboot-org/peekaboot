@@ -441,19 +441,6 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void extractsServiceNameFromResource() {
-        String traceId = "0123456789abcdef0123456789abcdef";
-        SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
-                .setResource(Resource.create(Attributes.of(SERVICE_NAME_KEY, "orders-service")))
-                .build();
-
-        exporter.export(List.of(span));
-
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
-        assertThat(stored.remoteServiceName()).isEqualTo("orders-service");
-    }
-
-    @Test
     void extractsAttributesAsTags() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)

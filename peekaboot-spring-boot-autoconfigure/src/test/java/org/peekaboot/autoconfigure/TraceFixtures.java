@@ -73,7 +73,6 @@ final class TraceFixtures {
                 List.of(),
                 null,
                 null,
-                null,
                 NEXT_CREATION_ORDER.incrementAndGet());
     }
 }

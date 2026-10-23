@@ -1517,7 +1517,6 @@ SpanData
 ├── tags: Map<String, String>
 ├── events: List<Event>
 ├── errorMessage, errorClass
-├── remoteServiceName
 └── creationOrder: long
 ```
 

@@ -276,7 +276,6 @@ public class TraceTreeMapper {
                 spanData.creationOrder(),
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
-                spanData.remoteServiceName(),
                 queries.statement(spanData),
                 queries.rowCount(spanData.spanId()),
                 isAsync && !parentIsAsync);

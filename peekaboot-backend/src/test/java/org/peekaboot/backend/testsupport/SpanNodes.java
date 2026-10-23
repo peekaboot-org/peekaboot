@@ -37,7 +37,6 @@ public final class SpanNodes {
         private long creationOrder;
         private String errorMessage;
         private String errorClass;
-        private String remoteServiceName;
         private SqlStatement query;
         private Long rowCount;
         private boolean asyncEntry;
@@ -102,11 +101,6 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder remoteServiceName(String remoteServiceName) {
-            this.remoteServiceName = remoteServiceName;
-            return this;
-        }
-
         public Builder query(SqlStatement query) {
             this.query = query;
             return this;
@@ -132,7 +126,6 @@ public final class SpanNodes {
                     creationOrder,
                     errorMessage,
                     errorClass,
-                    remoteServiceName,
                     query,
                     rowCount,
                     asyncEntry);

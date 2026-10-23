@@ -18,7 +18,6 @@ public record SpanData(
         List<Event> events,
         String errorMessage,
         String errorClass,
-        String remoteServiceName,
         long creationOrder) {
 
     public record Event(String name, Instant timestamp) {}
@@ -52,7 +51,6 @@ public record SpanData(
                 events,
                 errorMessage,
                 errorClass,
-                remoteServiceName,
                 creationOrder);
     }
 }

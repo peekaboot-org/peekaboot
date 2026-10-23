@@ -101,7 +101,6 @@ public final class TestSpans {
                     List.copyOf(events),
                     errorMessage,
                     errorClass,
-                    null,
                     NEXT_CREATION_ORDER.incrementAndGet());
         }
     }
