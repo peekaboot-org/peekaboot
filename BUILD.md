@@ -730,12 +730,10 @@ fails the job while the only damage is a tag nobody has consumed.
 
 Reproducibility depends on `project.build.outputTimestamp` being pinned in the root pom and
 in the testing-app's, and on every plugin version being explicit. That includes the
-lifecycle plugins Maven would otherwise bind on its own. Clean, resources, install and
-deploy sit at the versions `spring-boot-dependencies` manages, so the testing-app runs the
-same ones. The site plugin, which Boot does not manage, was pinned at Maven 3.9.16's own
-binding of 3.12.1; Dependabot has since moved it past. Surefire, failsafe, the compiler
-and the dependency plugin have likewise moved past Boot's pins; the testing-app pins those
-four in its own `pluginManagement`, and Dependabot bumps both poms in one pull request.
+lifecycle plugins Maven would otherwise bind on its own. The testing-app pins, in its own
+`pluginManagement`, each plugin whose root pom version differs from the one
+`spring-boot-dependencies` manages, so Dependabot bumps both poms in one pull request and a
+reactor build runs one version of each.
 
 ### Release notes
 

@@ -216,15 +216,11 @@
     <build>
         <pluginManagement>
             <plugins>
-                <!-- The lifecycle plugins Maven binds by itself, pinned so a local Maven
-                     other than the wrapper's builds the same way. clean, resources,
-                     install and deploy sit at the versions spring-boot-dependencies
-                     manages, so the testing-app (parented to spring-boot-starter-parent)
-                     runs the same ones. surefire, failsafe, compiler and dependency have
-                     moved past Boot's pins through Dependabot; the testing-app pins those
-                     four itself, and Dependabot bumps both poms in one pull request. The
-                     site plugin, which Boot does not manage, was pinned at Maven 3.9.16's
-                     binding of 3.12.1 and Dependabot has since moved it past. -->
+                <!-- Every plugin Maven binds by itself is pinned, here and below, so a
+                     local Maven other than the wrapper's builds the same way. The
+                     testing-app (parented to spring-boot-starter-parent) pins each one whose
+                     version here differs from the one Boot manages, so Dependabot bumps both
+                     poms in one pull request and a reactor build runs one version of each. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-clean-plugin</artifactId>
