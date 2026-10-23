@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -225,25 +226,19 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
      * a details panel's tag key - the nearest ancestor's.
      */
     private double contrastRatio(String selector) {
-        return ((Number) page.evaluate("""
+        @SuppressWarnings("unchecked")
+        List<String> inkAndFill = (List<String>) page.evaluate("""
                 (sel) => {
-                    const parse = c => c.match(/\\d+(\\.\\d+)?/g).map(Number);
-                    const luminance = ([r, g, b]) => {
-                        const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-                        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-                    };
                     const start = document.querySelector(sel);
-                    const text = luminance(parse(getComputedStyle(start).color).slice(0, 3));
-                    let fill = null;
                     for (let el = start; el; el = el.parentElement) {
-                        const c = parse(getComputedStyle(el).backgroundColor);
-                        if (c.length < 4 || c[3] > 0) { fill = luminance(c.slice(0, 3)); break; }
+                        const fill = getComputedStyle(el).backgroundColor;
+                        const c = fill.match(/\\d+(\\.\\d+)?/g).map(Number);
+                        if (c.length < 4 || c[3] > 0) return [getComputedStyle(start).color, fill];
                     }
-                    if (fill === null) throw new Error('no opaque background behind ' + sel);
-                    const [hi, lo] = text > fill ? [text, fill] : [fill, text];
-                    return (hi + 0.05) / (lo + 0.05);
+                    throw new Error('no opaque background behind ' + sel);
                 }
-                """, selector)).doubleValue();
+                """, selector);
+        return ColourVision.contrastRatio(inkAndFill.get(0), inkAndFill.get(1));
     }
 
     private String backgroundColor(String selector) {
@@ -300,27 +295,30 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
      * shorthand filters operate in sRGB, clamped at white), which the computed color/
      * backgroundColor that {@link #contrastRatio} reads never reflects.
      */
-    private Map<String, Object> renderedInkAndFill(String selector) {
+    private RenderedInkAndFill renderedInkAndFill(String selector) {
         @SuppressWarnings("unchecked")
-        Map<String, Object> rendered = (Map<String, Object>) page.evaluate("""
+        Map<String, Object> computed = (Map<String, Object>) page.evaluate("""
                 (sel) => {
-                    const parse = c => c.match(/\\d+(\\.\\d+)?/g).map(Number);
-                    const luminance = ([r, g, b]) => {
-                        const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-                        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-                    };
                     const style = getComputedStyle(document.querySelector(sel));
                     const brightness = style.filter.match(/brightness\\((\\d*\\.?\\d+)\\)/);
-                    const k = brightness ? Number(brightness[1]) : 1;
-                    const apply = rgb => rgb.slice(0, 3).map(v => Math.min(255, v * k));
-                    const ink = luminance(apply(parse(style.color)));
-                    const fill = apply(parse(style.backgroundColor));
-                    const [hi, lo] = [ink, luminance(fill)].sort((a, b) => b - a);
-                    return {fill: fill.join(','), ratio: (hi + 0.05) / (lo + 0.05)};
+                    return {ink: style.color, fill: style.backgroundColor, brightness: brightness ? Number(brightness[1]) : 1};
                 }
                 """, selector);
-        return rendered;
+        double brightness = ((Number) computed.get("brightness")).doubleValue();
+        double[] ink = brightened(ColourVision.channels((String) computed.get("ink")), brightness);
+        double[] fill = brightened(ColourVision.channels((String) computed.get("fill")), brightness);
+        return new RenderedInkAndFill(Arrays.stream(fill).boxed().toList(), ColourVision.contrastRatio(ink, fill));
     }
+
+    /** What a brightness() filter does to a colour: every sRGB channel scaled, clamped at white. */
+    private static double[] brightened(double[] channels, double factor) {
+        return Arrays.stream(channels)
+                .map(channel -> Math.min(255, channel * factor))
+                .toArray();
+    }
+
+    /** The fill's rendered channels, and its contrast ratio with the rendered ink. */
+    private record RenderedInkAndFill(List<Double> fill, double contrastRatio) {}
 
     /**
      * Pressed buttons are excluded from the generic hover fill swap (their fill IS their
@@ -338,17 +336,17 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
             for (String button : List.of("#btn-pressed", "#unmask-pressed")) {
                 awaitResting(button);
-                Map<String, Object> resting = renderedInkAndFill(button);
-                assertThat(((Number) resting.get("ratio")).doubleValue())
+                RenderedInkAndFill resting = renderedInkAndFill(button);
+                assertThat(resting.contrastRatio())
                         .as("%s resting ink/fill contrast (%s theme)", button, theme)
                         .isGreaterThanOrEqualTo(4.5);
 
                 awaitHovered(button);
-                Map<String, Object> hovered = renderedInkAndFill(button);
-                assertThat(hovered.get("fill"))
+                RenderedInkAndFill hovered = renderedInkAndFill(button);
+                assertThat(hovered.fill())
                         .as("%s hover shifts the rendered fill (%s theme)", button, theme)
-                        .isNotEqualTo(resting.get("fill"));
-                assertThat(((Number) hovered.get("ratio")).doubleValue())
+                        .isNotEqualTo(resting.fill());
+                assertThat(hovered.contrastRatio())
                         .as("%s hovered ink/fill contrast (%s theme)", button, theme)
                         .isGreaterThanOrEqualTo(4.5);
             }

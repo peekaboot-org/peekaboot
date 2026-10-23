@@ -4,9 +4,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * How far apart two CSS colours look to a dichromat: each colour is passed through Machado,
- * Oliveira and Fernandes (2009)'s simulation at full severity, in linear sRGB as the paper
- * defines it, and the results are compared with CIEDE2000 under D65.
+ * Arithmetic over {@code getComputedStyle} colours: their WCAG contrast ratio, and how far apart
+ * they look to a dichromat. For the latter each colour is passed through Machado, Oliveira and
+ * Fernandes (2009)'s simulation at full severity, in linear sRGB as the paper defines it, and
+ * the results are compared with CIEDE2000 under D65.
  */
 final class ColourVision {
 
@@ -47,7 +48,7 @@ final class ColourVision {
         }
     }
 
-    private static final Pattern RGB = Pattern.compile("rgba?\\((\\d+), (\\d+), (\\d+)");
+    private static final Pattern RGB = Pattern.compile("rgba?\\(([\\d.]+), ([\\d.]+), ([\\d.]+)");
 
     private ColourVision() {}
 
@@ -56,14 +57,44 @@ final class ColourVision {
         return ciede2000(lab(deficiency.simulate(linearRgb(first))), lab(deficiency.simulate(linearRgb(second))));
     }
 
-    private static double[] linearRgb(String cssColour) {
+    /** The WCAG 2.x contrast ratio between two {@code getComputedStyle} colours, whichever is the lighter. */
+    static double contrastRatio(String first, String second) {
+        return contrastRatio(channels(first), channels(second));
+    }
+
+    /** {@link #contrastRatio(String, String)} over 0-255 sRGB channels, for a colour as rendered rather than as computed. */
+    static double contrastRatio(double[] first, double[] second) {
+        double firstLuminance = relativeLuminance(first);
+        double secondLuminance = relativeLuminance(second);
+        return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05);
+    }
+
+    /** The red, green and blue channels (0-255) of an {@code rgb()} or {@code rgba()} colour; alpha is dropped. */
+    static double[] channels(String cssColour) {
         Matcher matcher = RGB.matcher(cssColour);
         if (!matcher.lookingAt()) {
             throw new IllegalArgumentException("not an rgb() colour: " + cssColour);
         }
         double[] rgb = new double[3];
         for (int i = 0; i < 3; i++) {
-            double v = Integer.parseInt(matcher.group(i + 1)) / 255.0;
+            rgb[i] = Double.parseDouble(matcher.group(i + 1));
+        }
+        return rgb;
+    }
+
+    private static double relativeLuminance(double[] channels) {
+        double[] rgb = linear(channels);
+        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    }
+
+    private static double[] linearRgb(String cssColour) {
+        return linear(channels(cssColour));
+    }
+
+    private static double[] linear(double[] channels) {
+        double[] rgb = new double[3];
+        for (int i = 0; i < 3; i++) {
+            double v = channels[i] / 255.0;
             rgb[i] = v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
         }
         return rgb;
