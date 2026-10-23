@@ -173,21 +173,12 @@ public final class SeriesSampler {
 
     private double sampleRate(List<Meter> meters, long elapsedMillis) {
         double current = cumulativeCount(meters);
-        if (Double.isNaN(current)) {
-            previousCount = current;
-            return Double.NaN;
-        }
-        if (Double.isNaN(previousCount)) {
-            previousCount = current;
-            return Double.NaN;
-        }
-        double delta = current - previousCount;
-        if (delta < 0) {
-            previousCount = current;
-            return Double.NaN;
-        }
+        double previous = previousCount;
         previousCount = current;
-        return delta * 1000.0 / elapsedMillis;
+        if (Double.isNaN(current) || Double.isNaN(previous) || current < previous) {
+            return Double.NaN;
+        }
+        return (current - previous) * 1000.0 / elapsedMillis;
     }
 
     private static double cumulativeCount(List<Meter> meters) {
@@ -236,9 +227,6 @@ public final class SeriesSampler {
     }
 
     private double sampleMax(List<Meter> meters) {
-        if (meters.isEmpty()) {
-            return Double.NaN;
-        }
         double max = Double.NaN;
         for (Meter meter : meters) {
             double value =
