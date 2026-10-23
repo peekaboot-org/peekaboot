@@ -2,9 +2,6 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -44,18 +41,10 @@ class InventoryRestockIT extends TestingAppITBase {
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        List<JsonNode> restocks = new ArrayList<>();
-        trace.path("queries").forEach(query -> {
-            String sql = query.path("statement").path("text").asString("").toLowerCase(Locale.ROOT);
-            if (sql.contains("set quantity = ? where sku = ?")) {
-                restocks.add(query);
-            }
-        });
-        assertThat(restocks).singleElement().satisfies(query -> {
-            assertThat(query.path("dataSourceName").asString("")).isEqualTo("inventory-db");
-            assertThat(query.path("statement").path("parameters").size())
-                    .as("one parameter set per SKU: %s", query.path("statement").path("parameters"))
-                    .isEqualTo(7);
-        });
+        JsonNode restock = TraceQueries.queryContaining(trace, "SET quantity = ? WHERE sku = ?");
+        assertThat(restock.path("dataSourceName").asString("")).isEqualTo("inventory-db");
+        assertThat(restock.path("statement").path("parameters").size())
+                .as("one parameter set per SKU: %s", restock.path("statement").path("parameters"))
+                .isEqualTo(7);
     }
 }

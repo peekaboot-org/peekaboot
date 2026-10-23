@@ -19,7 +19,7 @@ class QueryParameterCaptureIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode statement = personLookup(trace);
+        JsonNode statement = TraceQueries.queryContaining(trace, "from person").path("statement");
         assertThat(statement.path("parameters").toString()).isEqualTo("[[\"424242\"]]");
         assertThat(statement.path("formatted").asString())
                 .as("Hibernate is on this app's classpath")
@@ -27,14 +27,5 @@ class QueryParameterCaptureIT extends TestingAppITBase {
         assertThat(SpanTree.tagValues(trace, DbSpans.PARAMETERS_TAG))
                 .as("served inside the statement, not again as a tag")
                 .isEmpty();
-    }
-
-    private static JsonNode personLookup(JsonNode trace) {
-        for (JsonNode query : trace.path("queries")) {
-            if (query.path("statement").path("text").asString("").contains("from person")) {
-                return query.path("statement");
-            }
-        }
-        throw new AssertionError("no query against person among " + trace.path("queries"));
     }
 }

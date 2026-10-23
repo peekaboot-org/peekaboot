@@ -217,7 +217,7 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
                         .path("status")
                         .asString(""))
                 .isEqualTo("OK");
-        assertThat(listedTraceIds("bucket=errors")).doesNotContain(traceId);
+        assertThat(traces.listedTraceIds("bucket=errors")).doesNotContain(traceId);
     }
 
     /**
@@ -295,10 +295,10 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
     void anAsyncTaskDispatchedOutsideARequestIsNotObserved() throws InterruptedException {
         // The listing is shared with the rest of this class (and the suite) - an async
         // subtree row from another test's own trace carries that trace's id, not a
-        // parentless ASYNC_TASK trace of its own, but listedTraceIds() cannot tell those
+        // parentless ASYNC_TASK trace of its own, but traces.listedTraceIds() cannot tell those
         // apart. Same before/after idiom as TraceApiClient.awaitTraceAppearing: only a row
         // that is new since this test's own hand-off can be this test's hand-off.
-        List<String> asyncTaskIdsBeforeHandOff = listedTraceIds("rootActionType=" + RootActionType.ASYNC_TASK);
+        List<String> asyncTaskIdsBeforeHandOff = traces.listedTraceIds("rootActionType=" + RootActionType.ASYNC_TASK);
 
         CountDownLatch handedOver = new CountDownLatch(1);
 
@@ -312,7 +312,8 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
         // hand-off above is readable only once that hand-off's span - had there been one - is.
         traces.awaitTrace(traces.get("/orders"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        List<String> newAsyncTaskIds = new ArrayList<>(listedTraceIds("rootActionType=" + RootActionType.ASYNC_TASK));
+        List<String> newAsyncTaskIds =
+                new ArrayList<>(traces.listedTraceIds("rootActionType=" + RootActionType.ASYNC_TASK));
         newAsyncTaskIds.removeAll(asyncTaskIdsBeforeHandOff);
 
         assertThat(newAsyncTaskIds)
@@ -356,25 +357,12 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
     }
 
     private List<JsonNode> asyncRowsOf(String traceId) {
-        JsonNode response =
-                api.getJson("/peekaboot/api/traces/insights?limit=10000&rootActionType=" + RootActionType.ASYNC_TASK);
-        return response.path("traces")
-                .valueStream()
+        return traces.listedTraces("rootActionType=" + RootActionType.ASYNC_TASK).stream()
                 .filter(listed -> traceId.equals(listed.path("traceId").asString("")))
                 .toList();
     }
 
     private static long endMs(JsonNode span) {
         return span.path("startTimeMs").asLong() + span.path("durationMs").asLong();
-    }
-
-    /** The ids the listing endpoint answers with for {@code query}. */
-    private List<String> listedTraceIds(String query) {
-        JsonNode response = api.getJson("/peekaboot/api/traces/insights?limit=10000&" + query);
-        List<String> ids = new ArrayList<>();
-        for (JsonNode listed : response.path("traces")) {
-            ids.add(listed.path("traceId").asString(""));
-        }
-        return ids;
     }
 }

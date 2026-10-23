@@ -47,7 +47,7 @@ class RedisTraceIT {
 
     private static final Logger log = LoggerFactory.getLogger(RedisTraceIT.class);
 
-    private static final String EVERY_TYPE = "*";
+    private static final String EVERY_TYPE = "rootActionType=*";
     private static final String NO_TYPE_NAMED = "";
 
     @Container
@@ -140,7 +140,7 @@ class RedisTraceIT {
                 RootActionType.MAINTENANCE,
                 listed -> isRedisRootOf(listed, "INFO")
                         && !infoTracesBeforePoll.contains(listed.path("traceId").asString("")),
-                RedisTraceIT::rootOperation);
+                TraceApiClient::rootOperation);
 
         String traceId = trace.path("traceId").asString("");
         assertThat(traces.listedTraceIds(EVERY_TYPE)).contains(traceId);
@@ -154,7 +154,7 @@ class RedisTraceIT {
         OrderFixtures.placeOrder(traces.api(), "GADGET-2", 1);
 
         traces.awaitTraceOfType(
-                RootActionType.MAINTENANCE, listed -> isRedisRootOf(listed, "HELLO"), RedisTraceIT::rootOperation);
+                RootActionType.MAINTENANCE, listed -> isRedisRootOf(listed, "HELLO"), TraceApiClient::rootOperation);
 
         assertThat(traces.listedTraces(NO_TYPE_NAMED))
                 .noneMatch(listed -> isRedisRootOf(listed, "HELLO") || isRedisRootOf(listed, "CLIENT"));
@@ -176,9 +176,5 @@ class RedisTraceIT {
         JsonNode tags = listed.path("rootSpan").path("tags");
         return "redis".equals(tags.path("db.system").asString(""))
                 && command.equals(tags.path("db.operation").asString(""));
-    }
-
-    private static String rootOperation(JsonNode listed) {
-        return listed.path("rootOperation").asString("");
     }
 }

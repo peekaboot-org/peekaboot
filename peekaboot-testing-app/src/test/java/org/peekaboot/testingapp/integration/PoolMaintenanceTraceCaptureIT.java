@@ -25,6 +25,10 @@ class PoolMaintenanceTraceCaptureIT extends TestingAppITBase {
     /** The listing request the dashboard sends with no chip selected: it names no type at all. */
     private static final String NO_TYPE_NAMED = "";
 
+    private static final String MAINTENANCE_NAMED = "rootActionType=" + RootActionType.MAINTENANCE;
+
+    private static final String EVERY_TYPE = "rootActionType=*";
+
     @Autowired
     private DataSource dataSource;
 
@@ -35,7 +39,7 @@ class PoolMaintenanceTraceCaptureIT extends TestingAppITBase {
         // own maintenance acquires connections without any test asking. An id absent from the
         // listing before the acquisition below is the closest this test can get to naming the
         // trace it caused; matching on the type alone would assert about somebody else's.
-        Set<String> listedBeforeAcquisition = Set.copyOf(traces.listedTraceIds(RootActionType.MAINTENANCE.name()));
+        Set<String> listedBeforeAcquisition = Set.copyOf(traces.listedTraceIds(MAINTENANCE_NAMED));
 
         try (Connection connection = dataSource.getConnection()) {
             assertThat(connection.isValid(1)).isTrue();
@@ -60,8 +64,8 @@ class PoolMaintenanceTraceCaptureIT extends TestingAppITBase {
         // does the wildcard, while the default request does not. Asserting only the last would
         // hold just as well for a listing that came back empty.
         String traceId = trace.path("traceId").asString("");
-        assertThat(traces.listedTraceIds(RootActionType.MAINTENANCE.name())).contains(traceId);
-        assertThat(traces.listedTraceIds("*")).contains(traceId);
+        assertThat(traces.listedTraceIds(MAINTENANCE_NAMED)).contains(traceId);
+        assertThat(traces.listedTraceIds(EVERY_TYPE)).contains(traceId);
         assertThat(traces.listedTraceIds(NO_TYPE_NAMED)).doesNotContain(traceId);
     }
 }

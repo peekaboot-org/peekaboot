@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import tools.jackson.databind.JsonNode;
 
-/** Reads a trace's {@code queries} list, the Queries tab's own data, by the DataSource each query ran on. */
+/** Reads a trace's {@code queries} list, the Queries tab's own data, by DataSource or by statement. */
 final class TraceQueries {
 
     private TraceQueries() {}
@@ -26,5 +26,25 @@ final class TraceQueries {
             }
         });
         return statements;
+    }
+
+    /**
+     * The one query whose statement contains {@code fragment}. Fails unless exactly one does,
+     * naming every statement the trace held.
+     */
+    static JsonNode queryContaining(JsonNode trace, String fragment) {
+        List<JsonNode> found = new ArrayList<>();
+        List<String> statements = new ArrayList<>();
+        trace.path("queries").forEach(query -> {
+            String statement = query.path("statement").path("text").asString("");
+            statements.add(statement);
+            if (statement.contains(fragment)) {
+                found.add(query);
+            }
+        });
+        if (found.size() != 1) {
+            throw new AssertionError(found.size() + " statements containing '" + fragment + "', among " + statements);
+        }
+        return found.getFirst();
     }
 }

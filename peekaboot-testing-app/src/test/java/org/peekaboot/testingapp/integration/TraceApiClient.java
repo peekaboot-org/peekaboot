@@ -147,18 +147,19 @@ class TraceApiClient {
         return awaitListedTrace("rootActionType=" + type.name(), match, label, "a " + type + " trace");
     }
 
-    /** The traces the listing endpoint returns for one {@code rootActionType} value; an empty one names no type. */
-    List<JsonNode> listedTraces(String rootActionType) {
-        String typeQuery = rootActionType.isEmpty() ? "" : "&rootActionType=" + rootActionType;
+    /**
+     * The traces the listing endpoint returns for {@code query} ({@code rootActionType=*},
+     * {@code bucket=errors}), every one of them; an empty query is the dashboard's default listing.
+     */
+    List<JsonNode> listedTraces(String query) {
+        String uri = "/peekaboot/api/traces/insights?limit=10000" + (query.isEmpty() ? "" : "&" + query);
         List<JsonNode> listed = new ArrayList<>();
-        api.getJson("/peekaboot/api/traces/insights?limit=10000" + typeQuery)
-                .path("traces")
-                .forEach(listed::add);
+        api.getJson(uri).path("traces").forEach(listed::add);
         return listed;
     }
 
-    List<String> listedTraceIds(String rootActionType) {
-        return listedTraces(rootActionType).stream()
+    List<String> listedTraceIds(String query) {
+        return listedTraces(query).stream()
                 .map(trace -> trace.path("traceId").asString(""))
                 .toList();
     }
@@ -195,7 +196,7 @@ class TraceApiClient {
         }
     }
 
-    private static String rootOperation(JsonNode trace) {
+    static String rootOperation(JsonNode trace) {
         return trace.path("rootOperation").asString("");
     }
 
