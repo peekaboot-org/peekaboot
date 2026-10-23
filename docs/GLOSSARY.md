@@ -103,7 +103,8 @@ bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 ### Issue
 `SpanIssue(IssueType type, String message, IssueSeverity severity)`, held in `SpanNode.issues`.
 `IssueType`'s constants are `SLOW`, `VERY_SLOW` and `SLOW_QUERY`; `IssueSeverity`
-has two and serialises lowercase through `@JsonValue`.
+has two and serialises lowercase through `@JsonValue`. The UI colours a span's duration by
+`severity` alone (`severity.js`'s `issueSeverity`), never by `type`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
 `issues` empty on every node it builds. Firing conditions:
@@ -134,7 +135,7 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | `RootActionType` constant names | Title-case labels and icons | Held only in `shared/root-actions.js`. |
 | tab module id `scheduled-tasks` | payload key `scheduledTasks` | Two spellings of the same tab, one in the hash, one in `ActuatorInsightsResponse`. |
 
-`SharedModuleIT` pins the vocabularies that do line up (`ROOT_ACTION_TYPES`, `ISSUE_TYPES`,
+`SharedModuleIT` pins the vocabularies that do line up (`ROOT_ACTION_TYPES`, `ISSUE_SEVERITIES`,
 `TASK_TYPES`, `MIGRATION_STATES`, `CHANGE_SET_EXEC_TYPES`, `LOG_LEVELS`, the `Features` keys) so they cannot drift apart
 silently. A new mirrored vocabulary belongs there too.
 

@@ -149,8 +149,8 @@ scoped to its own host: the consumer's markup is not Peekaboot's to answer for.
 ## Backend to frontend contracts
 The frontend is plain ES modules, so a Java enum and its JS mirror drift silently.
 `SharedModuleIT`'s `*MirrorTheBackend*` tests pin `ROOT_ACTION_TYPES`, `TASK_TYPES`,
-`MIGRATION_STATES`, `ISSUE_TYPES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
-`MigrationState`, `IssueType` and Logback's levels, the keys the frontend reads off
+`MIGRATION_STATES`, `ISSUE_SEVERITIES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
+`MigrationState`, `IssueSeverity` (its wire words) and Logback's levels, the keys the frontend reads off
 `/api/features` to the `Features` record, and `severity.js`'s `DEFAULT_THRESHOLDS` to the
 properties' defaults. A vocabulary that gains a JS mirror gets a row there. The same suite pins
 `format.js`'s `formatLongDuration` against `UptimeFormat.humanize` unit by unit, and drives

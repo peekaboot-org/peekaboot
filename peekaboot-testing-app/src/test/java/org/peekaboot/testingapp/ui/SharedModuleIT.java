@@ -17,7 +17,7 @@ import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.peekaboot.backend.domain.liquibase.ChangeSetExecType;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
-import org.peekaboot.backend.domain.trace.IssueType;
+import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.TileFormat;
@@ -335,19 +335,28 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(published).containsAll(thresholdKeys);
     }
 
+    /** The tier is read off the backend's own severity word, so an issue type the frontend has never heard of still colours. */
     @Test
     void issueSeverityReportsTheWorstOfASpansIssues() {
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW_QUERY'}])"))
+        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW_QUERY', severity: 'warning'}])"))
                 .isEqualTo("slow");
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW'}, {type: 'VERY_SLOW'}])"))
+        assertThat(
+                        evalModule(
+                                "severity.js",
+                                "m.issueSeverity([{type: 'SLOW', severity: 'warning'}, {type: 'VERY_SLOW', severity: 'error'}])"))
+                .isEqualTo("very-slow");
+        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'NOT_YET_INVENTED', severity: 'error'}])"))
                 .isEqualTo("very-slow");
         assertThat(evalModule("severity.js", "m.issueSeverity([])")).isEqualTo("");
         assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
     }
 
     @Test
-    void issueTypesMirrorTheBackendEnum() {
-        assertThat(evalModule("severity.js", "m.ISSUE_TYPES")).isEqualTo(names(IssueType.values()));
+    void issueSeveritiesMirrorTheBackendEnum() {
+        assertThat(evalModule("severity.js", "m.ISSUE_SEVERITIES"))
+                .isEqualTo(Arrays.stream(IssueSeverity.values())
+                        .map(IssueSeverity::wireName)
+                        .toList());
     }
 
     @Test

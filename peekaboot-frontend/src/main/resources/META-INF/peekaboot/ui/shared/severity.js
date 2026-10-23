@@ -49,18 +49,17 @@ export function querySeverity(ms, features) {
     return ms >= threshold(features, 'slowQueryThresholdMs') ? 'slow' : '';
 }
 
-/** Every IssueType the backend raises, in the enum's order, and the severity suffix each one paints a duration with. */
-const ISSUE_SEVERITIES = Object.freeze({
-    SLOW: 'slow',
-    VERY_SLOW: 'very-slow',
-    SLOW_QUERY: 'slow'
+/** Every IssueSeverity word the backend sends with an issue, in the enum's order, and the severity suffix each one paints a duration with. */
+const ISSUE_SEVERITY_SUFFIXES = Object.freeze({
+    warning: 'slow',
+    error: 'very-slow'
 });
 
-export const ISSUE_TYPES = Object.keys(ISSUE_SEVERITIES);
+export const ISSUE_SEVERITIES = Object.keys(ISSUE_SEVERITY_SUFFIXES);
 
-/** The worst latency severity among a span's issues - the backend's own verdict on that span. */
+/** The worst latency severity among a span's issues - the backend's own verdict on that span, read off each issue's severity. */
 export function issueSeverity(issues) {
-    const severities = (issues || []).map(issue => ISSUE_SEVERITIES[issue.type] || '');
+    const severities = (issues || []).map(issue => ISSUE_SEVERITY_SUFFIXES[issue.severity] || '');
     if (severities.includes('very-slow')) return 'very-slow';
     if (severities.includes('slow')) return 'slow';
     return '';
