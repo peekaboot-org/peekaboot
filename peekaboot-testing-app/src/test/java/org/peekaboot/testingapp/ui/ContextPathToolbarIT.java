@@ -26,9 +26,6 @@ class ContextPathToolbarIT extends ContextPathTestBase {
 
     private static final String NETWORK_CHANGED = "net::ERR_NETWORK_CHANGED";
 
-    /** The bar tracks the page's own trace; the same wait Toolbar.traceId() makes, here with a timeout of the test's choosing. */
-    private static final String TRACE_ID_SHOWN = "root => root.querySelector('#pk-trace').textContent.trim() !== '-'";
-
     @Autowired
     private TraceStore traceStore;
 
@@ -109,8 +106,7 @@ class ContextPathToolbarIT extends ContextPathTestBase {
     void theOverlayOpenedFromTheDashboardLoadsFromBehindTheContextPath() {
         openPersonsPage();
         awaitQueryCountOnTheBar();
-        String traceId = (String) page.evaluate(
-                "() => JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent).traceId");
+        String traceId = toolbar.traceId();
 
         // the hash lands on the Traces tab, so its list - not the Overview's build info - is
         // the proof that the dashboard rendered
@@ -135,17 +131,17 @@ class ContextPathToolbarIT extends ContextPathTestBase {
         // evaluate() awaits the promise: the response, Server-Timing header and all, is in
         // before the absence check starts, and nothing is left in flight for teardown to cut off
         page.evaluate("() => fetch('" + CONTEXT_PATH + "/v3/api-docs').then(r => r.text())");
-        assertThatThrownBy(() -> toolbar.waitUntil(TRACE_ID_SHOWN, null, 1000)).isInstanceOf(TimeoutError.class);
+        assertThatThrownBy(() -> toolbar.awaitTraceTracked(1000)).isInstanceOf(TimeoutError.class);
 
         page.evaluate("() => fetch('" + CONTEXT_PATH + "/api/person/all').then(r => r.text())");
-        toolbar.waitUntil(TRACE_ID_SHOWN, null, 10000);
+        toolbar.awaitTraceTracked(10000);
 
         assertThat(pageErrors).isEmpty();
     }
 
     /** A query count can only come from /app/peekaboot/api/traces/{id}/insights, and only once the trace is stored. */
     private void awaitQueryCountOnTheBar() {
-        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
+        toolbar.awaitMetrics("quer");
     }
 
     private List<String> capturedRequestPaths() {

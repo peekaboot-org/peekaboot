@@ -48,7 +48,7 @@ class ErrorPageIT extends PlaywrightTestBase {
     @Test
     void theBarOnTheErrorPageShowsTheFailedRequest() {
         page.navigate(baseUrl + "/boom");
-        toolbar.waitUntil("root => root.querySelector('#pk-status').textContent.trim() !== ''");
+        toolbar.awaitStatus();
 
         assertThat(toolbar.text("#pk-status")).isEqualTo("500");
         assertThat(toolbar.text("#pk-path")).isEqualTo("/boom");

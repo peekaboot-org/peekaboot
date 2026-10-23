@@ -48,7 +48,7 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarShowsMethodPathAndStatusForTheRequest() {
         openPersonsPage();
-        toolbar.waitUntil("root => root.querySelector('#pk-status').textContent.trim() !== ''");
+        toolbar.awaitStatus();
 
         String status = toolbar.text("#pk-status");
         String path = toolbar.text("#pk-path");
@@ -139,8 +139,7 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarShowsQueryCountAndControllerNameAfterTraceCompletes() {
         openPersonsPage();
-        toolbar.waitUntil("root => { const text = root.querySelector('#pk-metrics').textContent;"
-                + " return text.includes('quer') && text.includes('log'); }");
+        toolbar.awaitMetrics("quer", "log");
 
         String metrics = toolbar.text("#pk-metrics");
         assertThat(metrics).contains("1 query");
@@ -163,7 +162,7 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarShowsErrorLogCountWhenRequestLogsAnError() {
         page.navigate(baseUrl + "/?error=true");
-        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('err')");
+        toolbar.awaitMetrics("err");
 
         assertThat(toolbar.text("#pk-metrics")).contains("1 err");
     }
@@ -184,7 +183,7 @@ class ToolbarIT extends PlaywrightTestBase {
         openPersonsPage();
         String traceId = toolbar.traceId();
         JsonNode trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
-        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('span')");
+        toolbar.awaitMetrics("span");
 
         String expectedSpans = localeFormatted(
                 trace.path("summary").path("spans").path("count").asInt(), "ar-EG-u-nu-arab");
@@ -209,7 +208,7 @@ class ToolbarIT extends PlaywrightTestBase {
         openPersonsPage();
         String traceId = toolbar.traceId();
         JsonNode trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
-        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('span')");
+        toolbar.awaitMetrics("span");
 
         String expectedSpans = localeFormatted(
                 trace.path("summary").path("spans").path("count").asInt(), "en-US");
@@ -330,7 +329,7 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarTypeScaleDoesNotFollowTheHostPagesRootFontSize() {
         openPersonsPage();
-        toolbar.waitUntil("root => root.querySelector('#pk-status').textContent.trim() !== ''");
+        toolbar.awaitStatus();
         page.addStyleTag(new Page.AddStyleTagOptions().setContent("html { font-size: 62.5%; }"));
 
         assertThat(toolbar.evaluate("root => getComputedStyle(root.querySelector('.pk-toolbar')).fontSize"))
@@ -347,7 +346,7 @@ class ToolbarIT extends PlaywrightTestBase {
     void toolbarWrapsInsteadOfOverflowingANarrowViewport() {
         page.setViewportSize(375, 667);
         openPersonsPage();
-        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
+        toolbar.awaitMetrics("quer");
 
         Boolean everythingFits = (Boolean) toolbar.evaluate("root => {"
                 + "const bar = root.querySelector('.pk-toolbar');"

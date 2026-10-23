@@ -60,7 +60,7 @@ class SecuredDashboardIT extends PlaywrightTestBase {
     void theToolbarResolvesItsMetricsAndDropsTheNoticeForAnAdmin() {
         openPersonsPage();
 
-        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
+        toolbar.awaitMetrics("quer");
 
         assertThat(toolbar.text("#pk-metrics")).contains("quer").doesNotContain("?");
         toolbar.waitForGone("#pk-auth");

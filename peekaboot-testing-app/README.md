@@ -121,7 +121,8 @@ This module is not published to Maven Central (`maven.deploy.skip`).
 ### Page objects and helpers (`ui/`)
 
 `PlaywrightTestBase` binds three page objects to each test's page: `toolbar` (the dev
-toolbar's shadow root), `overlay` (the trace-detail overlay: `awaitOpened`, `awaitTrace(id)`,
+toolbar's shadow root: `traceId`, `awaitTraceTracked`, `awaitMetrics`, `awaitStatus`,
+`openOverlay`), `overlay` (the trace-detail overlay: `awaitOpened`, `awaitTrace(id)`,
 `awaitLoaded`, `openTab`, `awaitClosed`) and `dashboard` (the tab strip: `openTab(id)` waits
 for the tab's own data, `openTracesTab`, `awaitListedTrace(id)`, `openListedTrace(id)`,
 `selectedTab`, and `kvValue`/`awaitKvValue` for a `.pk-kv` row found by its key). Every

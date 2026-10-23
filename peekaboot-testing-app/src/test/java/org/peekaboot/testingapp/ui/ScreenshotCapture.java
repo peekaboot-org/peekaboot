@@ -149,8 +149,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private static final int MIN_INSIGHTS_SAMPLES = 12;
 
     /**
-     * The traceId of the flagship /orders N+1 request, captured straight from that
-     * response's own toolbar payload in {@link #generateTraffic()} - see the field's use
+     * The traceId of the flagship /orders N+1 request, read off that response's own
+     * Server-Timing header in {@link #generateTraffic()} - see the field's use
      * in {@link #captureDashboardTabs} for why this is not simply "click the first item
      * in the traces list".
      */
@@ -448,23 +448,17 @@ class ScreenshotCapture extends PlaywrightTestBase {
      * failing request, a request that hands work to an {@code @Async} task (listed as two
      * rows, the request and the task) and, last, the deliberately heavy N+1 /orders trace
      * that peekaboot.tracing.max-spans-per-trace exists to keep intact. Its traceId is read
-     * straight from that response's own toolbar payload, the same JSON the toolbar itself
-     * renders from, so {@link #flagshipTraceId} names the real trace regardless of what
-     * else the dashboard's own tabs cause to be captured afterward.
+     * off that response's own Server-Timing header, so {@link #flagshipTraceId} names the
+     * real trace regardless of what else the dashboard's own tabs cause to be captured
+     * afterward.
      */
     private void generateTraffic() {
         page.navigate(baseUrl + "/persons");
         page.navigate(baseUrl + "/api/orders/1/report");
         page.navigate(baseUrl + "/boom");
         asyncTraceId = triggerOrderEnrichment();
-        page.navigate(baseUrl + "/orders");
-        flagshipTraceId = (String) page.evaluate(
-                "() => JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent).traceId");
-        if (flagshipTraceId == null || flagshipTraceId.isBlank()) {
-            throw new IllegalStateException("no traceId on the /orders toolbar payload - "
-                    + "cannot deep-link the flagship trace-detail screenshot");
-        }
-        // The toolbar payload above is read the instant the response committed; the
+        flagshipTraceId = traceIdOf(page.navigate(baseUrl + "/orders"));
+        // The id above is read the instant the response committed; the
         // /orders trace's ~80+ spans arrive at the store asynchronously afterward.
         awaitTrace(flagshipTraceId, ROOT_SPAN_EXPORTED);
         // the task outlives its request, so its span reaches the store after the request's
