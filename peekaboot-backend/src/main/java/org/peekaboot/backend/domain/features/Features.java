@@ -23,7 +23,6 @@ public record Features(
         boolean tracing,
         boolean tracingSpansPossible,
         boolean metrics,
-        boolean devToolbar,
         boolean unmaskingEnabled,
         boolean insights,
         long slowSpanThresholdMs,

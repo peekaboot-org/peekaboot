@@ -73,6 +73,6 @@ public class MetricsService {
             groups.add(new MetricGroup(name, description, baseUnit, type, measurements));
         }
 
-        return new MetricsInfo(groups.size(), allMeters.size(), groups);
+        return new MetricsInfo(groups);
     }
 }

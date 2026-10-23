@@ -17,5 +17,5 @@ public record EnvResponse(List<String> activeProfiles, List<PropertySource> prop
         }
     }
 
-    public record PropertyValueDescriptor(Object value, String origin) {}
+    public record PropertyValueDescriptor(Object value) {}
 }

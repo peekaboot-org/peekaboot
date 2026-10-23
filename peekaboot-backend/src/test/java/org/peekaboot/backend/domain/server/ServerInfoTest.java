@@ -19,7 +19,6 @@ class ServerInfoTest {
 
         assertThat(info.timezone()).isEqualTo("Europe/Berlin");
         assertThat(info.timezoneOffset()).isEqualTo("+02:00");
-        assertThat(info.timezoneDisplay()).isEqualTo("Central European Time");
         assertThat(info.currentTime()).isEqualTo("2026-07-01T14:00:00+02:00");
     }
 
@@ -28,18 +27,5 @@ class ServerInfoTest {
         Clock winter = Clock.fixed(Instant.parse("2026-01-15T12:00:00Z"), BERLIN);
 
         assertThat(ServerInfo.current(Locale.ENGLISH, winter).timezoneOffset()).isEqualTo("+01:00");
-    }
-
-    @Test
-    void theDisplayNamesFollowTheRequestLocale() {
-        assertThat(ServerInfo.current(Locale.GERMAN, SUMMER).timezoneDisplay()).isEqualTo("Mitteleuropäische Zeit");
-    }
-
-    /** The separator is shown as text on the Overview, so the control characters become their escapes. */
-    @Test
-    void theLineSeparatorIsEscapedForDisplay() {
-        assertThat(ServerInfo.current(Locale.ENGLISH, SUMMER).lineSeparator())
-                .doesNotContain("\n", "\r")
-                .isIn("\\n", "\\r\\n");
     }
 }

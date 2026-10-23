@@ -36,8 +36,6 @@ class MetricsServiceTest {
         MetricsInfo result = service.getMetrics();
 
         assertThat(service.isAvailable()).isFalse();
-        assertThat(result.metricCount()).isZero();
-        assertThat(result.measurementCount()).isZero();
         assertThat(result.metrics()).isEmpty();
     }
 
@@ -65,8 +63,6 @@ class MetricsServiceTest {
 
         MetricsInfo result = service.getMetrics();
 
-        assertThat(result.metricCount()).isEqualTo(1);
-        assertThat(result.measurementCount()).isEqualTo(2);
         assertThat(result.metrics()).hasSize(1);
 
         MetricGroup group = result.metrics().get(0);
@@ -119,7 +115,7 @@ class MetricsServiceTest {
 
         MetricsInfo result = service.getMetrics();
 
-        assertThat(result.metricCount()).isEqualTo(1);
+        assertThat(result.metrics()).hasSize(1);
         MetricGroup group = result.metrics().get(0);
         assertThat(group.name()).isEqualTo("http.requests");
         assertThat(group.type()).isEqualTo("COUNTER");

@@ -81,7 +81,6 @@ public class PeekabootController {
                 traceInsightsService.isTracingAvailable(),
                 tracingSpansPossible,
                 metricsService.isAvailable(),
-                properties.isDevToolbar(),
                 properties.isEnableUnmasking(),
                 insightsService != null,
                 uiTracingProperties.getSlowSpanThresholdMs(),
