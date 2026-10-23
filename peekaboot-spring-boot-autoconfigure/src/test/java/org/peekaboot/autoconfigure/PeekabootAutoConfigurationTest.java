@@ -2,13 +2,12 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.micrometer.tracing.Span;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.domain.features.Features;
@@ -17,8 +16,6 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -170,65 +167,29 @@ class PeekabootAutoConfigurationTest {
     /**
      * StackTraceRulesConfiguration resolves {@code peekaboot.stack-trace.fold} once, for the trace
      * store's folding and the error page alike: off must empty the exclusion list rather than
-     * leave it unread, so no frame is ever
-     * hidden regardless of what {@code peekaboot.stack-trace.exclude} names. Drives a real
-     * captured log through the actual bean rather than asserting on construction alone, since a
-     * bean existing proves nothing about what reached its constructor.
+     * leave it unread, so no frame is ever hidden regardless of what
+     * {@code peekaboot.stack-trace.exclude} names. With no fold setting at all the context runner
+     * runs no post-processor, so only the bound default decides. Drives a real captured log
+     * through the actual bean rather than asserting on construction alone, since a bean existing
+     * proves nothing about what reached its constructor.
      */
-    @Test
-    void honoursTheFoldSwitchForCapturedLogs() {
+    @ParameterizedTest
+    @CsvSource({"peekaboot.stack-trace.fold=false, false", "peekaboot.stack-trace.fold=true, true", "'', true"})
+    void foldsCapturedLogsAsTheFoldSwitchSays(String foldSetting, boolean folded) {
         tracingRunner()
-                .withPropertyValues("peekaboot.stack-trace.fold=false", "peekaboot.stack-trace.exclude=com.acme.vendor")
+                .withPropertyValues("peekaboot.stack-trace.exclude=com.acme.vendor", foldSetting)
                 .run(context -> {
                     TraceStore traceStore = context.getBean(TraceStore.class);
-                    addRootSpan(traceStore);
-                    traceStore.addLog(
-                            new LogCapturedEvent(
-                                    "t1",
-                                    "s1",
-                                    Instant.EPOCH,
-                                    "ERROR",
-                                    "TestLogger",
-                                    "boom",
-                                    "main",
-                                    "java.lang.IllegalStateException: boom\n\tat com.acme.vendor.Client.call(Client.java:42)\n"));
-
-                    TraceInsightsService service = context.getBean(TraceInsightsService.class);
-                    TraceLog log =
-                            service.getTraceInsights("t1").orElseThrow().logs().getFirst();
-
-                    assertThat(log.hiddenFrames())
-                            .as("fold=false must empty the exclusion list, not just leave it unread")
-                            .isEmpty();
-                });
-    }
-
-    /** No fold setting at all: the context runner runs no post-processor, so only the bound default decides. */
-    @Test
-    void foldsCapturedLogsWithoutAnyFoldSetting() {
-        tracingRunner()
-                .withPropertyValues("peekaboot.stack-trace.exclude=com.acme.vendor")
-                .run(context -> {
-                    TraceStore traceStore = context.getBean(TraceStore.class);
-                    addRootSpan(traceStore);
-                    traceStore.addLog(
-                            new LogCapturedEvent(
-                                    "t1",
-                                    "s1",
-                                    Instant.EPOCH,
-                                    "ERROR",
-                                    "TestLogger",
-                                    "boom",
-                                    "main",
-                                    "java.lang.IllegalStateException: boom\n\tat com.acme.vendor.Client.call(Client.java:42)\n"));
+                    TraceFixtures.addRootSpan(traceStore);
+                    traceStore.addLog(TraceFixtures.vendorFrameLog());
 
                     TraceLog log = context.getBean(TraceInsightsService.class)
-                            .getTraceInsights("t1")
+                            .getTraceInsights(TraceFixtures.TRACE_ID)
                             .orElseThrow()
                             .logs()
                             .getFirst();
 
-                    assertThat(log.hiddenFrames()).isNotEmpty();
+                    assertThat(log.hiddenFrames().isEmpty()).isEqualTo(!folded);
                 });
     }
 
@@ -259,45 +220,14 @@ class PeekabootAutoConfigurationTest {
 
     private static SqlStatement capturedStatement(AssertableWebApplicationContext context) {
         TraceStore traceStore = context.getBean(TraceStore.class);
-        addRootSpan(traceStore);
-        traceStore.addSpan(new SpanData(
-                "t1",
-                "q1",
-                "s1",
-                "SELECT",
-                Span.Kind.CLIENT,
-                Instant.EPOCH.plusMillis(10),
-                Instant.EPOCH.plusMillis(20),
-                Map.of("db.query.text", "select 1"),
-                List.of(),
-                null,
-                null,
-                null,
-                2L));
+        TraceFixtures.addRootSpan(traceStore);
+        traceStore.addSpan(TraceFixtures.query("select 1"));
         return context.getBean(TraceInsightsService.class)
-                .getTraceInsights("t1")
+                .getTraceInsights(TraceFixtures.TRACE_ID)
                 .orElseThrow()
                 .queries()
                 .getFirst()
                 .statement();
-    }
-
-    /** The SERVER root {@code t1}/{@code s1} a captured span or log hangs off. */
-    private static void addRootSpan(TraceStore traceStore) {
-        traceStore.addSpan(new SpanData(
-                "t1",
-                "s1",
-                null,
-                "GET /x",
-                Span.Kind.SERVER,
-                Instant.EPOCH,
-                Instant.EPOCH.plusMillis(100),
-                Map.of(),
-                List.of(),
-                null,
-                null,
-                null,
-                1L));
     }
 
     /**

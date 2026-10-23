@@ -3,14 +3,11 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.observation.ObservationRegistry;
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
-import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -98,21 +95,7 @@ class PeekabootTracingAutoConfigurationTest {
                 .run(context -> {
                     TraceStore store = context.getBean(TraceStore.class);
                     // slow threshold 1ms: a 5ms span classifies as slow
-                    Instant start = Instant.parse("2026-01-01T00:00:00Z");
-                    store.addSpan(new SpanData(
-                            "t1",
-                            "s1",
-                            null,
-                            "op",
-                            null,
-                            start,
-                            start.plusMillis(5),
-                            Map.of(),
-                            List.of(),
-                            null,
-                            null,
-                            null,
-                            1L));
+                    store.addSpan(TraceFixtures.rootSpanLasting(5));
                     assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
     }

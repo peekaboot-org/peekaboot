@@ -121,7 +121,9 @@ to every test class. The domain records carry no test-only constructors, and a t
 wrap a builder in a positional helper of its own (`createSpan(id, 150, OK, tags, children)`):
 that hides the defaults the builder exists to make explicit. `peekaboot-testing-app` cannot
 reach `Spans` (the backend publishes no test jar), so its `integration/TestSpans` is the same
-builder shape for the ITs that write spans straight to the store.
+builder shape for the ITs that write spans straight to the store. `peekaboot-spring-boot-autoconfigure`
+needs only a few fixed shapes, so its `TraceFixtures` names them (`addRootSpan`, `query`,
+`rootSpanLasting`, `vendorFrameLog`) instead.
 
 `MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123..."`) on purpose.
 The file is full of strings shaped exactly like the credentials the engine detects, and
