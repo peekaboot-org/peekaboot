@@ -40,8 +40,7 @@ class ContentBufferingResponseWrapperTest {
         ServletOutputStream outputStream = wrapper.getOutputStream();
         outputStream.write("Hello World".getBytes(StandardCharsets.UTF_8));
 
-        byte[] content = wrapper.getContentAsByteArray();
-        assertThat(new String(content, StandardCharsets.UTF_8)).isEqualTo("Hello World");
+        assertThat(wrapper.getContentAsString()).isEqualTo("Hello World");
         assertThat(originalResponse.getContentAsByteArray()).isEmpty();
     }
 
@@ -260,7 +259,7 @@ class ContentBufferingResponseWrapperTest {
         wrapper.reset();
 
         assertThat(originalResponse.containsHeader("X-Stale")).isFalse();
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     @Test
@@ -281,7 +280,7 @@ class ContentBufferingResponseWrapperTest {
 
         assertThat(originalResponse.getStatus()).isEqualTo(500);
         assertThat(originalResponse.getErrorMessage()).isEqualTo("boom");
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     @Test
@@ -291,7 +290,7 @@ class ContentBufferingResponseWrapperTest {
         wrapper.sendRedirect("/elsewhere");
 
         assertThat(originalResponse.getRedirectedUrl()).isEqualTo("/elsewhere");
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     /** Servlet 6.1 added overloads to both families; each one replaces the body the same way. */
@@ -304,7 +303,7 @@ class ContentBufferingResponseWrapperTest {
         send.accept(wrapper);
 
         assertThat(originalResponse.isCommitted()).isTrue();
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     static Stream<Arguments> bodyReplacingOverloads() {
@@ -335,7 +334,7 @@ class ContentBufferingResponseWrapperTest {
 
         assertThat(wrapper.isPassthrough()).isTrue();
         assertThat(originalResponse.getContentAsByteArray()).hasSize(chunks * chunk.length + 1);
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     /**
@@ -361,7 +360,7 @@ class ContentBufferingResponseWrapperTest {
 
         assertThat(wrapper.isPassthrough()).isTrue();
         assertThat(originalResponse.getContentAsString()).isEqualTo(expected.toString());
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     /**
@@ -398,7 +397,7 @@ class ContentBufferingResponseWrapperTest {
         worker[0].join();
 
         assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     /**
@@ -426,7 +425,7 @@ class ContentBufferingResponseWrapperTest {
         worker[0].join();
 
         assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
-        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+        assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
     /** Resumes once the worker has finished, or is blocked on a monitor the calling thread holds. */

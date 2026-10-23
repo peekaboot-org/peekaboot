@@ -246,13 +246,6 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         super.sendRedirect(location, sc, clearBuffer);
     }
 
-    public byte[] getContentAsByteArray() {
-        if (writer != null) {
-            writer.flush();
-        }
-        return buffer.toByteArray();
-    }
-
     public String getContentAsString() {
         if (writer == null) {
             return buffer.toString(charset());

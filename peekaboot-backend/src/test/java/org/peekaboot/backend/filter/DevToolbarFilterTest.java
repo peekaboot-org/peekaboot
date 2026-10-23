@@ -54,7 +54,7 @@ class DevToolbarFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new DevToolbarFilter(toolbarDataProvider, tracer);
+        filter = filterWith(toolbarDataProvider, PeekabootPaths.DEFAULT_SWAGGER_UI_PATH);
         request = get("/users/123");
         response = new MockHttpServletResponse();
     }
@@ -283,7 +283,7 @@ class DevToolbarFilterTest {
         ToolbarDataProvider throwingProvider = mock(ToolbarDataProvider.class);
         when(throwingProvider.getToolbarSummaryJson(any(), any(), any(), any(Integer.class), any()))
                 .thenThrow(new RuntimeException("Provider error"));
-        DevToolbarFilter throwingFilter = new DevToolbarFilter(throwingProvider, tracer);
+        DevToolbarFilter throwingFilter = filterWith(throwingProvider, PeekabootPaths.DEFAULT_SWAGGER_UI_PATH);
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
         chainWritesHtml(htmlContent);
 
@@ -480,7 +480,7 @@ class DevToolbarFilterTest {
      */
     @Test
     void followsACustomisedSwaggerUiPathIntoIdleMode() throws Exception {
-        DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/admin/docs.html");
+        DevToolbarFilter customised = filterWith(toolbarDataProvider, "/admin/docs.html");
         request = get("/admin/swagger-ui/index.html");
         chainWritesHtml("<html><body><div id=\"swagger-ui\"></div></body></html>");
 
@@ -492,7 +492,7 @@ class DevToolbarFilterTest {
     /** With the UI moved elsewhere, the default location is a regular page again. */
     @Test
     void doesNotUseIdleModeOnTheDefaultPathOnceTheSwaggerUiPathIsCustomised() throws Exception {
-        DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/admin/docs.html");
+        DevToolbarFilter customised = filterWith(toolbarDataProvider, "/admin/docs.html");
         request = get("/swagger-ui/index.html");
         chainWritesHtml("<html><body></body></html>");
 
@@ -504,7 +504,7 @@ class DevToolbarFilterTest {
     /** A customised path without a directory part leaves the UI at springdoc's default location. */
     @Test
     void aCustomisedPathWithoutADirectoryKeepsTheDefaultUiLocationIdle() throws Exception {
-        DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/docs");
+        DevToolbarFilter customised = filterWith(toolbarDataProvider, "/docs");
         request = get("/swagger-ui/index.html");
         chainWritesHtml("<html><body></body></html>");
 
@@ -524,6 +524,11 @@ class DevToolbarFilterTest {
         filter.doFilter(request, response, chain);
 
         assertThat(response.getContentAsString()).contains("\"idle\":true");
+    }
+
+    /** Every path default in place, with springdoc's UI configured at {@code swaggerUiPath}. */
+    private DevToolbarFilter filterWith(ToolbarDataProvider provider, String swaggerUiPath) {
+        return new DevToolbarFilter(provider, tracer, PeekabootPaths.defaults(), swaggerUiPath);
     }
 
     /** Under spring.mvc.servlet.path the container maps the DispatcherServlet's prefix as the servlet path. */

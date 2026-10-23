@@ -43,16 +43,6 @@ public class DevToolbarFilter implements Filter {
     // rendered fragment's CSS; there is one filter instance per application.
     private final ToolbarShell toolbarShell = new ToolbarShell();
 
-    /** Every path default in place - plain construction for tests. */
-    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
-        this(toolbarDataProvider, tracer, PeekabootPaths.DEFAULT_SWAGGER_UI_PATH);
-    }
-
-    /** {@link PeekabootPaths#defaults()} plus the given swagger path - plain construction for tests. */
-    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer, String swaggerUiPath) {
-        this(toolbarDataProvider, tracer, PeekabootPaths.defaults(), swaggerUiPath);
-    }
-
     /** @param swaggerUiPath the effective {@code springdoc.swagger-ui.path}, for the idle-mode check */
     public DevToolbarFilter(
             ToolbarDataProvider toolbarDataProvider, Tracer tracer, PeekabootPaths paths, String swaggerUiPath) {
