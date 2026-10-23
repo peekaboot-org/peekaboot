@@ -12,36 +12,22 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
-import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Boots the sample app behind a {@code server.servlet.context-path} - in a context of its
- * own, so every other class keeps the root-mounted app - and proves Peekaboot follows the
- * prefix on both sides. The toolbar the filter injects loads its script, its stylesheets and
- * its trace data from under {@code /app/peekaboot}; the dashboard, served from there too,
- * reaches its API and opens its overlay without configuration; and the dashboard's own
- * requests are still recognised as Peekaboot's despite the context path in front of them,
- * so they are neither given a toolbar nor captured as traces.
+ * Proves Peekaboot follows the context path on both sides. The toolbar the filter injects
+ * loads its script, its stylesheets and its trace data from under {@code /app/peekaboot}; the
+ * dashboard, served from there too, reaches its API and opens its overlay without
+ * configuration; and the dashboard's own requests are still recognised as Peekaboot's despite
+ * the context path in front of them, so they are neither given a toolbar nor captured as
+ * traces.
  */
-@SpringBootTest(
-        classes = TestingApp.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "server.servlet.context-path=/app")
-class ContextPathToolbarIT extends PlaywrightTestBase {
-
-    private static final String CONTEXT_PATH = "/app";
+class ContextPathToolbarIT extends ContextPathTestBase {
 
     private static final String NETWORK_CHANGED = "net::ERR_NETWORK_CHANGED";
 
     /** The bar tracks the page's own trace; the same wait Toolbar.traceId() makes, here with a timeout of the test's choosing. */
     private static final String TRACE_ID_SHOWN = "root => root.querySelector('#pk-trace').textContent.trim() !== '-'";
-
-    @Override
-    protected String contextPath() {
-        return CONTEXT_PATH;
-    }
 
     @Autowired
     private TraceStore traceStore;
@@ -74,7 +60,7 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
 
     @Test
     void theToolbarLoadsItsScriptStylesAndTraceDataFromBehindTheContextPath() {
-        openPersonsPageBehindTheContextPath();
+        openPersonsPage();
         awaitQueryCountOnTheBar();
 
         String scriptSrc = (String) page.evaluate(
@@ -87,7 +73,7 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
     /** The overlay's module and stylesheets are addressed from the base path the data blob carries. */
     @Test
     void theOverlayOpenedFromTheToolbarLoadsFromBehindTheContextPath() {
-        openPersonsPageBehindTheContextPath();
+        openPersonsPage();
         awaitQueryCountOnTheBar();
 
         toolbar.openOverlay();
@@ -106,7 +92,7 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
     void theDashboardLoadsBehindTheContextPathAndIsNotTreatedAsAHostPage() {
         // A real application request first, so the "nothing of Peekaboot's was captured"
         // assertion below is made against a store that demonstrably captures.
-        openPersonsPageBehindTheContextPath();
+        openPersonsPage();
 
         openDashboard();
 
@@ -121,7 +107,7 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
     /** The dashboard opens the overlay without naming a base path; the derived default has to be the prefixed one. */
     @Test
     void theOverlayOpenedFromTheDashboardLoadsFromBehindTheContextPath() {
-        openPersonsPageBehindTheContextPath();
+        openPersonsPage();
         awaitQueryCountOnTheBar();
         String traceId = (String) page.evaluate(
                 "() => JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent).traceId");
@@ -155,13 +141,6 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
         toolbar.waitUntil(TRACE_ID_SHOWN, null, 10000);
 
         assertThat(pageErrors).isEmpty();
-    }
-
-    private void openPersonsPageBehindTheContextPath() {
-        openPersonsPage();
-        // toolbar.js sets data-pk-ready itself, so its presence is the proof that the module
-        // was fetched from the prefixed URL the shell wrote
-        page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
     }
 
     /** A query count can only come from /app/peekaboot/api/traces/{id}/insights, and only once the trace is stored. */
