@@ -84,15 +84,5 @@ final class PeekabootPropertyKeys {
             INSIGHTS_ENABLED, "true",
             ERROR_PAGE_OVERRIDE, "false");
 
-    /**
-     * The property source carrying the launch-context defaults - present under this name only
-     * when the application has not already called {@code SpringApplication.setDefaultProperties}
-     * or {@code SpringApplicationBuilder.properties}; otherwise these entries are folded into
-     * Boot's own {@code defaultProperties} source instead and this name never appears. A signal
-     * that must survive regardless of which branch ran needs its own property key, not this
-     * source's name - see {@link #SECURITY_DEPLOYMENT_DETECTED}.
-     */
-    static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
-
     private PeekabootPropertyKeys() {}
 }

@@ -329,7 +329,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isFalse();
         assertThat(environment
                         .getPropertySources()
-                        .get(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME)
+                        .get(PeekabootDefaultsEnvironmentPostProcessor.DETECTION_PROPERTY_SOURCE_NAME)
                         .getProperty("peekaboot.security.enabled"))
                 .isEqualTo(true);
         // unlike the switch above, this one is never overridden - PeekabootSecurityAutoConfiguration
@@ -355,7 +355,9 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
 
-        assertThat(environment.getPropertySources().contains(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME))
+        assertThat(environment
+                        .getPropertySources()
+                        .contains(PeekabootDefaultsEnvironmentPostProcessor.DETECTION_PROPERTY_SOURCE_NAME))
                 .isFalse();
         assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
                 .isFalse();

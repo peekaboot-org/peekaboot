@@ -44,6 +44,16 @@ import org.springframework.core.io.Resource;
  */
 public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
+    /**
+     * The property source carrying the launch-context defaults - present under this name only
+     * when the application has not already called {@code SpringApplication.setDefaultProperties}
+     * or {@code SpringApplicationBuilder.properties}; otherwise these entries are folded into
+     * Boot's own {@code defaultProperties} source instead and this name never appears. A signal
+     * that must survive regardless of which branch ran needs its own property key, not this
+     * source's name - see {@link PeekabootPropertyKeys#SECURITY_DEPLOYMENT_DETECTED}.
+     */
+    static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
+
     private static final String PROPERTY_SOURCE_NAME = "peekabootDefaults";
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
@@ -85,7 +95,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         // defaultProperties (see #contribute) and this method's own named property source
         // never appears at all.
         detected.put(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, deploymentLaunch);
-        contribute(environment, new MapPropertySource(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME, detected));
+        contribute(environment, new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
         // After the detected defaults, which a blank detected switch falls back to.
         BooleanSwitches.treatBlanksAsUnset(environment, detected);
         // After the blanks give way, so a yes beneath one is checked too, and before the read of
