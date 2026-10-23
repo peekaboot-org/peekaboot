@@ -1,4 +1,5 @@
 import {el, button} from './dom.js';
+import {formatNumber} from './format.js';
 import {highlightText} from './markup.js';
 
 let groupSequence = 0;
@@ -20,6 +21,12 @@ export function iconLink(href, {label, icon, className}) {
         title: label,
         attrs: {href, 'aria-label': label}
     });
+}
+
+/** A wrapping row of muted "Label: n" badges above a tab's groups; `counts` is `[[label, n], ...]`. */
+export function countSummary(counts, locale) {
+    return el('div', {className: 'pk-count-summary'},
+        ...counts.map(([label, n]) => badge(`${label}: ${formatNumber(n, {locale})}`, 'muted')));
 }
 
 /** The centred, muted placeholder a list shows when it has nothing to list. */

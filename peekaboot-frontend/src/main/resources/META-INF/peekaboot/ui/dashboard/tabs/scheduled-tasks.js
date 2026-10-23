@@ -3,9 +3,9 @@
  * delay, fixed rate), each expandable to its individual task rows, with a summary badge
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
-import {badge, iconLink} from '../../shared/components.js';
+import {badge, countSummary, iconLink} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
-import {formatCount, formatDateTime, formatInterval, formatNumber} from '../../shared/format.js';
+import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {taskStatusVariant} from '../../shared/severity.js';
 import {buildAppHash} from '../../shared/url-state.js';
@@ -30,7 +30,12 @@ const tab = filteredGroupTab({
     }),
     items: (group, list, query, context) => group.tasks.forEach(task =>
         list.appendChild(renderTaskRow(task, group.type, context))),
-    extraTop: (data, context) => renderSummary(data.scheduledTasks, context.locale),
+    extraTop: ({scheduledTasks}, context) => countSummary([
+        ['Total', scheduledTasks.tasks.length],
+        ['Cron', scheduledTasks.cronCount],
+        ['Fixed Delay', scheduledTasks.fixedDelayCount],
+        ['Fixed Rate', scheduledTasks.fixedRateCount]
+    ], context.locale),
     emptyMessage: 'No scheduled tasks configured'
 });
 
@@ -47,14 +52,6 @@ function groupsByType(tasks) {
     return TASK_TYPES
         .map(type => ({type, tasks: tasks.filter(task => task.type === type)}))
         .filter(group => group.tasks.length > 0);
-}
-
-function renderSummary(scheduledTasks, locale) {
-    return el('div', {className: 'pk-tasks-summary'},
-        badge(`Total: ${formatNumber(scheduledTasks.tasks.length, {locale})}`, 'muted'),
-        badge(`Cron: ${formatNumber(scheduledTasks.cronCount, {locale})}`, 'muted'),
-        badge(`Fixed Delay: ${formatNumber(scheduledTasks.fixedDelayCount, {locale})}`, 'muted'),
-        badge(`Fixed Rate: ${formatNumber(scheduledTasks.fixedRateCount, {locale})}`, 'muted'));
 }
 
 function renderTaskRow(task, type, context) {

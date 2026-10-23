@@ -2,9 +2,9 @@
  * The "Loggers" tab: logger levels grouped by package, filterable by name and
  * restrictable to loggers with an explicit configured level.
  */
-import {badge} from '../../shared/components.js';
+import {badge, countSummary} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
-import {formatCount, formatNumber} from '../../shared/format.js';
+import {formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {highlightText} from '../../shared/markup.js';
 import {logLevelVariant} from '../../shared/severity.js';
@@ -28,7 +28,10 @@ const tab = filteredGroupTab({
     }),
     items: (group, list, query) => group.loggers.forEach(logger =>
         list.appendChild(renderLoggerRow(logger, query))),
-    extraTop: (data, context) => renderSummary(data.loggers, context.locale),
+    extraTop: ({loggers}, context) => countSummary([
+        ['Total', loggers.totalCount],
+        ['Configured', loggers.configuredCount]
+    ], context.locale),
     emptyMessage: 'No loggers available',
     noMatchMessage: () => 'No loggers matching criteria',
     urlFilter: {reconcile: reconcileWithUrl, write: writeUrlParams},
@@ -107,12 +110,6 @@ function isConfigured(logger) {
 function matches(logger, query) {
     if (configuredOnly && !isConfigured(logger)) return false;
     return !query || logger.name.toLowerCase().includes(query.toLowerCase());
-}
-
-function renderSummary(loggersInfo, locale) {
-    return el('div', {className: 'pk-loggers-summary'},
-        badge(`Total: ${formatNumber(loggersInfo.totalCount, {locale})}`, 'muted'),
-        badge(`Configured: ${formatNumber(loggersInfo.configuredCount, {locale})}`, 'muted'));
 }
 
 function renderLoggerRow(logger, query) {

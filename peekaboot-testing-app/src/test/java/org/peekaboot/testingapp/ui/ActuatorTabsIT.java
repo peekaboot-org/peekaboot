@@ -79,7 +79,7 @@ class ActuatorTabsIT extends PlaywrightTestBase {
                 .as("a group per schedule type the app actually registers, and no other")
                 .isNotEmpty()
                 .isSubsetOf("Cron Tasks", "Fixed Delay Tasks", "Fixed Rate Tasks");
-        assertThat(page.locator("#scheduled-tasks-groups .pk-tasks-summary .pk-badge")
+        assertThat(page.locator("#scheduled-tasks-groups .pk-count-summary .pk-badge")
                         .first()
                         .textContent())
                 .as("the summary counts the tasks Spring registered, not the rows that rendered")

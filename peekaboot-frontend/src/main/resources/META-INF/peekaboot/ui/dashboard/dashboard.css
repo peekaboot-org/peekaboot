@@ -281,9 +281,10 @@
     margin-bottom: var(--pk-space-lg);
 }
 
-/* Loggers. Also used by the scheduled-tasks summary row (.pk-tasks-summary) - both are
-   just a wrapping row of count badges, with nothing logger-specific about the layout. */
-.pk-loggers-summary, .pk-tasks-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+/* The count-badge row above the Loggers and Scheduled Tasks groups (components.js's countSummary). */
+.pk-count-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+
+/* Loggers */
 .pk-loggers-controls { margin-bottom: var(--pk-space-md); }
 .pk-checkbox-label { display: flex; align-items: center; gap: var(--pk-space-sm); font-size: var(--pk-text-sm); color: var(--pk-text); cursor: pointer; }
 .pk-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--pk-primary-text); }
