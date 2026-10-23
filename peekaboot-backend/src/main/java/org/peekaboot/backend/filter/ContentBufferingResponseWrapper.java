@@ -272,17 +272,15 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
             return;
         }
         if (buffer.size() > 0) {
-            HttpServletResponse response = (HttpServletResponse) getResponse();
-            response.setContentLength(buffer.size());
-            buffer.writeTo(response.getOutputStream());
+            getResponse().setContentLength(buffer.size());
+            buffer.writeTo(getResponse().getOutputStream());
             committed = true;
         }
     }
 
     public void copyBodyToResponse(byte[] content) throws IOException {
-        HttpServletResponse response = (HttpServletResponse) getResponse();
-        response.setContentLength(content.length);
-        response.getOutputStream().write(content);
+        getResponse().setContentLength(content.length);
+        getResponse().getOutputStream().write(content);
         committed = true;
     }
 
