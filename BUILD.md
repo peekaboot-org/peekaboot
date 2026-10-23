@@ -635,21 +635,21 @@ Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does
 1. A preflight that fails the run before anything is built when `dev` moved since the
    dispatch, when no commit but the next development version follows the last tag, or when
    `main` is not an ancestor of `dev` and so could not fast-forward.
-2. `./mvnw --batch-mode verify`
-3. The release version resolved with `git-cliff --bumped-version`. `CHANGELOG.md` regenerated
+2. The release version resolved with `git-cliff --bumped-version`. `CHANGELOG.md` regenerated
    whole against it and staged, and `README.md`'s dependency snippet rewritten to it and
    staged. See [Release notes](#release-notes).
-4. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
-   picks the staged changelog up, so version bump, changelog and tag are one commit.
-5. `./mvnw -P peekaboot-release release:perform`, then a wait until the release is on repo1.
-6. `main` fast-forwarded to the tagged commit, so it names exactly what was published.
+3. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
+   picks the staged changelog up, so version bump, changelog and tag are one commit. Its
+   `clean verify` is the release's one full build.
+4. `./mvnw -P peekaboot-release release:perform`, then a wait until the release is on repo1.
+5. `main` fast-forwarded to the tagged commit, so it names exactly what was published.
    Nothing merges back, because `main` originates no commits of its own.
-7. Grouped release notes for the new tag rendered by git-cliff into the release body, and
+6. Grouped release notes for the new tag rendered by git-cliff into the release body, and
    the `unreleased` draft deleted.
-8. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
+7. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
    committed to that repo's `dev`, its `main` fast-forwarded so Pages rebuilds, and the same
    bare version tagged there.
-9. `build-on-push` dispatched on `dev`, so the next development version gets its build and
+8. `build-on-push` dispatched on `dev`, so the next development version gets its build and
    snapshot. The release's own pushes use `GITHUB_TOKEN`, which starts no workflow.
 
 `release:prepare` pushes to `dev` with `GITHUB_TOKEN`, and that works only because the ruleset
@@ -715,8 +715,7 @@ the bundle is still uploaded from `peekaboot-coverage`, the reactor's last modul
 signing and the upload to Central happen. The workflow passes it
 `-Darguments="-DskipTests -DskipITs -Djacoco.skip=true"`. Failsafe ignores `-DskipTests`,
 so `-DskipITs` is what keeps the Playwright suite out. That tree passed `verify` in
-`preparationGoals`, and the job's own build verified the same sources beforehand, so a
-third run would only repeat the Playwright suite. The static-analysis gates, both
+`preparationGoals`, so a second run would only repeat the Playwright suite. The static-analysis gates, both
 dependency checks and the configuration-metadata check still run.
 
 The changelog reaches the tagged commit because that commit is a plain `git commit` over
