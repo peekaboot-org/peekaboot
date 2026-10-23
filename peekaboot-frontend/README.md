@@ -138,6 +138,11 @@ Every rule reading one of them repeats the light-theme literal as its `var()` fa
 that goes missing then costs the dark palette for that rule and nothing else, rather than
 leaving the element with no fill or no ink.
 
+`trace-detail.css` holds the same policy for the overlay's later tokens: `--pk-pink` (the
+consumer-kind span colour), the six `--pk-sql-*` and `--pk-on-primary-wash` (the span-filter
+chip's hover wash). `ThemeTokenIT` strips all of them from a served `tokens.css` and checks
+that every rule still paints.
+
 ## The bundled webfont
 
 The UI renders in [Geist and Geist Mono](https://github.com/vercel/geist-font), vendored

@@ -231,7 +231,8 @@
 .pk-sql__params-label,
 .pk-sql__params-omitted { color: var(--pk-text-muted); }
 .pk-sql__param-list { margin: 0; padding-left: 4ch; overflow-wrap: anywhere; }
-/* Light literals as fallbacks: a stale cached tokens.css must not leave a token unpainted. */
+/* Light literals as fallbacks: a tokens.css that lacks these tokens loses only their dark-theme
+   colour (see the frontend README's token section). */
 .pk-sql__keyword { color: var(--pk-sql-keyword, #7c3aed); }
 .pk-sql__string { color: var(--pk-sql-string, #117937); }
 .pk-sql__number { color: var(--pk-sql-number, #02458e); }
