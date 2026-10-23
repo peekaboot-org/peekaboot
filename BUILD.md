@@ -17,29 +17,29 @@ Gradle build must be kept in lockstep.
 | --- | --- |
 | JDK | **25**, the root pom's `peekaboot.java.version`, which both builds compile against. No toolchains, no fallback |
 | Maven / Gradle | The checked-in wrappers. Each fetches its own build tool at the version and SHA-256 pinned in `.mvn/wrapper/maven-wrapper.properties` and `gradle/wrapper/gradle-wrapper.properties`. A local Maven 3.9+ works the same |
-| Docker | Needed by `mvn verify`: three testing-app ITs start their engine through Testcontainers (see its [README](peekaboot-testing-app/README.md#the-automated-ui-suite-srctest)). Also for running the sample app and for `ScreenshotCapture` |
+| Docker | Needed by `./mvnw verify`: three testing-app ITs start their engine through Testcontainers (see its [README](peekaboot-testing-app/README.md#the-automated-ui-suite-srctest)). Also for running the sample app and for `ScreenshotCapture` |
 | Network | First run only: the wrappers fetch their build tool, the frontend gate fetches Node and its npm packages, Playwright fetches Chromium into `~/.cache/ms-playwright`, and Testcontainers pulls the MySQL, Redis and go-httpbin images |
 
 ## Commands
 
 ```bash
-mvn clean verify     # compile + all tests + every gate               <- the real build
-mvn clean install    # the same, plus install into ~/.m2
-mvn test             # the fast gate: the dependency/output checks + Error Prone
-                     # + unit tests only; integration tests (*IT) don't run
-                     # before `verify`
-mvn spotless:apply   # format (local builds already do this for you)
+./mvnw clean verify    # compile + all tests + every gate             <- the real build
+./mvnw clean install   # the same, plus install into ~/.m2
+./mvnw test            # the fast gate: the dependency/output checks + Error Prone
+                       # + unit tests only; integration tests (*IT) don't run
+                       # before `verify`
+./mvnw spotless:apply  # format (local builds already do this for you)
 
-mvn -pl <module> test -Dtest=<Class>              # one unit-test class; never add -am
-mvn -pl <module> verify -Dit.test=<Class>         # one *IT class (runs this module's
-                                                  # gates too; that's inherent to verify)
-mvn -pl <module> -am verify -Dit.test=<Class> \
+./mvnw -pl <module> test -Dtest=<Class>             # one unit-test class; never add -am
+./mvnw -pl <module> verify -Dit.test=<Class>        # one *IT class (runs this module's
+                                                    # gates too; that's inherent to verify)
+./mvnw -pl <module> -am verify -Dit.test=<Class> \
     -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false \
-    -Dfailsafe.failIfNoSpecifiedTests=false           # the same against uncommitted sibling-module
-                                                  # changes: both skip flags, or failsafe fails the
-                                                  # first upstream module with "No tests matching pattern"
-mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8093; needs Docker
-                                                  # and an `mvn install` beforehand
+    -Dfailsafe.failIfNoSpecifiedTests=false         # the same against uncommitted sibling-module
+                                                    # changes: both skip flags, or failsafe fails the
+                                                    # first upstream module with "No tests matching pattern"
+./mvnw -pl peekaboot-testing-app spring-boot:run    # sample app on :8093; needs Docker
+                                                    # and an `./mvnw install` beforehand
 ```
 
 ### What each command actually checks
@@ -47,8 +47,8 @@ mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8093; needs D
 Tests are split by lifecycle. Unit tests live in `*Test` classes and run at `test` under
 surefire. Anything that boots a real application (every `@SpringBootTest`, the whole
 Playwright suite) lives in `*IT` classes and runs at `integration-test` under failsafe.
-That is what makes `mvn test` the fast gate: the dependency/output checks, Error Prone
-and every unit test, nothing else. `mvn verify` adds the integration tests and the
+That is what makes `./mvnw test` the fast gate: the dependency/output checks, Error Prone
+and every unit test, nothing else. `./mvnw verify` adds the integration tests and the
 remaining gates. Per module, `verify` runs:
 
 ```
@@ -87,7 +87,7 @@ inheriting the gates from the parent get them first, so there the gates still ru
 pmd → checkstyle → spotbugs → spotless. That module also adds `spring-boot:repackage`, so
 it is the only one producing an executable jar.
 
-The Playwright suite is the bulk of a cold `mvn clean verify`. `mvn test` alone is a
+The Playwright suite is the bulk of a cold `./mvnw clean verify`. `./mvnw test` alone is a
 fraction of it.
 
 ## The reactor
@@ -130,7 +130,7 @@ third-party version clash would buy nothing but two permanent exclusions.
 ## The parallel Gradle build
 
 `settings.gradle.kts` includes the modules the root pom lists. `./gradlew build` is the
-`mvn clean verify` equivalent. It runs unit tests (`test`, `*Test` and `*Tests`) and
+`./mvnw clean verify` equivalent. It runs unit tests (`test`, `*Test` and `*Tests`) and
 integration tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, with
 the testing-app pom's `peekaboot.it.threads` unless `-Ppeekaboot.it.threads=N` overrides it). It runs the static-analysis gates at the
 same tool versions, reading the same `config/` files, plus the reactor-wide coverage gate
@@ -325,7 +325,7 @@ cannot be banned, because the starter's own dependencies bring them: logback thr
 `spring-boot-starter-actuator`, the OpenTelemetry SDK and
 `spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. Re-check
 the split after a dependency change with
-`mvn -pl peekaboot-spring-boot-starter -am dependency:tree`.
+`./mvnw -pl peekaboot-spring-boot-starter -am dependency:tree`.
 
 ### The configuration-metadata check
 
@@ -334,7 +334,7 @@ the split after a dependency change with
 IDE reads to complete and document peekaboot's settings. It runs only because the parent
 sets `<proc>full</proc>` and lists the processor in `annotationProcessorPaths`; lose
 either and the jar ships without metadata, silently. `requireFilesExist` at
-`process-classes` fails the build instead, early enough that `mvn test` catches it.
+`process-classes` fails the build instead, early enough that `./mvnw test` catches it.
 
 ### The coverage gate
 
@@ -390,7 +390,7 @@ covers only the build mechanics.
   parent.
 - `peekaboot-testing-app`'s tests activate the `test` profile: H2 instead of PostgreSQL,
   Docker Compose off. Three ITs still start a container through Testcontainers, so
-  `mvn verify` needs Docker (see [Prerequisites](#prerequisites)).
+  `./mvnw verify` needs Docker (see [Prerequisites](#prerequisites)).
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
   install it explicitly with the `exec:java` invocation in the module README if that fails.
 - The shared test helpers live in `peekaboot-test-support`. Its
@@ -410,7 +410,7 @@ covers only the build mechanics.
 
 ## CI
 
-The workflows live under `.github/workflows/`. Both build workflows use the checked-in
+The workflows live under `.github/workflows/`. Every workflow that builds uses the checked-in
 `./mvnw`, and every third-party action is pinned to a commit SHA with the tag in a trailing
 comment; Dependabot's `github-actions` updates move the pins. `osslabz/github-actions` is the
 exception, tracked by its moving `@v1` tag: SHA pinning defends against a third-party action
@@ -692,7 +692,7 @@ which never calls the Portal.
 
 The sources and javadoc jars are *not* release-only. Both are attached on every build of
 the published modules, and javadoc runs with `doclint` at `all,-missing` and fails on an
-error, so a broken `@link` surfaces at `mvn package` rather than after `release:prepare`
+error, so a broken `@link` surfaces at `./mvnw package` rather than after `release:prepare`
 has pushed the tag.
 
 Three modules stay out of the bundle, by two different switches. The publishing plugin

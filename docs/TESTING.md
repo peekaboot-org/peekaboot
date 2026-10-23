@@ -380,11 +380,11 @@ would fail the context of every test that excluded the auto-configuration. Both 
 [`BUILD.md`](../BUILD.md#quality-gates) owns the gate list and what each command checks. What a
 test author needs on top of it:
 
-- Fast gate: `mvn test` (root). Unit tests plus the gates bound before the `test` phase. Single
-  unit-test class: `mvn -pl <module> test -Dtest=<Class>`. Never combine `-am` with `-Dtest`.
-- Full reactor, `mvn clean verify`: unit tests, integration tests and every gate.
+- Fast gate: `./mvnw test` (root). Unit tests plus the gates bound before the `test` phase. Single
+  unit-test class: `./mvnw -pl <module> test -Dtest=<Class>`. Never combine `-am` with `-Dtest`.
+- Full reactor, `./mvnw clean verify`: unit tests, integration tests and every gate.
 - Everything that boots an application lives in `*IT` classes (failsafe, `integration-test`
-  phase) and only runs under `verify`. Single class: `mvn -pl <module> verify -Dit.test=<Class>`.
+  phase) and only runs under `verify`. Single class: `./mvnw -pl <module> verify -Dit.test=<Class>`.
   The one exception is `PeekabootDefaultsRegistrationTest`, a `*Test` running a real non-web
   `SpringApplication` so the fast gate covers `spring.factories` registration and
   default-property precedence; it boots no server and costs a fraction of a second.
@@ -399,11 +399,11 @@ test author needs on top of it:
   three nightly. The webkit engine is Playwright's own WebKit build - what Safari is built on,
   at a different version and feature set. It is not Safari and proves nothing about Safari.
 - Write-path benchmark, excluded from the default suite:
-  `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
+  `./mvnw -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker for real PostgreSQL and Flyway):
 
   ```bash
-  mvn -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
+  ./mvnw -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
       -Dsurefire.failIfNoSpecifiedTests=false \
       -Dpeekaboot.screenshots.out=/absolute/path/to/peekaboot-org.github.io/assets/img/screenshots
   ```
