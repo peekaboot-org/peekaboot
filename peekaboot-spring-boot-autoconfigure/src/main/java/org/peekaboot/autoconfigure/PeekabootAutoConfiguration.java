@@ -25,10 +25,8 @@ import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.context.annotation.Bean;
@@ -44,9 +42,8 @@ import org.springframework.context.annotation.Import;
  * bean of the same type or name replaces the default instead of colliding with it.
  */
 @AutoConfiguration(after = {PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class})
-@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@ConditionalOnPeekabootServlet
 @ConditionalOnClass(HealthEndpoint.class)
-@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})
 @Import(StackTraceRulesConfiguration.class)
 public class PeekabootAutoConfiguration {

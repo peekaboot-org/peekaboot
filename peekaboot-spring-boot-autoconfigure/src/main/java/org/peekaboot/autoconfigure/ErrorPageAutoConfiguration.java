@@ -11,7 +11,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.SpringBootCondition;
 import org.springframework.boot.autoconfigure.template.TemplateAvailabilityProvider;
 import org.springframework.boot.autoconfigure.template.TemplateAvailabilityProviders;
@@ -47,9 +46,8 @@ import org.springframework.web.servlet.DispatcherServlet;
  * that would consult an {@code ErrorViewResolver}.
  */
 @AutoConfiguration(before = ErrorMvcAutoConfiguration.class)
-@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@ConditionalOnPeekabootServlet
 @ConditionalOnClass({DispatcherServlet.class, ErrorAttributes.class})
-@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED)
 @Import(StackTraceRulesConfiguration.class)
 public class ErrorPageAutoConfiguration {

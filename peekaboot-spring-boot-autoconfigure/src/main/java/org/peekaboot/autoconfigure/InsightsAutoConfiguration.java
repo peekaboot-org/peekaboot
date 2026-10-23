@@ -12,7 +12,6 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ResourceLoader;
@@ -27,8 +26,7 @@ import org.springframework.core.io.ResourceLoader;
 @AutoConfiguration(
         after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class},
         afterName = "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration")
-@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnPeekabootServlet
 @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.INSIGHTS_ENABLED, matchIfMissing = true)
 @ConditionalOnBean(MeterRegistry.class)
 @EnableConfigurationProperties(InsightsProperties.class)

@@ -21,7 +21,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -41,8 +40,7 @@ import org.springframework.util.StringUtils;
  * security must cover {@code /peekaboot/**}.
  */
 @AutoConfiguration(after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class})
-@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnPeekabootServlet
 @EnableConfigurationProperties(PeekabootProperties.class)
 public class PeekabootSecurityAutoConfiguration {
 

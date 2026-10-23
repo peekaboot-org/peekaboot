@@ -15,7 +15,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.tomcat.TomcatContextCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationEventPublisher;
@@ -35,8 +34,7 @@ import org.springframework.core.env.Environment;
             "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration",
             "org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration"
         })
-@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnPeekabootServlet
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
 public class DevToolbarAutoConfiguration {
 

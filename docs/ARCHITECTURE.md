@@ -724,17 +724,19 @@ nobody overrode bought nothing but wiring.
 
 ### Conditional Loading
 
-Most of the auto-configuration classes carry the same two class-level conditions, the
-servlet guard and the master switch: `PeekabootAutoConfiguration`,
-`PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
+Most of the auto-configuration classes carry `@ConditionalOnPeekabootServlet`, directly or
+through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the master switch:
+`PeekabootAutoConfiguration`, `PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
 `DevToolbarAutoConfiguration`, `ErrorPageAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
-`EventListenerInstrumentationAutoConfiguration`, `PeekabootTracingAutoConfiguration`,
+`AsyncInstrumentationAutoConfiguration`, `EventListenerInstrumentationAutoConfiguration`,
+`PeekabootTracingAutoConfiguration`,
 `OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`,
 `InsightsAutoConfiguration` and `PeekabootSecurityAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@interface ConditionalOnPeekabootServlet {}
 ```
 
 Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
@@ -780,9 +782,13 @@ activation and storage detection are web-type independent, while `peekaboot-defa
 the dev-toolbar defaults are skipped off-servlet.
 
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
-`TracingInterceptorAutoConfiguration`, `EventListenerInstrumentationAutoConfiguration` and
-`QueryParameterAutoConfiguration` additionally require `peekaboot.tracing.enabled` (default on):
-handler, view, event listener and query observations are tracing, and
+`TracingInterceptorAutoConfiguration`, `AsyncInstrumentationAutoConfiguration`,
+`EventListenerInstrumentationAutoConfiguration` and `QueryParameterAutoConfiguration` carry
+`@ConditionalOnPeekabootTracing` instead, which adds `peekaboot.tracing.enabled` (default on).
+It nests `@ConditionalOnPeekabootServlet` rather than repeating its property condition: Boot
+keeps one `@ConditionalOnBooleanProperty` per meta-annotation path, and `ComposedConditionsTest`
+pins that both match exactly where the copied stacks did. Handler, view, async, event listener
+and query observations are tracing, and
 with it off there is no store for them to land in. `DevToolbarAutoConfiguration` does not read that property at all. Its capture half,
 the `RequestCaptureFilter` registration and the Logback appender registrar, is
 `@ConditionalOnBean(TraceStore.class)` instead, so with `peekaboot.tracing.enabled=false` the
