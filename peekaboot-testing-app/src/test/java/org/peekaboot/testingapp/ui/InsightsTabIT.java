@@ -164,7 +164,7 @@ class InsightsTabIT extends PlaywrightTestBase {
                 route.resume();
             }
         });
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights");
+        page.navigate(dashboardUrl("#insights"));
         page.waitForSelector("#insights-tab.active");
         page.waitForCondition(() -> parkedTabRequest.get() != null);
 
@@ -462,8 +462,7 @@ class InsightsTabIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkRestoresTheGlobalAggregationLevel() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights?level=1");
-        page.waitForSelector("#insights-level .pk-insight-level[data-level='1'][aria-pressed='true']");
+        openDashboard("#insights?level=1", "#insights-level .pk-insight-level[data-level='1'][aria-pressed='true']");
 
         assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
                 .isEqualTo("false");
@@ -478,8 +477,7 @@ class InsightsTabIT extends PlaywrightTestBase {
      */
     @Test
     void bogusLevelInTheUrlFallsBackToTheFirstConfiguredLevel() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights?level=99");
-        page.waitForSelector("#insights-level .pk-insight-level");
+        openDashboard("#insights?level=99", "#insights-level .pk-insight-level");
 
         assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
                 .isEqualTo("true");
@@ -518,8 +516,7 @@ class InsightsTabIT extends PlaywrightTestBase {
     void deepLinkRestoresTheCheckboxesAndAPanelOverride() {
         Request request = page.waitForRequest(
                 "**/api/insights/data?level=1",
-                () -> page.navigate(
-                        baseUrl + "/peekaboot/ui/dashboard/index.html#insights?percentiles=1&restarts=0&panels=cpu:1"));
+                () -> page.navigate(dashboardUrl("#insights?percentiles=1&restarts=0&panels=cpu:1")));
         assertThat(request.url()).contains("level=1");
 
         String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
@@ -575,9 +572,9 @@ class InsightsTabIT extends PlaywrightTestBase {
      */
     @Test
     void bogusCheckboxAndOverrideValuesFallBackAndSelfCorrect() {
-        page.navigate(baseUrl
-                + "/peekaboot/ui/dashboard/index.html#insights?percentiles=yes&restarts=nope&panels=cpu:99,ghost:1");
-        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu']");
+        openDashboard(
+                "#insights?percentiles=yes&restarts=nope&panels=cpu:99,ghost:1",
+                "#insights-panels .pk-insight-panel[data-panel-id='cpu']");
 
         assertThat(page.isChecked("#insights-percentiles")).isFalse();
         assertThat(page.isChecked("#insights-markers")).isTrue();

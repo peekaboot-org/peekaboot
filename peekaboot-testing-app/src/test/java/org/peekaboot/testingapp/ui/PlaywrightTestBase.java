@@ -246,13 +246,35 @@ abstract class PlaywrightTestBase {
      * renderData(), but it also hides on the failure path.
      */
     protected void openDashboard(String hash, String readySelector) {
-        page.navigate(baseUrl + contextPath() + "/peekaboot/ui/dashboard/index.html" + hash);
+        page.navigate(dashboardUrl(hash));
         page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
         page.waitForSelector(readySelector + ", #error:not(.hidden)");
         if (page.isVisible("#error")) {
             throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
         Fonts.awaitReady(page);
+    }
+
+    /** The dashboard's address, for a test that navigates there itself: one that catches the page mid-boot, say. */
+    protected String dashboardUrl() {
+        return dashboardUrl("");
+    }
+
+    /** {@link #dashboardUrl()} at {@code hash} ({@code "#traces?bucket=slow"}, say). */
+    protected String dashboardUrl(String hash) {
+        return baseUrl + contextPath() + "/peekaboot/ui/dashboard/index.html" + hash;
+    }
+
+    /** Deep-links the dashboard to {@code traceId}'s overlay and waits until the overlay open is that trace's. */
+    protected Response openTraceDeepLink(String traceId) {
+        return openTraceDeepLink(traceId, "");
+    }
+
+    /** {@link #openTraceDeepLink(String)} on {@code subview}: {@code "/logs?level=ERROR"}, say. */
+    protected Response openTraceDeepLink(String traceId, String subview) {
+        Response navigation = page.navigate(dashboardUrl("#traces/" + traceId + subview));
+        overlay.awaitTrace(traceId);
+        return navigation;
     }
 
     protected void openPersonsPage() {

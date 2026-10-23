@@ -23,7 +23,7 @@ class TraceOverlayEscapeIT extends PlaywrightTestBase {
     void openTheOverlayOverTheDashboard() {
         String traceId = seedAnHttpTrace();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.waitFor(".pk-tab");
         page.evaluate("() => { window.pageEscapes = 0; document.addEventListener('keydown', event => {"
                 + " if (event.key === 'Escape') window.pageEscapes += 1; }); }");

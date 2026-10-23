@@ -13,7 +13,7 @@ class LiquibaseTabHiddenIT extends PlaywrightTestBase {
 
     @Test
     void withoutChangeSetsTheTabIsHiddenAndADeepLinkFallsBackToOverview() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#liquibase");
+        page.navigate(dashboardUrl("#liquibase"));
         // Attached, not visible: Overview's build info renders in the same task as the fallback, whichever tab shows.
         page.waitForSelector(
                 "#build-info > *", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));

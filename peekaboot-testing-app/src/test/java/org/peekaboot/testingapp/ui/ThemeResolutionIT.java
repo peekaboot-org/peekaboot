@@ -135,7 +135,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
         emulateOsColorScheme(ColorScheme.LIGHT);
         serveMainJsEmpty();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.navigate(dashboardUrl());
 
         assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
     }
@@ -145,7 +145,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
         emulateOsColorScheme(ColorScheme.DARK);
         serveMainJsEmpty();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.navigate(dashboardUrl());
 
         assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
     }
@@ -165,7 +165,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
         serveMainJsEmpty();
         serveWithCsp("**/peekaboot/ui/dashboard/index.html", "script-src 'self'");
 
-        Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        Response navigation = page.navigate(dashboardUrl());
 
         assertThat(navigation.headers())
                 .as("the policy reached the document under test")

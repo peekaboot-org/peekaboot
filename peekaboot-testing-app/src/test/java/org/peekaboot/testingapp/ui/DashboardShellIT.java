@@ -199,7 +199,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         List<String> documents = recordDocumentRequests();
         page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.navigate(dashboardUrl());
 
         page.waitForSelector("#error:not(.hidden)");
         page.waitForLoadState();
@@ -221,7 +221,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         List<String> documents = recordDocumentRequests();
         loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.navigate(dashboardUrl());
         // The first document reaches the load state on its own even though meters.js was
         // lost, so waiting only on that races the reload. The second document is what this
         // test is about.
@@ -253,7 +253,7 @@ class DashboardShellIT extends PlaywrightTestBase {
             }
         });
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.navigate(dashboardUrl());
 
         page.waitForSelector("#error:not(.hidden)");
         assertThat(page.textContent("#error .message")).contains("could not start");
@@ -270,7 +270,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void theBannerRaisedWhenTheShellNeverStartedCanBeDismissed() {
         page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.navigate(dashboardUrl());
         page.waitForSelector("#error:not(.hidden)");
 
         page.click("#error-close");
@@ -316,9 +316,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         page.route("**/peekaboot/ui/assets/logo-mark.png", route -> {});
         loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
 
-        page.navigate(
-                baseUrl + "/peekaboot/ui/dashboard/index.html",
-                new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+        page.navigate(dashboardUrl(), new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
         page.waitForSelector("#build-info > *");
 
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
@@ -335,7 +333,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         page.addInitScript("sessionStorage.setItem('peekaboot-dashboard-retried', String(Date.now() - 120000));");
         loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.navigate(dashboardUrl());
         page.waitForSelector("#build-info > *");
 
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");

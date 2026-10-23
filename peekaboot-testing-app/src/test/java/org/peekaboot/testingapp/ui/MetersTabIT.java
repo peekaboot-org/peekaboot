@@ -77,7 +77,7 @@ class MetersTabIT extends PlaywrightTestBase {
      */
     @Test
     void metersFilterIsRestoredFromTheUrlAndWritesBackOnInput() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#meters?q=jvm");
+        page.navigate(dashboardUrl("#meters?q=jvm"));
         page.waitForFunction("() => document.querySelector('#meters-filter')?.value === 'jvm'");
 
         assertThat(page.inputValue("#meters-filter")).isEqualTo("jvm");

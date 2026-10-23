@@ -38,8 +38,9 @@ class TraceFiltersIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkRestoresTheTracesBucketAndTypeFilter() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors&type=SCHEDULED_JOB");
-        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
+        openDashboard(
+                "#traces?bucket=errors&type=SCHEDULED_JOB",
+                "#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
 
         assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
                 .isEqualTo("false");
@@ -61,8 +62,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
     @Test
     void bogusBucketInTheUrlFallsBackToAllInsteadOfHittingTheBackendWithIt() {
         String traceId = seedAnHttpTrace();
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=bogus");
-        dashboard.awaitListedTrace(traceId);
+        openDashboard("#traces?bucket=bogus", Dashboard.traceItem(traceId));
 
         assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
                 .isEqualTo("true");
@@ -207,7 +207,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
     void deepLinkRestoresTheLiftedMaintenanceExclusion() {
         Response listing = page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"),
-                () -> page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?excluded=none"));
+                () -> page.navigate(dashboardUrl("#traces?excluded=none")));
 
         assertThat(rootActionTypeOf(listing)).isEqualTo("*");
         page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");

@@ -134,7 +134,7 @@ class TracesTabIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkingDirectlyToATraceDetailPreservesTheDetailSegment() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
+        openTraceDeepLink("deadbeef");
         overlay.waitFor(".pk-overlay__error");
 
         assertThat(page.url()).endsWith("#traces/deadbeef");
@@ -426,8 +426,7 @@ class TracesTabIT extends PlaywrightTestBase {
     @Test
     void autoRefreshOfTheTracesTabDoesNotClobberTheOpenOverlaysFilterParams() {
         String traceId = seedAnErrorTrace();
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors");
-        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
+        openDashboard("#traces?bucket=errors", "#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
         dashboard.awaitListedTrace(traceId);
 
         dashboard.openListedTrace(traceId);
@@ -503,8 +502,7 @@ class TracesTabIT extends PlaywrightTestBase {
     @Test
     void replayingTheUrlAnOverlayTabSwitchWroteDoesNotRebuildTheOverlay() {
         String traceId = seedAnHttpTrace();
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        overlay.awaitTrace(traceId);
+        openTraceDeepLink(traceId);
         overlay.openTab("queries");
         page.waitForFunction("id => window.location.hash === '#traces/' + id + '/queries'", traceId);
 
@@ -573,8 +571,7 @@ class TracesTabIT extends PlaywrightTestBase {
             String traceId = traceIdOf(page.navigate(baseUrl + "/api/orders/" + order.getId() + "/report"));
             awaitListedTrace("bucket=slow", "trace => trace.traceId === '" + traceId + "'");
 
-            page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=slow");
-            page.waitForSelector("#traces-bucket .pk-btn[data-bucket='slow'][aria-pressed='true']");
+            openDashboard("#traces?bucket=slow", "#traces-bucket .pk-btn[data-bucket='slow'][aria-pressed='true']");
             dashboard.awaitListedTrace(traceId);
 
             String rendered = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__duration")

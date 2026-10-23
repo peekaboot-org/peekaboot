@@ -165,7 +165,7 @@ class AccessibilityIT extends PlaywrightTestBase {
      */
     @Test
     void overlayMakesTheRestOfThePageInert() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
+        openTraceDeepLink("deadbeef");
         overlay.waitFor(".pk-overlay__error");
 
         boolean siblingsInert = (boolean) page.evaluate("() => Array.from(document.body.children)"

@@ -64,7 +64,7 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
     void theTraceOverlayHasNoAccessibilityViolations() {
         String traceId = openPageThatLogsAnError();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.waitFor(".pk-tab");
         overlay.click(".pk-gantt-all-details");
         overlay.waitFor(".pk-gantt-span--open");

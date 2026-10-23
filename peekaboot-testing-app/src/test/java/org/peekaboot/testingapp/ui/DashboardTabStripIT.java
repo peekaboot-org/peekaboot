@@ -133,9 +133,7 @@ class DashboardTabStripIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkToAnUnavailableTabFallsBackToOverview() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#flyway");
-        page.waitForSelector("#overview-tab.active");
-        page.waitForSelector("#build-info > *");
+        openDashboard("#flyway", "#overview-tab.active #build-info > *");
 
         assertThat(page.url()).endsWith("#overview");
         assertThat(page.isVisible("#flyway-tab")).isFalse();
@@ -151,9 +149,7 @@ class DashboardTabStripIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkToAnUnknownTabCorrectsTheHashToOverview() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#nosuchtab");
-        page.waitForSelector("#overview-tab.active");
-        page.waitForSelector("#build-info > *");
+        openDashboard("#nosuchtab", "#overview-tab.active #build-info > *");
 
         assertThat(page.url()).endsWith("#overview");
         assertThat(page.getAttribute(".pk-tab[data-tab='overview']", "aria-selected"))

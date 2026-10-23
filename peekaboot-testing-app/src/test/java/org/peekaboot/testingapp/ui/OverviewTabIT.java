@@ -285,8 +285,7 @@ class OverviewTabIT extends PlaywrightTestBase {
      */
     @Test
     void overviewSkipsTheTileFetchWhileAnotherTabIsShowing() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#environment");
-        page.waitForSelector("#property-sources .pk-group__header");
+        openDashboard("#environment", "#property-sources .pk-group__header");
 
         assertThatThrownBy(() -> page.waitForRequest(
                         "**/api/insights/config**",

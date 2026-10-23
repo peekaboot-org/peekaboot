@@ -49,7 +49,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     void deepLinkToATraceLogsTabRestoresTabAndFilters() {
         String traceId = freshFixedRateSchedulerTraceId();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=ERROR&q=failed");
+        openTraceDeepLink(traceId, "/logs?level=ERROR&q=failed");
         overlay.waitFor("#pk-log-level");
 
         String selectedTab = overlay.selectedTab();
@@ -146,7 +146,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     void deepLinkWithAnUnrecognizedLevelFallsBackToAllLevelsAndShowsEveryRow() {
         String traceId = freshFixedRateSchedulerTraceId();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=BOGUS");
+        openTraceDeepLink(traceId, "/logs?level=BOGUS");
         overlay.waitFor("#pk-log-level");
 
         String levelValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-level').value");

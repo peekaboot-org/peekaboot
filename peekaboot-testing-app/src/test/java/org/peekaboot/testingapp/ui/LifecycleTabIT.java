@@ -142,7 +142,7 @@ class LifecycleTabIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkRestoresThePagerPage() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#lifecycle?page=2");
+        page.navigate(dashboardUrl("#lifecycle?page=2"));
         page.waitForFunction(
                 "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 2 of 3'");
 
@@ -180,7 +180,7 @@ class LifecycleTabIT extends PlaywrightTestBase {
      */
     @Test
     void overflowingPageInTheUrlClampsToTheLastPageAndCorrectsTheUrl() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#lifecycle?page=99");
+        page.navigate(dashboardUrl("#lifecycle?page=99"));
         page.waitForFunction(
                 "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 3 of 3'");
 

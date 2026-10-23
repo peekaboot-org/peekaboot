@@ -128,7 +128,8 @@ for the tab's own data, `openTracesTab`, `awaitListedTrace(id)`, `openListedTrac
 `selectedTab`, and `kvValue`/`awaitKvValue` for a `.pk-kv` row found by its key). Every
 shadow-root lookup goes through them; a test never spells
 `document.getElementById(...).shadowRoot` itself. The base also offers
-`openDashboard(hash, readySelector)`, `awaitTrace(traceId, jsPredicate)` and
+`openDashboard(hash, readySelector)`, `dashboardUrl(hash)` for a test that navigates there
+itself, `openTraceDeepLink(traceId)`, `awaitTrace(traceId, jsPredicate)` and
 `awaitListedTrace(query, jsPredicate)` (see `docs/TESTING.md`, *Isolation in shared Spring
 contexts*), `seedAnHttpTrace()` and `openTracesTabWithATrace()` for a test that needs a trace of
 its own, `openPageThatLogsAnError()` for the persons page that logs an ERROR (`/?error=true`)

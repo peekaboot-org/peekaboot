@@ -128,7 +128,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         String traceId = waitForMultiSpanLogTraceId();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.waitFor("#pk-gantt-rows");
         return traceId;
     }
@@ -821,7 +821,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void aQueryLinkRevealsItsSpanInsideACollapsedAsyncSubtree() {
         String traceId = storeAsyncQueryTrace();
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/queries");
+        openTraceDeepLink(traceId, "/queries");
         overlay.waitFor(".pk-query-item .pk-span-tree-link[data-span-id='async-query']");
 
         overlay.click(".pk-query-item .pk-span-tree-link[data-span-id='async-query']");
@@ -1308,7 +1308,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 route.resume();
             }
         });
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        page.navigate(dashboardUrl("#traces/" + traceId));
         page.waitForSelector("#traces-tab.active");
         page.waitForCondition(() -> parkedFeatures.get() != null);
 
@@ -1350,7 +1350,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // in the order they ended, so the query span the header counts is there with it.
         awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.waitFor(".pk-overlay__title-method");
 
         String methodText = overlay.text(".pk-overlay__title-method");
@@ -1385,7 +1385,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         JsonNode trace = awaitTrace(traceId, "trace => (trace.queries || []).length > 0");
         page.addInitScript("localStorage.setItem('peekaboot-locale', 'ar-EG-u-nu-arab')");
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.waitFor(".pk-tab[data-tab=\"logs\"] .pk-tab__count");
 
         assertThat(overlay.text(".pk-tab[data-tab=\"spans\"] .pk-tab__count"))
@@ -1424,7 +1424,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         String traceId = toolbar.traceId();
         serveWithCsp("**/peekaboot/ui/dashboard/index.html", "style-src 'self'");
 
-        Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        Response navigation = openTraceDeepLink(traceId);
         overlay.awaitMeasurable(".pk-gantt-span[data-depth='2']");
 
         assertThat(navigation.headers())
@@ -1502,7 +1502,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         page.setViewportSize(1280, 800);
         String traceId = storeDeepQueryTrace();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.awaitMeasurable(".pk-span-logs-toggle");
 
         assertThat(overlay.evaluate("root => [...root.querySelectorAll('.pk-gantt-name__text')]"
@@ -1527,7 +1527,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .at(0, 10)
                 .build());
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.awaitMeasurable(".pk-gantt-name__text");
 
         BoundingBox nameCellBox =
@@ -1553,7 +1553,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         page.setViewportSize(375, 667);
         String traceId = storeDeepQueryTrace();
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.awaitMeasurable(".pk-span-logs-toggle");
 
         assertThat(overlay.evaluate("""
@@ -1718,7 +1718,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     private void openOverlayFromTheDashboard(String traceId) {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.waitFor(".pk-overlay__meta");
     }
 
@@ -2221,7 +2221,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .event("exception", 20)
                 .build());
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        openTraceDeepLink(traceId);
         overlay.waitFor("#pk-gantt-rows");
 
         assertThat(overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').getAttribute('aria-label')"))
