@@ -36,11 +36,19 @@ public final class PanelConfigLoader {
 
     private PanelConfigLoader() {}
 
-    public static PanelsFile load(Resource defaults, Resource userOverride) {
-        PanelsFile file = readValidated(defaults);
-        if (userOverride != null && userOverride.exists()) {
-            file = merge(file, readValidated(userOverride));
+    public static PanelsFile load(Resource resource) {
+        return complete(readValidated(resource));
+    }
+
+    /** Merges {@code override} onto an already loaded {@code base}; a missing override leaves the base as it is. */
+    public static PanelsFile merge(PanelsFile base, Resource override) {
+        if (!override.exists()) {
+            return base;
         }
+        return complete(mergeById(base, readValidated(override)));
+    }
+
+    private static PanelsFile complete(PanelsFile file) {
         file.panels().forEach(PanelConfigLoader::requireTitle);
         return sorted(file);
     }
@@ -143,7 +151,7 @@ public final class PanelConfigLoader {
         require(panel.title() != null, "panel '" + panel.id() + "' has no title and patches no bundled panel");
     }
 
-    private static PanelsFile merge(PanelsFile base, PanelsFile override) {
+    private static PanelsFile mergeById(PanelsFile base, PanelsFile override) {
         Map<String, PanelDef> panels = new LinkedHashMap<>();
         base.panels().forEach(p -> panels.put(p.id(), p));
         override.panels().forEach(p -> panels.put(p.id(), isPatch(p, panels) ? patched(panels.get(p.id()), p) : p));

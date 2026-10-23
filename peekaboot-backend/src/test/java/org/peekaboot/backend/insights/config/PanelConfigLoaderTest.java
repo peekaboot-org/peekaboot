@@ -24,7 +24,7 @@ class PanelConfigLoaderTest {
      */
     @Test
     void theShippedFileHoldsBackSixPanels() {
-        PanelsFile file = PanelConfigLoader.load(shippedDefaults, null);
+        PanelsFile file = PanelConfigLoader.load(shippedDefaults);
 
         assertThat(file.panels())
                 .filteredOn(panel -> Boolean.FALSE.equals(panel.enabled()))
@@ -41,7 +41,7 @@ class PanelConfigLoaderTest {
     /** The timer's average and maximum, in the unit the frontend renders the panel by. */
     @Test
     void theShippedHttpLatencyPanelChartsAvgAndMaxInMillis() {
-        PanelDef latency = panelNamed(PanelConfigLoader.load(shippedDefaults, null), "http-latency");
+        PanelDef latency = panelNamed(PanelConfigLoader.load(shippedDefaults), "http-latency");
 
         assertThat(latency.unit()).isEqualTo(Unit.MILLIS);
         assertThat(latency.series()).extracting(SeriesDef::stat).containsExactly(Stat.AVG, Stat.MAX);
@@ -49,7 +49,7 @@ class PanelConfigLoaderTest {
 
     @Test
     void loadsDefaultsAlone() {
-        PanelsFile file = PanelConfigLoader.load(defaults, null);
+        PanelsFile file = PanelConfigLoader.load(defaults);
         assertThat(file.panels()).extracting(PanelDef::id).containsExactly("cpu", "heap");
         assertThat(file.tiles()).extracting(TileDef::id).containsExactly("uptime");
         PanelDef heap = file.panels().get(1);
@@ -63,7 +63,7 @@ class PanelConfigLoaderTest {
      */
     @Test
     void hyphenatedWordsBindToTheirConstants() {
-        PanelsFile file = PanelConfigLoader.load(new ClassPathResource("insights/loader-hyphenated-words.yml"), null);
+        PanelsFile file = PanelConfigLoader.load(new ClassPathResource("insights/loader-hyphenated-words.yml"));
 
         PanelDef net = panelNamed(file, "net");
         assertThat(net.chart()).isEqualTo(Chart.BARS_LINE);
@@ -73,13 +73,13 @@ class PanelConfigLoaderTest {
 
     @Test
     void defaultsStatToValue() {
-        PanelsFile file = PanelConfigLoader.load(defaults, null);
+        PanelsFile file = PanelConfigLoader.load(defaults);
         assertThat(file.panels().get(0).series().get(0).stat()).isEqualTo(Stat.VALUE);
     }
 
     @Test
     void userPanelReplacesSameIdWhollyAndReorders() {
-        PanelsFile file = PanelConfigLoader.load(defaults, user);
+        PanelsFile file = PanelConfigLoader.merge(PanelConfigLoader.load(defaults), user);
         // heap got order 5 from the user file, so it now sorts first
         assertThat(file.panels()).extracting(PanelDef::id).containsExactly("heap", "cpu", "custom");
         assertThat(file.panels().get(0).title()).isEqualTo("My heap");
@@ -87,7 +87,7 @@ class PanelConfigLoaderTest {
 
     @Test
     void userCanAddDisabledPanels() {
-        PanelsFile file = PanelConfigLoader.load(defaults, user);
+        PanelsFile file = PanelConfigLoader.merge(PanelConfigLoader.load(defaults), user);
         PanelDef custom = file.panels().get(2);
         assertThat(custom.enabled()).isFalse();
         assertThat(custom.series().get(0).stat()).isEqualTo(Stat.RATE);
@@ -96,7 +96,7 @@ class PanelConfigLoaderTest {
     /** The website's first by-id example: {@code - id: thread-states / enabled: true}, nothing else. */
     @Test
     void aTitlelessEntrySwitchesAShippedPanelOnByIdAlone() {
-        PanelsFile file = PanelConfigLoader.load(shipped, patch);
+        PanelsFile file = PanelConfigLoader.merge(PanelConfigLoader.load(shipped), patch);
 
         PanelDef threadStates = panelNamed(file, "thread-states");
         assertThat(threadStates.enabled()).isTrue();
@@ -111,7 +111,7 @@ class PanelConfigLoaderTest {
     /** The website's second by-id example: {@code - id: load / enabled: false}. */
     @Test
     void aTitlelessEntryHidesAShippedPanelWithoutRedefiningIt() {
-        PanelsFile file = PanelConfigLoader.load(shipped, patch);
+        PanelsFile file = PanelConfigLoader.merge(PanelConfigLoader.load(shipped), patch);
 
         PanelDef load = panelNamed(file, "load");
         assertThat(load.enabled()).isFalse();
@@ -122,8 +122,8 @@ class PanelConfigLoaderTest {
     /** A title-less entry can only patch a panel that exists; under a new id there is nothing to patch. */
     @Test
     void aTitlelessEntryUnderAnUnknownIdIsRejected() {
-        assertThatThrownBy(() ->
-                        PanelConfigLoader.load(shipped, new ClassPathResource("insights/loader-patch-unknown-id.yml")))
+        assertThatThrownBy(() -> PanelConfigLoader.merge(
+                        PanelConfigLoader.load(shipped), new ClassPathResource("insights/loader-patch-unknown-id.yml")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("nothing-ships-under-this-id")
                 .hasMessageContaining("title");
@@ -131,23 +131,22 @@ class PanelConfigLoaderTest {
 
     @Test
     void missingUserResourceIsIgnored() {
-        PanelsFile file = PanelConfigLoader.load(defaults, new ClassPathResource("insights/nope.yml"));
+        PanelsFile file =
+                PanelConfigLoader.merge(PanelConfigLoader.load(defaults), new ClassPathResource("insights/nope.yml"));
         assertThat(file.panels()).hasSize(2);
     }
 
     /** The collector keys its rings by id, so a second definition would silently replace the first. */
     @Test
     void rejectsDuplicatePanelIdsWithinOneFile() {
-        assertThatThrownBy(() ->
-                        PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-panel.yml"), null))
+        assertThatThrownBy(() -> PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-panel.yml")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("duplicate panel id 'cpu'");
     }
 
     @Test
     void rejectsDuplicateSeriesIdsWithinOnePanel() {
-        assertThatThrownBy(() ->
-                        PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-series.yml"), null))
+        assertThatThrownBy(() -> PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-series.yml")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("panel 'heap': duplicate series id 'used'");
     }
@@ -156,7 +155,7 @@ class PanelConfigLoaderTest {
     @Test
     void rejectsInvalidStatNamingThePropertyAndTheWord() {
         // loader-invalid.yml: single panel whose series has stat: bogus
-        assertThatThrownBy(() -> PanelConfigLoader.load(new ClassPathResource("insights/loader-invalid.yml"), null))
+        assertThatThrownBy(() -> PanelConfigLoader.load(new ClassPathResource("insights/loader-invalid.yml")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("panels[0].series[0].stat")
                 .hasMessageContaining("bogus");
@@ -165,8 +164,8 @@ class PanelConfigLoaderTest {
     /** subtract-meter changes what value.currentValue subtracts from; rate/avg/max have no such term to subtract from. */
     @Test
     void rejectsSubtractMeterOnAStatOtherThanValue() {
-        assertThatThrownBy(() ->
-                        PanelConfigLoader.load(new ClassPathResource("insights/loader-subtract-meter-rate.yml"), null))
+        assertThatThrownBy(
+                        () -> PanelConfigLoader.load(new ClassPathResource("insights/loader-subtract-meter-rate.yml")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("panel 'net'")
                 .hasMessageContaining("series 'throughput'")
@@ -177,8 +176,7 @@ class PanelConfigLoaderTest {
     /** The overview maps tile values by id in a flat map, so a second definition would silently replace the first. */
     @Test
     void rejectsDuplicateTileIdsWithinOneFile() {
-        assertThatThrownBy(
-                        () -> PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-tile.yml"), null))
+        assertThatThrownBy(() -> PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-tile.yml")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("duplicate tile id 'uptime'");
     }

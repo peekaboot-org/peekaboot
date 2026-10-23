@@ -60,8 +60,8 @@ public final class InsightsService implements SmartLifecycle {
                 ? resourceLoader.getResource(properties.getConfigLocation())
                 : resourceLoader.getResource(CLASSPATH_PREFIX + USER_LOCATION);
         int levelCount = properties.getLevels().size();
-        PanelsFile bundled = withKnownLevels(PanelConfigLoader.load(defaults, null), levelCount);
-        PanelsFile file = withUserOverride(bundled, defaults, userOverride, levelCount);
+        PanelsFile bundled = withKnownLevels(PanelConfigLoader.load(defaults), levelCount);
+        PanelsFile file = withUserOverride(bundled, userOverride, levelCount);
 
         this.panels = file.panels().stream()
                 .filter(panel -> panel.enabled() == null || panel.enabled())
@@ -90,13 +90,9 @@ public final class InsightsService implements SmartLifecycle {
      * because it is theirs - a typo in it costs them their panel customisation, not
      * the application Peekaboot is embedded in.
      */
-    private static PanelsFile withUserOverride(
-            PanelsFile bundled, Resource defaults, Resource userOverride, int levelCount) {
-        if (userOverride == null || !userOverride.exists()) {
-            return bundled;
-        }
+    private static PanelsFile withUserOverride(PanelsFile bundled, Resource userOverride, int levelCount) {
         try {
-            return withKnownLevels(PanelConfigLoader.load(defaults, userOverride), levelCount);
+            return withKnownLevels(PanelConfigLoader.merge(bundled, userOverride), levelCount);
         } catch (RuntimeException e) {
             log.error(
                     "Insights panel config {} is invalid; discarding it entirely and serving the bundled panels"
