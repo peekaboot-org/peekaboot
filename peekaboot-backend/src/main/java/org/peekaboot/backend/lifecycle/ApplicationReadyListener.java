@@ -114,18 +114,19 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         LifecycleBanner.line(report, String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch));
 
         ProcessInfo processInfo = ProcessInfo.current();
-        report.append(String.format(
+        LifecycleBanner.text(
+                report,
+                String.format(
                         " Process User: %s (uid=%s, gid=%s, pid=%d)",
-                        processInfo.username(), processInfo.uid(), processInfo.gid(), processInfo.pid()))
-                .append("\n");
+                        processInfo.username(), processInfo.uid(), processInfo.gid(), processInfo.pid()));
         if (!processInfo.parentProcesses().isEmpty()) {
             String tree = processInfo.parentProcesses().stream()
                     .map(p -> p.command().isEmpty() ? String.valueOf(p.pid()) : p.command() + "(" + p.pid() + ")")
                     .reduce((a, b) -> a + " -> " + b)
                     .orElse("");
-            report.append(" Process Tree: ").append(tree).append("\n");
+            LifecycleBanner.text(report, " Process Tree: " + tree);
         }
-        report.append(LifecycleBanner.LINE).append("\n");
+        LifecycleBanner.rule(report);
     }
 
     private void appendMemoryInfo(StringBuilder report) {
@@ -134,9 +135,10 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         MemoryUsage heapMemory = memoryMXBean.getHeapMemoryUsage();
         MemoryUsage nonHeapMemory = memoryMXBean.getNonHeapMemoryUsage();
 
-        report.append(String.format(
-                        " Heap Memory: used=%s, max=%s", ByteFormat.humanize(heapMemory.getUsed()), maxOf(heapMemory)))
-                .append("\n");
+        LifecycleBanner.text(
+                report,
+                String.format(
+                        " Heap Memory: used=%s, max=%s", ByteFormat.humanize(heapMemory.getUsed()), maxOf(heapMemory)));
         LifecycleBanner.line(
                 report,
                 String.format(
@@ -157,10 +159,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         }
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
-            report.append(String.format(
+            LifecycleBanner.text(
+                    report,
+                    String.format(
                             " DB Connection [%s]: %s on %s (user: %s)",
-                            metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()))
-                    .append("\n\n");
+                            metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()));
+            LifecycleBanner.blankLine(report);
 
             if (!metadata.connectionParams().isEmpty()) {
                 String params = connectionParamsMasker.mask(metadata.connectionParams()).entrySet().stream()
@@ -187,10 +191,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         DataSource dataSource = dataSources.get(dataSourceName);
         hikariPoolInfo.settingsOf(dataSource).ifPresent(settings -> {
-            report.append(String.format(
+            LifecycleBanner.text(
+                    report,
+                    String.format(
                             " DB Pool: minimumIdle=%d, maximumPoolSize=%d",
-                            settings.minimumIdle(), settings.maximumPoolSize()))
-                    .append("\n\n");
+                            settings.minimumIdle(), settings.maximumPoolSize()));
+            LifecycleBanner.blankLine(report);
 
             LifecycleBanner.line(report, " Connection Timeout: " + settings.connectionTimeoutMs() + " ms");
         });

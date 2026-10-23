@@ -74,4 +74,20 @@ class ApplicationStoppedListenerTest {
                 .contains("Up since (context start): 2026-09-09 10:10:30")
                 .contains("Stopped:                  2026-09-09 10:15:30");
     }
+
+    /** The whole banner, frame and blank lines included, so the shared banner helpers cannot reshape it unseen. */
+    @Test
+    void theBannerIsFramedLikeTheReadyBanner() {
+        String report = banner(Duration.ofMinutes(5), new BuildInfoProvider(null));
+
+        assertThat(report)
+                .isEqualTo("\n" + LifecycleBanner.SEPARATOR + "\n"
+                        + " :: ApplicationStopped :: \n"
+                        + LifecycleBanner.SEPARATOR + "\n"
+                        + " Application [unknown] stopped after 5 minutes\n"
+                        + LifecycleBanner.LINE + "\n"
+                        + " Up since (context start): 2026-09-09 10:10:30\n"
+                        + " Stopped:                  2026-09-09 10:15:30\n"
+                        + LifecycleBanner.SEPARATOR);
+    }
 }

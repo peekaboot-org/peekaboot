@@ -26,7 +26,22 @@ public final class LifecycleBanner {
 
     /** One line of the report, closed by the rule that separates it from the next. */
     public static void line(StringBuilder report, String text) {
-        report.append(text).append("\n").append(LINE).append("\n");
+        text(report, text);
+        rule(report);
+    }
+
+    /** One line of the report that belongs to the same group as the next. */
+    public static void text(StringBuilder report, String text) {
+        report.append(text).append("\n");
+    }
+
+    /** The rule that closes a group of lines. */
+    public static void rule(StringBuilder report) {
+        report.append(LINE).append("\n");
+    }
+
+    public static void blankLine(StringBuilder report) {
+        report.append("\n");
     }
 
     public static void close(StringBuilder report) {

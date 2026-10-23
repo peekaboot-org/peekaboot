@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
@@ -157,6 +158,87 @@ class ApplicationReadyListenerTest {
                 .render(ReadyEvents.webApplication(8083));
 
         assertThat(report).contains(" DB Connection [primary]").doesNotContain("DB Pool");
+    }
+
+    /**
+     * Which lines carry a rule below them, and where the frame holds a blank line, reduced to each
+     * line's label. The process tree depends on how the test JVM was launched, so it is left out.
+     */
+    @Test
+    void banner_framesItsLinesInGroups() {
+        DataSourceMetadata metadata = new DataSourceMetadata(
+                "primary",
+                "app",
+                List.of(),
+                "orders",
+                DatabaseProduct.POSTGRESQL,
+                new LinkedHashMap<>(Map.of("ssl", new JdbcProperty(PropertySource.QUERY, "true"))),
+                "PostgreSQL",
+                "16",
+                "PostgreSQL JDBC Driver");
+        try (HikariDataSource hikari = new HikariDataSource()) {
+            String report = banner().metadata(metadata)
+                    .dataSources(Map.of("primary", hikari))
+                    .hikari(new HikariPoolInfo())
+                    .render(ReadyEvents.webApplication(8083));
+
+            assertThat(skeleton(report))
+                    .containsExactly(
+                            "",
+                            "=",
+                            " :: ApplicationReady :: ",
+                            "=",
+                            "Application",
+                            "-",
+                            "Service URL",
+                            "-",
+                            "Swagger UI",
+                            "-",
+                            "Application Info",
+                            "-",
+                            "Default Timezone",
+                            "-",
+                            "Java VM Name",
+                            "-",
+                            "Java VM Version",
+                            "-",
+                            "Operating System",
+                            "-",
+                            "Process User",
+                            "-",
+                            "Heap Memory",
+                            "Non-Heap Memory",
+                            "-",
+                            "DB Connection",
+                            "",
+                            "DB Connection Params",
+                            "-",
+                            "DB Version",
+                            "-",
+                            "DB Pool",
+                            "",
+                            "Connection Timeout",
+                            "-",
+                            "=");
+        }
+    }
+
+    /** Each line as its label: {@code =} for the frame, {@code -} for a rule, the title as is, blank as blank. */
+    private static List<String> skeleton(String report) {
+        return Stream.of(report.split("\n", -1))
+                .filter(line -> !line.startsWith(" Process Tree: "))
+                .map(line -> {
+                    if (line.equals(LifecycleBanner.SEPARATOR)) {
+                        return "=";
+                    }
+                    if (line.equals(LifecycleBanner.LINE)) {
+                        return "-";
+                    }
+                    return line.startsWith(" ::")
+                            ? line
+                            : line.replaceAll("[:\\[].*", "").trim();
+                })
+                .toList();
     }
 
     /** The metadata a real in-memory H2 reports for {@code name}; the banner reads only the name off it. */

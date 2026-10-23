@@ -52,17 +52,13 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
         Instant stopped = clock.instant();
 
         StringBuilder report = LifecycleBanner.open("ApplicationStopped");
-        report.append(String.format(
+        LifecycleBanner.line(
+                report,
+                String.format(
                         " Application [%s] stopped after %s",
-                        buildInfoProvider.getName(), UptimeFormat.humanize(Duration.between(started, stopped))))
-                .append("\n");
-        report.append(LifecycleBanner.LINE).append("\n");
-        report.append(" Up since (context start): ")
-                .append(timestamp.format(started))
-                .append("\n");
-        report.append(" Stopped:                  ")
-                .append(timestamp.format(stopped))
-                .append("\n");
+                        buildInfoProvider.getName(), UptimeFormat.humanize(Duration.between(started, stopped))));
+        LifecycleBanner.text(report, " Up since (context start): " + timestamp.format(started));
+        LifecycleBanner.text(report, " Stopped:                  " + timestamp.format(stopped));
         LifecycleBanner.close(report);
 
         logger.info(report.toString());
