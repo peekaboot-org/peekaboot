@@ -20,21 +20,21 @@ import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
  */
 public class LifecycleRuns {
 
-    private final LifecycleEventLog log;
+    private final LifecycleEventLog eventLog;
     private final LongSupplier clock;
 
-    public LifecycleRuns(LifecycleEventLog log) {
-        this(log, System::currentTimeMillis);
+    public LifecycleRuns(LifecycleEventLog eventLog) {
+        this(eventLog, System::currentTimeMillis);
     }
 
     /** {@code clock} supplies the epoch millis a still-running run is measured up to; tests fix it. */
-    LifecycleRuns(LifecycleEventLog log, LongSupplier clock) {
-        this.log = log;
+    LifecycleRuns(LifecycleEventLog eventLog, LongSupplier clock) {
+        this.eventLog = eventLog;
         this.clock = clock;
     }
 
     public LifecycleRunsResponse runs() {
-        List<LifecycleEvent> events = log.events();
+        List<LifecycleEvent> events = eventLog.events();
         List<LifecycleRunsResponse.Run> runs = new ArrayList<>();
         BuildFacts carried = null;
         for (int i = 0; i < events.size(); i++) {

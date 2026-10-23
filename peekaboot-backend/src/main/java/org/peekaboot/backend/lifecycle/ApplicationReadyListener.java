@@ -23,7 +23,7 @@ import org.springframework.core.annotation.Order;
 @Order(Ordered.LOWEST_PRECEDENCE - 100)
 public class ApplicationReadyListener implements ApplicationListener<ApplicationReadyEvent> {
 
-    private static final Logger logger = LoggerFactory.getLogger(ApplicationReadyListener.class);
+    private static final Logger log = LoggerFactory.getLogger(ApplicationReadyListener.class);
 
     private final EnvironmentInfo environmentInfo;
 
@@ -73,7 +73,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         LifecycleBanner.close(report);
 
-        logger.info(report.toString());
+        log.info(report.toString());
     }
 
     private void appendApplicationInfo(StringBuilder report) {

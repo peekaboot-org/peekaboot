@@ -8,17 +8,17 @@ import org.peekaboot.backend.domain.lifecycle.LifecycleEventsResponse;
 /** Turns the raw log into what the dashboard draws: a time, and only what changed with it. */
 public class LifecycleEvents {
 
-    private final LifecycleEventLog log;
+    private final LifecycleEventLog eventLog;
 
-    public LifecycleEvents(LifecycleEventLog log) {
-        this.log = log;
+    public LifecycleEvents(LifecycleEventLog eventLog) {
+        this.eventLog = eventLog;
     }
 
     public LifecycleEventsResponse events() {
         List<LifecycleEventsResponse.Event> served = new ArrayList<>();
         BuildFacts previous = null;
         LifecycleEvent.Type previousType = null;
-        for (LifecycleEvent event : log.events()) {
+        for (LifecycleEvent event : eventLog.events()) {
             if (event.type() == LifecycleEvent.Type.STOP) {
                 served.add(
                         new LifecycleEventsResponse.Event("stop", event.epochMs(), null, null, null, null, null, null));

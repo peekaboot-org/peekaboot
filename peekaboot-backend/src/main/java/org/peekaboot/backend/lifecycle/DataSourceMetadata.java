@@ -32,7 +32,7 @@ public record DataSourceMetadata(
         String databaseProductVersion,
         String driverName) {
 
-    private static final Logger logger = LoggerFactory.getLogger(DataSourceMetadata.class);
+    private static final Logger log = LoggerFactory.getLogger(DataSourceMetadata.class);
 
     public DataSourceMetadata {
         hosts = hosts == null ? List.of() : hosts;
@@ -67,7 +67,7 @@ public record DataSourceMetadata(
                     metaData.getDatabaseProductVersion(),
                     metaData.getDriverName()));
         } catch (Exception e) {
-            logger.warn("Failed to extract metadata from DataSource '{}': {}", dataSourceName, e.getMessage());
+            log.warn("Failed to extract metadata from DataSource '{}': {}", dataSourceName, e.getMessage());
         }
 
         return Optional.empty();

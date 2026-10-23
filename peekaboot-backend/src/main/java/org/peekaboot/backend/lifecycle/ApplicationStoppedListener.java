@@ -22,7 +22,7 @@ import org.springframework.context.event.ContextClosedEvent;
  */
 public class ApplicationStoppedListener implements ApplicationListener<ContextClosedEvent> {
 
-    private static final Logger logger = LoggerFactory.getLogger(ApplicationStoppedListener.class);
+    private static final Logger log = LoggerFactory.getLogger(ApplicationStoppedListener.class);
 
     private final BuildInfoProvider buildInfoProvider;
     private final ApplicationContext ownContext;
@@ -61,6 +61,6 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
         LifecycleBanner.text(report, " Stopped:                  " + timestamp.format(stopped));
         LifecycleBanner.close(report);
 
-        logger.info(report.toString());
+        log.info(report.toString());
     }
 }

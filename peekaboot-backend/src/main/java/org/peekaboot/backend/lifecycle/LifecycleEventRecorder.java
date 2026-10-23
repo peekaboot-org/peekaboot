@@ -14,17 +14,17 @@ import org.springframework.context.event.EventListener;
  */
 public class LifecycleEventRecorder {
 
-    private final LifecycleEventLog log;
+    private final LifecycleEventLog eventLog;
     private final BuildInfoProvider buildInfoProvider;
     private final GitProperties gitProperties;
     private final ApplicationContext ownContext;
 
     public LifecycleEventRecorder(
-            LifecycleEventLog log,
+            LifecycleEventLog eventLog,
             BuildInfoProvider buildInfoProvider,
             GitProperties gitProperties,
             ApplicationContext ownContext) {
-        this.log = log;
+        this.eventLog = eventLog;
         this.buildInfoProvider = buildInfoProvider;
         this.gitProperties = gitProperties;
         this.ownContext = ownContext;
@@ -32,7 +32,7 @@ public class LifecycleEventRecorder {
 
     @EventListener
     public void onReady(ApplicationReadyEvent event) {
-        log.recordWhenLoaded(LifecycleEvent.start(
+        eventLog.recordWhenLoaded(LifecycleEvent.start(
                 event.getTimestamp(),
                 ProcessHandle.current().pid(),
                 buildInfoProvider.getEntries(),
@@ -44,7 +44,7 @@ public class LifecycleEventRecorder {
         if (!ContextEvents.fromOwnContext(event, ownContext)) {
             return;
         }
-        log.recordAndPersist(LifecycleEvent.stop(
+        eventLog.recordAndPersist(LifecycleEvent.stop(
                 System.currentTimeMillis(), ProcessHandle.current().pid()));
     }
 }
