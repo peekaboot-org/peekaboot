@@ -9,6 +9,7 @@ import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
+import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.mapper.trace.HibernateSqlFormatter;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
@@ -132,7 +133,8 @@ public class PeekabootAutoConfiguration {
             PeekabootProperties properties,
             PeekabootTracingProperties tracingProperties,
             ObjectProvider<InsightsService> insightsService,
-            ObjectProvider<OtelSpanExporter> otelSpanExporter) {
+            ObjectProvider<OtelSpanExporter> otelSpanExporter,
+            ObjectProvider<LifecycleController> lifecycleController) {
         return new PeekabootController(
                 actuatorInsightsService,
                 traceInsightsService,
@@ -140,7 +142,8 @@ public class PeekabootAutoConfiguration {
                 properties,
                 tracingProperties,
                 insightsService.getIfAvailable(),
-                otelSpanExporter.getIfAvailable() != null);
+                otelSpanExporter.getIfAvailable() != null,
+                lifecycleController.getIfAvailable() != null);
     }
 
     /** Only with Hibernate on the classpath; without it every query's {@code formatted} SQL is null. */

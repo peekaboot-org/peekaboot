@@ -148,6 +148,9 @@ application's retained history begins mid-cycle, and the oldest surviving event 
 whose own start already aged out. That orphaned stop is normal, and it carries a real
 timestamp, so the downtime between it and the next start is still reported.
 
+`/api/features` publishes `lifecycle` from whether the `LifecycleController` bean exists, and
+the Lifecycle tab hides on it the way Insights hides on `insights`.
+
 The Lifecycle tab renders `/runs` as a table alongside `/events`' markers on the charts, 20
 rows to a page. Paging is client-side over the single fetch: the cap bounds the response at
 roughly 500 runs, small enough to hold in the browser rather than adding pagination parameters

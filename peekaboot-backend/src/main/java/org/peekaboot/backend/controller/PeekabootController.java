@@ -41,6 +41,9 @@ public class PeekabootController {
     /** Whether a span source is wired to the trace store - see {@link Features#tracingSpansPossible}. */
     private final boolean tracingSpansPossible;
 
+    /** See {@link Features#lifecycle}. */
+    private final boolean lifecycle;
+
     public PeekabootController(
             ActuatorInsightsService actuatorInsightsService,
             TraceInsightsService traceInsightsService,
@@ -48,7 +51,8 @@ public class PeekabootController {
             PeekabootProperties properties,
             PeekabootTracingProperties tracingProperties,
             @Nullable InsightsService insightsService,
-            boolean tracingSpansPossible) {
+            boolean tracingSpansPossible,
+            boolean lifecycle) {
         this.actuatorInsightsService = actuatorInsightsService;
         this.traceInsightsService = traceInsightsService;
         this.metricsService = metricsService;
@@ -56,6 +60,7 @@ public class PeekabootController {
         this.tracingProperties = tracingProperties;
         this.insightsService = insightsService;
         this.tracingSpansPossible = tracingSpansPossible;
+        this.lifecycle = lifecycle;
     }
 
     @GetMapping(value = "/api/actuator/all/insights", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -76,6 +81,7 @@ public class PeekabootController {
                 metricsService.isAvailable(),
                 properties.getUnmasking().isEnabled(),
                 insightsService != null,
+                lifecycle,
                 tracingProperties.getSlowSpanThresholdMs(),
                 tracingProperties.getVerySlowSpanThresholdMs(),
                 tracingProperties.getSlowQueryThresholdMs(),

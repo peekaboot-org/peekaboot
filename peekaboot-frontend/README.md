@@ -674,7 +674,8 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
      a tab's click-to-open path cannot drift from the deep-link one.
 
    One optional export: `isAvailable(data, features)` gates whether the tab's strip button
-   is shown at all (`meters.js`, `traces.js` gate on a feature flag). A tab links into
+   is shown at all (`meters.js`, `traces.js`, `insights.js` and `lifecycle.js` gate on a
+   feature flag). A tab links into
    another tab with a plain `<a href>` built by `buildAppHash(...)` (`shared/components.js`'s
    `iconLink` for the icon-only ones); the hash router restores the target's filters from
    the URL like any deep link, so there is no hand-off channel to wire (`scheduled-tasks.js`

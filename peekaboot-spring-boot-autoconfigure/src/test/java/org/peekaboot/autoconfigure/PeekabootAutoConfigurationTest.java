@@ -81,6 +81,20 @@ class PeekabootAutoConfigurationTest {
                 });
     }
 
+    /** The dashboard hides the Lifecycle tab from this flag, as it hides Insights. */
+    @ParameterizedTest
+    @CsvSource({"true, true", "false, false"})
+    void publishesWhetherTheLifecycleHistoryIsServed(boolean lifecycleEnabled, boolean published) {
+        contextRunner
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootStorageAutoConfiguration.class, PeekabootLifecycleAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.lifecycle.enabled=" + lifecycleEnabled)
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .lifecycle())
+                        .isEqualTo(published));
+    }
+
     @Test
     void publishesTheUnmaskingSwitch() {
         contextRunner

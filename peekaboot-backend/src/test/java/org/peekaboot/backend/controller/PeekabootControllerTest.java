@@ -56,20 +56,20 @@ class PeekabootControllerTest {
 
         when(metricsService.isAvailable()).thenReturn(true);
 
-        controller = controller(tracingProperties, null, false);
+        controller = controller(null, false, false);
     }
 
     /** The controller over the test's fields, with the three constructor arguments the feature tests vary. */
-    private PeekabootController controller(
-            PeekabootTracingProperties tracing, InsightsService insights, boolean spanSourceWired) {
+    private PeekabootController controller(InsightsService insights, boolean spanSourceWired, boolean lifecycle) {
         return new PeekabootController(
                 actuatorInsightsService,
                 traceInsightsService,
                 metricsService,
                 properties,
-                tracing,
+                tracingProperties,
                 insights,
-                spanSourceWired);
+                spanSourceWired,
+                lifecycle);
     }
 
     @Nested
@@ -205,8 +205,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldIncludeInsightsFeatureAsTrueWhenInsightsServicePresent() {
-            PeekabootController controllerWithInsights =
-                    controller(tracingProperties, mock(InsightsService.class), false);
+            PeekabootController controllerWithInsights = controller(mock(InsightsService.class), false, false);
 
             assertThat(controllerWithInsights.getFeatures().insights()).isTrue();
         }
@@ -249,9 +248,19 @@ class PeekabootControllerTest {
 
         @Test
         void shouldReportTracingSpansPossibleWhenASpanSourceIsWired() {
-            PeekabootController withSpanSource = controller(tracingProperties, null, true);
+            PeekabootController withSpanSource = controller(null, true, false);
 
             assertThat(withSpanSource.getFeatures().tracingSpansPossible()).isTrue();
+        }
+
+        @Test
+        void shouldReportLifecycleWhenItsRunHistoryIsServed() {
+            assertThat(controller(null, false, true).getFeatures().lifecycle()).isTrue();
+        }
+
+        @Test
+        void shouldReportLifecycleOffWithoutItsRunHistory() {
+            assertThat(controller.getFeatures().lifecycle()).isFalse();
         }
 
         @Test

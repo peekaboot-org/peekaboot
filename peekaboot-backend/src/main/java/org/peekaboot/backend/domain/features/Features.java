@@ -14,6 +14,8 @@ package org.peekaboot.backend.domain.features;
  *                             since sampling and the rest of the host's tracing setup stay
  *                             outside Peekaboot's view. Meaningless while {@link #tracing} is
  *                             false.
+ * @param lifecycle whether the run history behind the Lifecycle tab is served, which
+ *                  {@code peekaboot.lifecycle.enabled} decides
  * @param slowTraceThresholdMs the Slow bucket's admission threshold; null while tracing is
  *                             off, when there is no store to admit into
  * @param maskLiteral the exact literal masked values are replaced with ({@code MaskingEngine.MASK_LITERAL});
@@ -25,6 +27,7 @@ public record Features(
         boolean metrics,
         boolean unmaskingEnabled,
         boolean insights,
+        boolean lifecycle,
         long slowSpanThresholdMs,
         long verySlowSpanThresholdMs,
         long slowQueryThresholdMs,

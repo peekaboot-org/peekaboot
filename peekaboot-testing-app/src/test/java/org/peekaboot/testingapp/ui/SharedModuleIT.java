@@ -314,8 +314,8 @@ class SharedModuleIT extends PlaywrightTestBase {
 
     /**
      * Every key the frontend reads off /api/features is a component of the backend's
-     * Features record: the four flags (traces.js, meters.js, insights.js/overview.js and
-     * unmask-control.js gate on them) and the threshold keys severity.js formats by.
+     * Features record: the five flags (traces.js, meters.js, insights.js/overview.js,
+     * lifecycle.js and unmask-control.js gate on them) and the threshold keys severity.js formats by.
      */
     @Test
     void featureKeysReadByTheFrontendMirrorTheBackendRecord() {
@@ -323,7 +323,8 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .map(RecordComponent::getName)
                 .toList();
 
-        assertThat(published).contains("tracing", "metrics", "insights", "unmaskingEnabled", "maskLiteral");
+        assertThat(published)
+                .contains("tracing", "metrics", "insights", "lifecycle", "unmaskingEnabled", "maskLiteral");
         @SuppressWarnings("unchecked")
         List<String> thresholdKeys = (List<String>) evalModule("severity.js", "Object.keys(m.DEFAULT_THRESHOLDS)");
         assertThat(published).containsAll(thresholdKeys);

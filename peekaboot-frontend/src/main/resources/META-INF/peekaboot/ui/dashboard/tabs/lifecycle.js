@@ -10,10 +10,6 @@
  * survives across those 30s re-renders - a reader on page 3 is not bounced back to page
  * 1 every refresh. It only moves when the refreshed run list no longer has that many
  * pages (renderTable clamps it to the new last page).
- *
- * There is no isAvailable() - the tab always shows. peekaboot.lifecycle.enabled=false
- * removes the endpoint outright, and an operator who set that flag will not be
- * surprised; the fetch's error path renders an honest "unavailable" line instead.
  */
 import {badge, cardTable, cell, emptyState} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
@@ -37,14 +33,15 @@ const tab = selfFetchingTab({
         renderTable(container, context);
     },
     renderError: (container, error) => {
-        // peekaboot.lifecycle.enabled=false removes the endpoint entirely - that is an
-        // expected, operator-chosen state, not a bug, so this logs quietly and renders
-        // an honest sentence rather than throwing.
         console.warn('Lifecycle history unavailable:', error);
         runs = null;
         container.querySelector('#lifecycle-runs').replaceChildren(emptyState('Lifecycle history is unavailable'));
     }
 });
+
+export function isAvailable(data, features) {
+    return Boolean(features?.lifecycle);
+}
 
 export const {render} = tab;
 
