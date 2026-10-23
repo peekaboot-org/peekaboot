@@ -123,7 +123,7 @@
     background-size: calc(var(--pk-gantt-depth) * var(--pk-gantt-indent)) 100%;
 }
 
-.pk-gantt-row { align-items: center; min-height: 28px; border-radius: var(--pk-space-xs); }
+.pk-gantt-row { align-items: center; min-height: 28px; border-radius: var(--pk-radius-sm); }
 /* An open span's row keeps the hover tint, which ties the panel under it to its row. */
 .pk-gantt-row:hover, .pk-gantt-span--open > .pk-gantt-row { background: var(--pk-bg-alt); }
 
@@ -143,7 +143,7 @@
 /* A .pk-unbutton: the span's dot and name, and the switch for its details panel. It takes
    the cell's free width, which pushes the chips to the cell's right edge. padding-left gives
    the inset focus ring above room to clear the kind dot. */
-.pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); padding-left: var(--pk-space-xs); padding-right: var(--pk-space-xs); font-size: var(--pk-text-sm); color: var(--pk-text); text-align: left; border-radius: var(--pk-space-xs); }
+.pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); padding-left: var(--pk-space-xs); padding-right: var(--pk-space-xs); font-size: var(--pk-text-sm); color: var(--pk-text); text-align: left; border-radius: var(--pk-radius-sm); }
 .pk-gantt-name__toggle--error { color: var(--pk-danger); }
 .pk-gantt-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Also the pointer's switch for the span's details (see spans.js). */
@@ -190,7 +190,7 @@
 /* The row's query/logs toggles: a trailing chevron (the same glyph and transition
    components.css's .pk-group__header draws for its own collapsible groups) that starts
    pointing down and flips to point up once the panel it names is open. */
-.pk-span-action--expand { gap: 4px; }
+.pk-span-action--expand { gap: var(--pk-space-xs); }
 .pk-span-action--expand::after { content: '\25BE'; transition: transform var(--pk-transition); }
 .pk-span-action--expand[aria-expanded="true"]::after { transform: rotate(180deg); }
 
@@ -198,7 +198,7 @@
    span's name (past its ancestors' indent and its own toggle column) and lightly set apart
    from the row above with its kind's own left border and the page's alt background, closed
    until its own toggle opens it. */
-.pk-span-panel { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm) calc(var(--pk-gantt-depth) * var(--pk-gantt-indent) + var(--pk-gantt-toggle)); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
+.pk-span-panel { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm) calc(var(--pk-gantt-depth) * var(--pk-gantt-indent) + var(--pk-gantt-toggle)); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-radius-sm) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
 .pk-span-panel--open { display: flex; flex-direction: column; gap: var(--pk-space-sm); }
 .pk-span-panel--query.pk-span-panel--open, .pk-span-panel--logs.pk-span-panel--open { align-items: flex-start; gap: var(--pk-space-xs); }
 .pk-span-panel--query .pk-sql { align-self: stretch; }
