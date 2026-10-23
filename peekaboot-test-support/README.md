@@ -5,9 +5,9 @@ reactor and is never published, so nothing an application depends on comes from 
 
 It holds two classes (`org.peekaboot.testsupport`):
 
-- `LogCapture`, the logback `ListAppender` wrapper that `peekaboot-backend` and
-  `peekaboot-spring-boot-autoconfigure` tests use to assert on deliberate log events instead
-  of letting them reach the console (see [`docs/TESTING.md`](../docs/TESTING.md)).
+- `LogCapture`, the logback `ListAppender` wrapper that `peekaboot-backend`,
+  `peekaboot-spring-boot-autoconfigure` and `peekaboot-testing-app` tests use to assert on
+  deliberate log events instead of letting them reach the console (see [`docs/TESTING.md`](../docs/TESTING.md)).
 - `IntentionalLogFilter`, a logback appender filter for the console appender of
   `peekaboot-testing-app`'s `logback-test.xml`. It hides one deliberate line (logger name plus
   message regex) from the console while the root logger's Peekaboot appender still receives it.
@@ -37,6 +37,6 @@ test-scope dependency that always resolves in the reactor.
   or runtime classpath.
 - **Never published.** No release step uploads this jar. Keep `skipPublishing` set.
 - **No dependency on the sibling modules.** Only logback and slf4j. The backend's own
-  fixture builders (`Spans`, `SpanNodes`, `RequestCompletedEvents`, `TraceStores`)
+  fixture builders (`Spans`, `SpanNodes`, `TraceTrees`, `RequestCompletedEvents`, `TraceStores`)
   construct backend domain types and therefore stay in `peekaboot-backend`'s test tree.
   Moving them here would create a dependency cycle.

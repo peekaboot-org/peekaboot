@@ -95,7 +95,7 @@ fraction of it.
 | Module | Artifact | Published | Contains |
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | Shared build config, dependency management (the `spring-boot-dependencies` BOM) |
-| `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | `LogCapture` only, consumed at test scope by the backend and autoconfigure suites. See its [README](peekaboot-test-support/README.md) |
+| `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | Shared test helpers, consumed at test scope by the other modules' suites. See its [README](peekaboot-test-support/README.md) |
 | `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class and therefore the configuration metadata. Its web/servlet/logback/Hikari/OTel deps are `<optional>`: the host app supplies them, and the auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only, outside every default static location, so a consumer with Peekaboot off serves none of it. Plain ES modules and CSS copied as-is: no build step, no test sources. Empty `-javadoc` jar (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration classes, `AutoConfiguration.imports` and `spring.factories` |
@@ -379,8 +379,8 @@ Surefire and failsafe, JUnit 5 + AssertJ. Conventions, the pristine-output polic
 and the Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md). This section
 covers only the build mechanics.
 
-- Test sources exist in `peekaboot-backend`, `peekaboot-spring-boot-autoconfigure` and
-  `peekaboot-testing-app`. The parent runs `maven-dependency-plugin:properties` in every
+- Test sources exist in `peekaboot-test-support`, `peekaboot-backend`,
+  `peekaboot-spring-boot-autoconfigure` and `peekaboot-testing-app`. The parent runs `maven-dependency-plugin:properties` in every
   module and gives surefire and failsafe one managed `argLine`,
   `@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}`. The agent keeps
   Mockito's inline mock-maker from self-attaching and warning about it; the
@@ -393,12 +393,9 @@ covers only the build mechanics.
   `mvn verify` needs Docker (see [Prerequisites](#prerequisites)).
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
   install it explicitly with the `exec:java` invocation in the module README if that fails.
-- `LogCapture` is the only shared test helper, and it lives in `peekaboot-test-support` as
-  a plain test-scope dependency of the backend and autoconfigure modules. Why a module
-  rather than a `-tests` jar is in
-  [peekaboot-test-support/README.md](peekaboot-test-support/README.md). The backend's own
-  fixture builders (`Spans`, `SpanNodes`, `TraceTrees`, `RequestCompletedEvents`,
-  `TraceStores`) construct backend domain types and stay in its test tree.
+- The shared test helpers live in `peekaboot-test-support`. Its
+  [README](peekaboot-test-support/README.md) names them and their consumers, and says why
+  a module rather than a `-tests` jar.
 - The parent sets the runners' includes explicitly: `*Test` and `*Tests` for surefire,
   `*IT` for failsafe, the same patterns as the Gradle `test`/`integrationTest` tasks.
   The defaults would also take `Test*`, `*TestCase`, `IT*` and `*ITCase`, which Gradle

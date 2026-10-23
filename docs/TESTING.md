@@ -153,8 +153,7 @@ prints none. No stack traces.
   engines skip it; nothing is excused at the output.
 - Tests that trigger error paths capture the log event (logback `ListAppender`) and assert it
   instead of letting it print. The shared helper is `org.peekaboot.testsupport.LogCapture` from
-  `peekaboot-test-support`, an unpublished reactor module both `peekaboot-backend` and
-  `peekaboot-spring-boot-autoconfigure` consume at test scope (see [`BUILD.md`](../BUILD.md)).
+  [`peekaboot-test-support`](../peekaboot-test-support/README.md).
 - `peekaboot-testing-app`'s `logback-test.xml` sets `org.apache.catalina.core.ContainerBase` to
   `OFF`. `OrderController`'s deliberately failing `/boom` endpoint escapes as an unhandled
   exception, which embedded Tomcat logs as a full stack trace under a per-JVM
