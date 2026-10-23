@@ -128,16 +128,14 @@ class TraceInsightsServiceTest {
 
     @Test
     void getInsightsQueriesRequestedBucket() {
-        InMemoryTraceStore bucketStore = TraceStores.withDefaults();
-        bucketStore.addSpan(span("s1")
+        store.addSpan(span("s1")
                 .in("terr")
                 .error("boom", "java.lang.RuntimeException")
                 .build());
-        bucketStore.addSpan(span("s2").in("tok").build());
-        TraceInsightsService bucketService = newService(bucketStore);
+        store.addSpan(span("s2").in("tok").build());
 
-        TraceInsightsResponse errors = bucketService.getInsights(10, TraceBucket.ERRORS, null, null);
-        TraceInsightsResponse all = bucketService.getInsights(10, TraceBucket.ALL, null, null);
+        TraceInsightsResponse errors = service.getInsights(10, TraceBucket.ERRORS, null, null);
+        TraceInsightsResponse all = service.getInsights(10, TraceBucket.ALL, null, null);
 
         assertThat(errors.traces()).extracting(TraceTree::traceId).containsExactly("terr");
         assertThat(all.traces()).hasSize(2);
@@ -145,14 +143,12 @@ class TraceInsightsServiceTest {
 
     @Test
     void responseCarriesBucketCounts() {
-        InMemoryTraceStore bucketStore = TraceStores.withDefaults();
-        bucketStore.addSpan(span("s1")
+        store.addSpan(span("s1")
                 .in("terr")
                 .error("boom", "java.lang.RuntimeException")
                 .build());
-        TraceInsightsService bucketService = newService(bucketStore);
 
-        TraceInsightsResponse response = bucketService.getInsights(10, TraceBucket.ALL, null, null);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 1, 0));
     }
