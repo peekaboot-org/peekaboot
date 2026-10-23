@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
 
 class CredentialsFileTest {
@@ -82,6 +83,60 @@ class CredentialsFileTest {
                         .readAttributes()
                         .permissions()))
                 .isEqualTo("rw-------");
+    }
+
+    /** The default path sits in the storage directory; an explicit one may sit anywhere, so neither may be written through. */
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void write_neverWritesThroughASymlinkPlantedAtThePath(@TempDir Path dir) throws IOException {
+        var victim = dir.resolve("victim");
+        Files.writeString(victim, "untouched");
+        Files.setPosixFilePermissions(victim, PosixFilePermissions.fromString("rw-r--r--"));
+        var path = dir.resolve("security.properties");
+        Files.createSymbolicLink(path, victim);
+
+        assertThat(new CredentialsFile(path).write(credentials("orders-admin", PasswordHash.of("s3cret"))))
+                .isTrue();
+
+        assertThat(Files.readString(victim)).isEqualTo("untouched");
+        assertThat(PosixPermissions.of(victim)).isEqualTo("rw-r--r--");
+        assertThat(Files.isSymbolicLink(path)).isFalse();
+        assertThat(new CredentialsFile(path).read()).isPresent();
+    }
+
+    /** A second name for the file must keep the old content: the write replaces the file rather than writing into it. */
+    @Test
+    void write_replacesTheFileRatherThanWritingIntoIt(@TempDir Path dir) throws IOException {
+        var path = dir.resolve("security.properties");
+        Files.writeString(path, "previous");
+        var otherName = Files.createLink(dir.resolve("other-name"), path);
+
+        assertThat(new CredentialsFile(path).write(credentials("orders-admin", PasswordHash.of("s3cret"))))
+                .isTrue();
+
+        assertThat(Files.readString(otherName)).isEqualTo("previous");
+        assertThat(new CredentialsFile(path).read()).isPresent();
+    }
+
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void write_createsMissingParentDirectoriesReadableOnlyByTheOwner(@TempDir Path dir) throws IOException {
+        var path = dir.resolve("a/b/security.properties");
+
+        new CredentialsFile(path).write(credentials("orders-admin", PasswordHash.of("s3cret")));
+
+        assertThat(PosixPermissions.of(dir.resolve("a"))).isEqualTo("rwx------");
+        assertThat(PosixPermissions.of(dir.resolve("a/b"))).isEqualTo("rwx------");
+    }
+
+    @Test
+    void write_leavesNoTemporaryBehind(@TempDir Path dir) throws IOException {
+        new CredentialsFile(dir.resolve("security.properties"))
+                .write(credentials("orders-admin", PasswordHash.of("s3cret")));
+
+        try (var entries = Files.list(dir)) {
+            assertThat(entries).containsExactly(dir.resolve("security.properties"));
+        }
     }
 
     @Test

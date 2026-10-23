@@ -1,18 +1,17 @@
 package org.peekaboot.backend.security;
 
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.Reader;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import java.util.Properties;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +19,9 @@ import org.slf4j.LoggerFactory;
  * Only a hash ever reaches disk - the plaintext is printed once and then only lives in memory.
  * Every failure resolves to "no usable file": the caller's answer to all of them is the same,
  * generate a password for this run and say so.
+ *
+ * <p>Every path, an explicit {@code peekaboot.security.credentials-file} included, is written
+ * through {@link OwnerOnlyFiles}: owner-only, replaced in one step, never through a symlink.
  */
 public final class CredentialsFile {
 
@@ -32,8 +34,6 @@ public final class CredentialsFile {
     private static final String HEADER = "Peekaboot generated these credentials for its"
             + " /peekaboot/** guard.\nDelete this file for a new password, or set"
             + " peekaboot.security.password.";
-
-    private static final String OWNER_ONLY = "rw-------";
 
     @Nullable
     private final Path path;
@@ -79,48 +79,12 @@ public final class CredentialsFile {
         properties.setProperty(PASSWORD_KEY, credentials.passwordHash().format());
         properties.setProperty(CREATED_KEY, credentials.createdAt().toString());
         try {
-            Path parent = path.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            createOwnerOnly();
-            try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-                properties.store(writer, HEADER);
-            }
+            OwnerOnlyFiles.replaceAtomically(
+                    path, out -> properties.store(new OutputStreamWriter(out, StandardCharsets.UTF_8), HEADER));
             return true;
         } catch (IOException e) {
             log.warn("Could not write the Peekaboot credentials file {}: {}", path, e.getMessage());
             return false;
-        }
-    }
-
-    /**
-     * Created with the permissions already set rather than set afterwards, so the file is never
-     * briefly world-readable. A file system without POSIX permissions gets a plain create.
-     */
-    private void createOwnerOnly() throws IOException {
-        try {
-            try {
-                Files.createFile(
-                        path, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(OWNER_ONLY)));
-            } catch (UnsupportedOperationException e) {
-                Files.createFile(path);
-            }
-        } catch (FileAlreadyExistsException e) {
-            log.debug("Overwriting the existing Peekaboot credentials file {}", path);
-            tightenPermissions();
-        }
-    }
-
-    /**
-     * A file that predates this write may hold looser permissions than Peekaboot creates; best
-     * effort, since a file system without POSIX permissions must still write the file.
-     */
-    private void tightenPermissions() {
-        try {
-            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(OWNER_ONLY));
-        } catch (UnsupportedOperationException | IOException e) {
-            log.debug("Could not tighten permissions on the Peekaboot credentials file {}: {}", path, e.getMessage());
         }
     }
 
