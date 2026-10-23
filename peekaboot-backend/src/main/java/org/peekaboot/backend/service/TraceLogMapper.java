@@ -8,6 +8,7 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
+import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
@@ -69,23 +70,18 @@ final class TraceLogMapper {
      * ranges are only the rendering hint the browser needs so it classifies nothing itself.
      */
     private TraceLog toTraceLog(TraceDataBundle bundle, LogCapturedEvent e) {
-        if (e.stackTrace() == null) {
-            return new TraceLog(
-                    bundle.resolveSpanId(e.spanId()),
-                    e.timestamp(),
-                    e.level(),
-                    e.loggerName(),
-                    e.message(),
-                    e.threadName(),
-                    null,
-                    List.of(),
-                    List.of());
+        String wireStackTrace = null;
+        List<Range> hiddenFrames = List.of();
+        List<Range> applicationFrames = List.of();
+        if (e.stackTrace() != null) {
+            FoldedTrace folded = stackTraceRules.fold(e.stackTrace());
+            // The ranges index into folded.lines(), not the raw captured string: String.lines() splits
+            // on a lone \r where the browser's split('\n') would not, so sending anything else back
+            // would leave the two disagreeing about which line a given index names.
+            wireStackTrace = String.join("\n", folded.lines());
+            hiddenFrames = folded.hidden();
+            applicationFrames = folded.applicationFrames();
         }
-        FoldedTrace folded = stackTraceRules.fold(e.stackTrace());
-        // The ranges index into folded.lines(), not the raw captured string: String.lines() splits
-        // on a lone \r where the browser's split('\n') would not, so sending anything else back
-        // would leave the two disagreeing about which line a given index names.
-        String wireStackTrace = String.join("\n", folded.lines());
         return new TraceLog(
                 bundle.resolveSpanId(e.spanId()),
                 e.timestamp(),
@@ -94,7 +90,7 @@ final class TraceLogMapper {
                 e.message(),
                 e.threadName(),
                 wireStackTrace,
-                folded.hidden(),
-                folded.applicationFrames());
+                hiddenFrames,
+                applicationFrames);
     }
 }
