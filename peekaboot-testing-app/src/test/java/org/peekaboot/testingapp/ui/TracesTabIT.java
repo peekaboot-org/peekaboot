@@ -7,8 +7,6 @@ import com.microsoft.playwright.Mouse;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.BoundingBox;
 import io.micrometer.tracing.Span;
-import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,7 +15,7 @@ import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.Scheduler;
 import org.peekaboot.testingapp.entity.CustomerOrder;
-import org.peekaboot.testingapp.entity.OrderLine;
+import org.peekaboot.testingapp.integration.OrderFixtures;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
 import org.peekaboot.testingapp.order.OrderReconciler;
@@ -71,20 +69,8 @@ class TracesTabIT extends PlaywrightTestBase {
 
     /** One order with one line, for a test that needs a row to read rather than a query count. */
     private CustomerOrder seedAnOrder() {
-        CustomerOrder order = new CustomerOrder();
-        order.setReference("PK-TABS-" + System.nanoTime());
-        order.setCustomerId(1L);
-        order.setStatus("PLACED");
-        order.setPlacedAt(Instant.parse("2026-08-20T08:00:00Z"));
-        CustomerOrder saved = orderRepository.save(order);
-
-        OrderLine line = new OrderLine();
-        line.setOrderId(saved.getId());
-        line.setSku("WIDGET-TABS");
-        line.setQuantity(1);
-        line.setUnitPrice(new BigDecimal("19.99"));
-        orderLineRepository.save(line);
-        return saved;
+        return OrderFixtures.seedOrder(
+                orderRepository, orderLineRepository, 1L, "PLACED", 1, "PK-TABS-", "WIDGET-TABS");
     }
 
     /** The millis behind a rendered duration, so a row's own text can be compared with a threshold. */
@@ -297,8 +283,7 @@ class TracesTabIT extends PlaywrightTestBase {
 
     /** Undoes {@link #seedAnOrder()}, so a test that seeds its own order leaves the shared H2 database as it found it. */
     private void deleteOrder(CustomerOrder order) {
-        orderLineRepository.deleteAll(orderLineRepository.findByOrderId(order.getId()));
-        orderRepository.delete(order);
+        OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
     }
 
     /** The positive control for TracesTabWithoutSpanSourceIT: with a span exporter wired, the tab lists as usual. */
