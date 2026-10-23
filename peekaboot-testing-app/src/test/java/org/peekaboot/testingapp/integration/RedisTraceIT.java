@@ -131,7 +131,8 @@ class RedisTraceIT {
                 .map(listed -> listed.path("traceId").asString(""))
                 .collect(Collectors.toSet());
 
-        traces.restClient()
+        traces.api()
+                .restClient()
                 .get()
                 .uri("/peekaboot/api/actuator/all/insights")
                 .retrieve()
@@ -184,7 +185,8 @@ class RedisTraceIT {
     }
 
     private ResponseEntity<String> placeOrder(String sku) {
-        return traces.restClient()
+        return traces.api()
+                .restClient()
                 .post()
                 .uri("/api/orders")
                 .contentType(MediaType.APPLICATION_JSON)

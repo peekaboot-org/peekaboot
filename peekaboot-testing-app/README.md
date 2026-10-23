@@ -111,6 +111,11 @@ mvn -pl peekaboot-testing-app -am verify                       # the whole suite
 mvn -pl peekaboot-testing-app verify -Dit.test=<Class>         # one *IT class
 ```
 
+The integration tests under `integration/` that run on the shared context extend
+`TestingAppITBase`. It carries `@TestingAppTest` (the `test` profile on a random port) and hands
+each test `api`, the `PeekabootApi` over that port, and `traces`, the `TraceApiClient` beside
+it. A class that needs a context of its own redeclares `@SpringBootTest` over the base.
+
 This module is not published to Maven Central (`maven.deploy.skip`).
 
 ### Page objects and helpers (`ui/`)

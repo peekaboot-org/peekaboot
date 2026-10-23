@@ -177,7 +177,8 @@ class ProfileLookupTraceIT {
     }
 
     private ResponseEntity<String> personPage(Person person, String query) {
-        return traces.restClient()
+        return traces.api()
+                .restClient()
                 .get()
                 .uri("/persons/" + person.getId() + query)
                 .accept(MediaType.TEXT_HTML)

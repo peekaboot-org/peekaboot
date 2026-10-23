@@ -27,11 +27,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
 import org.springframework.boot.task.ThreadPoolTaskSchedulerBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -55,9 +53,8 @@ import tools.jackson.databind.JsonNode;
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "isolated-trace-store=AsyncTraceCaptureIT")
-@ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class AsyncTraceCaptureIT {
+class AsyncTraceCaptureIT extends TestingAppITBase {
 
     private static final Duration TASK_TIMEOUT = Duration.ofSeconds(15);
 
@@ -74,9 +71,6 @@ class AsyncTraceCaptureIT {
     private static final Predicate<JsonNode> NESTED_ASYNC_SPANS_CAPTURED = TraceApiClient.ROOT_SPAN_EXPORTED.and(
             trace -> SpanTree.spansNamed(trace, AsyncTaskMarker.CONTEXTUAL_NAME).size() == 2);
 
-    @LocalServerPort
-    private int port;
-
     @Autowired
     @Qualifier(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
     private TaskExecutor applicationTaskExecutor;
@@ -90,10 +84,6 @@ class AsyncTraceCaptureIT {
     @Autowired
     private ThreadPoolTaskSchedulerBuilder schedulerBuilder;
 
-    private PeekabootApi api;
-
-    private TraceApiClient traces;
-
     private ThreadPoolTaskScheduler scheduler;
 
     /**
@@ -105,8 +95,6 @@ class AsyncTraceCaptureIT {
      */
     @BeforeAll
     void startTheSchedulerBootWouldHaveBuilt() {
-        api = new PeekabootApi(port);
-        traces = new TraceApiClient(port);
         scheduler = schedulerBuilder.build();
         scheduler.initialize();
     }

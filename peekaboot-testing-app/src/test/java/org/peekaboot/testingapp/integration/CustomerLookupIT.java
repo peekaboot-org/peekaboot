@@ -3,19 +3,14 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.order.CustomerClient;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * A customer id with nobody behind it is an answer both ends of the demo's outbound call
@@ -27,25 +22,13 @@ import org.springframework.test.context.ActiveProfiles;
  * these two tests, dropping the 404 branch would only show up as four WARN lines with a
  * stack trace in the suite's output.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class CustomerLookupIT {
-
-    @LocalServerPort
-    private int port;
+class CustomerLookupIT extends TestingAppITBase {
 
     @Autowired
     private OrderRepository orderRepository;
 
     @Autowired
     private OrderLineRepository orderLineRepository;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
 
     @Test
     void anIdWithNobodyBehindItAnswersNotFound() {

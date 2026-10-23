@@ -4,12 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -30,18 +27,7 @@ import tools.jackson.databind.JsonNode;
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "peekaboot.enable-unmasking=true")
-@ActiveProfiles("test")
-class UnmaskingEnabledIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class UnmaskingEnabledIT extends TestingAppITBase {
 
     @Test
     void insightsEndpointReturnsRealValuesWhenUnmaskIsRequested() {

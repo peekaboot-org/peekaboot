@@ -4,16 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.order.NewOrder;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -25,18 +22,7 @@ import tools.jackson.databind.JsonNode;
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "peekaboot.insights.config-location=classpath:peekaboot-insights.yml")
-@ActiveProfiles("test")
-class InsightsPanelFileIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class InsightsPanelFileIT extends TestingAppITBase {
 
     @Test
     void theAppsPanelFileSwitchesOnEveryOptInPanelAndAddsItsOwn() {

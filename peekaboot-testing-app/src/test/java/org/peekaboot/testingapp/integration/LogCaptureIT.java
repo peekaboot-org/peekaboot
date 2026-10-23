@@ -2,12 +2,7 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -31,19 +26,7 @@ import tools.jackson.databind.JsonNode;
  * BatchSpanProcessor whereas logs are published synchronously during the request, so a trace
  * whose root span is stored has already received every log it will ever get.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class LogCaptureIT {
-
-    @LocalServerPort
-    private int port;
-
-    private TraceApiClient traces;
-
-    @BeforeEach
-    void connect() {
-        traces = new TraceApiClient(port);
-    }
+class LogCaptureIT extends TestingAppITBase {
 
     @Test
     void errorLoggedInsideRequestIsCapturedAgainstThatRequestsTrace() {

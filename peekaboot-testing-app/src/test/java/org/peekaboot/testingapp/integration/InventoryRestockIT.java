@@ -5,41 +5,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.util.LinkedMultiValueMap;
 import tools.jackson.databind.JsonNode;
 
 /** The restock exists to put one statement with many parameter sets in front of the Queries tab. */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class InventoryRestockIT {
-
-    @LocalServerPort
-    private int port;
+class InventoryRestockIT extends TestingAppITBase {
 
     @Autowired
     @Qualifier("inventory")
     private JdbcClient inventory;
-
-    private PeekabootApi api;
-
-    private TraceApiClient traces;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-        traces = new TraceApiClient(port);
-    }
 
     /** GADGET-3 is the one SKU no other class orders, so its count is this test's alone to change. */
     @Test

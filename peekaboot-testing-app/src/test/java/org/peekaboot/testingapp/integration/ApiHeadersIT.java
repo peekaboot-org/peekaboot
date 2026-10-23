@@ -3,14 +3,9 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * What Peekaboot serves under {@code /peekaboot} through the real, auto-configured app, and
@@ -20,19 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
  * assets keep their own, revalidating cache policy), and the assets themselves have to arrive
  * at all.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class ApiHeadersIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class ApiHeadersIT extends TestingAppITBase {
 
     @Test
     void apiResponsesAreNeitherStoredNorSniffed() {

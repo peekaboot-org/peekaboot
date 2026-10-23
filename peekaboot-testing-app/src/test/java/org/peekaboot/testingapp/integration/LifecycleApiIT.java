@@ -5,16 +5,11 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.time.Duration;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -28,25 +23,13 @@ import tools.jackson.databind.JsonNode;
  * {@code path} yields for an absent field iterates empty and reads as {@code false}, so a
  * field the API stopped serving would slip past {@code isEmpty()} and {@code isFalse()}.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class LifecycleApiIT {
-
-    @LocalServerPort
-    private int port;
+class LifecycleApiIT extends TestingAppITBase {
 
     @Autowired
     private BuildProperties buildProperties;
 
     @Autowired
     private ObjectProvider<GitProperties> gitProperties;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
 
     @Test
     void theRunningApplicationServesItsOwnStartWithEveryBuildFieldItKnows() {

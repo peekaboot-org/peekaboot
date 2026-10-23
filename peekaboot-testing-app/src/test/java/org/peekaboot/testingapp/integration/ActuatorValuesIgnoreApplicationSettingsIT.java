@@ -7,12 +7,9 @@ import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvi
 
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
@@ -46,18 +43,7 @@ import tools.jackson.databind.JsonNode;
             "management.endpoint.configprops.access=none",
             "management.endpoint.health.show-details=never"
         })
-@ActiveProfiles("test")
-class ActuatorValuesIgnoreApplicationSettingsIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class ActuatorValuesIgnoreApplicationSettingsIT extends TestingAppITBase {
 
     @Test
     void theEnvironmentTabShowsANonSensitiveValueTheApplicationHidesFromItsOwnActuator() {

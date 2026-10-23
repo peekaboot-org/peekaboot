@@ -4,13 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.time.Instant;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
@@ -31,19 +28,8 @@ import tools.jackson.databind.JsonNode;
             "spring.jackson.default-property-inclusion=non_null",
             "spring.jackson.datatype.datetime.write-dates-as-timestamps=true"
         })
-@ActiveProfiles("test")
 @Import(HostJacksonSettingsIT.ProbeController.class)
-class HostJacksonSettingsIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class HostJacksonSettingsIT extends TestingAppITBase {
 
     @Test
     void theApplicationsOwnJsonFollowsItsJacksonSettings() {

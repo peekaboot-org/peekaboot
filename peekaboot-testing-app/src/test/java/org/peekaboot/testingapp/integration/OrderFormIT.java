@@ -3,14 +3,9 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import tools.jackson.databind.JsonNode;
@@ -19,22 +14,7 @@ import tools.jackson.databind.JsonNode;
  * The nav's order forms: the same placement as the JSON API behind a post-redirect-get, whose
  * failures render the error page and write no order.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class OrderFormIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    private TraceApiClient traces;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-        traces = new TraceApiClient(port);
-    }
+class OrderFormIT extends TestingAppITBase {
 
     @Test
     void aPlacedOrderRedirectsToTheOrdersPage() {

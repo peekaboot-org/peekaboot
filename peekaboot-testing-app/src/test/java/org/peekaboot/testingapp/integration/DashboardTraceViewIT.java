@@ -3,14 +3,9 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.store.TraceStore;
-import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -22,22 +17,10 @@ import tools.jackson.databind.JsonNode;
  * <p>The store is shared with every other class running against this application, so the
  * trace is pinned by an id of this class's own and nothing here asserts a store-wide count.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class DashboardTraceViewIT {
-
-    @LocalServerPort
-    private int port;
+class DashboardTraceViewIT extends TestingAppITBase {
 
     @Autowired
     private TraceStore traceStore;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
 
     @Test
     void anInjectedTraceIsServedWithItsSpansAndTags() {

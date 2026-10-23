@@ -3,13 +3,8 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.runtime.MachineInfo;
-import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -18,19 +13,7 @@ import tools.jackson.databind.JsonNode;
  * network or CPU facts on either side. What the Overview tab does with them is
  * {@code OverviewMachineIT}'s question.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class MachineInsightsIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class MachineInsightsIT extends TestingAppITBase {
 
     @Test
     void insightsApiCarriesTheCpuTopology() {

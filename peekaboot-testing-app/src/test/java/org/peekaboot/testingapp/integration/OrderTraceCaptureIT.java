@@ -8,7 +8,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.order.NewOrder;
@@ -16,12 +15,9 @@ import org.peekaboot.testingapp.order.OrderReconciler;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -30,18 +26,13 @@ import tools.jackson.databind.JsonNode;
  * green run here is evidence the Traces tab, the buckets and the query counters work end
  * to end.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class OrderTraceCaptureIT {
+class OrderTraceCaptureIT extends TestingAppITBase {
 
     private static final int SEEDED_ORDERS = 8;
 
     /** OrderService.listOrders' deliberate N+1: findByOrderId, countByOrderId, existsById. */
     private static final int QUERIES_PER_ORDER = 3;
-
-    @LocalServerPort
-    private int port;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -54,8 +45,6 @@ class OrderTraceCaptureIT {
 
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
-
-    private TraceApiClient traces;
 
     /**
      * Seeded once: every save outside a request is a root trace of its own in the store
@@ -78,7 +67,6 @@ class OrderTraceCaptureIT {
             line.setUnitPrice(new BigDecimal("19.99"));
             orderLineRepository.save(line);
         }
-        traces = new TraceApiClient(port);
     }
 
     @Test
@@ -281,7 +269,7 @@ class OrderTraceCaptureIT {
     }
 
     private ResponseEntity<String> placeOrder(NewOrder order) {
-        return traces.restClient()
+        return api.restClient()
                 .post()
                 .uri("/api/orders")
                 .contentType(MediaType.APPLICATION_JSON)

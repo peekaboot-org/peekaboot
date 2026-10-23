@@ -2,41 +2,21 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /** The statistics page exists to put a query past Peekaboot's SLOW_QUERY threshold every time. */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class OrderStatisticsIT {
-
-    @LocalServerPort
-    private int port;
+class OrderStatisticsIT extends TestingAppITBase {
 
     @Autowired
     private OrderRepository orderRepository;
 
     @Autowired
     private OrderLineRepository orderLineRepository;
-
-    private PeekabootApi api;
-
-    private TraceApiClient traces;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-        traces = new TraceApiClient(port);
-    }
 
     @Test
     void thePageCountsOrdersPerStatus() {

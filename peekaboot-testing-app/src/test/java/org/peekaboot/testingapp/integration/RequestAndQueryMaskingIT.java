@@ -3,17 +3,12 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.mapper.trace.DbSpans;
 import org.peekaboot.backend.tracing.store.TraceStore;
-import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -28,22 +23,10 @@ import tools.jackson.databind.JsonNode;
  * of {@code SharedFixturesConfig}, so this class shares the suite's context instead of forking
  * one for a fixture.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class RequestAndQueryMaskingIT {
-
-    @LocalServerPort
-    private int port;
+class RequestAndQueryMaskingIT extends TestingAppITBase {
 
     @Autowired
     private TraceStore traceStore;
-
-    private TraceApiClient traces;
-
-    @BeforeEach
-    void connect() {
-        traces = new TraceApiClient(port);
-    }
 
     @Test
     void aSecretBearingQueryParameterComesBackMaskedFromTheTraceInsightsApi() {
@@ -61,7 +44,7 @@ class RequestAndQueryMaskingIT {
 
     @Test
     void aSecretBearingFormFieldComesBackMaskedFromTheTraceInsightsApi() {
-        ResponseEntity<Void> response = traces.restClient()
+        ResponseEntity<Void> response = api.restClient()
                 .post()
                 .uri("/masking-test/login")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)

@@ -4,12 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -23,19 +18,7 @@ import tools.jackson.databind.JsonNode;
  * a real, secret-looking property to check the masking engine's actual output against -
  * the test profile's H2 datasource doesn't otherwise need a password.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class ActuatorMaskingIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class ActuatorMaskingIT extends TestingAppITBase {
 
     @Test
     void insightsEndpointMasksASecretLookingConfigProperty() {

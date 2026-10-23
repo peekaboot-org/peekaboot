@@ -3,12 +3,9 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -29,18 +26,7 @@ import tools.jackson.databind.JsonNode;
             "peekaboot.insights.levels[2].interval=4h",
             "peekaboot.insights.levels[2].size=10"
         })
-@ActiveProfiles("test")
-class InsightsTilesIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-    }
+class InsightsTilesIT extends TestingAppITBase {
 
     @Test
     void everyTileCarriesAValueBeforeTheFirstTick() {

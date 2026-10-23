@@ -9,11 +9,7 @@ import java.util.function.Function;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -24,22 +20,16 @@ import tools.jackson.databind.JsonNode;
  * answers a request that names no type with, while still listing it for a request that
  * asks for the type.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class PoolMaintenanceTraceCaptureIT {
+class PoolMaintenanceTraceCaptureIT extends TestingAppITBase {
 
     /** The listing request the dashboard sends with no chip selected: it names no type at all. */
     private static final String NO_TYPE_NAMED = "";
-
-    @LocalServerPort
-    private int port;
 
     @Autowired
     private DataSource dataSource;
 
     @Test
     void aStandaloneConnectionAcquisitionBecomesAMaintenanceTrace() throws SQLException {
-        TraceApiClient traces = new TraceApiClient(port);
 
         // One trace listing serves every test running against this application, and HikariCP's
         // own maintenance acquires connections without any test asking. An id absent from the

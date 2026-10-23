@@ -14,7 +14,6 @@ import org.awaitility.core.ConditionTimeoutException;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -41,15 +40,14 @@ class TraceApiClient {
     private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
 
     private final PeekabootApi api;
-    private final RestClient restClient;
 
     TraceApiClient(int port) {
         this.api = new PeekabootApi(port);
-        this.restClient = api.restClient();
     }
 
-    RestClient restClient() {
-        return restClient;
+    /** The plain API client underneath, for a request whose answer is not a trace. */
+    PeekabootApi api() {
+        return api;
     }
 
     /**

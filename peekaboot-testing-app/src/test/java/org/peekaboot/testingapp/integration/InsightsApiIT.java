@@ -20,15 +20,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -39,21 +33,7 @@ import tools.jackson.databind.JsonNode;
  * and the Playwright specs that reuse the same profile - don't need to wait out
  * the 10s production default.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class InsightsApiIT {
-
-    @LocalServerPort
-    private int port;
-
-    private PeekabootApi api;
-    private RestClient restClient;
-
-    @BeforeEach
-    void connect() {
-        api = new PeekabootApi(port);
-        restClient = api.restClient();
-    }
+class InsightsApiIT extends TestingAppITBase {
 
     @Test
     void configServesPanelsAndLevels() {
@@ -84,7 +64,7 @@ class InsightsApiIT {
 
     @Test
     void invalidLevelIsBadRequest() {
-        HttpStatusCode status = restClient
+        HttpStatusCode status = api.restClient()
                 .get()
                 .uri("/peekaboot/api/insights/data?level=9")
                 .accept(MediaType.APPLICATION_JSON)

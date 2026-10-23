@@ -5,13 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -26,19 +21,7 @@ import tools.jackson.databind.JsonNode;
  * was captured as part of this trace. Both symptoms are asserted here, on the shape of
  * what Peekaboot captured.
  */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class NestedDispatchTraceCaptureIT {
-
-    @LocalServerPort
-    private int port;
-
-    private TraceApiClient traces;
-
-    @BeforeEach
-    void connect() {
-        traces = new TraceApiClient(port);
-    }
+class NestedDispatchTraceCaptureIT extends TestingAppITBase {
 
     /**
      * Tomcat suspends a wrapped response once a forward returns, which drops everything
@@ -48,7 +31,7 @@ class NestedDispatchTraceCaptureIT {
      */
     @Test
     void forwardingRequestStillServesItsPage() {
-        String html = traces.restClient()
+        String html = api.restClient()
                 .get()
                 .uri("/people")
                 .accept(MediaType.TEXT_HTML)

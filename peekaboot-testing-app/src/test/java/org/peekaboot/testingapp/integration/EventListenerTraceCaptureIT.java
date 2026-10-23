@@ -11,20 +11,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.EventListenerMarker;
-import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.order.NewOrder;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /** What Peekaboot makes of the sync, async transactional and observed order-placed listeners, from one real order. */
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class EventListenerTraceCaptureIT {
+class EventListenerTraceCaptureIT extends TestingAppITBase {
 
     private static final String CONFIRMATION_SPAN = "OrderConfirmationListener#onOrderPlaced";
 
@@ -35,15 +29,11 @@ class EventListenerTraceCaptureIT {
             TraceApiClient.ROOT_SPAN_EXPORTED.and(trace -> SpanTree.names(trace)
                     .containsAll(List.of(CONFIRMATION_SPAN, STOCK_LEVEL_SPAN, AsyncTaskMarker.CONTEXTUAL_NAME)));
 
-    @LocalServerPort
-    private int port;
-
     private JsonNode trace;
 
     @BeforeAll
     void placeAnOrder() {
-        TraceApiClient traces = new TraceApiClient(port);
-        ResponseEntity<String> response = traces.restClient()
+        ResponseEntity<String> response = api.restClient()
                 .post()
                 .uri("/api/orders")
                 .contentType(MediaType.APPLICATION_JSON)

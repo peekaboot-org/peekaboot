@@ -147,7 +147,8 @@ class MultiDataSourceTraceIT {
 
     /** Hands back an error status instead of throwing, so a test can assert on 400 and 409. */
     private ResponseEntity<String> placeOrder(NewOrder order) {
-        return traces.restClient()
+        return traces.api()
+                .restClient()
                 .post()
                 .uri("/api/orders")
                 .contentType(MediaType.APPLICATION_JSON)
