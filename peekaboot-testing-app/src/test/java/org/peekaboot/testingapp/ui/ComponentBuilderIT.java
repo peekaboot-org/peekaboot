@@ -175,28 +175,24 @@ class ComponentBuilderIT extends PlaywrightTestBase {
 
     @Test
     void apiClientReachesTheRealEndpoint() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        Object tracing = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/api.js');
+        Object tracing = importModule("shared/api.js", """
+            (async () => {
                 const client = m.createClient({basePath: '/peekaboot'});
                 const features = await client.get('/api/features');
                 return features.tracing;
-            }
+            })()
             """);
         assertThat(tracing).isEqualTo(true);
     }
 
     @Test
     void apiClientRejectsWithTheStatus() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        Object message = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/api.js');
+        Object message = importModule("shared/api.js", """
+            (async () => {
                 const client = m.createClient({basePath: '/peekaboot'});
                 try { await client.get('/api/traces/does-not-exist/insights'); return 'resolved'; }
                 catch (e) { return e.message; }
-            }
+            })()
             """);
         assertThat((String) message)
                 .as("the status is what a caller renders, so it has to survive into the message")
@@ -215,8 +211,6 @@ class ComponentBuilderIT extends PlaywrightTestBase {
      */
     @Test
     void staleOverlappingResponseIsSupersededByTheNewerCall() {
-        openDashboard();
-
         AtomicReference<Route> parkedFirstRequest = new AtomicReference<>();
         page.route("**/peekaboot/api/features", route -> {
             if (!parkedFirstRequest.compareAndSet(null, route)) {
@@ -232,15 +226,14 @@ class ComponentBuilderIT extends PlaywrightTestBase {
             }
         });
 
-        Object result = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/api.js');
+        Object result = importModule("shared/api.js", """
+            (async () => {
                 const client = m.createClient({basePath: '/peekaboot'});
                 const first = client.get('/api/features');
                 const second = client.get('/api/features');
                 const [firstResult, secondResult] = await Promise.all([first, second]);
                 return (firstResult === null) + '|' + (secondResult !== null && secondResult.tracing === true);
-            }
+            })()
             """);
 
         assertThat(result).isEqualTo("true|true");

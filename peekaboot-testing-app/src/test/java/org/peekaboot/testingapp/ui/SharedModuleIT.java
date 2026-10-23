@@ -39,16 +39,12 @@ import org.peekaboot.backend.ui.InlinedStylesheets;
 class SharedModuleIT extends PlaywrightTestBase {
 
     private Object evalModule(String module, String expression) {
-        return evalUiModule("shared/" + module, expression);
-    }
-
-    private Object evalUiModule(String path, String expression) {
-        return importModule(path, expression);
+        return importModule("shared/" + module, expression);
     }
 
     /** Runs {@code body}, a function body over the insights store module {@code m}, and returns what it returns. */
     private Object evalInsightsStore(String body) {
-        return evalUiModule("dashboard/tabs/insights-store.js", "(() => {" + body + "})()");
+        return importModule("dashboard/tabs/insights-store.js", "(() => {" + body + "})()");
     }
 
     /**
@@ -57,7 +53,7 @@ class SharedModuleIT extends PlaywrightTestBase {
      * oldest open /api/insights/data request, and {@code settle()} letting pending work run.
      */
     private Object evalInsightsStream(String body) {
-        return evalUiModule(
+        return importModule(
                 "dashboard/tabs/insights-stream.js",
                 "(async () => {"
                         + " let source;"
@@ -366,7 +362,7 @@ class SharedModuleIT extends PlaywrightTestBase {
 
     @Test
     void taskTypesMirrorTheBackendEnum() {
-        assertThat(evalUiModule("dashboard/tabs/scheduled-tasks.js", "m.TASK_TYPES"))
+        assertThat(importModule("dashboard/tabs/scheduled-tasks.js", "m.TASK_TYPES"))
                 .isEqualTo(names(TaskType.values()));
     }
 
@@ -501,17 +497,17 @@ class SharedModuleIT extends PlaywrightTestBase {
     /** lifecycle.js's page param is 1-based in the URL; anything unparseable, fractional or below 1 is page one. */
     @Test
     void lifecyclePageFromUrlParsesOneBasedAndRejectsGarbage() {
-        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '3'})"))
+        assertThat(importModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '3'})"))
                 .isEqualTo(2);
-        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '1'})"))
+        assertThat(importModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '1'})"))
                 .isEqualTo(0);
-        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '0'})"))
+        assertThat(importModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '0'})"))
                 .isEqualTo(0);
-        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '2.5'})"))
+        assertThat(importModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '2.5'})"))
                 .isEqualTo(0);
-        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: 'x'})"))
+        assertThat(importModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: 'x'})"))
                 .isEqualTo(0);
-        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({})"))
+        assertThat(importModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({})"))
                 .isEqualTo(0);
     }
 
@@ -519,13 +515,13 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void insightsLevelFromUrlAcceptsOnlyConfiguredLevels() {
         String levels = "[{index: 0}, {index: 1}, {index: 2}]";
-        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: '1'}, " + levels + ", 0)"))
+        assertThat(importModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: '1'}, " + levels + ", 0)"))
                 .isEqualTo(1);
-        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: '9'}, " + levels + ", 0)"))
+        assertThat(importModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: '9'}, " + levels + ", 0)"))
                 .isEqualTo(0);
-        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: 'abc'}, " + levels + ", 0)"))
+        assertThat(importModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: 'abc'}, " + levels + ", 0)"))
                 .isEqualTo(0);
-        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({}, " + levels + ", 0)"))
+        assertThat(importModule("dashboard/tabs/insights.js", "m.levelFromUrl({}, " + levels + ", 0)"))
                 .isEqualTo(0);
     }
 
@@ -533,27 +529,27 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void insightsPanelOverridesFromUrlAcceptOnlyConfiguredPanelsAndLevels() {
         String config = "{panels: [{id: 'cpu'}, {id: 'load'}], levels: [{index: 0}, {index: 1}]}";
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights.js",
                         "JSON.stringify(m.panelOverridesFromUrl({panels: 'cpu:1,load:0'}, " + config + "))"))
                 .isEqualTo("{\"cpu\":1,\"load\":0}");
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights.js",
                         "JSON.stringify(m.panelOverridesFromUrl({panels: 'cpu:9'}, " + config + "))"))
                 .isEqualTo("{}");
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights.js",
                         "JSON.stringify(m.panelOverridesFromUrl({panels: 'ghost:1'}, " + config + "))"))
                 .isEqualTo("{}");
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights.js",
                         "JSON.stringify(m.panelOverridesFromUrl({panels: 'garbage'}, " + config + "))"))
                 .isEqualTo("{}");
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights.js",
                         "JSON.stringify(m.panelOverridesFromUrl({panels: 'cpu:'}, " + config + "))"))
                 .isEqualTo("{}");
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights.js", "JSON.stringify(m.panelOverridesFromUrl({}, " + config + "))"))
                 .isEqualTo("{}");
     }
@@ -789,13 +785,13 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void insightsStoreCountsMissedSamplesCappedAtTheRingSize() {
         String snapshot = "{endEpochMs: 10000, intervalMs: 1000, size: 5}";
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 11000})"))
                 .isEqualTo(0);
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 13000})"))
                 .isEqualTo(2);
-        assertThat(evalUiModule(
+        assertThat(importModule(
                         "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 20000})"))
                 .isEqualTo(5);
     }
@@ -878,7 +874,7 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("format.js", "m.TILE_FORMATS"))
                 .isEqualTo(
                         Stream.of(TileFormat.values()).map(TileFormat::wireName).toList());
-        assertThat(evalUiModule("dashboard/tabs/insights-chart.js", "m.CHART_TYPES"))
+        assertThat(importModule("dashboard/tabs/insights-chart.js", "m.CHART_TYPES"))
                 .isEqualTo(Stream.of(Chart.values()).map(Chart::wireName).toList());
     }
 
@@ -892,7 +888,7 @@ class SharedModuleIT extends PlaywrightTestBase {
     void insightsChartFallbacksMirrorTheLightThemeTokens() {
         @SuppressWarnings("unchecked")
         Map<String, String> fallbacks = new LinkedHashMap<>(
-                (Map<String, String>) evalUiModule("dashboard/tabs/insights-colors.js", "m.LIGHT_FALLBACKS"));
+                (Map<String, String>) importModule("dashboard/tabs/insights-colors.js", "m.LIGHT_FALLBACKS"));
         fallbacks.remove("--pk-font");
 
         setStoredTheme("light");

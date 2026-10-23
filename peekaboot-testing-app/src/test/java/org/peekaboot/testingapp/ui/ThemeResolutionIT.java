@@ -181,13 +181,11 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void watchThemeFollowsTheOsPreferenceChangingAfterTheModuleLoaded() {
         emulateOsColorScheme(ColorScheme.LIGHT);
-        openBlankFixture();
-        page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/theme.js');
+        importModule("shared/theme.js", """
+            (() => {
                 window.__pkThemes = [];
                 m.watchTheme(theme => window.__pkThemes.push(theme));
-            }
+            })()
             """);
 
         emulateOsColorScheme(ColorScheme.DARK);
