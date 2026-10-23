@@ -57,6 +57,12 @@ dependencies {
     testImplementation("com.deque.html.axe-core:playwright:4.13.0")
 }
 
+// The Maven module's annotationProcessorPaths lists Error Prone alone, so its jar carries no
+// configuration metadata.
+configurations.annotationProcessor {
+    exclude(group = "org.springframework.boot", module = "spring-boot-configuration-processor")
+}
+
 // Maven compiles this module with -parameters (spring-boot-starter-parent default).
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-parameters")
