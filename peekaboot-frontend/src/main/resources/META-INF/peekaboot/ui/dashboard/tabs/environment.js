@@ -13,7 +13,7 @@ const tab = propertyGroupTab({
     listId: 'property-sources',
     unmaskSlotId: 'env-unmask-slot',
     select: data => data?.environment?.propertySources,
-    groupName: source => source.name || 'Unknown Source',
+    groupName: source => source.name,
     extraTop: data => renderActiveProfiles(data.environment.activeProfiles),
     emptyMessage: 'No environment properties available'
 });

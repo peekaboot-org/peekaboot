@@ -122,12 +122,8 @@ function renderBuildInfo(container, build, dateOptions) {
 function renderGitInfo(container, git, dateOptions) {
     fillCard(container, '#git-info', git, 'No git info available', body => {
         if (git.branch) body.appendChild(kvRow('Branch', git.branch));
-        if (git.commit?.id) {
-            const commitId = git.commit.id.abbrev || git.commit.id;
-            body.appendChild(kvRow('Commit', commitId, {mono: true}));
-        }
+        if (git.commit?.id) body.appendChild(kvRow('Commit', git.commit.id, {mono: true}));
         if (git.commit?.time) body.appendChild(kvRow('Commit Time', formatDateTime(git.commit.time, dateOptions)));
-        if (git.dirty !== undefined) body.appendChild(kvRow('Dirty', git.dirty ? 'Yes' : 'No'));
     });
 }
 
@@ -298,12 +294,11 @@ function renderDataSourceCard(ds) {
         el('h2', {className: 'pk-card__title', text: name}),
         ds.health ? badge(ds.health, healthSeverity(ds.health)) : null);
 
-    const dbProduct = ds.databaseProduct ? (ds.databaseProduct.displayName || ds.databaseProduct) : '-';
     const body = el('div', {className: 'pk-card__body'},
         kvRow('Database', ds.databaseName),
         kvRow('Host', formatHosts(ds.hosts), {mono: true}),
         kvRow('User', ds.username),
-        kvRow('Product', String(dbProduct)),
+        kvRow('Product', ds.databaseProduct),
         kvRow('Driver', ds.driver));
 
     const card = el('div', {className: 'pk-card', attrs: {'data-datasource': name}}, header, body);
@@ -360,7 +355,7 @@ function renderMemoryInfo(container, runtime) {
     if (storage && storage.length > 0) {
         storage.forEach(s => {
             const used = s.total - s.free;
-            body.appendChild(usageSection(s.path || 'Disk',
+            body.appendChild(usageSection(s.path,
                 `${formatBytes(used)} used / ${formatBytes(s.total)} total (${formatBytes(s.free)} free)`,
                 s.usedPercent));
         });
