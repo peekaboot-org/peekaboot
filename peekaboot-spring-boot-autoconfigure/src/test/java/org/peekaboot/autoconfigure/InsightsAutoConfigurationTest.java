@@ -135,11 +135,7 @@ class InsightsAutoConfigurationTest {
 
     @Test
     void backsOffWhenPeekabootDisabled() {
-        new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        PeekabootAutoConfiguration.class,
-                        InsightsAutoConfiguration.class,
-                        JacksonAutoConfiguration.class))
+        contextRunner
                 .withUserConfiguration(MeterRegistryConfig.class)
                 .withPropertyValues("peekaboot.enabled=false")
                 .run(context -> {

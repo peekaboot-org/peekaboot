@@ -201,14 +201,9 @@ class DevToolbarAutoConfigurationTest {
      */
     @Test
     void theToolbarSeesATracerFromBravesAutoConfiguration() {
-        new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        DevToolbarAutoConfiguration.class,
-                        PeekabootAutoConfiguration.class,
-                        DispatcherServletAutoConfiguration.class,
-                        PeekabootPathsAutoConfiguration.class,
-                        BraveAutoConfiguration.class))
-                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
+        contextRunner
+                .withConfiguration(AutoConfigurations.of(BraveAutoConfiguration.class))
+                .withPropertyValues("peekaboot.dev-toolbar=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasBean("devToolbarFilter");
