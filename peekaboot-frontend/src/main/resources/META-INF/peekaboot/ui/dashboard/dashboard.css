@@ -248,7 +248,7 @@
 .pk-component-grid__details { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); overflow-wrap: anywhere; white-space: pre-line; }
 
 /* DataSources */
-.pk-datasources__toggle { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
+.pk-datasources__toggle,
 .pk-datasources__params { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
 .pk-datasources__params-list { background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
