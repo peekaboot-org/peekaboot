@@ -226,7 +226,6 @@ class TraceInsightsServiceTest {
         assertThat(result.get().logs()).hasSize(1);
         assertThat(result.get().logs().get(0).message()).isEqualTo("Test log message from trace");
         assertThat(result.get().logs().get(0).level()).isEqualTo("INFO");
-        assertThat(result.get().logs().get(0).loggerName()).isEqualTo("TestLogger");
     }
 
     /** The service folds with the rules it was built with; {@link TraceLogMapperTest} pins the folding itself. */

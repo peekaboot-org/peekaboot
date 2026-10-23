@@ -1642,8 +1642,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .at(7, 1)
                 .tag("jdbc.row-count", "8")
                 .build());
-        traceStore.addLog(new LogCapturedEvent(
-                traceId, "query", Instant.EPOCH.plusMillis(6), "INFO", "fixture", "found 8 orders", "main", null));
+        traceStore.addLog(
+                new LogCapturedEvent(traceId, "query", Instant.EPOCH.plusMillis(6), "INFO", "found 8 orders", null));
         return traceId;
     }
 

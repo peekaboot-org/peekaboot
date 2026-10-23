@@ -86,9 +86,7 @@ final class TraceLogMapper {
                 bundle.resolveSpanId(e.spanId()),
                 e.timestamp(),
                 e.level(),
-                e.loggerName(),
                 e.message(),
-                e.threadName(),
                 wireStackTrace,
                 hiddenFrames,
                 applicationFrames);

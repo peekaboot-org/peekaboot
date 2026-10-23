@@ -34,7 +34,6 @@ public final class SpanNodes {
         private Map<String, String> tags = Map.of();
         private List<SpanEvent> events = List.of();
         private List<SpanIssue> issues = List.of();
-        private long creationOrder;
         private String errorMessage;
         private String errorClass;
         private SqlStatement query;
@@ -90,11 +89,6 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder order(long creationOrder) {
-            this.creationOrder = creationOrder;
-            return this;
-        }
-
         public Builder error(String errorMessage, String errorClass) {
             this.errorMessage = errorMessage;
             this.errorClass = errorClass;
@@ -123,7 +117,6 @@ public final class SpanNodes {
                     tags,
                     events,
                     issues,
-                    creationOrder,
                     errorMessage,
                     errorClass,
                     query,

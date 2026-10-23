@@ -52,14 +52,11 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
         String spanId = mdc.get(SPAN_ID_KEY);
         Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
         String level = event.getLevel().toString();
-        String loggerName = event.getLoggerName();
         String message = event.getFormattedMessage();
-        String threadName = event.getThreadName();
         IThrowableProxy throwable = event.getThrowableProxy();
         String stackTrace = throwable == null ? null : capLines(ThrowableProxyUtil.asString(throwable));
 
-        eventPublisher.publishEvent(
-                new LogCapturedEvent(traceId, spanId, timestamp, level, loggerName, message, threadName, stackTrace));
+        eventPublisher.publishEvent(new LogCapturedEvent(traceId, spanId, timestamp, level, message, stackTrace));
     }
 
     private static String capLines(String trace) {

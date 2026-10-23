@@ -111,7 +111,6 @@ class QueryExtractorTest {
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).rowCount()).isEqualTo(42L);
-        assertThat(queries.get(0).creationOrder()).isEqualTo(10L);
     }
 
     @Test

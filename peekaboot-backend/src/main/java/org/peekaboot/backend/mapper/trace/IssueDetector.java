@@ -35,25 +35,19 @@ public class IssueDetector {
         long slowQueryMs = properties.getSlowQueryThresholdMs();
 
         if (durationMs >= verySlowMs) {
-            issues.add(issue(IssueType.VERY_SLOW, "Span", durationMs, verySlowMs, IssueSeverity.ERROR));
+            issues.add(new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR));
         } else if (durationMs >= slowMs) {
-            issues.add(issue(IssueType.SLOW, "Span", durationMs, slowMs, IssueSeverity.WARNING));
+            issues.add(new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING));
         }
 
         if (DbSpans.isQuery(span) && durationMs >= slowQueryMs) {
-            issues.add(issue(IssueType.SLOW_QUERY, "Query", durationMs, slowQueryMs, IssueSeverity.WARNING));
+            issues.add(new SpanIssue(IssueType.SLOW_QUERY, IssueSeverity.WARNING));
         }
 
         List<SpanNode> processedChildren =
                 span.children().stream().map(this::processSpan).toList();
 
         return span.withIssues(issues, processedChildren);
-    }
-
-    private static SpanIssue issue(
-            IssueType type, String subject, long durationMs, long thresholdMs, IssueSeverity severity) {
-        return new SpanIssue(
-                type, String.format("%s took %dms (threshold: %dms)", subject, durationMs, thresholdMs), severity);
     }
 
     private static boolean hasSlowIssue(SpanNode span) {

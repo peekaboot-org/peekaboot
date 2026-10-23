@@ -46,9 +46,7 @@ final class TraceFixtures {
                 ROOT_SPAN_ID,
                 Instant.EPOCH,
                 "ERROR",
-                "TestLogger",
                 "boom",
-                "main",
                 "java.lang.IllegalStateException: boom\n\tat com.acme.vendor.Client.call(Client.java:42)\n");
     }
 

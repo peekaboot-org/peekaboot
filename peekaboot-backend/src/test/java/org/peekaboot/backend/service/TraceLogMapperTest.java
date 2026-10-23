@@ -41,20 +41,13 @@ class TraceLogMapperTest {
 
     @Test
     void aLogCarriesWhatWasCaptured() {
-        store.addLog(log("t1")
-                .inSpan("root")
-                .at("WARN")
-                .from("org.example.Thing")
-                .saying("careful")
-                .build());
+        store.addLog(log("t1").inSpan("root").at("WARN").saying("careful").build());
 
         TraceLog result = mapped(mapper).getFirst();
 
         assertThat(result.spanId()).isEqualTo("root");
         assertThat(result.level()).isEqualTo("WARN");
-        assertThat(result.loggerName()).isEqualTo("org.example.Thing");
         assertThat(result.message()).isEqualTo("careful");
-        assertThat(result.threadName()).isEqualTo("main");
     }
 
     @Test

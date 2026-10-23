@@ -14,14 +14,7 @@ import java.time.Instant;
  *     with a trailing marker where it was.
  */
 public record LogCapturedEvent(
-        String traceId,
-        String spanId,
-        Instant timestamp,
-        String level,
-        String loggerName,
-        String message,
-        String threadName,
-        String stackTrace) {
+        String traceId, String spanId, Instant timestamp, String level, String message, String stackTrace) {
 
     public boolean isError() {
         return "ERROR".equalsIgnoreCase(level);

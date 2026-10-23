@@ -101,7 +101,7 @@ class or message. An error-level log alone does not: it only puts the trace in t
 bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Issue
-`SpanIssue(IssueType type, String message, IssueSeverity severity)`, held in `SpanNode.issues`.
+`SpanIssue(IssueType type, IssueSeverity severity)`, held in `SpanNode.issues`.
 `IssueType`'s constants are `SLOW`, `VERY_SLOW` and `SLOW_QUERY`; `IssueSeverity`
 has two and serialises lowercase through `@JsonValue`. The UI colours a span's duration by
 `severity` alone (`severity.js`'s `issueSeverity`), never by `type`.
@@ -228,15 +228,14 @@ fill; see *Servlet Filters* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for what suc
 solve first.
 
 ### Trace Log and Query Info
-`TraceLog(spanId, timestamp, level, loggerName, message, threadName, stackTrace, hiddenFrames,
-applicationFrames)` is one captured log event, correlated by the trace and span ids frozen in its
-MDC. `stackTrace` is the captured throwable, null where there was none; `hiddenFrames` and
+`TraceLog(spanId, timestamp, level, message, stackTrace, hiddenFrames, applicationFrames)` is one
+captured log event, correlated by the trace and span ids frozen in its MDC. `stackTrace` is the captured throwable, null where there was none; `hiddenFrames` and
 `applicationFrames` are the line ranges folding marked in it. It appears once on the detail
 response, in `TraceTree.logs`, its `spanId` resolved to the span that survived deduplication. A log
 with no span id belongs to no span.
 
-`QueryInfo(spanId, statement, dbSystem, dataSourceName, durationMs, timestamp, rowCount,
-creationOrder)` is one query span. `statement` is masked and may be null when the
+`QueryInfo(spanId, statement, dbSystem, dataSourceName, durationMs, rowCount)` is one query
+span. `statement` is masked and may be null when the
 instrumentation recorded no statement; the query is still listed. `dataSourceName` is
 the Hikari pool name (`jdbc.datasource.pool`) unless Hikari generated it (`HikariPool-1`), else
 datasource-proxy's `jdbc.datasource.name`, null when neither is tagged.

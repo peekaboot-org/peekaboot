@@ -48,12 +48,12 @@ class IssueDetectorTest {
                         Named.of(
                                 "150ms, between the slow and very-slow thresholds",
                                 node("span1").durationMs(150).build()),
-                        new SpanIssue(IssueType.SLOW, "Span took 150ms (threshold: 100ms)", IssueSeverity.WARNING)),
+                        new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING)),
                 Arguments.of(
                         Named.of(
                                 "600ms, past the very-slow threshold",
                                 node("span1").durationMs(600).build()),
-                        new SpanIssue(IssueType.VERY_SLOW, "Span took 600ms (threshold: 500ms)", IssueSeverity.ERROR)),
+                        new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR)),
                 Arguments.of(
                         Named.of(
                                 "an 80ms query, past the slow-query threshold",
@@ -62,8 +62,7 @@ class IssueDetectorTest {
                                         .durationMs(80)
                                         .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"))
                                         .build()),
-                        new SpanIssue(
-                                IssueType.SLOW_QUERY, "Query took 80ms (threshold: 50ms)", IssueSeverity.WARNING)));
+                        new SpanIssue(IssueType.SLOW_QUERY, IssueSeverity.WARNING)));
     }
 
     /** The thresholds are inclusive: a span exactly on one trips it. */

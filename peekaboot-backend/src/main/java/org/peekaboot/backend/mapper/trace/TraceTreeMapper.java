@@ -273,7 +273,6 @@ public class TraceTreeMapper {
                 maskedTags(spanData),
                 mapEvents(spanData),
                 List.of(), // issues added by IssueDetector
-                spanData.creationOrder(),
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
                 queries.statement(spanData),

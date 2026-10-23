@@ -1,6 +1,5 @@
 package org.peekaboot.backend.mapper.trace;
 
-import java.time.Instant;
 import java.util.List;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -20,17 +19,12 @@ public class QueryExtractor {
         String dbSystem = DbSpans.system(span.tags());
         String dataSourceName = DbSpans.dataSourceName(span.tags());
 
-        Instant timestamp = span.startTime();
-        long creationOrder = span.creationOrder();
-
         return new QueryInfo(
                 span.spanId(),
                 queries.statement(span),
                 dbSystem,
                 dataSourceName,
                 span.durationMs(),
-                timestamp,
-                queries.rowCount(span.spanId()),
-                creationOrder);
+                queries.rowCount(span.spanId()));
     }
 }

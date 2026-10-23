@@ -19,9 +19,7 @@ public record TraceLog(
         String spanId,
         Instant timestamp,
         String level,
-        String loggerName,
         String message,
-        String threadName,
         String stackTrace,
         List<Range> hiddenFrames,
         List<Range> applicationFrames) {}
