@@ -2,8 +2,8 @@
 #
 # Waits until a released version can be downloaded from Maven Central.
 #
-# The release uploads with waitUntil=uploaded, because central-publishing-maven-plugin 0.11.0
-# fails the build on the first non-2xx status poll (StatusPublisherEndpoint.call) even when the
+# The release uploads with waitUntil=uploaded, because central-publishing-maven-plugin fails
+# the build on the first non-2xx status poll (StatusPublisherEndpoint.call) even when the
 # deployment goes on to publish. Here a failed request is just another retry. A deployment
 # publishes all or nothing, so the starter's pom stands for the whole bundle.
 #
