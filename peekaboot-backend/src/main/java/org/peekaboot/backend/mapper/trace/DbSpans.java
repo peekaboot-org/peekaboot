@@ -9,6 +9,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
+import org.peekaboot.backend.tracing.tags.Tags;
 
 /**
  * The one definition of "database query span", shared by the summary count
@@ -29,17 +31,11 @@ public final class DbSpans {
     /** The name Hikari gives a pool nobody named. */
     private static final Pattern GENERATED_POOL_NAME = Pattern.compile("HikariPool-\\d+");
 
-    /**
-     * The bind parameters Peekaboot's own capture records on a query span: a JSON array of
-     * parameter sets, one per execution of a batch, each an array of SQL literals.
-     */
-    public static final String PARAMETERS_TAG = "peekaboot.query.parameters";
-
-    /** How many parameter sets of a capped batch {@link #PARAMETERS_TAG} leaves out; absent when it left out none. */
-    public static final String OMITTED_PARAMETER_SETS_TAG = "peekaboot.query.omitted-parameter-sets";
-
-    private static final Set<String> STATEMENT_TAGS =
-            Set.of("db.query.text", "db.statement", PARAMETERS_TAG, OMITTED_PARAMETER_SETS_TAG);
+    private static final Set<String> STATEMENT_TAGS = Set.of(
+            "db.query.text",
+            "db.statement",
+            QueryParameterTags.PARAMETERS_TAG,
+            QueryParameterTags.OMITTED_PARAMETER_SETS_TAG);
 
     /** How {@link #sql} joins the statements of a batch. */
     static final String STATEMENT_SEPARATOR = ";\n";

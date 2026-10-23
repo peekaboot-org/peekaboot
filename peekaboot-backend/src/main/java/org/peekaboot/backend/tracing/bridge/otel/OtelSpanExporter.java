@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.mapper.trace.HttpSpanTags;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
+import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**

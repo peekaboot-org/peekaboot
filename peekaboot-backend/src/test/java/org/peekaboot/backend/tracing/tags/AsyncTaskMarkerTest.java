@@ -1,4 +1,4 @@
-package org.peekaboot.backend.domain.trace;
+package org.peekaboot.backend.tracing.tags;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

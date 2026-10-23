@@ -7,6 +7,7 @@ import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 
@@ -52,7 +53,7 @@ final class SqlStatements {
     }
 
     private static int omittedParameterSets(Map<String, String> tags) {
-        String count = tags == null ? null : tags.get(DbSpans.OMITTED_PARAMETER_SETS_TAG);
+        String count = tags == null ? null : tags.get(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG);
         if (count == null) {
             return 0;
         }
@@ -64,7 +65,7 @@ final class SqlStatements {
     }
 
     private List<List<String>> maskedParameters(Map<String, String> tags) {
-        String json = tags == null ? null : tags.get(DbSpans.PARAMETERS_TAG);
+        String json = tags == null ? null : tags.get(QueryParameterTags.PARAMETERS_TAG);
         if (json == null) {
             return List.of();
         }

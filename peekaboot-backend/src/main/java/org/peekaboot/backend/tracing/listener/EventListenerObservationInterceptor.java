@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.jspecify.annotations.Nullable;
-import org.peekaboot.backend.domain.trace.EventListenerMarker;
+import org.peekaboot.backend.tracing.tags.EventListenerMarker;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotatedElementUtils;

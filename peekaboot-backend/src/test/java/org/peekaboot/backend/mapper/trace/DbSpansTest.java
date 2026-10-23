@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.SqlStatement;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 
 class DbSpansTest {
 
@@ -212,7 +213,8 @@ class DbSpansTest {
         assertThat(DbSpans.isStatementTag("jdbc.query[3]")).isTrue();
         assertThat(DbSpans.isStatementTag("db.system")).isFalse();
         assertThat(DbSpans.isStatementTag("jdbc.row-count")).isFalse();
-        assertThat(DbSpans.isStatementTag(DbSpans.PARAMETERS_TAG)).isTrue();
-        assertThat(DbSpans.isStatementTag(DbSpans.OMITTED_PARAMETER_SETS_TAG)).isTrue();
+        assertThat(DbSpans.isStatementTag(QueryParameterTags.PARAMETERS_TAG)).isTrue();
+        assertThat(DbSpans.isStatementTag(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
+                .isTrue();
     }
 }

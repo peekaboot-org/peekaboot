@@ -14,6 +14,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 
 class SqlStatementsTest {
 
@@ -80,7 +81,7 @@ class SqlStatementsTest {
     @Test
     void masksEachParameterTheWayItMasksTheSql() {
         SqlStatement statement = withHibernate.of(jdbcQuery("q1", "insert into tokens (id, value) values (?, ?)")
-                .tag(DbSpans.PARAMETERS_TAG, "[[\"42\",\"'" + GITHUB_TOKEN + "'\"],[\"43\",\"'plain'\"]]")
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\",\"'" + GITHUB_TOKEN + "'\"],[\"43\",\"'plain'\"]]")
                 .build());
 
         assertThat(statement.parameters()).containsExactly(List.of("42", "'******'"), List.of("43", "'plain'"));
@@ -89,8 +90,9 @@ class SqlStatementsTest {
     @ParameterizedTest
     @ValueSource(strings = {"not json", "{\"a\":1}", "null", "[null]", "[[null]]", "[\"x\"]", "[[\"x\"],1]"})
     void aMalformedParametersTagYieldsNoParameters(String tag) {
-        SqlStatement statement = withHibernate.of(
-                jdbcQuery("q1", "select ?").tag(DbSpans.PARAMETERS_TAG, tag).build());
+        SqlStatement statement = withHibernate.of(jdbcQuery("q1", "select ?")
+                .tag(QueryParameterTags.PARAMETERS_TAG, tag)
+                .build());
 
         assertThat(statement.text()).isEqualTo("select ?");
         assertThat(statement.parameters()).isEmpty();
@@ -99,8 +101,8 @@ class SqlStatementsTest {
     @Test
     void carriesTheCountOfParameterSetsACappedBatchLeftOut() {
         SqlStatement statement = withHibernate.of(jdbcQuery("q1", "insert into t values (?)")
-                .tag(DbSpans.PARAMETERS_TAG, "[[\"1\"],[\"2\"]]")
-                .tag(DbSpans.OMITTED_PARAMETER_SETS_TAG, "37")
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"1\"],[\"2\"]]")
+                .tag(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG, "37")
                 .build());
 
         assertThat(statement.parameters()).containsExactly(List.of("1"), List.of("2"));
@@ -111,8 +113,8 @@ class SqlStatementsTest {
     @ValueSource(strings = {"", "x", "-3", "1.5", "99999999999"})
     void aMalformedOmittedCountReadsAsNoneOmitted(String tag) {
         SqlStatement statement = withHibernate.of(jdbcQuery("q1", "select ?")
-                .tag(DbSpans.PARAMETERS_TAG, "[[\"1\"]]")
-                .tag(DbSpans.OMITTED_PARAMETER_SETS_TAG, tag)
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"1\"]]")
+                .tag(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG, tag)
                 .build());
 
         assertThat(statement.parameters()).containsExactly(List.of("1"));

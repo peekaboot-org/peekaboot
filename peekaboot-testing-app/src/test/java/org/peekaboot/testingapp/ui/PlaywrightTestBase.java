@@ -24,7 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.extension.TestWatcher;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.peekaboot.testingapp.TestingAppTest;
 import org.peekaboot.testingapp.integration.ServerTiming;
 import org.slf4j.Logger;

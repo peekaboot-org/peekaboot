@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.mapper.trace.DbSpans;
 import org.peekaboot.backend.tracing.store.TraceStore;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -119,7 +119,7 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
                 .at(5, 15)
                 .tag("db.system", "h2")
                 .tag("db.statement", "INSERT INTO tokens (value) VALUES (?)")
-                .tag(DbSpans.PARAMETERS_TAG, "[[\"'ghp_" + "a".repeat(36) + "'\"]]")
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"'ghp_" + "a".repeat(36) + "'\"]]")
                 .build());
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);

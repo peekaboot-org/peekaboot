@@ -1,4 +1,4 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.tracing.tags;
 
 import java.util.Map;
 

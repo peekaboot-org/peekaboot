@@ -3,9 +3,11 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.Map;
 import java.util.Set;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.HttpSpanTags;
+import org.peekaboot.backend.tracing.tags.Tags;
 
 /**
  * What started a trace, read off its root span alone: the one classification behind a trace's

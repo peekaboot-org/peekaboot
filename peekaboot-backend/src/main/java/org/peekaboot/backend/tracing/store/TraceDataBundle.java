@@ -12,9 +12,9 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
 /**
  * Bundle of all data collected for a single trace: spans, logs, and request info.

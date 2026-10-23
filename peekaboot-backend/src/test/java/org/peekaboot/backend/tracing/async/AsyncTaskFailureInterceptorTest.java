@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.testsupport.RecordingObservations;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.springframework.aop.framework.ProxyFactory;
 
 /**

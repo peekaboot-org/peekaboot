@@ -23,8 +23,8 @@ import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
-import org.peekaboot.backend.mapper.trace.DbSpans;
 import org.peekaboot.backend.testsupport.RecordingObservations;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -95,7 +95,7 @@ class QueryParameterObservationFilterTest {
                         .get(0)
                         .asString(""))
                 .isEqualTo(String.valueOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS));
-        assertThat(queryContext().getHighCardinalityKeyValue(DbSpans.OMITTED_PARAMETER_SETS_TAG))
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
                 .extracting(KeyValue::getValue)
                 .isEqualTo("2");
     }
@@ -106,7 +106,7 @@ class QueryParameterObservationFilterTest {
 
         assertThat(PeekabootJson.MAPPER.readTree(parametersTag()))
                 .hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS);
-        assertThat(queryContext().getHighCardinalityKeyValue(DbSpans.OMITTED_PARAMETER_SETS_TAG))
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
                 .isNull();
     }
 
@@ -142,7 +142,7 @@ class QueryParameterObservationFilterTest {
             statement.executeQuery("SELECT COUNT(*) FROM person").close();
         }
 
-        assertThat(queryContext().getHighCardinalityKeyValue(DbSpans.PARAMETERS_TAG))
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.PARAMETERS_TAG))
                 .isNull();
     }
 
@@ -154,7 +154,7 @@ class QueryParameterObservationFilterTest {
             count.executeQuery().close();
         }
 
-        assertThat(queryContext().getHighCardinalityKeyValue(DbSpans.PARAMETERS_TAG))
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.PARAMETERS_TAG))
                 .isNull();
     }
 
@@ -175,7 +175,7 @@ class QueryParameterObservationFilterTest {
 
         new QueryParameterObservationFilter().map(context);
 
-        assertThat(context.getHighCardinalityKeyValue(DbSpans.PARAMETERS_TAG))
+        assertThat(context.getHighCardinalityKeyValue(QueryParameterTags.PARAMETERS_TAG))
                 .extracting(KeyValue::getValue)
                 .isEqualTo("[[\"'Bob'\"]]");
     }
@@ -220,7 +220,7 @@ class QueryParameterObservationFilterTest {
     }
 
     private String parametersTag() {
-        KeyValue tag = queryContext().getHighCardinalityKeyValue(DbSpans.PARAMETERS_TAG);
+        KeyValue tag = queryContext().getHighCardinalityKeyValue(QueryParameterTags.PARAMETERS_TAG);
         assertThat(tag)
                 .as("the key the tracing handler turns into the span tag")
                 .isNotNull();

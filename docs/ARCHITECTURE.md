@@ -234,9 +234,12 @@ org.peekaboot.backend/
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
 │   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
-│   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
-│                           # AsyncMembership, Window, ListingRoots, ListedTrace,
-│                           # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
+│   ├── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
+│   │                       # AsyncMembership, Window, ListingRoots, ListedTrace,
+│   │                       # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
+│   └── tags/               # The span-tag vocabulary capture, store and mappers share: AsyncTaskMarker,
+│                           # EventListenerMarker, QueryParameterTags (Peekaboot's own keys), HttpSpanTags,
+│                           # Tags (reading foreign conventions)
 └── ui/                     # InlinedStylesheets, Placeholders: shared by the server-rendered toolbar and error page
 ```
 
@@ -1480,8 +1483,9 @@ datasource-micrometer's `jdbc.params[N]` is one comma-joined string. `QueryParam
 reads datasource-proxy's `QueryInfo.getParametersList()`, which datasource-proxy fills for every
 prepared statement whatever `jdbc.datasource-proxy.include-parameter-values` says.
 
-It adds them as one high-cardinality key, `peekaboot.query.parameters` (`DbSpans.PARAMETERS_TAG`):
-a JSON array of parameter sets, one per batch entry, each an array of SQL literals (`SqlLiterals`).
+It adds them as one high-cardinality key, `peekaboot.query.parameters`
+(`QueryParameterTags.PARAMETERS_TAG`): a JSON array of parameter sets, one per batch entry, each
+an array of SQL literals (`SqlLiterals`).
 Values bound by name are skipped, and a statement without parameters gets no key. A filter runs in
 `Observation.stop()` before any handler's `onStop`, so the tracing handler tags the span with it.
 
@@ -1504,8 +1508,8 @@ query text in place of a placeholder.
 `QueryParameterObservationFilter.MAX_PARAMETER_SETS` (100) drops the parameter sets of a batch
 past that many entries rather than rendering and serialising all of them. It records how many
 it dropped as a second key, `peekaboot.query.omitted-parameter-sets`
-(`DbSpans.OMITTED_PARAMETER_SETS_TAG`), absent when it dropped none. The statement serves that
-count as `omittedParameterSets`, and the browser words it. Both caps exist
+(`QueryParameterTags.OMITTED_PARAMETER_SETS_TAG`), absent when it dropped none. The statement
+serves that count as `omittedParameterSets`, and the browser words it. Both caps exist
 because the capture is always on, unlike datasource-micrometer's own `jdbc.params`, which is
 off by default. Nothing else on the ingestion path bounds a tag's size, so an unbounded literal
 or batch would cost time on the application's query thread, bloat the in-memory trace store,

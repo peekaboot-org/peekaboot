@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
 /**
  * Builds {@link SpanData} fixtures. Every field has a neutral default - trace {@code trace1},

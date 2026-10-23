@@ -94,10 +94,10 @@ webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
 JDBC-shaped query span, `resultSet(id, rowCount)` for the row-count span datasource-proxy
 exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair and
 `jdbcConnection` for the pool acquisition datasource-micrometer exports, and `asyncTask` for the
-span Peekaboot's async decorator exports. A query fixture's bind
-parameters are its `DbSpans.PARAMETERS_TAG` tag, in the JSON `QueryParameterObservationFilter`
-writes (`.tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")`); `SpanNodes.node(id).statement(...)` takes the
-mapped `SqlStatement`.
+span Peekaboot's async decorator exports. A query fixture's bind parameters are its
+`QueryParameterTags.PARAMETERS_TAG` tag, in the JSON `QueryParameterObservationFilter` writes
+(`.tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\"]]")`); `SpanNodes.node(id).statement(...)`
+takes the mapped `SqlStatement`.
 `TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
 `snapshot()`, so a mapper test gets the root and ordering the store would hand it.
 `SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the

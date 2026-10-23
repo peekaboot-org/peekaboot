@@ -3,7 +3,7 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.mapper.trace.DbSpans;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -24,7 +24,7 @@ class QueryParameterCaptureIT extends TestingAppITBase {
         assertThat(statement.path("formatted").asString())
                 .as("Hibernate is on this app's classpath")
                 .startsWith("    select");
-        assertThat(SpanTree.tagValues(trace, DbSpans.PARAMETERS_TAG))
+        assertThat(SpanTree.tagValues(trace, QueryParameterTags.PARAMETERS_TAG))
                 .as("served inside the statement, not again as a tag")
                 .isEmpty();
     }

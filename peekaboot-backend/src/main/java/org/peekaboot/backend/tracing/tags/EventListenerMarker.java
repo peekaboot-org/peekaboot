@@ -1,4 +1,4 @@
-package org.peekaboot.backend.domain.trace;
+package org.peekaboot.backend.tracing.tags;
 
 /** The names Peekaboot's event-listener instrumentation puts on the observation it raises. */
 public final class EventListenerMarker {

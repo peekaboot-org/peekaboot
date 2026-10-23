@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
 import org.peekaboot.testingapp.order.OrderReconciler;

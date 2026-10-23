@@ -22,7 +22,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
@@ -33,6 +32,8 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.testsupport.TraceDatas;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 
 class TraceTreeMapperTest {
 
@@ -1254,8 +1255,8 @@ class TraceTreeMapperTest {
         var cappedBatch = jdbcQuery("q1", "insert into person (id) values (?)")
                 .parent("root")
                 .at(10, 20)
-                .tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")
-                .tag(DbSpans.OMITTED_PARAMETER_SETS_TAG, "3")
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\"]]")
+                .tag(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG, "3")
                 .build();
 
         SpanNode node = mapper.map(TraceDatas.of("trace1", root, cappedBatch))
@@ -1264,8 +1265,8 @@ class TraceTreeMapperTest {
                 .getFirst();
 
         assertThat(node.tags())
-                .doesNotContainKey(DbSpans.PARAMETERS_TAG)
-                .doesNotContainKey(DbSpans.OMITTED_PARAMETER_SETS_TAG);
+                .doesNotContainKey(QueryParameterTags.PARAMETERS_TAG)
+                .doesNotContainKey(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG);
         assertThat(node.statement().parameters()).containsExactly(List.of("42"));
         assertThat(node.statement().omittedParameterSets()).isEqualTo(3);
     }
@@ -1280,7 +1281,7 @@ class TraceTreeMapperTest {
         var lookup = jdbcQuery("q1", "select p.email from person p where p.id=?")
                 .parent("root")
                 .at(10, 20)
-                .tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\"]]")
                 .build();
         return TraceDatas.of("trace1", root, lookup);
     }

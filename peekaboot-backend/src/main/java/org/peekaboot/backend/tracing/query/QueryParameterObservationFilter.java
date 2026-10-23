@@ -8,12 +8,12 @@ import java.util.List;
 import net.ttddyy.dsproxy.proxy.ParameterSetOperation;
 import net.ttddyy.observation.tracing.QueryContext;
 import org.peekaboot.backend.config.PeekabootJson;
-import org.peekaboot.backend.mapper.trace.DbSpans;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Puts a query's bind parameters on its span as {@link DbSpans#PARAMETERS_TAG}. The
+ * Puts a query's bind parameters on its span as {@link QueryParameterTags#PARAMETERS_TAG}. The
  * OpenTelemetry query convention tags none, and datasource-micrometer's own
  * {@code jdbc.params[N]} is one comma-joined string that a value containing a comma breaks.
  *
@@ -25,7 +25,7 @@ public final class QueryParameterObservationFilter implements ObservationFilter 
 
     /**
      * A batch past this many entries has its excess parameter sets dropped and only counted, as
-     * {@link DbSpans#OMITTED_PARAMETER_SETS_TAG}; a runaway batch should not turn one query into
+     * {@link QueryParameterTags#OMITTED_PARAMETER_SETS_TAG}; a runaway batch should not turn one query into
      * thousands of high-cardinality tag entries.
      */
     static final int MAX_PARAMETER_SETS = 100;
@@ -45,11 +45,11 @@ public final class QueryParameterObservationFilter implements ObservationFilter 
                         .toList();
                 if (parameterSets.stream().anyMatch(set -> !set.isEmpty())) {
                     context.addHighCardinalityKeyValue(KeyValue.of(
-                            DbSpans.PARAMETERS_TAG, PeekabootJson.MAPPER.writeValueAsString(parameterSets)));
+                            QueryParameterTags.PARAMETERS_TAG, PeekabootJson.MAPPER.writeValueAsString(parameterSets)));
                     int omitted = batch.size() - parameterSets.size();
                     if (omitted > 0) {
                         context.addHighCardinalityKeyValue(
-                                KeyValue.of(DbSpans.OMITTED_PARAMETER_SETS_TAG, String.valueOf(omitted)));
+                                KeyValue.of(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG, String.valueOf(omitted)));
                     }
                 }
             } catch (RuntimeException e) {

@@ -6,7 +6,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.mapper.trace.RootActionTypes;
 import org.peekaboot.backend.tracing.store.ListedTrace;
@@ -15,6 +14,7 @@ import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
 /**
  * Expands a bucket's bundles into listing rows and applies the root-level filters, so

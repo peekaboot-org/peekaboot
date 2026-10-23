@@ -4,7 +4,7 @@ import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.concurrent.Future;
 import java.util.concurrent.RunnableScheduledFuture;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.springframework.core.task.TaskDecorator;
 import org.springframework.scheduling.support.DelegatingErrorHandlingRunnable;
 

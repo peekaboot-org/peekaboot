@@ -8,8 +8,8 @@ import io.micrometer.observation.Observation;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.EventListenerMarker;
 import org.peekaboot.backend.testsupport.RecordingObservations;
+import org.peekaboot.backend.tracing.tags.EventListenerMarker;
 import org.springframework.aop.framework.ProxyFactory;
 
 class EventListenerObservationInterceptorTest {

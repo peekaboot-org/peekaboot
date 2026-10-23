@@ -1,4 +1,4 @@
-package org.peekaboot.backend.domain.trace;
+package org.peekaboot.backend.tracing.tags;
 
 import java.util.Map;
 import org.jspecify.annotations.Nullable;

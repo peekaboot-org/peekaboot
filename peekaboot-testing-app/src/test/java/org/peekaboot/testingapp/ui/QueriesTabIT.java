@@ -6,7 +6,7 @@ import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.peekaboot.testingapp.integration.TestSpans;
 
 /** The trace-detail overlay's Queries tab, and the links from its entries back to the span tree. */

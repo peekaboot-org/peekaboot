@@ -9,8 +9,8 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
-import org.peekaboot.backend.domain.trace.EventListenerMarker;
+import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.EventListenerMarker;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
