@@ -11,6 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -61,7 +62,8 @@ class DevToolbarAutoConfigurationTest {
     @Configuration(proxyBeanMethods = false)
     static class UserSameNamedBeansConfig {
 
-        static final ToolbarDataProvider TOOLBAR_DATA_PROVIDER = new ToolbarDataProvider();
+        static final ToolbarDataProvider TOOLBAR_DATA_PROVIDER =
+                new ToolbarDataProvider(new PeekabootTracingProperties());
         static final FilterRegistrationBean<DevToolbarFilter> FILTER_REGISTRATION = new FilterRegistrationBean<>();
 
         @Bean

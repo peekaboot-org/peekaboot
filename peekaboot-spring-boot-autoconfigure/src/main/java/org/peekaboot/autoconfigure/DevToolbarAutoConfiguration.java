@@ -5,6 +5,7 @@ import jakarta.servlet.DispatcherType;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -12,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.tomcat.TomcatContextCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -32,14 +34,15 @@ import org.springframework.core.env.Environment;
         })
 @ConditionalOnPeekabootServlet
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED)
+@EnableConfigurationProperties(PeekabootTracingProperties.class)
 public class DevToolbarAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
 
     @Bean
     @ConditionalOnMissingBean
-    public ToolbarDataProvider toolbarDataProvider() {
-        return new ToolbarDataProvider();
+    public ToolbarDataProvider toolbarDataProvider(PeekabootTracingProperties tracingProperties) {
+        return new ToolbarDataProvider(tracingProperties);
     }
 
     // the missing-bean check matches the deduced generic FilterRegistrationBean<DevToolbarFilter>,

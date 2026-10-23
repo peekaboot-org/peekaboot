@@ -327,10 +327,12 @@ and `verySlowSpanThresholdMs` (`peekaboot.tracing.*`, what `IssueDetector` raise
 and VERY_SLOW at), `slowQueryThresholdMs` (SLOW_QUERY) and `slowTraceThresholdMs`
 (`peekaboot.tracing.slow-trace-threshold-ms`, the Slow bucket's admission threshold, `null`
 while tracing is off). The dashboard hands its `features` to every tab and to the overlay
-it opens (`openTraceDetail(traceId, {locale, timeZone, features})`). The dev toolbar and
-the overlay it opens are the one path with no features in hand; there `severity.js`'s
-`DEFAULT_THRESHOLDS` mirrors the backend defaults under the same names, and
-`SharedModuleIT` pins them to the backend properties' defaults.
+it opens (`openTraceDetail(traceId, {locale, timeZone, features})`). The dev toolbar never
+fetches `/api/features`; its data blob carries the three span and query thresholds as
+`features` under the same names (`ToolbarDataProvider`), and the bar hands them to the
+overlay it opens. Without features `severity.js` falls back to `DEFAULT_THRESHOLDS`, the
+backend defaults under the same names, which `SharedModuleIT` pins to the backend
+properties' defaults.
 
 Every comparison is at-or-above (`>=`), on both sides of the wire. `IssueDetector` raises
 SLOW/VERY_SLOW/SLOW_QUERY at `duration >= threshold`, and `durationSeverity()`/
@@ -338,9 +340,9 @@ SLOW/VERY_SLOW/SLOW_QUERY at `duration >= threshold`, and `durationSeverity()`/
 default thresholds, a 50 ms query already slow. Where a span's own issues are in hand,
 `issueSeverity(span.issues)` reads the backend's verdict, each issue's `severity`, and colours
 the gantt duration cells; `durationSeverity()` re-derives a severity only for durations no
-issue describes, meaning a trace's total query time and the dev toolbar's trace duration. The overlay's header marks a
-trace SLOW by the backend's per-trace `slow` flag (below), the same flag the Traces tab's
-badge reads. A Flyway migration's execution time is not coloured at all: the span
+issue describes, meaning a trace's total query time. The overlay's header and the dev
+toolbar colour a trace's duration by the backend's per-trace `slow` flag (below), the same
+flag the Traces tab's badge reads. A Flyway migration's execution time is not coloured at all: the span
 thresholds describe request spans, and a migration that takes seconds is doing its job. The
 Queries tab's per-query SLOW pill uses `querySeverity()`, the threshold behind the
 backend's SLOW_QUERY issue (`slowQueryThresholdMs`, 50 ms by default), never the span

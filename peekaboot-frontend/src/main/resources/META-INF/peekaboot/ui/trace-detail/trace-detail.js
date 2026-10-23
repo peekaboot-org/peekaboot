@@ -102,8 +102,8 @@ export function shownTraceTarget() {
  * options: basePath (the toolbar's server-provided one; the dashboard's own by default),
  * urlState (see main.js's buildTraceUrlState), onClose, and the dashboard's display
  * settings - locale, timeZone and the /api/features payload. The toolbar passes its own
- * readLocaleSetting() read for locale; timeZone and features stay dashboard-only and fall
- * back to the browser's own time zone and the shared default thresholds.
+ * readLocaleSetting() read for locale and the thresholds its data blob carries as features;
+ * timeZone stays dashboard-only and falls back to the browser's own time zone.
  */
 export function openTraceDetail(traceId, options = {}) {
     // Captured before closeTraceDetail() below, which restores focus to whatever a prior

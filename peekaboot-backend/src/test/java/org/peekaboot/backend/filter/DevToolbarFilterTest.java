@@ -35,6 +35,7 @@ import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.testsupport.CurrentSpans;
 import org.peekaboot.backend.testsupport.FailingWriteResponse;
 import org.peekaboot.backend.testsupport.Requests;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -42,7 +43,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @ExtendWith(MockitoExtension.class)
 class DevToolbarFilterTest {
 
-    ToolbarDataProvider toolbarDataProvider = new ToolbarDataProvider();
+    ToolbarDataProvider toolbarDataProvider = new ToolbarDataProvider(new PeekabootTracingProperties());
 
     @Mock
     Tracer tracer;

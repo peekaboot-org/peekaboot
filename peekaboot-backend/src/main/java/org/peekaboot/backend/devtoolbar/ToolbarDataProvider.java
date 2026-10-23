@@ -1,6 +1,7 @@
 package org.peekaboot.backend.devtoolbar;
 
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import tools.jackson.core.SerializableString;
 import tools.jackson.core.io.CharacterEscapes;
 import tools.jackson.core.io.SerializedString;
@@ -17,11 +18,24 @@ public class ToolbarDataProvider {
      */
     private static final ObjectWriter WRITER = PeekabootJson.MAPPER.writer().with(new ScriptSafeEscapes());
 
+    private final PeekabootTracingProperties tracingProperties;
+
+    public ToolbarDataProvider(PeekabootTracingProperties tracingProperties) {
+        this.tracingProperties = tracingProperties;
+    }
+
+    /**
+     * The effective thresholds, under the names {@code /api/features} publishes them: the bar
+     * never fetches that endpoint, and the overlay it opens colours by these.
+     */
+    record ToolbarFeatures(long slowSpanThresholdMs, long verySlowSpanThresholdMs, long slowQueryThresholdMs) {}
+
     /** What toolbar.js shows for the request the page came from. */
-    record ToolbarSummary(String method, String path, int status, String traceId, String basePath) {}
+    record ToolbarSummary(
+            String method, String path, int status, String traceId, String basePath, ToolbarFeatures features) {}
 
     /** The page came from outside a traced request; the bar waits for the next one. */
-    record IdleMode(boolean idle, String basePath) {}
+    record IdleMode(boolean idle, String basePath, ToolbarFeatures features) {}
 
     /**
      * What the bar shows for a page that came out of a traced request.
@@ -30,11 +44,18 @@ public class ToolbarDataProvider {
      *     prefix behind the request's context path
      */
     public String getToolbarSummaryJson(String basePath, String method, String path, int status, String traceId) {
-        return WRITER.writeValueAsString(new ToolbarSummary(method, path, status, traceId, basePath));
+        return WRITER.writeValueAsString(new ToolbarSummary(method, path, status, traceId, basePath, features()));
     }
 
     public String getIdleModeJson(String basePath) {
-        return WRITER.writeValueAsString(new IdleMode(true, basePath));
+        return WRITER.writeValueAsString(new IdleMode(true, basePath, features()));
+    }
+
+    private ToolbarFeatures features() {
+        return new ToolbarFeatures(
+                tracingProperties.getSlowSpanThresholdMs(),
+                tracingProperties.getVerySlowSpanThresholdMs(),
+                tracingProperties.getSlowQueryThresholdMs());
     }
 
     private static final class ScriptSafeEscapes extends CharacterEscapes {

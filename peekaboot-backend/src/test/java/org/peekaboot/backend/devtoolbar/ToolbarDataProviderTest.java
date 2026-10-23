@@ -5,15 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import tools.jackson.databind.JsonNode;
 
 class ToolbarDataProviderTest {
 
+    PeekabootTracingProperties tracingProperties;
     ToolbarDataProvider provider;
 
     @BeforeEach
     void setUp() {
-        provider = new ToolbarDataProvider();
+        tracingProperties = new PeekabootTracingProperties();
+        provider = new ToolbarDataProvider(tracingProperties);
     }
 
     @Test
@@ -63,5 +66,23 @@ class ToolbarDataProviderTest {
 
         assertThat(parsed.path("idle").asBoolean()).isTrue();
         assertThat(parsed.path("basePath").asString()).isEqualTo("/peekaboot");
+    }
+
+    /** The overlay the bar opens colours by these, so they have to be the configured ones, in both modes. */
+    @Test
+    void shouldCarryTheEffectiveThresholds() {
+        tracingProperties.setSlowSpanThresholdMs(250);
+        tracingProperties.setVerySlowSpanThresholdMs(900);
+        tracingProperties.setSlowQueryThresholdMs(75);
+
+        for (String json : new String[] {
+            provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null),
+            provider.getIdleModeJson("/peekaboot")
+        }) {
+            JsonNode features = PeekabootJson.MAPPER.readTree(json).path("features");
+            assertThat(features.path("slowSpanThresholdMs").asLong()).isEqualTo(250L);
+            assertThat(features.path("verySlowSpanThresholdMs").asLong()).isEqualTo(900L);
+            assertThat(features.path("slowQueryThresholdMs").asLong()).isEqualTo(75L);
+        }
     }
 }

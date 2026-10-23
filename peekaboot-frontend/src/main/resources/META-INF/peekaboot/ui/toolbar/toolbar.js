@@ -15,14 +15,14 @@
  * trace ids from Server-Timing headers instead. Clicking the bar (or pressing
  * Enter/Space while it has focus) lazy-imports the trace-detail overlay.
  *
- * The bar never fetches /api/features: it colours durations by the shared defaults
- * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults. Its counts
- * group in the dashboard's chosen locale, read through storage.js's readLocaleSetting().
+ * The bar never fetches /api/features: the blob's `features` carries the effective
+ * thresholds under the same names, for the bar's query total and the overlay it opens. The
+ * trace's own duration is coloured by the backend's trace.slow, as on the Traces tab. Its
+ * counts group in the dashboard's chosen locale, read through storage.js's readLocaleSetting().
  */
 import {createClient} from '../shared/api.js';
 import {badge} from '../shared/components.js';
 import {el} from '../shared/dom.js';
-import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
 import {bindTheme} from '../shared/theme.js';
 import {readLocaleSetting} from '../shared/storage.js';
@@ -111,8 +111,8 @@ function initToolbar(host, data) {
         }
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
-        const duration = durationStat(clock, trace.durationMs, durationSeverity(trace.durationMs));
-        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {locale: readLocaleSetting()}));
+        const duration = durationStat(clock, trace.durationMs, trace.slow ? 'slow' : '');
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {features: data.features, locale: readLocaleSetting()}));
     }
 
     // Nothing ever arrived: replace "loading" with the stat line's own words, its counts
@@ -124,7 +124,7 @@ function initToolbar(host, data) {
 
     async function openOverlay() {
         const overlay = await import('../trace-detail/trace-detail.js');
-        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath, locale: readLocaleSetting()});
+        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath, locale: readLocaleSetting(), features: data.features});
     }
 
     if (!data.idle && data.traceId) {
