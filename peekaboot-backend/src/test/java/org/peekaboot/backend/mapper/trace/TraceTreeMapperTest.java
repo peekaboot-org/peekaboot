@@ -793,8 +793,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void attachesOrphanSpansToTheRoot() {
-        // A span whose parent doesn't exist in the trace (orphan)
+    void aLoneSpanWithAMissingParentIsTheRoot() {
         var orphan = span("orphan")
                 .parent("missing-parent")
                 .named("orphan-op")
@@ -802,10 +801,8 @@ class TraceTreeMapperTest {
                 .at(0, 50)
                 .build();
 
-        var traceData = TraceDatas.of("trace1", orphan);
+        TraceTree result = mapper.map(TraceDatas.of("trace1", orphan));
 
-        // The orphan should become a root
-        TraceTree result = mapper.map(traceData);
         assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("orphan");
     }
