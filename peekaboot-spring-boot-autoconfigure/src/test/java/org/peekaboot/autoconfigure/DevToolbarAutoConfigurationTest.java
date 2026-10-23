@@ -16,6 +16,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
@@ -100,11 +102,15 @@ class DevToolbarAutoConfigurationTest {
         }
     }
 
-    /** The springdoc property decides where idle mode applies; it has to reach the filter. */
-    @Test
-    void theCustomisedSwaggerUiPathReachesTheToolbarFilter() {
+    /**
+     * The springdoc property decides where idle mode applies; it has to reach the filter. springdoc
+     * serves a slash-less value at the same place, since Spring's pattern parser adds the slash.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"/admin/docs.html", "admin/docs.html"})
+    void theCustomisedSwaggerUiPathReachesTheToolbarFilter(String swaggerUiPath) {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true", "springdoc.swagger-ui.path=/admin/docs.html")
+                .withPropertyValues("peekaboot.dev-toolbar=true", "springdoc.swagger-ui.path=" + swaggerUiPath)
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     DevToolbarFilter filter =

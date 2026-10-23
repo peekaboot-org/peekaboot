@@ -106,10 +106,6 @@ public class ServerUrlResolver {
     }
 
     private String swaggerUiPath() {
-        String configured = environment.getProperty("springdoc.swagger-ui.path");
-        if (configured == null || configured.isBlank()) {
-            return PeekabootPaths.DEFAULT_SWAGGER_UI_PATH;
-        }
-        return configured.startsWith("/") ? configured : "/" + configured;
+        return PeekabootPaths.swaggerUiPath(environment.getProperty("springdoc.swagger-ui.path"));
     }
 }

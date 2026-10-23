@@ -182,6 +182,21 @@ class PeekabootPathsTest {
         assertThat(PeekabootPaths.normaliseContextPath(configured)).isEqualTo(prefix);
     }
 
+    /** springdoc's default stands in for an unset or blank value; Spring's pattern parser adds a missing leading slash. */
+    @ParameterizedTest
+    @CsvSource(
+            value = {
+                "NULL, /swagger-ui.html",
+                "'', /swagger-ui.html",
+                "'  ', /swagger-ui.html",
+                "/admin/docs.html, /admin/docs.html",
+                "admin/docs.html, /admin/docs.html"
+            },
+            nullValues = "NULL")
+    void theSwaggerUiPathFallsBackToSpringdocsDefaultAndStartsWithASlash(String configured, String resolved) {
+        assertThat(PeekabootPaths.swaggerUiPath(configured)).isEqualTo(resolved);
+    }
+
     /** Tolerates the trailing-slash and bare-root spellings the context-path property can carry. */
     @Test
     void theContextPathIsNormalisedToItsPrefixForm() {

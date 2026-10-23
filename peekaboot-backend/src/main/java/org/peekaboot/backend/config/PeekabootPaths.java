@@ -90,6 +90,18 @@ public final class PeekabootPaths {
     }
 
     /**
+     * The effective {@code springdoc.swagger-ui.path}, for the toolbar's idle mode and the
+     * lifecycle banner alike. springdoc serves a slash-less value at the same place, since
+     * Spring's pattern parser adds the leading slash.
+     */
+    public static String swaggerUiPath(@Nullable String configured) {
+        if (configured == null || configured.isBlank()) {
+            return DEFAULT_SWAGGER_UI_PATH;
+        }
+        return configured.startsWith("/") ? configured : "/" + configured;
+    }
+
+    /**
      * {@code /manage} as the prefix {@code /manage/}, tolerating a missing leading or an
      * extra trailing slash. A base path of {@code /} puts the management endpoints at the
      * application root. It has no prefix of its own to match by, so nothing extra is excluded
