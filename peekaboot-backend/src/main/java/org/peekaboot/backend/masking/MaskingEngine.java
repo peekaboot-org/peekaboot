@@ -138,7 +138,7 @@ public final class MaskingEngine {
             return null;
         }
         if (isSensitiveKey(key)) {
-            return MaskingRules.MASK;
+            return MASK_LITERAL;
         }
         return maskValue(value);
     }
@@ -186,7 +186,7 @@ public final class MaskingEngine {
                         .append('=')
                         .append(URLEncoder.encode(mask(key, value), StandardCharsets.UTF_8));
             } catch (IllegalArgumentException malformedEncoding) {
-                result.append(rawKey).append('=').append(MaskingRules.MASK);
+                result.append(rawKey).append('=').append(MASK_LITERAL);
             }
         }
         return result.toString();
@@ -216,7 +216,7 @@ public final class MaskingEngine {
                 // order only breaks ties between spans that start at the same offset
                 continue;
             }
-            result.append(value, cursor, span[0]).append(MaskingRules.MASK);
+            result.append(value, cursor, span[0]).append(MASK_LITERAL);
             cursor = span[1];
         }
         result.append(value, cursor, value.length());
