@@ -7,24 +7,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class PeekabootProperties {
 
     /**
-     * The master switch for the dashboard, its API and Peekaboot's own defaults: false
-     * unless PeekabootDefaultsEnvironmentPostProcessor's launch-context detection sets it
-     * (on for a local launch from an IDE, spring-boot:run or bootRun), and any explicit
+     * The master switch for the dashboard, its API and Peekaboot's own defaults. Off unless
+     * Peekaboot detects a local launch from an IDE, spring-boot:run or bootRun; an explicit
      * setting wins over that detection.
      */
     private boolean enabled = false;
 
     /**
      * Injects the dev toolbar into HTML responses and turns on correlated-log and full
-     * request-detail capture. Defaulted from the launch context like {@code peekaboot.enabled}.
+     * request-detail capture. Defaulted from the launch context like peekaboot.enabled.
      */
     private boolean devToolbar = false;
 
     /**
-     * Gate on unmasked property retrieval, independent of the per-request
-     * {@code unmask} query parameter the endpoints that carry property values accept -
-     * see PeekabootController. While this is false, unmasked values cannot be obtained
-     * by any means, regardless of what the request asks for.
+     * Allows the dashboard to show property values unmasked. The endpoints that return
+     * property values take an unmask query parameter; while this is false, no request
+     * obtains unmasked values, whatever it asks for.
      */
     private boolean enableUnmasking = false;
 
@@ -110,7 +108,7 @@ public class PeekabootProperties {
      */
     public static class Storage {
 
-        /** Whether anything is written to disk at all. Defaulted from the launch context like {@code peekaboot.enabled}. */
+        /** Whether anything is written to disk at all. Defaulted from the launch context like peekaboot.enabled. */
         private boolean enabled = false;
 
         /**
@@ -166,7 +164,7 @@ public class PeekabootProperties {
         /** Whether Peekaboot challenges every /peekaboot/** request with its own HTTP Basic credentials. */
         private boolean enabled = false;
 
-        /** Unset derives {@code <artifact>-admin} from the build coordinates or the application name. */
+        /** Unset derives the username from the build's artifact id or the application name, plus -admin. */
         private String username;
 
         /**
@@ -175,7 +173,7 @@ public class PeekabootProperties {
          */
         private String password;
 
-        /** Unset resolves to {@code security.properties} beside Peekaboot's other state. */
+        /** Unset resolves to security.properties beside Peekaboot's other state. */
         private String credentialsFile;
 
         public boolean isEnabled() {
@@ -219,7 +217,7 @@ public class PeekabootProperties {
      */
     public static class ErrorPage {
 
-        /** Renders the failing request, the exception and its stack trace where Boot would render the whitelabel page, or the application's own page where {@code override} is set. */
+        /** Renders the failing request, the exception and its stack trace where Boot would render the whitelabel page, or the application's own page where override is set. */
         private boolean enabled = false;
 
         /** Renders Peekaboot's page even where the application brings an error page of its own. */
@@ -249,14 +247,14 @@ public class PeekabootProperties {
      */
     public static class StackTrace {
 
-        /** Hides frames matching {@code exclude} behind a disclosure; on everywhere, since one control reveals them. */
+        /** Hides frames matching exclude behind a disclosure; on everywhere, since one control reveals them. */
         private boolean fold = true;
 
         /**
          * Frames to hide, matched as a substring of the whole frame line the way Logback matches
-         * the exclusions in {@code logging.exception-conversion-word}. Setting this replaces the
-         * resolved list; left unset, the exclusions from that conversion word apply, and failing
-         * that a built-in list of reflection, container and framework packages.
+         * the exclusions in logging.exception-conversion-word. A non-empty list replaces the
+         * resolved list; left unset or empty, the exclusions from that conversion word apply, and
+         * failing that a built-in list of reflection, container and framework packages.
          */
         private List<String> exclude = List.of();
 

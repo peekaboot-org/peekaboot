@@ -23,7 +23,7 @@ public class InsightsProperties {
     private boolean enabled = true;
 
     /**
-     * The ring levels, finest first ({@code levels[0].interval=10s}, {@code levels[0].size=90}, ...).
+     * The ring levels, finest first (levels[0].interval=10s, levels[0].size=90, ...).
      * Each coarser interval must be a whole multiple of the previous one, by no more than the
      * previous size. Setting this replaces the default list (10s x 90, 1m x 1440, 1h x 720).
      */

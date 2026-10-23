@@ -11,7 +11,7 @@ public class PeekabootTracingProperties {
     /** Whether Peekaboot observes tasks handed to Spring's task executors; on unless set to false. */
     private boolean async = true;
 
-    /** Whether Peekaboot observes the application's {@code @EventListener} methods; on unless set to false. */
+    /** Whether Peekaboot observes the application's @EventListener methods; on unless set to false. */
     private boolean eventListeners = true;
 
     /** Maximum number of traces held in the All bucket, oldest evicted first. */
