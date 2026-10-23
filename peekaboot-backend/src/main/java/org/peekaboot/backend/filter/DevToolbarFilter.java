@@ -127,7 +127,7 @@ public class DevToolbarFilter implements Filter {
                 // hand the response over and skip injection
                 wrappedResponse.enablePassthrough();
             } else if (!wrappedResponse.isPassthrough()) {
-                processResponse(request, wrappedResponse, original.method(), original.uri(), original.traceId());
+                processResponse(request, wrappedResponse, original);
             }
         } catch (Exception e) {
             if (isClientAbort(e)) {
@@ -204,16 +204,12 @@ public class DevToolbarFilter implements Filter {
     }
 
     private void processResponse(
-            HttpServletRequest request,
-            ContentBufferingResponseWrapper wrappedResponse,
-            String method,
-            String uri,
-            String traceId)
+            HttpServletRequest request, ContentBufferingResponseWrapper wrappedResponse, OriginalRequest original)
             throws IOException {
 
         wrappedResponse.flushBuffer();
 
-        log.trace("Response content-type: {} for {}", wrappedResponse.getContentType(), uri);
+        log.trace("Response content-type: {} for {}", wrappedResponse.getContentType(), original.uri());
 
         if (!wrappedResponse.isHtml()) {
             log.trace("Skipping toolbar injection - not HTML: {}", wrappedResponse.getContentType());
@@ -232,15 +228,11 @@ public class DevToolbarFilter implements Filter {
             return;
         }
 
-        log.trace("Injecting toolbar at position {} with traceId: {}", bodyEndIndex, traceId);
+        log.trace("Injecting toolbar at position {} with traceId: {}", bodyEndIndex, original.traceId());
 
         String toolbarHtml;
         try {
-            if (isSwaggerUi(request)) {
-                toolbarHtml = generateSwaggerToolbarHtml(request);
-            } else {
-                toolbarHtml = generateToolbarHtml(request, wrappedResponse, method, uri, traceId);
-            }
+            toolbarHtml = toolbarHtml(request, wrappedResponse, original);
         } catch (Exception e) {
             log.warn("Failed to generate toolbar HTML", e);
             wrappedResponse.copyBodyToResponse();
@@ -253,7 +245,7 @@ public class DevToolbarFilter implements Filter {
         byte[] modifiedBytes = modifiedContent.getBytes(wrappedResponse.charset());
         wrappedResponse.copyBodyToResponse(modifiedBytes);
 
-        log.trace("Toolbar injected successfully for {}", uri);
+        log.trace("Toolbar injected successfully for {}", original.uri());
     }
 
     /**
@@ -269,25 +261,19 @@ public class DevToolbarFilter implements Filter {
         return -1;
     }
 
-    private String generateToolbarHtml(
-            HttpServletRequest request,
-            ContentBufferingResponseWrapper response,
-            String method,
-            String uri,
-            String traceId) {
+    /** Swagger UI has no request of its own to report, so its bar idles until one of its calls returns a trace. */
+    private String toolbarHtml(
+            HttpServletRequest request, ContentBufferingResponseWrapper response, OriginalRequest original) {
         String basePath = paths.basePath(request);
-        String summaryJson =
-                toolbarDataProvider.getToolbarSummaryJson(basePath, method, uri, response.getStatus(), traceId);
-        return toolbarShell.render(basePath, summaryJson);
+        String json = isSwaggerUi(request)
+                ? toolbarDataProvider.getIdleModeJson(basePath)
+                : toolbarDataProvider.getToolbarSummaryJson(
+                        basePath, original.method(), original.uri(), response.getStatus(), original.traceId());
+        return toolbarShell.render(basePath, json);
     }
 
     private boolean isSwaggerUi(HttpServletRequest request) {
         String path = paths.pathWithinDispatcherServlet(PeekabootPaths.pathWithinApplication(request));
         return path != null && path.startsWith(swaggerUiPrefix);
-    }
-
-    private String generateSwaggerToolbarHtml(HttpServletRequest request) {
-        String basePath = paths.basePath(request);
-        return toolbarShell.render(basePath, toolbarDataProvider.getIdleModeJson(basePath));
     }
 }
