@@ -78,7 +78,8 @@ public class PeekabootLifecycleAutoConfiguration {
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider,
             ConfigurableListableBeanFactory beanFactory,
             ObjectProvider<HikariPoolInfo> hikariPoolInfoProvider,
-            MaskingEngine maskingEngine) {
+            MaskingEngine maskingEngine,
+            ApplicationContext applicationContext) {
         DataSourceMetadataList dataSourceMetadataList =
                 dataSourceMetadataListProvider.getIfAvailable(() -> DataSourceMetadataList.EMPTY);
         return new ApplicationReadyListener(
@@ -88,7 +89,8 @@ public class PeekabootLifecycleAutoConfiguration {
                 dataSourceMetadataList.entries(),
                 ApplicationBeans.ofType(beanFactory, DataSource.class),
                 hikariPoolInfoProvider.getIfAvailable(),
-                maskingEngine);
+                maskingEngine,
+                applicationContext);
     }
 
     /**

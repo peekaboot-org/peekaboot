@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,6 +17,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 
 class LifecycleEventRecorderTest {
@@ -44,12 +46,11 @@ class LifecycleEventRecorderTest {
     @Test
     void aReadyApplicationIsRecordedWithTheBuildAndGitFactsTheViewsRead() {
         LifecycleEventLog log = log();
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(
-                log, new BuildInfoProvider(buildProperties()), gitProperties(), mock(ApplicationContext.class));
-        ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
-        when(event.getTimestamp()).thenReturn(1_756_000_000_000L);
+        ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(buildProperties()), gitProperties(), context);
 
-        recorder.onReady(event);
+        recorder.onReady(ready(context, 1_756_000_000_000L));
 
         // onReady defers to recordWhenLoaded, which never blocks its caller.
         await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
@@ -73,12 +74,11 @@ class LifecycleEventRecorderTest {
         Path path = directory.resolve(LifecycleEventFile.FILE_NAME);
         LifecycleEventLog log = new LifecycleEventLog(new LifecycleEventFile(path));
         log.beginLoad();
+        ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         LifecycleEventRecorder recorder = new LifecycleEventRecorder(
-                log, new BuildInfoProvider(buildProperties()), new GitProperties(git), mock(ApplicationContext.class));
-        ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
-        when(event.getTimestamp()).thenReturn(1_756_000_000_000L);
+                log, new BuildInfoProvider(buildProperties()), new GitProperties(git), context);
 
-        recorder.onReady(event);
+        recorder.onReady(ready(context, 1_756_000_000_000L));
 
         // the log persists inside the same lock its readers take, so a visible event is a written file
         await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
@@ -90,16 +90,41 @@ class LifecycleEventRecorderTest {
     @Test
     void anApplicationWithoutBuildOrGitInfoStillRecordsItsStart() {
         LifecycleEventLog log = log();
-        LifecycleEventRecorder recorder =
-                new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, mock(ApplicationContext.class));
-        ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
-        when(event.getTimestamp()).thenReturn(1L);
+        ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
 
-        recorder.onReady(event);
+        recorder.onReady(ready(context, 1L));
 
         await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
         assertThat(log.events().get(0).build()).isEmpty();
         assertThat(log.events().get(0).git()).isEmpty();
+    }
+
+    /**
+     * In a parent/child hierarchy the child's ready event is published to the parent too;
+     * recording it would log a second start for one run, which then reads as an unclean exit.
+     */
+    @Test
+    void anotherContextsReadyIsNotRecorded() {
+        LifecycleEventLog log = log();
+        ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
+
+        recorder.onReady(ready(mock(ConfigurableApplicationContext.class), 1L));
+        recorder.onReady(ready(context, 2L));
+
+        // the starts are appended on their own threads; the own one arriving and staying alone
+        // is what shows the other was never recorded
+        await().atMost(Duration.ofSeconds(5))
+                .during(Duration.ofMillis(300))
+                .until(() -> log.events().stream().map(LifecycleEvent::epochMs).toList(), List.of(2L)::equals);
+    }
+
+    private static ApplicationReadyEvent ready(ConfigurableApplicationContext context, long timestamp) {
+        ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
+        when(event.getApplicationContext()).thenReturn(context);
+        when(event.getTimestamp()).thenReturn(timestamp);
+        return event;
     }
 
     @Test

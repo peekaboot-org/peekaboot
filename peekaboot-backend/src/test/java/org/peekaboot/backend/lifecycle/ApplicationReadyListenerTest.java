@@ -22,6 +22,7 @@ import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -239,6 +240,21 @@ class ApplicationReadyListenerTest {
                 .toList();
     }
 
+    /**
+     * In a parent/child hierarchy the child's ready event is published to the parent too; the
+     * parent has logged its own banner already and must not log a second one for the child.
+     */
+    @Test
+    void banner_isNotLoggedForAnotherContextsReadyEvent() {
+        ApplicationReadyListener listener = banner().listenerOf(mock(ApplicationContext.class));
+
+        try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
+            listener.onApplicationEvent(ReadyEvents.webApplication(8083));
+
+            assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
     /** The metadata a real in-memory H2 reports for {@code name}; the banner reads only the name off it. */
     private static DataSourceMetadata h2Metadata(String name) {
         JdbcDataSource dataSource = new JdbcDataSource();
@@ -283,9 +299,18 @@ class ApplicationReadyListenerTest {
             return this;
         }
 
-        /** Runs the listener against {@code event} and returns the single banner it logs. */
+        /** Runs the listener of {@code event}'s own context against it and returns the single banner it logs. */
         String render(ApplicationReadyEvent event) {
-            var listener = new ApplicationReadyListener(
+            try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
+                listenerOf(event.getApplicationContext()).onApplicationEvent(event);
+
+                assertThat(capture.appender().list).hasSize(1);
+                return capture.appender().list.get(0).getFormattedMessage();
+            }
+        }
+
+        ApplicationReadyListener listenerOf(ApplicationContext ownContext) {
+            return new ApplicationReadyListener(
                     new EnvironmentInfo(environment),
                     buildInfo,
                     new ServerUrlResolver(
@@ -295,14 +320,8 @@ class ApplicationReadyListenerTest {
                     metadata,
                     dataSources,
                     hikariPoolInfo,
-                    new MaskingEngine());
-
-            try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
-                listener.onApplicationEvent(event);
-
-                assertThat(capture.appender().list).hasSize(1);
-                return capture.appender().list.get(0).getFormattedMessage();
-            }
+                    new MaskingEngine(),
+                    ownContext);
         }
     }
 }

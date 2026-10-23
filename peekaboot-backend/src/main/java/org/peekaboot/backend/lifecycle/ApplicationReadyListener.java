@@ -15,6 +15,7 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -41,6 +42,8 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private final ConnectionParamsMasker connectionParamsMasker;
 
+    private final ApplicationContext ownContext;
+
     public ApplicationReadyListener(
             EnvironmentInfo environmentInfo,
             BuildInfoProvider buildInfoProvider,
@@ -48,7 +51,8 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             List<DataSourceMetadata> dataSourceMetadataList,
             Map<String, DataSource> dataSources,
             @Nullable HikariPoolInfo hikariPoolInfo,
-            MaskingEngine maskingEngine) {
+            MaskingEngine maskingEngine,
+            ApplicationContext ownContext) {
 
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
@@ -57,10 +61,14 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         this.dataSources = dataSources;
         this.hikariPoolInfo = hikariPoolInfo;
         this.connectionParamsMasker = new ConnectionParamsMasker(maskingEngine);
+        this.ownContext = ownContext;
     }
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
+        if (!ContextEvents.fromOwnContext(event, ownContext)) {
+            return;
+        }
 
         StringBuilder report = LifecycleBanner.open("ApplicationReady");
 

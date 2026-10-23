@@ -32,6 +32,9 @@ public class LifecycleEventRecorder {
 
     @EventListener
     public void onReady(ApplicationReadyEvent event) {
+        if (!ContextEvents.fromOwnContext(event, ownContext)) {
+            return;
+        }
         eventLog.recordWhenLoaded(LifecycleEvent.start(
                 event.getTimestamp(),
                 ProcessHandle.current().pid(),
