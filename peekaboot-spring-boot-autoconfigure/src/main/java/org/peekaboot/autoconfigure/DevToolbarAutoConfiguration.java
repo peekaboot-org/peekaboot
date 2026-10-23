@@ -5,9 +5,6 @@ import jakarta.servlet.DispatcherType;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
-import org.peekaboot.backend.filter.RequestCaptureFilter;
-import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -17,17 +14,15 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.tomcat.TomcatContextCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 
 /**
- * The toolbar injection filter, and the request and log capture that feed the store. The
- * capture parts need a {@link TraceStore} bean to land in; the toolbar itself only needs
- * the {@link Tracer}, whichever of Boot's two tracing bridges registers it.
+ * The toolbar injection filter. It only needs the {@link Tracer}, whichever of Boot's two
+ * tracing bridges registers it; the request and log capture it shows are
+ * {@link TraceCaptureAutoConfiguration}'s.
  */
 @AutoConfiguration(
         after = {PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class},
@@ -37,7 +32,6 @@ import org.springframework.core.env.Environment;
         })
 @ConditionalOnPeekabootServlet
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED)
-@Import(MaskingConfiguration.class)
 public class DevToolbarAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
@@ -75,25 +69,6 @@ public class DevToolbarAutoConfiguration {
         return registration;
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnBean({Tracer.class, TraceStore.class})
-    public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
-            Tracer tracer,
-            ApplicationEventPublisher eventPublisher,
-            MaskingEngine maskingEngine,
-            PeekabootPaths peekabootPaths) {
-        FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher, maskingEngine, peekabootPaths));
-        registration.addUrlPatterns("/*");
-        // inside Boot's ServerHttpObservationFilter (HIGHEST_PRECEDENCE + 1), so the server
-        // span is current, and ahead of Spring Security, so rejected requests are captured too
-        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
-        registration.setName("requestCaptureFilter");
-        log.debug("RequestCaptureFilter registered for all URLs");
-        return registration;
-    }
-
     /** See {@link TomcatForwardResponseCustomizer}. */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass({TomcatContextCustomizer.class, org.apache.catalina.Context.class})
@@ -103,18 +78,6 @@ public class DevToolbarAutoConfiguration {
         @ConditionalOnMissingBean
         TomcatForwardResponseCustomizer tomcatForwardResponseCustomizer() {
             return new TomcatForwardResponseCustomizer();
-        }
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(name = "ch.qos.logback.classic.LoggerContext")
-    @ConditionalOnBean(TraceStore.class)
-    static class LogbackCaptureConfiguration {
-
-        @Bean
-        @ConditionalOnMissingBean
-        LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
-            return new LogbackAppenderRegistrar(eventPublisher);
         }
     }
 }

@@ -38,7 +38,7 @@ public class PeekabootTracingProperties {
     /** A database query span's duration in milliseconds at or above which it gets the SLOW_QUERY issue. */
     private long slowQueryThresholdMs = 50;
 
-    /** Maximum correlated log entries retained per trace; only populated while the dev toolbar is on. */
+    /** Maximum correlated log entries retained per trace. */
     private int maxLogsPerTrace = 500;
 
     public boolean isEnabled() {

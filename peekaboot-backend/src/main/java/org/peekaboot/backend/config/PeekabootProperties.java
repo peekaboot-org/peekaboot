@@ -93,10 +93,7 @@ public class PeekabootProperties {
 
     public static class DevToolbar {
 
-        /**
-         * Injects the dev toolbar into HTML responses and turns on correlated-log and full
-         * request-detail capture. Defaulted from the launch context like peekaboot.enabled.
-         */
+        /** Injects the dev toolbar into HTML responses. Defaulted from the launch context like peekaboot.enabled. */
         private boolean enabled = false;
 
         public boolean isEnabled() {

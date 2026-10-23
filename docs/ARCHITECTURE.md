@@ -258,8 +258,10 @@ documented in the registration: it sits *inside* Boot's `ServerHttpObservationFi
 (`HIGHEST_PRECEDENCE + 1`), so the server span is current when it runs, and ahead of Spring
 Security, so a request the security chain rejects is still captured. `DevToolbarFilter` is
 innermost; it wraps the response in a `ContentBufferingResponseWrapper` and injects its markup
-into the buffered body. Both registrations live only in `DevToolbarAutoConfiguration`, so
-neither filter runs while `peekaboot.dev-toolbar.enabled` is off.
+into the buffered body. `RequestCaptureFilter` is registered by `TraceCaptureAutoConfiguration`
+and follows `peekaboot.tracing.enabled`, since the dashboard reads what it captures;
+`DevToolbarFilter` is registered by `DevToolbarAutoConfiguration` and follows
+`peekaboot.dev-toolbar.enabled`.
 
 `DashboardAuthenticationFilter` maps `/peekaboot/*` under the `DispatcherServlet`'s own prefix
 rather than `/*`, at a fixed order of `0`. With `spring.mvc.servlet.path=/app` the dashboard's
@@ -327,18 +329,17 @@ there is no prefix to tell those requests apart by. The bean also carries the re
 `isExcludedRequestPath` strips it before matching, so actuator and Peekaboot spans are skipped
 the same with and without one.
 
-Without the toolbar on, a trace still carries a basic method/path/status summary
-(`summary.request`), read off the root span's HTTP tags by `HttpSpanTags`. That class knows all
+A trace also carries a basic method/path/status summary (`summary.request`), read off the root
+span's HTTP tags by `HttpSpanTags`, which holds where the request capture never ran. That class knows all
 three naming schemes that reach the store. Boot's default server-request observation uses
 `method`, `status`, `uri` for the route pattern, and `http.url`, the request URI and therefore
 the path shown. The current OpenTelemetry names are `http.request.method`, `url.path` and
 `http.response.status_code`; their superseded spelling is `http.method`, `http.target` and
 `http.status_code`. The overlay reads `summary.request` rather than the tags, so the browser
 never has to know those names. Headers, query/form parameters and the resolved controller
-class/method are never available without the toolbar, and neither are correlated logs (see
-*Log Capture*).
+class/method come from the request capture alone.
 
-Request/response body content and uploaded file names are not captured, dev-toolbar or not.
+Request/response body content and uploaded file names are not captured.
 `HttpExchange` has no fields for them; a body-capture pass adds the fields it fills, and is its
 own design pass. Capture is the easy half. Masking is the hard one, because `MaskingEngine`'s
 key-name rules have no key names to judge in a body: a JSON body is structure, a form post is
@@ -346,7 +347,7 @@ pairs, an upload is bytes. Sizing needs a cap and a truncation marker the Reques
 
 ### Server-Timing Header
 
-`RequestCaptureFilter`, dev-toolbar-only per above, sets a `Server-Timing` response header
+`RequestCaptureFilter` sets a `Server-Timing` response header
 carrying the current trace context in W3C `traceparent` form, before invoking the filter
 chain:
 
@@ -691,7 +692,8 @@ hooks that run before or outside the application context are registered in
 |-------|----------------|---------|
 | `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, trace mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
-| `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, the `LogbackAppenderRegistrar` and `TomcatForwardResponseCustomizer` beans |
+| `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration and the `TomcatForwardResponseCustomizer` bean |
+| `TraceCaptureAutoConfiguration` | `.imports` | Request capture filter registration and the `LogbackAppenderRegistrar` bean, both feeding the trace store |
 | `ErrorPageAutoConfiguration` | `.imports` | Peekaboot's error page, registered in the fallback slot or, where `peekaboot.error-page.override` is set, in the two places that outrank an application's own (see *Error Page*) |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
@@ -738,7 +740,7 @@ through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the 
 `DevToolbarAutoConfiguration`, `ErrorPageAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
 `AsyncInstrumentationAutoConfiguration`, `EventListenerInstrumentationAutoConfiguration`,
 `PeekabootTracingAutoConfiguration`,
-`OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`,
+`OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`, `TraceCaptureAutoConfiguration`,
 `InsightsAutoConfiguration` and `PeekabootSecurityAutoConfiguration`.
 
 ```java
@@ -791,16 +793,15 @@ the dev-toolbar defaults are skipped off-servlet.
 
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
 `TracingInterceptorAutoConfiguration`, `AsyncInstrumentationAutoConfiguration`,
-`EventListenerInstrumentationAutoConfiguration` and `QueryParameterAutoConfiguration` carry
-`@ConditionalOnPeekabootTracing` instead, which adds `peekaboot.tracing.enabled` (default on).
+`EventListenerInstrumentationAutoConfiguration`, `QueryParameterAutoConfiguration` and
+`TraceCaptureAutoConfiguration` carry `@ConditionalOnPeekabootTracing` instead, which adds `peekaboot.tracing.enabled` (default on).
 It nests `@ConditionalOnPeekabootServlet` rather than repeating its property condition: Boot
 keeps one `@ConditionalOnBooleanProperty` per meta-annotation path, and `ComposedConditionsTest`
 pins that both match exactly where the copied stacks did. Handler, view, async, event listener
-and query observations are tracing, and
-with it off there is no store for them to land in. `DevToolbarAutoConfiguration` does not read that property at all. Its capture half,
-the `RequestCaptureFilter` registration and the Logback appender registrar, is
-`@ConditionalOnBean(TraceStore.class)` instead, so with `peekaboot.tracing.enabled=false` the
-toolbar is still injected into every page with nothing captured behind it.
+and query observations and the request and log capture are tracing, and
+with it off there is no store for them to land in. `DevToolbarAutoConfiguration` does not read
+that property at all, so with `peekaboot.tracing.enabled=false` the toolbar is still injected
+into every page with nothing captured behind it.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or `peekaboot.dev-toolbar.enabled`. Both
 default from `PeekabootDefaultsEnvironmentPostProcessor` into a `peekabootDetection` property
@@ -1240,9 +1241,8 @@ no header-injection code anywhere in the repo.
 `PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event;
 `TraceStoreEventListener` forwards it to `TraceStore`, which stores by traceId, and
 `TraceLogMapper` maps them into the trace's flat log list on read (see *Trace Assembly and
-Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which only
-`DevToolbarAutoConfiguration` registers, so correlated logs require `peekaboot.dev-toolbar.enabled=true`.
-A trace's Logs tab stays empty without it, independent of `peekaboot.tracing.enabled`.
+Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which
+`TraceCaptureAutoConfiguration` registers while tracing is on, whatever the toolbar switch says.
 
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot does
 that on the first start in a JVM and on the first start after any application closed or failed
@@ -1626,8 +1626,8 @@ Test categories, each module's suite and how to test an auto-configuration are i
 
 ## Auto-Configuration Ordering
 
-`DevToolbarAutoConfiguration` requires specific ordering to ensure the `Tracer` bean exists,
-whichever of Boot's tracing bridges registers it:
+`DevToolbarAutoConfiguration` and `TraceCaptureAutoConfiguration` require specific ordering to
+ensure the `Tracer` bean exists, whichever of Boot's tracing bridges registers it:
 
 ```java
 @AutoConfiguration(
