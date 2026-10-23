@@ -704,6 +704,7 @@ hooks that run before or outside the application context are registered in
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
 | `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |
+| `HibernateStatisticsMetricsAutoConfiguration` | `.imports` | `HibernateStatisticsMeterBinder`: the four `hibernate.*` meters the insights panels read, bound from each session factory's statistics with hibernate-micrometer's names and tags; steps aside where `org.hibernate.orm.micrometer.HibernateMetrics` is present, since Boot then binds them |
 | `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
@@ -747,7 +748,8 @@ through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the 
 `AsyncInstrumentationAutoConfiguration`, `EventListenerInstrumentationAutoConfiguration`,
 `PeekabootTracingAutoConfiguration`,
 `OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`, `TraceCaptureAutoConfiguration`,
-`InsightsAutoConfiguration` and `PeekabootSecurityAutoConfiguration`.
+`InsightsAutoConfiguration`, `HibernateStatisticsMetricsAutoConfiguration` and
+`PeekabootSecurityAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -760,13 +762,16 @@ the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar
 `TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean,
 `EventListenerInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
 `peekaboot.tracing.event-listeners`, `InsightsAutoConfiguration`
-a `MeterRegistry` bean and `peekaboot.insights.enabled`, `OtelTracingAutoConfiguration` the
+a `MeterRegistry` bean and `peekaboot.insights.enabled`,
+`HibernateStatisticsMetricsAutoConfiguration` the same plus an `EntityManagerFactory` bean and
+no hibernate-micrometer, `OtelTracingAutoConfiguration` the
 OpenTelemetry SDK's `SpanExporter` class, and `QueryParameterAutoConfiguration`
 datasource-micrometer's `QueryContext` class. Class-level conditions guard only what the
 starter's closure leaves optional: `spring-boot-health`, the OpenTelemetry SDK and
 datasource-micrometer's tracing observation support, which the starter brings but a host can
-exclude. HikariCP, Logback, Flyway and Liquibase are optional too, each guarded a level down
-on a nested `@Configuration`. `InfoEndpoint` and `ObservationRegistry` arrive with hard
+exclude. HikariCP, Logback, Flyway, Liquibase and Hibernate are optional too, each guarded a level down
+on a nested `@Configuration`, except that `HibernateStatisticsMetricsAutoConfiguration` guards
+Hibernate at class level, having nothing to bind without it. `InfoEndpoint` and `ObservationRegistry` arrive with hard
 dependencies of this module and the backend, so no consumer of the starter can be without
 them.
 

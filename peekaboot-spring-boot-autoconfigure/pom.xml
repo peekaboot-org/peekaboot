@@ -113,6 +113,13 @@
             <artifactId>spring-boot-micrometer-observation</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- compile-only: the Hibernate meters the insights panels read, bound from a session
+             factory's statistics; never brought into an application that has no Hibernate -->
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Test dependencies -->
         <!-- QueryParameterAutoConfigurationTest proves the class condition with and without QueryContext -->
@@ -165,12 +172,6 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- the SQL formatter's condition, proven with Hibernate present and filtered away -->
-        <dependency>
-            <groupId>org.hibernate.orm</groupId>
-            <artifactId>hibernate-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

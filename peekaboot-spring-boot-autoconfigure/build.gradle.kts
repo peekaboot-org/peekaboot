@@ -33,6 +33,9 @@ dependencies {
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
+    // the Hibernate meters the insights panels read, bound from a session factory's statistics;
+    // never brought into an application that has no Hibernate
+    compileOnly("org.hibernate.orm:hibernate-core")
 
     // shared test support (LogCapture)
     testImplementation(project(":peekaboot-test-support"))
@@ -48,6 +51,6 @@ dependencies {
     testImplementation("com.h2database:h2")
     // QueryParameterAutoConfigurationTest proves the class condition with and without QueryContext
     testImplementation("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
-    // the SQL formatter's condition, proven with Hibernate present and filtered away
+    // the SQL formatter's condition and the Hibernate meters, proven with Hibernate present and filtered away
     testImplementation("org.hibernate.orm:hibernate-core")
 }

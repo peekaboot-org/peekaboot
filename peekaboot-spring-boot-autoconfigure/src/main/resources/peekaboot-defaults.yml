@@ -4,8 +4,9 @@
 spring:
   jpa:
     properties:
-      # Needed by the hibernate.* meter panels in peekaboot-insights-defaults.yml, which
-      # sample Hibernate's Micrometer meters - and those only exist with statistics on.
+      # Needed by the hibernate.* meter panels in peekaboot-insights-defaults.yml, whose
+      # meters HibernateStatisticsMeterBinder binds from these statistics (or Boot's binder,
+      # with hibernate-micrometer present) - and only while statistics are on.
       # Spring default: false
       "[hibernate.generate_statistics]": true
 
