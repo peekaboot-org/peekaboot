@@ -15,7 +15,6 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.SmartLifecycle;
 
 /**
  * Samples every configured series into level 0 of its {@link SeriesRings} on each tick and
@@ -24,7 +23,7 @@ import org.springframework.context.SmartLifecycle;
  * on a boundary-aligned schedule; the sampling methods themselves remain
  * callable directly, which is how tests exercise them without starting threads.
  */
-public final class InsightsCollector implements SmartLifecycle {
+public final class InsightsCollector {
 
     private static final Logger log = LoggerFactory.getLogger(InsightsCollector.class);
 
@@ -90,7 +89,6 @@ public final class InsightsCollector implements SmartLifecycle {
         this.tiles = new TileTracker(tiles, registry);
     }
 
-    @Override
     public synchronized void start() {
         if (running) {
             return;
@@ -106,14 +104,12 @@ public final class InsightsCollector implements SmartLifecycle {
     }
 
     /** Interrupts and joins every level thread (see {@link WorkerThreads}), then clears them. */
-    @Override
     public synchronized void stop() {
         running = false;
         WorkerThreads.stopAndJoin(threads);
         threads.clear();
     }
 
-    @Override
     public boolean isRunning() {
         return running;
     }
