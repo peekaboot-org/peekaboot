@@ -46,7 +46,6 @@ public final class InsightsCollector implements SmartLifecycle {
         Optional<InsightsSnapshot> awaitSnapshot(Duration timeout);
     }
 
-    private final long[] intervalMillis;
     private final Map<String, SeriesSampler> samplers = new LinkedHashMap<>();
     private final SeriesRings rings;
 
@@ -81,11 +80,6 @@ public final class InsightsCollector implements SmartLifecycle {
         this.listener = listener;
         this.restoreBarrier = new SnapshotRestoreBarrier(snapshotSource);
         this.schedule = new IntervalBoundary(clock, Thread::sleep);
-        this.intervalMillis = new long[levels.size()];
-        for (int i = 0; i < levels.size(); i++) {
-            intervalMillis[i] = levels.get(i).intervalMillis();
-        }
-
         for (SeriesDef def : series) {
             UnresolvedMeterReport report =
                     shippedSeriesIds.contains(def.id()) ? UnresolvedMeterReport.DEBUG : UnresolvedMeterReport.WARN;
@@ -103,7 +97,7 @@ public final class InsightsCollector implements SmartLifecycle {
         }
         running = true;
         List<String> names = threadNames();
-        for (int level = 0; level < intervalMillis.length; level++) {
+        for (int level = 0; level < rings.levelCount(); level++) {
             int boundLevel = level;
             Thread thread = Thread.ofVirtual().name(names.get(level)).unstarted(() -> runLevel(boundLevel));
             threads.add(thread);
@@ -126,10 +120,11 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /** Names the level threads would run under, without starting anything. */
     List<String> threadNames() {
-        List<String> names = new ArrayList<>(intervalMillis.length);
+        List<String> names = new ArrayList<>(rings.levelCount());
         names.add("peekaboot-insights-tick");
-        for (int level = 1; level < intervalMillis.length; level++) {
-            names.add("peekaboot-insights-agg-" + IntervalFormat.humanize(Duration.ofMillis(intervalMillis[level])));
+        for (int level = 1; level < rings.levelCount(); level++) {
+            names.add("peekaboot-insights-agg-"
+                    + IntervalFormat.humanize(Duration.ofMillis(rings.intervalMillis(level))));
         }
         return names;
     }
@@ -140,8 +135,8 @@ public final class InsightsCollector implements SmartLifecycle {
      * {@code tick}/{@code rollUp} and repeats until interrupted.
      */
     private void runLevel(int level) {
-        long intervalMs = intervalMillis[level];
-        long offsetMs = level == 0 ? 0 : intervalMillis[level - 1] / 2;
+        long intervalMs = rings.intervalMillis(level);
+        long offsetMs = level == 0 ? 0 : rings.intervalMillis(level - 1) / 2;
         schedule.runEvery(intervalMs, offsetMs, boundary -> {
             try {
                 restoreBarrier.arriveBefore(this::restore);
@@ -176,7 +171,7 @@ public final class InsightsCollector implements SmartLifecycle {
      */
     private long elapsedSince(int level, long epochMs) {
         long previous = rings.endEpochMs(level);
-        return previous > 0 && epochMs > previous ? epochMs - previous : intervalMillis[level];
+        return previous > 0 && epochMs > previous ? epochMs - previous : rings.intervalMillis(level);
     }
 
     /**
@@ -185,10 +180,10 @@ public final class InsightsCollector implements SmartLifecycle {
      * it to this level's ring, and notifies the listener.
      */
     void rollUp(int level, long epochMs) {
-        if (level < 1 || level >= intervalMillis.length) {
-            throw new IllegalArgumentException("level must be in [1, " + (intervalMillis.length - 1) + "]");
+        if (level < 1 || level >= rings.levelCount()) {
+            throw new IllegalArgumentException("level must be in [1, " + (rings.levelCount() - 1) + "]");
         }
-        int n = (int) (intervalMillis[level] / intervalMillis[level - 1]);
+        int n = (int) (rings.intervalMillis(level) / rings.intervalMillis(level - 1));
         Map<String, AggregateStats> entries = new LinkedHashMap<>();
         if (level == 1) {
             rings.tickWindows(n).forEach((id, window) -> entries.put(id, AggregateStats.of(window)));

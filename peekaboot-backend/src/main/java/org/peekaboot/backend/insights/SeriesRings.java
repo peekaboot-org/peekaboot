@@ -51,6 +51,15 @@ final class SeriesRings {
         }
     }
 
+    int levelCount() {
+        return intervalMillis.length;
+    }
+
+    /** The interval {@code level} is sampled or aggregated at. */
+    long intervalMillis(int level) {
+        return intervalMillis[level];
+    }
+
     /**
      * Appends one sample to every series' level-0 ring and dates them {@code epochMs}, as one
      * write. A series {@code values} lacks gets a gap, and ids no series carries are ignored,
