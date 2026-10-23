@@ -167,26 +167,25 @@ export function revealRow(row) {
     }
 }
 
-function findSpan(span, spanId) {
-    if (!span) return null;
-    if (span.spanId === spanId) return span;
-    for (const child of span.children || []) {
-        const found = findSpan(child, spanId);
-        if (found) return found;
+/** Every span of the tree under `root`, `root` first, depth first. */
+export function* spansOf(root) {
+    if (!root) return;
+    yield root;
+    for (const child of root.children || []) yield* spansOf(child);
+}
+
+function findSpan(root, spanId) {
+    for (const span of spansOf(root)) {
+        if (span.spanId === spanId) return span;
     }
     return null;
 }
 
 /** A subtree's own wall-clock window: a child can outlive its parent, which is why this exists. */
 function subtreeWindowMs(span) {
-    const end = latestEndMs(span, span.startTimeMs + (span.durationMs || 0));
+    const end = Array.from(spansOf(span), member => member.startTimeMs + (member.durationMs || 0))
+        .reduce((latest, memberEnd) => Math.max(latest, memberEnd));
     return Math.max(end - span.startTimeMs, 0);
-}
-
-function latestEndMs(span, latest) {
-    let end = Math.max(latest, span.startTimeMs + (span.durationMs || 0));
-    for (const child of span.children || []) end = latestEndMs(child, end);
-    return end;
 }
 
 function spanKind(span) {
@@ -196,13 +195,7 @@ function spanKind(span) {
 
 /** The kinds this trace has, in KIND_LABELS order: the key to the row dots and bar colours. */
 function kindLegend(rootSpan) {
-    const present = new Set();
-    const collect = span => {
-        if (!span) return;
-        present.add(spanKind(span));
-        (span.children || []).forEach(collect);
-    };
-    collect(rootSpan);
+    const present = new Set(Array.from(spansOf(rootSpan), spanKind));
     return el('ul', {className: 'pk-gantt-legend', attrs: {'aria-label': 'Span kinds'}},
         ...Object.keys(KIND_LABELS).filter(kind => present.has(kind)).map(kind =>
             el('li', {className: `pk-gantt-legend__item pk-gantt-kind--${kind}`}, kindDot(), KIND_LABELS[kind])));

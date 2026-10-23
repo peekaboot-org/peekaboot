@@ -10,16 +10,11 @@ import {LOG_LEVELS} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {emptyState} from '../../shared/components.js';
 import {logEntry} from '../log-entry.js';
+import {spansOf} from './spans.js';
 
 /** A spanId -> name lookup over the span tree, to name the span each log row belongs to. */
 function buildSpanNames(rootSpan) {
-    const names = new Map();
-    (function walk(span) {
-        if (!span) return;
-        names.set(span.spanId, span.name);
-        (span.children || []).forEach(walk);
-    })(rootSpan);
-    return names;
+    return new Map(Array.from(spansOf(rootSpan), span => [span.spanId, span.name]));
 }
 
 function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
