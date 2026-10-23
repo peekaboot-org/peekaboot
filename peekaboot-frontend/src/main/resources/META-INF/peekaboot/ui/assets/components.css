@@ -231,9 +231,6 @@
 /* Primary bucket/segment selector - a top-level filter, so it carries more weight
    and a comfortable hit area rather than the compact --small treatment. */
 .pk-btn--bucket { padding: var(--pk-space-sm) var(--pk-space-md); font-size: var(--pk-text-sm); font-weight: 600; }
-/* Extra right padding clears room for a dropdown-style caret/chevron the
-   consumer places absolutely inside the button. */
-.pk-btn--select { padding-right: var(--pk-space-md); }
 
 /* Copyable identifier - a labelled, full-length trace/span id that copies on click.
    Reads as text until hovered, so a row full of ids does not look like a row of buttons. */

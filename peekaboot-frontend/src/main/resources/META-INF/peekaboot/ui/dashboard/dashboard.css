@@ -53,8 +53,9 @@
     .pk-header__tz-info { display: none; }
 }
 /* The header sits on --pk-bg like everything else, so .pk-btn needs no
-   border/hover overrides here - only the select's appearance reset. */
-.pk-header select.pk-btn { appearance: none; -webkit-appearance: none; }
+   border/hover overrides here - only the select's appearance reset, which drops the
+   native caret, and a right padding twice .pk-btn's own. */
+.pk-header select.pk-btn { appearance: none; -webkit-appearance: none; padding-right: var(--pk-space-md); }
 
 /* Layout */
 .pk-container {
