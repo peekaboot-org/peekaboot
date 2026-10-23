@@ -91,7 +91,6 @@ jobs:
       # `env`, never `${{ }}` inside the script: an input interpolated there is a shell
       # injection for anyone with write access.
       - name: resolve-release-version
-        id: resolve-release-version
         env:
           OVERRIDE: ${{ inputs.releaseVersion }}
         run: |
@@ -109,7 +108,6 @@ jobs:
             echo "::error::tag $version already exists"
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
           # Every later script reads it from env, which never interpolates into shell text.
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
@@ -134,10 +132,12 @@ jobs:
           grep -q "<version>${VERSION}</version>" README.md
           git add README.md
 
+      # The identity checkout documents for commits made with the built-in token. Global, so
+      # publish-site's clone of the site repository commits as the same identity.
       - name: configure-git-user
-        uses: qoomon/actions--setup-git@8e6bd30ac05e17a81b61169daae62cb6b7e61294 # v1.1.1
-        with:
-          user: bot
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       # No developmentVersion: the release plugin derives the next `-SNAPSHOT` from the
       # release version by incrementing its patch.
@@ -189,11 +189,13 @@ jobs:
           # "## Unreleased" and still exit 0, which would publish as the release body.
           grep -q "^## ${VERSION} " release-notes.md
 
+      # --verify-tag: fails rather than creating the tag if release:prepare's push is missing.
       - name: create-release-notes
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          body_path: release-notes.md
-          tag_name: ${{ steps.resolve-release-version.outputs.version }}
+        run: |
+          gh release create "${VERSION}" --verify-tag --title "${VERSION}" \
+            --notes-file release-notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # After the real release exists, so a failure between the two leaves the draft
       # standing rather than losing the notes. A skipped delete only strands a cosmetic
