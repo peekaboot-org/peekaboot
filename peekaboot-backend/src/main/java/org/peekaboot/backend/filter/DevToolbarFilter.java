@@ -11,8 +11,10 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.devtoolbar.ToolbarShell;
@@ -39,17 +41,26 @@ public class DevToolbarFilter implements Filter {
     private final Tracer tracer;
     private final PeekabootPaths paths;
     private final String swaggerUiPrefix;
+    private final String apiDocsPath;
     // Reads the bar's stylesheets off the classpath once, at construction, and caches the
     // rendered fragment's CSS; there is one filter instance per application.
     private final ToolbarShell toolbarShell = new ToolbarShell();
 
-    /** @param swaggerUiPath the effective {@code springdoc.swagger-ui.path}, for the idle-mode check */
+    /**
+     * @param swaggerUiPath the effective {@code springdoc.swagger-ui.path}, for the idle-mode check
+     * @param apiDocsPath the effective {@code springdoc.api-docs.path}, whose calls idle mode ignores
+     */
     public DevToolbarFilter(
-            ToolbarDataProvider toolbarDataProvider, Tracer tracer, PeekabootPaths paths, String swaggerUiPath) {
+            ToolbarDataProvider toolbarDataProvider,
+            Tracer tracer,
+            PeekabootPaths paths,
+            String swaggerUiPath,
+            String apiDocsPath) {
         this.toolbarDataProvider = toolbarDataProvider;
         this.tracer = tracer;
         this.paths = paths;
         this.swaggerUiPrefix = swaggerUiPrefix(swaggerUiPath);
+        this.apiDocsPath = apiDocsPath;
     }
 
     /**
@@ -266,10 +277,21 @@ public class DevToolbarFilter implements Filter {
             HttpServletRequest request, ContentBufferingResponseWrapper response, OriginalRequest original) {
         String basePath = paths.basePath(request);
         String json = isSwaggerUi(request)
-                ? toolbarDataProvider.getIdleModeJson(basePath)
+                ? toolbarDataProvider.getIdleModeJson(basePath, swaggerUisOwnPathPrefixes(request))
                 : toolbarDataProvider.getToolbarSummaryJson(
                         basePath, original.method(), original.uri(), response.getStatus(), original.traceId());
         return toolbarShell.render(basePath, json);
+    }
+
+    /**
+     * Swagger UI's own calls, as the browser addresses them: the server records them like any
+     * other request, so idle mode has to skip them itself. Peekaboot's and the excluded prefixes
+     * need no entry, since the server never names a trace on them.
+     */
+    private List<String> swaggerUisOwnPathPrefixes(HttpServletRequest request) {
+        return Stream.of(swaggerUiPrefix, apiDocsPath)
+                .map(path -> request.getContextPath() + paths.belowDispatcherServlet(path))
+                .toList();
     }
 
     private boolean isSwaggerUi(HttpServletRequest request) {

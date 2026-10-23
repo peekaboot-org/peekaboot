@@ -509,6 +509,26 @@ class DevToolbarFilterTest {
         assertThat(response.getContentAsString()).contains("\"idle\":true");
     }
 
+    /** Swagger UI's own calls go out behind the context path and the DispatcherServlet's prefix; the bar skips them there. */
+    @Test
+    void idleModeNamesSwaggerUisOwnCallsAsTheBrowserAddressesThem() throws Exception {
+        DevToolbarFilter customised = new DevToolbarFilter(
+                toolbarDataProvider,
+                tracer,
+                new PeekabootPaths("/actuator", "/ctx", "/app"),
+                "/admin/docs.html",
+                "/spec");
+        request = underTheDispatcherServletsPrefix("/admin/swagger-ui/index.html");
+        request.setContextPath("/ctx");
+        request.setRequestURI("/ctx/app/admin/swagger-ui/index.html");
+        chainWritesHtml("<html><body></body></html>");
+
+        customised.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString())
+                .contains("\"ignoredPathPrefixes\":[\"/ctx/app/admin/swagger-ui/\",\"/ctx/app/spec\"]");
+    }
+
     /** The idle-mode check matches the container's context-relative path, like every other check here. */
     @Test
     void idleModeStillAppliesBehindAContextPath() throws Exception {
@@ -524,7 +544,8 @@ class DevToolbarFilterTest {
 
     /** Every path default in place, with springdoc's UI configured at {@code swaggerUiPath}. */
     private DevToolbarFilter filterWith(ToolbarDataProvider provider, String swaggerUiPath) {
-        return new DevToolbarFilter(provider, tracer, PeekabootPaths.defaults(), swaggerUiPath);
+        return new DevToolbarFilter(
+                provider, tracer, PeekabootPaths.defaults(), swaggerUiPath, PeekabootPaths.DEFAULT_API_DOCS_PATH);
     }
 
     /** Under spring.mvc.servlet.path the container maps the DispatcherServlet's prefix as the servlet path. */
@@ -540,7 +561,8 @@ class DevToolbarFilterTest {
                 toolbarDataProvider,
                 tracer,
                 new PeekabootPaths("/actuator", "", "/app"),
-                PeekabootPaths.DEFAULT_SWAGGER_UI_PATH);
+                PeekabootPaths.DEFAULT_SWAGGER_UI_PATH,
+                PeekabootPaths.DEFAULT_API_DOCS_PATH);
     }
 
     @Test

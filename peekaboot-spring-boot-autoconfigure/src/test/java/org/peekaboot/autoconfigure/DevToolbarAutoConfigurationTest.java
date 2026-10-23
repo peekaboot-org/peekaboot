@@ -103,6 +103,29 @@ class DevToolbarAutoConfigurationTest {
                 });
     }
 
+    /** Swagger UI fetches its spec from springdoc.api-docs.path; idle mode skips that call wherever it is configured. */
+    @Test
+    void theCustomisedApiDocsPathReachesTheToolbarFilter() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true", "springdoc.api-docs.path=/spec")
+                .withUserConfiguration(TracerOnlyConfig.class)
+                .run(context -> {
+                    DevToolbarFilter filter =
+                            (DevToolbarFilter) context.getBean("devToolbarFilter", FilterRegistrationBean.class)
+                                    .getFilter();
+                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/swagger-ui/index.html");
+                    request.setServletPath("/swagger-ui/index.html");
+                    MockHttpServletResponse response = new MockHttpServletResponse();
+                    filter.doFilter(request, response, (req, res) -> {
+                        res.setContentType("text/html");
+                        res.getWriter().write("<html><body></body></html>");
+                    });
+
+                    assertThat(response.getContentAsString())
+                            .contains("\"ignoredPathPrefixes\":[\"/swagger-ui/\",\"/spec\"]");
+                });
+    }
+
     /** The error page is rendered on the ERROR dispatch; a REQUEST-only registration never sees it. */
     @Test
     void theToolbarFilterIsRegisteredForTheErrorDispatchToo() {

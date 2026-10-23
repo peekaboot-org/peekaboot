@@ -197,6 +197,14 @@ class PeekabootPathsTest {
         assertThat(PeekabootPaths.swaggerUiPath(configured)).isEqualTo(resolved);
     }
 
+    @ParameterizedTest
+    @CsvSource(
+            value = {"NULL, /v3/api-docs", "'', /v3/api-docs", "/spec, /spec", "spec, /spec"},
+            nullValues = "NULL")
+    void theApiDocsPathFallsBackToSpringdocsDefaultAndStartsWithASlash(String configured, String resolved) {
+        assertThat(PeekabootPaths.apiDocsPath(configured)).isEqualTo(resolved);
+    }
+
     /** Tolerates the trailing-slash and bare-root spellings the context-path property can carry. */
     @Test
     void theContextPathIsNormalisedToItsPrefixForm() {

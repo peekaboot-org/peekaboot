@@ -1,5 +1,6 @@
 package org.peekaboot.backend.devtoolbar;
 
+import java.util.List;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -37,8 +38,11 @@ public class ToolbarDataProvider {
     record ToolbarSummary(
             String method, String path, int status, String traceId, String basePath, ToolbarFeatures features) {}
 
-    /** The page came from outside a traced request; the bar waits for the next one. */
-    record IdleMode(boolean idle, String basePath, ToolbarFeatures features) {}
+    /**
+     * The page came from outside a traced request; the bar waits for the next one, skipping the
+     * calls under {@code ignoredPathPrefixes}.
+     */
+    record IdleMode(boolean idle, String basePath, List<String> ignoredPathPrefixes, ToolbarFeatures features) {}
 
     /**
      * What the bar shows for a page that came out of a traced request.
@@ -50,8 +54,13 @@ public class ToolbarDataProvider {
         return WRITER.writeValueAsString(new ToolbarSummary(method, path, status, traceId, basePath, features()));
     }
 
-    public String getIdleModeJson(String basePath) {
-        return WRITER.writeValueAsString(new IdleMode(true, basePath, features()));
+    /**
+     * What the bar shows on Swagger UI, which has no request of its own.
+     *
+     * @param ignoredPathPrefixes the paths, as the browser addresses them, whose calls the bar does not report
+     */
+    public String getIdleModeJson(String basePath, List<String> ignoredPathPrefixes) {
+        return WRITER.writeValueAsString(new IdleMode(true, basePath, ignoredPathPrefixes, features()));
     }
 
     private ToolbarFeatures features() {

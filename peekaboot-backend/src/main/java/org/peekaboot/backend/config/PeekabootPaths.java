@@ -41,6 +41,9 @@ public final class PeekabootPaths {
     /** springdoc's own default for {@code springdoc.swagger-ui.path}, for the toolbar's idle mode and the lifecycle banner. */
     public static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
 
+    /** springdoc's own default for {@code springdoc.api-docs.path}, which Swagger UI fetches its spec from. */
+    public static final String DEFAULT_API_DOCS_PATH = "/v3/api-docs";
+
     /** Prefixes whose requests are neither traced nor given a toolbar. */
     private final Set<String> excludedPrefixes;
 
@@ -95,8 +98,17 @@ public final class PeekabootPaths {
      * Spring's pattern parser adds the leading slash.
      */
     public static String swaggerUiPath(@Nullable String configured) {
+        return springdocPath(configured, DEFAULT_SWAGGER_UI_PATH);
+    }
+
+    /** The effective {@code springdoc.api-docs.path}, read the way {@link #swaggerUiPath} reads its own. */
+    public static String apiDocsPath(@Nullable String configured) {
+        return springdocPath(configured, DEFAULT_API_DOCS_PATH);
+    }
+
+    private static String springdocPath(@Nullable String configured, String springdocDefault) {
         if (configured == null || configured.isBlank()) {
-            return DEFAULT_SWAGGER_UI_PATH;
+            return springdocDefault;
         }
         return configured.startsWith("/") ? configured : "/" + configured;
     }

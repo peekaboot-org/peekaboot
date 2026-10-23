@@ -11,8 +11,8 @@
  * below, which links to the dashboard so the reader can authenticate.
  *
  * The data JSON carries method/path/status/traceId/basePath for regular pages
- * or {idle:true, basePath} for Swagger UI, where a fetch interceptor picks up
- * trace ids from Server-Timing headers instead. Clicking the bar (or pressing
+ * or {idle:true, basePath, ignoredPathPrefixes} for Swagger UI, where a fetch interceptor
+ * picks up trace ids from Server-Timing headers instead. Clicking the bar (or pressing
  * Enter/Space while it has focus) lazy-imports the trace-detail overlay.
  *
  * The bar never fetches /api/features: the blob's `features` carries the effective
@@ -148,7 +148,7 @@ function initToolbar(host, data) {
         });
     });
 
-    if (data.idle) installServerTimingInterceptor(data.basePath, loadTrace);
+    if (data.idle) installServerTimingInterceptor(data.ignoredPathPrefixes, loadTrace);
 }
 
 /**
@@ -190,20 +190,10 @@ function pollTrace(client, traceId, {stillCurrent, onTrace, onNothingArrived}) {
 /**
  * Idle mode (Swagger UI): the page has no request of its own, so window.fetch is wrapped
  * and the trace id is picked up from the Server-Timing header of every API response,
- * reported as onRequest(traceId, method, path, status).
+ * reported as onRequest(traceId, method, path, status). Swagger UI's own calls, under
+ * ignoredPathPrefixes, are skipped.
  */
-function installServerTimingInterceptor(basePath, onRequest) {
-    // basePath is <context-path>/peekaboot; fetched paths carry the same context path, so
-    // the prefixes to ignore have to be put behind it too. '/actuator/' matches only Boot's
-    // default management base path - a relocated one is excluded server-side instead, since
-    // RequestCaptureFilter is given a PeekabootPaths built from the configured base path and
-    // never sets the Server-Timing header this interceptor reads, so a relocated actuator
-    // call is silently ignored either way. The one exception is management.endpoints.web.
-    // base-path=/: PeekabootPaths.managementPrefix has no prefix to exclude by there, so the
-    // header is set and actuator calls are reported like any other request.
-    const contextPath = basePath.slice(0, basePath.lastIndexOf('/'));
-    const skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/']
-        .map(prefix => contextPath + prefix);
+function installServerTimingInterceptor(ignoredPathPrefixes, onRequest) {
     const originalFetch = window.fetch;
 
     window.fetch = function(input, init) {
@@ -218,7 +208,7 @@ function installServerTimingInterceptor(basePath, onRequest) {
             path = url;
         }
 
-        const skip = skipPrefixes.some(prefix => path.startsWith(prefix));
+        const skip = ignoredPathPrefixes.some(prefix => path.startsWith(prefix));
 
         return originalFetch.apply(this, arguments).then(response => {
             if (skip) return response;

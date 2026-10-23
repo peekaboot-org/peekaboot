@@ -62,15 +62,18 @@ class ToolbarDataProviderTest {
     void shouldCarryTheBasePathItIsGiven() {
         assertThat(provider.getToolbarSummaryJson("/app/peekaboot", "GET", "/app/users", 200, null))
                 .contains("\"basePath\":\"/app/peekaboot\"");
-        assertThat(provider.getIdleModeJson("/app/peekaboot")).contains("\"basePath\":\"/app/peekaboot\"");
+        assertThat(provider.getIdleModeJson("/app/peekaboot", List.of())).contains("\"basePath\":\"/app/peekaboot\"");
     }
 
     @Test
     void shouldGenerateIdleModeJson() {
-        JsonNode parsed = PeekabootJson.MAPPER.readTree(provider.getIdleModeJson("/peekaboot"));
+        JsonNode parsed = PeekabootJson.MAPPER.readTree(
+                provider.getIdleModeJson("/peekaboot", List.of("/swagger-ui/", "/v3/api-docs")));
 
         assertThat(parsed.path("idle").asBoolean()).isTrue();
         assertThat(parsed.path("basePath").asString()).isEqualTo("/peekaboot");
+        assertThat(parsed.path("ignoredPathPrefixes").valueStream().map(JsonNode::asString))
+                .containsExactly("/swagger-ui/", "/v3/api-docs");
     }
 
     /** The overlay the bar opens colours by these, so they have to be the configured ones, in both modes. */
@@ -82,7 +85,7 @@ class ToolbarDataProviderTest {
 
         for (String json : new String[] {
             provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null),
-            provider.getIdleModeJson("/peekaboot")
+            provider.getIdleModeJson("/peekaboot", List.of())
         }) {
             JsonNode features = PeekabootJson.MAPPER.readTree(json).path("features");
             assertThat(features.path("slowSpanThresholdMs").asLong()).isEqualTo(250L);

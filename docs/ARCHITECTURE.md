@@ -361,8 +361,10 @@ Server-Timing: trace;desc="00-<traceId>-<spanId>-<traceFlags>"
 Setting it before the chain runs ensures the header is present even when downstream
 handling commits the response early. The toolbar's own idle-mode script, used on pages like
 Swagger UI that have no request of their own to report, reads this header off `fetch()`
-responses to pick up a trace id for a call it didn't otherwise see. Nothing stops any other
-tool that can read response headers from doing the same.
+responses to pick up a trace id for a call it didn't otherwise see. It skips Swagger UI's own
+calls, under the Swagger UI and `springdoc.api-docs.path` prefixes the `IdleMode` blob names
+(`ignoredPathPrefixes`); the excluded prefixes need no entry, since they never carry the header.
+Nothing stops any other tool that can read response headers from doing the same.
 
 ### BFF Pattern
 

@@ -61,7 +61,8 @@ public class DevToolbarAutoConfiguration {
                 toolbarDataProvider,
                 tracer,
                 peekabootPaths,
-                PeekabootPaths.swaggerUiPath(environment.getProperty("springdoc.swagger-ui.path"))));
+                PeekabootPaths.swaggerUiPath(environment.getProperty("springdoc.swagger-ui.path")),
+                PeekabootPaths.apiDocsPath(environment.getProperty("springdoc.api-docs.path"))));
         registration.addUrlPatterns("/*");
         // ERROR as well as REQUEST: the error page is rendered on its own dispatch, and the
         // bar belongs on it. What the bar reports there comes from the original request.
