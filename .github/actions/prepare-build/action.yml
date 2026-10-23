@@ -55,21 +55,9 @@ runs:
         server-password-env-var: ${{ inputs.server-password-env-var }}
         gpg-private-key: ${{ inputs.gpg-private-key }}
         gpg-passphrase-env-var: ${{ inputs.gpg-passphrase-env-var }}
-
-    # setup-java v6.0.1 has no input for <repositoryOrigins> (actions/setup-java#1282 adds one,
-    # unreleased), so it goes into the settings.xml it just wrote. Fails if the server entry is
-    # missing, rather than uploading without credentials.
-    - name: declare-server-origin
-      if: inputs.server-origin != ''
-      shell: bash
-      env:
-        SERVER_ID: ${{ inputs.server-id }}
-        SERVER_ORIGIN: ${{ inputs.server-origin }}
-      run: |
-        settings="$HOME/.m2/settings.xml"
-        origins="<repositoryOrigins><repositoryOrigin>$SERVER_ORIGIN</repositoryOrigin></repositoryOrigins>"
-        sed -i "s#<id>$SERVER_ID</id>#&$origins#" "$settings"
-        grep -qF "<id>$SERVER_ID</id>$origins" "$settings"
+        # setup-java fails on an origin whose server id it has not configured, rather than
+        # letting the upload go out without credentials.
+        mvn-server-repository-origins: ${{ inputs.server-origin != '' && format('{0}:{1}', inputs.server-id, inputs.server-origin) || '' }}
 
     # A browser build changes with the Playwright version and nothing else, so the cache is
     # keyed on that property rather than on every pom. The engine list joins the key because
