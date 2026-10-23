@@ -7,6 +7,7 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.PeekabootWebConfig;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.insights.InsightsService;
+import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.mapper.trace.HibernateSqlFormatter;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
@@ -39,11 +40,14 @@ import org.springframework.context.annotation.Import;
  * component scanning would derive from its class (some are looked up by exactly that
  * name, e.g. {@code ServerUrlResolver#DASHBOARD_CONFIG_BEAN_NAME}), so an application
  * bean of the same type or name replaces the default instead of colliding with it.
+ *
+ * <p>Binds the tracing and insights properties whatever their switches say, so the Config
+ * tab shows the switch that turned a feature off.
  */
 @AutoConfiguration(after = {PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class})
 @ConditionalOnPeekabootServlet
 @ConditionalOnClass(HealthEndpoint.class)
-@EnableConfigurationProperties({PeekabootProperties.class, PeekabootTracingProperties.class})
+@EnableConfigurationProperties({PeekabootProperties.class, PeekabootTracingProperties.class, InsightsProperties.class})
 @Import({StackTraceRulesConfiguration.class, MaskingConfiguration.class})
 public class PeekabootAutoConfiguration {
 

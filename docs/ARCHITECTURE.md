@@ -863,7 +863,9 @@ process that is not a developer's own launch.
 `peekaboot.lifecycle.enabled` is read by a `@ConditionalOnBooleanProperty` condition, since it
 has to be evaluated before any Peekaboot bean exists, and is also bound as
 `PeekabootProperties.Lifecycle.enabled` so it carries configuration metadata and shows up on
-the Config tab like every other switch.
+the Config tab like every other switch. `PeekabootAutoConfiguration` binds
+`PeekabootTracingProperties` and `InsightsProperties` the same way, whatever their own switches
+say, so `peekaboot.tracing.enabled=false` and `peekaboot.insights.enabled=false` stay visible there.
 
 That double reading is why a switch a condition gates on must not hold a value the two read
 differently. `@ConditionalOnBooleanProperty` compares the raw value with `true`, ignoring case,

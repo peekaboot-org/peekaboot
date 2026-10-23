@@ -13,9 +13,12 @@ import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.domain.trace.TraceLog;
+import org.peekaboot.backend.insights.InsightsService;
+import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -58,6 +61,24 @@ class PeekabootAutoConfigurationTest {
                                 .getLifecycle()
                                 .isEnabled())
                         .isFalse());
+    }
+
+    /** Like lifecycle's, the switch that turned a feature off stays on the Config tab, which lists the bound beans. */
+    @Test
+    void bindsTheTracingAndInsightsSwitchesWhileTheirFeaturesAreOff() {
+        contextRunner
+                .withConfiguration(
+                        AutoConfigurations.of(PeekabootTracingAutoConfiguration.class, InsightsAutoConfiguration.class))
+                .withPropertyValues(
+                        "peekaboot.enabled=true", "peekaboot.tracing.enabled=false", "peekaboot.insights.enabled=false")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(TraceStore.class);
+                    assertThat(context).doesNotHaveBean(InsightsService.class);
+                    assertThat(context.getBean(PeekabootTracingProperties.class).isEnabled())
+                            .isFalse();
+                    assertThat(context.getBean(InsightsProperties.class).isEnabled())
+                            .isFalse();
+                });
     }
 
     @Test
