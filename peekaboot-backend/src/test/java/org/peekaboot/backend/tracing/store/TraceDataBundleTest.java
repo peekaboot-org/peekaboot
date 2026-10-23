@@ -21,13 +21,14 @@ import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 class TraceDataBundleTest {
 
     private static final String SQL = "SELECT * FROM person";
+    private static final int NO_CAP = Integer.MAX_VALUE;
 
     @Test
     void spansReturnsSortedSnapshot() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(span("span3").order(3).build(), 100);
-        bundle.addSpan(span("span1").order(1).build(), 100);
-        bundle.addSpan(span("span2").order(2).build(), 100);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
+        bundle.addSpan(span("span3").order(3).build());
+        bundle.addSpan(span("span1").order(1).build());
+        bundle.addSpan(span("span2").order(2).build());
 
         List<SpanData> spans = bundle.snapshot().spans();
 
@@ -37,14 +38,14 @@ class TraceDataBundleTest {
     /** The flag flips on the first eviction and stays: a trimmed trace never reads as complete again. */
     @Test
     void addSpanTrimsOldestBeyondLimit() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 3, NO_CAP);
         for (int i = 1; i <= 3; i++) {
-            bundle.addSpan(span("span" + i).order(i).build(), 3);
+            bundle.addSpan(span("span" + i).order(i).build());
         }
         assertThat(bundle.snapshot().truncated()).isFalse();
 
-        bundle.addSpan(span("span4").order(4).build(), 3);
-        bundle.addSpan(span("span5").order(5).build(), 3);
+        bundle.addSpan(span("span4").order(4).build());
+        bundle.addSpan(span("span5").order(5).build());
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
         assertThat(bundle.snapshot().truncated()).isTrue();
@@ -56,12 +57,12 @@ class TraceDataBundleTest {
         // direct child of the real span it duplicates, and a span cannot end (and so
         // export) before the ancestor containing it does - so the duplicate normally
         // arrives here first, before the real span it needs to be compared against.
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
         SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(1).build();
         SpanData real = jdbcQuery("parent1", SQL).order(2).build();
 
-        bundle.addSpan(duplicate, 100);
-        bundle.addSpan(real, 100);
+        bundle.addSpan(duplicate);
+        bundle.addSpan(real);
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("parent1");
     }
@@ -71,12 +72,12 @@ class TraceDataBundleTest {
         // The uncommon ordering - covered for robustness, not because it's expected in
         // production, since a faithful fold must not assume the child-before-parent
         // ordering is the only one it will ever see.
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
         SpanData real = jdbcQuery("parent1", SQL).order(1).build();
         SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(2).build();
 
-        bundle.addSpan(real, 100);
-        bundle.addSpan(duplicate, 100);
+        bundle.addSpan(real);
+        bundle.addSpan(duplicate);
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("parent1");
     }
@@ -86,15 +87,15 @@ class TraceDataBundleTest {
         // Nesting depth means the grandchild ends (and so exports) before the duplicate
         // that contains it, which in turn ends before the real span - so all three arrive
         // in the reverse of their logical parent-child order.
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
         SpanData grandchild =
                 jdbcDuplicate("rs1", "dup1", SQL).named("result-set").order(1).build();
         SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(2).build();
         SpanData real = jdbcQuery("parent1", SQL).order(3).build();
 
-        bundle.addSpan(grandchild, 100);
-        bundle.addSpan(duplicate, 100);
-        bundle.addSpan(real, 100);
+        bundle.addSpan(grandchild);
+        bundle.addSpan(duplicate);
+        bundle.addSpan(real);
 
         List<SpanData> spans = bundle.snapshot().spans();
         assertThat(spans).extracting(SpanData::spanId).containsExactly("rs1", "parent1");
@@ -109,12 +110,12 @@ class TraceDataBundleTest {
 
     @Test
     void resolveSpanIdFollowsTheRedirectChainToTheSurvivingSpan() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
         SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(1).build();
         SpanData real = jdbcQuery("parent1", SQL).order(2).build();
 
-        bundle.addSpan(duplicate, 100);
-        bundle.addSpan(real, 100);
+        bundle.addSpan(duplicate);
+        bundle.addSpan(real);
 
         assertThat(bundle.resolveSpanId("dup1")).isEqualTo("parent1");
         assertThat(bundle.resolveSpanId("unrelated")).isEqualTo("unrelated");
@@ -123,15 +124,15 @@ class TraceDataBundleTest {
 
     @Test
     void doesNotCollapseAChildWithDifferentTagsFromItsParent() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
         SpanData parent = jdbcQuery("parent1", "SELECT * FROM person").order(1).build();
         SpanData child = jdbcQuery("child1", "SELECT * FROM orders")
                 .parent("parent1")
                 .order(2)
                 .build();
 
-        bundle.addSpan(parent, 100);
-        bundle.addSpan(child, 100);
+        bundle.addSpan(parent);
+        bundle.addSpan(child);
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("parent1", "child1");
     }
@@ -141,16 +142,14 @@ class TraceDataBundleTest {
         // Five real spans, each followed by its double-instrumented duplicate arriving
         // first (as in production) - ten raw addSpan calls against a cap of five. If the
         // cap counted raw arrivals rather than folded spans, this trace would truncate.
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 5, NO_CAP);
         long order = 1;
         for (int i = 0; i < 5; i++) {
             String realId = "real" + i;
-            bundle.addSpan(
-                    jdbcDuplicate("dup" + i, realId, "SELECT " + i)
-                            .order(order++)
-                            .build(),
-                    5);
-            bundle.addSpan(jdbcQuery(realId, "SELECT " + i).order(order++).build(), 5);
+            bundle.addSpan(jdbcDuplicate("dup" + i, realId, "SELECT " + i)
+                    .order(order++)
+                    .build());
+            bundle.addSpan(jdbcQuery(realId, "SELECT " + i).order(order++).build());
         }
 
         assertThat(bundle.snapshot().spans())
@@ -167,18 +166,16 @@ class TraceDataBundleTest {
         // evicted it grows for the trace's whole life regardless of maxSpans. Here 500
         // real+duplicate pairs are folded against a cap of 10 - unpruned, the table would
         // hold close to 500 entries by the end.
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
         int cap = 10;
+        TraceDataBundle bundle = new TraceDataBundle("trace1", cap, NO_CAP);
         int pairs = 500;
         long order = 1;
         for (int i = 0; i < pairs; i++) {
             String realId = "real" + i;
-            bundle.addSpan(
-                    jdbcDuplicate("dup" + i, realId, "SELECT " + i)
-                            .order(order++)
-                            .build(),
-                    cap);
-            bundle.addSpan(jdbcQuery(realId, "SELECT " + i).order(order++).build(), cap);
+            bundle.addSpan(jdbcDuplicate("dup" + i, realId, "SELECT " + i)
+                    .order(order++)
+                    .build());
+            bundle.addSpan(jdbcQuery(realId, "SELECT " + i).order(order++).build());
         }
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
@@ -200,8 +197,8 @@ class TraceDataBundleTest {
         // (three spans that pairwise match, nested three deep), which does not occur in
         // production - but the class Javadoc promises the redirect table "stays bounded by
         // the maxSpans cap" unconditionally, so this must hold even for that shape.
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
         int cap = 10;
+        TraceDataBundle bundle = new TraceDataBundle("trace1", cap, NO_CAP);
         int triples = 500;
         long order = 1;
         for (int i = 0; i < triples; i++) {
@@ -210,21 +207,17 @@ class TraceDataBundleTest {
             String gcId = "gc-" + i;
             // arrival order: innermost duplicate first, then the mid duplicate, then the
             // real span - the expected child-before-parent export ordering, three deep
-            bundle.addSpan(
-                    jdbcQuery(gcId, "SELECT " + i)
-                            .parent(dup1Id)
-                            .tag("peer.service", "ds-inner")
-                            .order(order++)
-                            .build(),
-                    cap);
-            bundle.addSpan(
-                    jdbcQuery(dup1Id, "SELECT " + i)
-                            .parent(survivorId)
-                            .tag("peer.service", "ds-mid")
-                            .order(order++)
-                            .build(),
-                    cap);
-            bundle.addSpan(jdbcQuery(survivorId, "SELECT " + i).order(order++).build(), cap);
+            bundle.addSpan(jdbcQuery(gcId, "SELECT " + i)
+                    .parent(dup1Id)
+                    .tag("peer.service", "ds-inner")
+                    .order(order++)
+                    .build());
+            bundle.addSpan(jdbcQuery(dup1Id, "SELECT " + i)
+                    .parent(survivorId)
+                    .tag("peer.service", "ds-mid")
+                    .order(order++)
+                    .build());
+            bundle.addSpan(jdbcQuery(survivorId, "SELECT " + i).order(order++).build());
         }
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
@@ -239,14 +232,14 @@ class TraceDataBundleTest {
         // The OTel batch exporter adds spans on its own thread while the
         // toolbar polls the API; reading must not throw
         // ConcurrentModificationException or return a corrupt snapshot.
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", NO_CAP, NO_CAP);
         int totalSpans = 20_000;
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             Future<?> writer = executor.submit(() -> {
                 for (int i = 0; i < totalSpans; i++) {
-                    bundle.addSpan(span("span" + i).order(i).build(), Integer.MAX_VALUE);
+                    bundle.addSpan(span("span" + i).order(i).build());
                 }
             });
 
@@ -266,27 +259,27 @@ class TraceDataBundleTest {
     /** The root is the first stored span whose parent is not stored - a child that exported before its parent is not it. */
     @Test
     void rootSpanIsTheFirstStoredSpanWhoseParentIsNotStored() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 10, NO_CAP);
         assertThat(bundle.listingRoots().root()).isNull();
 
-        bundle.addSpan(span("child").parent("parent").order(1).build(), 10);
+        bundle.addSpan(span("child").parent("parent").order(1).build());
         assertThat(bundle.listingRoots().root().spanId()).isEqualTo("child");
 
-        bundle.addSpan(span("parent").order(2).build(), 10);
+        bundle.addSpan(span("parent").order(2).build());
         assertThat(bundle.listingRoots().root().spanId()).isEqualTo("parent");
     }
 
     /** An orphaned task is its trace's root and its only entry, until the request it ran for arrives. */
     @Test
     void listingRootsNameTheRootAndTheAsyncEntriesOfOneMoment() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000));
 
         ListingRoots orphaned = bundle.listingRoots();
         assertThat(orphaned.root().spanId()).isEqualTo("async");
         assertThat(orphaned.asyncEntries()).extracting(SpanData::spanId).containsExactly("async");
 
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
 
         ListingRoots enclosed = bundle.listingRoots();
         assertThat(enclosed.root().spanId()).isEqualTo("root");
@@ -295,8 +288,8 @@ class TraceDataBundleTest {
 
     @Test
     void aBundleWithoutAsyncSpansListsNoAsyncEntries() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
 
         assertThat(bundle.listingRoots().asyncEntries()).isEmpty();
     }
@@ -308,10 +301,10 @@ class TraceDataBundleTest {
      */
     @Test
     void snapshotReportsTheWindowTheSlowBucketAdmittedEvenAfterEviction() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(span("span1").at(100, 50).order(1).build(), 2);
-        bundle.addSpan(span("span2").at(200, 50).order(2).build(), 2);
-        bundle.addSpan(span("span3").at(300, 50).order(3).build(), 2);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 2, NO_CAP);
+        bundle.addSpan(span("span1").at(100, 50).order(1).build());
+        bundle.addSpan(span("span2").at(200, 50).order(2).build());
+        bundle.addSpan(span("span3").at(300, 50).order(3).build());
 
         TraceData snapshot = bundle.snapshot();
 
@@ -323,9 +316,9 @@ class TraceDataBundleTest {
 
     @Test
     void snapshotReportsTheSynchronousWindowAsTheDuration() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
-        bundle.addSpan(asyncSpan("async", "root", 40, 240_000), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
+        bundle.addSpan(asyncSpan("async", "root", 40, 240_000));
 
         TraceData snapshot = bundle.snapshot();
 
@@ -334,9 +327,9 @@ class TraceDataBundleTest {
 
     @Test
     void snapshotCarriesTheRootSpanTheBundleChose() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(span("child").parent("parent").order(1).build(), 10);
-        bundle.addSpan(span("parent").order(2).build(), 10);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 10, NO_CAP);
+        bundle.addSpan(span("child").parent("parent").order(1).build());
+        bundle.addSpan(span("parent").order(2).build());
 
         TraceData snapshot = bundle.snapshot();
 
@@ -354,10 +347,10 @@ class TraceDataBundleTest {
      */
     @Test
     void snapshotsRootIsAnElementOfItsSpansAfterARedirectRewroteItsParent() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(jdbcQuery("a", "SELECT 1").parent("dup").order(1).build(), 100);
-        bundle.addSpan(jdbcQuery("b", "SELECT 2").parent("a").order(2).build(), 100);
-        bundle.addSpan(jdbcDuplicate("dup", "b", "SELECT 2").order(3).build(), 100);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
+        bundle.addSpan(jdbcQuery("a", "SELECT 1").parent("dup").order(1).build());
+        bundle.addSpan(jdbcQuery("b", "SELECT 2").parent("a").order(2).build());
+        bundle.addSpan(jdbcDuplicate("dup", "b", "SELECT 2").order(3).build());
 
         TraceData snapshot = bundle.snapshot();
 
@@ -368,7 +361,7 @@ class TraceDataBundleTest {
 
     @Test
     void snapshotOfAnEmptyBundleHasNoRootAndNoWindow() {
-        TraceData snapshot = new TraceDataBundle("trace1").snapshot();
+        TraceData snapshot = new TraceDataBundle("trace1", NO_CAP, NO_CAP).snapshot();
 
         assertThat(snapshot.spans()).isEmpty();
         assertThat(snapshot.rootSpan()).isNull();
@@ -378,9 +371,9 @@ class TraceDataBundleTest {
 
     @Test
     void theSynchronousWindowMatchesTheSpanWindowWithoutAsyncSpans() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
-        bundle.addSpan(plainSpan("child", "root", 10, 20), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
+        bundle.addSpan(plainSpan("child", "root", 10, 20));
 
         assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
         assertThat(bundle.snapshot().asyncSpanIds()).isEmpty();
@@ -392,9 +385,9 @@ class TraceDataBundleTest {
      */
     @Test
     void theSynchronousWindowExcludesAnAsyncSubtree() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
-        bundle.addSpan(asyncSpan("async", "root", 40, 240_000), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
+        bundle.addSpan(asyncSpan("async", "root", 40, 240_000));
 
         assertThat(bundle.spanWindow()).isEqualTo(Duration.ofMillis(240_040));
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
@@ -406,28 +399,28 @@ class TraceDataBundleTest {
      */
     @Test
     void anAsyncSubtreesDescendantsAreExcludedEvenWhenTheyArriveFirst() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("deep", "async", 100, 239_000), 500);
-        bundle.addSpan(asyncSpan("async", "root", 40, 240_000), 500);
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("deep", "async", 100, 239_000));
+        bundle.addSpan(asyncSpan("async", "root", 40, 240_000));
+        bundle.addSpan(plainSpan("root", null, 0, 50));
 
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
     @Test
     void theSynchronousWindowFallsBackToTheSpanWindowForAPurelyAsyncBundle() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(asyncSpan("async", "gone", 0, 3_700), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(asyncSpan("async", "gone", 0, 3_700));
 
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(3_700));
     }
 
     @Test
     void asyncEntriesNameTheSubtreeRootAndNotItsDescendants() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
-        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 500);
-        bundle.addSpan(plainSpan("deep", "async", 50, 900), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000));
+        bundle.addSpan(plainSpan("deep", "async", 50, 900));
 
         assertThat(bundle.listingRoots().asyncEntries())
                 .extracting(SpanData::spanId)
@@ -441,10 +434,10 @@ class TraceDataBundleTest {
      */
     @Test
     void nestedAsyncWorkYieldsOnlyTheOuterEntry() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
-        bundle.addSpan(asyncSpan("outer", "root", 40, 2_000), 500);
-        bundle.addSpan(asyncSpan("inner", "outer", 100, 1_000), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
+        bundle.addSpan(asyncSpan("outer", "root", 40, 2_000));
+        bundle.addSpan(asyncSpan("inner", "outer", 100, 1_000));
 
         assertThat(bundle.listingRoots().asyncEntries())
                 .extracting(SpanData::spanId)
@@ -458,10 +451,10 @@ class TraceDataBundleTest {
      */
     @Test
     void theSynchronousWindowSurvivesSpanEviction() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("root", null, 0, 50), 2);
-        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 2);
-        bundle.addSpan(plainSpan("later", "root", 20, 10), 2);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 2, NO_CAP);
+        bundle.addSpan(plainSpan("root", null, 0, 50));
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000));
+        bundle.addSpan(plainSpan("later", "root", 20, 10));
 
         assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
@@ -474,14 +467,14 @@ class TraceDataBundleTest {
      */
     @Test
     void aLateAsyncEntryKeepsTheSynchronousTimeOfEvictedSpans() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("slow", "root", 0, 1_500), 3);
-        bundle.addSpan(plainSpan("quick", "root", 10, 10), 3);
-        bundle.addSpan(plainSpan("background", "async", 100, 2_900), 3);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 3, NO_CAP);
+        bundle.addSpan(plainSpan("slow", "root", 0, 1_500));
+        bundle.addSpan(plainSpan("quick", "root", 10, 10));
+        bundle.addSpan(plainSpan("background", "async", 100, 2_900));
         // evicts "slow"
-        bundle.addSpan(plainSpan("later", "root", 30, 10), 3);
+        bundle.addSpan(plainSpan("later", "root", 30, 10));
         // evicts "quick", and moves "background" out of the synchronous window
-        bundle.addSpan(asyncSpan("async", "root", 90, 3_010), 3);
+        bundle.addSpan(asyncSpan("async", "root", 90, 3_010));
 
         assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
@@ -494,14 +487,14 @@ class TraceDataBundleTest {
      */
     @Test
     void asyncWorkInsideTheSynchronousWindowKeepsBothWindowsEqualUnderEviction() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("first", "root", 0, 1_500), 3);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 3, NO_CAP);
+        bundle.addSpan(plainSpan("first", "root", 0, 1_500));
         // shares the window's start, so its joining the subtree forces a refold
-        bundle.addSpan(plainSpan("background", "async", 0, 800), 3);
-        bundle.addSpan(plainSpan("quick", "root", 10, 10), 3);
+        bundle.addSpan(plainSpan("background", "async", 0, 800));
+        bundle.addSpan(plainSpan("quick", "root", 10, 10));
         // evicts "first"
-        bundle.addSpan(plainSpan("later", "root", 30, 10), 3);
-        bundle.addSpan(asyncSpan("async", "root", 0, 900), 3);
+        bundle.addSpan(plainSpan("later", "root", 30, 10));
+        bundle.addSpan(asyncSpan("async", "root", 0, 900));
 
         assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
@@ -517,7 +510,7 @@ class TraceDataBundleTest {
      */
     @Test
     void asyncMembershipFollowsResolveThroughAFoldedAwayDuplicateAncestor() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
         SpanData leaf = plainSpan("leaf", "dup", 100_000, 5_000);
         SpanData duplicate =
                 jdbcDuplicate("dup", "real", "SELECT 1").at(150, 100).build();
@@ -528,11 +521,11 @@ class TraceDataBundleTest {
 
         // child-before-parent, the real export order: leaf, then its stated parent (the
         // duplicate), then the real span the duplicate folds into, then async, then root
-        bundle.addSpan(leaf, 500);
-        bundle.addSpan(duplicate, 500);
-        bundle.addSpan(real, 500);
-        bundle.addSpan(async, 500);
-        bundle.addSpan(root, 500);
+        bundle.addSpan(leaf);
+        bundle.addSpan(duplicate);
+        bundle.addSpan(real);
+        bundle.addSpan(async);
+        bundle.addSpan(root);
 
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
@@ -543,16 +536,16 @@ class TraceDataBundleTest {
      */
     @Test
     void aTwoHopDescendantStoredBeforeItsEntryLeavesTheSynchronousWindow() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
         SpanData leaf = plainSpan("leaf", "mid", 20, 40_000);
         SpanData mid = plainSpan("mid", "async", 10, 50_000);
         SpanData async = asyncSpan("async", "root", 5, 100_000);
         SpanData root = plainSpan("root", null, 0, 20);
 
-        bundle.addSpan(leaf, 500);
-        bundle.addSpan(mid, 500);
-        bundle.addSpan(async, 500);
-        bundle.addSpan(root, 500);
+        bundle.addSpan(leaf);
+        bundle.addSpan(mid);
+        bundle.addSpan(async);
+        bundle.addSpan(root);
 
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(20));
     }
@@ -563,11 +556,11 @@ class TraceDataBundleTest {
      */
     @Test
     void aSpanJoiningThroughItsParentTakesItsStoredDescendantsAlong() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("leaf", "late", 100, 9_000), 500);
-        bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 500);
-        bundle.addSpan(plainSpan("late", "async", 50, 9_500), 500);
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("leaf", "late", 100, 9_000));
+        bundle.addSpan(asyncSpan("async", "root", 40, 1_000));
+        bundle.addSpan(plainSpan("late", "async", 50, 9_500));
+        bundle.addSpan(plainSpan("root", null, 0, 50));
 
         assertThat(bundle.snapshot().asyncSpanIds()).containsExactlyInAnyOrder("async", "late", "leaf");
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
@@ -579,12 +572,12 @@ class TraceDataBundleTest {
      */
     @Test
     void aDuplicateFoldedIntoAnAsyncSpanBringsItsStoredChildrenAlong() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(plainSpan("leaf", "dup", 100_000, 5_000), 500);
-        bundle.addSpan(jdbcQuery("real", "SELECT 1").parent("async").at(100, 50).build(), 500);
-        bundle.addSpan(asyncSpan("async", "root", 40, 10_000), 500);
-        bundle.addSpan(jdbcDuplicate("dup", "real", "SELECT 1").at(110, 30).build(), 500);
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(plainSpan("leaf", "dup", 100_000, 5_000));
+        bundle.addSpan(jdbcQuery("real", "SELECT 1").parent("async").at(100, 50).build());
+        bundle.addSpan(asyncSpan("async", "root", 40, 10_000));
+        bundle.addSpan(jdbcDuplicate("dup", "real", "SELECT 1").at(110, 30).build());
+        bundle.addSpan(plainSpan("root", null, 0, 50));
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).doesNotContain("dup");
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
@@ -596,12 +589,12 @@ class TraceDataBundleTest {
      */
     @Test
     void aDuplicateAbsorbedByAnAsyncSurvivorLeavesTheSynchronousWindow() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(jdbcDuplicate("dup", "real", "SELECT 1").at(110, 5_000).build(), 500);
-        bundle.addSpan(asyncSpan("async", "root", 40, 10_000), 500);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
+        bundle.addSpan(jdbcDuplicate("dup", "real", "SELECT 1").at(110, 5_000).build());
+        bundle.addSpan(asyncSpan("async", "root", 40, 10_000));
         bundle.addSpan(
-                jdbcQuery("real", "SELECT 1").parent("async").at(100, 6_000).build(), 500);
-        bundle.addSpan(plainSpan("root", null, 0, 50), 500);
+                jdbcQuery("real", "SELECT 1").parent("async").at(100, 6_000).build());
+        bundle.addSpan(plainSpan("root", null, 0, 50));
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).doesNotContain("dup");
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
@@ -613,14 +606,14 @@ class TraceDataBundleTest {
      */
     @Test
     void descendantsStoredBeforeTheirEntryIsEvictedStayOutOfTheSynchronousWindow() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(asyncSpan("first", "root", 90, 1_000), 3);
-        bundle.addSpan(plainSpan("late", "first", 100, 9_000), 3);
-        bundle.addSpan(plainSpan("x", "root", 0, 50), 3);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 3, NO_CAP);
+        bundle.addSpan(asyncSpan("first", "root", 90, 1_000));
+        bundle.addSpan(plainSpan("late", "first", 100, 9_000));
+        bundle.addSpan(plainSpan("x", "root", 0, 50));
         // evicts "first"
-        bundle.addSpan(plainSpan("y", "root", 10, 10), 3);
+        bundle.addSpan(plainSpan("y", "root", 10, 10));
         // evicts "late"
-        bundle.addSpan(asyncSpan("second", "root", 30, 10), 3);
+        bundle.addSpan(asyncSpan("second", "root", 30, 10));
 
         assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
@@ -628,12 +621,12 @@ class TraceDataBundleTest {
 
     @Test
     void aFoldedAwayAsyncDuplicateLeavesNoMemberBehind() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(markedTwin("dup", "real"), 2);
-        bundle.addSpan(markedTwin("real", "root"), 2);
-        bundle.addSpan(plainSpan("x", "root", 0, 50), 2);
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 2, NO_CAP);
+        bundle.addSpan(markedTwin("dup", "real"));
+        bundle.addSpan(markedTwin("real", "root"));
+        bundle.addSpan(plainSpan("x", "root", 0, 50));
         // evicts "real", the last async span stored
-        bundle.addSpan(plainSpan("y", "root", 10, 10), 2);
+        bundle.addSpan(plainSpan("y", "root", 10, 10));
 
         assertThat(bundle.listingRoots().asyncEntries()).isEmpty();
         assertThat(bundle.snapshot().asyncSpanIds()).isEmpty();
@@ -641,9 +634,9 @@ class TraceDataBundleTest {
 
     @Test
     void addLogTrimsOldestBeyondLimit() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        TraceDataBundle bundle = new TraceDataBundle("trace1", NO_CAP, 3);
         for (int i = 1; i <= 5; i++) {
-            bundle.addLog(log("trace1").saying("log" + i).build(), 3);
+            bundle.addLog(log("trace1").saying("log" + i).build());
         }
 
         assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");

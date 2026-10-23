@@ -60,8 +60,8 @@ class TraceWritePathBenchmark {
         // duplicate, leaving exactly the real spans (TraceDataBundleTest and
         // InMemoryTraceStoreTest cover this in depth; this is a cheap guard against the
         // benchmark silently drifting from what the fold logic actually does).
-        TraceDataBundle sanityBundle = new TraceDataBundle("bench-sanity");
-        rawSpans.forEach(span -> sanityBundle.addSpan(span, CAP));
+        TraceDataBundle sanityBundle = new TraceDataBundle("bench-sanity", CAP, Integer.MAX_VALUE);
+        rawSpans.forEach(span -> sanityBundle.addSpan(span));
         assertThat(sanityBundle.snapshot().spans()).hasSize(REAL_QUERY_COUNT + 1);
         assertThat(sanityBundle.snapshot().truncated()).isFalse();
 
@@ -113,10 +113,10 @@ class TraceWritePathBenchmark {
     }
 
     private static long timeFoldOnInsertion(List<SpanData> spans, int cap) {
-        TraceDataBundle bundle = new TraceDataBundle(TRACE_ID);
+        TraceDataBundle bundle = new TraceDataBundle(TRACE_ID, cap, Integer.MAX_VALUE);
         long start = System.nanoTime();
         for (SpanData span : spans) {
-            bundle.addSpan(span, cap);
+            bundle.addSpan(span);
         }
         long elapsed = System.nanoTime() - start;
         if (bundle.snapshot().spans().isEmpty()) {

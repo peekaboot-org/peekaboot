@@ -14,9 +14,9 @@ public final class TraceDatas {
     private TraceDatas() {}
 
     public static TraceData of(String traceId, SpanData... spans) {
-        TraceDataBundle bundle = new TraceDataBundle(traceId);
+        TraceDataBundle bundle = new TraceDataBundle(traceId, Integer.MAX_VALUE, Integer.MAX_VALUE);
         for (SpanData span : spans) {
-            bundle.addSpan(span, Integer.MAX_VALUE);
+            bundle.addSpan(span);
         }
         return bundle.snapshot();
     }

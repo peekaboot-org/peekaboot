@@ -42,6 +42,8 @@ import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 public class TraceDataBundle {
 
     private final String traceId;
+    private final int maxSpans;
+    private final int maxLogs;
     private final Object spansLock = new Object();
     private final Map<String, SpanData> spansById = new LinkedHashMap<>();
     private final Map<String, String> parentRedirects = new HashMap<>();
@@ -62,8 +64,14 @@ public class TraceDataBundle {
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
 
-    public TraceDataBundle(String traceId) {
+    /**
+     * @param maxSpans the most deduplicated spans kept, oldest evicted first
+     * @param maxLogs  the most logs kept, oldest trimmed first
+     */
+    public TraceDataBundle(String traceId, int maxSpans, int maxLogs) {
         this.traceId = traceId;
+        this.maxSpans = maxSpans;
+        this.maxLogs = maxLogs;
     }
 
     public String traceId() {
@@ -76,7 +84,7 @@ public class TraceDataBundle {
      * than double-instrumented duplicates. See the class Javadoc for why this has to check
      * both directions.
      */
-    public void addSpan(SpanData span, int maxSpans) {
+    public void addSpan(SpanData span) {
         synchronized (spansLock) {
             if (!isDuplicateOfStoredParent(span)) {
                 store(span);
@@ -281,7 +289,7 @@ public class TraceDataBundle {
         }
     }
 
-    public void addLog(LogCapturedEvent log, int maxLogs) {
+    public void addLog(LogCapturedEvent log) {
         if (log.isError()) {
             hasErrorLog = true;
         }

@@ -49,14 +49,14 @@ public class InMemoryTraceStore implements TraceStore {
     public void addSpan(SpanData span) {
         newestSpanOrder.accumulateAndGet(span.creationOrder(), Math::max);
         TraceDataBundle bundle = resolveBundle(span.traceId());
-        bundle.addSpan(span, maxSpansPerTrace);
+        bundle.addSpan(span);
         classify(bundle);
     }
 
     @Override
     public void addLog(LogCapturedEvent log) {
         TraceDataBundle bundle = resolveBundle(log.traceId());
-        bundle.addLog(log, maxLogsPerTrace);
+        bundle.addLog(log);
         // logs never affect slow classification and can only ever add a trace to the
         // Errors bucket, never remove it, so a full classify() pass is unnecessary here.
         if (log.isError()) {
@@ -85,8 +85,9 @@ public class InMemoryTraceStore implements TraceStore {
         return buckets.get(TraceBucket.ALL)
                 .computeIfAbsent(
                         traceId,
-                        id -> listedNow(
-                                listedAnywhere(id).map(ListedTrace::bundle).orElseGet(() -> new TraceDataBundle(id))))
+                        id -> listedNow(listedAnywhere(id)
+                                .map(ListedTrace::bundle)
+                                .orElseGet(() -> new TraceDataBundle(id, maxSpansPerTrace, maxLogsPerTrace))))
                 .bundle();
     }
 
