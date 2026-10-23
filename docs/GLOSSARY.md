@@ -31,7 +31,7 @@ without a copy so the list filters can classify a bundle without building a tree
 `TraceTree.rootSpan` is the mapped `SpanNode` at the top.
 
 ### Root Action Type
-`RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
+`RootActionType`, serialised by constant name. `RootActionTypes.of`
 assigns one from the root span's kind and tag prefixes. MAINTENANCE alone also reads the parent
 id, the pool rule's fixed contextual name and the Redis rule's tag values. Labels and icons live
 only in the frontend's `shared/root-actions.js`, keyed by constant name. A reader's view of the types is on the site:
@@ -51,7 +51,7 @@ The first rule that matches wins:
    fired by Spring's scheduler matches. Quartz or a plain `ScheduledExecutorService` falls
    through to `UNKNOWN` or whatever else its tags match.
 5. `MAINTENANCE` for Redis connection upkeep: CLIENT kind, no parent id, `db.system=redis` and a
-   `db.operation` in `TraceTreeMapper.REDIS_UPKEEP_COMMANDS`. Those are what Lettuce's
+   `db.operation` in `RootActionTypes.REDIS_UPKEEP_COMMANDS`. Those are what Lettuce's
    connection handshake sends (`HELLO`, `AUTH`, `PING`, `SELECT`, `READONLY`, `CLIENT`) and what
    Boot's Redis health indicators send (`INFO`, `CLUSTER`). The reactive health indicator's
    command takes a parent only from the Reactor context and the handshake runs under no span, so

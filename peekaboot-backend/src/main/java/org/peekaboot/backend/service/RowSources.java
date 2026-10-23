@@ -8,7 +8,7 @@ import java.util.Locale;
 import java.util.Set;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.mapper.trace.RootActionTypes;
 import org.peekaboot.backend.tracing.store.ListedTrace;
 import org.peekaboot.backend.tracing.store.ListingRoots;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -88,15 +88,15 @@ final class RowSources {
     }
 
     /**
-     * The two root-level filters, applied to a row's own root span. Action type and
-     * operation come straight off {@link TraceTreeMapper}'s root-span logic, so the verdict
-     * matches what mapping the full tree would say - without copying, building or masking a
-     * tree for rows the response will never carry. An empty type set and a null operation
+     * The two root-level filters, applied to a row's own root span. The type comes from
+     * {@link RootActionTypes}, as a mapped tree's does, so the verdict matches what mapping the
+     * full tree would say - without copying, building or masking a tree for rows the response
+     * will never carry. An empty type set and a null operation
      * each filter nothing away, and short-circuit before the classification a wildcard has
      * no use for.
      */
     private static boolean matchesRootFilters(SpanData root, Set<RootActionType> actionTypes, String rootOperation) {
-        return (actionTypes.isEmpty() || actionTypes.contains(TraceTreeMapper.detectRootActionType(root)))
+        return (actionTypes.isEmpty() || actionTypes.contains(RootActionTypes.of(root)))
                 && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null, rootOperation));
     }
 

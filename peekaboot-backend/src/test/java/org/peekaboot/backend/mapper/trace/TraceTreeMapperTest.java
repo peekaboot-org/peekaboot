@@ -819,7 +819,7 @@ class TraceTreeMapperTest {
 
     /**
      * The full classification grid: every {@link Span.Kind}, plus the null kind Micrometer uses
-     * for internal spans, against every tag family {@code detectRootActionType()} inspects.
+     * for internal spans, against every tag family {@code RootActionTypes.of} inspects.
      * Scheduled-job detection keys on a tag <em>pair</em> rather than a prefix, so it sits
      * outside this grid and is covered by the named tests below.
      *
