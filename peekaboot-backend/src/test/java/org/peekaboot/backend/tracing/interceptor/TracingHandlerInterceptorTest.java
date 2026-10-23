@@ -90,7 +90,8 @@ class TracingHandlerInterceptorTest {
         assertThat(observationRegistry)
                 .hasObservationWithNameEqualTo("spring.view.render")
                 .that()
-                .hasHighCardinalityKeyValue("view.name", "users/list");
+                .hasHighCardinalityKeyValue("view.name", "users/list")
+                .hasContextualNameEqualTo("users/list");
     }
 
     /** A handler may return a View instance rather than a name; it renders all the same. */
@@ -193,7 +194,8 @@ class TracingHandlerInterceptorTest {
         assertThat(observationRegistry)
                 .hasObservationWithNameEqualTo("spring.handler")
                 .that()
-                .hasHighCardinalityKeyValue("handler.name", "TestController.getUsers");
+                .hasHighCardinalityKeyValue("handler.name", "TestController.getUsers")
+                .hasContextualNameEqualTo("TestController.getUsers");
     }
 
     @Test

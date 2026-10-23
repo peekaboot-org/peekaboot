@@ -68,6 +68,7 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
 
         String spanName = resolveHandlerName(handler);
         Observation observation = Observation.createNotStarted("spring.handler", observationRegistry)
+                .contextualName(spanName)
                 .lowCardinalityKeyValue("handler.type", handler.getClass().getSimpleName())
                 .highCardinalityKeyValue("handler.name", spanName)
                 .start();
@@ -91,6 +92,7 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         String viewName = viewName(modelAndView);
         if (viewName != null) {
             Observation viewObservation = Observation.createNotStarted("spring.view.render", observationRegistry)
+                    .contextualName(viewName)
                     .lowCardinalityKeyValue("view.type", "template")
                     .highCardinalityKeyValue("view.name", viewName)
                     .start();

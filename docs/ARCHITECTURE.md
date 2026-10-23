@@ -1052,6 +1052,10 @@ application has configured sees them, not just Peekaboot's:
 | `spring.handler` | `preHandle`, once per dispatch | `handler.type` (low cardinality: the handler class's simple name), `handler.name` (high cardinality: `BeanType.methodName` for a `HandlerMethod`, else the handler class's simple name) |
 | `spring.view.render` | `postHandle`, only when the handler returned a resolvable view | `view.type` (always `template`), `view.name` (the view name, or the `View` implementation's simple class name when the handler returned a `View` instance) |
 
+Each sets its `handler.name` or `view.name` as the contextual name, so the span is named
+`PersonController.persons` or `persons`, like the async and listener spans, while the
+observation name, and so the metrics, stay `spring.handler` and `spring.view.render`.
+
 A `@ResponseBody` or REST controller renders no view, so those requests carry a handler span and
 no view span at all.
 

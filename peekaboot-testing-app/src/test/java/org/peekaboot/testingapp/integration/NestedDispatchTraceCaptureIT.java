@@ -45,23 +45,35 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
     void forwardingRequestCapturesBothDispatches() {
         JsonNode trace = traces.awaitTrace(traces.get("/people"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(spanNames(trace, "spring.handler"))
+        assertThat(describedNames(trace, "handler.name"))
                 .as("the forwarding controller and the one it forwards to each get a span")
                 .containsExactlyInAnyOrder("PersonController.people", "PersonController.persons");
-        assertThat(spanNames(trace, "spring.view.render"))
+        assertThat(describedNames(trace, "view.name"))
                 .as("an outer view span left unstopped is never exported - it would be missing here")
                 .containsExactlyInAnyOrder("forward:/persons", "persons");
+    }
+
+    /** The Spans tab labels a span by its name, so a handler or view span reads as what it ran. */
+    @Test
+    void handlerAndViewSpansAreNamedAfterWhatTheyRan() {
+        JsonNode trace = traces.awaitTrace(traces.get("/people"), TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        List<JsonNode> described =
+                collect(trace.path("rootSpan"), span -> !describedName(span).isEmpty());
+        assertThat(described).hasSize(4);
+        assertThat(described)
+                .allSatisfy(span -> assertThat(span.path("name").asString("")).isEqualTo(describedName(span)));
     }
 
     @Test
     void forwardingRequestKeepsTheForwardedWorkUnderTheForward() {
         JsonNode trace = traces.awaitTrace(traces.get("/people"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode forwardSpan = findSpan(trace.path("rootSpan"), "spring.view.render", "forward:/persons");
+        JsonNode forwardSpan = findSpan(trace.path("rootSpan"), "view.name", "forward:/persons");
         assertThat(forwardSpan)
                 .as("the forward's view span must be in the tree, not dropped")
                 .isNotNull();
-        assertThat(findSpan(forwardSpan, "spring.handler", "PersonController.persons"))
+        assertThat(findSpan(forwardSpan, "handler.name", "PersonController.persons"))
                 .as("the forwarded dispatch belongs under the forward that caused it, not "
                         + "re-parented to the root as an orphan")
                 .isNotNull();
@@ -92,13 +104,10 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
                 .containsExactly("http get /persons");
     }
 
-    /** Every {@code view.name}/{@code handler.name} tag carried by a span of this name, tree-wide. */
-    private static List<String> spanNames(JsonNode trace, String spanName) {
-        return collect(
-                        trace.path("rootSpan"),
-                        span -> spanName.equals(span.path("name").asString("")))
-                .stream()
-                .map(NestedDispatchTraceCaptureIT::describedName)
+    /** Every {@code tagKey} tag, {@code handler.name} or {@code view.name}, tree-wide. */
+    private static List<String> describedNames(JsonNode trace, String tagKey) {
+        return collect(trace.path("rootSpan"), span -> span.path("tags").has(tagKey)).stream()
+                .map(span -> span.path("tags").path(tagKey).asString(""))
                 .toList();
     }
 
@@ -123,12 +132,12 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
         return found;
     }
 
-    private static JsonNode findSpan(JsonNode span, String spanName, String describedName) {
-        if (spanName.equals(span.path("name").asString("")) && describedName.equals(describedName(span))) {
+    private static JsonNode findSpan(JsonNode span, String tagKey, String describedName) {
+        if (describedName.equals(span.path("tags").path(tagKey).asString(null))) {
             return span;
         }
         for (JsonNode child : span.path("children")) {
-            JsonNode found = findSpan(child, spanName, describedName);
+            JsonNode found = findSpan(child, tagKey, describedName);
             if (found != null) {
                 return found;
             }
@@ -136,10 +145,7 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
         return null;
     }
 
-    /**
-     * What the span is about: the handler or the view it was opened for. Both tags are
-     * high-cardinality, so they sit on the span rather than in its name.
-     */
+    /** What the span is about: the handler or the view it was opened for, empty for any other span. */
     private static String describedName(JsonNode span) {
         JsonNode tags = span.path("tags");
         return tags.has("handler.name")
