@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.ConfigPropsResponse;
-import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
-import org.peekaboot.backend.domain.config.ConfigProperty;
+import org.peekaboot.backend.domain.property.Property;
+import org.peekaboot.backend.domain.property.PropertyGroup;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 class ConfigMapperTest {
@@ -33,7 +33,7 @@ class ConfigMapperTest {
 
         assertThat(result.groups()).hasSize(2);
         assertThat(result.groups())
-                .extracting(ConfigGroup::prefix)
+                .extracting(PropertyGroup::name)
                 .containsExactlyInAnyOrder("spring.datasource", "server");
     }
 
@@ -47,7 +47,7 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups()).hasSize(1);
-        assertThat(result.groups().get(0).prefix()).isEqualTo("unknown");
+        assertThat(result.groups().get(0).name()).isEqualTo("unknown");
     }
 
     @Test
@@ -96,7 +96,7 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties())
-                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .extracting(Property::key, Property::value)
                 .containsExactly(
                         tuple("registration.google.clientId", "abc123"),
                         tuple("registration.google.clientSecret", "******"));
@@ -118,7 +118,7 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties())
-                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .extracting(Property::key, Property::value)
                 .containsExactly(tuple("credentials", "******"));
     }
 
@@ -142,7 +142,7 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties())
-                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .extracting(Property::key, Property::value)
                 .containsExactly(
                         tuple("servlet.session.cookie.name", "JSESSIONID"),
                         tuple("servlet.session.cookie.sameSite", "Lax"));
@@ -163,7 +163,7 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties())
-                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .extracting(Property::key, Property::value)
                 .containsExactly(tuple("servers[0].host", "a.example.org"), tuple("servers[1]", "plain"));
     }
 
@@ -178,7 +178,7 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties())
-                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .extracting(Property::key, Property::value)
                 .containsExactly(tuple("servers", "[]"));
     }
 
@@ -211,7 +211,7 @@ class ConfigMapperTest {
 
         assertThat(result.groups()).hasSize(1);
         assertThat(result.groups().get(0).properties())
-                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .extracting(Property::key, Property::value)
                 .containsExactlyInAnyOrder(tuple("port", "8080"), tuple("address", "0.0.0.0"));
     }
 
@@ -227,7 +227,7 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties())
-                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .extracting(Property::key, Property::value)
                 .containsExactly(tuple("address", null));
     }
 
@@ -243,7 +243,7 @@ class ConfigMapperTest {
 
         ConfigInfo result = mapper.map(new ConfigPropsResponse(contexts), false);
 
-        assertThat(result.groups()).extracting(ConfigGroup::prefix).containsExactly("bare");
+        assertThat(result.groups()).extracting(PropertyGroup::name).containsExactly("bare");
         assertThat(result.groups().get(0).properties()).isEmpty();
     }
 }

@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.EnvResponse;
 import org.peekaboot.backend.domain.environment.EnvironmentInfo;
-import org.peekaboot.backend.domain.environment.PropertySourceGroup;
-import org.peekaboot.backend.domain.environment.PropertyValue;
+import org.peekaboot.backend.domain.property.Property;
+import org.peekaboot.backend.domain.property.PropertyGroup;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 public class EnvironmentMapper {
@@ -25,24 +25,24 @@ public class EnvironmentMapper {
         return new EnvironmentInfo(env.activeProfiles(), extractPropertySources(env, unmask));
     }
 
-    private List<PropertySourceGroup> extractPropertySources(EnvResponse env, boolean unmask) {
-        List<PropertySourceGroup> result = new ArrayList<>();
+    private List<PropertyGroup> extractPropertySources(EnvResponse env, boolean unmask) {
+        List<PropertyGroup> result = new ArrayList<>();
         for (EnvResponse.PropertySource source : env.propertySources()) {
             String name = source.name() != null ? source.name() : "unknown";
-            List<PropertyValue> properties = extractProperties(source, unmask);
-            result.add(new PropertySourceGroup(name, properties));
+            List<Property> properties = extractProperties(source, unmask);
+            result.add(new PropertyGroup(name, properties));
         }
         return result;
     }
 
-    private List<PropertyValue> extractProperties(EnvResponse.PropertySource source, boolean unmask) {
-        List<PropertyValue> result = new ArrayList<>();
+    private List<Property> extractProperties(EnvResponse.PropertySource source, boolean unmask) {
+        List<Property> result = new ArrayList<>();
         for (Map.Entry<String, EnvResponse.PropertyValueDescriptor> entry :
                 source.properties().entrySet()) {
             String key = entry.getKey();
             EnvResponse.PropertyValueDescriptor pv = entry.getValue();
             String value = pv.value() != null ? pv.value().toString() : null;
-            result.add(new PropertyValue(key, maskingEngine.mask(key, value, unmask)));
+            result.add(new Property(key, maskingEngine.mask(key, value, unmask)));
         }
         return result;
     }

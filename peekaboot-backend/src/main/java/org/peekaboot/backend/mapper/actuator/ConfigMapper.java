@@ -5,9 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.ConfigPropsResponse;
-import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
-import org.peekaboot.backend.domain.config.ConfigProperty;
+import org.peekaboot.backend.domain.property.Property;
+import org.peekaboot.backend.domain.property.PropertyGroup;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
 
@@ -24,7 +24,7 @@ public class ConfigMapper {
             return new ConfigInfo(List.of());
         }
 
-        Map<String, List<ConfigProperty>> byPrefix = new LinkedHashMap<>();
+        Map<String, List<Property>> byPrefix = new LinkedHashMap<>();
 
         for (ConfigPropsResponse.ConfigContext context : configprops.contexts().values()) {
             for (ConfigPropsResponse.ConfigBean bean : context.beans().values()) {
@@ -32,17 +32,17 @@ public class ConfigMapper {
             }
         }
 
-        List<ConfigGroup> groups = byPrefix.entrySet().stream()
-                .map(e -> new ConfigGroup(e.getKey(), e.getValue()))
+        List<PropertyGroup> groups = byPrefix.entrySet().stream()
+                .map(e -> new PropertyGroup(e.getKey(), e.getValue()))
                 .toList();
 
         return new ConfigInfo(groups);
     }
 
     private void collectBeanProperties(
-            ConfigPropsResponse.ConfigBean bean, Map<String, List<ConfigProperty>> byPrefix, boolean unmask) {
+            ConfigPropsResponse.ConfigBean bean, Map<String, List<Property>> byPrefix, boolean unmask) {
         String prefix = bean.prefix() != null ? bean.prefix() : "unknown";
-        List<ConfigProperty> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
+        List<Property> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
         for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
             flattenInto(properties, entry.getKey(), treeMasker.mask(entry.getKey(), entry.getValue(), unmask));
         }
@@ -57,7 +57,7 @@ public class ConfigMapper {
      * as the single leaf it became. An empty container stays a property of its own rather
      * than vanishing.
      */
-    private void flattenInto(List<ConfigProperty> out, String key, Object masked) {
+    private void flattenInto(List<Property> out, String key, Object masked) {
         if (masked instanceof Map<?, ?> map && !map.isEmpty()) {
             for (Map.Entry<?, ?> child : map.entrySet()) {
                 flattenInto(out, key + "." + child.getKey(), child.getValue());
@@ -67,7 +67,7 @@ public class ConfigMapper {
                 flattenInto(out, key + "[" + i + "]", list.get(i));
             }
         } else {
-            out.add(new ConfigProperty(key, masked != null ? masked.toString() : null));
+            out.add(new Property(key, masked != null ? masked.toString() : null));
         }
     }
 }

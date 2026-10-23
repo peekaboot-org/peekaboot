@@ -82,7 +82,7 @@ class ActuatorInsightsServiceTest {
         assertThat(response.flyway().migrations()).hasSize(1);
         assertThat(response.flyway().migrations().get(0).version()).isEqualTo("1");
         assertThat(response.config().groups()).hasSize(1);
-        assertThat(response.config().groups().get(0).prefix()).isEqualTo("my.config");
+        assertThat(response.config().groups().get(0).name()).isEqualTo("my.config");
     }
 
     @Test

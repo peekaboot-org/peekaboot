@@ -12,7 +12,7 @@ final class ActuatorInsightsJson {
 
     private ActuatorInsightsJson() {}
 
-    /** ConfigInfo shape: {groups: [{prefix, properties: [{key, value}]}]}; the first group holding {@code key} wins. */
+    /** ConfigInfo shape: {groups: [{name, properties: [{key, value}]}]}; the first group holding {@code key} wins. */
     static JsonNode findConfigInfoProperty(JsonNode configInfo, String key) {
         for (JsonNode group : configInfo.path("groups")) {
             JsonNode property = findProperty(group, key);
@@ -26,7 +26,7 @@ final class ActuatorInsightsJson {
     /** For a key that is relative to its group, such as {@code password} under {@code spring.datasource}. */
     static JsonNode findConfigInfoProperty(JsonNode configInfo, String groupPrefix, String key) {
         for (JsonNode group : configInfo.path("groups")) {
-            if (groupPrefix.equals(group.path("prefix").asString(null))) {
+            if (groupPrefix.equals(group.path("name").asString(null))) {
                 return findProperty(group, key);
             }
         }

@@ -482,7 +482,6 @@ class SharedModuleIT extends PlaywrightTestBase {
                     const tab = m.propertyGroupTab({
                         listId: 'pk-fgt-list', unmaskSlotId: 'pk-fgt-unmask',
                         select: data => data.groups,
-                        groupName: group => group.name,
                         emptyMessage: 'none'
                     });
                     const properties = Array.from({length: 1234}, (_, i) => ({key: 'k' + i, value: i}));

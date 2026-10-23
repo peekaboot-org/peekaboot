@@ -12,7 +12,6 @@ const tab = propertyGroupTab({
     listId: 'config-groups',
     unmaskSlotId: 'config-unmask-slot',
     select: data => data?.config?.groups,
-    groupName: group => group.prefix,
     emptyMessage: 'No configuration properties available'
 });
 

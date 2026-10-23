@@ -149,12 +149,12 @@ export function filteredGroupTab({
 
 /**
  * The property-list case of filteredGroupTab, shared by config.js and environment.js:
- * groups of {key, value} properties matched on either, values rendered as one line of
- * text (a structured value as JSON), and the "Show secrets" control (unmask-control.js)
- * in the slot `unmaskSlotId` names. `groupName(group)` names a group - config's prefix, a
- * property source's name - and doubles as its identity for expansion restore.
+ * the backend's PropertyGroup {name, properties} of {key, value} properties, matched on
+ * either, values rendered as one line of text (a structured value as JSON), and the "Show
+ * secrets" control (unmask-control.js) in the slot `unmaskSlotId` names. A group's name -
+ * config's prefix, a property source's name - doubles as its identity for expansion restore.
  */
-export function propertyGroupTab({inputId, listId, unmaskSlotId, select, groupName, extraTop, emptyMessage}) {
+export function propertyGroupTab({inputId, listId, unmaskSlotId, select, extraTop, emptyMessage}) {
     const tab = filteredGroupTab({
         inputId,
         listId,
@@ -163,9 +163,9 @@ export function propertyGroupTab({inputId, listId, unmaskSlotId, select, groupNa
             const properties = (group.properties || []).filter(prop => propertyMatches(prop, query));
             return properties.length > 0 ? {...group, properties} : null;
         },
-        key: groupName,
+        key: group => group.name,
         header: (group, query, context) => ({
-            name: groupName(group),
+            name: group.name,
             count: formatCount(group.properties.length, 'property', {plural: 'properties', locale: context.locale}),
             highlight: query
         }),

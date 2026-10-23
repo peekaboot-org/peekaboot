@@ -8,7 +8,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.EnvResponse;
 import org.peekaboot.backend.domain.environment.EnvironmentInfo;
-import org.peekaboot.backend.domain.environment.PropertyValue;
+import org.peekaboot.backend.domain.property.Property;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 class EnvironmentMapperTest {
@@ -34,7 +34,7 @@ class EnvironmentMapperTest {
         assertThat(result.propertySources()).hasSize(1);
         assertThat(result.propertySources().get(0).name()).isEqualTo("application.properties");
         assertThat(result.propertySources().get(0).properties())
-                .extracting(PropertyValue::key, PropertyValue::value)
+                .extracting(Property::key, Property::value)
                 .containsExactly(tuple("server.port", "8080"));
     }
 
