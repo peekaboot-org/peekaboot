@@ -90,10 +90,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         // Security follows the deployment launch rather than localDevelopment: a test is
         // neither, and a consumer's @SpringBootTest must not start being challenged.
         detected.put(PeekabootPropertyKeys.SECURITY_ENABLED, deploymentLaunch);
-        // Not meant for an application to set, so unlike the switches above its resolved value
-        // is always what was detected - including once these entries are folded into
-        // defaultProperties (see #contribute) and this method's own named property source
-        // never appears at all.
+        // Nothing is meant to set it, so it reads as detected, also once these entries are folded
+        // into defaultProperties (see #contribute) and this method's own property source never appears.
         detected.put(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, deploymentLaunch);
         contribute(environment, new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
         // After the detected defaults, which a blank detected switch falls back to.
