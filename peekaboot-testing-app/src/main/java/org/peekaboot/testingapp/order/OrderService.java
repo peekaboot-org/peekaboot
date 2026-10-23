@@ -83,9 +83,7 @@ public class OrderService {
             long lineCount = orderLineRepository.countByOrderId(order.getId());
             orderRepository.existsById(order.getId());
 
-            BigDecimal total = lines.stream()
-                    .map(line -> line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal total = lines.stream().map(OrderLine::total).reduce(BigDecimal.ZERO, BigDecimal::add);
             List<String> productNames =
                     lines.stream().map(line -> productName(line.getSku())).toList();
 
@@ -157,8 +155,8 @@ public class OrderService {
                 saved.getStatus(),
                 saved.getPlacedAt(),
                 1,
-                line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())),
-                "customer #" + saved.getCustomerId(),
+                line.total(),
+                CustomerClient.fallbackName(saved.getCustomerId()),
                 List.of(product.name()));
     }
 

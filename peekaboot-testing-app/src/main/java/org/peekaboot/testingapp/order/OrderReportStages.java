@@ -35,9 +35,7 @@ public class OrderReportStages {
     BigDecimal priceLines(List<OrderLine> lines) {
 
         SimulatedWork.pause(600);
-        return lines.stream()
-                .map(line -> line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return lines.stream().map(OrderLine::total).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Observed(name = "order.report.apply-discounts", contextualName = "order.report.apply-discounts")

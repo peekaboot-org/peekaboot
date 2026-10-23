@@ -67,4 +67,9 @@ public class OrderLine {
     public void setUnitPrice(BigDecimal unitPrice) {
         this.unitPrice = unitPrice;
     }
+
+    /** What the line costs: its unit price times its quantity. */
+    public BigDecimal total() {
+        return unitPrice.multiply(BigDecimal.valueOf(quantity));
+    }
 }

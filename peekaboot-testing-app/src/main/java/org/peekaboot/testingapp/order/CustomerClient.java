@@ -31,6 +31,11 @@ public class CustomerClient {
         this.localPort = localPort;
     }
 
+    /** The name an order shows for its customer when the person API was not asked or knows nobody by that id. */
+    public static String fallbackName(long customerId) {
+        return "customer #" + customerId;
+    }
+
     public String lookupCustomerName(long customerId) {
 
         try {
@@ -48,10 +53,10 @@ public class CustomerClient {
                     + person.path("lastName").asString("");
         } catch (HttpClientErrorException.NotFound noSuchCustomer) {
             // An id with nobody behind it is an answer, not a failure - the order still renders.
-            return "customer #" + customerId;
+            return fallbackName(customerId);
         } catch (RuntimeException e) {
             log.warn("customer lookup for {} failed, falling back to the id", customerId, e);
-            return "customer #" + customerId;
+            return fallbackName(customerId);
         }
     }
 }
