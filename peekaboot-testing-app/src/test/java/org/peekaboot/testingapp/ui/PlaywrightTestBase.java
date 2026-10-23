@@ -18,8 +18,6 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -27,6 +25,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.extension.TestWatcher;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.testingapp.TestingAppTest;
+import org.peekaboot.testingapp.integration.ServerTiming;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -39,11 +38,9 @@ abstract class PlaywrightTestBase {
     private static final Logger log = LoggerFactory.getLogger(PlaywrightTestBase.class);
 
     /**
-     * A JS predicate on the trace JSON: the request's own root span has reached the store.
-     * Only a SERVER-kind root classifies HTTP_REQUEST, the root is the last span of a request
-     * to end, and the exporter hands spans over in the order they ended, so every span that
-     * ended before it is there too. Logs need no wait of their own: they are captured
-     * synchronously during the request.
+     * A JS predicate on the trace JSON: the request's own root span has reached the store. The
+     * JS twin of {@code TraceApiClient.ROOT_SPAN_EXPORTED}, whose Javadoc says why that proves
+     * the whole trace has.
      */
     protected static final String ROOT_SPAN_EXPORTED = "trace => trace.rootActionType === 'HTTP_REQUEST'";
 
@@ -55,9 +52,6 @@ abstract class PlaywrightTestBase {
 
     /** A JS predicate on the trace JSON: the trace carries an ERROR log. */
     protected static final String ERROR_LOGGED = "trace => (trace.logs || []).some(log => log.level === 'ERROR')";
-
-    /** Same pattern TraceApiClient.traceIdOf reads Server-Timing with - duplicated here since that class is package-private to integration. */
-    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final int API_TIMEOUT_MS = 15_000;
@@ -352,12 +346,7 @@ abstract class PlaywrightTestBase {
 
     /** The trace id a response names in its Server-Timing header, for an endpoint with no toolbar to read it from. */
     protected static String traceIdOf(Response response) {
-        String serverTiming = response.headerValue("Server-Timing");
-        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
-        if (!matcher.find()) {
-            throw new AssertionError("Server-Timing must carry the trace id: " + serverTiming);
-        }
-        return matcher.group(1);
+        return ServerTiming.traceId(response.headerValue("Server-Timing"));
     }
 
     /**
