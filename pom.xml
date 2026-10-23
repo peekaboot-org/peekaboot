@@ -250,6 +250,30 @@
                     <artifactId>maven-site-plugin</artifactId>
                     <version>3.22.0</version>
                 </plugin>
+                <!-- Central requires a -javadoc jar for every jar component, and javadoc:jar
+                     produces nothing for a module without Java sources. Such a module binds
+                     this execution to package, which jars the empty javadoc output directory
+                     instead. Drop that binding the day the module gains Java sources:
+                     javadoc:jar would then attach a second javadoc artifact and the release
+                     would fail on the duplicate. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.5.1</version>
+                    <executions>
+                        <execution>
+                            <id>empty-javadoc-jar</id>
+                            <phase>none</phase>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                            <configuration>
+                                <classifier>javadoc</classifier>
+                                <classesDirectory>${project.build.directory}/apidocs</classesDirectory>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
                 <!-- Both test runners start their JVM with the JaCoCo agent (late-bound,
                      see jacoco-prepare-agent below) and the Mockito agent, whose jar path
                      the dependency plugin's properties goal resolves in every module. The
@@ -385,11 +409,6 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.5.1</version>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>

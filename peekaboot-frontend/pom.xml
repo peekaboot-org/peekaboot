@@ -30,24 +30,14 @@
 
     <build>
         <plugins>
-            <!-- No Java sources, so javadoc:jar produces nothing - and Central requires a
-                 -javadoc jar for every jar component. Package the empty javadoc output
-                 directory as that jar. Remove this execution the day the module gains
-                 Java sources: javadoc:jar would then attach a second javadoc artifact
-                 and the release would fail on the duplicate. -->
+            <!-- No Java sources: see empty-javadoc-jar in the root pom. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <executions>
                     <execution>
                         <id>empty-javadoc-jar</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                        <configuration>
-                            <classifier>javadoc</classifier>
-                            <classesDirectory>${project.build.directory}/apidocs</classesDirectory>
-                        </configuration>
+                        <phase>package</phase>
                     </execution>
                 </executions>
             </plugin>
