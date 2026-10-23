@@ -111,7 +111,7 @@ class PeekabootActuatorServiceIT {
         assertThat(dataSources).hasSize(1);
         DataSourceInfo dataSource = dataSources.getFirst();
         assertThat(dataSource.name()).isEqualTo("primary");
-        assertThat(dataSource.hosts()).extracting(Host::toString).containsExactly("db.example.com:5432");
+        assertThat(dataSource.hosts()).containsExactly(new DataSourceInfo.Host("db.example.com", 5432, null));
         assertThat(dataSource.properties()).containsEntry("MODE", "MEMORY").containsEntry("password", "******");
     }
 

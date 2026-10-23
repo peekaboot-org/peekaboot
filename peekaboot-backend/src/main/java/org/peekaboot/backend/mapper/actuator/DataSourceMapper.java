@@ -27,9 +27,11 @@ public class DataSourceMapper {
 
         return new DataSourceInfo(
                 metadata.dataSourceName(),
-                metadata.databaseProduct(),
+                metadata.databaseProduct().name(),
                 metadata.driverName(),
-                metadata.hosts(),
+                metadata.hosts().stream()
+                        .map(host -> new DataSourceInfo.Host(host.hostname(), host.port(), host.instanceName()))
+                        .toList(),
                 metadata.databaseName(),
                 metadata.username(),
                 dbHealth,

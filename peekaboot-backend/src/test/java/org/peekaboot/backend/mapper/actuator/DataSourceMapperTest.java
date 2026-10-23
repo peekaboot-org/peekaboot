@@ -6,10 +6,12 @@ import static org.assertj.core.api.Assertions.tuple;
 import java.util.List;
 import java.util.Map;
 import net.osslabz.jdbc.DatabaseProduct;
+import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
@@ -108,7 +110,29 @@ class DataSourceMapperTest {
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
-        assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.POSTGRESQL);
+        assertThat(result.get(0).databaseProduct()).isEqualTo("POSTGRESQL");
+    }
+
+    /** The dashboard reads the product as its bare name and each host as hostname, port and instance. */
+    @Test
+    void serialisesTheProductAsItsNameAndEachHostAsItsThreeParts() {
+        DataSourceMetadata metadata = new DataSourceMetadata(
+                "ds",
+                "sa",
+                List.of(Host.of("db1", 5432), Host.of("db2", 1433, "SQLEXPRESS")),
+                "app",
+                DatabaseProduct.POSTGRESQL,
+                Map.of(),
+                "PostgreSQL",
+                "17",
+                "driver");
+
+        String json = PeekabootJson.MAPPER.writeValueAsString(mapper.map(List.of(metadata), null, false));
+
+        assertThat(json)
+                .contains("\"databaseProduct\":\"POSTGRESQL\"")
+                .contains("\"hosts\":[{\"hostname\":\"db1\",\"port\":5432,\"instanceName\":null},"
+                        + "{\"hostname\":\"db2\",\"port\":1433,\"instanceName\":\"SQLEXPRESS\"}]");
     }
 
     @Test
