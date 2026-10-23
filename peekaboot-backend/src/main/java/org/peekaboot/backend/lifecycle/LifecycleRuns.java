@@ -37,6 +37,7 @@ public class LifecycleRuns {
         List<LifecycleEvent> events = eventLog.events();
         List<LifecycleRunsResponse.Run> runs = new ArrayList<>();
         BuildFacts carried = null;
+        long nowEpochMs = clock.getAsLong();
         for (int i = 0; i < events.size(); i++) {
             LifecycleEvent event = events.get(i);
             if (event.type() != LifecycleEvent.Type.START) {
@@ -45,7 +46,7 @@ public class LifecycleRuns {
             BuildFacts effective = BuildFacts.of(event).withFallback(carried);
             LifecycleEvent previous = i == 0 ? null : events.get(i - 1);
             LifecycleEvent next = i + 1 < events.size() ? events.get(i + 1) : null;
-            runs.add(toRun(event, previous, next, effective, changed(effective, carried), clock.getAsLong()));
+            runs.add(toRun(event, previous, next, effective, changed(effective, carried), nowEpochMs));
             carried = effective;
         }
         Collections.reverse(runs);
@@ -84,16 +85,16 @@ public class LifecycleRuns {
         Long downForMs = downForMs(start, previous);
         return new LifecycleRunsResponse.Run(
                 start.epochMs(),
-                timing.stoppedAtEpochMs,
-                timing.ranForMs,
+                timing.stoppedAtEpochMs(),
+                timing.ranForMs(),
                 downForMs,
                 effective.version(),
                 effective.branch(),
                 effective.shortCommitId(),
                 effective.buildTimeEpochMs(),
                 changed,
-                timing.running,
-                timing.uncleanExit);
+                timing.running(),
+                timing.uncleanExit());
     }
 
     /**
@@ -111,18 +112,7 @@ public class LifecycleRuns {
     }
 
     /** How a run ended (or hasn't), derived from the event that follows its start. */
-    private static final class Timing {
-        private final Long stoppedAtEpochMs;
-        private final Long ranForMs;
-        private final boolean running;
-        private final boolean uncleanExit;
-
-        private Timing(Long stoppedAtEpochMs, Long ranForMs, boolean running, boolean uncleanExit) {
-            this.stoppedAtEpochMs = stoppedAtEpochMs;
-            this.ranForMs = ranForMs;
-            this.running = running;
-            this.uncleanExit = uncleanExit;
-        }
+    private record Timing(Long stoppedAtEpochMs, Long ranForMs, boolean running, boolean uncleanExit) {
 
         private static Timing of(LifecycleEvent start, LifecycleEvent next, long nowEpochMs) {
             if (next == null) {
