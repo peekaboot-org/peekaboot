@@ -37,13 +37,15 @@ spring:
 
 peekaboot:
   enabled: true
-  dev-toolbar: true
+  dev-toolbar:
+    enabled: true
   # Off by default (see PeekabootProperties); on here so the capture tool can photograph
   # both the reveal control and, deliberately, one revealed value behind it - see
   # ScreenshotCapture.captureRevealedGroupIfPresent and its scoping rule (never
   # systemProperties/systemEnvironment, see MASKED_GROUP_HEADER_SELECTOR's doc comment)
   # for what makes that safe to publish.
-  enable-unmasking: true
+  unmasking:
+    enabled: true
   # Detected off for a test launch (see application-test.yml); on here so the error page is
   # served for /boom.
   error-page:

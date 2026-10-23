@@ -16,7 +16,7 @@ one directory, `peekaboot.storage.dir`. Both properties, their defaults, the per
 subdirectory and its fallbacks live on the site under
 [`peekaboot.storage`](https://www.peekaboot.org/docs/configuration/#peekabootstorage).
 
-Like `peekaboot.dev-toolbar`, the switch follows the launch context rather than
+Like `peekaboot.dev-toolbar.enabled`, the switch follows the launch context rather than
 `peekaboot.enabled`'s resolved value: on for an IDE or `spring-boot:run` launch, off everywhere
 else, and an explicit setting wins in either direction. Switching Peekaboot on deliberately in
 a shared environment therefore writes nothing to that host's `$HOME`.
@@ -259,7 +259,7 @@ documented in the registration: it sits *inside* Boot's `ServerHttpObservationFi
 Security, so a request the security chain rejects is still captured. `DevToolbarFilter` is
 innermost; it wraps the response in a `ContentBufferingResponseWrapper` and injects its markup
 into the buffered body. Both registrations live only in `DevToolbarAutoConfiguration`, so
-neither filter runs while `peekaboot.dev-toolbar` is off.
+neither filter runs while `peekaboot.dev-toolbar.enabled` is off.
 
 `DashboardAuthenticationFilter` maps `/peekaboot/*` under the `DispatcherServlet`'s own prefix
 rather than `/*`, at a fixed order of `0`. With `spring.mvc.servlet.path=/app` the dashboard's
@@ -438,7 +438,7 @@ reach them. The application's `SanitizingFunction` beans are passed into both
 constructors, and Boot's `Sanitizer` still runs them regardless of `Show.ALWAYS`.
 A host `SanitizingFunction` bean still masks a value before Peekaboot sees it.
 Short of that, what decides whether a value reaches the dashboard unmasked is
-`MaskingEngine` alone, gated by `peekaboot.enable-unmasking` and the request's
+`MaskingEngine` alone, gated by `peekaboot.unmasking.enabled` and the request's
 `unmask` parameter (`PeekabootController.resolveUnmask`). Spring Boot 4.1 registers no
 `SanitizingFunction` of its own, and with `Show.ALWAYS` its `Sanitizer` returns every
 value no function changed, so without a host bean Boot masks nothing on this path.
@@ -703,7 +703,7 @@ hooks that run before or outside the application context are registered in
 | `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`; deployment detection for `peekaboot.security.enabled` and `peekaboot.security.deployment-detected`; the default property values; the `peekabootBlankSwitches` source, where `BooleanSwitches.treatBlanksAsUnset` makes a blank switch read as unset; and the check that no switch holds a value the conditions and the binder read differently (see *Conditional Loading*, *Default Properties* and *Automatic Dashboard Security*) |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`; deployment detection for `peekaboot.security.enabled` and `peekaboot.security.deployment-detected`; the default property values; the `peekabootBlankSwitches` source, where `BooleanSwitches.treatBlanksAsUnset` makes a blank switch read as unset; and the check that no switch holds a value the conditions and the binder read differently (see *Conditional Loading*, *Default Properties* and *Automatic Dashboard Security*) |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
@@ -748,7 +748,7 @@ through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the 
 ```
 
 Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
-the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar`,
+the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar.enabled`,
 `TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean,
 `EventListenerInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
 `peekaboot.tracing.event-listeners`, `InsightsAutoConfiguration`
@@ -802,7 +802,7 @@ the `RequestCaptureFilter` registration and the Logback appender registrar, is
 `@ConditionalOnBean(TraceStore.class)` instead, so with `peekaboot.tracing.enabled=false` the
 toolbar is still injected into every page with nothing captured behind it.
 
-There is no `matchIfMissing` fallback for `peekaboot.enabled` or `peekaboot.dev-toolbar`. Both
+There is no `matchIfMissing` fallback for `peekaboot.enabled` or `peekaboot.dev-toolbar.enabled`. Both
 default from `PeekabootDefaultsEnvironmentPostProcessor` into a `peekabootDetection` property
 source at lowest precedence, so any explicit application setting wins in either direction.
 `PeekabootOffByDefaultTest` pins that for every registered auto-configuration at once: without
@@ -812,7 +812,7 @@ toolbar keys on the same local-development detection as `peekaboot.enabled`, not
 environment does not inject the toolbar into every page as a side effect.
 
 `peekaboot.error-page.enabled` is the fourth switch this detection derives, alongside
-`peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled` (see *Persisted
+`peekaboot.enabled`, `peekaboot.dev-toolbar.enabled` and `peekaboot.storage.enabled` (see *Persisted
 state*): on for a detected local run, off otherwise, with an explicit setting always winning.
 `peekaboot.stack-trace.fold` is not among them: folding only decides what a trace shows first,
 so it defaults to `true` on every launch.
@@ -925,8 +925,8 @@ left over dashboard content: it removes an `InfoContributor` bean outright and s
 narrows the Overview tab, and an explicit host setting wins because Peekaboot's
 own four `management.info.*` defaults apply at lowest precedence.
 
-`peekaboot.enable-unmasking` is the only visibility switch. `MaskingEngine` masks every
-sensitive value it sees; `enable-unmasking` combined with the request's `unmask`
+`peekaboot.unmasking.enabled` is the only visibility switch. `MaskingEngine` masks every
+sensitive value it sees; `unmasking.enabled` combined with the request's `unmask`
 parameter (`PeekabootController.resolveUnmask`) is what reveals one. Neither half
 suffices alone.
 
@@ -939,7 +939,7 @@ Where it does not, Peekaboot's four named sources are appended last, in this ord
 `peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
 `peekabootDevToolbarDefaults`. `peekabootDetection` is where all six launch-context-detected
 values land, since none of them needs a yml resource of its own (see *Conditional Loading*).
-Four follow a local run: `peekaboot.enabled`, `peekaboot.dev-toolbar`,
+Four follow a local run: `peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`,
 `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`.
 Two follow a deployment launch: `peekaboot.security.enabled` and
 `peekaboot.security.deployment-detected` (see *Automatic Dashboard Security*).
@@ -1239,7 +1239,7 @@ no header-injection code anywhere in the repo.
 `TraceStoreEventListener` forwards it to `TraceStore`, which stores by traceId, and
 `TraceLogMapper` maps them into the trace's flat log list on read (see *Trace Assembly and
 Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which only
-`DevToolbarAutoConfiguration` registers, so correlated logs require `peekaboot.dev-toolbar=true`.
+`DevToolbarAutoConfiguration` registers, so correlated logs require `peekaboot.dev-toolbar.enabled=true`.
 A trace's Logs tab stays empty without it, independent of `peekaboot.tracing.enabled`.
 
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot does

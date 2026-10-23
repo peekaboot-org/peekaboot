@@ -642,7 +642,7 @@ successful read fails it.
 `peekaboot-testing-app/src/test/resources/application-test.yml` sets
 `management.opentelemetry.tracing.export.schedule-delay: 50ms`, lower even than
 `peekaboot-dev-toolbar-defaults.yml`'s 200ms default, which would otherwise apply here since
-this profile sets `peekaboot.dev-toolbar: true` explicitly. Playwright tests open the trace
+this profile sets `peekaboot.dev-toolbar.enabled: true` explicitly. Playwright tests open the trace
 overlay immediately after page load, well inside either window. Without the override the
 overlay's spans, queries and logs tabs would assert against a trace that had not reached the
 `TraceStore` yet.

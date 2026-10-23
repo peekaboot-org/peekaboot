@@ -66,7 +66,7 @@ public final class ActuatorInsightsService {
 
     /**
      * {@code unmask} is the caller's already-resolved decision (from
-     * {@code peekaboot.enable-unmasking} and the request's {@code unmask} parameter,
+     * {@code peekaboot.unmasking.enabled} and the request's {@code unmask} parameter,
      * combined once in PeekabootController) - threaded to every mapper here that carries
      * property values, so none of them re-derives it.
      */

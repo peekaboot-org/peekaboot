@@ -97,14 +97,14 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
             boolean expectedErrorPage) {
         MockEnvironment environment = new MockEnvironment();
         setIfGiven(environment, "peekaboot.enabled", enabled);
-        setIfGiven(environment, "peekaboot.dev-toolbar", devToolbar);
+        setIfGiven(environment, "peekaboot.dev-toolbar.enabled", devToolbar);
         setIfGiven(environment, "peekaboot.storage.enabled", storage);
         setIfGiven(environment, "peekaboot.error-page.enabled", errorPage);
 
         postProcessor(localDevelopment).postProcessEnvironment(environment, servletApplication());
 
         assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isEqualTo(expectedEnabled);
-        assertThat(environment.getProperty("peekaboot.dev-toolbar", Boolean.class))
+        assertThat(environment.getProperty("peekaboot.dev-toolbar.enabled", Boolean.class))
                 .isEqualTo(expectedDevToolbar);
         assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
                 .isEqualTo(expectedStorage);
@@ -274,7 +274,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThat(detection.getPropertyNames())
                 .containsExactlyInAnyOrder(
                         PeekabootPropertyKeys.ENABLED,
-                        PeekabootPropertyKeys.DEV_TOOLBAR,
+                        PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED,
                         PeekabootPropertyKeys.STORAGE_ENABLED,
                         PeekabootPropertyKeys.SECURITY_ENABLED,
                         PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED,
@@ -525,7 +525,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     @Test
     void leavesTheSpanExportDelayAloneWhenTheToolbarIsOff() {
         MockEnvironment environment = new MockEnvironment();
-        environment.setProperty("peekaboot.dev-toolbar", "false");
+        environment.setProperty("peekaboot.dev-toolbar.enabled", "false");
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
@@ -548,14 +548,14 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     /**
      * Peekaboot's own defaults are skipped entirely once {@code peekaboot.enabled} resolves
      * false, before the dev-toolbar branch is ever reached - so an explicit
-     * {@code peekaboot.dev-toolbar=true} does not decide this "regardless of
+     * {@code peekaboot.dev-toolbar.enabled=true} does not decide this "regardless of
      * peekaboot.enabled"; it never gets read at all here.
      */
     @Test
     void leavesTheSpanExportDelayAloneWhenPeekabootIsDisabledEvenWithDevToolbarExplicitlyOn() {
         MockEnvironment environment = new MockEnvironment();
         environment.setProperty("peekaboot.enabled", "false");
-        environment.setProperty("peekaboot.dev-toolbar", "true");
+        environment.setProperty("peekaboot.dev-toolbar.enabled", "true");
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 

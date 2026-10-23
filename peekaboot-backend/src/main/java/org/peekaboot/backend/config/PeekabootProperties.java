@@ -13,18 +13,9 @@ public class PeekabootProperties {
      */
     private boolean enabled = false;
 
-    /**
-     * Injects the dev toolbar into HTML responses and turns on correlated-log and full
-     * request-detail capture. Defaulted from the launch context like peekaboot.enabled.
-     */
-    private boolean devToolbar = false;
+    private DevToolbar devToolbar = new DevToolbar();
 
-    /**
-     * Allows the dashboard to show property values unmasked. The endpoints that return
-     * property values take an unmask query parameter; while this is false, no request
-     * obtains unmasked values, whatever it asks for.
-     */
-    private boolean enableUnmasking = false;
+    private Unmasking unmasking = new Unmasking();
 
     private Storage storage = new Storage();
 
@@ -44,20 +35,20 @@ public class PeekabootProperties {
         this.enabled = enabled;
     }
 
-    public boolean isDevToolbar() {
+    public DevToolbar getDevToolbar() {
         return devToolbar;
     }
 
-    public void setDevToolbar(boolean devToolbar) {
+    public void setDevToolbar(DevToolbar devToolbar) {
         this.devToolbar = devToolbar;
     }
 
-    public boolean isEnableUnmasking() {
-        return enableUnmasking;
+    public Unmasking getUnmasking() {
+        return unmasking;
     }
 
-    public void setEnableUnmasking(boolean enableUnmasking) {
-        this.enableUnmasking = enableUnmasking;
+    public void setUnmasking(Unmasking unmasking) {
+        this.unmasking = unmasking;
     }
 
     public Storage getStorage() {
@@ -98,6 +89,41 @@ public class PeekabootProperties {
 
     public void setStackTrace(StackTrace stackTrace) {
         this.stackTrace = stackTrace;
+    }
+
+    public static class DevToolbar {
+
+        /**
+         * Injects the dev toolbar into HTML responses and turns on correlated-log and full
+         * request-detail capture. Defaulted from the launch context like peekaboot.enabled.
+         */
+        private boolean enabled = false;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Unmasking {
+
+        /**
+         * Allows the dashboard to show property values unmasked. The endpoints that return
+         * property values take an unmask query parameter; while this is false, no request
+         * obtains unmasked values, whatever it asks for.
+         */
+        private boolean enabled = false;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
     }
 
     /**

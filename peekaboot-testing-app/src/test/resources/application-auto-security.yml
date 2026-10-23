@@ -10,6 +10,7 @@ spring:
       - classpath:servlet-security-exclusions.yml
 
 peekaboot:
-  dev-toolbar: false
+  dev-toolbar:
+    enabled: false
   security:
     enabled: true

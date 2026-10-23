@@ -167,7 +167,7 @@ class PeekabootSecurityAutoConfigurationTest {
     @ValueSource(booleans = {true, false})
     void theArmedPostureFollowsTheToolbarSwitch(boolean devToolbar, @TempDir Path storageDir) {
         runner(storageDir)
-                .withPropertyValues("peekaboot.dev-toolbar=" + devToolbar)
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=" + devToolbar)
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
                         .hasValueSatisfying(report -> {

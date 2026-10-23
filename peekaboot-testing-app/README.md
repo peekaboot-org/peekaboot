@@ -25,7 +25,7 @@ cached, written synchronously), a third compose service on a random port that Bo
 A fourth compose service, go-httpbin, publishes the fixed port `127.0.0.1:18093` with the
 `org.springframework.boot.ignore` label, and `app.profile-service.url` points `ProfileClient` at it.
 Every page opens with a nav linking each scenario below, with forms for the writes.
-`peekaboot.enable-unmasking` is on, so the Environment and Config tabs offer "Show secrets".
+`peekaboot.unmasking.enabled` is on, so the Environment and Config tabs offer "Show secrets".
 `src/main/resources/peekaboot-insights.yml` switches on the six opt-in Insights panels and adds
 an "Orders placed" panel and Overview tile over the `testingapp.orders.placed` counter.
 

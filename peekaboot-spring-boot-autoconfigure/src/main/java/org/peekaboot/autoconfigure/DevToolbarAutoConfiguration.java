@@ -36,7 +36,7 @@ import org.springframework.core.env.Environment;
             "org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration"
         })
 @ConditionalOnPeekabootServlet
-@ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED)
 @Import(MaskingConfiguration.class)
 public class DevToolbarAutoConfiguration {
 

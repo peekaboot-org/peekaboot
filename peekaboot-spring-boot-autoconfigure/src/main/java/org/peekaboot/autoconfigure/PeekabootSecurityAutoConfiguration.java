@@ -82,7 +82,7 @@ public class PeekabootSecurityAutoConfiguration {
                     paths.dashboardPath(),
                     resolvedCredentials,
                     resolvedCredentialsFile.path().orElse(null),
-                    properties.isDevToolbar(),
+                    properties.getDevToolbar().isEnabled(),
                     errorPageOnADeployment);
         }
         return deploymentLaunch

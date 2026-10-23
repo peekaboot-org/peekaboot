@@ -19,9 +19,11 @@ spring:
         size: 1
 
 peekaboot:
-  dev-toolbar: true
+  dev-toolbar:
+    enabled: true
   # application.yml turns this on for the demo; the masking tests need it off.
-  enable-unmasking: false
+  unmasking:
+    enabled: false
   # The detected default is off outside a local run; a test launch is neither local nor a
   # deployment, so ErrorPageIT needs it turned on explicitly.
   error-page:

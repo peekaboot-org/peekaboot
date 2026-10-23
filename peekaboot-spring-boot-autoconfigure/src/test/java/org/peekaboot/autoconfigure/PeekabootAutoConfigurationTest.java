@@ -60,6 +60,16 @@ class PeekabootAutoConfigurationTest {
                         .isFalse());
     }
 
+    @Test
+    void publishesTheUnmaskingSwitch() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.unmasking.enabled=true")
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .unmaskingEnabled())
+                        .isTrue());
+    }
+
     /** Bound without the trace store too: the issue detector and /api/features need them while tracing is off. */
     @Test
     void publishesTheIssueThresholdsBoundUnderTracing() {

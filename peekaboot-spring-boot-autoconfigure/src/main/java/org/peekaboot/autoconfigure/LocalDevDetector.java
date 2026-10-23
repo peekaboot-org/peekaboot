@@ -48,7 +48,7 @@ import org.springframework.core.NativeDetector;
  * <p>A container marker is a container marker wherever it comes from, so a checkout worked on
  * inside a devcontainer - VS Code Dev Containers, GitHub Codespaces - is not a local launch by
  * this measure however it was started; what the detection would have switched on there
- * ({@code peekaboot.enabled}, {@code peekaboot.dev-toolbar}, {@code peekaboot.storage.enabled},
+ * ({@code peekaboot.enabled}, {@code peekaboot.dev-toolbar.enabled}, {@code peekaboot.storage.enabled},
  * {@code peekaboot.error-page.enabled}) has to be set explicitly.
  */
 final class LocalDevDetector {

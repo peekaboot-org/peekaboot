@@ -63,7 +63,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void createsBeansWhenDevToolbarEnabled() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
@@ -75,7 +75,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void userSuppliedSameNamedBeansReplaceTheDefaults() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class, UserSameNamedBeansConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -111,7 +111,7 @@ class DevToolbarAutoConfigurationTest {
     @ValueSource(strings = {"/admin/docs.html", "admin/docs.html"})
     void theCustomisedSwaggerUiPathReachesTheToolbarFilter(String swaggerUiPath) {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true", "springdoc.swagger-ui.path=" + swaggerUiPath)
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true", "springdoc.swagger-ui.path=" + swaggerUiPath)
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     DevToolbarFilter filter =
@@ -133,7 +133,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void theToolbarFilterIsRegisteredForTheErrorDispatchToo() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> assertThat(context.getBean("devToolbarFilter", FilterRegistrationBean.class))
                         .extracting(FilterRegistrationBean::determineDispatcherTypes)
@@ -142,7 +142,7 @@ class DevToolbarAutoConfigurationTest {
 
     @Test
     void doesNotCreateBeansWhenDevToolbarDisabled() {
-        contextRunner.withPropertyValues("peekaboot.dev-toolbar=false").run(context -> {
+        contextRunner.withPropertyValues("peekaboot.dev-toolbar.enabled=false").run(context -> {
             assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
             assertThat(context).doesNotHaveBean("devToolbarFilter");
         });
@@ -163,7 +163,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void capturesNothingWithoutATraceStore() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -181,7 +181,7 @@ class DevToolbarAutoConfigurationTest {
         // @ConditionalOnBean(Tracer.class) must keep them unregistered, while
         // toolbarDataProvider (no such condition) still registers.
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(TraceStoreOnlyConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -203,7 +203,7 @@ class DevToolbarAutoConfigurationTest {
     void theToolbarSeesATracerFromBravesAutoConfiguration() {
         contextRunner
                 .withConfiguration(AutoConfigurations.of(BraveAutoConfiguration.class))
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasBean("devToolbarFilter");
@@ -216,7 +216,7 @@ class DevToolbarAutoConfigurationTest {
         // the PeekabootProperties bean); the toolbar must switch off cleanly
         // instead of failing the context on the missing bean.
         contextRunner
-                .withPropertyValues("peekaboot.enabled=false", "peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.enabled=false", "peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -230,7 +230,7 @@ class DevToolbarAutoConfigurationTest {
         int before = peekabootAppenderCount();
 
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(LogbackAppenderRegistrar.class);
@@ -258,7 +258,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void logCaptureSurvivesLogbackReinitialisation() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class, CapturedLogRecorder.class)
                 .run(context -> {
                     CapturedLogRecorder recorder = context.getBean(CapturedLogRecorder.class);
@@ -367,7 +367,7 @@ class DevToolbarAutoConfigurationTest {
                         DispatcherServletAutoConfiguration.class,
                         PeekabootPathsAutoConfiguration.class))
                 .withUserConfiguration(MinimalPropertiesConfig.class, MockTracingConfig.class)
-                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasBean("requestCaptureFilter");
@@ -380,7 +380,7 @@ class DevToolbarAutoConfigurationTest {
     void theDashboardTheToolbarAndTheBannerShareOneMaskingEngine() {
         contextRunner
                 .withConfiguration(AutoConfigurations.of(PeekabootLifecycleAutoConfiguration.class))
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> assertThat(context).hasSingleBean(MaskingEngine.class));
     }
@@ -388,7 +388,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void doesNotCreateLogbackRegistrarWhenLogbackMissing() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .withClassLoader(new FilteredClassLoader(LoggerContext.class))
                 .run(context -> {
@@ -400,7 +400,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void registersTheTomcatForwardCustomizerWhenTomcatIsPresent() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -411,7 +411,7 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void doesNotRegisterTheTomcatForwardCustomizerWithoutTomcat() {
         contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .withClassLoader(new FilteredClassLoader(org.apache.catalina.Context.class))
                 .run(context -> {

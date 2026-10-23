@@ -193,7 +193,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldReportUnmaskingEnabledWhenThePropertyIsSet() {
-            properties.setEnableUnmasking(true);
+            properties.getUnmasking().setEnabled(true);
 
             assertThat(controller.getFeatures().unmaskingEnabled()).isTrue();
         }
@@ -305,7 +305,7 @@ class PeekabootControllerTest {
         /**
          * The single most important test in the unmasking feature: the request's
          * unmask=true parameter must never be a bypass on its own. properties starts
-         * with enableUnmasking false (PeekabootProperties' own default), so this pins
+         * with unmasking.enabled false (PeekabootProperties' own default), so this pins
          * that the controller still resolves to masked in that state regardless of
          * what the request asks for.
          */
@@ -318,7 +318,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldRequestUnmaskedDataOnlyWhenBothThePropertyAndTheParameterAreTrue() {
-            properties.setEnableUnmasking(true);
+            properties.getUnmasking().setEnabled(true);
 
             controller.getInsights(null, true);
 
@@ -327,7 +327,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldStayMaskedWhenUnmaskingIsEnabledButTheParameterIsNotSet() {
-            properties.setEnableUnmasking(true);
+            properties.getUnmasking().setEnabled(true);
 
             controller.getInsights(null, false);
 

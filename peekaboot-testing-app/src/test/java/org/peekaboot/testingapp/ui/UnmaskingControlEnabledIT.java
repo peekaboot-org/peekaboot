@@ -10,14 +10,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * {@code peekaboot.enable-unmasking=true} - the server-side half of the two-independent-
+ * {@code peekaboot.unmasking.enabled=true} - the server-side half of the two-independent-
  * opt-ins design (see {@code UnmaskingEnabledIT} for the HTTP-level proof).
  * This exercises the dashboard control that drives the request-side half, the {@code
  * unmask=true} query parameter, end to end through a real browser.
  *
  * <p>A separate Spring context from the rest of the {@code ui} suite is required for the
  * same reason {@code UnmaskingEnabledIT} needs its own:
- * {@code peekaboot.enable-unmasking} is read once at context startup via
+ * {@code peekaboot.unmasking.enabled} is read once at context startup via
  * {@code PeekabootProperties}, so the enabled/disabled states can't share a context. The
  * {@code @SpringBootTest} redeclared here (matching {@link org.peekaboot.testingapp.TestingAppTest}'s
  * except for {@code properties}) takes precedence over the inherited one -
@@ -30,7 +30,7 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "peekaboot.enable-unmasking=true")
+        properties = "peekaboot.unmasking.enabled=true")
 @ActiveProfiles("test")
 class UnmaskingControlEnabledIT extends PlaywrightTestBase {
 

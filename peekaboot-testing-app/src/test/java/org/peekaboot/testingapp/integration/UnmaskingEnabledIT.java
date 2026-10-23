@@ -11,13 +11,13 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Proves the second half of the two-independent-opt-ins design end to end through the
- * real HTTP API: with {@code peekaboot.enable-unmasking=true}, the request's
+ * real HTTP API: with {@code peekaboot.unmasking.enabled=true}, the request's
  * {@code unmask=true} parameter takes effect - but only when it is present.
  * See {@code UnmaskingDisabledIT} for the security-critical case where the
  * property is false.
  *
  * <p>A separate Spring context from {@code UnmaskingDisabledIT} is
- * unavoidable here: peekaboot.enable-unmasking is read once at context startup via
+ * unavoidable here: peekaboot.unmasking.enabled is read once at context startup via
  * {@code PeekabootProperties}, so the two states can't share a context.
  *
  * <p>application-test.yml binds {@code spring.datasource.password} as a fixture value
@@ -26,7 +26,7 @@ import tools.jackson.databind.JsonNode;
 @SpringBootTest(
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "peekaboot.enable-unmasking=true")
+        properties = "peekaboot.unmasking.enabled=true")
 class UnmaskingEnabledIT extends TestingAppITBase {
 
     @Test

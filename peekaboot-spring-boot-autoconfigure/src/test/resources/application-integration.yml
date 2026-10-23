@@ -20,6 +20,7 @@ spring:
 
 peekaboot:
   enabled: true
-  dev-toolbar: true
+  dev-toolbar:
+    enabled: true
   error-page:
     enabled: true

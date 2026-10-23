@@ -23,7 +23,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 /**
- * Derives the defaults for {@code peekaboot.enabled}, {@code peekaboot.dev-toolbar},
+ * Derives the defaults for {@code peekaboot.enabled}, {@code peekaboot.dev-toolbar.enabled},
  * {@code peekaboot.storage.enabled} and {@code peekaboot.error-page.enabled} from the launch
  * context (on only when running locally in an IDE or via spring-boot:run/bootRun), and for
  * {@code peekaboot.security.enabled} from the same detection reading
@@ -84,7 +84,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         // directory, nor starts serving stack traces there.
         Map<String, Object> detected = new HashMap<>();
         detected.put(PeekabootPropertyKeys.ENABLED, localDevelopment);
-        detected.put(PeekabootPropertyKeys.DEV_TOOLBAR, localDevelopment);
+        detected.put(PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED, localDevelopment);
         detected.put(PeekabootPropertyKeys.STORAGE_ENABLED, localDevelopment);
         detected.put(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, localDevelopment);
         // Security follows the deployment launch rather than localDevelopment: a test is
@@ -120,8 +120,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         applyDefaults(environment, PROPERTY_SOURCE_NAME, DEFAULTS_RESOURCE);
 
         // Read back rather than reusing localDevelopment: an application that sets
-        // peekaboot.dev-toolbar explicitly, in either direction, decides this.
-        if (!environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false)) {
+        // peekaboot.dev-toolbar.enabled explicitly, in either direction, decides this.
+        if (!environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED, Boolean.class, false)) {
             log.debug("Dev toolbar is off - skipping peekaboot dev toolbar defaults");
             return;
         }

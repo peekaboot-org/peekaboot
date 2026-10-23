@@ -10,7 +10,7 @@ final class PeekabootPropertyKeys {
     static final String ENABLED = "peekaboot.enabled";
 
     /** The toolbar switch; defaulted from the launch context like {@link #ENABLED}. */
-    static final String DEV_TOOLBAR = "peekaboot.dev-toolbar";
+    static final String DEV_TOOLBAR_ENABLED = "peekaboot.dev-toolbar.enabled";
 
     /** The persistence switch; defaulted from the launch context like {@link #ENABLED}. */
     static final String STORAGE_ENABLED = "peekaboot.storage.enabled";
@@ -54,7 +54,7 @@ final class PeekabootPropertyKeys {
      */
     static final List<String> BOOLEAN_SWITCHES = List.of(
             ENABLED,
-            DEV_TOOLBAR,
+            DEV_TOOLBAR_ENABLED,
             LIFECYCLE_ENABLED,
             TRACING_ENABLED,
             TRACING_ASYNC,

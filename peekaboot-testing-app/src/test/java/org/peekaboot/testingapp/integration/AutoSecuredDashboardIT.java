@@ -184,7 +184,9 @@ class AutoSecuredDashboardIT {
     @Test
     void servesTheDashboardAndToolbarUnderTheServletPath(@TempDir Path dir) {
         try (ConfigurableApplicationContext app = boot(
-                dir.resolve("security.properties"), "--spring.mvc.servlet.path=/app", "--peekaboot.dev-toolbar=true")) {
+                dir.resolve("security.properties"),
+                "--spring.mvc.servlet.path=/app",
+                "--peekaboot.dev-toolbar.enabled=true")) {
             DashboardCredentials appCredentials = app.getBean(DashboardCredentials.class);
             PeekabootApi anonymous = apiOf(app);
             PeekabootApi signedIn = anonymous.withBasicAuth(appCredentials.username(), appCredentials.plaintext());

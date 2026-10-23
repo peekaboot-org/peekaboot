@@ -61,7 +61,7 @@ class PeekabootOffByDefaultTest {
      */
     @Test
     void registersNoPeekabootBeanWithOnlyTheToolbarSwitchedOn() {
-        contextRunner.withPropertyValues("peekaboot.dev-toolbar=true").run(context -> {
+        contextRunner.withPropertyValues("peekaboot.dev-toolbar.enabled=true").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(peekabootBeans(context)).isEmpty();
         });

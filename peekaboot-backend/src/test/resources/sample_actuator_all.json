@@ -157,7 +157,7 @@
             "origin": "class path resource [application.yml] - 11:19",
             "value": "******"
           },
-          "peekaboot.dev-toolbar": {
+          "peekaboot.dev-toolbar.enabled": {
             "origin": "class path resource [application.yml] - 14:16",
             "value": "******"
           },

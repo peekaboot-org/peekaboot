@@ -9,7 +9,8 @@ spring:
     import: classpath:h2-test-infrastructure.yml
 
 peekaboot:
-  dev-toolbar: true
+  dev-toolbar:
+    enabled: true
 
 management:
   tracing:

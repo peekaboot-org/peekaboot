@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 /**
- * With {@code peekaboot.enable-unmasking} off - application-test.yml's setting, which
+ * With {@code peekaboot.unmasking.enabled} off - application-test.yml's setting, which
  * {@link PlaywrightTestBase}'s own un-overridden Spring context runs with, so no property
  * override is needed here - the unmask control must never appear anywhere in the
  * DOM. A control that cannot work must never be offered (see

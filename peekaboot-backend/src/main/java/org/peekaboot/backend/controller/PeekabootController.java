@@ -74,7 +74,7 @@ public class PeekabootController {
                 traceInsightsService.isTracingAvailable(),
                 tracingSpansPossible,
                 metricsService.isAvailable(),
-                properties.isEnableUnmasking(),
+                properties.getUnmasking().isEnabled(),
                 insightsService != null,
                 tracingProperties.getSlowSpanThresholdMs(),
                 tracingProperties.getVerySlowSpanThresholdMs(),
@@ -85,14 +85,14 @@ public class PeekabootController {
 
     /**
      * The single place the two independent unmasking opt-ins are combined: the
-     * server-side {@code peekaboot.enable-unmasking} property and the request's
+     * server-side {@code peekaboot.unmasking.enabled} property and the request's
      * {@code unmask} parameter. Neither is sufficient alone - while the property is
      * false, {@code requestedUnmask} is ignored, so the request can never be a bypass
      * on its own. Every endpoint that carries property values calls this exactly once
      * and threads the result down, rather than re-deriving the decision per mapper.
      */
     private boolean resolveUnmask(boolean requestedUnmask) {
-        return properties.isEnableUnmasking() && requestedUnmask;
+        return properties.getUnmasking().isEnabled() && requestedUnmask;
     }
 
     @GetMapping(value = "/api/metrics", produces = MediaType.APPLICATION_JSON_VALUE)

@@ -145,7 +145,7 @@ public final class MaskingEngine {
 
     /**
      * Returns {@code value} verbatim when {@code unmask} is true. The decision is made once
-     * upstream ({@code peekaboot.enable-unmasking} and the request's {@code unmask}
+     * upstream ({@code peekaboot.unmasking.enabled} and the request's {@code unmask}
      * parameter, see {@code PeekabootController.resolveUnmask}) and threaded down; every
      * other caller uses the two-arg overload and always masks.
      */
