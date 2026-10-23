@@ -120,6 +120,31 @@ class TracesTabIT extends PlaywrightTestBase {
     }
 
     /**
+     * The loading block sits above the bucket row, so showing it for a refresh of a list
+     * already on screen pushes the controls and the list down for the round trip. Only the
+     * tab's first fetch shows it.
+     */
+    @Test
+    void aRefreshOfTheShownListKeepsTheLoadingBlockHidden() {
+        openTracesTabWithATrace();
+        page.evaluate("""
+                () => {
+                    window.pkLoadingShown = false;
+                    const loading = document.getElementById('traces-loading');
+                    new MutationObserver(() => {
+                        if (!loading.classList.contains('hidden')) window.pkLoadingShown = true;
+                    }).observe(loading, {attributes: true, attributeFilter: ['class']});
+                }
+                """);
+
+        page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"), () -> page.click("#refresh-btn"));
+        page.waitForFunction("() => document.getElementById('traces-loading').classList.contains('hidden')");
+
+        assertThat(page.evaluate("() => window.pkLoadingShown")).isEqualTo(false);
+    }
+
+    /**
      * tabStrip()'s {silent: true} option exists for this:
      * handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
      * so that syncing the strip's visual selection on a hash-driven boot doesn't also

@@ -47,7 +47,10 @@ const BUCKET_EMPTY_MESSAGES = {
 const tab = selfFetchingTab({
     fetch: context => context.client.get('/api/traces/insights', {params: requestParams()}),
     reconcile: reconcileWithUrl,
-    loading: container => {
+    // Only before the first list arrives: the block sits above the controls, so showing it
+    // for a refresh would push them and the list down for the round trip.
+    loading: (container, {firstLoad}) => {
+        if (!firstLoad) return;
         container.querySelector('#traces-loading').classList.remove('hidden');
         container.querySelector('#no-traces').classList.add('hidden');
     },
