@@ -4,42 +4,32 @@ import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Serves its page immediately, then finishes a child of the request's trace roughly
- * {@link #LATE_WORK} later - the shape of an {@code @Async} continuation, a streamed body or a
+ * Serves its page immediately, then keeps a child of the request's trace running until the test
+ * releases it - the shape of an {@code @Async} continuation, a streamed body or a
  * {@code DeferredResult}. The collapsed toolbar only ever sees that span if it keeps reading
- * after its first successful render.
+ * after its first successful render. Ending on release rather than on a timer lets the test
+ * prove that render came first, however slowly the page loads.
  */
 @RestController
 public class LateSpanController {
 
     /**
-     * Long enough that the bar provably renders at least once before the span lands.
-     *
-     * <p>Two clocks: the late span starts at response time and ends {@code LATE_WORK} later.
-     * The toolbar's fetch ladder ({@code attemptDelays} in {@code toolbar.js}) starts only once
-     * its module graph has executed, some latency {@code L} after the response, so its
-     * attempts fire at {@code L+250}, {@code L+750}, {@code L+1750} and {@code L+4750}.
-     * {@code L} is what inflates under CI load, so it is the margin that matters.
-     *
-     * <p>The constraints: the first render must still show the short baseline duration, i.e.
-     * land before the late span ends - {@code L+750 < LATE_WORK} even if the first attempt is
-     * missed - and the late span must be exported ({@code LATE_WORK} plus the test profile's
-     * 50ms {@code schedule-delay}) before the third attempt: {@code LATE_WORK + 50 < L+1750},
-     * which holds at {@code L=0} and only gains room as {@code L} grows.
-     *
-     * <p>Changing the ladder, the export delay, or this value invalidates this arithmetic - redo
-     * it rather than assume it still holds.
+     * The least a late span runs, so the trace it stretches reaches a duration the request's own
+     * spans never do.
      */
     public static final Duration LATE_WORK = Duration.ofMillis(1500);
+
+    /** Ends late work nobody released, so a test that failed first leaves no span running. */
+    private static final Duration ABANDONED_AFTER = Duration.ofSeconds(30);
 
     private static final String PAGE =
             "<!DOCTYPE html><html><head><title>Late span</title></head><body>ok</body></html>";
@@ -50,14 +40,13 @@ public class LateSpanController {
      * Bounded rather than a single slot: a browser may well re-request the page (a reload, a
      * favicon-triggered navigation), and the test wants the first run's span, not the last.
      */
-    private final BlockingQueue<LateSpan> ended = new ArrayBlockingQueue<>(8);
+    private final BlockingQueue<String> endedTraceIds = new ArrayBlockingQueue<>(8);
+
+    private final Semaphore releases = new Semaphore(0);
 
     public LateSpanController(Tracer tracer) {
         this.tracer = tracer;
     }
-
-    /** What the late span actually turned out to be, recorded by the thread that ended it. */
-    public record LateSpan(String traceId, Instant endedAt) {}
 
     @GetMapping(value = "/late-span", produces = MediaType.TEXT_HTML_VALUE)
     public String lateSpan() {
@@ -69,24 +58,30 @@ public class LateSpanController {
         return PAGE;
     }
 
-    /** Blocks until the async span has ended, so the test asserts on facts rather than timing. */
-    public LateSpan awaitLateSpan(Duration timeout) throws InterruptedException {
-        LateSpan lateSpan = ended.poll(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        if (lateSpan == null) {
+    /** Lets one run of late work end, once it has run for {@link #LATE_WORK}. */
+    public void release() {
+        releases.release();
+    }
+
+    /** Blocks until a released late span has ended and returns the trace it belongs to. */
+    public String awaitLateSpanTraceId(Duration timeout) throws InterruptedException {
+        String traceId = endedTraceIds.poll(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        if (traceId == null) {
             throw new AssertionError("the late span never ended within " + timeout);
         }
-        return lateSpan;
+        return traceId;
     }
 
     private void runLateWork(TraceContext parent) {
         Span span = tracer.spanBuilder().setParent(parent).name("late-work").start();
         try {
             Thread.sleep(LATE_WORK.toMillis());
+            releases.tryAcquire(ABANDONED_AFTER.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
             span.end();
-            ended.offer(new LateSpan(span.context().traceId(), Instant.now()));
+            endedTraceIds.offer(span.context().traceId());
         }
     }
 }

@@ -3,7 +3,6 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
-import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.fixtures.LateSpanController;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,24 +12,22 @@ import org.springframework.beans.factory.annotation.Autowired;
  * trace looks complete, so work ending after the response - an {@code @Async} continuation, a
  * streamed body - still appears on it.
  *
- * <p>Real app, real spans, real browser: {@link LateSpanController} ends a genuine child span
- * ~1.5s after the response, and the assertions below check that it really is the same trace and
- * really did end after the response, rather than trusting the tracing wiring.
+ * <p>Real app, real spans, real browser: {@link LateSpanController} keeps a genuine child span
+ * running past the response, and the assertions below check that it really is the same trace,
+ * rather than trusting the tracing wiring.
  *
- * <p>That 1.5s is not incidental: it has to outlast the toolbar's first render, or the "duration
- * changes" assertion below has nothing to change to and times out. See {@link
- * LateSpanController#LATE_WORK} for the exact margin against the fetch ladder and the test export
- * delay.
+ * <p>The test owns the order. It holds the bar's first read until the root span is stored, so
+ * that read renders the short baseline, and only then releases the late span. Anything left on
+ * a clock would race the page load, which stretches without bound on a busy machine.
  */
 class ToolbarLateSpanIT extends PlaywrightTestBase {
 
     /**
      * The rendered {@code ⏱} duration is the signal, not the span count: the trace's duration
-     * spans its earliest start to its latest end, so a child ending 1.5s after the root
-     * stretches it from a handful of milliseconds to at least {@code LATE_WORK}, while the span
-     * count only steps by one and could land on either render depending on when the backend
-     * counts a still-running child. The query and log counters cannot serve at all - this
-     * request issues neither.
+     * spans its earliest start to its latest end, so the late child stretches it from a
+     * handful of milliseconds to at least {@code LATE_WORK}, while the span count only steps by
+     * one and could land on either render depending on when the backend counts a still-running
+     * child. The query and log counters cannot serve at all - this request issues neither.
      */
     private static final String RENDERED_DURATION =
             "root => root.querySelector('#pk-metrics .pk-stat__duration')?.textContent ?? null";
@@ -45,24 +42,21 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
 
     @Test
     void collapsedBarPicksUpASpanThatEndsAfterTheResponse() throws InterruptedException {
+        ParkedRequest firstRead = parkFirst("**/api/traces/*/insights");
         page.navigate(baseUrl + "/late-span");
-        Instant responseReceivedAt = Instant.now();
-        page.waitForSelector("#peekaboot-toolbar-host");
-
-        // First render: the root span is exported, the late child is still running.
-        String firstRender = (String) toolbar.waitUntil(RENDERED_DURATION, null, 10_000);
         String barTraceId = toolbar.traceId();
 
-        LateSpanController.LateSpan lateSpan = lateSpanController.awaitLateSpan(Duration.ofSeconds(10));
-        assertThat(lateSpan.traceId())
-                .as("the late span must belong to the trace the bar is reading")
-                .isEqualTo(barTraceId);
-        assertThat(lateSpan.endedAt())
-                .as("the late span must end after the response reached the browser")
-                .isAfter(responseReceivedAt);
+        firstRead.awaitParked();
+        awaitTrace(barTraceId, ROOT_SPAN_EXPORTED);
+        firstRead.resume();
+        String firstRender = (String) toolbar.waitUntil(RENDERED_DURATION, null, 10_000);
 
+        lateSpanController.release();
         String laterRender = (String) toolbar.waitUntil(RENDERED_DURATION_OTHER_THAN, firstRender, 15_000);
 
+        assertThat(lateSpanController.awaitLateSpanTraceId(Duration.ofSeconds(10)))
+                .as("the late span must belong to the trace the bar is reading")
+                .isEqualTo(barTraceId);
         assertThat(renderedDurationMs(laterRender))
                 .isGreaterThan(renderedDurationMs(firstRender))
                 .isGreaterThanOrEqualTo((double) LateSpanController.LATE_WORK.toMillis());

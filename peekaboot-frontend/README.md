@@ -633,9 +633,9 @@ a pending placeholder ("? spans", "? queries", "? logs", the stat line's own wor
 leaving a spinner up forever. A response that arrived but was empty (a 404, or `rootSpan`
 missing) leaves the previous render standing.
 
-`ToolbarLateSpanIT` is timed against this ladder: `LateSpanController.LATE_WORK`
-is arithmetic over the four attempts and the test profile's export delay, so moving an
-attempt means redoing that arithmetic.
+`ToolbarLateSpanIT` pins this: it releases a late span only after the first attempt has
+rendered, and needs a later attempt to pick it up. A ladder that stops after its first
+successful read fails it.
 
 ## `application-test.yml`: the export delay
 

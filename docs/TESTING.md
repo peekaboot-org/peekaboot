@@ -41,11 +41,11 @@
 - Micrometer gauges: never `registry.gauge(name, obj)` with the result discarded. The registry
   holds `obj` weakly and samples turn NaN after a GC. Use `Gauge.builder(name, supplier)`, or
   keep the returned object in a field.
-- Timing a test does not own: `ToolbarLateSpanIT`'s margins are arithmetic against the
-  toolbar's fetch ladder (`toolbar.js`, documented in `peekaboot-frontend/README.md`) and the
-  test profile's span export delay. Neither has a source of truth a Java test can read.
-  `LateSpanController.LATE_WORK` carries that arithmetic in its Javadoc. Touch the ladder, the
-  export delay or the constant and you redo it rather than assume it holds.
+- Timing a test does not own: a fixed delay raced against the page load loses on a busy
+  machine, because the load stretches without bound. `ToolbarLateSpanIT` holds the toolbar's
+  first read until the root span is stored and releases its late span only after that read
+  has rendered. It relies on nothing but the fetch ladder (`toolbar.js`, documented in
+  `peekaboot-frontend/README.md`) reading again after its first attempt.
 
 ## Suites
 
