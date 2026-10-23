@@ -11,9 +11,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The error dispatch end to end on a real container: Peekaboot's page renders where Boot's
@@ -24,29 +22,22 @@ import tools.jackson.databind.json.JsonMapper;
 @ActiveProfiles("integration")
 class ErrorDispatchIT {
 
-    /** The blob ToolbarShell embeds for toolbar.js, which reads it before it calls home. */
-    private static final Pattern TOOLBAR_DATA =
-            Pattern.compile("<script id=\"peekaboot-toolbar-data\" type=\"application/json\">(.*?)</script>");
-
     /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
     private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     @LocalServerPort
     private int port;
 
-    private RestClient restClient;
+    private LocalServer server;
 
     @BeforeEach
     void setUp() {
-        restClient = RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .defaultStatusHandler(status -> true, (request, response) -> {})
-                .build();
+        server = new LocalServer(port);
     }
 
     @Test
     void aThrownExceptionRendersPeekabootsPageWithTheStackTrace() {
-        String page = html("/throwing");
+        String page = server.html("/throwing");
 
         assertThat(page)
                 .contains("java.lang.IllegalStateException")
@@ -57,14 +48,14 @@ class ErrorDispatchIT {
 
     @Test
     void theBarOnTheErrorPageReportsTheRequestThatFailed() {
-        ResponseEntity<String> response = restClient
+        ResponseEntity<String> response = server.client()
                 .get()
                 .uri("/throwing")
                 .accept(MediaType.TEXT_HTML)
                 .retrieve()
                 .toEntity(String.class);
 
-        JsonNode data = toolbarData(response.getBody());
+        JsonNode data = LocalServer.toolbarData(response.getBody());
         assertThat(data.path("path").asString()).isEqualTo("/throwing");
         assertThat(data.path("method").asString()).isEqualTo("GET");
         assertThat(data.path("status").asInt()).isEqualTo(500);
@@ -78,35 +69,35 @@ class ErrorDispatchIT {
      */
     @Test
     void theBarReportsAPostOriginalRequestsMethod() {
-        String page = restClient
+        String page = server.client()
                 .post()
                 .uri("/throwing-post")
                 .accept(MediaType.TEXT_HTML)
                 .retrieve()
                 .body(String.class);
 
-        assertThat(toolbarData(page).path("method").asString()).isEqualTo("POST");
+        assertThat(LocalServer.toolbarData(page).path("method").asString()).isEqualTo("POST");
     }
 
     /** An unmapped path is a 404 through the same dispatch, with no exception of its own to show. */
     @Test
     void anUnmappedPathRendersThePageWithItsStatus() {
-        String page = html("/no-such-page");
+        String page = server.html("/no-such-page");
 
         assertThat(page).contains("404").contains("pk-error__");
-        assertThat(toolbarData(page).path("path").asString()).isEqualTo("/no-such-page");
+        assertThat(LocalServer.toolbarData(page).path("path").asString()).isEqualTo("/no-such-page");
     }
 
     /** Peekaboot's own paths are excluded on the first dispatch, so their error pages carry no bar either. */
     @Test
     void anErrorUnderPeekabootsOwnPrefixGetsNoBar() {
-        assertThat(html("/peekaboot/api/no-such-endpoint")).doesNotContain("Peekaboot Dev Toolbar");
+        assertThat(server.html("/peekaboot/api/no-such-endpoint")).doesNotContain("Peekaboot Dev Toolbar");
     }
 
     /** An XHR is excluded on the first dispatch too, so its error page carries no bar either. */
     @Test
     void anXhrErrorGetsNoBar() {
-        String body = restClient
+        String body = server.client()
                 .get()
                 .uri("/throwing")
                 .header("X-Requested-With", "XMLHttpRequest")
@@ -115,18 +106,6 @@ class ErrorDispatchIT {
                 .body(String.class);
 
         assertThat(body).contains("pk-error__").doesNotContain("Peekaboot Dev Toolbar");
-    }
-
-    private String html(String uri) {
-        return restClient.get().uri(uri).accept(MediaType.TEXT_HTML).retrieve().body(String.class);
-    }
-
-    private static JsonNode toolbarData(String html) {
-        Matcher matcher = TOOLBAR_DATA.matcher(html);
-        assertThat(matcher.find())
-                .as("the injected page carries the toolbar data blob")
-                .isTrue();
-        return JsonMapper.builder().build().readTree(matcher.group(1));
     }
 
     /** The trace id the same response's Server-Timing header names, so it is checked against the trace actually assigned. */

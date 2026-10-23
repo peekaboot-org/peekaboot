@@ -6,8 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.web.client.RestClient;
 
 /**
  * With Peekaboot off, a consumer must serve nothing under /peekaboot: Boot's default static
@@ -43,23 +41,14 @@ class PeekabootOffIT {
 
     @Test
     void theToolbarIsNotInjectedIntoTheApplicationsOwnPages() {
-        String page = RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build()
-                .get()
-                .uri("/test")
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .body(String.class);
+        String page = new LocalServer(port).html("/test");
 
         assertThat(page).contains("Test Page").doesNotContain("Peekaboot", "peekaboot");
     }
 
     private HttpStatus statusOf(String path) {
-        return HttpStatus.valueOf(RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .defaultStatusHandler(status -> true, (request, response) -> {})
-                .build()
+        return HttpStatus.valueOf(new LocalServer(port)
+                .client()
                 .get()
                 .uri(path)
                 .retrieve()

@@ -77,10 +77,7 @@ class OverrideBeatsAdviceIT {
     }
 
     private RestClient client() {
-        return RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .defaultStatusHandler(status -> true, (request, response) -> {})
-                .build();
+        return new LocalServer(port).client();
     }
 
     @Controller
