@@ -449,7 +449,7 @@
 .pk-insight-panel--overridden .pk-insight-panel-levels { border-radius: var(--pk-radius); outline: 1px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-insight-panel-reset { width: 24px; height: 24px; color: var(--pk-primary-text); }
 .pk-insight-chart { min-height: 180px; }
-/* Cards for an absent subsystem carry a message instead of a chart (see insights.js). */
+/* Cards for an absent subsystem carry a message instead of a chart (see insights-panels.js). */
 .pk-insight-panel--empty .pk-insight-chart { display: flex; align-items: center; justify-content: center; }
 .pk-insight-empty { font-size: var(--pk-text-sm); }
 .pk-insight-chart .u-legend { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }

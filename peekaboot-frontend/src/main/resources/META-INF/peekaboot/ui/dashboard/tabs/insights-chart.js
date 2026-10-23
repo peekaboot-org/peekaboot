@@ -3,7 +3,7 @@
  * construction of one chart per panel.
  *
  * uPlot is only fetched the first time a chart actually has to be drawn (see
- * insights.js's IntersectionObserver) - a dashboard that never opens the tab, or
+ * insights-panels.js's IntersectionObserver) - a dashboard that never opens the tab, or
  * only scrolls its top row, never pays for the library.
  *
  * A chart is a handle rather than a bare uPlot instance: the mapping from the
@@ -240,7 +240,7 @@ export function createChart({
                 onZoom(min, max);
             }],
             // the readback the panel's own element carries as data-zoom-min/-max (see
-            // insights.js) - fires for every x-scale change, whatever caused it
+            // insights-panels.js) - fires for every x-scale change, whatever caused it
             setScale: [(u, key) => {
                 if (key !== 'x') return;
                 const panelEl = mount.closest('.pk-insight-panel');
@@ -257,7 +257,7 @@ export function createChart({
 
     return {
         setData(next, resetScales = true) {
-            // resetScales=false (a live tick/rollup while zoomed, see insights.js's
+            // resetScales=false (a live tick/rollup while zoomed, see insights-panels.js's
             // redraw()) holds the current window and skips uPlot's repaint entirely -
             // the canvas freezes on whatever it last drew, catching up in one repaint
             // once the zoom is lifted (see resetXScale)
