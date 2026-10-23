@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
 import io.micrometer.core.instrument.Counter;
@@ -507,13 +508,5 @@ class InsightsCollectorTest {
                 registry,
                 InsightsCollectors.noOpListener(),
                 InsightsCollectors.noSnapshot());
-    }
-
-    private static void awaitQuietly(CountDownLatch latch) {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 }

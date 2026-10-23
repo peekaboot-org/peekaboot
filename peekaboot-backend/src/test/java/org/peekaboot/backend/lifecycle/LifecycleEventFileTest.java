@@ -19,7 +19,7 @@ class LifecycleEventFileTest {
     Path directory;
 
     private LifecycleEventFile file() {
-        return new LifecycleEventFile(directory.resolve("lifecycle.jsonl"));
+        return new LifecycleEventFile(directory.resolve(LifecycleEventFile.FILE_NAME));
     }
 
     @Test
@@ -45,7 +45,7 @@ class LifecycleEventFileTest {
 
     @Test
     void oneEventPerLineSoADamagedLineCostsOnlyItself() throws IOException {
-        Path path = directory.resolve("lifecycle.jsonl");
+        Path path = directory.resolve(LifecycleEventFile.FILE_NAME);
         LifecycleEventFile file = file();
         file.write(List.of(start(1_000).build(), start(2_000).build()));
         List<String> lines = Files.readAllLines(path);
@@ -65,7 +65,7 @@ class LifecycleEventFileTest {
      */
     @Test
     void aLineThatParsesIntoNoEventAtAllIsSkippedLikeADamagedOne() throws IOException {
-        Path path = directory.resolve("lifecycle.jsonl");
+        Path path = directory.resolve(LifecycleEventFile.FILE_NAME);
         LifecycleEventFile file = file();
         file.write(List.of(start(2_000).build()));
         List<String> lines = new ArrayList<>();
@@ -88,7 +88,7 @@ class LifecycleEventFileTest {
         assertThat(file.read()).hasSize(2);
         try (var files = Files.list(directory)) {
             assertThat(files.map(Path::getFileName).map(Path::toString).toList())
-                    .containsExactly("lifecycle.jsonl");
+                    .containsExactly(LifecycleEventFile.FILE_NAME);
         }
     }
 
@@ -97,12 +97,12 @@ class LifecycleEventFileTest {
     void theLogAndItsDirectoryAreReadableByTheOwnerAlone() throws IOException {
         PosixPermissions.assumeSupported();
         Path stateDirectory = directory.resolve("state");
-        LifecycleEventFile file = new LifecycleEventFile(stateDirectory.resolve("lifecycle.jsonl"));
+        LifecycleEventFile file = new LifecycleEventFile(stateDirectory.resolve(LifecycleEventFile.FILE_NAME));
 
         file.write(List.of(start(1_000).build()));
 
         assertThat(PosixPermissions.of(stateDirectory)).isEqualTo("rwx------");
-        assertThat(PosixPermissions.of(stateDirectory.resolve("lifecycle.jsonl")))
+        assertThat(PosixPermissions.of(stateDirectory.resolve(LifecycleEventFile.FILE_NAME)))
                 .isEqualTo("rw-------");
     }
 
@@ -122,7 +122,7 @@ class LifecycleEventFileTest {
 
     @Test
     void aFailedRewriteLeavesNoTemporaryFileBehind() throws IOException {
-        Path target = directory.resolve("lifecycle.jsonl");
+        Path target = directory.resolve(LifecycleEventFile.FILE_NAME);
         Files.createDirectories(target.resolve("occupied"));
         LifecycleEventFile file = new LifecycleEventFile(target);
 

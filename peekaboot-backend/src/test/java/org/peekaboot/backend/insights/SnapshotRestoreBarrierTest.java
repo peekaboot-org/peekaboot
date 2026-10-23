@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -66,13 +67,5 @@ class SnapshotRestoreBarrierTest {
         assertThat(asked).hasValue(1);
         assertThat(restored).isEmpty();
         assertThat(barrier.hasApplied()).isFalse();
-    }
-
-    private static void awaitQuietly(CountDownLatch latch) {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 }
