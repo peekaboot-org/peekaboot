@@ -115,12 +115,11 @@ function initToolbar(host, data) {
         metricsEl.replaceChildren(duration, ...traceStatParts(trace, {locale: readLocaleSetting()}));
     }
 
-    // Nothing ever arrived: replace "loading" with the placeholder row rather than
-    // leaving a spinner up forever.
+    // Nothing ever arrived: replace "loading" with the stat line's own words, its counts
+    // unknown, rather than leaving a spinner up forever.
     function renderPending() {
-        metricsEl.replaceChildren(el('span', {
-            className: 'pk-toolbar__pending', text: '[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]'
-        }));
+        metricsEl.replaceChildren(...['spans', 'queries', 'logs'].map(noun =>
+            el('span', {className: 'pk-stat pk-toolbar__pending', text: `? ${noun}`})));
     }
 
     async function openOverlay() {

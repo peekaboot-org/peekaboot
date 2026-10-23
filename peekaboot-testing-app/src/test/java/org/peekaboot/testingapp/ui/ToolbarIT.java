@@ -234,7 +234,11 @@ class ToolbarIT extends PlaywrightTestBase {
         boolean hasPendingElement =
                 (Boolean) toolbar.evaluate("root => !!root.querySelector('#pk-metrics .pk-toolbar__pending')");
         assertThat(hasPendingElement).isTrue();
-        assertThat(toolbar.text("#pk-metrics")).contains("?");
+        // the stat line's own words, so a screen reader reads counts rather than emoji names
+        assertThat(toolbar.evaluate("root => Array.from(root.querySelectorAll('#pk-metrics .pk-toolbar__pending'),"
+                        + " stat => stat.textContent)"))
+                .isEqualTo(List.of("? spans", "? queries", "? logs"));
+        assertThat(toolbar.text("#pk-metrics")).doesNotContainPattern("\\p{So}");
     }
 
     /**

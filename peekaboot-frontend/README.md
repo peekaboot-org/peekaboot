@@ -629,8 +629,9 @@ so a span that ends after the root still reaches the bar: an `@Async` continuati
 streamed body. The last attempt lands 4.75s after the response finished. With
 `peekaboot-dev-toolbar-defaults.yml`'s 200ms span export delay (see `docs/ARCHITECTURE.md`,
 *Default Properties*), a trace still absent by then is not coming, and the bar falls back to
-a pending placeholder rather than leaving a spinner up forever. A response that arrived but
-was empty (a 404, or `rootSpan` missing) leaves the previous render standing.
+a pending placeholder ("? spans", "? queries", "? logs", the stat line's own words) rather than
+leaving a spinner up forever. A response that arrived but was empty (a 404, or `rootSpan`
+missing) leaves the previous render standing.
 
 `ToolbarLateSpanIT` is timed against this ladder: `LateSpanController.LATE_WORK`
 is arithmetic over the four attempts and the test profile's export delay, so moving an
