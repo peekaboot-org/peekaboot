@@ -162,6 +162,22 @@ class PeekabootSecurityAutoConfigurationTest {
                         .isPresent());
     }
 
+    /** The toolbar's requests hit the guard too, so an armed posture with the toolbar on warns about the dialog. */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void theArmedPostureFollowsTheToolbarSwitch(boolean devToolbar, @TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.dev-toolbar=" + devToolbar)
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(report -> {
+                            assertThat(report.text().contains("The dev toolbar is on"))
+                                    .isEqualTo(devToolbar);
+                            assertThat(report.level())
+                                    .isEqualTo(devToolbar ? SecurityPosture.Level.WARN : SecurityPosture.Level.INFO);
+                        }));
+    }
+
     /** The controllers sit under the DispatcherServlet's path, so the guard has to sit there too. */
     @ParameterizedTest
     @ValueSource(strings = {"/app", "/app/"})

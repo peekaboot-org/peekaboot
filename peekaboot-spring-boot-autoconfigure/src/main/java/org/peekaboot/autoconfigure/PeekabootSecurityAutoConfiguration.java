@@ -70,6 +70,7 @@ public class PeekabootSecurityAutoConfiguration {
             ObjectProvider<DashboardCredentials> credentials,
             ObjectProvider<CredentialsFile> credentialsFile,
             PeekabootPaths paths,
+            PeekabootProperties properties,
             ListableBeanFactory beanFactory,
             Environment environment) {
         DashboardCredentials resolvedCredentials = credentials.getIfAvailable();
@@ -81,7 +82,7 @@ public class PeekabootSecurityAutoConfiguration {
                     paths.dashboardPath(),
                     resolvedCredentials,
                     resolvedCredentialsFile.path().orElse(null),
-                    environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false),
+                    properties.isDevToolbar(),
                     errorPageOnADeployment);
         }
         return deploymentLaunch
