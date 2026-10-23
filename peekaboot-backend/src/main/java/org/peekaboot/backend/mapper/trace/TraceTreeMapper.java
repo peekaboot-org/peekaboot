@@ -71,7 +71,7 @@ public class TraceTreeMapper {
         // exported) under the root so they don't silently vanish from the tree
         attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
 
-        TraceTabSummary summary = calculateSummary(spans, rootSpanData, traceData.asyncSpanIds());
+        TraceTabSummary summary = calculateSummary(spans, rootSpanData);
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
 
@@ -151,17 +151,15 @@ public class TraceTreeMapper {
 
     /**
      * The subtree's own span, error and query figures - not the enclosing trace's, so a row
-     * rooted at an async entry reports what that entry point's own work did. Unlike
-     * {@link #calculateSummary}, nothing here is excluded for being async: every span in a
-     * subtree rooted at an async entry is async-marked or a descendant of one, so that
-     * exclusion would report zero. No request part: a subtree is not a request.
+     * rooted at an async entry reports what that entry point's own work did. No request part:
+     * a subtree is not a request.
      */
     private static TraceTabSummary subtreeSummary(SpanNode subtreeRoot) {
         SubtreeTotals totals = new SubtreeTotals();
         accumulateSubtree(subtreeRoot, totals);
         return new TraceTabSummary(
                 null,
-                new TraceTabSummary.SpansSummary(totals.spanCount, totals.totalDurationMs, totals.errorCount),
+                new TraceTabSummary.SpansSummary(totals.spanCount, totals.errorCount),
                 new TraceTabSummary.QueriesSummary(totals.queryCount, totals.queryDurationMs),
                 LOGS_COUNTED_LATER);
     }
@@ -171,7 +169,6 @@ public class TraceTreeMapper {
         if (node.status() == SpanStatus.ERROR) {
             totals.errorCount++;
         }
-        totals.totalDurationMs += node.durationMs();
         if (DbSpans.isQuery(node)) {
             totals.queryCount++;
             totals.queryDurationMs += node.durationMs();
@@ -184,7 +181,6 @@ public class TraceTreeMapper {
     /** Mutable running totals for {@link #accumulateSubtree}, folded into a {@link TraceTabSummary} once complete. */
     private static final class SubtreeTotals {
         int spanCount;
-        long totalDurationMs;
         int errorCount;
         int queryCount;
         long queryDurationMs;
@@ -311,33 +307,24 @@ public class TraceTreeMapper {
                 .toList();
     }
 
-    private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData, Set<String> asyncSpanIds) {
+    private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
         int dbQueryCount = 0;
         long dbTotalDurationMs = 0L;
         int errorCount = 0;
-        long totalDurationMs = 0L;
 
         for (SpanData span : spans) {
             if (span.hasError()) {
                 errorCount++;
             }
-            long durationMs = span.durationMs();
-            // Excluded from the sum for the same reason async work is excluded from the trace
-            // window: the caller never waited for it. The counts above and below still cover
-            // every span - error-bucket admission reads any erroring span, so dropping one here
-            // would show a trace as OK while it sat in the Errors bucket.
-            if (!asyncSpanIds.contains(span.spanId())) {
-                totalDurationMs += durationMs;
-            }
             if (DbSpans.isQuery(span)) {
                 dbQueryCount++;
-                dbTotalDurationMs += durationMs;
+                dbTotalDurationMs += span.durationMs();
             }
         }
 
         return new TraceTabSummary(
                 extractRequestSummary(rootSpanData),
-                new TraceTabSummary.SpansSummary(spans.size(), totalDurationMs, errorCount),
+                new TraceTabSummary.SpansSummary(spans.size(), errorCount),
                 new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
                 LOGS_COUNTED_LATER);
     }

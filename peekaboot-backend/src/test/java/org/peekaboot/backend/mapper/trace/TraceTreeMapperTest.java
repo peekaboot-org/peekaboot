@@ -436,13 +436,11 @@ class TraceTreeMapperTest {
     }
 
     /**
-     * The summed duration follows the same rule as the trace window: on a parent trace it
-     * describes synchronous work, because the caller never waited for the rest. The span and
-     * error counts still cover everything, so a failure in background work keeps the trace's
-     * status consistent with its place in the Errors bucket.
+     * The span and error counts cover async spans too, so a failure in background work keeps
+     * the trace's status consistent with its place in the Errors bucket.
      */
     @Test
-    void theSpanSummaryExcludesAsyncSpansFromTheSummedDuration() {
+    void theSpanCountIncludesAsyncSpans() {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
         var async = asyncTask("async").parent("root").at(40, 240_000).build();
 
@@ -450,7 +448,6 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.summary().spans().totalDurationMs()).isEqualTo(50);
         assertThat(result.summary().spans().count()).isEqualTo(2);
     }
 
@@ -525,7 +522,6 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.mapSubtree(traceData, "async");
 
         assertThat(result.summary().spans().count()).isEqualTo(2);
-        assertThat(result.summary().spans().totalDurationMs()).isEqualTo(1_900);
     }
 
     /** An orphan has no parent in the trace, so there is no enclosing trace to link back to. */
