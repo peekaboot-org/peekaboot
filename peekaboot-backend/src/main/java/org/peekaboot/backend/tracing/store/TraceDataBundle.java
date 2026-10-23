@@ -375,16 +375,11 @@ public class TraceDataBundle {
         return root != null ? root : earliest;
     }
 
-    /** Whether any span stored so far carried an error - maintained in {@code store()}, no span copy. */
-    public boolean hasErrorSpan() {
+    /** Whether any span stored or log captured so far was an error; maintained as each arrives, no span copy. */
+    boolean hasError() {
         synchronized (spansLock) {
-            return hasErrorSpan;
+            return hasErrorSpan || hasErrorLog;
         }
-    }
-
-    /** Whether any log captured so far was an error. */
-    public boolean hasErrorLog() {
-        return hasErrorLog;
     }
 
     /** The window every span stored so far has covered, async ones included; null before a timed span. */

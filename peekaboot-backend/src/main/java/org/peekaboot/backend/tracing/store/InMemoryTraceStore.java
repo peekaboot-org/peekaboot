@@ -59,7 +59,7 @@ public class InMemoryTraceStore implements TraceStore {
         bundle.addLog(log, maxLogsPerTrace);
         // logs never affect slow classification and can only ever add a trace to
         // errorTraces, never remove it — so a full classify() pass is unnecessary here.
-        if (!errorTraces.containsKey(bundle.traceId()) && log.isError()) {
+        if (log.isError()) {
             listIn(errorTraces, bundle);
         }
     }
@@ -153,7 +153,7 @@ public class InMemoryTraceStore implements TraceStore {
      * the one it was admitted by.
      */
     private void classify(TraceDataBundle bundle) {
-        if (!errorTraces.containsKey(bundle.traceId()) && hasError(bundle)) {
+        if (bundle.hasError()) {
             listIn(errorTraces, bundle);
         }
         if (isSlow(bundle)) {
@@ -161,11 +161,6 @@ public class InMemoryTraceStore implements TraceStore {
         } else {
             slowTraces.remove(bundle.traceId());
         }
-    }
-
-    /** Incremental signals the bundle maintains as events arrive; no span copy or sort per span. */
-    private static boolean hasError(TraceDataBundle bundle) {
-        return bundle.hasErrorSpan() || bundle.hasErrorLog();
     }
 
     private boolean isSlow(TraceDataBundle bundle) {
