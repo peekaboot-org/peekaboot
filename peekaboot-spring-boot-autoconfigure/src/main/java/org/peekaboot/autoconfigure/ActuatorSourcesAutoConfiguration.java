@@ -5,6 +5,7 @@ import java.util.Map;
 import liquibase.integration.spring.SpringLiquibase;
 import org.flywaydb.core.Flyway;
 import org.peekaboot.backend.actuator.InsightsSource;
+import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.SpringBootVersion;
@@ -64,7 +65,7 @@ public class ActuatorSourcesAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "springVersionsInsightsSource")
     public InsightsSource springVersionsInsightsSource() {
-        return new InsightsSource("spring", () -> {
+        return new InsightsSource(ActuatorParsedData.SPRING, () -> {
             // LinkedHashMap, not Map.of: either version is null when the jar carries no
             // implementation version, which Map.of rejects.
             Map<String, String> versions = new LinkedHashMap<>();
@@ -84,7 +85,7 @@ public class ActuatorSourcesAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "healthInsightsSource")
     public InsightsSource healthInsightsSource(ObjectProvider<HealthEndpoint> healthEndpoint) {
-        return new InsightsSource("health", () -> {
+        return new InsightsSource(ActuatorParsedData.HEALTH, () -> {
             HealthEndpoint endpoint = healthEndpoint.getIfAvailable();
             return endpoint == null ? null : endpoint.health();
         });
@@ -94,7 +95,8 @@ public class ActuatorSourcesAutoConfiguration {
     @ConditionalOnMissingBean(name = "infoInsightsSource")
     public InsightsSource infoInsightsSource(ObjectProvider<InfoContributor> infoContributors) {
         return new InsightsSource(
-                "info", () -> new InfoEndpoint(infoContributors.orderedStream().toList()).info());
+                ActuatorParsedData.INFO,
+                () -> new InfoEndpoint(infoContributors.orderedStream().toList()).info());
     }
 
     @Bean
@@ -102,7 +104,7 @@ public class ActuatorSourcesAutoConfiguration {
     public InsightsSource envInsightsSource(
             Environment environment, ObjectProvider<SanitizingFunction> sanitizingFunctions) {
         return new InsightsSource(
-                "env",
+                ActuatorParsedData.ENV,
                 () -> new EnvironmentEndpoint(
                                 environment, sanitizingFunctions.orderedStream().toList(), Show.ALWAYS)
                         .environment(null));
@@ -112,7 +114,7 @@ public class ActuatorSourcesAutoConfiguration {
     @ConditionalOnMissingBean(name = "configpropsInsightsSource")
     public InsightsSource configpropsInsightsSource(
             ApplicationContext context, ObjectProvider<SanitizingFunction> sanitizingFunctions) {
-        return new InsightsSource("configprops", () -> {
+        return new InsightsSource(ActuatorParsedData.CONFIGPROPS, () -> {
             ConfigurationPropertiesReportEndpoint endpoint = new ConfigurationPropertiesReportEndpoint(
                     sanitizingFunctions.orderedStream().toList(), Show.ALWAYS);
             endpoint.setApplicationContext(context);
@@ -124,7 +126,7 @@ public class ActuatorSourcesAutoConfiguration {
     @ConditionalOnMissingBean(name = "loggersInsightsSource")
     public InsightsSource loggersInsightsSource(
             ObjectProvider<LoggingSystem> loggingSystem, ObjectProvider<LoggerGroups> loggerGroups) {
-        return new InsightsSource("loggers", () -> {
+        return new InsightsSource(ActuatorParsedData.LOGGERS, () -> {
             LoggingSystem system = loggingSystem.getIfAvailable();
             return system == null
                     ? null
@@ -136,7 +138,7 @@ public class ActuatorSourcesAutoConfiguration {
     @ConditionalOnMissingBean(name = "scheduledTasksInsightsSource")
     public InsightsSource scheduledTasksInsightsSource(ObjectProvider<ScheduledTaskHolder> holders) {
         return new InsightsSource(
-                "scheduledtasks",
+                ActuatorParsedData.SCHEDULEDTASKS,
                 () -> new ScheduledTasksEndpoint(holders.orderedStream().toList()).scheduledTasks());
     }
 
@@ -154,7 +156,7 @@ public class ActuatorSourcesAutoConfiguration {
         @ConditionalOnMissingBean(name = "flywayInsightsSource")
         InsightsSource flywayInsightsSource(ApplicationContext context, ConfigurableListableBeanFactory beanFactory) {
             return new InsightsSource(
-                    "flyway",
+                    ActuatorParsedData.FLYWAY,
                     () -> hasApplicationBean(beanFactory, Flyway.class)
                             ? new FlywayEndpoint(context).flywayBeans()
                             : null);
@@ -171,7 +173,7 @@ public class ActuatorSourcesAutoConfiguration {
         InsightsSource liquibaseInsightsSource(
                 ApplicationContext context, ConfigurableListableBeanFactory beanFactory) {
             return new InsightsSource(
-                    "liquibase",
+                    ActuatorParsedData.LIQUIBASE,
                     () -> hasApplicationBean(beanFactory, SpringLiquibase.class)
                             ? new LiquibaseEndpoint(context).liquibaseBeans()
                             : null);

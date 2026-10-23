@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * (health without the actuator's health endpoint, flyway or liquibase without its
  * migration bean) reports that it has nothing rather than failing.
  *
- * @param id an {@code ActuatorParsedData} component name: spring, health, info, env,
- *     loggers, flyway, liquibase, configprops or scheduledtasks
+ * @param id one of the section ids declared on
+ *     {@link org.peekaboot.backend.actuator.parsed.ActuatorParsedData}
  */
 public record InsightsSource(String id, Supplier<@Nullable Object> read) {}

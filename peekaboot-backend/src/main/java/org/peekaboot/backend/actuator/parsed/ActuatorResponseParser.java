@@ -37,15 +37,15 @@ public class ActuatorResponseParser {
 
     public ActuatorParsedData parse(Map<String, Object> rawData) {
         return new ActuatorParsedData(
-                section(rawData, "spring", SpringInfo.class),
-                section(rawData, "health", HealthResponse.class),
-                section(rawData, "info", InfoResponse.class),
-                section(rawData, "env", EnvResponse.class),
-                section(rawData, "loggers", LoggersResponse.class),
-                section(rawData, "flyway", FlywayResponse.class),
-                section(rawData, "liquibase", LiquibaseResponse.class),
-                section(rawData, "configprops", ConfigPropsResponse.class),
-                section(rawData, "scheduledtasks", ScheduledTasksResponse.class));
+                section(rawData, ActuatorParsedData.SPRING, SpringInfo.class),
+                section(rawData, ActuatorParsedData.HEALTH, HealthResponse.class),
+                section(rawData, ActuatorParsedData.INFO, InfoResponse.class),
+                section(rawData, ActuatorParsedData.ENV, EnvResponse.class),
+                section(rawData, ActuatorParsedData.LOGGERS, LoggersResponse.class),
+                section(rawData, ActuatorParsedData.FLYWAY, FlywayResponse.class),
+                section(rawData, ActuatorParsedData.LIQUIBASE, LiquibaseResponse.class),
+                section(rawData, ActuatorParsedData.CONFIGPROPS, ConfigPropsResponse.class),
+                section(rawData, ActuatorParsedData.SCHEDULEDTASKS, ScheduledTasksResponse.class));
     }
 
     private <T> T section(Map<String, Object> rawData, String id, Class<T> type) {

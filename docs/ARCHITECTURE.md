@@ -411,7 +411,8 @@ record and `InsightsController`'s 400 body included, both under that package pre
 
 Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` holds a
 list of `InsightsSource` beans, one per source id (`spring`, `health`, `info`,
-`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`, `liquibase`). Each is a record
+`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`, `liquibase`, declared once as
+constants on `ActuatorParsedData`). Each is a record
 pairing that id with a `Supplier`. Seven of them read an endpoint object
 `ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
 `HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is
