@@ -29,12 +29,6 @@
     </properties>
 
     <build>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>false</filtering>
-            </resource>
-        </resources>
         <plugins>
             <!-- No Java sources, so javadoc:jar produces nothing - and Central requires a
                  -javadoc jar for every jar component. Package the empty javadoc output
