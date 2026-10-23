@@ -392,11 +392,11 @@ function renderHealthBanner(container, health, locale) {
     statusContainer.appendChild(pill);
 
     // classList, not className - a full reassignment would also wipe out the base
-    // classes (pk-health, pk-health__dot) the static markup put on both elements.
-    dot.classList.remove('pk-health__dot--down', 'pk-health__dot--unknown');
+    // classes (pk-health, pk-status-dot pk-health__dot) the static markup put on both elements.
+    dot.classList.remove('pk-status-dot--down', 'pk-status-dot--unknown');
     banner.classList.remove('pk-health--down', 'pk-health--unknown');
     if (modifier) {
-        dot.classList.add(`pk-health__dot--${modifier}`);
+        dot.classList.add(`pk-status-dot--${modifier}`);
         banner.classList.add(`pk-health--${modifier}`);
     }
 
@@ -423,7 +423,7 @@ function renderHealthComponents(container, components) {
 
     components.forEach(component => {
         const modifier = healthModifier(healthSeverity(component.status || 'UNKNOWN'));
-        const dotClass = 'pk-component-grid__dot' + (modifier ? ` pk-component-grid__dot--${modifier}` : '');
+        const dotClass = 'pk-status-dot' + (modifier ? ` pk-status-dot--${modifier}` : '');
         const detailsText = Object.entries(component.details || {})
             .filter(([, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
             .map(([k, v]) => {

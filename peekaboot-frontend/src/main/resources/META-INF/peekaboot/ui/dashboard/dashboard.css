@@ -212,15 +212,13 @@
    match the warning text they sit beside. */
 .pk-health--unknown { border-left-color: var(--pk-warning-text); }
 .pk-health__status { display: flex; align-items: center; gap: var(--pk-space-sm); }
-.pk-health__dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--pk-success);
-    animation: pk-pulse 2s ease-in-out infinite;
-}
-.pk-health__dot--down { background: var(--pk-danger); animation: none; }
-.pk-health__dot--unknown { background: var(--pk-warning-text); animation: none; }
+/* A health status as a dot (overview.js's healthModifier): UP by default, --down, --unknown. */
+.pk-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pk-success); }
+.pk-status-dot--down { background: var(--pk-danger); }
+.pk-status-dot--unknown { background: var(--pk-warning-text); }
+/* The banner's dot is larger, and pulses while the application is UP. */
+.pk-health__dot { width: 12px; height: 12px; animation: pk-pulse 2s ease-in-out infinite; }
+.pk-health__dot.pk-status-dot--down, .pk-health__dot.pk-status-dot--unknown { animation: none; }
 @keyframes pk-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
@@ -243,9 +241,6 @@
 .pk-component-grid__card { padding: var(--pk-space-md); background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 .pk-component-grid__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--pk-space-xs); }
 .pk-component-grid__name { font-weight: 600; font-size: var(--pk-text-sm); color: var(--pk-text-strong); }
-.pk-component-grid__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pk-success); }
-.pk-component-grid__dot--down { background: var(--pk-danger); }
-.pk-component-grid__dot--unknown { background: var(--pk-warning-text); }
 .pk-component-grid__details { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); overflow-wrap: anywhere; white-space: pre-line; }
 
 /* DataSources */
