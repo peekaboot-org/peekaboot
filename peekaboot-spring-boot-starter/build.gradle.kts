@@ -6,7 +6,7 @@ plugins {
 
 description = "Peekaboot Spring Boot Starter - Dependency aggregator for easy integration"
 
-val datasourceMicrometerVersion = providers.gradleProperty("datasourceMicrometerVersion").get()
+val datasourceMicrometerVersion = pomProperty("datasource-micrometer.version")
 
 // No sources - the jar is deliberately empty, exactly like the Maven artifact.
 dependencies {

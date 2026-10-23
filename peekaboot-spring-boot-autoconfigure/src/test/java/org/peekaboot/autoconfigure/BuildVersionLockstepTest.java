@@ -27,21 +27,19 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.boot.SpringBootVersion;
 
 /**
  * Build metadata both build systems need is declared once, in the poms, because
  * {@code maven-release-plugin} rewrites the poms on every release and knows nothing about the
- * Gradle build. A second copy on the Gradle side goes stale the moment a release runs, and
- * nothing notices, because each build is internally consistent and CI builds Gradle only on
+ * Gradle build, and Dependabot bumps a pom alone. The Gradle build reads the module version and
+ * every pom property out of the poms. A second copy on the Gradle side would go stale behind a
+ * green build, because each build is internally consistent and CI builds Gradle only on
  * Dependabot branches.
  *
- * <p>Every value a Gradle script cannot read out of a pom is written on both sides instead:
- * the Spring Boot line, the static-analysis tool versions, the coverage floors, the library
- * versions both builds declare, the frontend gate's Node version and install command, the
- * compiler release level and the IT thread count. Dependabot bumps the two ecosystems in
- * separate pull requests, so any of them can move on one side alone. Each is guarded here by
- * comparing the two declarations, which fails the Maven build every branch runs.
+ * <p>A value with no pom property behind it is written on both sides instead: the
+ * static-analysis tool versions spelled inside plugin configuration, the slf4j-api override, the
+ * library versions both builds declare inline, and the frontend gate's install command. Each is
+ * guarded here by comparing the two declarations, which fails the Maven build every branch runs.
  *
  * <p>The testing-app pom does not inherit {@code peekaboot-parent}, so it repeats the build
  * instant, the JaCoCo, PMD and Surefire versions, the compiler release level and the Spring Boot
@@ -58,19 +56,11 @@ class BuildVersionLockstepTest {
 
     @Test
     @Timeout(10)
-    void gradleBuildsAgainstTheSameSpringBootVersionAsMaven() throws IOException {
-        assertThat(gradleProperties().getProperty("springBootVersion"))
-                .as("springBootVersion in gradle.properties must match the Boot version Maven resolves")
-                .isEqualTo(SpringBootVersion.getVersion());
-    }
-
-    @Test
-    @Timeout(10)
-    void gradleTakesTheModuleVersionFromThePomsRatherThanFromItsOwnCopy() throws IOException {
-        assertThat(gradleProperties().getProperty("version"))
-                .as("settings.gradle.kts reads the version from pom.xml; a copy in gradle.properties "
-                        + "goes stale at the next release:prepare, which rewrites the poms alone")
-                .isNull();
+    void gradlePropertiesHoldsGradleSettingsAlone() throws IOException {
+        assertThat(gradleProperties().stringPropertyNames())
+                .as("settings.gradle.kts reads the version and the pom properties out of the poms; a copy "
+                        + "in gradle.properties goes stale at the next release:prepare or Maven-only bump")
+                .allMatch(name -> name.startsWith("org.gradle."));
     }
 
     @Test
@@ -168,7 +158,7 @@ class BuildVersionLockstepTest {
     }
 
     /**
-     * Each row is one value the Gradle build cannot read out of a pom, so it spells it out
+     * Each row is one value with no pom property behind it, so the Gradle build spells it out
      * itself. Maven is the system of record; a row fails the moment the two spellings differ.
      */
     @ParameterizedTest(name = "{0}")
@@ -227,8 +217,6 @@ class BuildVersionLockstepTest {
         Path root = reactorRoot();
         Path pom = root.resolve("pom.xml");
         Path conventions = root.resolve("buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts");
-        Path coveragePom = root.resolve("peekaboot-coverage/pom.xml");
-        Path coverageScript = root.resolve("peekaboot-coverage/build.gradle.kts");
         Path appPom = root.resolve("peekaboot-testing-app/pom.xml");
         Path appScript = root.resolve("peekaboot-testing-app/build.gradle.kts");
         Path frontendPom = root.resolve("peekaboot-frontend/pom.xml");
@@ -255,48 +243,6 @@ class BuildVersionLockstepTest {
                         conventions,
                         "checkstyle \\{\\s*toolVersion = \"([^\"]+)\""),
                 row(
-                        "PMD",
-                        pom,
-                        "<pmd.version>([^<]+)</pmd.version>",
-                        conventions,
-                        "pmd \\{\\s*toolVersion = \"([^\"]+)\""),
-                row(
-                        "JaCoCo",
-                        pom,
-                        "<jacoco.version>([^<]+)</jacoco.version>",
-                        conventions,
-                        "jacoco \\{\\s*toolVersion = \"([^\"]+)\""),
-                row(
-                        "JaCoCo in the coverage module",
-                        pom,
-                        "<jacoco.version>([^<]+)</jacoco.version>",
-                        coverageScript,
-                        "jacoco \\{\\s*toolVersion = \"([^\"]+)\""),
-                row(
-                        "the compiler release level",
-                        pom,
-                        "<peekaboot.java.version>([^<]+)</peekaboot.java.version>",
-                        conventions,
-                        "options.release = (\\d+)"),
-                row(
-                        "the line-coverage floor",
-                        coveragePom,
-                        "<jacoco.min.line>([^<]+)</jacoco.min.line>",
-                        coverageScript,
-                        "counter = \"LINE\"[\\s\\S]*?minimum = \"([^\"]+)\""),
-                row(
-                        "the branch-coverage floor",
-                        coveragePom,
-                        "<jacoco.min.branch>([^<]+)</jacoco.min.branch>",
-                        coverageScript,
-                        "counter = \"BRANCH\"[\\s\\S]*?minimum = \"([^\"]+)\""),
-                row(
-                        "Playwright",
-                        appPom,
-                        "<playwright.version>([^<]+)</playwright.version>",
-                        appScript,
-                        "playwright:playwright:([^\"]+)\""),
-                row(
                         "axe-core",
                         appPom,
                         "axe-core</groupId>\\s*<artifactId>playwright</artifactId>\\s*<version>([^<]+)</version>",
@@ -315,12 +261,6 @@ class BuildVersionLockstepTest {
                         appScript,
                         "datasource-proxy-spring-boot-starter:([^\"]+)\""),
                 row(
-                        "datasource-micrometer",
-                        pom,
-                        "<datasource-micrometer.version>([^<]+)</datasource-micrometer.version>",
-                        root.resolve("gradle.properties"),
-                        "datasourceMicrometerVersion=(.+)"),
-                row(
                         "jdbc-url-parser",
                         backendPom,
                         "<artifactId>jdbc-url-parser</artifactId>\\s*<version>([^<]+)</version>",
@@ -338,18 +278,6 @@ class BuildVersionLockstepTest {
                         "<artifactId>slf4j-api</artifactId>\\s*<version>([^<]+)</version>",
                         conventions,
                         "slf4j-api:([^\"]+)\""),
-                row(
-                        "the IT thread count",
-                        appPom,
-                        "<peekaboot.it.threads>([^<]+)</peekaboot.it.threads>",
-                        root.resolve("gradle.properties"),
-                        "peekaboot.it.threads=(.+)"),
-                row(
-                        "the pinned Node runtime",
-                        frontendPom,
-                        "<peekaboot.node.version>([^<]+)</peekaboot.node.version>",
-                        frontendScript,
-                        "node \\{[\\s\\S]*?version = \"([^\"]+)\""),
                 // A Gradle side that drifted back to npm's default `install` would stay green while
                 // resolving outside the lockfile, and could lint on different tool versions than CI.
                 row(

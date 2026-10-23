@@ -1,4 +1,5 @@
-import java.util.Properties
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.xpath.XPathFactory
 
 // Hosts the peekaboot.java-conventions precompiled script plugin - the Gradle
 // equivalent of peekaboot-parent's shared build configuration. Third-party plugin
@@ -12,12 +13,13 @@ repositories {
     gradlePluginPortal()
 }
 
-// The Spring Boot line is declared once, in the root gradle.properties, for both the
-// plugin here and the BOM the convention plugin imports. buildSrc is a build of its own
-// and does not inherit that file, so read it directly.
-val springBootVersion = Properties()
-    .apply { rootDir.parentFile.resolve("gradle.properties").inputStream().use { load(it) } }
-    .getProperty("springBootVersion")
+// The Spring Boot line is the root pom's spring-boot.version, for both the plugin here and
+// the BOM the convention plugin imports. buildSrc is a build of its own and does not see
+// what settings.gradle.kts reads, so read the pom directly.
+val springBootVersion: String = XPathFactory.newInstance().newXPath().evaluate(
+    "/project/properties/spring-boot.version",
+    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(rootDir.parentFile.resolve("pom.xml")),
+).trim().ifEmpty { throw GradleException("The root pom declares no <spring-boot.version>") }
 
 dependencies {
     implementation("com.diffplug.spotless:spotless-plugin-gradle:8.10.4")

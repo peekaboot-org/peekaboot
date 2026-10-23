@@ -4,7 +4,7 @@ plugins {
 
 description = "Peekaboot Backend - Spring Boot controllers, services, and lifecycle listeners"
 
-val datasourceMicrometerVersion = providers.gradleProperty("datasourceMicrometerVersion").get()
+val datasourceMicrometerVersion = pomProperty("datasource-micrometer.version")
 
 dependencies {
     api("org.springframework.boot:spring-boot")

@@ -11,7 +11,7 @@ description = "Peekaboot Testing App - sample application for manual and automat
 // reactor"). Gradle has no counterpart to a Maven parent, so this module simply shares
 // the conventions.
 
-val springBootVersion = providers.gradleProperty("springBootVersion").get()
+val springBootVersion = pomProperty("spring-boot.version")
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -52,7 +52,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-mysql")
     // shared test support (LogCapture, IntentionalLogFilter)
     testImplementation(project(":peekaboot-test-support"))
-    testImplementation("com.microsoft.playwright:playwright:1.63.0")
+    testImplementation("com.microsoft.playwright:playwright:${pomProperty("playwright.version")}")
     // the axe-core rule engine, in lockstep with pom.xml
     testImplementation("com.deque.html.axe-core:playwright:4.13.0")
 }
@@ -68,8 +68,7 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-parameters")
 }
 
-// project.build.outputTimestamp, read from the poms by settings.gradle.kts.
-val outputTimestamp = extra["outputTimestamp"] as String
+val outputTimestamp = pomProperty("project.build.outputTimestamp")
 
 springBoot {
     // Fixed build.time (the same instant Maven stamps), so the boot jar is byte-identical
@@ -103,11 +102,11 @@ gitProperties {
     )
 }
 
-// The *IT suite runs concurrent test classes in one JVM; same knobs and defaults as the
-// Maven build (peekaboot.it.threads in gradle.properties, 1 serializes for debugging).
+// The *IT suite runs concurrent test classes in one JVM; same knobs as the Maven build, with
+// the pom's defaults (-Ppeekaboot.it.threads=1 serializes for debugging).
 tasks.named<Test>("integrationTest") {
-    val threads = providers.gradleProperty("peekaboot.it.threads").getOrElse("2")
-    val browser = providers.gradleProperty("peekaboot.it.browser").getOrElse("chromium")
+    val threads = providers.gradleProperty("peekaboot.it.threads").getOrElse(pomProperty("peekaboot.it.threads"))
+    val browser = providers.gradleProperty("peekaboot.it.browser").getOrElse(pomProperty("peekaboot.it.browser"))
     systemProperty("peekaboot.it.browser", browser)
     // Same split as the Maven per-engine profiles: only Chromium runs the tests whose
     // subject is Chromium's own behaviour.

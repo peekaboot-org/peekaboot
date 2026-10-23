@@ -15,7 +15,7 @@ Gradle build must be kept in lockstep.
 
 | | |
 | --- | --- |
-| JDK | **25**. `maven.compiler.release=25` / Gradle `options.release = 25`, no toolchains, no fallback |
+| JDK | **25**, the root pom's `peekaboot.java.version`, which both builds compile against. No toolchains, no fallback |
 | Maven / Gradle | The checked-in wrappers. Each fetches its own build tool at the version and SHA-256 pinned in `.mvn/wrapper/maven-wrapper.properties` and `gradle/wrapper/gradle-wrapper.properties`. A local Maven 3.9+ works the same |
 | Docker | Only for running the sample app and for `ScreenshotCapture`. Not needed by `mvn verify` |
 | Network | First run only: the wrappers fetch their build tool, and Playwright fetches Chromium into `~/.cache/ms-playwright` |
@@ -129,10 +129,10 @@ third-party version clash would buy nothing but two permanent exclusions.
 
 ## The parallel Gradle build
 
-`settings.gradle.kts` mirrors the reactor module for module. `./gradlew build` is the
+`settings.gradle.kts` includes the modules the root pom lists. `./gradlew build` is the
 `mvn clean verify` equivalent. It runs unit tests (`test`, `*Test` and `*Tests`) and
-integration tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, via
-`peekaboot.it.threads` in `gradle.properties`). It runs the static-analysis gates at the
+integration tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, with
+the testing-app pom's `peekaboot.it.threads` unless `-Ppeekaboot.it.threads=N` overrides it). It runs the static-analysis gates at the
 same tool versions, reading the same `config/` files, plus the reactor-wide coverage gate
 (`:peekaboot-coverage:coverageGate`, the same 90%/75% floors on merged execution data).
 `./gradlew test` is the fast gate, `./gradlew assemble` just builds the jars.
@@ -146,39 +146,36 @@ no Gradle equivalent; the module simply shares the conventions.
 
 ### Lockstep
 
-The module version and the build instant are *derived*, not copied. `settings.gradle.kts`
-reads `<version>` and `project.build.outputTimestamp` out of the root `pom.xml` and hands
-both to every Gradle project. `maven-release-plugin` rewrites the poms alone, so a
-hand-kept copy on the Gradle side went stale at every release and nothing noticed, because
-CI builds Gradle only on Dependabot branches. `BuildVersionLockstepTest`
-fails if such a copy reappears.
+The Gradle build copies nothing the poms declare. `settings.gradle.kts` reads the module
+list, the module `<version>` and every `<properties>` entry out of the root pom and each
+module's pom, a module's own properties over the root pom's. Scripts read one with
+`pomProperty("...")` from `buildSrc/src/main/kotlin/PomProperties.kt`; `buildSrc`, a build of
+its own, reads `spring-boot.version` for the Boot plugin directly. So the Spring Boot line,
+datasource-micrometer, JaCoCo, PMD, the compiler release level, the coverage floors, the Node
+pin, Playwright, the IT defaults and the build instant each live in one pom. Mockito's agent
+jar takes its version from the Boot BOM, as Maven does. `maven-release-plugin` rewrites the
+poms alone and Dependabot bumps a pom property alone, so a copy on the Gradle side would go
+stale behind a green build, because CI builds Gradle only on Dependabot branches.
+`BuildVersionLockstepTest` fails if `gradle.properties` holds anything but Gradle's own
+settings, or if a Gradle script pins a build instant of its own.
 
-`gradle.properties` holds `springBootVersion`, matching the root
-pom's `spring-boot.version` and the testing-app's parent version. The convention plugin
-turns it into the BOM import every module gets, and `buildSrc` reads it for the Boot
-plugin. The same test compares it against the version Maven resolves, because Dependabot
-cannot group the two ecosystems into one pull request. Mockito's agent jar takes its
-version from that BOM, as Maven does.
-
-Every other shared literal is written on both sides and has to change on both: Error
-Prone, palantir, Checkstyle, SpotBugs, Spotless, JaCoCo, PMD, the coverage floors,
-datasource-micrometer (`datasourceMicrometerVersion` in `gradle.properties`), jdbc-url-parser,
-cron-utils, the root pom's slf4j-api override (a constraint in the convention plugin), the
-testing-app's direct dependencies (springdoc, datasource-proxy, Playwright and
-axe-core), the compiler release level, the IT thread count, and the frontend gate's two: the
-pinned Node version and `npm ci`. `BuildVersionLockstepTest` compares every pair, JaCoCo's
-second Gradle declaration in `peekaboot-coverage` included. SpotBugs and Spotless compare
-through a mapping, because one side names a plugin whose version is not the tool's. The
+A value with no pom property behind it is written on both sides and has to change on both:
+Error Prone, palantir, Checkstyle, SpotBugs and Spotless, all spelled inside plugin
+configuration, the root pom's slf4j-api override (a constraint in the convention plugin),
+jdbc-url-parser, cron-utils, the testing-app's springdoc, datasource-proxy and axe-core, and
+the frontend gate's `npm ci`. `BuildVersionLockstepTest` compares every pair. SpotBugs and
+Spotless compare through a mapping, because one side names a plugin whose version is not the
+tool's. The
 frontend's *lint tool* versions are not on that list. They live once in
 `peekaboot-frontend/package.json`, which both builds install from, so there is nothing to
 drift.
 
 The Maven job runs `BuildVersionLockstepTest` on every branch, so a bump on one side alone goes
-red and waits for a human. How the other side moves depends on how Gradle declares the value.
-A library declared as a dependency coordinate on both sides (datasource-micrometer, springdoc,
-datasource-proxy, jdbc-url-parser, cron-utils, Playwright, axe-core) gets a `gradle` PR next
-to the `maven` one, and the human lands the two together. A tool Gradle pins through
-`toolVersion`, `palantirJavaFormat(...)` or the Node `version =` has no Gradle PR, because
+red and waits for a human. A pom property needs no Gradle edit at all. For the rest, how the
+other side moves depends on how Gradle declares the value. A library declared as a dependency
+coordinate on both sides (springdoc, datasource-proxy, jdbc-url-parser, cron-utils, axe-core)
+gets a `gradle` PR next to the `maven` one, and the human lands the two together. A tool Gradle
+pins through `toolVersion` or `palantirJavaFormat(...)` has no Gradle PR, because
 Dependabot's `gradle` ecosystem bumps dependency coordinates only. The Maven PR goes red alone,
 and the human adds the Gradle edit on that branch. On every `dependabot/*` branch
 `build-on-push` adds a `gradle-build` job next to the Maven job, so that Gradle edit builds
@@ -245,8 +242,9 @@ worth having on both sides.
 | Optional-dependency leaks | `validate` | `maven-enforcer-plugin` | inline in `peekaboot-spring-boot-starter/pom.xml` | the starter's transitive closure |
 | Configuration metadata present | `process-classes` | `maven-enforcer-plugin` | inline in `peekaboot-backend/pom.xml` | `peekaboot-backend/target/classes` |
 
-Each gate's plugin and tool version is pinned in the root `pom.xml`, and again in
-`buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` for the Gradle build. The
+Each gate's plugin and tool version is pinned in the root `pom.xml`. The Gradle build reads
+the ones declared as properties and spells the rest out again in
+`buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` (see [Lockstep](#lockstep)). The
 frontend gate is the exception on both counts: it is declared in `peekaboot-frontend`'s own
 POM and build script, because the root `<plugins>` block reaches modules that have no
 `package.json` for `npm ci` to read, and its tool versions live in that module's

@@ -1,17 +1,9 @@
+import java.util.Properties
 import org.w3c.dom.Element
 import javax.xml.parsers.DocumentBuilderFactory
 
-// Parallel build system to the Maven reactor (see BUILD.md) - the module set and
-// their artifactIds must stay in lockstep with the root pom.xml.
+// Parallel build system to the Maven reactor (see BUILD.md), which is its system of record.
 rootProject.name = "peekaboot"
-
-include("peekaboot-test-support")
-include("peekaboot-backend")
-include("peekaboot-frontend")
-include("peekaboot-spring-boot-autoconfigure")
-include("peekaboot-spring-boot-starter")
-include("peekaboot-testing-app")
-include("peekaboot-coverage")
 
 dependencyResolutionManagement {
     repositories {
@@ -19,31 +11,47 @@ dependencyResolutionManagement {
     }
 }
 
-// The poms are the system of record for the module version and the build instant:
-// maven-release-plugin rewrites both on every release and never touches this build, so a
-// hand-kept copy here would go stale the moment a release runs. BuildVersionLockstepTest
-// fails if one reappears.
-val pom: Element = DocumentBuilderFactory.newInstance()
+// The module list, the module version and every pom property come out of the poms rather
+// than out of a copy here. maven-release-plugin rewrites the version and the build instant
+// and never touches this build, and Dependabot bumps a pom property without a Gradle twin,
+// so a hand-kept copy would go stale behind a green Gradle build.
+fun pomOf(directory: File): Element = DocumentBuilderFactory.newInstance()
     .newDocumentBuilder()
-    .parse(rootDir.resolve("pom.xml"))
+    .parse(directory.resolve("pom.xml"))
     .documentElement
 
-fun childElement(parent: Element, name: String): Element {
+fun childElements(parent: Element, name: String): List<Element> {
     val children = parent.childNodes
-    for (index in 0 until children.length) {
-        val child = children.item(index)
-        if (child is Element && child.tagName == name) {
-            return child
-        }
-    }
-    throw GradleException("pom.xml has no <$name> under <${parent.tagName}>")
+    return (0 until children.length)
+        .map { children.item(it) }
+        .filterIsInstance<Element>()
+        .filter { name == "*" || it.tagName == name }
 }
 
-val pomVersion = childElement(pom, "version").textContent.trim()
-val pomOutputTimestamp =
-    childElement(childElement(pom, "properties"), "project.build.outputTimestamp").textContent.trim()
+fun childElement(parent: Element, name: String): Element =
+    childElements(parent, name).singleOrNull()
+        ?: throw GradleException("pom.xml has no single <$name> under <${parent.tagName}>")
 
+fun propertiesOf(pom: Element): Map<String, String> =
+    childElements(pom, "properties")
+        .flatMap { childElements(it, "*") }
+        .associate { it.tagName to it.textContent.trim() }
+
+val rootPom = pomOf(rootDir)
+val pomVersion = childElement(rootPom, "version").textContent.trim()
+val rootPomProperties = propertiesOf(rootPom)
+
+childElements(childElement(rootPom, "modules"), "module").forEach { include(it.textContent.trim()) }
+
+// Each project sees its own pom's properties over the root pom's, the way a Maven module
+// inherits them; BuildVersionLockstepTest holds the testing-app's copies of root values
+// equal. Read through pomProperty in buildSrc.
 gradle.beforeProject {
     version = pomVersion
-    extra["outputTimestamp"] = pomOutputTimestamp
+    extra["pomProperties"] = Properties().apply {
+        putAll(rootPomProperties)
+        if (projectDir != rootDir) {
+            putAll(propertiesOf(pomOf(projectDir)))
+        }
+    }
 }

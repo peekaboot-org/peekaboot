@@ -24,9 +24,8 @@ repositories {
 // record (BUILD.md, Lockstep).
 
 node {
-    // Same pin as <peekaboot.node.version>; frontend-maven-plugin spells it "v24.21.0",
-    // this plugin wants it bare. BuildVersionLockstepTest compares the two.
-    version = "24.21.0"
+    // The pom's <peekaboot.node.version>, bare: frontend-maven-plugin is the one that wants the "v".
+    version = pomProperty("peekaboot.node.version")
     download = true
     // Default is "install", which would rewrite package-lock.json from inside a build.
     npmInstallCommand = "ci"

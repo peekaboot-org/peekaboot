@@ -6,11 +6,11 @@ plugins {
 description = "Peekaboot Coverage - reactor-wide coverage report and the coverage gate"
 
 jacoco {
-    toolVersion = "0.8.15"
+    toolVersion = pomProperty("jacoco.version")
 }
 
 /*
- * Same gate as the Maven module: line >= 0.90 and branch >= 0.75 over every published
+ * Same gate as the Maven module, at the floors its pom declares, over every published
  * class, measured on the merged execution data of the whole reactor. Gradle can point
  * the verification straight at the sibling modules' class directories, so the Maven
  * module's unpack-the-jars workaround is not needed here. The floors catch a
@@ -48,12 +48,12 @@ val coverageGate = tasks.register<JacocoCoverageVerification>("coverageGate") {
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.90".toBigDecimal()
+                minimum = pomProperty("jacoco.min.line").toBigDecimal()
             }
             limit {
                 counter = "BRANCH"
                 value = "COVEREDRATIO"
-                minimum = "0.75".toBigDecimal()
+                minimum = pomProperty("jacoco.min.branch").toBigDecimal()
             }
         }
     }

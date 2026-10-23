@@ -4,7 +4,7 @@ plugins {
 
 description = "Peekaboot Auto-configuration - Spring Boot auto-configuration"
 
-val datasourceMicrometerVersion = providers.gradleProperty("datasourceMicrometerVersion").get()
+val datasourceMicrometerVersion = pomProperty("datasource-micrometer.version")
 
 dependencies {
     api(project(":peekaboot-backend"))

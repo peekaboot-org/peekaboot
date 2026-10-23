@@ -2,12 +2,12 @@ import net.ltgt.gradle.errorprone.errorprone
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 
 /*
- * The Gradle counterpart of peekaboot-parent: compiler setup (release 25, Error Prone,
- * configuration-processor-friendly), the four static-analysis gates at `check`, JaCoCo,
+ * The Gradle counterpart of peekaboot-parent: compiler setup (the pom's release level, Error
+ * Prone, configuration-processor-friendly), the four static-analysis gates at `check`, JaCoCo,
  * reproducible archives, and the unit/IT lifecycle split (`test` runs *Test and *Tests,
- * `integrationTest` runs *IT and hangs off `check`). Tool versions and config file
- * locations must stay in lockstep with the Maven build - Maven is the system of record;
- * the Gradle build mirrors it.
+ * `integrationTest` runs *IT and hangs off `check`). Maven is the system of record: tool
+ * versions it declares as pom properties are read from there, the rest and the config file
+ * locations must stay in lockstep with it.
  */
 plugins {
     `java-library`
@@ -20,8 +20,9 @@ plugins {
 }
 
 group = "org.peekaboot"
-// version comes from the poms via settings.gradle.kts; the Spring Boot line is read below.
-val springBootVersion = providers.gradleProperty("springBootVersion").get()
+// version comes from the poms via settings.gradle.kts, and so does every other value the
+// poms declare as a property.
+val springBootVersion = pomProperty("spring-boot.version")
 
 java {
     withSourcesJar()
@@ -41,7 +42,7 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 }
 
 tasks.withType<JavaCompile>().configureEach {
-    options.release = 25
+    options.release = pomProperty("peekaboot.java.version").toInt()
     options.encoding = "UTF-8"
     // Error Prone reports its findings as warnings; this is what makes it a gate.
     options.compilerArgs.add("-Werror")
@@ -119,7 +120,7 @@ tasks.check {
 }
 
 jacoco {
-    toolVersion = "0.8.15"
+    toolVersion = pomProperty("jacoco.version")
 }
 
 checkstyle {
@@ -128,7 +129,7 @@ checkstyle {
 }
 
 pmd {
-    toolVersion = "7.28.0"
+    toolVersion = pomProperty("pmd.version")
     ruleSets = listOf() // the built-in default ruleset must not leak in beside ours
     ruleSetFiles = files(rootProject.file("config/pmd-ruleset.xml"))
 }

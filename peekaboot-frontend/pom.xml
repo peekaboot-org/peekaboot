@@ -16,9 +16,8 @@
     <properties>
         <!-- The Node the build downloads, never the machine's: a system install gives a
              different minor version on every host, and "passes here, fails there" is worse
-             than no gate. The same literal appears in build.gradle.kts, which wants it
-             without the "v" - BuildVersionLockstepTest compares the two. No ecosystem
-             watches a Node pin, so this one moves by hand. -->
+             than no gate. build.gradle.kts reads this property too. No ecosystem watches
+             a Node pin, so this one moves by hand. -->
         <peekaboot.node.version>24.21.0</peekaboot.node.version>
         <!-- The one switch that turns the frontend lint gate off, in the shape of the root
              POM's jacoco.skip. The plugin's own skip.npm/skip.installnodenpm cannot be used
