@@ -84,9 +84,7 @@ public final class DbSpans {
     }
 
     private static boolean isQuery(Span.Kind kind, Map<String, String> tags) {
-        return kind == Span.Kind.CLIENT
-                && tags != null
-                && tags.keySet().stream().anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
+        return kind == Span.Kind.CLIENT && tags != null && Tags.anyKeyStartsWith(tags, "db.", "jdbc.query");
     }
 
     /**

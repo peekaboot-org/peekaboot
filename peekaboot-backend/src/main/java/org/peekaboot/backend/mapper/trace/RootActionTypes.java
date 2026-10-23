@@ -31,7 +31,7 @@ public final class RootActionTypes {
         // producer root span carries the same tags as a consumer. Only CONSUMER kind
         // states the direction outright; PRODUCER states the opposite, so it must not
         // fall into the tag arm below.
-        if (kind == Span.Kind.CONSUMER || (kind != Span.Kind.PRODUCER && hasTagPrefix(tags, "messaging."))) {
+        if (kind == Span.Kind.CONSUMER || (kind != Span.Kind.PRODUCER && Tags.anyKeyStartsWith(tags, "messaging."))) {
             return RootActionType.MESSAGE_CONSUMER;
         }
         if (kind == Span.Kind.SERVER) {
@@ -68,7 +68,7 @@ public final class RootActionTypes {
         }
         // CLIENT-kind, not merely db.* tagged: only the client side of a query is a span
         // Peekaboot ever sees, so any other kind carrying db.* is not a database action.
-        if (kind == Span.Kind.CLIENT && hasTagPrefix(tags, "db.")) {
+        if (kind == Span.Kind.CLIENT && Tags.anyKeyStartsWith(tags, "db.")) {
             return RootActionType.DATABASE;
         }
         // datasource-micrometer's connection observation as the root: a pooled connection
@@ -86,7 +86,7 @@ public final class RootActionTypes {
         if (kind == Span.Kind.CLIENT
                 && parentId == null
                 && "connection".equals(name)
-                && hasTagPrefix(tags, "jdbc.datasource.")) {
+                && Tags.anyKeyStartsWith(tags, "jdbc.datasource.")) {
             return RootActionType.MAINTENANCE;
         }
         return RootActionType.UNKNOWN;
@@ -102,7 +102,7 @@ public final class RootActionTypes {
         if (HttpSpanTags.describesHttpRequest(tags)) {
             return RootActionType.HTTP_REQUEST;
         }
-        if (hasTagPrefix(tags, "rpc.")) {
+        if (Tags.anyKeyStartsWith(tags, "rpc.")) {
             return RootActionType.RPC_CALL;
         }
         return RootActionType.HTTP_REQUEST;
@@ -114,10 +114,6 @@ public final class RootActionTypes {
                 && parentId == null
                 && "redis".equals(tags.get("db.system"))
                 && REDIS_UPKEEP_COMMANDS.contains(tags.getOrDefault("db.operation", ""));
-    }
-
-    private static boolean hasTagPrefix(Map<String, String> tags, String prefix) {
-        return tags.keySet().stream().anyMatch(k -> k.startsWith(prefix));
     }
 
     /**

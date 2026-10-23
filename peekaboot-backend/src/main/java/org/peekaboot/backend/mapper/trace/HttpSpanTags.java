@@ -51,8 +51,7 @@ public final class HttpSpanTags {
      * convention emits, which keeps an RPC span's bare {@code method} from counting.
      */
     public static boolean describesHttpRequest(Map<String, String> tags) {
-        return tags.keySet().stream().anyMatch(key -> key.startsWith("http."))
-                || (tags.containsKey("method") && tags.containsKey("uri"));
+        return Tags.anyKeyStartsWith(tags, "http.") || (tags.containsKey("method") && tags.containsKey("uri"));
     }
 
     private static String pathOf(String urlOrPath) {
