@@ -48,9 +48,7 @@ export function isAvailable(data, features) {
     return Boolean(features?.metrics);
 }
 
-export function render(container, data, context) {
-    tab.render(container, data, context);
-}
+export const {render} = tab;
 
 /** The "N / M metrics" readout beside the filter input, updated on every render. */
 function updateCount(container, {groups, filtered, query, context}) {

@@ -20,6 +20,4 @@ export function isAvailable(data) {
     return Boolean(data?.config?.groups?.length);
 }
 
-export function render(container, data, context) {
-    tab.render(container, data, context);
-}
+export const {render} = tab;

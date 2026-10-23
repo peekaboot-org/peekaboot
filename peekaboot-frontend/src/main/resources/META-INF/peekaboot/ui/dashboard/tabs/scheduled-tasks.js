@@ -43,9 +43,7 @@ export function isAvailable(data) {
     return Boolean(data?.scheduledTasks?.tasks?.length);
 }
 
-export function render(container, data, context) {
-    tab.render(container, data, context);
-}
+export const {render} = tab;
 
 function groupsByType(tasks) {
     if (!tasks) return [];

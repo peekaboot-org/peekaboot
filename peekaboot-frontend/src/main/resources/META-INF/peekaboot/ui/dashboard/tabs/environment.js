@@ -18,9 +18,7 @@ const tab = propertyGroupTab({
     emptyMessage: 'No environment properties available'
 });
 
-export function render(container, data, context) {
-    tab.render(container, data, context);
-}
+export const {render} = tab;
 
 function renderActiveProfiles(activeProfiles) {
     if (!activeProfiles || activeProfiles.length === 0) return null;

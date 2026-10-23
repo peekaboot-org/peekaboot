@@ -46,9 +46,7 @@ const tab = selfFetchingTab({
     }
 });
 
-export function render(container, data, context) {
-    tab.render(container, data, context);
-}
+export const {render} = tab;
 
 /**
  * The URL's 1-based page param as this module's 0-based page index; anything
