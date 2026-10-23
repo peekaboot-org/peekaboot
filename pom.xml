@@ -357,7 +357,6 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.16.0</version>
                 <configuration>
-                    <release>${maven.compiler.release}</release>
                     <!-- Explicit so a future removal of annotationProcessorPaths does not
                          silently stop the configuration processor: JDK 23+ runs classpath
                          annotation processors only when asked to. -->
