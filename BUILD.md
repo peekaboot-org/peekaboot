@@ -417,9 +417,7 @@ The workflows live under `.github/workflows/`. Both build workflows use the chec
 comment; Dependabot's `github-actions` updates move the pins. `osslabz/github-actions` is the
 exception, tracked by its moving `@v1` tag: SHA pinning defends against a third-party action
 being retagged under you, which does not apply to an action in an organisation of our own, and
-pinning it here would leave this repository the one consumer that never receives its fixes. The composite action below has its
-own `directory` entry in `dependabot.yml`, because `/` covers `.github/workflows` and a
-root `action.yml` only.
+pinning it here would leave this repository the one consumer that never receives its fixes.
 
 ### `.github/actions/prepare-build`
 
