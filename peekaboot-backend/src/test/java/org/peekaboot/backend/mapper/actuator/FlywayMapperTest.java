@@ -21,7 +21,7 @@ class FlywayMapperTest {
         return new FlywayResponse(Map.of(
                 "application",
                 new FlywayResponse.FlywayContext(
-                        Map.of("flyway", new FlywayResponse.FlywayBean(List.of(migrations))), null)));
+                        Map.of("flyway", new FlywayResponse.FlywayBean(List.of(migrations))))));
     }
 
     private static FlywayResponse.Migration migration(String description, String state, String version) {
@@ -108,9 +108,9 @@ class FlywayMapperTest {
     @Test
     void absentBeansAndMigrationsReadAsNoMigrations() {
         FlywayResponse flywayData = new FlywayResponse(Map.of(
-                "empty", new FlywayResponse.FlywayContext(null, null),
+                "empty", new FlywayResponse.FlywayContext(null),
                 "application",
-                        new FlywayResponse.FlywayContext(Map.of("flyway", new FlywayResponse.FlywayBean(null)), null)));
+                        new FlywayResponse.FlywayContext(Map.of("flyway", new FlywayResponse.FlywayBean(null)))));
 
         assertThat(mapper.map(flywayData).migrations()).isEmpty();
     }

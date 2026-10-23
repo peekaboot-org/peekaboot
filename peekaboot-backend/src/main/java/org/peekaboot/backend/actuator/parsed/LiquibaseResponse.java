@@ -11,7 +11,7 @@ public record LiquibaseResponse(Map<String, LiquibaseContext> contexts) {
         contexts = Absent.orEmpty(contexts);
     }
 
-    public record LiquibaseContext(Map<String, LiquibaseBean> liquibaseBeans, String parentId) {
+    public record LiquibaseContext(Map<String, LiquibaseBean> liquibaseBeans) {
         public LiquibaseContext {
             liquibaseBeans = Absent.orEmpty(liquibaseBeans);
         }

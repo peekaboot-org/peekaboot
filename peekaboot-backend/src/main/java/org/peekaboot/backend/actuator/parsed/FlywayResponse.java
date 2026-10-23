@@ -11,7 +11,7 @@ public record FlywayResponse(Map<String, FlywayContext> contexts) {
         contexts = Absent.orEmpty(contexts);
     }
 
-    public record FlywayContext(Map<String, FlywayBean> flywayBeans, String parentId) {
+    public record FlywayContext(Map<String, FlywayBean> flywayBeans) {
         public FlywayContext {
             flywayBeans = Absent.orEmpty(flywayBeans);
         }

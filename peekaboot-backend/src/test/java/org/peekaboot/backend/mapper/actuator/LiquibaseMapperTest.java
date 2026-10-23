@@ -21,7 +21,7 @@ class LiquibaseMapperTest {
         return new LiquibaseResponse(Map.of(
                 "application",
                 new LiquibaseResponse.LiquibaseContext(
-                        Map.of("liquibase", new LiquibaseResponse.LiquibaseBean(List.of(changeSets))), null)));
+                        Map.of("liquibase", new LiquibaseResponse.LiquibaseBean(List.of(changeSets))))));
     }
 
     private static LiquibaseResponse.ChangeSet changeSet(String id, Integer orderExecuted) {
@@ -71,14 +71,11 @@ class LiquibaseMapperTest {
                 "inventoryLiquibase",
                 new LiquibaseResponse.LiquibaseBean(List.of(changeSet("inventory-1", 1), changeSet("inventory-3", 3))));
         Map<String, LiquibaseResponse.LiquibaseContext> contexts = new LinkedHashMap<>();
-        contexts.put("application", new LiquibaseResponse.LiquibaseContext(beans, null));
+        contexts.put("application", new LiquibaseResponse.LiquibaseContext(beans));
         contexts.put(
                 "parent",
-                new LiquibaseResponse.LiquibaseContext(
-                        Map.of(
-                                "parentLiquibase",
-                                new LiquibaseResponse.LiquibaseBean(List.of(changeSet("parent-4", 4)))),
-                        null));
+                new LiquibaseResponse.LiquibaseContext(Map.of(
+                        "parentLiquibase", new LiquibaseResponse.LiquibaseBean(List.of(changeSet("parent-4", 4))))));
 
         LiquibaseInfo result = mapper.map(new LiquibaseResponse(contexts));
 
@@ -103,10 +100,10 @@ class LiquibaseMapperTest {
     @Test
     void absentBeansAndChangeSetsReadAsNoChangeSets() {
         LiquibaseResponse liquibaseData = new LiquibaseResponse(Map.of(
-                "empty", new LiquibaseResponse.LiquibaseContext(null, null),
+                "empty", new LiquibaseResponse.LiquibaseContext(null),
                 "application",
                         new LiquibaseResponse.LiquibaseContext(
-                                Map.of("liquibase", new LiquibaseResponse.LiquibaseBean(null)), null)));
+                                Map.of("liquibase", new LiquibaseResponse.LiquibaseBean(null)))));
 
         assertThat(mapper.map(liquibaseData).changeSets()).isEmpty();
     }

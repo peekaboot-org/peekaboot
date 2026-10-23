@@ -90,7 +90,7 @@ class ApplicationMapperTest {
         InfoResponse info = new InfoResponse(
                 null,
                 null,
-                new InfoResponse.JavaInfo(new InfoResponse.JavaInfo.VendorInfo("Eclipse Adoptium", "21.0.1"), "21.0.1"),
+                new InfoResponse.JavaInfo(new InfoResponse.JavaInfo.VendorInfo("Eclipse Adoptium"), "21.0.1"),
                 null,
                 null);
         ApplicationInfo result = mapper.map(info, null, false);

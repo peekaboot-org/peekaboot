@@ -244,7 +244,7 @@ class ActuatorResponseParserTest {
                 response.configprops().contexts().get("app");
         assertThat(context.beans().get("server").properties()).isEmpty();
         assertThat(new ConfigPropsResponse(null).contexts()).isEmpty();
-        assertThat(new ConfigPropsResponse.ConfigContext(null, null).beans()).isEmpty();
+        assertThat(new ConfigPropsResponse.ConfigContext(null).beans()).isEmpty();
     }
 
     @Test
@@ -260,7 +260,7 @@ class ActuatorResponseParserTest {
                         .migrations())
                 .isEmpty();
         assertThat(new FlywayResponse(null).contexts()).isEmpty();
-        assertThat(new FlywayResponse.FlywayContext(null, null).flywayBeans()).isEmpty();
+        assertThat(new FlywayResponse.FlywayContext(null).flywayBeans()).isEmpty();
     }
 
     @Test
@@ -277,7 +277,7 @@ class ActuatorResponseParserTest {
                         .changeSets())
                 .isEmpty();
         assertThat(new LiquibaseResponse(null).contexts()).isEmpty();
-        assertThat(new LiquibaseResponse.LiquibaseContext(null, null).liquibaseBeans())
+        assertThat(new LiquibaseResponse.LiquibaseContext(null).liquibaseBeans())
                 .isEmpty();
     }
 

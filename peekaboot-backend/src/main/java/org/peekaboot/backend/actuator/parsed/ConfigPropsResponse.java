@@ -9,7 +9,7 @@ public record ConfigPropsResponse(Map<String, ConfigContext> contexts) {
         contexts = Absent.orEmpty(contexts);
     }
 
-    public record ConfigContext(Map<String, ConfigBean> beans, String parentId) {
+    public record ConfigContext(Map<String, ConfigBean> beans) {
         public ConfigContext {
             beans = Absent.orEmpty(beans);
         }

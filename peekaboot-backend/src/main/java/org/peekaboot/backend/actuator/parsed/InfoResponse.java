@@ -15,7 +15,7 @@ public record InfoResponse(GitInfo git, Map<String, Object> build, JavaInfo java
     }
 
     public record JavaInfo(VendorInfo vendor, String version) {
-        public record VendorInfo(String name, String version) {}
+        public record VendorInfo(String name) {}
     }
 
     public record OsInfo(String arch, String name, String version) {}

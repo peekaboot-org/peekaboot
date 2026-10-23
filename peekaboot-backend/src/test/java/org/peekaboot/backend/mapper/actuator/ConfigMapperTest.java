@@ -21,15 +21,13 @@ class ConfigMapperTest {
     void map_shouldGroupByPrefix() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "spring.datasource-DataSourceProperties",
-                                        new ConfigPropsResponse.ConfigBean(
-                                                "spring.datasource",
-                                                Map.of("url", "jdbc:h2:mem:test", "driverClassName", "org.h2.Driver")),
-                                "server-ServerProperties",
-                                        new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080"))),
-                        null)));
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "spring.datasource-DataSourceProperties",
+                                new ConfigPropsResponse.ConfigBean(
+                                        "spring.datasource",
+                                        Map.of("url", "jdbc:h2:mem:test", "driverClassName", "org.h2.Driver")),
+                        "server-ServerProperties",
+                                new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080"))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -43,11 +41,8 @@ class ConfigMapperTest {
     void map_shouldFallBackToUnknownPrefixWhenPrefixIsNull() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "mystery-MysteryProperties",
-                                new ConfigPropsResponse.ConfigBean(null, Map.of("value", "1"))),
-                        null)));
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "mystery-MysteryProperties", new ConfigPropsResponse.ConfigBean(null, Map.of("value", "1"))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -59,12 +54,10 @@ class ConfigMapperTest {
     void map_shouldMaskSensitiveProperties() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "datasource",
-                                new ConfigPropsResponse.ConfigBean(
-                                        "spring.datasource", Map.of("password", "secret123", "username", "admin"))),
-                        null)));
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "datasource",
+                        new ConfigPropsResponse.ConfigBean(
+                                "spring.datasource", Map.of("password", "secret123", "username", "admin"))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -95,12 +88,10 @@ class ConfigMapperTest {
 
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "oauth2",
-                                new ConfigPropsResponse.ConfigBean(
-                                        "spring.security.oauth2.client", Map.of("registration", registration))),
-                        null)));
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "oauth2",
+                        new ConfigPropsResponse.ConfigBean(
+                                "spring.security.oauth2.client", Map.of("registration", registration))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -120,11 +111,9 @@ class ConfigMapperTest {
 
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "gateway",
-                                new ConfigPropsResponse.ConfigBean("gateway", Map.of("credentials", credentials))),
-                        null)));
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "gateway",
+                        new ConfigPropsResponse.ConfigBean("gateway", Map.of("credentials", credentials))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -146,11 +135,9 @@ class ConfigMapperTest {
 
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "server-ServerProperties",
-                                new ConfigPropsResponse.ConfigBean("server", Map.of("servlet", servlet))),
-                        null)));
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "server-ServerProperties",
+                        new ConfigPropsResponse.ConfigBean("server", Map.of("servlet", servlet))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -171,7 +158,7 @@ class ConfigMapperTest {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(
-                        Map.of("pool", new ConfigPropsResponse.ConfigBean("pool", Map.of("servers", servers))), null)));
+                        Map.of("pool", new ConfigPropsResponse.ConfigBean("pool", Map.of("servers", servers))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -186,8 +173,7 @@ class ConfigMapperTest {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(
-                        Map.of("pool", new ConfigPropsResponse.ConfigBean("pool", Map.of("servers", List.of()))),
-                        null)));
+                        Map.of("pool", new ConfigPropsResponse.ConfigBean("pool", Map.of("servers", List.of()))))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -200,12 +186,9 @@ class ConfigMapperTest {
     void map_shouldReturnRealValueWhenUnmaskIsTrue() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "datasource",
-                                new ConfigPropsResponse.ConfigBean(
-                                        "spring.datasource", Map.of("password", "secret123"))),
-                        null)));
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "datasource",
+                        new ConfigPropsResponse.ConfigBean("spring.datasource", Map.of("password", "secret123"))))));
 
         ConfigInfo result = mapper.map(configprops, true);
         assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("secret123");
@@ -218,12 +201,11 @@ class ConfigMapperTest {
         contexts.put(
                 "parent",
                 new ConfigPropsResponse.ConfigContext(
-                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080"))), null));
+                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080")))));
         contexts.put(
                 "child",
                 new ConfigPropsResponse.ConfigContext(
-                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", Map.of("address", "0.0.0.0"))),
-                        "parent"));
+                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", Map.of("address", "0.0.0.0")))));
 
         ConfigInfo result = mapper.map(new ConfigPropsResponse(contexts), false);
 
@@ -240,7 +222,7 @@ class ConfigMapperTest {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(
-                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", properties)), null)));
+                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", properties)))));
 
         ConfigInfo result = mapper.map(configprops, false);
 
@@ -253,11 +235,11 @@ class ConfigMapperTest {
     @Test
     void map_shouldTreatAbsentBeansAndPropertiesAsEmpty() {
         Map<String, ConfigPropsResponse.ConfigContext> contexts = new LinkedHashMap<>();
-        contexts.put("empty", new ConfigPropsResponse.ConfigContext(null, null));
+        contexts.put("empty", new ConfigPropsResponse.ConfigContext(null));
         contexts.put(
                 "application",
                 new ConfigPropsResponse.ConfigContext(
-                        Map.of("bare", new ConfigPropsResponse.ConfigBean("bare", null)), null));
+                        Map.of("bare", new ConfigPropsResponse.ConfigBean("bare", null))));
 
         ConfigInfo result = mapper.map(new ConfigPropsResponse(contexts), false);
 
