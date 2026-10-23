@@ -97,6 +97,54 @@ class InsightsPropertiesTest {
                 .hasMessageContaining("snapshot");
     }
 
+    /**
+     * The rings, the roll-up and the boundary schedule all count in whole milliseconds; a
+     * sub-millisecond level would divide by zero on its own thread, which then never samples.
+     */
+    @Test
+    void rejectsALevelIntervalBelowOneMillisecond() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofNanos(500_000), 90)));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(
+                        "peekaboot.insights.levels: interval must be a positive whole number of milliseconds");
+    }
+
+    /** As a finer level, the same interval used to fail the roll-up check with a bare ArithmeticException. */
+    @Test
+    void rejectsASubMillisecondIntervalBeneathACoarserLevel() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(List.of(
+                InsightsProperties.Level.of(Duration.ofNanos(500_000), 90),
+                InsightsProperties.Level.of(Duration.ofSeconds(10), 90)));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(
+                        "peekaboot.insights.levels: interval must be a positive whole number of milliseconds");
+    }
+
+    /** {@code 1500us} would be truncated to 1ms everywhere it is used, so it is refused rather than misread. */
+    @Test
+    void rejectsALevelIntervalThatIsNoWholeNumberOfMilliseconds() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofNanos(1_500_000), 90)));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("whole number of milliseconds");
+    }
+
+    /** The snapshot writer schedules in whole milliseconds; below one it would die on its first boundary. */
+    @Test
+    void rejectsAPersistenceIntervalBelowOneMillisecond() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getPersistence().setInterval(Duration.ofNanos(500_000));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(
+                        "peekaboot.insights.persistence.interval must be a positive whole number of milliseconds");
+    }
+
     @Test
     void rejectsNonPositivePersistenceInterval() {
         InsightsProperties properties = new InsightsProperties();

@@ -66,8 +66,9 @@ public class InsightsProperties {
     }
 
     private static void validateLevel(Level level) {
-        if (level.interval == null || level.interval.isZero() || level.interval.isNegative()) {
-            throw new IllegalStateException("peekaboot.insights.levels: interval must be positive");
+        if (!isWholePositiveMillis(level.interval)) {
+            throw new IllegalStateException("peekaboot.insights.levels: interval must be a positive whole number of"
+                    + " milliseconds (" + level.interval + " configured)");
         }
         if (level.size <= 0) {
             throw new IllegalStateException("peekaboot.insights.levels: size must be > 0");
@@ -96,12 +97,18 @@ public class InsightsProperties {
         if (persistence == null) {
             throw new IllegalStateException("peekaboot.insights.persistence must not be null");
         }
-        if (persistence.interval != null && (persistence.interval.isZero() || persistence.interval.isNegative())) {
-            throw new IllegalStateException("peekaboot.insights.persistence.interval must be positive");
+        if (persistence.interval != null && !isWholePositiveMillis(persistence.interval)) {
+            throw new IllegalStateException("peekaboot.insights.persistence.interval must be a positive whole number"
+                    + " of milliseconds (" + persistence.interval + " configured)");
         }
         if (persistence.maxAge != null && (persistence.maxAge.isZero() || persistence.maxAge.isNegative())) {
             throw new IllegalStateException("peekaboot.insights.persistence.max-age must be positive");
         }
+    }
+
+    /** Rings, roll-ups and the boundary schedule all count in milliseconds, so a finer interval cannot be honoured. */
+    private static boolean isWholePositiveMillis(Duration interval) {
+        return interval != null && interval.toMillis() >= 1 && interval.equals(Duration.ofMillis(interval.toMillis()));
     }
 
     public boolean isEnabled() {
