@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -45,6 +46,17 @@ class PanelConfigLoaderTest {
 
         assertThat(latency.unit()).isEqualTo(Unit.MILLIS);
         assertThat(latency.series()).extracting(SeriesDef::stat).containsExactly(Stat.AVG, Stat.MAX);
+    }
+
+    /** A series without its own unit is labelled with the panel's, so the per-second rate beside a count needs one. */
+    @Test
+    void theShippedTomcatSessionsPanelLabelsTheCreationRatePerSecond() {
+        PanelDef sessions = panelNamed(PanelConfigLoader.load(shippedDefaults), "tomcat-sessions");
+
+        assertThat(sessions.unit()).isEqualTo(Unit.COUNT);
+        assertThat(sessions.series())
+                .extracting(SeriesDef::id, SeriesDef::stat, SeriesDef::unit)
+                .containsExactly(tuple("active", Stat.VALUE, null), tuple("created", Stat.RATE, Unit.PERSEC));
     }
 
     @Test

@@ -229,7 +229,7 @@ panels:
     enabled: false
     series:
       - { id: active, label: Active, meter: tomcat.sessions.active.current }
-      - { id: created, label: Created, meter: tomcat.sessions.created, stat: rate }
+      - { id: created, label: Created, meter: tomcat.sessions.created, stat: rate, unit: persec }
 
   - id: allocation
     title: Memory allocation
