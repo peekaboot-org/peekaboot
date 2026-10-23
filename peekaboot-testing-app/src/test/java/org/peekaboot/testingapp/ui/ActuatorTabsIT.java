@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
@@ -68,6 +69,24 @@ class ActuatorTabsIT extends PlaywrightTestBase {
         assertThat(page.locator("#loggers-list .pk-kv__key").allTextContents())
                 .as("ROOT always carries a configured level, so the filtered list keeps it")
                 .contains("ROOT");
+    }
+
+    /** Logger packages take the strong name variant and metric names the mono one; property groups keep the plain one. */
+    @Test
+    void eachGroupTabNamesItsGroupsInItsOwnVariant() {
+        openDashboard();
+        assertThat(groupNameClasses("loggers", "#loggers-list")).containsOnly("pk-group__name pk-group__name--strong");
+        assertThat(groupNameClasses("meters", "#meters-list")).containsOnly("pk-group__name pk-group__name--mono");
+        assertThat(groupNameClasses("environment", "#property-sources")).containsOnly("pk-group__name");
+    }
+
+    private List<String> groupNameClasses(String tab, String list) {
+        dashboard.openTab(tab);
+        List<String> classes = page.locator(list + " .pk-group__name").all().stream()
+                .map(name -> name.getAttribute("class"))
+                .toList();
+        assertThat(classes).as("the %s tab renders groups", tab).isNotEmpty();
+        return classes;
     }
 
     @Test
