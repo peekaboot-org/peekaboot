@@ -61,8 +61,8 @@ class TraceWritePathBenchmark {
         // benchmark silently drifting from what the fold logic actually does).
         TraceDataBundle sanityBundle = new TraceDataBundle("bench-sanity");
         rawSpans.forEach(span -> sanityBundle.addSpan(span, CAP));
-        assertThat(sanityBundle.spans()).hasSize(REAL_QUERY_COUNT + 1);
-        assertThat(sanityBundle.truncated()).isFalse();
+        assertThat(sanityBundle.snapshot().spans()).hasSize(REAL_QUERY_COUNT + 1);
+        assertThat(sanityBundle.snapshot().truncated()).isFalse();
 
         for (int i = 0; i < WARMUP_ITERATIONS; i++) {
             timeAppendAndTrim(rawSpans, CAP);
@@ -118,7 +118,7 @@ class TraceWritePathBenchmark {
             bundle.addSpan(span, cap);
         }
         long elapsed = System.nanoTime() - start;
-        if (bundle.spans().isEmpty()) {
+        if (bundle.snapshot().spans().isEmpty()) {
             throw new AssertionError("unreachable - keeps the bundle live across the JIT's dead-code elimination");
         }
         return elapsed;

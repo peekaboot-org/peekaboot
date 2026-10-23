@@ -12,7 +12,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -36,7 +35,7 @@ import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
  * ordering). A folded-away duplicate's id is kept in a redirect table so a later span whose
  * stated parent was already folded away - a grandchild of the duplicate, which arrives before
  * the duplicate does - still resolves to the surviving ancestor when the trace is read back
- * out via {@link #spans()}. That table is pruned as spans are evicted (see
+ * out via {@link #snapshot()}. That table is pruned as spans are evicted (see
  * {@link #evictOldest}), so it stays bounded by the {@code maxSpans} cap rather than growing
  * for the trace's whole life.
  */
@@ -50,6 +49,7 @@ public class TraceDataBundle {
     private final Map<String, List<String>> redirectsPointingAt = new HashMap<>();
 
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
+    /** Set once the cap drops a real span, never for a folded duplicate; a trimmed trace stays marked. */
     private boolean truncated = false;
     // Classification signals, maintained span by span in store() so InMemoryTraceStore's
     // classify() never has to copy and sort the whole trace per arriving span. fullWindow gives
@@ -300,17 +300,6 @@ public class TraceDataBundle {
         this.request = request;
     }
 
-    /**
-     * True once the {@code maxSpans} cap in {@link #addSpan} has actually dropped a real
-     * (post-deduplication) span - never set merely because duplicate artifacts were folded
-     * away. Sticky: a trace that was ever truncated stays marked as such.
-     */
-    public boolean truncated() {
-        synchronized (spansLock) {
-            return truncated;
-        }
-    }
-
     /** Test-only: pins a bound on the redirect table's growth without reflection. */
     int parentRedirectCountForTesting() {
         synchronized (spansLock) {
@@ -324,13 +313,10 @@ public class TraceDataBundle {
      */
     public TraceData snapshot() {
         synchronized (spansLock) {
-            // copy under spansLock before sorting; streaming spansById directly would race
-            // with a concurrent addSpan call mutating it
-            List<SpanData> spans = new ArrayList<>(spansById.values())
-                    .stream()
-                            .map(this::withResolvedParent)
-                            .sorted(Comparator.comparingLong(SpanData::creationOrder))
-                            .toList();
+            List<SpanData> spans = spansById.values().stream()
+                    .map(this::withResolvedParent)
+                    .sorted(Comparator.comparingLong(SpanData::creationOrder))
+                    .toList();
             // the root is one of the resolved copies, so the mapper's equality skip finds it in the list
             return new TraceData(
                     traceId,
@@ -341,10 +327,6 @@ public class TraceDataBundle {
                     asyncMembership.members(),
                     truncated);
         }
-    }
-
-    public List<SpanData> spans() {
-        return snapshot().spans();
     }
 
     /**
@@ -443,13 +425,6 @@ public class TraceDataBundle {
             }
         }
         return entries;
-    }
-
-    /** Transitive async-subtree membership, for the mapper to summarise and shape a tree by. */
-    public Set<String> asyncSpanIds() {
-        synchronized (spansLock) {
-            return asyncMembership.members();
-        }
     }
 
     public List<LogCapturedEvent> logs() {

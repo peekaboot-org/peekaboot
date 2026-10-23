@@ -507,7 +507,7 @@ class OtelSpanExporterTest {
      * at every call site regardless, but this centralizes the lookup expression itself.
      */
     private List<org.peekaboot.backend.tracing.store.SpanData> storedSpans(String traceId) {
-        return storage.getTrace(traceId).orElseThrow().spans();
+        return storage.getTrace(traceId).orElseThrow().snapshot().spans();
     }
 
     private org.peekaboot.backend.tracing.store.SpanData storedSpan(String traceId) {

@@ -26,7 +26,7 @@ class TraceDataBundleTest {
         bundle.addSpan(createSpan("span1", 1), 100);
         bundle.addSpan(createSpan("span2", 2), 100);
 
-        List<SpanData> spans = bundle.spans();
+        List<SpanData> spans = bundle.snapshot().spans();
 
         assertThat(spans).extracting(SpanData::spanId).containsExactly("span1", "span2", "span3");
     }
@@ -38,13 +38,13 @@ class TraceDataBundleTest {
         for (int i = 1; i <= 3; i++) {
             bundle.addSpan(createSpan("span" + i, i), 3);
         }
-        assertThat(bundle.truncated()).isFalse();
+        assertThat(bundle.snapshot().truncated()).isFalse();
 
         bundle.addSpan(createSpan("span4", 4), 3);
         bundle.addSpan(createSpan("span5", 5), 3);
 
-        assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
-        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
+        assertThat(bundle.snapshot().truncated()).isTrue();
     }
 
     @Test
@@ -60,7 +60,7 @@ class TraceDataBundleTest {
         bundle.addSpan(duplicate, 100);
         bundle.addSpan(real, 100);
 
-        assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("parent1");
+        assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("parent1");
     }
 
     @Test
@@ -75,7 +75,7 @@ class TraceDataBundleTest {
         bundle.addSpan(real, 100);
         bundle.addSpan(duplicate, 100);
 
-        assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("parent1");
+        assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("parent1");
     }
 
     @Test
@@ -92,7 +92,7 @@ class TraceDataBundleTest {
         bundle.addSpan(duplicate, 100);
         bundle.addSpan(real, 100);
 
-        List<SpanData> spans = bundle.spans();
+        List<SpanData> spans = bundle.snapshot().spans();
         assertThat(spans).extracting(SpanData::spanId).containsExactly("rs1", "parent1");
         assertThat(spans.stream()
                         .filter(s -> "rs1".equals(s.spanId()))
@@ -126,7 +126,7 @@ class TraceDataBundleTest {
         bundle.addSpan(parent, 100);
         bundle.addSpan(child, 100);
 
-        assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("parent1", "child1");
+        assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("parent1", "child1");
     }
 
     @Test
@@ -142,10 +142,10 @@ class TraceDataBundleTest {
             bundle.addSpan(jdbcSpan(realId, null, "query", "SELECT " + i, "sample_app_db", order++), 5);
         }
 
-        assertThat(bundle.spans())
+        assertThat(bundle.snapshot().spans())
                 .as("ten raw arrivals must not truncate a trace with only five real spans")
                 .hasSize(5);
-        assertThat(bundle.truncated())
+        assertThat(bundle.snapshot().truncated())
                 .as("ten raw arrivals must not truncate a trace with only five real spans")
                 .isFalse();
     }
@@ -166,8 +166,8 @@ class TraceDataBundleTest {
             bundle.addSpan(jdbcSpan(realId, null, "query", "SELECT " + i, "sample_app_db", order++), cap);
         }
 
-        assertThat(bundle.spans()).hasSize(cap);
-        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.snapshot().spans()).hasSize(cap);
+        assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.parentRedirectCountForTesting())
                 .as("the redirect table must be pruned as spans are evicted, not grow with "
                         + "every duplicate ever folded over the trace's whole life")
@@ -200,7 +200,7 @@ class TraceDataBundleTest {
             bundle.addSpan(jdbcSpan(survivorId, null, "query", "SELECT " + i, "sample_app_db", order++), cap);
         }
 
-        assertThat(bundle.spans()).hasSize(cap);
+        assertThat(bundle.snapshot().spans()).hasSize(cap);
         assertThat(bundle.parentRedirectCountForTesting())
                 .as("the redirect table must not leak an entry per chained fold whose "
                         + "intermediate survivor was itself later folded away and evicted")
@@ -225,7 +225,7 @@ class TraceDataBundleTest {
 
             // reads race the writer on purpose
             while (!writer.isDone()) {
-                List<SpanData> snapshot = bundle.spans();
+                List<SpanData> snapshot = bundle.snapshot().spans();
                 assertThat(snapshot).isSortedAccordingTo(Comparator.comparingLong(SpanData::creationOrder));
             }
             writer.get();
@@ -233,7 +233,7 @@ class TraceDataBundleTest {
             executor.shutdownNow();
         }
 
-        assertThat(bundle.spans()).hasSize(totalSpans);
+        assertThat(bundle.snapshot().spans()).hasSize(totalSpans);
     }
 
     /** The root is the first stored span whose parent is not stored - a child that exported before its parent is not it. */
@@ -356,7 +356,7 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("child", "root", 10, 20), 500);
 
         assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
-        assertThat(bundle.asyncSpanIds()).isEmpty();
+        assertThat(bundle.snapshot().asyncSpanIds()).isEmpty();
     }
 
     /**
@@ -405,7 +405,7 @@ class TraceDataBundleTest {
         assertThat(bundle.listingRoots().asyncEntries())
                 .extracting(SpanData::spanId)
                 .containsExactly("async");
-        assertThat(bundle.asyncSpanIds()).containsExactlyInAnyOrder("async", "deep");
+        assertThat(bundle.snapshot().asyncSpanIds()).containsExactlyInAnyOrder("async", "deep");
     }
 
     /**
@@ -436,7 +436,7 @@ class TraceDataBundleTest {
         bundle.addSpan(asyncSpan("async", "root", 40, 1_000), 2);
         bundle.addSpan(plainSpan("later", "root", 20, 10), 2);
 
-        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -456,7 +456,7 @@ class TraceDataBundleTest {
         // evicts "quick", and moves "background" out of the synchronous window
         bundle.addSpan(asyncSpan("async", "root", 90, 3_010), 3);
 
-        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
     }
 
@@ -476,7 +476,7 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("later", "root", 30, 10), 3);
         bundle.addSpan(asyncSpan("async", "root", 0, 900), 3);
 
-        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
         assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
     }
@@ -542,7 +542,7 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("late", "async", 50, 9_500), 500);
         bundle.addSpan(plainSpan("root", null, 0, 50), 500);
 
-        assertThat(bundle.asyncSpanIds()).containsExactlyInAnyOrder("async", "late", "leaf");
+        assertThat(bundle.snapshot().asyncSpanIds()).containsExactlyInAnyOrder("async", "late", "leaf");
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -559,7 +559,7 @@ class TraceDataBundleTest {
         bundle.addSpan(jdbcDuplicate("dup", "real", "SELECT 1").at(110, 30).build(), 500);
         bundle.addSpan(plainSpan("root", null, 0, 50), 500);
 
-        assertThat(bundle.spans()).extracting(SpanData::spanId).doesNotContain("dup");
+        assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).doesNotContain("dup");
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -576,7 +576,7 @@ class TraceDataBundleTest {
                 jdbcQuery("real", "SELECT 1").parent("async").at(100, 6_000).build(), 500);
         bundle.addSpan(plainSpan("root", null, 0, 50), 500);
 
-        assertThat(bundle.spans()).extracting(SpanData::spanId).doesNotContain("dup");
+        assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).doesNotContain("dup");
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -595,7 +595,7 @@ class TraceDataBundleTest {
         // evicts "late"
         bundle.addSpan(asyncSpan("second", "root", 30, 10), 3);
 
-        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -609,7 +609,7 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("y", "root", 10, 10), 2);
 
         assertThat(bundle.listingRoots().asyncEntries()).isEmpty();
-        assertThat(bundle.asyncSpanIds()).isEmpty();
+        assertThat(bundle.snapshot().asyncSpanIds()).isEmpty();
     }
 
     @Test
