@@ -45,6 +45,15 @@ public class ApplicationMapper {
 
     private static GitInfo gitInfo(InfoResponse.GitInfo git) {
         InfoResponse.GitInfo.CommitInfo commit = git.commit();
-        return new GitInfo(git.branch(), commit == null ? null : new GitInfo.Commit(commit.id(), commit.time()));
+        return new GitInfo(
+                git.branch(), commit == null ? null : new GitInfo.Commit(commitId(commit.id()), commit.time()));
+    }
+
+    private static String commitId(Object id) {
+        if (id instanceof Map<?, ?> forms) {
+            Object shown = forms.get("abbrev") != null ? forms.get("abbrev") : forms.get("full");
+            return shown == null ? null : shown.toString();
+        }
+        return id == null ? null : id.toString();
     }
 }

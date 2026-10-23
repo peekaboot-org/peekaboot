@@ -53,6 +53,22 @@ class ApplicationMapperTest {
     }
 
     @Test
+    void map_shouldShowTheAbbreviationOfAFullModeCommitId() {
+        assertThat(commitIdShownFor(Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4")))
+                .isEqualTo("1a2b3c4");
+    }
+
+    @Test
+    void map_shouldFallBackToTheFullIdWhenTheAbbreviationIsMissing() {
+        assertThat(commitIdShownFor(Map.of("full", "1a2b3c4d5e6f7a8b"))).isEqualTo("1a2b3c4d5e6f7a8b");
+    }
+
+    @Test
+    void map_shouldLeaveTheIdAbsentWhenTheCommitCarriesNone() {
+        assertThat(commitIdShownFor(null)).isNull();
+    }
+
+    @Test
     void map_shouldLeaveTheCommitAbsentWhenGitCarriesNone() {
         InfoResponse info = new InfoResponse(new InfoResponse.GitInfo("main", null), null, null, null, null);
 
@@ -97,5 +113,15 @@ class ApplicationMapperTest {
         assertThat(result.git()).isNull();
         assertThat(result.javaVersion()).isNull();
         assertThat(result.springBootVersion()).isNull();
+    }
+
+    private String commitIdShownFor(Object id) {
+        InfoResponse info = new InfoResponse(
+                new InfoResponse.GitInfo("main", new InfoResponse.GitInfo.CommitInfo(id, "2024-01-01T10:00:00Z")),
+                null,
+                null,
+                null,
+                null);
+        return mapper.map(info, null, false).git().commit().id();
     }
 }

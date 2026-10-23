@@ -10,7 +10,8 @@ public record InfoResponse(GitInfo git, Map<String, Object> build, JavaInfo java
     }
 
     public record GitInfo(String branch, CommitInfo commit) {
-        public record CommitInfo(String id, String time) {}
+        /** {@code id} is a String, or {@code {full, abbrev}} under {@code management.info.git.mode=full}. */
+        public record CommitInfo(Object id, String time) {}
     }
 
     public record JavaInfo(VendorInfo vendor, String version) {

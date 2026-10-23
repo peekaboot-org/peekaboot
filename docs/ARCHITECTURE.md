@@ -368,7 +368,7 @@ tool that can read response headers from doing the same.
 The backend implements a Backend-for-Frontend pattern:
 
 1. **Raw actuator data**: `PeekabootActuatorService` invokes actuator endpoints in-process (see below)
-2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed records. A section the service could not read is null; inside a section, a collection the response left out binds as empty (the records' compact constructors), so the mappers guard the section and nothing below it
+2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed records. A section the service could not read is null, and so is one that does not bind to its record, each section parsing on its own; inside a section, a collection the response left out binds as empty (the records' compact constructors), so the mappers guard the section and nothing below it
 3. **Domain mapping**: individual mappers transform to domain models
 4. **Aggregation**: `ActuatorInsightsService` combines all data for the dashboard
 
@@ -381,6 +381,8 @@ arrives as the single masked leaf its subtree collapsed to.
 `ApplicationMapper` copies only `branch`, `commit.id` and `commit.time` off `info.git` into the
 `GitInfo` record, for the reason the lifecycle log whitelists its `GitProperties` entries (see
 *`lifecycle.jsonl`*): a remote URL can carry a token and a committer's address is personal data.
+Under `management.info.git.mode=full` Boot nests `commit.id` as `{full, abbrev}`; the mapper
+sends the abbreviation, else the full id, so `commit.id` is always a String on the wire.
 `info.build` stays a free-form map, masked, because the consuming app fills it itself.
 
 The word `insights` marks these BFF endpoints as a path *suffix* and the unrelated metric

@@ -3,6 +3,7 @@ package org.peekaboot.backend.actuator.parsed;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import ch.qos.logback.classic.Level;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testsupport.LogCapture;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -86,6 +88,58 @@ class ActuatorResponseParserTest {
         assertThat(response.health()).isNotNull();
         assertThat(response.info()).isNotNull();
         assertThat(response.loggers()).isNotNull();
+    }
+
+    @Test
+    void parsesASectionThatDoesNotBindAsAbsentAndKeepsTheOthers() {
+        Map<String, Object> data = new LinkedHashMap<>(rawData);
+        data.put("health", Map.of("status", Map.of("code", "UP")));
+
+        try (LogCapture capture = LogCapture.attach(ActuatorResponseParser.class)) {
+            ActuatorParsedData response = parser.parse(data);
+
+            assertThat(response.health()).isNull();
+            assertThat(response.info()).isNotNull();
+            assertThat(response.env()).isNotNull();
+            assertThat(response.scheduledtasks()).isNotNull();
+            assertThat(capture.appender().list).hasSize(1);
+        }
+    }
+
+    /** The dashboard refreshes every 30 s, so a section that keeps failing warns once and then logs at DEBUG. */
+    @Test
+    void warnsWithTheCauseOnlyTheFirstTimeASectionDoesNotBind() {
+        Map<String, Object> data = Map.of("loggers", Map.of("loggers", List.of("ROOT")));
+
+        try (LogCapture capture = LogCapture.attach(ActuatorResponseParser.class, Level.DEBUG)) {
+            parser.parse(data);
+            parser.parse(data);
+
+            assertThat(capture.appender().list).hasSize(2);
+            assertThat(capture.appender().list.get(0)).satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo("Actuator endpoint 'loggers' did not parse");
+                assertThat(event.getThrowableProxy()).isNotNull();
+            });
+            assertThat(capture.appender().list.get(1)).satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getFormattedMessage()).startsWith("Actuator endpoint 'loggers' did not parse again: ");
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        }
+    }
+
+    /** Boot's {@code management.info.git.mode=full} nests the commit id instead of sending a String. */
+    @Test
+    void bindsAFullModeGitCommitId() {
+        Map<String, Object> data = Map.of(
+                "info",
+                Map.of("git", Map.of("commit", Map.of("id", Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4")))));
+
+        ActuatorParsedData response = parser.parse(data);
+
+        assertThat(response.info().git().commit().id())
+                .isEqualTo(Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4"));
     }
 
     @Test

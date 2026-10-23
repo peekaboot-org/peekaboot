@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -21,6 +22,7 @@ import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.ObjectProvider;
 
 class ActuatorInsightsServiceTest {
@@ -187,6 +189,50 @@ class ActuatorInsightsServiceTest {
 
         assertThat(response.scheduledTasks().tasks().getFirst().scheduleDescription())
                 .containsIgnoringCase("Stunde");
+    }
+
+    /** Boot's {@code management.info.git.mode=full} nests the commit id as {@code {full, abbrev}}. */
+    @Test
+    void getInsights_shouldShowTheAbbreviatedCommitIdInFullGitMode() {
+        ActuatorInsightsService service = service(
+                Map.of(
+                        "info",
+                        Map.of(
+                                "git",
+                                Map.of(
+                                        "branch",
+                                        "main",
+                                        "commit",
+                                        Map.of(
+                                                "id",
+                                                Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4"),
+                                                "time",
+                                                "2026-01-10T20:52:19Z")))),
+                DataSourceMetadataList.EMPTY);
+
+        ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
+
+        assertThat(response.application().git().commit().id()).isEqualTo("1a2b3c4");
+    }
+
+    /** A section that does not bind is left out like a failed read, so it cannot blank the other tabs. */
+    @Test
+    void getInsights_shouldKeepTheOtherSectionsWhenOneFailsToParse() {
+        ActuatorInsightsService service = service(
+                Map.of(
+                        "health", Map.of("status", Map.of("code", "UP")),
+                        "env", Map.of("activeProfiles", List.of("dev"))),
+                DataSourceMetadataList.EMPTY);
+
+        try (LogCapture capture = LogCapture.attach(ActuatorResponseParser.class)) {
+            ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
+
+            assertThat(response.environment().activeProfiles()).containsExactly("dev");
+            assertThat(response.health().status()).isEqualTo(HealthStatus.UNKNOWN);
+            assertThat(capture.appender().list)
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .containsExactly("Actuator endpoint 'health' did not parse");
+        }
     }
 
     /** The real actuator service over inline sources, one per section the test supplies. */
