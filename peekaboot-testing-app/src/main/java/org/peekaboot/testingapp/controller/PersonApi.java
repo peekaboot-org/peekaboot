@@ -28,6 +28,6 @@ public class PersonApi {
     @GetMapping("/api/person/{id}")
     public ResponseEntity<Person> findById(@PathVariable("id") Long id) {
 
-        return ResponseEntity.of(personQueryService.getPerson(id));
+        return ResponseEntity.of(personQueryService.findByIdUnobserved(id));
     }
 }

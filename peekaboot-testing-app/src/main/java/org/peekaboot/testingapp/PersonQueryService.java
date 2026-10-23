@@ -20,9 +20,10 @@ public class PersonQueryService {
         this.personRepository = personRepository;
     }
 
-    public Optional<Person> getPerson(long i) {
+    /** The lookup {@link #findById} makes, without a span of its own. */
+    public Optional<Person> findByIdUnobserved(long id) {
 
-        return personRepository.findById(i);
+        return personRepository.findById(id);
     }
 
     /**
@@ -42,7 +43,7 @@ public class PersonQueryService {
 
     /**
      * Observed like {@link #findAll()}: the detail and edit pages show the lookup as a span of
-     * its own above its one parameterised query. {@link #getPerson} stays unobserved for the
+     * its own above its one parameterised query. {@link #findByIdUnobserved} stays unobserved for the
      * JSON lookup, whose flat span tree is the point of that endpoint.
      */
     @Observed(name = "person.query.find-by-id", contextualName = "person.query.find-by-id")

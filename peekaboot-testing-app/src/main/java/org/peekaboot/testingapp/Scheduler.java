@@ -30,7 +30,7 @@ public class Scheduler {
     public void fixedRate() {
 
         log.info("fixedRate start");
-        personQueryService.getPerson(1);
+        personQueryService.findByIdUnobserved(1);
 
         log.error("fixedRate failed");
     }
