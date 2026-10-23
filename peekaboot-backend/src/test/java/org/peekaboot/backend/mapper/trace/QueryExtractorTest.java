@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.query;
 import static org.peekaboot.backend.testsupport.Spans.resultSet;
 import static org.peekaboot.backend.testsupport.Spans.span;
@@ -43,8 +44,8 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldFindQueryWithJdbcQueryTag() {
-        var querySpan = query("span1")
-                .tags(Map.of("jdbc.query[0]", "INSERT INTO orders (user_id) VALUES (?)", "peer.service", "orders_db"))
+        var querySpan = jdbcQuery("span1", "INSERT INTO orders (user_id) VALUES (?)")
+                .tag("peer.service", "orders_db")
                 .order(20)
                 .build();
 
@@ -97,15 +98,12 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldMatchResultSetToQuery() {
-        // Query span created first (creationOrder=10)
-        var querySpan = query("query1")
-                .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "mydb"))
-                .order(10)
-                .build();
+        var querySpan = jdbcQuery("query1", "SELECT * FROM users").order(10).build();
 
-        // Result-set span created after query (creationOrder=11)
-        var resultSetSpan =
-                resultSet("rs1", 42).tag("peer.service", "mydb").order(11).build();
+        var resultSetSpan = resultSet("rs1", 42)
+                .tag("peer.service", "sample_app_db")
+                .order(11)
+                .build();
 
         var traceData = TraceDatas.of("trace1", querySpan, resultSetSpan);
 
@@ -118,17 +116,12 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldNotAttributeRowCountToEarlierQueryWithoutResultSet() {
-        // An UPDATE produces no result-set span; the following SELECT's
-        // result set must not be attributed to it.
-        var update = query("q1")
-                .tags(Map.of("jdbc.query[0]", "UPDATE users SET active = true", "peer.service", "db"))
-                .order(10)
+        var update = jdbcQuery("q1", "UPDATE users SET active = true").order(10).build();
+        var select = jdbcQuery("q2", "SELECT * FROM users").order(20).build();
+        var rs = resultSet("rs1", 42)
+                .tag("peer.service", "sample_app_db")
+                .order(21)
                 .build();
-        var select = query("q2")
-                .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
-                .order(20)
-                .build();
-        var rs = resultSet("rs1", 42).tag("peer.service", "db").order(21).build();
 
         var traceData = TraceDatas.of("trace1", update, select, rs);
 
@@ -142,19 +135,17 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldMatchMultipleResultSetsToQueries() {
-        // First query + result set
-        var query1 = query("q1")
-                .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
-                .order(10)
+        var query1 = jdbcQuery("q1", "SELECT * FROM users").order(10).build();
+        var rs1 = resultSet("rs1", 10)
+                .tag("peer.service", "sample_app_db")
+                .order(11)
                 .build();
-        var rs1 = resultSet("rs1", 10).tag("peer.service", "db").order(11).build();
 
-        // Second query + result set
-        var query2 = query("q2")
-                .tags(Map.of("jdbc.query[0]", "SELECT * FROM orders", "peer.service", "db"))
-                .order(20)
+        var query2 = jdbcQuery("q2", "SELECT * FROM orders").order(20).build();
+        var rs2 = resultSet("rs2", 25)
+                .tag("peer.service", "sample_app_db")
+                .order(21)
                 .build();
-        var rs2 = resultSet("rs2", 25).tag("peer.service", "db").order(21).build();
 
         var traceData = TraceDatas.of("trace1", query1, rs1, query2, rs2);
 
@@ -169,20 +160,18 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldNotMatchResultSetToQueryIfCreationOrderIsLower() {
-        // Result-set created before query (shouldn't match)
-        var resultSetSpan =
-                resultSet("rs1", 99).tag("peer.service", "db").order(5).build();
-        var querySpan = query("q1")
-                .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
-                .order(10)
+        var resultSetSpan = resultSet("rs1", 99)
+                .tag("peer.service", "sample_app_db")
+                .order(5)
                 .build();
+        var querySpan = jdbcQuery("q1", "SELECT * FROM users").order(10).build();
 
         var traceData = TraceDatas.of("trace1", resultSetSpan, querySpan);
 
         List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).rowCount()).isNull(); // No match
+        assertThat(queries.get(0).rowCount()).isNull();
     }
 
     @Test
@@ -262,18 +251,9 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldListQueriesInCreationOrder() {
-        var query1 = query("q1")
-                .tags(Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "db"))
-                .order(10)
-                .build();
-        var query2 = query("q2")
-                .tags(Map.of("jdbc.query[0]", "SELECT 2", "peer.service", "db"))
-                .order(20)
-                .build();
-        var query3 = query("q3")
-                .tags(Map.of("jdbc.query[0]", "SELECT 3", "peer.service", "db"))
-                .order(30)
-                .build();
+        var query1 = jdbcQuery("q1", "SELECT 1").order(10).build();
+        var query2 = jdbcQuery("q2", "SELECT 2").order(20).build();
+        var query3 = jdbcQuery("q3", "SELECT 3").order(30).build();
 
         var traceData = TraceDatas.of("trace1", query1, query2, query3);
 
@@ -392,15 +372,12 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldReturnNullRowCountWhenRowCountIsMalformed() {
-        var querySpan = query("q1")
-                .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
-                .order(10)
-                .build();
+        var querySpan = jdbcQuery("q1", "SELECT * FROM users").order(10).build();
         var resultSetSpan = span("rs1")
                 .named("result-set")
                 .kind(Span.Kind.CLIENT)
                 .at(1100, 5)
-                .tags(Map.of("jdbc.row-count", "not-a-number", "peer.service", "db"))
+                .tags(Map.of("jdbc.row-count", "not-a-number", "peer.service", "sample_app_db"))
                 .order(11)
                 .build();
 
