@@ -28,7 +28,7 @@ class MachineInfoTest {
     }
 
     private static Signals signals(Path cpuinfo, OperatingSystemMXBean os) {
-        return new Signals(cpuinfo, 8, os, 512L * 1024 * 1024, ContainerRuntime.DOCKER, NO_NETWORK);
+        return new Signals(cpuinfo, 8, os, ContainerRuntime.DOCKER, NO_NETWORK);
     }
 
     /** Two processors on one physical core each, in the kernel's key\t: value shape. */
@@ -93,18 +93,16 @@ class MachineInfoTest {
     }
 
     @Test
-    void theProcessorCountHeapContainerAndAddressesAreCarriedThrough(@TempDir Path dir) throws Exception {
+    void theProcessorCountContainerAndAddressesAreCarriedThrough(@TempDir Path dir) throws Exception {
         List<NetworkAddress.Nic> nics =
                 List.of(new NetworkAddress.Nic(true, List.of(InetAddress.getByName("10.1.2.3"))));
         NetworkAddress.Signals oneNic =
                 new NetworkAddress.Signals(() -> nics, address -> "db-host", Duration.ofSeconds(1));
-        Signals signals = new Signals(
-                cpuinfo(dir), 8, hotspotBean(SIXTEEN_GIB), 512L * 1024 * 1024, ContainerRuntime.PODMAN, oneNic);
+        Signals signals = new Signals(cpuinfo(dir), 8, hotspotBean(SIXTEEN_GIB), ContainerRuntime.PODMAN, oneNic);
 
         MachineInfo info = MachineInfo.read(signals);
 
         assertThat(info.cpuCount()).isEqualTo(8);
-        assertThat(info.maxHeap()).isEqualTo(512L * 1024 * 1024);
         assertThat(info.container()).isEqualTo(ContainerRuntime.PODMAN);
         assertThat(info.networkAddresses()).containsExactly(new NetworkAddress("10.1.2.3", "db-host"));
     }

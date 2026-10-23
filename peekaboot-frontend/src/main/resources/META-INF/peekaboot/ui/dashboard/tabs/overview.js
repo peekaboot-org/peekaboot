@@ -169,7 +169,8 @@ function renderOsInfo(container, runtime) {
 }
 
 /**
- * The deployment environment: CPU, physical memory, the JVM's max heap, the
+ * The deployment environment: CPU, physical memory, the JVM's max heap (the
+ * memory reading's heapMax, the heap meter's own denominator), the
  * container runtime the backend detected ("none" outside one) and the machine's
  * non-local IP addresses. cpuCount and totalMemory come from the JDK, which is
  * container-aware - inside a limited container they report the container's share,
@@ -190,7 +191,7 @@ function renderMachineInfo(container, runtime, locale) {
     if (machine.cpuCount) body.appendChild(kvRow('CPU Cores', cpuCoresValue(machine, locale)));
     if (machine.cpuModel) body.appendChild(kvRow('CPU Model', machine.cpuModel));
     if (machine.totalMemory) body.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
-    if (machine.maxHeap) body.appendChild(kvRow('Max Heap', formatBytes(machine.maxHeap)));
+    if (runtime.memory?.heapMax) body.appendChild(kvRow('Max Heap', formatBytes(runtime.memory.heapMax)));
     body.appendChild(kvRow('Container', machine.container || 'none'));
 
     renderNetworkAddresses(body, machine.networkAddresses ?? [], previousFamily);

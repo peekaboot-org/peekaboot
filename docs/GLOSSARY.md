@@ -282,8 +282,9 @@ and optionally `isAvailable` to hide its own strip button.
 The landing tab, and the consumer of most of `ActuatorInsightsResponse`: the insights stat tiles,
 build/git/Spring/Java/OS info, the Machine card, JVM Defaults, the datasource cards beside it,
 the memory and storage meters, and the health banner with its component grid. The Machine card
-holds CPU count and model, total memory, max heap, the detected container runtime, and the
-machine's non-local addresses with reverse-resolved hostnames. Distinct from the Insights tab.
+holds CPU count and model, total memory, max heap (`memory.heapMax`, the heap meter's figure), the
+detected container runtime, and the machine's non-local addresses with reverse-resolved
+hostnames. Distinct from the Insights tab.
 
 ### Trace Detail
 The overlay over a single trace, `trace-detail/trace-detail.js`. It runs in a shadow root and is

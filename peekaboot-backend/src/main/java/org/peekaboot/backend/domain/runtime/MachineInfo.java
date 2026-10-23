@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * The machine (or container) the JVM runs on: logical processor count, CPU model and
- * {@link CpuTopology}, total physical memory, the JVM's max heap, the detected
+ * {@link CpuTopology}, total physical memory, the detected
  * {@link ContainerRuntime}, and the non-local {@link NetworkAddress}es.
  *
  * <p>Inside a container with limits, the JDK itself is container-aware: {@code cpuCount}
@@ -22,7 +22,6 @@ public record MachineInfo(
         String cpuModel,
         CpuTopology cpuTopology,
         Long totalMemory,
-        long maxHeap,
         ContainerRuntime container,
         List<NetworkAddress> networkAddresses) {
 
@@ -35,7 +34,6 @@ public record MachineInfo(
             Path cpuinfo,
             int cpuCount,
             OperatingSystemMXBean os,
-            long maxHeap,
             ContainerRuntime container,
             NetworkAddress.Signals network) {
 
@@ -45,7 +43,6 @@ public record MachineInfo(
                     Path.of("/proc/cpuinfo"),
                     runtime.availableProcessors(),
                     ManagementFactory.getOperatingSystemMXBean(),
-                    runtime.maxMemory(),
                     ContainerRuntime.current(),
                     NetworkAddress.Signals.fromRuntime());
         }
@@ -67,7 +64,6 @@ public record MachineInfo(
                 cpuinfo.model(),
                 cpuinfo.topology(),
                 readTotalMemory(signals.os()),
-                signals.maxHeap(),
                 signals.container(),
                 NetworkAddress.discover(signals.network()));
     }

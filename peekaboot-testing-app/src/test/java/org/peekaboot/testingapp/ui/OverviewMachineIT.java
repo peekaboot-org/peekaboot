@@ -3,18 +3,21 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Route;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.runtime.ContainerRuntime;
 import org.peekaboot.backend.domain.runtime.CpuTopology;
 import org.peekaboot.backend.domain.runtime.MachineInfo;
 import org.peekaboot.backend.domain.runtime.NetworkAddress;
+import tools.jackson.databind.node.ObjectNode;
 
 class OverviewMachineIT extends PlaywrightTestBase {
 
     /**
-     * The two byte rows against the machine this JVM runs on, formatted by the shared
+     * The Total Memory row against the machine this JVM runs on, formatted by the shared
      * formatter the row itself uses - a card of labels over placeholder numbers passes a
      * presence check and fails this.
      */
@@ -26,7 +29,25 @@ class OverviewMachineIT extends PlaywrightTestBase {
         MachineInfo current = MachineInfo.current();
         assertThat(page.textContent("#machine-info")).contains("CPU Cores");
         assertThat(dashboard.kvValue("#machine-info", "Total Memory")).isEqualTo(formatBytes(current.totalMemory()));
-        assertThat(dashboard.kvValue("#machine-info", "Max Heap")).isEqualTo(formatBytes(current.maxHeap()));
+    }
+
+    /**
+     * Max Heap is the memory reading's heapMax, the figure the heap meter divides by. The served
+     * value is replaced so that no other heap reading can match it by chance.
+     */
+    @Test
+    void maxHeapRowShowsTheHeapMetersMaximum() {
+        long servedHeapMax = 123_456_789L;
+        page.route("**/peekaboot/api/actuator/all/insights**", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode insights = (ObjectNode) readJson(response.text());
+            ((ObjectNode) insights.path("runtime").path("memory")).put("heapMax", servedHeapMax);
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(insights.toString()));
+        });
+        openDashboard();
+        page.waitForSelector("#machine-info .pk-kv");
+
+        assertThat(dashboard.kvValue("#machine-info", "Max Heap")).isEqualTo(formatBytes(servedHeapMax));
     }
 
     /** What the card renders a byte count as; the same module the card builds its rows with. */
