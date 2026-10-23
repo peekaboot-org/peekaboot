@@ -17,8 +17,9 @@ import org.springframework.context.annotation.Profile;
  *
  * <p>Same trick as {@link DeferredSchedulingConfig}: test sources under the application's own
  * package, a plain {@code @Configuration} the component scan finds without anyone naming it,
- * and the two profiles the IT suite boots under so the fixtures stay out of a real run and out
- * of the screenshot run. The controllers themselves live in {@code org.peekaboot.fixtures},
+ * and the {@code test} and {@code security} profiles, so the fixtures stay out of a real run
+ * and out of the screenshot run. {@code auto-security} names its own fixtures
+ * ({@code AutoSecuredDashboardIT}). The controllers themselves live in {@code org.peekaboot.fixtures},
  * outside that scan root, so this class alone decides which contexts get them - the same
  * reasoning that keeps {@code PeekabootSecurityConfig} out of it.
  */
