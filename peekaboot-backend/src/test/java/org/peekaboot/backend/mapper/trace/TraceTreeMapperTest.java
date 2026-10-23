@@ -39,53 +39,48 @@ class TraceTreeMapperTest {
 
     private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE);
 
+    /** child2 is created before child1 but starts after it, so only the start-time sort puts child1 first. */
     @Test
     void buildsATreeFromFlatSpans() {
-        // A trace with root -> child1 -> grandchild, and root -> child2
         var rootSpan = span("span-root")
                 .named("root-op")
                 .kind(Span.Kind.SERVER)
                 .at(0, 100)
-                .tags(Map.of("service.name", "api"))
-                .build();
-        var child1 = span("span-child1")
-                .parent("span-root")
-                .named("child1-op")
-                .kind(Span.Kind.CLIENT)
-                .at(10, 40)
-                .tags(Map.of("service.name", "api"))
+                .order(1)
                 .build();
         var child2 = span("span-child2")
                 .parent("span-root")
                 .named("child2-op")
                 .kind(Span.Kind.CLIENT)
                 .at(50, 30)
-                .tags(Map.of("service.name", "api"))
+                .order(2)
+                .build();
+        var child1 = span("span-child1")
+                .parent("span-root")
+                .named("child1-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 40)
+                .order(3)
                 .build();
         var grandchild = span("span-grandchild")
                 .parent("span-child1")
                 .named("grandchild-op")
                 .kind(Span.Kind.CLIENT)
                 .at(15, 20)
-                .tags(Map.of("service.name", "api"))
+                .order(4)
                 .build();
 
-        var traceData = TraceDatas.of("trace1", rootSpan, child1, child2, grandchild);
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan, child1, child2, grandchild));
+
         assertThat(result.traceId()).isEqualTo("trace1");
-        assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("span-root");
         assertThat(result.rootSpan().name()).isEqualTo("root-op");
-        assertThat(result.rootSpan().children()).hasSize(2);
-
-        // Children should be sorted by startTime
-        assertThat(result.rootSpan().children().get(0).spanId()).isEqualTo("span-child1");
-        assertThat(result.rootSpan().children().get(1).spanId()).isEqualTo("span-child2");
-
-        // Grandchild should be under child1
-        SpanNode child1Node = result.rootSpan().children().get(0);
-        assertThat(child1Node.children()).hasSize(1);
-        assertThat(child1Node.children().get(0).spanId()).isEqualTo("span-grandchild");
+        assertThat(result.rootSpan().children())
+                .extracting(SpanNode::spanId)
+                .containsExactly("span-child1", "span-child2");
+        assertThat(result.rootSpan().children().get(0).children())
+                .extracting(SpanNode::spanId)
+                .containsExactly("span-grandchild");
     }
 
     @Test
