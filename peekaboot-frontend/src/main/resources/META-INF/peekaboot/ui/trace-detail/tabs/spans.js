@@ -19,7 +19,7 @@
  * depth 0 and every bar to the left edge.
  */
 import {el, button} from '../../shared/dom.js';
-import {formatCount, formatDurationMs, formatTimelineTicks} from '../../shared/format.js';
+import {byKey, formatCount, formatDurationMs, formatTimelineTicks} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {sqlView} from '../../shared/sql-view.js';
@@ -382,9 +382,9 @@ function logsBySpan(logs) {
     return bySpan;
 }
 
-/** Full keys, since short ones collide (db.system.name, jdbc.datasource.name), in key order, since the backend's map has none. */
+/** Full keys, since short ones collide (db.system.name, jdbc.datasource.name), in key order (byKey), since the backend's map has none. */
 function tagList(tags) {
-    const entries = Object.entries(tags || {}).sort(([a], [b]) => a.localeCompare(b));
+    const entries = Object.entries(tags || {}).sort(byKey);
     if (entries.length === 0) return null;
     return el('dl', {className: 'pk-span-tags'},
         ...entries.flatMap(([key, value]) => [

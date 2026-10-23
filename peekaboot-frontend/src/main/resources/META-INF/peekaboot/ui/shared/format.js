@@ -140,6 +140,13 @@ export function formatPlainValue(value) {
     return String(value);
 }
 
+/**
+ * Compares two `[key, value]` entries by key in code-point order, not localeCompare's:
+ * collation is the reader's browser setting, and two readers must not see the same trace's
+ * headers, parameters or tags in different orders.
+ */
+export const byKey = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** `Number(n).toLocaleString(locale)` - grouped in `locale`, or the reader's browser locale when it is undefined. */
 export function formatNumber(n, {locale} = {}) {
     return Number(n).toLocaleString(locale);

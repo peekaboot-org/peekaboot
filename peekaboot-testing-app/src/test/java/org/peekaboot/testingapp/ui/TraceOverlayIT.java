@@ -1800,6 +1800,28 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
+     * Key order is code-point order, the one the Request tab sorts headers by: the browser's
+     * collation would put "a.token" before "B.cache", and two readers must not see the same
+     * trace's tags in different orders.
+     */
+    @Test
+    void spanTagsAreInCodePointOrderNotTheBrowsersCollation() {
+        Object keys = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'a',
+                    tags: {'a.token': '1', 'B.cache': '2', '_internal': '3'}}});
+                container.querySelector('.pk-gantt-all-details').click();
+                return Array.from(container.querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<String> tagKeys = (List<String>) keys;
+        assertThat(tagKeys).containsExactly("B.cache", "_internal", "a.token");
+    }
+
+    /**
      * The gantt's subtree toggle: collapsing the root hides every deeper row and flips the
      * control's own state, so a screen reader and the eye agree. Measured on rows rather than
      * on the button, since hiding is what the reader came for.

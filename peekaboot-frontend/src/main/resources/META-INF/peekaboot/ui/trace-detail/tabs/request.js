@@ -6,12 +6,8 @@
 import {MASK_LITERAL} from '../../shared/markup.js';
 import {badge, emptyState} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
-import {formatCount, formatDurationMs} from '../../shared/format.js';
+import {byKey, formatCount, formatDurationMs} from '../../shared/format.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
-
-// Code-point order, not localeCompare's: collation is the reader's browser setting, and
-// two readers must not see the same trace's headers and parameters in different orders.
-const byKey = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
 
 function kvTable(rows) {
     return el('table', {className: 'pk-table pk-table--kv'}, ...rows);
