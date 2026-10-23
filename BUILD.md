@@ -30,17 +30,22 @@ Gradle build must be kept in lockstep.
                        # before `verify`
 ./mvnw spotless:apply  # format (local builds already do this for you)
 
-./mvnw -pl <module> test -Dtest=<Class>             # one unit-test class; never add -am
+./mvnw -pl <module> test -Dtest=<Class>             # one unit-test class
 ./mvnw -pl <module> verify -Dit.test=<Class>        # one *IT class (runs this module's
                                                     # gates too; that's inherent to verify)
 ./mvnw -pl <module> -am verify -Dit.test=<Class> \
     -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false \
-    -Dfailsafe.failIfNoSpecifiedTests=false         # the same against uncommitted sibling-module
-                                                    # changes: both skip flags, or failsafe fails the
-                                                    # first upstream module with "No tests matching pattern"
+    -Dfailsafe.failIfNoSpecifiedTests=false         # the same against uncommitted
+                                                    # sibling-module changes
 ./mvnw -pl peekaboot-testing-app spring-boot:run    # sample app on :8093; needs Docker
                                                     # and an `./mvnw install` beforehand
 ```
+
+`-pl` without `-am` resolves the sibling modules from `~/.m2`, which holds whatever was
+installed last. With `-am`, `-Dtest` and `-Dit.test` apply to every upstream module as well,
+and the first one without a matching class fails with "No tests matching pattern". So `-am`
+with `-Dtest` needs `-Dsurefire.failIfNoSpecifiedTests=false`, and `-am` with `-Dit.test`
+needs `-Dfailsafe.failIfNoSpecifiedTests=false`.
 
 ### What each command actually checks
 
@@ -406,7 +411,6 @@ covers only the build mechanics.
   `TraceWritePathBenchmark`. Neither matches those includes. Running either is Maven
   only: `-Dtest=` widens Surefire's includes, while Gradle's `--tests` only filters within
   a task's own includes, so no Gradle task can reach them.
-- Never combine `-am` with `-Dtest`.
 
 ## CI
 

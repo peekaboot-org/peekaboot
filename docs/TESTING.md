@@ -381,7 +381,8 @@ would fail the context of every test that excluded the auto-configuration. Both 
 test author needs on top of it:
 
 - Fast gate: `./mvnw test` (root). Unit tests plus the gates bound before the `test` phase. Single
-  unit-test class: `./mvnw -pl <module> test -Dtest=<Class>`. Never combine `-am` with `-Dtest`.
+  unit-test class: `./mvnw -pl <module> test -Dtest=<Class>`. Adding `-am` needs the flags
+  [`BUILD.md`](../BUILD.md#commands) names.
 - Full reactor, `./mvnw clean verify`: unit tests, integration tests and every gate.
 - Everything that boots an application lives in `*IT` classes (failsafe, `integration-test`
   phase) and only runs under `verify`. Single class: `./mvnw -pl <module> verify -Dit.test=<Class>`.
