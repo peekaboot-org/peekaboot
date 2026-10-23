@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.store.SpanData;
 
 /**
@@ -83,6 +84,16 @@ public final class Spans {
                 .tag("db.system", "redis")
                 .tag("db.operation", command)
                 .tag("peer.service", "Redis");
+    }
+
+    /**
+     * The span {@code AsyncTaskDecorator}'s observation exports for one task: named and tagged
+     * with Peekaboot's async marker, no kind, no thread tag unless the test sets one.
+     */
+    public static SpanBuilder asyncTask(String spanId) {
+        return span(spanId)
+                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE);
     }
 
     public static final class SpanBuilder {

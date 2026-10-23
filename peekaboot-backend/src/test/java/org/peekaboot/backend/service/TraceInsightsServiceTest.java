@@ -3,6 +3,7 @@ package org.peekaboot.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Logs.log;
+import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
@@ -16,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.config.UiTracingProperties;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.HttpRequest;
@@ -887,11 +887,9 @@ class TraceInsightsServiceTest {
 
     /** The span Peekaboot's decorator exports for one task, dispatched 10ms before the request ended. */
     private static SpanData asyncTaskSpan(String traceId, long requestMs, long asyncMs) {
-        return span("async-" + traceId)
+        return asyncTask("async-" + traceId)
                 .in(traceId)
                 .parent("span-" + traceId)
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .at(requestMs - 10, asyncMs)
                 .build();
     }
@@ -904,19 +902,15 @@ class TraceInsightsServiceTest {
     private void addTraceWithTwoAsyncTasks(String traceId, long requestMs) {
         store.addSpan(
                 rootSpan(traceId, "test-operation", Span.Kind.SERVER, requestMs).build());
-        store.addSpan(span("async-a-" + traceId)
+        store.addSpan(asyncTask("async-a-" + traceId)
                 .in(traceId)
                 .parent("span-" + traceId)
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .tag("async.id", "a")
                 .at(requestMs - 10, 240_000)
                 .build());
-        store.addSpan(span("async-b-" + traceId)
+        store.addSpan(asyncTask("async-b-" + traceId)
                 .in(traceId)
                 .parent("span-" + traceId)
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .tag("async.id", "b")
                 .at(requestMs - 10, 5_000)
                 .build());
@@ -924,11 +918,9 @@ class TraceInsightsServiceTest {
 
     /** Background work whose triggering trace was evicted before it arrived. */
     private void addOrphanedAsyncWork(String traceId, long asyncMs) {
-        store.addSpan(span("async-" + traceId)
+        store.addSpan(asyncTask("async-" + traceId)
                 .in(traceId)
                 .parent("gone")
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .at(0, asyncMs)
                 .build());
     }

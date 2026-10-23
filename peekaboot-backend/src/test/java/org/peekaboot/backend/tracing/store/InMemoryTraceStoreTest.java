@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Logs.log;
+import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
@@ -11,7 +12,6 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -192,7 +192,11 @@ class InMemoryTraceStoreTest {
     void aTraceIsNotSlowOnAsyncWorkAlone() {
         InMemoryTraceStore store = storeWithSlowThreshold(1_000);
         store.addSpan(span("root").in("t1").at(START, Duration.ofMillis(50)).build());
-        store.addSpan(asyncSpan("t1", "root", START.plusMillis(40), Duration.ofMinutes(4)));
+        store.addSpan(asyncTask("async")
+                .in("t1")
+                .parent("root")
+                .at(START.plusMillis(40), Duration.ofMinutes(4))
+                .build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
     }
@@ -201,7 +205,11 @@ class InMemoryTraceStoreTest {
     void aTraceIsStillSlowOnItsOwnSynchronousWork() {
         InMemoryTraceStore store = storeWithSlowThreshold(1_000);
         store.addSpan(span("root").in("t1").at(START, Duration.ofMillis(1_500)).build());
-        store.addSpan(asyncSpan("t1", "root", START.plusMillis(100), Duration.ofMinutes(4)));
+        store.addSpan(asyncTask("async")
+                .in("t1")
+                .parent("root")
+                .at(START.plusMillis(100), Duration.ofMinutes(4))
+                .build());
 
         assertThat(listedTraceIds(store, TraceBucket.SLOW, 10)).containsExactly("t1");
     }
@@ -210,7 +218,8 @@ class InMemoryTraceStoreTest {
     @Test
     void aPurelyAsyncTraceIsSlowOnItsOwnDuration() {
         InMemoryTraceStore store = storeWithSlowThreshold(1_000);
-        store.addSpan(asyncSpan("t1", null, START, Duration.ofMillis(3_700)));
+        store.addSpan(
+                asyncTask("async").in("t1").at(START, Duration.ofMillis(3_700)).build());
 
         assertThat(listedTraceIds(store, TraceBucket.SLOW, 10)).containsExactly("t1");
     }
@@ -240,7 +249,11 @@ class InMemoryTraceStoreTest {
                 .as("with its parent still missing, the child counts as work the caller waited for")
                 .containsExactly("t1");
 
-        store.addSpan(asyncSpan("t1", "root", START.plusMillis(40), Duration.ofMinutes(4)));
+        store.addSpan(asyncTask("async")
+                .in("t1")
+                .parent("root")
+                .at(START.plusMillis(40), Duration.ofMinutes(4))
+                .build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
         assertThat(store.getTrace("t1").orElseThrow().snapshot().duration())
@@ -283,7 +296,11 @@ class InMemoryTraceStoreTest {
                 .named("render")
                 .at(START.plusMillis(30), Duration.ofMillis(10))
                 .build());
-        store.addSpan(asyncSpan("t1", "root", START.plusMillis(90), Duration.ofMillis(3_010)));
+        store.addSpan(asyncTask("async")
+                .in("t1")
+                .parent("root")
+                .at(START.plusMillis(90), Duration.ofMillis(3_010))
+                .build());
 
         assertThat(listedTraceIds(store, TraceBucket.SLOW, 10)).containsExactly("t1");
         TraceData snapshot = store.getTrace("t1").orElseThrow().snapshot();
@@ -509,17 +526,6 @@ class InMemoryTraceStoreTest {
         return span(traceId + "-s")
                 .in(traceId)
                 .error("boom", "java.lang.RuntimeException")
-                .build();
-    }
-
-    /** A span carrying Peekaboot's async marker, as AsyncTaskDecorator's observation exports it. */
-    private static SpanData asyncSpan(String traceId, String parentId, Instant startTime, Duration duration) {
-        return span("async")
-                .in(traceId)
-                .parent(parentId)
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
-                .at(startTime, duration)
                 .build();
     }
 }

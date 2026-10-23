@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Logs.log;
+import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
@@ -656,10 +657,8 @@ class TraceDataBundleTest {
      * the shape these tests are exercising.
      */
     private SpanData asyncSpan(String spanId, String parentId, long startOffsetMs, long durationMs) {
-        return span(spanId)
+        return asyncTask(spanId)
                 .parent(parentId)
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .tag(AsyncTaskMarker.THREAD_TAG_KEY, spanId)
                 .at(startOffsetMs, durationMs)
                 .build();
@@ -667,12 +666,7 @@ class TraceDataBundleTest {
 
     /** An async span with no thread tag, so two of them are tag-for-tag identical and one folds into the other. */
     private SpanData markedTwin(String spanId, String parentId) {
-        return span(spanId)
-                .parent(parentId)
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
-                .at(0, 100)
-                .build();
+        return asyncTask(spanId).parent(parentId).at(0, 100).build();
     }
 
     /** Named after its own span id, so a plain span parented under another plain span is never

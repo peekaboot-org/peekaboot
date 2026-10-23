@@ -2,6 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.redisCommand;
@@ -449,7 +450,7 @@ class TraceTreeMapperTest {
     @Test
     void theSpanSummaryExcludesAsyncSpansFromTheSummedDuration() {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = asyncEntry("async", "root", 40, 240_000);
+        var async = asyncTask("async").parent("root").at(40, 240_000).build();
 
         var traceData = TraceDatas.of("trace1", root, async);
 
@@ -462,10 +463,8 @@ class TraceTreeMapperTest {
     @Test
     void anErrorInAsyncWorkStillCountsTowardsTheTraceStatus() {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = span("async")
+        var async = asyncTask("async")
                 .parent("root")
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
                 .error("boom", "java.lang.RuntimeException")
                 .at(40, 1_000)
                 .build();
@@ -481,7 +480,7 @@ class TraceTreeMapperTest {
     @Test
     void mapsAnAsyncSubtreeAsATreeOfItsOwn() {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = asyncEntry("async", "root", 40, 240_000);
+        var async = asyncTask("async").parent("root").at(40, 240_000).build();
         var deep = span("deep").parent("async").at(100, 200_000).build();
 
         var traceData = TraceDatas.of("trace1", root, async, deep);
@@ -504,7 +503,7 @@ class TraceTreeMapperTest {
     void theSubtreeWindowCoversAChildThatOutlivesItsParent() {
         var root =
                 span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = asyncEntry("async", "root", 40, 1_000);
+        var async = asyncTask("async").parent("root").at(40, 1_000).build();
         var deep =
                 span("deep").named("deep-op").parent("async").at(100, 240_000).build();
 
@@ -524,7 +523,7 @@ class TraceTreeMapperTest {
     void mapSubtreeSummarisesTheSubtreeNotTheEnclosingTrace() {
         var root =
                 span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = asyncEntry("async", "root", 40, 1_000);
+        var async = asyncTask("async").parent("root").at(40, 1_000).build();
         var deep = span("deep").named("deep-op").parent("async").at(50, 900).build();
 
         var traceData = TraceDatas.of("trace1", root, async, deep);
@@ -538,7 +537,7 @@ class TraceTreeMapperTest {
     /** An orphan has no parent in the trace, so there is no enclosing trace to link back to. */
     @Test
     void anOrphanedAsyncSubtreeIsNotEnclosedByAStoredTrace() {
-        var async = asyncEntry("async", "evicted", 0, 3_700);
+        var async = asyncTask("async").parent("evicted").at(0, 3_700).build();
 
         var traceData = TraceDatas.of("trace1", async);
 
@@ -568,7 +567,7 @@ class TraceTreeMapperTest {
                 span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 50).build();
         var requestQuery =
                 jdbcQuery("q-request", "select 1").parent("root").at(10, 5).build();
-        var async = asyncEntry("async", "root", 40, 1_000);
+        var async = asyncTask("async").parent("root").at(40, 1_000).build();
         var taskQuery =
                 jdbcQuery("q-task", "select 2").parent("async").at(50, 5).build();
 
@@ -603,7 +602,7 @@ class TraceTreeMapperTest {
     @Test
     void marksAnAsyncEntrySpanInTheTree() {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = asyncEntry("async", "root", 40, 1_000);
+        var async = asyncTask("async").parent("root").at(40, 1_000).build();
         var deep = span("deep").parent("async").at(50, 900).build();
 
         var traceData = TraceDatas.of("trace1", root, async, deep);
@@ -959,11 +958,7 @@ class TraceTreeMapperTest {
     void detectsAsyncTaskRootActionTypeFromPeekabootsOwnMarker() {
         // The shape AsyncTaskDecorator produces: no Span.Kind, because a plain
         // Observation.Context is not a Sender/Receiver-style context, plus the marker key.
-        var rootSpan = span("root")
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .at(0, 100)
-                .tags(Map.of(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE))
-                .build();
+        var rootSpan = asyncTask("root").at(0, 100).build();
 
         var traceData = TraceDatas.of("trace1", rootSpan);
 
@@ -979,16 +974,10 @@ class TraceTreeMapperTest {
      */
     @Test
     void theAsyncMarkerOutranksTheScheduledTaskTagPair() {
-        var rootSpan = span("root")
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
+        var rootSpan = asyncTask("root")
                 .at(0, 100)
-                .tags(Map.of(
-                        AsyncTaskMarker.TAG_KEY,
-                        AsyncTaskMarker.TAG_VALUE,
-                        "code.function",
-                        "enrich",
-                        "code.namespace",
-                        "org.example.Enricher"))
+                .tag("code.function", "enrich")
+                .tag("code.namespace", "org.example.Enricher")
                 .build();
 
         var traceData = TraceDatas.of("trace1", rootSpan);
@@ -1331,15 +1320,6 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().children())
                 .extracting(SpanNode::spanId, SpanNode::rowCount)
                 .containsExactly(tuple("q1", 10L), tuple("rs", null), tuple("q2", null), tuple("rs2", null));
-    }
-
-    private static SpanData asyncEntry(String spanId, String parentId, long startOffsetMs, long durationMs) {
-        return span(spanId)
-                .parent(parentId)
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
-                .at(startOffsetMs, durationMs)
-                .build();
     }
 
     private static String statementText(SpanNode node) {

@@ -93,7 +93,8 @@ webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
 `Spans.span(id)` builds a `SpanData` with neutral defaults, alongside the `query` preset for a
 JDBC-shaped query span, `resultSet(id, rowCount)` for the row-count span datasource-proxy
 exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair and
-`jdbcConnection` for the pool acquisition datasource-micrometer exports. A query fixture's bind
+`jdbcConnection` for the pool acquisition datasource-micrometer exports, and `asyncTask` for the
+span Peekaboot's async decorator exports. A query fixture's bind
 parameters are its `DbSpans.PARAMETERS_TAG` tag, in the JSON `QueryParameterObservationFilter`
 writes (`.tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")`); `SpanNodes.node(id).query(...)` takes the
 mapped `SqlStatement`.
