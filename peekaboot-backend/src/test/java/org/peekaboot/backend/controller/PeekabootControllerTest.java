@@ -59,15 +59,21 @@ class PeekabootControllerTest {
 
         when(metricsService.isAvailable()).thenReturn(true);
 
-        controller = new PeekabootController(
+        controller = controller(tracingProperties, null, false);
+    }
+
+    /** The controller over the test's fields, with the three constructor arguments the feature tests vary. */
+    private PeekabootController controller(
+            PeekabootTracingProperties tracing, InsightsService insights, boolean spanSourceWired) {
+        return new PeekabootController(
                 actuatorInsightsService,
                 traceInsightsService,
                 metricsService,
                 properties,
                 uiTracingProperties,
-                tracingProperties,
-                null,
-                false);
+                tracing,
+                insights,
+                spanSourceWired);
     }
 
     @Nested
@@ -81,7 +87,7 @@ class PeekabootControllerTest {
 
             TraceInsightsResponse result = controller.getTracesInsights(100, null, "SCHEDULED_JOB", "MyScheduler");
 
-            assertThat(result).isEqualTo(expectedResponse);
+            assertThat(result).isSameAs(expectedResponse);
         }
 
         @Test
@@ -203,15 +209,8 @@ class PeekabootControllerTest {
 
         @Test
         void shouldIncludeInsightsFeatureAsTrueWhenInsightsServicePresent() {
-            PeekabootController controllerWithInsights = new PeekabootController(
-                    actuatorInsightsService,
-                    traceInsightsService,
-                    metricsService,
-                    properties,
-                    uiTracingProperties,
-                    tracingProperties,
-                    mock(InsightsService.class),
-                    false);
+            PeekabootController controllerWithInsights =
+                    controller(tracingProperties, mock(InsightsService.class), false);
 
             assertThat(controllerWithInsights.getFeatures().insights()).isTrue();
         }
@@ -246,30 +245,14 @@ class PeekabootControllerTest {
         /** With tracing off there is no store and no tracing properties bean - nothing to publish. */
         @Test
         void shouldLeaveTheSlowTraceThresholdNullWhenTracingIsOff() {
-            PeekabootController withoutTracing = new PeekabootController(
-                    actuatorInsightsService,
-                    traceInsightsService,
-                    metricsService,
-                    properties,
-                    uiTracingProperties,
-                    null,
-                    null,
-                    false);
+            PeekabootController withoutTracing = controller(null, null, false);
 
             assertThat(withoutTracing.getFeatures().slowTraceThresholdMs()).isNull();
         }
 
         @Test
         void shouldReportTracingSpansPossibleWhenASpanSourceIsWired() {
-            PeekabootController withSpanSource = new PeekabootController(
-                    actuatorInsightsService,
-                    traceInsightsService,
-                    metricsService,
-                    properties,
-                    uiTracingProperties,
-                    tracingProperties,
-                    null,
-                    true);
+            PeekabootController withSpanSource = controller(tracingProperties, null, true);
 
             assertThat(withSpanSource.getFeatures().tracingSpansPossible()).isTrue();
         }
