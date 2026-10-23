@@ -8,7 +8,7 @@ import java.util.stream.Stream;
  * Every ring of every series, as persisted. {@code series} maps a namespaced series id
  * to one entry per level; each entry is that level's columns, oldest sample first -
  * a single {@code values} column at level 0, and the eight {@link #STAT_COLUMNS} at
- * levels &ge; 1. Unlike {@link LevelSnapshot}, which serves the API, this carries the
+ * levels &ge; 1. Unlike {@link LevelData}, which serves the API, this carries the
  * internal {@code samples} column: the next roll-up weights its average by it.
  */
 public record InsightsSnapshot(long writtenAtEpochMs, List<Level> levels, Map<String, List<double[][]>> series) {

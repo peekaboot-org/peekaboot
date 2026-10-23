@@ -213,7 +213,7 @@ public final class InsightsService implements SmartLifecycle {
         if (level < 0 || level >= properties.getLevels().size()) {
             throw new IllegalArgumentException("Unknown insights level: " + level);
         }
-        return collector.snapshot(level).toResponse();
+        return collector.levelData(level).toResponse();
     }
 
     public long estimatedMemoryBytes() {

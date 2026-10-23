@@ -13,7 +13,7 @@ import org.peekaboot.backend.domain.insights.LevelDataResponse;
  * {@code statValues} carries aggregated windows for levels &ge; 1
  * (seriesId -&gt; statName -&gt; values, oldest first).
  */
-public record LevelSnapshot(
+public record LevelData(
         int level,
         long intervalMs,
         long endEpochMs,

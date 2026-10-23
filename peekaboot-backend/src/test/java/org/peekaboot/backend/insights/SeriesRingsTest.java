@@ -20,10 +20,10 @@ class SeriesRingsTest {
 
         rings.appendTick(10_000, Map.of("a", 1.0, "unknown", 9.0));
 
-        LevelSnapshot snapshot = rings.snapshot(0);
-        assertThat(snapshot.count()).isEqualTo(1);
-        assertThat(snapshot.tickValues().get("a")).containsExactly(1.0);
-        assertThat(snapshot.tickValues().get("b")).containsExactly(Double.NaN);
+        LevelData data = rings.levelData(0);
+        assertThat(data.count()).isEqualTo(1);
+        assertThat(data.tickValues().get("a")).containsExactly(1.0);
+        assertThat(data.tickValues().get("b")).containsExactly(Double.NaN);
     }
 
     @Test
@@ -33,10 +33,10 @@ class SeriesRingsTest {
 
         rings.appendStats(1, 60_000, Map.of("a", stats, "unknown", stats));
 
-        LevelSnapshot snapshot = rings.snapshot(1);
-        assertThat(snapshot.count()).isEqualTo(1);
-        assertThat(snapshot.statValues().get("a").get("avg")).containsExactly(2.0);
-        assertThat(snapshot.statValues().get("b").get("avg")).containsExactly(Double.NaN);
+        LevelData data = rings.levelData(1);
+        assertThat(data.count()).isEqualTo(1);
+        assertThat(data.statValues().get("a").get("avg")).containsExactly(2.0);
+        assertThat(data.statValues().get("b").get("avg")).containsExactly(Double.NaN);
     }
 
     /**

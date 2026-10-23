@@ -16,7 +16,7 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
  * <p>Written by one collector thread per level, and once by {@link #restore} ahead of their
  * first write; read by the API and the snapshot writer. A tick or roll-up lands as one write
  * under one lock: its gap fill, every series' sample and the stamp that dates them. A restore
- * holds the same lock, and {@link #snapshot(int)}, {@link #capture()} and the roll-up window
+ * holds the same lock, and {@link #levelData(int)}, {@link #capture()} and the roll-up window
  * reads run under it, so a reader sees whole ticks only. Meters are sampled before the write, so
  * the lock covers in-memory appends and nothing slower.
  */
@@ -155,7 +155,7 @@ final class SeriesRings {
      * samples and {@code endEpochMs} dates the newest. The chart dates each sample from those
      * two, so a partial tick would misdate every sample and repeat the next live event.
      */
-    LevelSnapshot snapshot(int level) {
+    LevelData levelData(int level) {
         synchronized (lock) {
             long intervalMs = intervalMillis[level];
             long endEpochMs = levelEndEpochMs.get(level);
@@ -167,7 +167,7 @@ final class SeriesRings {
                     tickValues.put(entry.getKey(), values);
                     count = values.length;
                 }
-                return new LevelSnapshot(0, intervalMs, endEpochMs, count, tickValues, Map.of());
+                return new LevelData(0, intervalMs, endEpochMs, count, tickValues, Map.of());
             }
             Map<String, Map<String, double[]>> statValues = new LinkedHashMap<>();
             int count = 0;
@@ -176,14 +176,14 @@ final class SeriesRings {
                 statValues.put(entry.getKey(), ring.toArrays());
                 count = ring.size();
             }
-            return new LevelSnapshot(level, intervalMs, endEpochMs, count, Map.of(), statValues);
+            return new LevelData(level, intervalMs, endEpochMs, count, Map.of(), statValues);
         }
     }
 
     /**
      * Everything persistence needs: every level of every series, including the
-     * {@code samples} column the API's {@link #snapshot(int)} deliberately omits. Read under
-     * the same lock as {@link #appendTick}, like {@link #snapshot(int)}, so every level holds
+     * {@code samples} column the API's {@link #levelData(int)} deliberately omits. Read under
+     * the same lock as {@link #appendTick}, like {@link #levelData(int)}, so every level holds
      * whole ticks only, one sample count for every series, and its {@code endEpochMs} dates
      * the newest of them.
      */

@@ -6,12 +6,12 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 
-class LevelSnapshotTest {
+class LevelDataTest {
 
     /** JSON has no NaN, so every gap inside an aggregated column has to leave as null. */
     @Test
     void anAggregatedLevelMapsNaNToNullInsideEachStatColumn() {
-        LevelSnapshot snapshot = new LevelSnapshot(
+        LevelData data = new LevelData(
                 1,
                 60_000,
                 120_000,
@@ -19,7 +19,7 @@ class LevelSnapshotTest {
                 Map.of(),
                 Map.of("g", Map.of("avg", new double[] {5.0, Double.NaN}, "max", new double[] {Double.NaN, 9.0})));
 
-        LevelDataResponse response = snapshot.toResponse();
+        LevelDataResponse response = data.toResponse();
 
         LevelDataResponse.SeriesData series = response.series().get("g");
         assertThat(series.values())

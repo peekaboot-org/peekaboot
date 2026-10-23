@@ -192,9 +192,9 @@ public final class InsightsCollector {
         listener.onRollUp(level, epochMs, entries);
     }
 
-    /** One level's rings as the API reads them; see {@link SeriesRings#snapshot(int)}. */
-    LevelSnapshot snapshot(int level) {
-        return rings.snapshot(level);
+    /** One level's rings as the API reads them; see {@link SeriesRings#levelData(int)}. */
+    LevelData levelData(int level) {
+        return rings.levelData(level);
     }
 
     /** The rings as persistence writes them; see {@link SeriesRings#capture()}. */

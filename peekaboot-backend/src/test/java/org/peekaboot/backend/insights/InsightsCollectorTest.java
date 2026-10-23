@@ -75,10 +75,10 @@ class InsightsCollectorTest {
         collector.tick(10_000);
         gaugeValue.set(7);
         collector.tick(20_000);
-        LevelSnapshot snapshot = collector.snapshot(0);
-        assertThat(snapshot.count()).isEqualTo(2);
-        assertThat(snapshot.endEpochMs()).isEqualTo(20_000);
-        assertThat(snapshot.tickValues().get("g")).containsExactly(5.0, 7.0);
+        LevelData data = collector.levelData(0);
+        assertThat(data.count()).isEqualTo(2);
+        assertThat(data.endEpochMs()).isEqualTo(20_000);
+        assertThat(data.tickValues().get("g")).containsExactly(5.0, 7.0);
         assertThat(events).containsExactly("tick:5.0", "tick:7.0");
     }
 
@@ -89,11 +89,11 @@ class InsightsCollectorTest {
             collector.tick(i * 10_000L);
         }
         collector.rollUp(1, 60_000);
-        LevelSnapshot snapshot = collector.snapshot(1);
-        assertThat(snapshot.count()).isEqualTo(1);
-        assertThat(snapshot.statValues().get("g").get("min")).containsExactly(10.0);
-        assertThat(snapshot.statValues().get("g").get("max")).containsExactly(60.0);
-        assertThat(snapshot.statValues().get("g").get("avg")).containsExactly(35.0);
+        LevelData data = collector.levelData(1);
+        assertThat(data.count()).isEqualTo(1);
+        assertThat(data.statValues().get("g").get("min")).containsExactly(10.0);
+        assertThat(data.statValues().get("g").get("max")).containsExactly(60.0);
+        assertThat(data.statValues().get("g").get("avg")).containsExactly(35.0);
         assertThat(events).contains("rollup:1:35.0");
     }
 
@@ -108,11 +108,11 @@ class InsightsCollectorTest {
             collector.rollUp(1, (window + 1) * 60_000L);
         }
         collector.rollUp(2, 120_000);
-        LevelSnapshot snapshot = collector.snapshot(2);
-        assertThat(snapshot.count()).isEqualTo(1);
-        assertThat(snapshot.statValues().get("g").get("min")).containsExactly(100.0);
-        assertThat(snapshot.statValues().get("g").get("max")).containsExactly(200.0);
-        assertThat(snapshot.statValues().get("g").get("avg")).containsExactly(150.0);
+        LevelData data = collector.levelData(2);
+        assertThat(data.count()).isEqualTo(1);
+        assertThat(data.statValues().get("g").get("min")).containsExactly(100.0);
+        assertThat(data.statValues().get("g").get("max")).containsExactly(200.0);
+        assertThat(data.statValues().get("g").get("avg")).containsExactly(150.0);
     }
 
     @Test
@@ -122,10 +122,10 @@ class InsightsCollectorTest {
         gaugeValue.set(9);
         collector.tick(40_000); // three intervals later: two boundaries were missed
 
-        LevelSnapshot snapshot = collector.snapshot(0);
-        assertThat(snapshot.count()).isEqualTo(4);
-        assertThat(snapshot.endEpochMs()).isEqualTo(40_000);
-        double[] values = snapshot.tickValues().get("g");
+        LevelData data = collector.levelData(0);
+        assertThat(data.count()).isEqualTo(4);
+        assertThat(data.endEpochMs()).isEqualTo(40_000);
+        double[] values = data.tickValues().get("g");
         assertThat(values[0]).isEqualTo(5.0);
         assertThat(values[1]).isNaN();
         assertThat(values[2]).isNaN();
@@ -139,10 +139,10 @@ class InsightsCollectorTest {
         collector.tick(10_000);
         collector.tick(10_000 + 100 * 10_000L); // a suspend far longer than the 6-slot ring
 
-        LevelSnapshot snapshot = collector.snapshot(0);
-        assertThat(snapshot.count()).isEqualTo(6);
-        assertThat(snapshot.tickValues().get("g")[4]).isNaN();
-        assertThat(snapshot.tickValues().get("g")[5]).isEqualTo(0.0);
+        LevelData data = collector.levelData(0);
+        assertThat(data.count()).isEqualTo(6);
+        assertThat(data.tickValues().get("g")[4]).isNaN();
+        assertThat(data.tickValues().get("g")[5]).isEqualTo(0.0);
     }
 
     @Test
@@ -154,7 +154,7 @@ class InsightsCollectorTest {
         counter.increment(30);
         rateCollector.tick(40_000); // 30 counts over the real 30s, not over one nominal interval
 
-        double[] values = rateCollector.snapshot(0).tickValues().get("r");
+        double[] values = rateCollector.levelData(0).tickValues().get("r");
         assertThat(values[3]).isEqualTo(1.0);
     }
 
@@ -173,9 +173,9 @@ class InsightsCollectorTest {
         counter.increment(10);
         rateCollector.tick(15_000);
 
-        LevelSnapshot snapshot = rateCollector.snapshot(0);
-        assertThat(snapshot.count()).as("no gap for a boundary in the past").isEqualTo(3);
-        assertThat(snapshot.tickValues().get("r")[2])
+        LevelData data = rateCollector.levelData(0);
+        assertThat(data.count()).as("no gap for a boundary in the past").isEqualTo(3);
+        assertThat(data.tickValues().get("r")[2])
                 .as("10 counts over the nominal 10s, not over -5s")
                 .isEqualTo(1.0);
     }
@@ -189,10 +189,10 @@ class InsightsCollectorTest {
         collector.rollUp(1, 60_000);
         collector.rollUp(1, 240_000); // three intervals later: two boundaries were missed
 
-        LevelSnapshot snapshot = collector.snapshot(1);
-        assertThat(snapshot.count()).isEqualTo(4);
-        assertThat(snapshot.endEpochMs()).isEqualTo(240_000);
-        double[] avgs = snapshot.statValues().get("g").get("avg");
+        LevelData data = collector.levelData(1);
+        assertThat(data.count()).isEqualTo(4);
+        assertThat(data.endEpochMs()).isEqualTo(240_000);
+        double[] avgs = data.statValues().get("g").get("avg");
         assertThat(avgs[0]).isEqualTo(10.0);
         assertThat(avgs[1]).isNaN();
         assertThat(avgs[2]).isNaN();
@@ -291,13 +291,13 @@ class InsightsCollectorTest {
     }
 
     /**
-     * The API's snapshot races the level-0 thread the same way, and a snapshot that read its
+     * The API's level data races the level-0 thread the same way, and a read that took its
      * series across a tick would date their samples from an {@code endEpochMs} some of them do
      * not end at. Like {@link #rollUpRacingATickAggregatesTheSameTicksForEverySeries}, this
-     * covers the lock {@code snapshot} takes, which no parked test can reach.
+     * covers the lock {@code levelData} takes, which no parked test can reach.
      */
     @Test
-    void snapshotRacingATickSeesWholeTicksOnly() throws Exception {
+    void levelDataRacingATickSeesWholeTicksOnly() throws Exception {
         AtomicLong tickNumber = new AtomicLong();
         InsightsCollector racing = racingCollector(tickNumber, InsightsCollectors.noOpListener());
         Thread ticker = startTicker(racing, tickNumber, 500);
@@ -305,11 +305,9 @@ class InsightsCollectorTest {
         int torn = 0;
         while (ticker.isAlive()) {
             boolean ticking = tickNumber.get() > 0;
-            LevelSnapshot snapshot = racing.snapshot(0);
+            LevelData data = racing.levelData(0);
             if (!holdsWholeTicks(
-                    snapshot.endEpochMs(),
-                    snapshot.count(),
-                    snapshot.tickValues().values())) {
+                    data.endEpochMs(), data.count(), data.tickValues().values())) {
                 torn++;
             }
             if (ticking && ticker.isAlive()) {
@@ -324,7 +322,7 @@ class InsightsCollectorTest {
                 .isZero();
     }
 
-    /** The snapshot writer's capture, raced like {@link #snapshotRacingATickSeesWholeTicksOnly}. */
+    /** The snapshot writer's capture, raced like {@link #levelDataRacingATickSeesWholeTicksOnly}. */
     @Test
     void captureRacingATickSeesWholeTicksOnly() throws Exception {
         AtomicLong tickNumber = new AtomicLong();
@@ -359,7 +357,7 @@ class InsightsCollectorTest {
      * boundary too, so a capture often lands while a tick is running. The codec refuses a
      * column longer than its level's count, so such a capture must carry one count for every
      * series rather than fail the write and burn the store's one-shot failure log. Like
-     * {@link #snapshotTakenMidTickSeesOnlyWholeTicks}, this pins the append-after-sampling
+     * {@link #levelDataReadMidTickSeesOnlyWholeTicks}, this pins the append-after-sampling
      * order only.
      */
     @Test
@@ -382,26 +380,26 @@ class InsightsCollectorTest {
     }
 
     /**
-     * A tick samples every series before it appends any, so a snapshot taken while it is
+     * A tick samples every series before it appends any, so level data read while it is
      * still sampling sees only the previous whole tick. The chart dates sample i from
      * {@code endEpochMs} and {@code count}, so a partial tick would misdate every sample. This
      * pins the append-after-sampling order only: the write has no seam to park in, so the
-     * lock {@code snapshot} takes is not covered here.
+     * lock {@code levelData} takes is not covered here.
      */
     @Test
-    void snapshotTakenMidTickSeesOnlyWholeTicks() throws Exception {
+    void levelDataReadMidTickSeesOnlyWholeTicks() throws Exception {
         MidTick midTick = parkTickInsideSampling();
-        LevelSnapshot snapshot;
+        LevelData data;
         try {
-            snapshot = midTick.collector().snapshot(0);
+            data = midTick.collector().levelData(0);
         } finally {
             midTick.finish();
         }
 
-        assertThat(snapshot.count()).isEqualTo(1);
-        assertThat(snapshot.endEpochMs()).isEqualTo(10_000);
-        assertThat(snapshot.tickValues())
-                .allSatisfy((id, values) -> assertThat(values).as(id).hasSize(snapshot.count()));
+        assertThat(data.count()).isEqualTo(1);
+        assertThat(data.endEpochMs()).isEqualTo(10_000);
+        assertThat(data.tickValues())
+                .allSatisfy((id, values) -> assertThat(values).as(id).hasSize(data.count()));
     }
 
     /**

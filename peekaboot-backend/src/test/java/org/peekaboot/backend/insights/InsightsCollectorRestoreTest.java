@@ -56,12 +56,12 @@ class InsightsCollectorRestoreTest {
         InsightsCollector restored = collector("cpu.process");
         restored.restore(snapshot);
 
-        LevelSnapshot level0 = restored.snapshot(0);
+        LevelData level0 = restored.levelData(0);
         assertThat(level0.count()).isEqualTo(2);
         assertThat(level0.endEpochMs()).isEqualTo(20_000);
         assertThat(level0.tickValues().get("cpu.process")).containsExactly(7.0, 7.0);
-        assertThat(restored.snapshot(1).endEpochMs()).isEqualTo(60_000);
-        assertThat(restored.snapshot(1).statValues().get("cpu.process").get("avg"))
+        assertThat(restored.levelData(1).endEpochMs()).isEqualTo(60_000);
+        assertThat(restored.levelData(1).statValues().get("cpu.process").get("avg"))
                 .containsExactly(7.0);
     }
 
@@ -85,8 +85,8 @@ class InsightsCollectorRestoreTest {
         InsightsCollector restored = collector("cpu.process");
         restored.restore(source.capture());
 
-        assertThat(restored.snapshot(0).tickValues()).containsOnlyKeys("cpu.process");
-        assertThat(restored.snapshot(0).tickValues().get("cpu.process")).hasSize(1);
+        assertThat(restored.levelData(0).tickValues()).containsOnlyKeys("cpu.process");
+        assertThat(restored.levelData(0).tickValues().get("cpu.process")).hasSize(1);
     }
 
     @Test
@@ -97,8 +97,8 @@ class InsightsCollectorRestoreTest {
         InsightsCollector restored = collector("cpu.process", "brand.new");
         restored.restore(source.capture());
 
-        assertThat(restored.snapshot(0).tickValues().get("cpu.process")).containsExactly(7.0);
-        assertThat(restored.snapshot(0).tickValues().get("brand.new")).containsExactly(Double.NaN);
+        assertThat(restored.levelData(0).tickValues().get("cpu.process")).containsExactly(7.0);
+        assertThat(restored.levelData(0).tickValues().get("brand.new")).containsExactly(Double.NaN);
     }
 
     /**
@@ -145,7 +145,7 @@ class InsightsCollectorRestoreTest {
         restored.restore(source.capture());
         restored.tick(60_000); // four 10s boundaries missed
 
-        assertThat(restored.snapshot(0).tickValues().get("cpu.process"))
+        assertThat(restored.levelData(0).tickValues().get("cpu.process"))
                 .containsExactly(7.0, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 7.0);
     }
 
@@ -187,7 +187,7 @@ class InsightsCollectorRestoreTest {
             collector.stop();
         }
 
-        double[] ticks = collector.snapshot(0).tickValues().get("cpu.process");
+        double[] ticks = collector.levelData(0).tickValues().get("cpu.process");
         assertThat(ticks[0]).isEqualTo(7.0);
         assertThat(Arrays.copyOfRange(ticks, 1, ticks.length)).isNotEmpty().containsOnly(1.0);
     }
@@ -203,8 +203,8 @@ class InsightsCollectorRestoreTest {
         }
 
         // only its own ticks; the persisted 7 that a wrongly-applied restore would carry never shows up
-        double[] ticks = collector.snapshot(0).tickValues().get("cpu.process");
-        assertThat(collector.snapshot(0).endEpochMs()).isGreaterThan(0);
+        double[] ticks = collector.levelData(0).tickValues().get("cpu.process");
+        assertThat(collector.levelData(0).endEpochMs()).isGreaterThan(0);
         assertThat(ticks).isNotEmpty();
         assertThat(ticks).containsOnly(1.0);
     }
@@ -236,8 +236,8 @@ class InsightsCollectorRestoreTest {
             // both level threads have been through the barrier once each has written
             await().atMost(Duration.ofSeconds(5))
                     .pollInterval(Duration.ofMillis(20))
-                    .until(() -> collector.snapshot(0).count() >= 3
-                            && collector.snapshot(1).count() >= 1);
+                    .until(() -> collector.levelData(0).count() >= 3
+                            && collector.levelData(1).count() >= 1);
         } finally {
             collector.stop();
         }
@@ -262,7 +262,7 @@ class InsightsCollectorRestoreTest {
 
             assertThat(asked).hasValue(1);
             // the failed attempt cost one tick, not the collector's ability to keep ticking
-            assertThat(collector.snapshot(0).tickValues().get("cpu.process")).hasSizeGreaterThan(1);
+            assertThat(collector.levelData(0).tickValues().get("cpu.process")).hasSizeGreaterThan(1);
             assertThat(logs.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage()).isEqualTo("Insights tick failed for level 0");
@@ -274,6 +274,6 @@ class InsightsCollectorRestoreTest {
     private static void awaitLevel0Samples(InsightsCollector collector, int count) {
         await().atMost(Duration.ofSeconds(5))
                 .pollInterval(Duration.ofMillis(20))
-                .until(() -> collector.snapshot(0).count() >= count);
+                .until(() -> collector.levelData(0).count() >= count);
     }
 }

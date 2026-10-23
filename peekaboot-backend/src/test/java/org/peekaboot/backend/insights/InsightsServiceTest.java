@@ -86,7 +86,7 @@ class InsightsServiceTest {
     }
 
     @Test
-    void dataSnapshotsMapNaNToNull() {
+    void levelDataMapsNaNToNull() {
         service.collector().tick(10_000); // most default meters unresolved in SimpleMeterRegistry
         LevelDataResponse data = service.data(0);
         assertThat(data.count()).isEqualTo(1);
