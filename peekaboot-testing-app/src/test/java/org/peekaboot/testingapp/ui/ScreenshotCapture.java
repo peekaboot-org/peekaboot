@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.peekaboot.backend.lifecycle.LifecycleEventFile;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -164,9 +163,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
     @DynamicPropertySource
     static void lifecycleStorage(DynamicPropertyRegistry registry) {
-        LIFECYCLE_HISTORY.writeTo(storageDir.resolve(LifecycleEventFile.FILE_NAME));
-        registry.add("peekaboot.storage.enabled", () -> "true");
-        registry.add("peekaboot.storage.dir", () -> storageDir.toString());
+        LIFECYCLE_HISTORY.register(registry, storageDir);
     }
 
     @Override

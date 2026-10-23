@@ -9,7 +9,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.peekaboot.backend.lifecycle.LifecycleEventFile;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -62,9 +61,7 @@ class LifecycleTabIT extends PlaywrightTestBase {
     @DynamicPropertySource
     static void lifecycleStorage(DynamicPropertyRegistry registry) {
         new LifecycleHistoryFixture(SEEDED_RUN_COUNT, UNCLEAN_INDEX, VERSION_CHANGE_INDEX, BRANCH_CHANGE_INDEX)
-                .writeTo(storageDir.resolve(LifecycleEventFile.FILE_NAME));
-        registry.add("peekaboot.storage.enabled", () -> "true");
-        registry.add("peekaboot.storage.dir", () -> storageDir.toString());
+                .register(registry, storageDir);
     }
 
     @BeforeEach

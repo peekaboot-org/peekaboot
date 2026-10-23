@@ -12,10 +12,11 @@ import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.lifecycle.LifecycleEvent;
 import org.peekaboot.backend.lifecycle.LifecycleEventFile;
+import org.springframework.test.context.DynamicPropertyRegistry;
 
 /**
  * A run history for the application to find when it boots, so the Lifecycle tab has
- * more than the application's own run to show. {@link #writeTo} writes a
+ * more than the application's own run to show. {@link #register} writes a
  * {@code lifecycle.jsonl} with the production {@link LifecycleEventFile} and
  * {@link LifecycleEvent}'s own factories - the fixture can never drift from the format
  * the reader expects, because if it did, every consumer would fail instead of proving
@@ -45,7 +46,17 @@ record LifecycleHistoryFixture(int runCount, int uncleanIndex, int versionChange
             Duration.ofHours(2).plusMinutes(30).toMillis();
     private static final long GAP_MS = Duration.ofMinutes(45).toMillis();
 
-    void writeTo(Path file) {
+    /**
+     * Writes the history into {@code dir} and points the application's storage at it. Called
+     * from a {@code @DynamicPropertySource}, which runs before the context reads the file.
+     */
+    void register(DynamicPropertyRegistry registry, Path dir) {
+        writeTo(dir.resolve(LifecycleEventFile.FILE_NAME));
+        registry.add("peekaboot.storage.enabled", () -> "true");
+        registry.add("peekaboot.storage.dir", dir::toString);
+    }
+
+    private void writeTo(Path file) {
         long cursor = Instant.now().minus(30, ChronoUnit.DAYS).toEpochMilli();
         List<LifecycleEvent> events = new ArrayList<>();
         for (int i = 0; i < runCount; i++) {
