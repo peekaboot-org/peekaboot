@@ -314,6 +314,13 @@ function wireTabs(container, trace, urlState, display) {
     let activeTabId = initialTab;
     let tabApi;
 
+    /** Renders `tabId` with its filters empty and records the switch; the strip and the cross-link jumps both switch through here. */
+    function switchTo(tabId) {
+        activeTabId = tabId;
+        navigate(tabId, {});
+        renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
+    }
+
     /**
      * Cross-link jumps between the overlay's own tabs (Queries -> Spans, Logs -> Spans):
      * switch the tab exactly as the strip would (silent select, urlState.update with empty
@@ -323,10 +330,8 @@ function wireTabs(container, trace, urlState, display) {
      * the shadow host) and mark it with a temporary highlight so the eye lands where focus went.
      */
     function jumpToElement(tabId, selector, reveal) {
-        activeTabId = tabId;
         tabApi.select(tabId, {silent: true});
-        navigate(tabId, {});
-        renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
+        switchTo(tabId);
         const target = tabContent.querySelector(selector);
         if (!target) {
             // nothing to land on (e.g. a truncated trace) - focus the tab button instead
@@ -351,10 +356,7 @@ function wireTabs(container, trace, urlState, display) {
         count: tab.count ? formatNumber(tab.count(trace), {locale: display.locale}) : undefined
     })), {
         onSelect: tabId => {
-            if (tabId === activeTabId) return;
-            activeTabId = tabId;
-            navigate(tabId, {});
-            renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
+            if (tabId !== activeTabId) switchTo(tabId);
         },
         initial: initialTab,
         panel: tabContent
