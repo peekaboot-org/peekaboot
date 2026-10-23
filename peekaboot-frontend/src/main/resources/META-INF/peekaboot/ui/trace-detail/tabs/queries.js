@@ -5,11 +5,12 @@
  * via view.goToSpan (see trace-detail.js's jumpToElement).
  */
 import {emptyState} from '../../shared/components.js';
-import {el, button} from '../../shared/dom.js';
+import {el} from '../../shared/dom.js';
 import {sqlView} from '../../shared/sql-view.js';
 import {querySeverity, severityClass} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {slowBadge} from '../../shared/trace-stats.js';
+import {spanTreeLink} from '../span-tree-link.js';
 
 export function render(container, trace, view = {}) {
     const queries = trace.queries || [];
@@ -40,16 +41,7 @@ function queryItem(query, index, view) {
         }));
     }
     if (spanId && view.goToSpan) {
-        const link = button({
-            className: 'pk-span-action pk-query-span-link',
-            text: '⤶',
-            title: "Show this query's span in the span tree",
-            attrs: {'data-span-id': spanId, 'aria-label': "Show this query's span in the span tree"}
-        });
-        // Fresh elements on every render, so per-element listeners cannot accumulate on the
-        // shared tab-content container the way a delegated one would.
-        link.addEventListener('click', () => view.goToSpan(spanId));
-        meta.append(link);
+        meta.append(spanTreeLink(spanId, view.goToSpan, "Show this query's span in the span tree"));
     }
 
     return el('div', {className: 'pk-query-item', attrs: {'data-span-id': spanId || null}},

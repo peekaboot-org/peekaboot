@@ -279,9 +279,10 @@
    column flow, so the copyable id below keeps its own line. */
 .pk-log__span-row { display: flex; align-items: center; gap: var(--pk-space-xs); }
 .pk-log__span-row .pk-log__span { flex: 1; min-width: 0; width: auto; }
-/* A .pk-unbutton .pk-icon-btn. */
-.pk-log__goto-span { color: var(--pk-primary-text); font-size: var(--pk-text-xs); }
-.pk-log__goto-span:hover { color: var(--pk-text); }
+/* The Queries entry's and the log row's link back to the span tree (span-tree-link.js), a
+   .pk-unbutton .pk-icon-btn. */
+.pk-span-tree-link { color: var(--pk-primary-text); font-size: var(--pk-text-xs); }
+.pk-span-tree-link:hover { color: var(--pk-text); }
 
 .pk-log__level { width: 50px; font-weight: 600; }
 /* One modifier per severity.js logLevelVariant(), so a level is coloured the way its badge is. */

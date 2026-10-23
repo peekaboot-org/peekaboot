@@ -29,6 +29,7 @@ META-INF/peekaboot/ui/
 │                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 │                    log-entry.js: one captured log, for the Logs tab and a span's details
+│                    span-tree-link.js: the Queries and Logs tabs' link back to a span
 ├── toolbar/         toolbar.css, toolbar.js
 ├── error-page/      error-page.css: the page Peekaboot renders in place of Boot's
 │                    whitelabel page
@@ -306,7 +307,7 @@ appear instead of a list.
 ### Cross-links in the trace overlay
 
 A log row and each Queries entry link back to their span's row in the Spans tab tree
-(`trace-detail.js`'s `goToSpan`). The Logs tab's span-name button is a second, in-tab link,
+(`trace-detail.js`'s `goToSpan`), through the one control `span-tree-link.js` builds. The Logs tab's span-name button is a second, in-tab link,
 filtering the log list to a span. A jump switches the overlay tab the way the strip would
 (`replaceState`, params reset), opens any collapsed subtree hiding the target, scrolls to it,
 moves keyboard focus onto it and marks it with the temporary `.pk-jump-flash` highlight. The

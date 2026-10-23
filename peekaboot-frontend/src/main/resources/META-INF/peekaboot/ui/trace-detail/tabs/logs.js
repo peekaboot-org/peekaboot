@@ -10,6 +10,7 @@ import {LOG_LEVELS} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {emptyState} from '../../shared/components.js';
 import {logEntry} from '../log-entry.js';
+import {spanTreeLink} from '../span-tree-link.js';
 import {spansOf} from './spans.js';
 
 /** A spanId -> name lookup over the span tree, to name the span each log row belongs to. */
@@ -34,14 +35,7 @@ function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
     // Cross-link to the span's row in the Spans tab tree - distinct from the name
     // button beside it, which filters this list (see trace-detail.js's goToSpan).
     if (view.goToSpan && spanId) {
-        const treeLink = button({
-            className: 'pk-unbutton pk-icon-btn pk-log__goto-span',
-            text: '⤶',
-            title: 'Show this span in the span tree',
-            attrs: {'data-span-id': spanId, 'aria-label': `Show span ${spanId} in the span tree`}
-        });
-        treeLink.addEventListener('click', () => view.goToSpan(spanId));
-        spanRow.append(treeLink);
+        spanRow.append(spanTreeLink(spanId, view.goToSpan, `Show span ${spanId} in the span tree`));
     }
 
     return logEntry(log, dateOptions,

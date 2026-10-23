@@ -272,8 +272,8 @@ class AccessibilityIT extends PlaywrightTestBase {
         }
 
         overlay.openLogsTab();
-        overlay.waitFor(".pk-log__goto-span");
-        assertMinimumHitTarget(".pk-log__goto-span");
+        overlay.waitFor(".pk-log .pk-span-tree-link");
+        assertMinimumHitTarget(".pk-log .pk-span-tree-link");
     }
 
     private void assertMinimumHitTarget(String selector) {

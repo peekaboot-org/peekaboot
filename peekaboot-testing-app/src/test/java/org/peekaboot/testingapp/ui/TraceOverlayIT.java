@@ -717,10 +717,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void queryEntrySpanLinkJumpsBackToItsSpanRow() {
         openOverlayFromToolbar();
         overlay.openTab("queries");
-        overlay.waitFor(".pk-query-span-link");
-        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-query-span-link').dataset.spanId");
+        overlay.waitFor(".pk-query-item .pk-span-tree-link");
+        String spanId = (String)
+                overlay.evaluate("root => root.querySelector('.pk-query-item .pk-span-tree-link').dataset.spanId");
 
-        overlay.click(".pk-query-span-link");
+        overlay.click(".pk-query-item .pk-span-tree-link");
 
         overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
         assertThat(awaitJumpLanding()).containsEntry("flashed", spanId).containsEntry("focused", spanId);
@@ -775,13 +776,41 @@ class TraceOverlayIT extends PlaywrightTestBase {
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
-        overlay.waitFor(".pk-log__goto-span");
-        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-log__goto-span').dataset.spanId");
+        overlay.waitFor(".pk-log .pk-span-tree-link");
+        String spanId =
+                (String) overlay.evaluate("root => root.querySelector('.pk-log .pk-span-tree-link').dataset.spanId");
 
-        overlay.click(".pk-log__goto-span");
+        overlay.click(".pk-log .pk-span-tree-link");
 
         overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
         assertThat(awaitJumpLanding()).containsEntry("flashed", spanId).containsEntry("focused", spanId);
+    }
+
+    /** The Queries and Logs tabs' links back to the span tree are one control: same class, same glyph, a name each. */
+    @Test
+    void queriesAndLogsLinkToTheSpanTreeWithTheSameControl() {
+        Object queryLink = importModule("trace-detail/tabs/queries.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {queries: [{statement: {text: 'SELECT 1', formatted: null, parameters: []},
+                    durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {goToSpan: () => {}});
+                const link = container.querySelector('.pk-query-meta button');
+                return [link.className, link.textContent, link.dataset.spanId, link.getAttribute('aria-label')].join('|');
+            })()
+            """);
+        Object logLink = importModule("trace-detail/tabs/logs.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {rootSpan: {spanId: 's1', name: 'a'},
+                    logs: [{spanId: 's1', level: 'INFO', message: 'x', timestamp: '2026-01-01T00:00:00Z'}]}, {goToSpan: () => {}});
+                const link = container.querySelector('.pk-log__span-row button:not(.pk-log__span)');
+                return [link.className, link.textContent, link.dataset.spanId, link.getAttribute('aria-label')].join('|');
+            })()
+            """);
+
+        assertThat(queryLink)
+                .isEqualTo("pk-unbutton pk-icon-btn pk-span-tree-link|⤶|s1|Show this query's span in the span tree");
+        assertThat(logLink).isEqualTo("pk-unbutton pk-icon-btn pk-span-tree-link|⤶|s1|Show span s1 in the span tree");
     }
 
     /**
@@ -793,9 +822,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void aQueryLinkRevealsItsSpanInsideACollapsedAsyncSubtree() {
         String traceId = storeAsyncQueryTrace();
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/queries");
-        overlay.waitFor(".pk-query-span-link[data-span-id='async-query']");
+        overlay.waitFor(".pk-query-item .pk-span-tree-link[data-span-id='async-query']");
 
-        overlay.click(".pk-query-span-link[data-span-id='async-query']");
+        overlay.click(".pk-query-item .pk-span-tree-link[data-span-id='async-query']");
 
         assertThat(awaitJumpLanding())
                 .containsEntry("flashed", "async-query")
