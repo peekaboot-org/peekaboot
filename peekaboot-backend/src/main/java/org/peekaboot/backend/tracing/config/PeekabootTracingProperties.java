@@ -26,7 +26,7 @@ public class PeekabootTracingProperties {
     /** Maximum traces held in the Slow bucket. */
     private int maxSlowTraces = 100;
 
-    /** Total end-to-end duration in milliseconds at or above which a trace qualifies for the Slow bucket. */
+    /** Duration in milliseconds, background async work excluded, at or above which a trace enters the Slow bucket. */
     private long slowTraceThresholdMs = 1000;
 
     /** Maximum correlated log entries retained per trace; only populated while the dev toolbar is on. */
