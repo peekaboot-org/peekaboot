@@ -57,15 +57,14 @@ class InlinedStylesheetsTest {
     /** peekaboot-frontend absent means the whole UI is absent; an unstyled surface beats a failure. */
     @Test
     void aMissingSheetLeavesTheOthersInPlace() {
-        try (LogCapture capture = LogCapture.attach(InlinedStylesheets.class)) {
+        try (LogCapture capture = LogCapture.attach(ClasspathText.class)) {
             InlinedStylesheets withMissing =
                     InlinedStylesheets.of(List.of(), List.of("/ui/assets/nope.css", "/ui/assets/tokens.css"));
 
             assertThat(withMissing.css()).contains("--pk-bg:");
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage())
-                        .isEqualTo("stylesheet /ui/assets/nope.css not found on the classpath");
+                assertThat(event.getFormattedMessage()).isEqualTo("/ui/assets/nope.css not found on the classpath");
             });
         }
     }

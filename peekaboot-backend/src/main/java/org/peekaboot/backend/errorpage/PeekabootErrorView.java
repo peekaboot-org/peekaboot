@@ -4,17 +4,15 @@ import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.peekaboot.backend.ui.ClasspathText;
 import org.peekaboot.backend.ui.InlinedStylesheets;
 import org.peekaboot.backend.ui.Placeholders;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.error.ErrorAttributeOptions;
 import org.springframework.boot.webmvc.error.ErrorAttributes;
 import org.springframework.web.context.request.ServletWebRequest;
@@ -39,8 +37,6 @@ import org.springframework.web.util.HtmlUtils;
  * {@code server.servlet.context-path} too.
  */
 public class PeekabootErrorView implements View {
-
-    private static final Logger log = LoggerFactory.getLogger(PeekabootErrorView.class);
 
     /**
      * Every sheet the page loads, in cascade order, relative to the base path: the three shared
@@ -107,7 +103,7 @@ public class PeekabootErrorView implements View {
 
     /** Shipped inline as well as linked; see the class comment on why one channel is not enough. */
     private static final String REVEAL_SCRIPT =
-            readResource(PeekabootPaths.CLASSPATH_ROOT + "/ui/error-page/reveal.js");
+            ClasspathText.read("/ui/error-page/reveal.js").orElse("");
 
     /**
      * Both copies of the script, in the template's head region: linked for a host whose
@@ -197,20 +193,6 @@ public class PeekabootErrorView implements View {
                         "REVEAL", revealsSomething ? REVEAL_CONTROL : "",
                         "FRAMES", StackTraceHtml.render(folded)));
         return new Detail(html, revealsSomething);
-    }
-
-    /** An unreadable script leaves the per-run disclosures working - the same degradation a blocked script produces. */
-    private static String readResource(String path) {
-        try (InputStream in = PeekabootErrorView.class.getResourceAsStream(path)) {
-            if (in == null) {
-                log.warn("resource {} not found on the classpath", path);
-                return "";
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("Failed to read resource {}: {}", path, e.getMessage());
-            return "";
-        }
     }
 
     /** A client error recedes beside a server error, the two tiers every Peekaboot surface shows a status in. */

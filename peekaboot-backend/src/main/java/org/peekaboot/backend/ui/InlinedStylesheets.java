@@ -1,17 +1,13 @@
 package org.peekaboot.backend.ui;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.peekaboot.backend.config.PeekabootPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,8 +21,6 @@ import org.slf4j.LoggerFactory;
 public final class InlinedStylesheets {
 
     private static final Logger log = LoggerFactory.getLogger(InlinedStylesheets.class);
-
-    private static final String CLASSPATH_ROOT = PeekabootPaths.CLASSPATH_ROOT;
 
     /** Stands in for the base path until a renderer knows it; also survives into the inlined CSS. */
     public static final String BASE_TOKEN = "{{BASE}}";
@@ -92,32 +86,15 @@ public final class InlinedStylesheets {
     public String css() {
         StringBuilder css = new StringBuilder();
         for (String servedPath : inlined) {
-            String sheet = readSheet(servedPath);
-            if (sheet != null) {
-                css.append(resolveRelativeUrls(stripComments(sheet), servedPath))
-                        .append('\n');
-            }
+            ClasspathText.read(servedPath)
+                    .ifPresent(sheet -> css.append(resolveRelativeUrls(stripComments(sheet), servedPath))
+                            .append('\n'));
         }
         return css.toString();
     }
 
     private static String stripComments(String css) {
         return CSS_COMMENT.matcher(css).replaceAll("");
-    }
-
-    private static String readSheet(String servedPath) {
-        try (InputStream in = InlinedStylesheets.class.getResourceAsStream(CLASSPATH_ROOT + servedPath)) {
-            if (in == null) {
-                // peekaboot-frontend is not on the classpath, so whatever surface is rendering
-                // has more missing than its styling - this warning is the least of its problems.
-                log.warn("stylesheet {} not found on the classpath", servedPath);
-                return null;
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("Failed to read stylesheet {}: {}", servedPath, e.getMessage());
-            return null;
-        }
     }
 
     /**
