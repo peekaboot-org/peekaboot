@@ -16,6 +16,7 @@ import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.testsupport.LogCapture;
@@ -39,8 +40,10 @@ class ApplicationReadyListenerTest {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod", "eu");
 
+        BuildProperties buildProperties = new BuildProperties(build);
         String report = banner().environment(environment)
-                .buildInfo(new BuildInfoProvider(new BuildProperties(build)))
+                .buildInfo(new BuildInfoProvider(buildProperties))
+                .identity(new ApplicationIdentity(buildProperties, "orders-app"))
                 .render(ReadyEvents.webApplication(8083));
 
         assertThat(report)
@@ -55,6 +58,17 @@ class ApplicationReadyListenerTest {
 
         assertThat(report)
                 .contains(" Application [unknown] ready with active profiles [default]")
+                .contains(" Application Info: Build information not available");
+    }
+
+    /** Without build-info the application is still named, by spring.application.name. */
+    @Test
+    void banner_namesTheApplicationWithoutBuildInfo() {
+        String report =
+                banner().identity(new ApplicationIdentity(null, "orders")).render(ReadyEvents.webApplication(8083));
+
+        assertThat(report)
+                .contains(" Application [orders] ready with active profiles [default]")
                 .contains(" Application Info: Build information not available");
     }
 
@@ -270,6 +284,7 @@ class ApplicationReadyListenerTest {
     private static final class Banner {
         private Environment environment = new MockEnvironment();
         private BuildInfoProvider buildInfo = new BuildInfoProvider(null);
+        private ApplicationIdentity identity = new ApplicationIdentity(null, null);
         private List<DataSourceMetadata> metadata = List.of();
         private Map<String, DataSource> dataSources = Map.of();
         private HikariPoolInfo hikariPoolInfo;
@@ -281,6 +296,11 @@ class ApplicationReadyListenerTest {
 
         Banner buildInfo(BuildInfoProvider buildInfo) {
             this.buildInfo = buildInfo;
+            return this;
+        }
+
+        Banner identity(ApplicationIdentity identity) {
+            this.identity = identity;
             return this;
         }
 
@@ -313,6 +333,7 @@ class ApplicationReadyListenerTest {
             return new ApplicationReadyListener(
                     new EnvironmentInfo(environment),
                     buildInfo,
+                    identity,
                     new ServerUrlResolver(
                             new MockEnvironment(),
                             new StaticListableBeanFactory().getBeanProvider(PeekabootPaths.class),

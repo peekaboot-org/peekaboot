@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import org.peekaboot.backend.config.ApplicationIdentity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -24,19 +25,19 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
 
     private static final Logger log = LoggerFactory.getLogger(ApplicationStoppedListener.class);
 
-    private final BuildInfoProvider buildInfoProvider;
+    private final ApplicationIdentity applicationIdentity;
     private final ApplicationContext ownContext;
     private final Clock clock;
     private final DateTimeFormatter timestamp;
 
     /** The server's own zone is what the banner is read in, so the default zone is the right one here. */
-    public ApplicationStoppedListener(BuildInfoProvider buildInfoProvider, ApplicationContext ownContext) {
-        this(buildInfoProvider, ownContext, Clock.system(ZoneId.systemDefault()));
+    public ApplicationStoppedListener(ApplicationIdentity applicationIdentity, ApplicationContext ownContext) {
+        this(applicationIdentity, ownContext, Clock.system(ZoneId.systemDefault()));
     }
 
     /** {@code clock} supplies the stop instant and the zone both timestamps are rendered in; tests fix it. */
-    ApplicationStoppedListener(BuildInfoProvider buildInfoProvider, ApplicationContext ownContext, Clock clock) {
-        this.buildInfoProvider = buildInfoProvider;
+    ApplicationStoppedListener(ApplicationIdentity applicationIdentity, ApplicationContext ownContext, Clock clock) {
+        this.applicationIdentity = applicationIdentity;
         this.ownContext = ownContext;
         this.clock = clock;
         this.timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(clock.getZone());
@@ -56,7 +57,7 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
                 report,
                 String.format(
                         " Application [%s] stopped after %s",
-                        buildInfoProvider.getName(), UptimeFormat.humanize(Duration.between(started, stopped))));
+                        applicationIdentity.displayName(), UptimeFormat.humanize(Duration.between(started, stopped))));
         LifecycleBanner.text(report, " Up since (context start): " + timestamp.format(started));
         LifecycleBanner.text(report, " Stopped:                  " + timestamp.format(stopped));
         LifecycleBanner.close(report);

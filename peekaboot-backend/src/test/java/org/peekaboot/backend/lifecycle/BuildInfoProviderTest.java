@@ -23,7 +23,6 @@ class BuildInfoProviderTest {
     void reportsTheBuildsCoordinates() {
         BuildInfoProvider provider = populated();
 
-        assertThat(provider.getName()).isEqualTo("orders");
         assertThat(provider.getFormattedInfo()).isEqualTo("com.acme:orders-service:1.2.3");
         assertThat(provider.getEntries())
                 .containsExactly(Map.entry("time", "1756000000000"), Map.entry("version", "1.2.3"));
@@ -34,7 +33,6 @@ class BuildInfoProviderTest {
     void reportsUnknownWithoutBuildProperties() {
         BuildInfoProvider provider = new BuildInfoProvider(null);
 
-        assertThat(provider.getName()).isEqualTo("unknown");
         assertThat(provider.getFormattedInfo()).isEqualTo("Build information not available");
         assertThat(provider.getEntries()).isEmpty();
     }

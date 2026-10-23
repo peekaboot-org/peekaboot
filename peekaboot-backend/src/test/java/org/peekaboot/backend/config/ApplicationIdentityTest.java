@@ -19,12 +19,20 @@ class ApplicationIdentityTest {
         return new BuildProperties(entries);
     }
 
+    private static BuildProperties named(String name) {
+        Properties entries = new Properties();
+        entries.setProperty("name", name);
+        return new BuildProperties(entries);
+    }
+
     @Test
     void theBuildCoordinatesNameTheApplication() {
         ApplicationIdentity identity = new ApplicationIdentity(build("com.acme", "orders-service"), "orders");
 
         assertThat(identity.qualifiedId()).isEqualTo("com.acme.orders-service");
         assertThat(identity.shortName()).isEqualTo("orders-service");
+        assertThat(new ApplicationIdentity(named("Orders Service"), "orders").displayName())
+                .isEqualTo("Orders Service");
     }
 
     @Test
@@ -33,6 +41,7 @@ class ApplicationIdentityTest {
 
         assertThat(identity.qualifiedId()).isEqualTo("orders");
         assertThat(identity.shortName()).isEqualTo("orders");
+        assertThat(identity.displayName()).isEqualTo("orders");
     }
 
     /** The qualified id needs both coordinates; the artifact alone still names the short form. */
@@ -50,5 +59,6 @@ class ApplicationIdentityTest {
 
         assertThat(identity.qualifiedId()).isNull();
         assertThat(identity.shortName()).isNull();
+        assertThat(identity.displayName()).isEqualTo("unknown");
     }
 }

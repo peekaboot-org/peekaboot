@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
@@ -23,9 +24,11 @@ class ApplicationStoppedListenerTest {
         return context;
     }
 
-    private static String banner(Duration uptime, BuildInfoProvider buildInfo) {
+    private static final ApplicationIdentity UNNAMED = new ApplicationIdentity(null, null);
+
+    private static String banner(Duration uptime, ApplicationIdentity identity) {
         ApplicationContext context = contextUpFor(uptime);
-        ApplicationStoppedListener listener = new ApplicationStoppedListener(buildInfo, context, STOP);
+        ApplicationStoppedListener listener = new ApplicationStoppedListener(identity, context, STOP);
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
             listener.onApplicationEvent(new ContextClosedEvent(context));
 
@@ -42,7 +45,7 @@ class ApplicationStoppedListenerTest {
     @Test
     void anotherContextsCloseIsNotThisApplicationsStop() {
         ApplicationStoppedListener listener =
-                new ApplicationStoppedListener(new BuildInfoProvider(null), contextUpFor(Duration.ofMinutes(5)), STOP);
+                new ApplicationStoppedListener(UNNAMED, contextUpFor(Duration.ofMinutes(5)), STOP);
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
             listener.onApplicationEvent(new ContextClosedEvent(contextUpFor(Duration.ofMinutes(4))));
 
@@ -52,17 +55,25 @@ class ApplicationStoppedListenerTest {
 
     @Test
     void theBannerNamesTheApplicationAndHowLongItRan() {
-        String report = banner(Duration.ofDays(1).plusHours(2).plusMinutes(3), new BuildInfoProvider(null));
+        String report = banner(Duration.ofDays(1).plusHours(2).plusMinutes(3), UNNAMED);
 
         assertThat(report)
                 .contains(":: ApplicationStopped ::")
                 .contains("Application [unknown] stopped after 1 day, 2 hours, 3 minutes");
     }
 
+    /** An application without build-info is still named, by spring.application.name. */
+    @Test
+    void theBannerFallsBackToTheApplicationName() {
+        String report = banner(Duration.ofMinutes(5), new ApplicationIdentity(null, "orders"));
+
+        assertThat(report).contains("Application [orders] stopped after 5 minutes");
+    }
+
     /** Both instants are rendered in the clock's zone, so the two lines can be read against each other. */
     @Test
     void theBannerSaysWhichStartItMeasuresFrom() {
-        String report = banner(Duration.ofMinutes(5), new BuildInfoProvider(null));
+        String report = banner(Duration.ofMinutes(5), UNNAMED);
 
         assertThat(report)
                 .contains("Up since (context start): 2026-09-09 10:10:30")
@@ -72,7 +83,7 @@ class ApplicationStoppedListenerTest {
     /** The whole banner, frame and blank lines included, so the shared banner helpers cannot reshape it unseen. */
     @Test
     void theBannerIsFramedLikeTheReadyBanner() {
-        String report = banner(Duration.ofMinutes(5), new BuildInfoProvider(null));
+        String report = banner(Duration.ofMinutes(5), UNNAMED);
 
         assertThat(report)
                 .isEqualTo("\n" + LifecycleBanner.SEPARATOR + "\n"

@@ -33,6 +33,14 @@ public final class ApplicationIdentity {
         return applicationName;
     }
 
+    /** The build's own name for the banners, {@code unknown} where nothing names the application. */
+    public String displayName() {
+        if (build != null && StringUtils.hasText(build.getName())) {
+            return build.getName();
+        }
+        return StringUtils.hasText(applicationName) ? applicationName : "unknown";
+    }
+
     /** The artifact alone: {@code com.acme.orders-admin} is a worse username than {@code orders-admin}. */
     public @Nullable String shortName() {
         if (build != null && StringUtils.hasText(build.getArtifact())) {

@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import java.util.ArrayList;
 import java.util.List;
 import javax.sql.DataSource;
+import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
@@ -46,7 +47,7 @@ import org.springframework.core.env.Environment;
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.LIFECYCLE_ENABLED, matchIfMissing = true)
-@Import(MaskingConfiguration.class)
+@Import({MaskingConfiguration.class, ApplicationIdentityConfiguration.class})
 public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
@@ -55,10 +56,7 @@ public class PeekabootLifecycleAutoConfiguration {
         return new EnvironmentInfo(environment);
     }
 
-    /**
-     * Without build-info.properties the banners print placeholders: the application name as
-     * "unknown" and "Build information not available" in place of the coordinates.
-     */
+    /** Without build-info.properties the ready banner prints "Build information not available" in place of the coordinates. */
     @Bean
     @ConditionalOnMissingBean
     public BuildInfoProvider buildInfoProvider(ObjectProvider<BuildProperties> buildProperties) {
@@ -76,6 +74,7 @@ public class PeekabootLifecycleAutoConfiguration {
     public ApplicationReadyListener applicationReadyListener(
             EnvironmentInfo environmentInfo,
             BuildInfoProvider buildInfoProvider,
+            ApplicationIdentity applicationIdentity,
             ServerUrlResolver serverUrlResolver,
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider,
             ConfigurableListableBeanFactory beanFactory,
@@ -87,6 +86,7 @@ public class PeekabootLifecycleAutoConfiguration {
         return new ApplicationReadyListener(
                 environmentInfo,
                 buildInfoProvider,
+                applicationIdentity,
                 serverUrlResolver,
                 dataSourceMetadataList.entries(),
                 ApplicationBeans.ofType(beanFactory, DataSource.class),
@@ -115,8 +115,8 @@ public class PeekabootLifecycleAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ApplicationStoppedListener applicationStoppedListener(
-            BuildInfoProvider buildInfoProvider, ApplicationContext applicationContext) {
-        return new ApplicationStoppedListener(buildInfoProvider, applicationContext);
+            ApplicationIdentity applicationIdentity, ApplicationContext applicationContext) {
+        return new ApplicationStoppedListener(applicationIdentity, applicationContext);
     }
 
     @Configuration(proxyBeanMethods = false)

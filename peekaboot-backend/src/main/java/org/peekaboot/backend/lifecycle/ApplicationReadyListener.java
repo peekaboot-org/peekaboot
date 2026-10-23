@@ -9,6 +9,7 @@ import java.util.TimeZone;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -30,6 +31,8 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private final BuildInfoProvider buildInfoProvider;
 
+    private final ApplicationIdentity applicationIdentity;
+
     private final ServerUrlResolver serverUrlResolver;
 
     private final List<DataSourceMetadata> dataSourceMetadataList;
@@ -47,6 +50,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     public ApplicationReadyListener(
             EnvironmentInfo environmentInfo,
             BuildInfoProvider buildInfoProvider,
+            ApplicationIdentity applicationIdentity,
             ServerUrlResolver serverUrlResolver,
             List<DataSourceMetadata> dataSourceMetadataList,
             Map<String, DataSource> dataSources,
@@ -56,6 +60,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
+        this.applicationIdentity = applicationIdentity;
         this.serverUrlResolver = serverUrlResolver;
         this.dataSourceMetadataList = dataSourceMetadataList;
         this.dataSources = dataSources;
@@ -86,7 +91,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private void appendApplicationInfo(StringBuilder report) {
 
-        String appName = buildInfoProvider.getName();
+        String appName = applicationIdentity.displayName();
         String profiles = environmentInfo.getActiveProfilesAsString();
         LifecycleBanner.line(
                 report, String.format(" Application [%s] ready with active profiles [%s]", appName, profiles));

@@ -11,10 +11,6 @@ public class BuildInfoProvider {
         this.buildProperties = buildProperties;
     }
 
-    public String getName() {
-        return buildProperties != null ? buildProperties.getName() : "unknown";
-    }
-
     public String getFormattedInfo() {
         if (buildProperties == null) {
             return "Build information not available";
