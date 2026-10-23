@@ -10,23 +10,19 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.TestingAppTest;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 import tools.jackson.databind.JsonNode;
 
@@ -35,17 +31,13 @@ import tools.jackson.databind.JsonNode;
  * queries from both, each labelled with its own pool name. Only the second DataSource gets a
  * container, since what is under test is that it stays apart from the primary.
  */
-// @Testcontainers must stay first: JUnit runs afterAll in reverse, so the context closes before the container stops.
-@Testcontainers
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @StartsContainers
+@TestingAppTest
 class MultiDataSourceTraceIT {
 
     // No @ServiceConnection: that would hand MySQL to the primary DataSource's connection details.
     @Container
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:9");
+    static final MySQLContainer MYSQL = new MySQLContainer(TestImages.MYSQL);
 
     @DynamicPropertySource
     static void inventoryOnMySql(DynamicPropertyRegistry registry) {

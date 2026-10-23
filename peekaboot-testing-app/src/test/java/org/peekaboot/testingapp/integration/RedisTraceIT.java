@@ -22,11 +22,9 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.scheduler.Schedulers;
 import tools.jackson.databind.JsonNode;
 
@@ -34,15 +32,12 @@ import tools.jackson.databind.JsonNode;
  * A repeated product lookup is served by Redis. Lettuce's detached upkeep commands are pinned as
  * maintenance; the rest of the dashboard's handling of its spans is logged, not pinned.
  */
-// @Testcontainers must stay first: JUnit runs afterAll in reverse, so the context closes before the container stops.
-@Testcontainers
+@StartsContainers
 @SpringBootTest(
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.cache.type=redis", "management.health.redis.enabled=true"})
 @ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-@StartsContainers
 class RedisTraceIT {
 
     private static final Logger log = LoggerFactory.getLogger(RedisTraceIT.class);
@@ -52,7 +47,7 @@ class RedisTraceIT {
 
     @Container
     @ServiceConnection
-    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:8").withExposedPorts(6379);
+    static final GenericContainer<?> REDIS = new GenericContainer<>(TestImages.REDIS).withExposedPorts(6379);
 
     @LocalServerPort
     private int port;

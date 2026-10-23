@@ -8,7 +8,7 @@ import java.net.ServerSocket;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.TestingAppTest;
 import org.peekaboot.testingapp.entity.Person;
 import org.peekaboot.testingapp.profile.ProfileCall;
 import org.peekaboot.testingapp.profile.ProfileClient;
@@ -16,20 +16,16 @@ import org.peekaboot.testingapp.profile.ProfileLookup;
 import org.peekaboot.testingapp.repository.PersonRepository;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -37,16 +33,12 @@ import tools.jackson.databind.JsonNode;
  * page's own trace, the server echoes the traceparent it received, and a failing or slow profile
  * service shows up where the dashboard files failures and slow traces.
  */
-// @Testcontainers must stay first: JUnit runs afterAll in reverse, so the context closes before the container stops.
-@Testcontainers
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @StartsContainers
+@TestingAppTest
 class ProfileLookupTraceIT {
 
     @Container
-    static final GenericContainer<?> HTTPBIN = new GenericContainer<>("ghcr.io/mccutchen/go-httpbin:2.25.0")
+    static final GenericContainer<?> HTTPBIN = new GenericContainer<>(TestImages.HTTPBIN)
             .withExposedPorts(8080)
             .waitingFor(Wait.forHttp("/status/200").forPort(8080));
 

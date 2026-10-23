@@ -22,9 +22,8 @@ running. Flyway, Liquibase and a `@Scheduled` job give the Flyway, Liquibase and
 Tasks tabs real data to show.
 Product lookups are cached in Redis (`@Cacheable("products")`, 30 s TTL, unknown SKUs not
 cached, written synchronously), a third compose service on a random port that Boot wires up itself.
-A fourth compose service, go-httpbin (`ghcr.io/mccutchen/go-httpbin:2.25.0`), publishes the
-fixed port `127.0.0.1:18093` with the `org.springframework.boot.ignore` label, and
-`app.profile-service.url` points `ProfileClient` at it.
+A fourth compose service, go-httpbin, publishes the fixed port `127.0.0.1:18093` with the
+`org.springframework.boot.ignore` label, and `app.profile-service.url` points `ProfileClient` at it.
 Every page opens with a nav linking each scenario below, with forms for the writes.
 `peekaboot.enable-unmasking` is on, so the Environment and Config tabs offer "Show secrets".
 `src/main/resources/peekaboot-insights.yml` switches on the six opt-in Insights panels and adds
@@ -97,8 +96,9 @@ A span counts as a query when it is a CLIENT span with any `db.*` or `jdbc.query
 ## The automated UI suite (`src/test`)
 
 The Playwright tests and every test that boots a Spring context live here, all in `*IT`
-classes, so they run under failsafe at `verify`. `mvn test` runs nothing in this module.
-They activate the `test` profile, which swaps PostgreSQL for in-memory H2 and disables
+classes, so they run under failsafe at `verify`. `mvn test` runs one plain unit test here,
+`ComposeImagesTest`: `compose.yml` must name the image tags the ITs start (`integration/TestImages`).
+The ITs activate the `test` profile, which swaps PostgreSQL for in-memory H2 and disables
 Docker Compose, so the suite needs neither Docker nor network access, with two exceptions.
 `MultiDataSourceTraceIT` and `RedisTraceIT` start MySQL and Redis through Testcontainers and
 need Docker, and `ProfileLookupTraceIT` starts go-httpbin the same way. The test profile leaves
