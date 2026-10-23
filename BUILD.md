@@ -477,6 +477,10 @@ after a Dependabot merge counts as Dependabot's run is GitHub's call: if it does
 snapshot waits for the next push to `dev`. A deploy without the secret would fail on Central's
 401 instead.
 
+A `lint` job runs next to it on every push: actionlint over the workflows and shellcheck over
+every `*.sh` under `.github`. Both are downloaded at a pinned version and checked against its
+SHA-256, and actionlint is handed that shellcheck for the workflows' `run:` blocks.
+
 On a `dependabot/*` branch a second job, `gradle-build`, runs next to the Maven job, because
 the Maven build compiles nothing from the Gradle files. A Gradle-ecosystem PR changes them,
 and a red Maven tool bump gets its Gradle twin pushed onto the Maven PR's branch by hand, so

@@ -83,6 +83,54 @@ jobs:
             .github/release-notes/render.sh --unreleased
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # The workflows and scripts that release and publish run nowhere else before a release, so
+  # they are linted on every push.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Checksum-verified downloads rather than third-party actions.
+      - name: install-actionlint
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${archive}"
+          echo "${SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+
+      - name: install-shellcheck
+        env:
+          VERSION: 0.11.0
+          SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+        run: |
+          archive="shellcheck-v${VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${VERSION}/${archive}"
+          echo "${SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" "shellcheck-v${VERSION}/shellcheck"
+          mv "$RUNNER_TEMP/shellcheck-v${VERSION}/shellcheck" "$RUNNER_TEMP/shellcheck"
+
+      # Handed this shellcheck rather than the runner's, so it checks the run: blocks with the
+      # same version as the scripts below.
+      - name: actionlint
+        run: '"$RUNNER_TEMP/actionlint" -color -shellcheck "$RUNNER_TEMP/shellcheck"'
+
+      # find rather than a list, so a new script is checked without editing this step.
+      - name: shellcheck
+        run: find .github -name '*.sh' -exec "$RUNNER_TEMP/shellcheck" {} +
+
   # The parallel Gradle build, for Dependabot branches only: the Maven job never reads a
   # build.gradle.kts, so without this a Gradle bump would merge unbuilt. Every ecosystem's
   # branch, because a red Maven tool bump is fixed by a Gradle edit pushed onto it.
