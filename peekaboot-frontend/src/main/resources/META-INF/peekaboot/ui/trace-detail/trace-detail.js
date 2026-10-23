@@ -21,7 +21,7 @@ import {registerBundledFonts} from '../shared/fonts.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
 import {badge, tabStrip} from '../shared/components.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
-import {truncatedBadge} from '../shared/trace-stats.js';
+import {slowBadge, truncatedBadge} from '../shared/trace-stats.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
@@ -270,7 +270,7 @@ function header(trace) {
             text: formatDurationMs(trace.durationMs)
         }),
         badge(statusLabel(status), statusVariant(status)),
-        trace.slow ? badge('SLOW', 'warn') : null,
+        trace.slow ? slowBadge() : null,
         trace.truncated ? truncatedBadge() : null);
 
     return el('div', {className: 'pk-overlay__header'},

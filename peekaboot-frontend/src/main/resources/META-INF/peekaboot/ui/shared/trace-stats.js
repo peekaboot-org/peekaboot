@@ -45,6 +45,11 @@ export function truncatedBadge() {
     });
 }
 
+/** The one wording for a SLOW verdict: the backend's on a trace (the Traces tab, the overlay header) and the query threshold's on a query. */
+export function slowBadge() {
+    return badge('SLOW', 'warn');
+}
+
 /**
  * A `.pk-stat`: `lead` (a string or an element, the count or an icon) followed by the
  * duration in monospace, coloured by `severity` (a severity.js suffix, or '').

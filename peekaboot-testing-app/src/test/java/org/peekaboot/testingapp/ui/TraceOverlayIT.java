@@ -1147,17 +1147,18 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * The SLOW label reads severity.js's querySeverity() - the query threshold behind the
+     * The SLOW pill reads severity.js's querySeverity() - the query threshold behind the
      * backend's SLOW_QUERY issue (slowQueryThresholdMs, default 50) - not the span
      * thresholds, and not a bare literal re-derived on the same line. Imports queries.js
      * directly (SharedModuleIT's pk-blank.html pattern) rather than driving a real slow
      * query through the app, and pins the exact boundary (49ms must NOT get the label;
      * 50ms - the threshold itself, IssueDetector compares with >= - must), for the
      * fallback and for a published threshold alike (see severity.js's own boundary tests
-     * in SharedModuleIT).
+     * in SharedModuleIT). The pill is trace-stats.js's slowBadge(), the one the Traces tab and
+     * the overlay header show, beside the duration rather than in its text.
      */
     @Test
-    void queriesTabSlowLabelFollowsTheQueryThresholdAtTheBoundary() {
+    void queriesTabSlowPillFollowsTheQueryThresholdAtTheBoundary() {
         Object labels = importModule("trace-detail/tabs/queries.js", """
             (() => {
                 const queries = [
@@ -1168,15 +1169,16 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 m.render(fallback, {queries});
                 const published = document.createElement('div');
                 m.render(published, {queries}, {features: {slowQueryThresholdMs: 51}});
-                const labelsIn = el =>
-                    Array.from(el.querySelectorAll('.pk-query__duration')).map(cell => cell.textContent);
+                const labelsIn = el => Array.from(el.querySelectorAll('.pk-query-meta')).map(meta =>
+                    meta.querySelector('.pk-query__duration').textContent + '|'
+                        + Array.from(meta.querySelectorAll('.pk-badge.pk-badge--warn'), pill => pill.textContent).join());
                 return [...labelsIn(fallback), ...labelsIn(published)];
             })()
             """);
 
         @SuppressWarnings("unchecked")
         List<String> durationLabels = (List<String>) labels;
-        assertThat(durationLabels).containsExactly("49ms", "50ms SLOW", "49ms", "50ms");
+        assertThat(durationLabels).containsExactly("49ms|", "50ms|SLOW", "49ms|", "50ms|");
     }
 
     /** The label adds the DataSource name only where it says more than the system already does. */

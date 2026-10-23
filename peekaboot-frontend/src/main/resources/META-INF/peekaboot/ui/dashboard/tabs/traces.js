@@ -14,7 +14,7 @@ import {el, button} from '../../shared/dom.js';
 import {formatDurationMs, formatDateTime, formatNumber} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
-import {traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
+import {slowBadge, traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
 import {parseAppHash, buildAppHash} from '../../shared/url-state.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
@@ -393,7 +393,7 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
     // Not the Slow bucket - that admits a trace by its total duration.
     let verdict = null;
     if (hasErrors) verdict = badge('ERROR', 'error');
-    else if (trace.slow) verdict = badge('SLOW', 'warn');
+    else if (trace.slow) verdict = slowBadge();
 
     return el('div', {className: 'pk-trace-item__main-line'},
         // role="img" + aria-label, not title: title on a roleless <span> is not reliably

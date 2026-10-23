@@ -9,6 +9,7 @@ import {el, button} from '../../shared/dom.js';
 import {sqlView} from '../../shared/sql-view.js';
 import {querySeverity, severityClass} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
+import {slowBadge} from '../../shared/trace-stats.js';
 
 export function render(container, trace, view = {}) {
     const queries = trace.queries || [];
@@ -29,8 +30,9 @@ function queryItem(query, index, view) {
     const meta = el('span', {className: 'pk-query-meta'},
         el('span', {
             className: 'pk-query__duration' + (durationClass ? ` ${severityClass(durationClass)}` : ''),
-            text: formatDurationMs(duration) + (durationClass ? ' SLOW' : '')
-        }));
+            text: formatDurationMs(duration)
+        }),
+        durationClass ? slowBadge() : null);
     if (query.rowCount != null) {
         meta.append(el('span', {
             className: 'pk-query-rows',
