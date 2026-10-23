@@ -77,6 +77,30 @@ class OverviewTabIT extends PlaywrightTestBase {
         assertThat(page.textContent("#health-status-text")).isEqualTo("UP");
     }
 
+    /** An UP application shows the success dot: 12px and pulsing on the banner, 8px and still on each component. */
+    @Test
+    void healthDotsShowTheUpStatusAtTheirOwnSize() {
+        openDashboard();
+        page.waitForFunction("() => document.querySelector('#health-status-text').textContent.trim() === 'UP'");
+        String success = resolvedVar(null, "--pk-success");
+
+        assertThat(dotStyle("#health-dot")).isEqualTo(List.of(success, "12px", "pk-pulse"));
+        page.click("#health-banner");
+        page.waitForSelector("#components-grid .pk-component-grid__header");
+        List<String> componentDot = dotStyle("#components-grid .pk-component-grid__header > span:last-child");
+        assertThat(componentDot).isEqualTo(List.of(success, "8px", "none"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> dotStyle(String selector) {
+        return (List<String>) page.locator(selector).first().evaluate("""
+                dot => {
+                    const style = getComputedStyle(dot);
+                    return [style.backgroundColor, style.width, style.animationName];
+                }
+                """);
+    }
+
     /**
      * A live JVM always holds some heap and never all of it, so a fill outside (0, 100] means
      * the real percentage never reached the primitive - a bare meter() with no argument
