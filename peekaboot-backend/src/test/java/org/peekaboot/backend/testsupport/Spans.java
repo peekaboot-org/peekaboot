@@ -189,7 +189,6 @@ public final class Spans {
                     kind,
                     startTime,
                     startTime.plus(duration),
-                    duration,
                     Map.copyOf(tags),
                     events,
                     errorMessage,

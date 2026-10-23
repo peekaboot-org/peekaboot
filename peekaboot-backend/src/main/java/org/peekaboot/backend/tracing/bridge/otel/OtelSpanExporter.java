@@ -8,7 +8,6 @@ import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
@@ -106,7 +105,6 @@ public class OtelSpanExporter implements SpanExporter {
             SpanData otelSpan, Map<String, String> tags) {
         Instant startTime = nanosToInstant(otelSpan.getStartEpochNanos());
         Instant endTime = nanosToInstant(otelSpan.getEndEpochNanos());
-        Duration duration = Duration.between(startTime, endTime);
 
         List<org.peekaboot.backend.tracing.store.SpanData.Event> events = extractEvents(otelSpan);
 
@@ -140,7 +138,6 @@ public class OtelSpanExporter implements SpanExporter {
                 mapKind(otelSpan.getKind()),
                 startTime,
                 endTime,
-                duration,
                 tags,
                 events,
                 errorMessage,

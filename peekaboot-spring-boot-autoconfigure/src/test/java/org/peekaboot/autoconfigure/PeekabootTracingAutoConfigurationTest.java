@@ -3,7 +3,6 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.observation.ObservationRegistry;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -108,7 +107,6 @@ class PeekabootTracingAutoConfigurationTest {
                             null,
                             start,
                             start.plusMillis(5),
-                            Duration.ofMillis(5),
                             Map.of(),
                             List.of(),
                             null,

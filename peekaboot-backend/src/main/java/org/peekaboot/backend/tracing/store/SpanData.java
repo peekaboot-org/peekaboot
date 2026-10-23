@@ -14,7 +14,6 @@ public record SpanData(
         Span.Kind kind,
         Instant startTime,
         Instant endTime,
-        Duration duration,
         Map<String, String> tags,
         List<Event> events,
         String errorMessage,
@@ -28,8 +27,14 @@ public record SpanData(
         return errorMessage != null || errorClass != null;
     }
 
+    /** Null while either end is unknown. */
+    public Duration duration() {
+        return startTime == null || endTime == null ? null : Duration.between(startTime, endTime);
+    }
+
     /** Zero for a span whose duration was never recorded. */
     public long durationMs() {
+        Duration duration = duration();
         return duration != null ? duration.toMillis() : 0L;
     }
 
@@ -43,7 +48,6 @@ public record SpanData(
                 kind,
                 startTime,
                 endTime,
-                duration,
                 tags,
                 events,
                 errorMessage,

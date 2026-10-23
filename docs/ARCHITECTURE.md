@@ -1503,7 +1503,7 @@ TraceData
 SpanData
 ├── traceId, spanId, parentId
 ├── name, kind
-├── startTime, endTime, duration
+├── startTime, endTime        # duration() derives from these
 ├── tags: Map<String, String>
 ├── events: List<Event>
 ├── errorMessage, errorClass

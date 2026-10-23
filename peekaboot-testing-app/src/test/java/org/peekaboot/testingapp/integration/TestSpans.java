@@ -97,7 +97,6 @@ public final class TestSpans {
                     kind,
                     startTime,
                     startTime.plus(duration),
-                    duration,
                     Map.copyOf(tags),
                     List.copyOf(events),
                     errorMessage,

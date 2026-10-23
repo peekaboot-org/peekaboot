@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -269,7 +268,6 @@ class PeekabootAutoConfigurationTest {
                 Span.Kind.CLIENT,
                 Instant.EPOCH.plusMillis(10),
                 Instant.EPOCH.plusMillis(20),
-                Duration.ofMillis(10),
                 Map.of("db.query.text", "select 1"),
                 List.of(),
                 null,
@@ -294,7 +292,6 @@ class PeekabootAutoConfigurationTest {
                 Span.Kind.SERVER,
                 Instant.EPOCH,
                 Instant.EPOCH.plusMillis(100),
-                Duration.ofMillis(100),
                 Map.of(),
                 List.of(),
                 null,

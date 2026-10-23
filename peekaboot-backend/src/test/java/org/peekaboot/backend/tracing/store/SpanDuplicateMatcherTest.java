@@ -5,7 +5,6 @@ import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -49,20 +48,7 @@ class SpanDuplicateMatcherTest {
     void aSpanWithoutTagsMatchesOneWithNone() {
         // the record allows a null tag map; the builder never produces one
         SpanData untagged = new SpanData(
-                "t",
-                "a",
-                null,
-                "connection",
-                null,
-                Instant.EPOCH,
-                Instant.EPOCH,
-                Duration.ZERO,
-                null,
-                List.of(),
-                null,
-                null,
-                null,
-                1);
+                "t", "a", null, "connection", null, Instant.EPOCH, Instant.EPOCH, null, List.of(), null, null, null, 1);
         SpanData empty = span("b").named("connection").build();
 
         assertThat(SpanDuplicateMatcher.isDuplicate(untagged, empty)).isTrue();
