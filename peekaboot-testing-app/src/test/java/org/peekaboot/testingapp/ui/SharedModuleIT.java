@@ -595,6 +595,31 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo("00:00:01.500");
     }
 
+    /**
+     * Java writes an Instant to the nanosecond; every engine keeps only the millisecond. WebKit's
+     * own Date.parse rounds 0.250999999s up at a present-day epoch, where a double runs out of
+     * digits, though not at 1970's.
+     */
+    @Test
+    void instantMsDropsTheDigitsPastTheMillisecond() {
+        assertThat(evalModule("format.js", """
+                        [m.instantMs('2026-10-23T10:00:00.250999999Z') - Date.UTC(2026, 9, 23, 10),
+                         m.instantMs('2026-10-23T10:00:00.2Z') - Date.UTC(2026, 9, 23, 10),
+                         m.instantMs('2026-10-23T12:00:00.999999+02:00') - Date.UTC(2026, 9, 23, 10),
+                         m.instantMs('2026-10-23T10:00:00Z') - Date.UTC(2026, 9, 23, 10),
+                         String(m.instantMs(null)), String(m.instantMs('not-a-timestamp'))]
+                        """)).isEqualTo(List.of(250, 200, 999, 0, "NaN", "NaN"));
+    }
+
+    /** A log row shows the millisecond its nanosecond timestamp falls in, in every engine. */
+    @Test
+    void formatTimeOfDayTruncatesANanosecondTimestamp() {
+        assertThat(evalModule(
+                        "format.js",
+                        "m.formatTimeOfDay('2026-10-23T10:00:01.500999999Z', {locale: 'en-US', timeZone: 'UTC'})"))
+                .isEqualTo("10:00:01.500");
+    }
+
     @Test
     void formatTimeOfDayTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatTimeOfDay(0, {locale: 'en-US', timeZone: 'UTC'})"))

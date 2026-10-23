@@ -91,6 +91,15 @@ const TIME_OF_DAY_OPTIONS = {
     hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
 };
 
+/**
+ * An ISO-8601 instant as epoch milliseconds, the digits past the millisecond dropped the way
+ * Java's toEpochMilli drops them: WebKit's Date.parse rounds them instead. NaN for a value
+ * that is no date string.
+ */
+export function instantMs(instant) {
+    return typeof instant === 'string' ? Date.parse(instant.replace(/(\.\d{3})\d+/, '$1')) : NaN;
+}
+
 /** A date/time in the dashboard's usual shape (date, hour and minute), in the reader's locale and timezone. */
 export function formatDateTime(value, display = {}) {
     return formatDateTimeWith(value, DEFAULT_DATE_OPTIONS, display);
@@ -108,7 +117,7 @@ export function formatTimeOfDay(value, display = {}) {
  */
 export function formatDateTimeWith(value, options, {locale, timeZone} = {}) {
     if (value == null || value === '') return '-';
-    const date = new Date(value);
+    const date = new Date(typeof value === 'string' ? instantMs(value) : value);
     // toLocaleString does not throw on an invalid Date - it returns the
     // literal string "Invalid Date" - so this must be checked explicitly rather
     // than relying on the try/catch below, which only guards a malformed
