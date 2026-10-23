@@ -245,3 +245,20 @@ jobs:
           git -C site push origin HEAD:dev
           git -C site push origin HEAD:main
           git -C site push origin "refs/tags/${VERSION}"
+
+  # The release pushed dev with GITHUB_TOKEN, which starts no push run, so the next snapshot
+  # is built on request. A job of its own, so the release job never holds `actions: write`.
+  build-next-snapshot:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      actions: write
+
+    steps:
+      - name: dispatch-build-on-push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run build-on-push.yml --ref dev

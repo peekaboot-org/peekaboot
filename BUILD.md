@@ -647,6 +647,8 @@ Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does
 8. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
    committed to that repo's `dev`, its `main` fast-forwarded so Pages rebuilds, and the same
    bare version tagged there.
+9. `build-on-push` dispatched on `dev`, so the next development version gets its build and
+   snapshot. The release's own pushes use `GITHUB_TOKEN`, which starts no workflow.
 
 `release:prepare` pushes to `dev` with `GITHUB_TOKEN`, and that works only because the ruleset
 requires no status check. A required check refuses any push that does not carry one, and a
