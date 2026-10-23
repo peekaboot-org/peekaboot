@@ -53,12 +53,4 @@ class CronDescriberTest {
 
         assertThat(result).isNull();
     }
-
-    @Test
-    void describe_nullLocale_defaultsToEnglish() {
-        String result = describer.describe("0 0 * * * *", null);
-
-        assertThat(result).isNotNull();
-        assertThat(result.toLowerCase(Locale.ROOT)).contains("hour");
-    }
 }

@@ -26,10 +26,9 @@ final class CronDescriber {
         if (cronExpression == null || cronExpression.isBlank()) {
             return null;
         }
-        Locale effectiveLocale = locale != null ? locale : Locale.ENGLISH;
         try {
             Cron cron = parser.parse(cronExpression);
-            return CronDescriptor.instance(effectiveLocale).describe(cron);
+            return CronDescriptor.instance(locale).describe(cron);
         } catch (IllegalArgumentException e) {
             // called on every insights refresh - keep the log noise low
             log.debug("Failed to parse cron expression '{}': {}", cronExpression, e.getMessage());

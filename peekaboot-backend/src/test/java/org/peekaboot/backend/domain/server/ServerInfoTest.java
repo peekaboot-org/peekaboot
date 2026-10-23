@@ -35,11 +35,6 @@ class ServerInfoTest {
         assertThat(ServerInfo.current(Locale.GERMAN, SUMMER).timezoneDisplay()).isEqualTo("Mitteleuropäische Zeit");
     }
 
-    @Test
-    void aMissingRequestLocaleFallsBackToEnglish() {
-        assertThat(ServerInfo.current(null, SUMMER).timezoneDisplay()).isEqualTo("Central European Time");
-    }
-
     /** The separator is shown as text on the Overview, so the control characters become their escapes. */
     @Test
     void theLineSeparatorIsEscapedForDisplay() {

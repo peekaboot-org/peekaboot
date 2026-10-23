@@ -26,17 +26,15 @@ public record ServerInfo(
 
     /** The clock supplies the zone and the instant, so a test can pin an offset without waiting for a season. */
     public static ServerInfo current(Locale requestLocale, Clock clock) {
-        Locale effectiveLocale = requestLocale != null ? requestLocale : Locale.ENGLISH;
-
         ZoneId zone = clock.getZone();
         String offset = zone.getRules().getOffset(clock.instant()).toString();
-        String display = zone.getDisplayName(TextStyle.FULL, effectiveLocale);
+        String display = zone.getDisplayName(TextStyle.FULL, requestLocale);
 
         String currentTime = ZonedDateTime.now(clock).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
         Locale defaultLocale = Locale.getDefault();
         String localeTag = defaultLocale.toLanguageTag();
-        String localeDisplayName = defaultLocale.getDisplayName(effectiveLocale);
+        String localeDisplayName = defaultLocale.getDisplayName(requestLocale);
 
         String encoding = Charset.defaultCharset().name();
         String lineSep = System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n");
