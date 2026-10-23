@@ -17,10 +17,11 @@ import org.springframework.http.HttpStatus;
  * agree on: the person API says 404 and {@code CustomerClient} names the id instead of
  * logging a failure.
  *
- * <p>Every full build takes this path - the test profile runs with Flyway off, so the
- * person table is empty and each {@code /orders} load looks a customer up in vain. Without
- * these two tests, dropping the 404 branch would only show up as four WARN lines with a
- * stack trace in the suite's output.
+ * <p>Most {@code /orders} loads in a full build take this path, since the test profile runs
+ * with Flyway off and few orders have a person behind their customer id. Without these
+ * tests, dropping the 404 branch would only show up as WARN lines with a stack trace in the
+ * suite's output. The client is asked directly, about an id no fixture creates: the page
+ * names whichever order comes first, in a database other classes write persons and orders to.
  */
 class CustomerLookupIT extends TestingAppITBase {
 
@@ -30,6 +31,9 @@ class CustomerLookupIT extends TestingAppITBase {
     @Autowired
     private OrderLineRepository orderLineRepository;
 
+    @Autowired
+    private CustomerClient customerClient;
+
     @Test
     void anIdWithNobodyBehindItAnswersNotFound() {
         assertThat(api.statusOf("/api/person/999"))
@@ -38,26 +42,15 @@ class CustomerLookupIT extends TestingAppITBase {
     }
 
     @Test
-    void theOrdersPageNamesAnUnknownCustomerByIdWithoutWarning() {
-        CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 999L, "WIDGET-CUST");
-        try {
-            // the page names the first order's customer on every row, so that is the id it renders
-            long customerId = orderRepository.findAll().getFirst().getCustomerId();
-
-            String orders;
-            try (LogCapture logs = LogCapture.attach(CustomerClient.class)) {
-                orders = api.get("/orders");
-
-                assertThat(logs.appender().list)
-                        .as("a 404 from the person API is an answer, not a failure worth a stack trace")
-                        .noneMatch(event -> event.getLevel().isGreaterOrEqual(Level.WARN));
-            }
-
-            assertThat(orders)
+    void anUnknownCustomerIsNamedByIdWithoutWarning() {
+        try (LogCapture logs = LogCapture.attach(CustomerClient.class)) {
+            assertThat(customerClient.lookupCustomerName(999L))
                     .as("the order still renders, with the id standing in for the name")
-                    .contains("customer #" + customerId);
-        } finally {
-            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+                    .isEqualTo("customer #999");
+
+            assertThat(logs.appender().list)
+                    .as("a 404 from the person API is an answer, not a failure worth a stack trace")
+                    .noneMatch(event -> event.getLevel().isGreaterOrEqual(Level.WARN));
         }
     }
 
