@@ -1589,46 +1589,8 @@ so a DataSource that cannot hand out a connection costs its card and nothing els
 
 ## Testing
 
-### Test Categories
-
-Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
-
-- `*Test`: plain unit tests, run by surefire at `test`. The one deliberate exception is
-  `PeekabootDefaultsRegistrationTest`, which runs a real non-web `SpringApplication`. It boots
-  no server, and what it proves (`spring.factories` registration and default-property
-  precedence) belongs in the fast gate.
-- `*IT`: anything that boots a server, run by failsafe at `integration-test`.
-
-`peekaboot-backend`'s suite uses no `@SpringBootTest` and no embedded server; a bare
-`AnnotationConfigApplicationContext` covers the one case where a bean-name lookup needs a real
-container (`ServerUrlResolverTest`). `peekaboot-spring-boot-autoconfigure` has context-runner
-unit tests for its auto-configurations, plus the `*IT`s that boot its own `TestApplication`
-(`DevToolbarAutoConfigurationIT` and `PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT`
-through `SpringApplicationBuilder`). Everything Playwright lives in `peekaboot-testing-app`
-under `org.peekaboot.testingapp.ui`, which boots the sample app and drives the real
-dashboard/toolbar/overlay in a headless browser. `peekaboot-frontend` has no test sources of
-its own; that suite covers it.
-
-### Testing Auto-Configuration
-
-Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests, as
-`PeekabootAutoConfigurationTest` does to prove a missing actuator endpoint class disables the
-whole configuration:
-
-```java
-contextRunner
-    .withPropertyValues("peekaboot.enabled=true")
-    .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
-    .run(context -> {
-        assertThat(context).hasNotFailed();
-        assertThat(context).doesNotHaveBean(PeekabootController.class);
-    });
-```
-
-For ordering, use a real OpenTelemetry stack rather than a mock `Tracer`:
-`DevToolbarAutoConfigurationIT` is a `@SpringBootTest(classes = TestApplication.class,
-webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
-`spring-boot-starter-opentelemetry` so the `Tracer` bean is the real one.
+Test categories, each module's suite and how to test an auto-configuration are in
+[`TESTING.md`](TESTING.md#suites).
 
 ## Key Design Decisions
 

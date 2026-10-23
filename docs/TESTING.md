@@ -47,6 +47,47 @@
   `LateSpanController.LATE_WORK` carries that arithmetic in its Javadoc. Touch the ladder, the
   export delay or the constant and you redo it rather than assume it holds.
 
+## Suites
+
+Two kinds, split by lifecycle:
+
+- `*Test`: plain unit tests, run by surefire at `test`. The one deliberate exception is
+  `PeekabootDefaultsRegistrationTest`, which runs a real non-web `SpringApplication`. It boots
+  no server, and what it proves (`spring.factories` registration and default-property
+  precedence) belongs in the fast gate.
+- `*IT`: anything that boots a server, run by failsafe at `integration-test`.
+
+`peekaboot-backend`'s suite uses no `@SpringBootTest` and no embedded server; a bare
+`AnnotationConfigApplicationContext` covers the one case where a bean-name lookup needs a real
+container (`ServerUrlResolverTest`). `peekaboot-spring-boot-autoconfigure` has context-runner
+unit tests for its auto-configurations, plus the `*IT`s that boot its own `TestApplication`
+(`DevToolbarAutoConfigurationIT` and `PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT`
+through `SpringApplicationBuilder`). Everything Playwright lives in `peekaboot-testing-app`
+under `org.peekaboot.testingapp.ui`, which boots the sample app and drives the real
+dashboard/toolbar/overlay in a headless browser. `peekaboot-frontend` has no test sources of
+its own; that suite covers it.
+
+### Testing auto-configuration
+
+Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests, as
+`PeekabootAutoConfigurationTest` does to prove a missing actuator endpoint class disables the
+whole configuration:
+
+```java
+contextRunner
+    .withPropertyValues("peekaboot.enabled=true")
+    .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
+    .run(context -> {
+        assertThat(context).hasNotFailed();
+        assertThat(context).doesNotHaveBean(PeekabootController.class);
+    });
+```
+
+For ordering, use a real OpenTelemetry stack rather than a mock `Tracer`:
+`DevToolbarAutoConfigurationIT` is a `@SpringBootTest(classes = TestApplication.class,
+webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
+`spring-boot-starter-opentelemetry` so the `Tracer` bean is the real one.
+
 ## Fixtures
 `peekaboot-backend`'s fixtures are built through `org.peekaboot.backend.testsupport`.
 `Spans.span(id)` builds a `SpanData` with neutral defaults, alongside the `query` preset for a
@@ -377,42 +418,17 @@ would fail the context of every test that excluded the auto-configuration. Both 
 `@SpringBootTest(classes = ...)`.
 
 ## Running
-[`BUILD.md`](../BUILD.md#quality-gates) owns the gate list and what each command checks. What a
-test author needs on top of it:
+[`BUILD.md`](../BUILD.md#commands) owns the commands, the gate list and the testing-app's
+thread and engine flags. What a test author needs on top of it:
 
-- Fast gate: `./mvnw test` (root). Unit tests plus the gates bound before the `test` phase. Single
-  unit-test class: `./mvnw -pl <module> test -Dtest=<Class>`. Adding `-am` needs the flags
-  [`BUILD.md`](../BUILD.md#commands) names.
-- Full reactor, `./mvnw clean verify`: unit tests, integration tests and every gate.
-- Everything that boots an application lives in `*IT` classes (failsafe, `integration-test`
-  phase) and only runs under `verify`. Single class: `./mvnw -pl <module> verify -Dit.test=<Class>`.
-  The one exception is `PeekabootDefaultsRegistrationTest`, a `*Test` running a real non-web
-  `SpringApplication` so the fast gate covers `spring.factories` registration and
-  default-property precedence; it boots no server and costs a fraction of a second.
-  `peekaboot-testing-app` runs its `*IT`s as concurrent classes in one JVM, 2 worker threads with
-  a browser each (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test asserting on
-  app-global state shared with other classes pins to its own traceId; nothing here takes a
-  `@ResourceLock`.
-- Playwright engine: `-Dpeekaboot.it.browser=chromium|firefox|webkit`, default `chromium`. An
-  unknown value fails the run instead of falling back. Firefox and WebKit hold back the tests
-  tagged `chromium-only`, whose subject is Chromium's own behaviour rather than peekaboot's; a
-  Chromium run still executes every one of them. `.github/workflows/cross-browser.yml` runs all
-  three nightly. The webkit engine is Playwright's own WebKit build: what Safari is built on,
-  at a different version and feature set. It is not Safari and proves nothing about Safari.
+- `peekaboot-testing-app` runs its `*IT`s as concurrent classes in one JVM, so a test asserting
+  on app-global state pins to its own traceId (see
+  [Isolation in shared Spring contexts](#isolation-in-shared-spring-contexts)).
 - Write-path benchmark, excluded from the default suite:
   `./mvnw -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
-- Regenerate the website's screenshots (needs Docker for real PostgreSQL and Flyway):
-
-  ```bash
-  ./mvnw -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
-      -Dsurefire.failIfNoSpecifiedTests=false \
-      -Dpeekaboot.screenshots.out=/absolute/path/to/peekaboot-org.github.io/assets/img/screenshots
-  ```
-
-  See `peekaboot-testing-app/README.md`'s screenshot section. `docs/images/dashboard.png` is a
-  byte-identical copy of one of those images and is regenerated with them. Which masked property
-  group the tool may reveal, and which it must never touch, is in
-  `ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment.
+- The website's screenshots come from `ScreenshotCapture`. Its command, and what it may and may
+  not reveal, are in
+  [`peekaboot-testing-app/README.md`](../peekaboot-testing-app/README.md#screenshot-capture-screenshotcapture).
 
 ## Counting tests
 Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`

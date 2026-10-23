@@ -88,22 +88,13 @@ peekaboot/
 ```
 
 ```bash
-./mvnw clean verify  # the real build: every test and every gate
-./mvnw clean install # the same, plus install into ~/.m2
-./mvnw test          # unit tests only; the *IT classes need `verify`
-
-./mvnw -pl peekaboot-testing-app spring-boot:run  # the sample app on :8093; needs
-                                                  # Docker and a prior `./mvnw install`
+./mvnw clean verify                                # every test and every gate
+./mvnw test                                        # unit tests only
+./mvnw -pl peekaboot-testing-app spring-boot:run   # the sample app on :8093
 ```
 
-The gates `./mvnw verify` enforces are the static-analysis tools (Spotless, Error Prone,
-SpotBugs, Checkstyle, PMD), the frontend's linters (ESLint, stylelint and html-validate,
-on a Node the build downloads), the dependency and output checks, and the reactor-wide
-JaCoCo coverage floor in `peekaboot-coverage`. Local builds format your sources for you; run
-`./mvnw spotless:apply` to do it by hand. A parallel Gradle build (`./gradlew build`) covers
-the same modules, tests and gates. Maven is the system of record, and CI builds Gradle only
-on Dependabot branches, so a change to one build has to be mirrored in the
-other.
+[`BUILD.md`](BUILD.md#commands) has the rest: every command, what each gate checks, what the
+sample app needs, and the parallel Gradle build.
 
 Further reading:
 

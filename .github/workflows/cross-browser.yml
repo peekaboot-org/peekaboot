@@ -35,7 +35,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build
         uses: ./.github/actions/prepare-build
         with:

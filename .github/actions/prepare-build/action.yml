@@ -86,7 +86,9 @@ runs:
         restore-keys: npm-${{ runner.os }}-
 
     # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
-    # download happening to work mid-test-run. Two steps, not one: see BUILD.md, CI.
+    # download happening to work mid-test-run. Two steps, not one: exec:java combined with -am
+    # ignores -pl and fails on the first upstream module without Playwright on its classpath,
+    # so the SNAPSHOTs go into the local repo first and the exec:java call resolves from there.
     # The gates are skipped here because the workflow's `verify` runs every one of them.
     - name: install-reactor-snapshots
       shell: bash

@@ -65,8 +65,8 @@ threads (`-Dpeekaboot.it.threads=N`; `1` serializes when diagnosing a flaky test
 owning its own browser, all sharing one Spring context cache and therefore one running
 app per context configuration. The concurrency is deliberate beyond speed: concurrent test
 classes hammer peekaboot the way a real concurrent host application does, so a race in
-peekaboot itself shows up here first. No class holds a JUnit `@ResourceLock`: every one of
-them pins its own trace id instead of clearing state the others are using.
+peekaboot itself shows up here first. How a test stays isolated under it is in
+[`docs/TESTING.md`](docs/TESTING.md#isolation-in-shared-spring-contexts).
 `-Dpeekaboot.it.forks=N` still exists on top (forks × threads both apply) but defaults to 1.
 The coverage gate sees the same `jacoco.exec` data it would from a serial run.
 
@@ -423,69 +423,34 @@ pinning it here would leave this repository the one consumer that never receives
 
 ### `.github/actions/prepare-build`
 
-The steps the build workflows share, as a composite action: JDK 25 (temurin) with the
-Maven cache, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
-`playwright.version` property and the engines asked for (only a Playwright bump changes the
-browser build), `~/.npm` cached on the frontend lockfile's hash, the reactor's SNAPSHOTs
-installed, then those browsers installed. The Node
-distribution needs no cache entry of its own: frontend-maven-plugin fetches it as a Maven
-artifact, which `setup-java`'s cache already covers. The `browsers` input names them and defaults to `chromium`, which
-leaves the push build as it was; `with-deps` adds `--with-deps`, the flag that apt-installs
-the engines' system libraries and wants passwordless sudo. The checkout
-stays in each workflow: a local action resolves from the runner's workspace, so it cannot
-run before the checkout that puts it there. Its inputs hand a server id and credential
-variable names on to `setup-java`, and the release workflow's GPG key with them.
-`build-on-push` and `release` both name the `central` server, because both publish; only
-the release signs. `cross-browser` passes none and gets `setup-java`'s defaults.
-
-Both publishing workflows also pass `server-origin: https://central.sonatype.com`. Maven 3.10
-sends a server's credentials only to the origins declared for its id, and for `central` that is
-`repo.maven.apache.org` alone, so without it every upload goes out anonymous and Central answers
-401. The action hands it to `setup-java`'s `mvn-server-repository-origins`, which writes
-`<repositoryOrigins>` into the generated `settings.xml`.
-
-The Chromium install is split into two steps on purpose. `exec:java` ignores `-pl` scoping
-when combined with `-am`: it runs the goal against every upstream reactor module too and
-fails on the first one without Playwright on its classpath. So the reactor's SNAPSHOTs are
-installed first (`-pl peekaboot-testing-app -am install -Dmaven.test.skip=true`, with the
-static-analysis gates, the frontend lint gate and the sources/javadoc jars skipped because
-the `verify` that follows runs them all anyway), and the plain `exec:java` call resolves
-against the local repo afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
-`pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
-invocation resolves whatever is latest that day.
+The steps the build workflows share between their checkout and their Maven build, as a
+composite action: JDK 25 (temurin) with the Maven cache and the `settings.xml` credentials a
+workflow asks for, the Playwright browser and npm caches, the reactor's SNAPSHOTs installed,
+then the Playwright browsers. The `browsers` input names the engines and defaults to
+`chromium`; `with-deps` adds `--with-deps` for their system libraries. `build-on-push` and
+`release` both name the `central` server and its origin, because both publish; only the
+release passes a GPG key. `cross-browser` passes none and gets `setup-java`'s defaults. The
+reason for each step sits beside it in
+[`action.yml`](.github/actions/prepare-build/action.yml).
 
 ### `build-on-push.yml`
 
 Runs on every branch except `main`, and on a `workflow_dispatch`, which
-`dependabot-pr-auto-merge` sends for `dev` after each merge. It checks out with
-`fetch-depth: 0` for the subject gate and git-cliff, gates the pushed commit subjects first,
-then runs `prepare-build`, sets the branch's snapshot version and runs
-`./mvnw --batch-mode clean deploy -P peekaboot-publish`.
-After the build it installs git-cliff, runs the release-notes tests and the tests of
-`.github/central/await-release.sh` (`.github/central/test/run.sh`, against the real repo1),
-and writes the pending notes into the run summary. The job keeps `contents: read`, because
-publishing authenticates to Central with the secrets the release uses rather than
-`GITHUB_TOKEN`.
-See [Snapshots](#snapshots) and [Release notes](#release-notes).
-
-The goal follows the publishing secret. A run that can read `OSSRH_TOKEN` runs `deploy`, and a
-run that cannot runs `verify`, checking what every other branch publishes. Dependabot's runs
-get Dependabot secrets only, and none is set, so they verify. Whether the build dispatched
-after a Dependabot merge counts as Dependabot's run is GitHub's call: if it does, `dev`'s
-snapshot waits for the next push to `dev`. A deploy without the secret would fail on Central's
-401 instead.
+`dependabot-pr-auto-merge` sends for `dev` after each merge. It gates the pushed commit
+subjects, runs `prepare-build`, sets the branch's snapshot version and runs
+`./mvnw --batch-mode clean deploy -P peekaboot-publish`. A run that cannot read the publishing
+secret, which covers Dependabot's, runs `verify` instead. After the build it runs the
+release-notes tests and the tests of `.github/central/await-release.sh` (against the real
+repo1), and writes the pending notes into the run summary. See [Snapshots](#snapshots) and
+[Release notes](#release-notes).
 
 A `lint` job runs next to it on every push: actionlint over the workflows and shellcheck over
 every `*.sh` under `.github`. Both are downloaded at a pinned version and checked against its
 SHA-256, and actionlint is handed that shellcheck for the workflows' `run:` blocks.
 
-On a `dependabot/*` branch a second job, `gradle-build`, runs next to the Maven job, because
-the Maven build compiles nothing from the Gradle files. A Gradle-ecosystem PR changes them,
-and a red Maven tool bump gets its Gradle twin pushed onto the Maven PR's branch by hand, so
-every Dependabot ecosystem runs it. It validates the wrapper jar with
-`gradle/actions/wrapper-validation` first, since those branches can replace the jar
-`./gradlew` executes, then runs `prepare-build` and `./gradlew build`. See
-[Lockstep](#lockstep).
+On a `dependabot/*` branch a third job, `gradle-build`, validates the Gradle wrapper and runs
+`./gradlew build` next to the Maven job. See [Lockstep](#lockstep). The reasons behind each
+job's steps are in the [workflow](.github/workflows/build-on-push.yml).
 
 ### `draft-release-notes.yml`
 
@@ -527,37 +492,16 @@ See [Releasing](#releasing).
 
 ### `dependabot-pr-auto-merge.yml`
 
-Waits for the `build-on-push` run of a Dependabot PR's head commit with `gh run watch`, then
-approves the PR and rebase-merges it into `dev`. It waits itself rather than using
-`gh pr merge --auto`, which only arms when a branch rule holds the pull request open; `dev`
-carries no such rule, for the reason under [Releasing](#releasing). A red or cancelled build
-leaves the pull request open and unapproved for a human. The merge condition is an
-allow-list. It admits a patch or minor update from the `github_actions`, `maven`, `gradle` or
-`npm_and_yarn` ecosystem, outside the `spring-boot` dependency group. Anything else waits for
-a human, so a semver-major update does, and so does a pull request whose update type
-Dependabot did not report. The watch covers every job in the run, so every PR also waits for
-the `gradle-build` job. Boot is a
-compatibility event rather than a bump, because peekaboot implements
-`EndpointExposureOutcomeContributor`, constructs actuator endpoint objects directly and
-depends on Boot's property-source ordering. That whole line
-arrives as one grouped PR: its version is declared twice on the Maven side, and a bump
-landing in one place only leaves the reactor building two Boot versions. Dependabot watches
-Maven, Gradle and the frontend's npm packages daily, GitHub Actions weekly. Every ecosystem
-holds an update back for seven days after its release, since a merged update runs in the `dev`
-build that holds the publishing token; security updates are not delayed.
-
-The workflow derives from `osslabz/github-actions`' shared
-`.github/workflows/dependabot-auto-merge.yml` and keeps its structure. It keeps its own copy
-because the shared one merges only Maven and GitHub Actions updates, merges action majors and
-does not hold the `spring-boot` group back. Action majors wait here because `release.yml` and
-this workflow run actions `build-on-push` never exercises. `metadata` runs
-`dependabot/fetch-metadata` with `pull-requests: read` alone. `merge` holds the write
-permissions and runs only for a pull request Dependabot opened and pushed; the allow-list
-sits on its merge step. `build-merged-dev` dispatches `build-on-push` and
-`draft-release-notes` on `dev` once the merge succeeded, where the shared one dispatches the
-build alone. The
-merge pushes `dev` with `GITHUB_TOKEN`, and a push with that token starts no workflow, so
-without the dispatch the merged `dev` would get no build, no snapshot and no draft notes.
+Merges a Dependabot pull request into `dev` once the `build-on-push` run of its head commit is
+green, `gradle-build` included, and then dispatches `build-on-push` and `draft-release-notes`
+on `dev`. It merges patch and minor updates from the `github_actions`, `maven`, `gradle` and
+`npm_and_yarn` ecosystems, outside the `spring-boot` group. Everything else waits for a human.
+It derives from `osslabz/github-actions`' shared `.github/workflows/dependabot-auto-merge.yml`.
+Why it waits for the build itself, why the allow-list leaves out what it does and how the jobs
+split their permissions are in the [workflow](.github/workflows/dependabot-pr-auto-merge.yml).
+Dependabot watches Maven, Gradle and the frontend's npm packages daily, GitHub Actions weekly.
+Every ecosystem holds an update back for seven days after its release, security updates
+excepted ([`dependabot.yml`](.github/dependabot.yml)).
 
 Branch model: `dev` is the default and integration branch, and the only branch that
 originates commits. `main` is a pointer to the last released commit; the release job

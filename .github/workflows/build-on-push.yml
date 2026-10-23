@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    # Publishing authenticates to Central with the release's secrets, not with GITHUB_TOKEN.
     permissions:
       contents: read
 
@@ -35,7 +36,6 @@ jobs:
         with:
           default-branch: dev
 
-      # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build
         uses: ./.github/actions/prepare-build
         with:
@@ -56,8 +56,10 @@ jobs:
       # Central's snapshot repository by itself. The signature stays behind in
       # peekaboot-release: Central validates a release and takes a snapshot as it comes.
       # A run without the publishing secret, which covers every run GitHub hands Dependabot's
-      # secrets, verifies what the others publish. Keyed on the secret rather than the actor,
-      # because the actor of the dispatch that follows a Dependabot merge is unconfirmed.
+      # secrets, verifies what the others publish; a deploy without it would fail on Central's
+      # 401. Keyed on the secret rather than the actor, because the actor of the dispatch that
+      # follows a Dependabot merge is unconfirmed: if it counts as Dependabot's, dev's snapshot
+      # waits for the next push to dev.
       - name: maven-build-publish
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
