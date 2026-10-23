@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import jakarta.servlet.DispatcherType;
 import java.nio.file.Path;
 import java.util.stream.Stream;
+import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
@@ -22,10 +23,10 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.env.Environment;
 import org.springframework.util.ClassUtils;
@@ -42,6 +43,7 @@ import org.springframework.util.StringUtils;
 @AutoConfiguration(after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class})
 @ConditionalOnPeekabootServlet
 @EnableConfigurationProperties(PeekabootProperties.class)
+@Import(ApplicationIdentityConfiguration.class)
 public class PeekabootSecurityAutoConfiguration {
 
     private static final String CREDENTIALS_FILE_NAME = "security.properties";
@@ -114,10 +116,9 @@ public class PeekabootSecurityAutoConfiguration {
         DashboardCredentials dashboardCredentials(
                 PeekabootProperties properties,
                 CredentialsFile credentialsFile,
-                ObjectProvider<BuildProperties> buildProperties,
-                Environment environment) {
+                ApplicationIdentity applicationIdentity) {
             return new DashboardCredentialsResolver(
-                            properties.getSecurity(), credentialsFile, applicationName(buildProperties, environment))
+                            properties.getSecurity(), credentialsFile, applicationIdentity.shortName())
                     .resolve();
         }
 
@@ -146,16 +147,6 @@ public class PeekabootSecurityAutoConfiguration {
             registration.setOrder(0);
             registration.setName("dashboardAuthenticationFilter");
             return registration;
-        }
-
-        /** The artifact alone: {@code com.acme.orders-admin} is a worse username than {@code orders-admin}. */
-        private static String applicationName(
-                ObjectProvider<BuildProperties> buildProperties, Environment environment) {
-            BuildProperties build = buildProperties.getIfAvailable();
-            if (build != null && StringUtils.hasText(build.getArtifact())) {
-                return build.getArtifact();
-            }
-            return environment.getProperty("spring.application.name");
         }
     }
 

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Level;
 import jakarta.servlet.Filter;
 import java.nio.file.Path;
+import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,6 +18,7 @@ import org.peekaboot.backend.security.SecurityPosture;
 import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -62,6 +64,25 @@ class PeekabootSecurityAutoConfigurationTest {
             assertThat(registration.getUrlPatterns()).containsExactly("/peekaboot/*");
             assertThat(registration.getFilter()).isInstanceOf(DashboardAuthenticationFilter.class);
         });
+    }
+
+    /** The artifact alone names the guard's user; the application name stands in without build-info. */
+    @Test
+    void derivesTheUsernameFromTheArtifactElseTheApplicationName(@TempDir Path storageDir) {
+        Properties build = new Properties();
+        build.setProperty("group", "com.acme");
+        build.setProperty("artifact", "orders-service");
+        runner(storageDir)
+                .withBean(BuildProperties.class, () -> new BuildProperties(build))
+                .withPropertyValues("spring.application.name=orders")
+                .run(context -> assertThat(
+                                context.getBean(DashboardCredentials.class).username())
+                        .isEqualTo("orders-service-admin"));
+        runner(storageDir.resolve("unbuilt"))
+                .withPropertyValues("spring.application.name=orders")
+                .run(context -> assertThat(
+                                context.getBean(DashboardCredentials.class).username())
+                        .isEqualTo("orders-admin"));
     }
 
     @Test

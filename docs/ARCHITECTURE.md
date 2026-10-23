@@ -30,7 +30,8 @@ explicit property beats a detected default everywhere else in this codebase.
 
 The subdirectory is named from the application's build coordinates rather than its
 `spring.application.name`, so two applications sharing a name, or having none, still keep their
-history apart.
+history apart. `ApplicationIdentity`, built once by `ApplicationIdentityConfiguration`, holds that
+rule and the guard username's artifact-first one, each falling back to the application name.
 
 `StorageDirectory` only resolves this path; it never touches the disk. While
 `peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and neither
@@ -196,7 +197,7 @@ Everything runs inside the host application's own process and on its own event b
 ```
 org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
-├── config/                 # PeekabootProperties, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
+├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
 ├── controller/             # PeekabootController: /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
