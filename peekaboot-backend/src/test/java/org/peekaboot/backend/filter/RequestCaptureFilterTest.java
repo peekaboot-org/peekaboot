@@ -5,14 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.peekaboot.backend.testsupport.Requests.get;
 
 import ch.qos.logback.classic.Level;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
@@ -32,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.testsupport.CurrentSpans;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationEventPublisher;
@@ -64,14 +63,6 @@ class RequestCaptureFilterTest {
         response = new MockHttpServletResponse();
     }
 
-    private void setupTraceContext(String traceId) {
-        Span span = mock(Span.class);
-        TraceContext context = mock(TraceContext.class);
-        when(context.traceId()).thenReturn(traceId);
-        when(span.context()).thenReturn(context);
-        when(tracer.currentSpan()).thenReturn(span);
-    }
-
     @ParameterizedTest
     @ValueSource(
             strings = {"/static/app.js", "/webjars/jquery.js", "/actuator/health", "/peekaboot/api/traces", "/error"})
@@ -96,7 +87,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void publishesEventWithTraceId() throws Exception {
-        setupTraceContext("abc123");
+        CurrentSpans.stub(tracer, "abc123");
 
         filter.doFilter(request, response, chain);
 
@@ -116,7 +107,7 @@ class RequestCaptureFilterTest {
      */
     @Test
     void aThrownExceptionIsCapturedAsAServerError() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         doThrow(new ServletException("handler failed")).when(chain).doFilter(request, response);
 
         assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(ServletException.class);
@@ -132,7 +123,7 @@ class RequestCaptureFilterTest {
      */
     @Test
     void aThrownExceptionAfterTheResponseIsCommittedKeepsTheFlushedStatus() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         response.setStatus(200);
         response.flushBuffer();
         doThrow(new ServletException("handler failed")).when(chain).doFilter(request, response);
@@ -144,7 +135,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void capturesRequestHeaders() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.setMethod("POST");
         request.addHeader("Content-Type", "application/json");
         request.addHeader("Accept", "application/json");
@@ -160,7 +151,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void masksSensitiveHeaders() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.addHeader("Authorization", "Bearer secret-token");
         request.addHeader("Cookie", "session=xyz");
         request.addHeader("X-Api-Key", "api-key-123");
@@ -178,7 +169,7 @@ class RequestCaptureFilterTest {
     /** A header sent more than once (Accept, or several Set-Cookie on the response) is captured whole. */
     @Test
     void joinsTheValuesOfARepeatedHeader() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.addHeader("Accept", "text/html");
         request.addHeader("Accept", "application/json");
         response.addHeader("Vary", "Accept");
@@ -198,7 +189,7 @@ class RequestCaptureFilterTest {
      */
     @Test
     void masksProxyAuthorizationHeader() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.addHeader("Proxy-Authorization", "Basic dXNlcjpwYXNz");
 
         filter.doFilter(request, response, chain);
@@ -208,7 +199,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void capturesQueryParameters() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.setQueryString("page=1&size=10");
         request.setParameter("page", "1");
         request.setParameter("size", "10");
@@ -222,7 +213,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void masksSensitiveQueryParameterValues() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = get("/search");
         request.setQueryString("api_key=xyz&q=widgets");
         request.setParameter("api_key", "xyz");
@@ -237,7 +228,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void masksTheRawQueryStringPerParameter() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = get("/search");
         request.setQueryString("api_key=xyz&q=widgets");
         request.setParameter("api_key", "xyz");
@@ -253,7 +244,7 @@ class RequestCaptureFilterTest {
         // getParameterMap() merges query-string and form-body parameters; only actual
         // query-string keys belong in queryParams and only body keys in formParams -
         // "password" here has no query-string counterpart, so it lands in formParams.
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = get("/login");
         request.setMethod("POST");
         request.setContentType("application/x-www-form-urlencoded");
@@ -270,7 +261,7 @@ class RequestCaptureFilterTest {
     /** Multipart fields reach getParameterMap() too; a parameter absent from the query string came from the body. */
     @Test
     void reportsMultipartFieldsAsFormParameters() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = get("/upload");
         request.setMethod("POST");
         request.setContentType("multipart/form-data; boundary=----peekaboot");
@@ -285,7 +276,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void reportsPatchFormFieldsAsFormParameters() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = get("/persons/1");
         request.setMethod("PATCH");
         request.setContentType("application/x-www-form-urlencoded");
@@ -300,7 +291,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void preservesAQueryStringPairWithNoValue() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = get("/search");
         request.setQueryString("debug&q=widgets");
         request.setParameter("debug", "");
@@ -319,7 +310,7 @@ class RequestCaptureFilterTest {
     @ParameterizedTest
     @ValueSource(strings = {"a%zz=1&q=widgets", "100%&q=widgets"})
     void capturesARequestWhoseQueryStringHasAMalformedKey(String queryString) throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = get("/orders");
         request.setQueryString(queryString);
         request.setParameter("q", "widgets");
@@ -335,7 +326,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void capturesANullQueryStringWhenThereIsNone() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
 
         filter.doFilter(request, response, chain);
 
@@ -347,7 +338,7 @@ class RequestCaptureFilterTest {
         // getParameterMap() merges query-string and form-body parameters;
         // only actual query-string keys belong in queryParams and only
         // body keys in formParams
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.setMethod("POST");
         request.setContentType("application/x-www-form-urlencoded");
         request.setQueryString("page=1");
@@ -365,7 +356,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void capturesControllerInfo() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.setAttribute(
                 HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE,
                 new HandlerMethod(new TestController(), TestController.class.getMethod("getUsers")));
@@ -379,7 +370,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void capturesResponseHeaders() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         response.addHeader("Content-Type", "application/json");
         response.addHeader("X-Request-Id", "req-123");
 
@@ -392,7 +383,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void masksSensitiveResponseHeaders() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         response.addHeader("Set-Cookie", "session=abc123");
         response.addHeader("Content-Type", "application/json");
 
@@ -406,7 +397,7 @@ class RequestCaptureFilterTest {
     /** The duration spans the chain: the clock is read once before it and once after. */
     @Test
     void measuresTheDurationAroundTheChain() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         PrimitiveIterator.OfLong clock = LongStream.of(1_000, 1_250).iterator();
         filter = new RequestCaptureFilter(
                 tracer, eventPublisher, new MaskingEngine(), PeekabootPaths.defaults(), clock::nextLong);
@@ -418,13 +409,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void setsServerTimingHeader() throws Exception {
-        Span span = mock(Span.class);
-        TraceContext context = mock(TraceContext.class);
-        when(context.traceId()).thenReturn("0af7651916cd43dd8448eb211c80319c");
-        when(context.spanId()).thenReturn("b7ad6b7169203331");
-        when(context.sampled()).thenReturn(true);
-        when(span.context()).thenReturn(context);
-        when(tracer.currentSpan()).thenReturn(span);
+        CurrentSpans.stub(tracer, "0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331", true);
 
         filter.doFilter(request, response, chain);
 
@@ -434,13 +419,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void setsServerTimingHeaderWithUnsampledFlag() throws Exception {
-        Span span = mock(Span.class);
-        TraceContext context = mock(TraceContext.class);
-        when(context.traceId()).thenReturn("abc123");
-        when(context.spanId()).thenReturn("def456");
-        when(context.sampled()).thenReturn(false);
-        when(span.context()).thenReturn(context);
-        when(tracer.currentSpan()).thenReturn(span);
+        CurrentSpans.stub(tracer, "abc123", "def456", false);
 
         filter.doFilter(request, response, chain);
 
@@ -458,7 +437,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void warnsAndPublishesNothingWhenCaptureFails() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request = new MockHttpServletRequest("GET", "/api/users") {
             @Override
             public Enumeration<String> getHeaderNames() {
@@ -499,7 +478,7 @@ class RequestCaptureFilterTest {
     /** The captured path is what the browser addressed - context path included. */
     @Test
     void capturesTheRequestUriWithItsContextPath() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         request.setContextPath("/app");
         request.setRequestURI("/app/api/users");
         request.setServletPath("/api/users");
@@ -516,7 +495,7 @@ class RequestCaptureFilterTest {
      */
     @Test
     void capturesAnAsyncRequestOnCompletionRatherThanOnHandOff() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         MockAsyncContext asyncContext = startAsync();
 
         filter.doFilter(request, response, chain);
@@ -533,7 +512,7 @@ class RequestCaptureFilterTest {
     /** The completion callback runs on a container thread with no current span; the id comes from the request thread. */
     @Test
     void asyncCaptureKeepsTheTraceIdResolvedOnTheRequestThread() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         MockAsyncContext asyncContext = startAsync();
         filter.doFilter(request, response, chain);
         clearInvocations(tracer);
@@ -547,7 +526,7 @@ class RequestCaptureFilterTest {
     /** A listener is dropped when a new async cycle starts unless it re-registers itself. */
     @Test
     void asyncCaptureFollowsARestartedAsyncCycle() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         MockAsyncContext asyncContext = startAsync();
         filter.doFilter(request, response, chain);
         AsyncListener listener = asyncContext.getListeners().get(0);
@@ -561,7 +540,7 @@ class RequestCaptureFilterTest {
     /** The container signals the timeout, then completes the cycle; the one capture carries the status it ended with. */
     @Test
     void aTimedOutAsyncRequestIsCapturedOnceWithItsFinalStatus() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         MockAsyncContext asyncContext = startAsync();
         filter.doFilter(request, response, chain);
         AsyncListener listener = asyncContext.getListeners().get(0);
@@ -576,7 +555,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void aFailedAsyncRequestIsCapturedOnceWithItsFinalStatus() throws Exception {
-        setupTraceContext("trace1");
+        CurrentSpans.stub(tracer, "trace1");
         MockAsyncContext asyncContext = startAsync();
         filter.doFilter(request, response, chain);
         AsyncListener listener = asyncContext.getListeners().get(0);
@@ -593,13 +572,6 @@ class RequestCaptureFilterTest {
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         return captor.getValue();
-    }
-
-    /** A GET without a context path: the request URI and the container's mapped path coincide. */
-    private static MockHttpServletRequest get(String path) {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
-        request.setServletPath(path);
-        return request;
     }
 
     /** Puts the request into the state a handler leaves it in after handing off asynchronously. */

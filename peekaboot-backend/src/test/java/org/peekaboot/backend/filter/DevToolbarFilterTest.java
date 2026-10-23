@@ -9,10 +9,10 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.peekaboot.backend.testsupport.Requests.get;
 
 import ch.qos.logback.classic.Level;
 import io.micrometer.tracing.Span;
-import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
@@ -32,7 +32,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.testsupport.CurrentSpans;
 import org.peekaboot.backend.testsupport.FailingWriteResponse;
+import org.peekaboot.backend.testsupport.Requests;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -175,11 +177,7 @@ class DevToolbarFilterTest {
 
     @Test
     void resolvesTraceIdFromCurrentSpanWhenPresent() throws Exception {
-        Span span = mock(Span.class);
-        TraceContext context = mock(TraceContext.class);
-        when(context.traceId()).thenReturn("abc123traceid");
-        when(span.context()).thenReturn(context);
-        when(tracer.currentSpan()).thenReturn(span);
+        CurrentSpans.stub(tracer, "abc123traceid");
         chainWritesHtml("<html><body><h1>Hello</h1></body></html>");
 
         filter.doFilter(request, response, chain);
@@ -191,10 +189,7 @@ class DevToolbarFilterTest {
     /** Read once, as the request arrives: a handler that closes the scope must not cost the bar its trace id. */
     @Test
     void reportsTheTraceIdCurrentWhenTheRequestArrived() throws Exception {
-        Span span = mock(Span.class);
-        TraceContext context = mock(TraceContext.class);
-        when(context.traceId()).thenReturn("abc123traceid");
-        when(span.context()).thenReturn(context);
+        Span span = CurrentSpans.span("abc123traceid");
         when(tracer.currentSpan()).thenReturn(span, (Span) null);
         chainWritesHtml("<html><body><h1>Hello</h1></body></html>");
 
@@ -595,13 +590,8 @@ class DevToolbarFilterTest {
      */
     @Test
     void theErrorDispatchGetsTheBarForTheRequestThatFailed() throws Exception {
-        request = new MockHttpServletRequest("POST", "/users/123");
-        request.setServletPath("/users/123");
-        Span span = mock(Span.class);
-        TraceContext traceContext = mock(TraceContext.class);
-        when(traceContext.traceId()).thenReturn("abc123");
-        when(span.context()).thenReturn(traceContext);
-        when(tracer.currentSpan()).thenReturn(span);
+        request = Requests.request("POST", "/users/123");
+        CurrentSpans.stub(tracer, "abc123");
 
         filter.doFilter(request, response, chain);
 
@@ -654,13 +644,6 @@ class DevToolbarFilterTest {
     private static final class ClientAbortException extends IOException {}
 
     private static final class EofException extends IOException {}
-
-    /** A GET without a context path: the request URI and the container's mapped path coincide. */
-    private static MockHttpServletRequest get(String path) {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
-        request.setServletPath(path);
-        return request;
-    }
 
     /** {@code chainWrites("text/html", content)} — the common case for the tests above. */
     private void chainWritesHtml(String content) throws Exception {

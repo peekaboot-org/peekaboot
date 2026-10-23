@@ -3,6 +3,7 @@ package org.peekaboot.backend.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.peekaboot.backend.testsupport.Requests.get;
 
 import ch.qos.logback.classic.Level;
 import jakarta.servlet.FilterChain;
@@ -17,7 +18,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testsupport.LogCapture;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 class DashboardAuthenticationFilterTest {
@@ -202,12 +202,6 @@ class DashboardAuthenticationFilterTest {
                 Instant.parse("2026-09-11T08:15:30Z"),
                 DashboardCredentials.Origin.LOADED);
         return new DashboardAuthenticationFilter(credentials, new CredentialCache());
-    }
-
-    private static MockHttpServletRequest get(String path) {
-        var request = new MockHttpServletRequest("GET", path);
-        request.setServletPath(path);
-        return request;
     }
 
     private static String basic(String username, String password) {

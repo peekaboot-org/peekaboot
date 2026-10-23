@@ -111,7 +111,9 @@ is `LifecycleEvent.stop`.
 rather than the events; the collector's only package-private constructor argument is its clock.
 `FailingWriteResponse` is the `MockHttpServletResponse` whose writes fail the way a container's
 do (first write, or every write), and `PosixPermissions` reads a path's mode for the tests that
-pin owner-only storage. OpenTelemetry `SpanData` comes from the SDK's own
+pin owner-only storage. `Requests.get(path)`/`request(method, path)` build the servlet request a
+filter test sends, and `CurrentSpans.stub(tracer, traceId)` makes a mocked `Tracer` report a
+current span. OpenTelemetry `SpanData` comes from the SDK's own
 `opentelemetry-sdk-testing` (`TestSpanData.builder()`), not a hand-rolled implementation.
 A test names only what it asserts on. A new record component is added to the builder once, not
 to every test class. The domain records carry no test-only constructors, and a test does not
