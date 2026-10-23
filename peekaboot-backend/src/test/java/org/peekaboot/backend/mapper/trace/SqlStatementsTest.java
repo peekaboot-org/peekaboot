@@ -26,7 +26,7 @@ class SqlStatementsTest {
         SqlStatement statement = new SqlStatements(new MaskingEngine(), SqlFormatter.NONE)
                 .of(jdbcQuery("q1", "select 1").build());
 
-        assertThat(statement).isEqualTo(new SqlStatement("select 1", null, List.of()));
+        assertThat(statement).isEqualTo(new SqlStatement("select 1", null, List.of(), 0));
     }
 
     /** Formatting runs on the raw text, so masking sees the same credential in both. */
@@ -96,12 +96,35 @@ class SqlStatementsTest {
         assertThat(statement.parameters()).isEmpty();
     }
 
+    @Test
+    void carriesTheCountOfParameterSetsACappedBatchLeftOut() {
+        SqlStatement statement = withHibernate.of(jdbcQuery("q1", "insert into t values (?)")
+                .tag(DbSpans.PARAMETERS_TAG, "[[\"1\"],[\"2\"]]")
+                .tag(DbSpans.OMITTED_PARAMETER_SETS_TAG, "37")
+                .build());
+
+        assertThat(statement.parameters()).containsExactly(List.of("1"), List.of("2"));
+        assertThat(statement.omittedParameterSets()).isEqualTo(37);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "x", "-3", "1.5", "99999999999"})
+    void aMalformedOmittedCountReadsAsNoneOmitted(String tag) {
+        SqlStatement statement = withHibernate.of(jdbcQuery("q1", "select ?")
+                .tag(DbSpans.PARAMETERS_TAG, "[[\"1\"]]")
+                .tag(DbSpans.OMITTED_PARAMETER_SETS_TAG, tag)
+                .build());
+
+        assertThat(statement.parameters()).containsExactly(List.of("1"));
+        assertThat(statement.omittedParameterSets()).isZero();
+    }
+
     /** Hibernate's BasicFormatterImpl throws NoSuchElementException on unbalanced closing parentheses. */
     @Test
     void aStatementTheFormatterCannotLayOutStillShowsRaw() {
         SqlStatement statement = withHibernate.of(jdbcQuery("q1", ")))").build());
 
-        assertThat(statement).isEqualTo(new SqlStatement(")))", null, List.of()));
+        assertThat(statement).isEqualTo(new SqlStatement(")))", null, List.of(), 0));
     }
 
     @Test

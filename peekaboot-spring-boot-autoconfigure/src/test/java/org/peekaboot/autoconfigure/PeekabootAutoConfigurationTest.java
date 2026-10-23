@@ -207,7 +207,7 @@ class PeekabootAutoConfigurationTest {
                 .withClassLoader(new FilteredClassLoader("org.hibernate"))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(capturedStatement(context)).isEqualTo(new SqlStatement("select 1", null, List.of()));
+                    assertThat(capturedStatement(context)).isEqualTo(new SqlStatement("select 1", null, List.of(), 0));
                 });
     }
 

@@ -3,6 +3,7 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,6 +35,12 @@ public final class DbSpans {
      */
     public static final String PARAMETERS_TAG = "peekaboot.query.parameters";
 
+    /** How many parameter sets of a capped batch {@link #PARAMETERS_TAG} leaves out; absent when it left out none. */
+    public static final String OMITTED_PARAMETER_SETS_TAG = "peekaboot.query.omitted-parameter-sets";
+
+    private static final Set<String> STATEMENT_TAGS =
+            Set.of("db.query.text", "db.statement", PARAMETERS_TAG, OMITTED_PARAMETER_SETS_TAG);
+
     /** How {@link #sql} joins the statements of a batch. */
     static final String STATEMENT_SEPARATOR = ";\n";
 
@@ -56,12 +63,9 @@ public final class DbSpans {
         return span.query() != null || isQuery(span.kind(), span.tags());
     }
 
-    /** The tags {@link #sql} reads the statement from, and the parameters tag; served once as {@code SpanNode.query}, not again as tags. */
+    /** The tags {@link #sql} reads the statement from, and the parameter tags; served once as {@code SpanNode.query}, not again as tags. */
     public static boolean isStatementTag(String key) {
-        return "db.query.text".equals(key)
-                || "db.statement".equals(key)
-                || BATCH_STATEMENT_TAG.matcher(key).matches()
-                || PARAMETERS_TAG.equals(key);
+        return STATEMENT_TAGS.contains(key) || BATCH_STATEMENT_TAG.matcher(key).matches();
     }
 
     /** datasource-proxy's result-set span: the one that carries the row count of the query before it. */

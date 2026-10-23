@@ -90,26 +90,14 @@ class QueryParameterObservationFilterTest {
         insertBatchOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS + 2);
 
         JsonNode sets = PeekabootJson.MAPPER.readTree(parametersTag());
-        assertThat(sets).hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS + 1);
+        assertThat(sets).hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS);
         assertThat(sets.get(QueryParameterObservationFilter.MAX_PARAMETER_SETS - 1)
                         .get(0)
                         .asString(""))
                 .isEqualTo(String.valueOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS));
-        assertThat(sets.get(QueryParameterObservationFilter.MAX_PARAMETER_SETS)
-                        .get(0)
-                        .asString(""))
-                .isEqualTo("/* 2 parameter sets omitted */");
-    }
-
-    @Test
-    void countsASingleDroppedParameterSetInTheSingular() throws SQLException {
-        insertBatchOf(QueryParameterObservationFilter.MAX_PARAMETER_SETS + 1);
-
-        JsonNode sets = PeekabootJson.MAPPER.readTree(parametersTag());
-        assertThat(sets.get(QueryParameterObservationFilter.MAX_PARAMETER_SETS)
-                        .get(0)
-                        .asString(""))
-                .isEqualTo("/* 1 parameter set omitted */");
+        assertThat(queryContext().getHighCardinalityKeyValue(DbSpans.OMITTED_PARAMETER_SETS_TAG))
+                .extracting(KeyValue::getValue)
+                .isEqualTo("2");
     }
 
     @Test
@@ -118,6 +106,8 @@ class QueryParameterObservationFilterTest {
 
         assertThat(PeekabootJson.MAPPER.readTree(parametersTag()))
                 .hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS);
+        assertThat(queryContext().getHighCardinalityKeyValue(DbSpans.OMITTED_PARAMETER_SETS_TAG))
+                .isNull();
     }
 
     private void insertBatchOf(int size) throws SQLException {

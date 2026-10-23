@@ -39,7 +39,7 @@ final class SqlLiterals {
     }
 
     /** The SQL block comment a cap leaves behind, counting the units it dropped. */
-    static String omitted(int count, String unit) {
+    private static String omitted(int count, String unit) {
         return "/* " + CountFormat.of(count, unit) + " omitted */";
     }
 

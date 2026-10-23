@@ -180,7 +180,7 @@ class DbSpansTest {
         assertThat(DbSpans.isQuery(node("s1")
                         .kind(Span.Kind.CLIENT)
                         .tags(Map.of("jdbc.datasource.name", "primary"))
-                        .query(new SqlStatement("SELECT 1", null, List.of()))
+                        .query(new SqlStatement("SELECT 1", null, List.of(), 0))
                         .build()))
                 .isTrue();
     }
@@ -213,5 +213,6 @@ class DbSpansTest {
         assertThat(DbSpans.isStatementTag("db.system")).isFalse();
         assertThat(DbSpans.isStatementTag("jdbc.row-count")).isFalse();
         assertThat(DbSpans.isStatementTag(DbSpans.PARAMETERS_TAG)).isTrue();
+        assertThat(DbSpans.isStatementTag(DbSpans.OMITTED_PARAMETER_SETS_TAG)).isTrue();
     }
 }

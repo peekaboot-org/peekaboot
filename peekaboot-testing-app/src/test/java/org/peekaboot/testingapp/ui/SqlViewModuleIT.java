@@ -112,18 +112,36 @@ class SqlViewModuleIT extends PlaywrightTestBase {
                 .isEqualTo(List.of(false, List.of("Parameter set 1", "Parameter set 2"), List.of("1", "2")));
     }
 
-    /** The backend ends a capped batch with one set saying how many it dropped; that is a note, not a set. */
+    /** The backend counts the sets it dropped from a capped batch; that count is a note, not a set. */
     @Test
-    void aCappedBatchEndsInANoteRatherThanAnotherParameterSet() {
+    void aCappedBatchEndsInANoteCountingTheSetsItLeftOut() {
         assertThat(inView(
                         "{\"text\": \"insert into t values (?)\", \"formatted\": null, \"parameters\":"
-                                + " [[\"1\"], [\"2\"], [\"/* 3 parameter sets omitted */\"]]}",
+                                + " [[\"1\"], [\"2\"]], \"omittedParameterSets\": 3}",
                         "return [texts('.pk-sql__params-label'), texts('.pk-sql__param-list li'),"
                                 + " texts('.pk-sql__params-omitted')];"))
                 .isEqualTo(List.of(
                         List.of("Parameter set 1", "Parameter set 2"),
                         List.of("1", "2"),
                         List.of("3 parameter sets omitted")));
+    }
+
+    @Test
+    void countsASingleOmittedParameterSetInTheSingular() {
+        assertThat(inView(
+                        "{\"text\": \"insert into t values (?)\", \"formatted\": null, \"parameters\":"
+                                + " [[\"1\"]], \"omittedParameterSets\": 1}",
+                        "return texts('.pk-sql__params-omitted');"))
+                .isEqualTo(List.of("1 parameter set omitted"));
+    }
+
+    @Test
+    void aBatchWithNothingOmittedShowsNoNote() {
+        assertThat(inView(
+                        "{\"text\": \"insert into t values (?)\", \"formatted\": null, \"parameters\":"
+                                + " [[\"1\"], [\"2\"]], \"omittedParameterSets\": 0}",
+                        "return has('.pk-sql__params-omitted');"))
+                .isEqualTo(false);
     }
 
     @Test

@@ -36,7 +36,10 @@ final class SqlStatements {
             return null;
         }
         return new SqlStatement(
-                maskingEngine.maskValue(sql), maskingEngine.maskValue(formatted(sql)), maskedParameters(span.tags()));
+                maskingEngine.maskValue(sql),
+                maskingEngine.maskValue(formatted(sql)),
+                maskedParameters(span.tags()),
+                omittedParameterSets(span.tags()));
     }
 
     private @Nullable String formatted(String sql) {
@@ -45,6 +48,18 @@ final class SqlStatements {
         } catch (RuntimeException e) {
             // a formatter that chokes on odd SQL must not cost the trace its query
             return null;
+        }
+    }
+
+    private static int omittedParameterSets(Map<String, String> tags) {
+        String count = tags == null ? null : tags.get(DbSpans.OMITTED_PARAMETER_SETS_TAG);
+        if (count == null) {
+            return 0;
+        }
+        try {
+            return Math.max(0, Integer.parseInt(count));
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 

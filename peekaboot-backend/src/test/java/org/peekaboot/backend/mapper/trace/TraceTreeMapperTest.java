@@ -1234,11 +1234,25 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void servesTheParametersTagInsideTheStatementNotBesideIt() {
-        SpanNode node = mapper.map(personLookupTrace()).rootSpan().children().getFirst();
+    void servesTheParameterTagsInsideTheStatementNotBesideThem() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 100).build();
+        var cappedBatch = jdbcQuery("q1", "insert into person (id) values (?)")
+                .parent("root")
+                .at(10, 20)
+                .tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")
+                .tag(DbSpans.OMITTED_PARAMETER_SETS_TAG, "3")
+                .build();
 
-        assertThat(node.tags()).doesNotContainKey(DbSpans.PARAMETERS_TAG);
+        SpanNode node = mapper.map(TraceDatas.of("trace1", root, cappedBatch))
+                .rootSpan()
+                .children()
+                .getFirst();
+
+        assertThat(node.tags())
+                .doesNotContainKey(DbSpans.PARAMETERS_TAG)
+                .doesNotContainKey(DbSpans.OMITTED_PARAMETER_SETS_TAG);
         assertThat(node.query().parameters()).containsExactly(List.of("42"));
+        assertThat(node.query().omittedParameterSets()).isEqualTo(3);
     }
 
     /** A request whose one query bound 42. */

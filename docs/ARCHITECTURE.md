@@ -1422,9 +1422,10 @@ style, `FormatStyle.BASIC`, each statement of a batch on its own) and then maske
 `formatted` is null without Hibernate on the classpath, the formatter bean's condition, and when the
 formatter throws, which `BasicFormatterImpl` does on unbalanced closing parentheses. `parameters` are
 the masked literals of `peekaboot.query.parameters`, empty when the tag is absent or malformed.
-Formatting runs before masking so masking sees the values it sees in the raw text.
+`omittedParameterSets` is the count of `peekaboot.query.omitted-parameter-sets`, 0 when that tag
+is absent or not a count. Formatting runs before masking so masking sees the values it sees in the raw text.
 
-The statement tags and the parameters tag are dropped from `SpanNode.tags` rather than served a
+The statement tags and the parameter tags are dropped from `SpanNode.tags` rather than served a
 second time beside the statement. A datasource-proxy result-set span's `jdbc.row-count` tag is
 served parsed as `SpanNode.rowCount` (null when it does not parse), on the query span it belongs to.
 `RowCounts` pairs the two by creation order, and both mappers read that one pairing through `TraceQueries`.
@@ -1473,9 +1474,10 @@ therefore stays one well-formed literal followed by a comment, rather than a clo
 trailing bare, unquoted text. A literal must keep that shape if it is ever substituted into
 query text in place of a placeholder.
 `QueryParameterObservationFilter.MAX_PARAMETER_SETS` (100) drops the parameter sets of a batch
-past that many entries and appends one set holding `/* N parameter sets omitted */`
-(`/* 1 parameter set omitted */` for a single one), the way a capped literal is marked, rather
-than rendering and serialising all of them. Both exist
+past that many entries rather than rendering and serialising all of them. It records how many
+it dropped as a second key, `peekaboot.query.omitted-parameter-sets`
+(`DbSpans.OMITTED_PARAMETER_SETS_TAG`), absent when it dropped none. The statement serves that
+count as `omittedParameterSets`, and the browser words it. Both caps exist
 because the capture is always on, unlike datasource-micrometer's own `jdbc.params`, which is
 off by default. Nothing else on the ingestion path bounds a tag's size, so an unbounded literal
 or batch would cost time on the application's query thread, bloat the in-memory trace store,
