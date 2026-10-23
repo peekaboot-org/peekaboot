@@ -25,6 +25,7 @@ import org.peekaboot.backend.insights.config.Unit;
 import org.peekaboot.backend.lifecycle.UptimeFormat;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.ui.InlinedStylesheets;
 
 /**
  * Exercises the shared ES modules in a real browser, imported from the running
@@ -887,14 +888,16 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     /**
-     * ToolbarShell links the three shared sheets shadow-styles.js links into the overlay,
-     * then the bar's own: the two lists must name the same files in the same order, or the
-     * bar and the overlay drift apart in cascade.
+     * The toolbar and the error page start from InlinedStylesheets.SHARED_SHEETS, the bar then
+     * links its own: that list must name the files shadow-styles.js links into the overlay, in
+     * the same order, or the server-rendered surfaces and the overlay drift apart in cascade.
      */
     @Test
     void toolbarLinksTheSharedSheetsTheOverlayLinks() {
         @SuppressWarnings("unchecked")
         List<String> shared = (List<String>) evalModule("shadow-styles.js", "m.SHARED_SHEETS");
+        assertThat(InlinedStylesheets.SHARED_SHEETS)
+                .isEqualTo(shared.stream().map(name -> "/ui/assets/" + name).toList());
         List<String> expected = new ArrayList<>(
                 shared.stream().map(name -> "/peekaboot/ui/assets/" + name).toList());
         expected.add("/peekaboot/ui/toolbar/toolbar.css");

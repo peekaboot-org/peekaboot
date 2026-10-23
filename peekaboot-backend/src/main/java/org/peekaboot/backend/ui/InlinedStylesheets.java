@@ -6,9 +6,11 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +30,13 @@ public final class InlinedStylesheets {
 
     /** Stands in for the base path until a renderer knows it; also survives into the inlined CSS. */
     public static final String BASE_TOKEN = "{{BASE}}";
+
+    /**
+     * The sheets every server-rendered surface loads first, in cascade order, relative to the
+     * base path. The same list as shadow-styles.js's SHARED_SHEETS, which SharedModuleIT pins.
+     */
+    public static final List<String> SHARED_SHEETS =
+            List.of("/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/assets/components.css");
 
     /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
     private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");
@@ -60,6 +69,16 @@ public final class InlinedStylesheets {
      */
     public static InlinedStylesheets of(List<String> linked, List<String> inlined) {
         return new InlinedStylesheets(linked, inlined);
+    }
+
+    /** {@link #SHARED_SHEETS} followed by a surface's own sheet. */
+    public static List<String> sharedSheetsAnd(String ownSheet) {
+        return Stream.concat(SHARED_SHEETS.stream(), Stream.of(ownSheet)).toList();
+    }
+
+    /** {@code template} with {@link #css()} at its {@code {{CSS}}} and {@link #links()} at its {@code {{LINKS}}}. */
+    public String fillInto(String template) {
+        return Placeholders.fill(template, Map.of("CSS", css(), "LINKS", links()));
     }
 
     /** One {@code <link rel="stylesheet">} line per linked sheet, newline-joined. */

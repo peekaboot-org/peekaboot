@@ -48,11 +48,7 @@ public class PeekabootErrorView implements View {
      * components.css linked only: the status pill this page renders is server-rendered markup
      * that is already there, not something a script has yet to inject.
      */
-    private static final List<String> SHEETS = List.of(
-            "/ui/assets/tokens.css",
-            "/ui/assets/base.css",
-            "/ui/assets/components.css",
-            "/ui/error-page/error-page.css");
+    private static final List<String> SHEETS = InlinedStylesheets.sharedSheetsAnd("/ui/error-page/error-page.css");
 
     private static final InlinedStylesheets STYLESHEETS = InlinedStylesheets.of(SHEETS, SHEETS);
 
@@ -127,8 +123,7 @@ public class PeekabootErrorView implements View {
             + "    <script>{{REVEAL_SCRIPT}}</script>";
 
     /** {@link #TEMPLATE} with the stylesheets in place; their {@code {{BASE}}} tokens are filled per request with the rest. */
-    private static final String PAGE =
-            Placeholders.fill(TEMPLATE, Map.of("CSS", STYLESHEETS.css(), "LINKS", STYLESHEETS.links()));
+    private static final String PAGE = STYLESHEETS.fillInto(TEMPLATE);
 
     /** {@link #detail}'s section markup, and whether folding actually hid something in it. */
     private record Detail(String html, boolean revealsSomething) {}

@@ -24,9 +24,8 @@ import org.springframework.web.util.HtmlUtils;
 public class ToolbarShell {
 
     /**
-     * Every sheet the bar loads, in cascade order, relative to the base path: the three shared
-     * sheets (the same list as shadow-styles.js's SHARED_SHEETS, which SharedModuleIT pins) and
-     * the bar's own. Linked as well as inlined. The {@code style-src} directive's
+     * Every sheet the bar loads, in cascade order, relative to the base path: the shared sheets
+     * and the bar's own. Linked as well as inlined. The {@code style-src} directive's
      * {@code 'unsafe-inline'} keyword governs only inline {@code <style>} elements and style
      * attributes; a {@code <link rel="stylesheet">} is governed by the directive's source list
      * instead, so dropping {@code 'unsafe-inline'} alone leaves it untouched. A host whose CSP
@@ -34,8 +33,7 @@ public class ToolbarShell {
      * written into this markup keep the bar styled. Both come from the same file, so there is
      * nothing to keep in sync.
      */
-    private static final List<String> LINKED_SHEETS = List.of(
-            "/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/assets/components.css", "/ui/toolbar/toolbar.css");
+    private static final List<String> LINKED_SHEETS = InlinedStylesheets.sharedSheetsAnd("/ui/toolbar/toolbar.css");
 
     private static final String COMPONENTS_SHEET = "/ui/assets/components.css";
 
@@ -88,7 +86,7 @@ public class ToolbarShell {
     private final String shell;
 
     public ToolbarShell() {
-        this.shell = Placeholders.fill(TEMPLATE, Map.of("CSS", STYLESHEETS.css(), "LINKS", STYLESHEETS.links()));
+        this.shell = STYLESHEETS.fillInto(TEMPLATE);
     }
 
     /**

@@ -29,6 +29,19 @@ class InlinedStylesheetsTest {
                 .contains("<link rel=\"stylesheet\" href=\"{{BASE}}/ui/assets/base.css\">");
     }
 
+    @Test
+    void fillsTheCssAndLinksPlaceholdersOfATemplate() {
+        assertThat(stylesheets.fillInto("<style>{{CSS}}</style>\n{{LINKS}}"))
+                .isEqualTo("<style>" + stylesheets.css() + "</style>\n" + stylesheets.links());
+    }
+
+    @Test
+    void putsASurfacesOwnSheetAfterTheSharedOnes() {
+        assertThat(InlinedStylesheets.sharedSheetsAnd("/ui/own.css"))
+                .containsExactly(
+                        "/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/assets/components.css", "/ui/own.css");
+    }
+
     /** A relative url() resolves against its stylesheet; inlined into a page it would resolve against the page. */
     @Test
     void rewritesRelativeUrlsToTheServedPathOfTheirSheet() {
