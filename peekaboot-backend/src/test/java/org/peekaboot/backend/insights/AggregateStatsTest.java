@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.within;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class AggregateStatsTest {
@@ -68,8 +69,7 @@ class AggregateStatsTest {
     @Test
     void aggregatesFinerEntries() {
         // two 1m entries: (min 1, max 9, avg 4, 6 samples) and (min 2, max 20, avg 8, 2 samples)
-        AggregateStats stats = AggregateStats.ofAggregates(
-                new double[] {1, 2}, new double[] {9, 20}, new double[] {4, 8}, new double[] {6, 2});
+        AggregateStats stats = AggregateStats.ofAggregates(List.of(finer(1, 9, 4, 6), finer(2, 20, 8, 2)));
         assertThat(stats.min()).isEqualTo(1);
         assertThat(stats.max()).isEqualTo(20);
         // weighted avg: (4*6 + 8*2) / 8 = 5.0
@@ -82,11 +82,14 @@ class AggregateStatsTest {
 
     @Test
     void aggregatesSkipNaNEntries() {
-        AggregateStats stats = AggregateStats.ofAggregates(
-                new double[] {Double.NaN, 2}, new double[] {Double.NaN, 4},
-                new double[] {Double.NaN, 3}, new double[] {0, 5});
+        AggregateStats stats = AggregateStats.ofAggregates(List.of(AggregateStats.EMPTY, finer(2, 4, 3, 5)));
         assertThat(stats.min()).isEqualTo(2);
         assertThat(stats.avg()).isEqualTo(3);
         assertThat(stats.samples()).isEqualTo(5);
+    }
+
+    /** A finer level's entry; its percentiles play no part in a roll-up, which ranks the averages. */
+    private static AggregateStats finer(double min, double max, double avg, int samples) {
+        return new AggregateStats(min, max, avg, Double.NaN, Double.NaN, Double.NaN, Double.NaN, samples);
     }
 }

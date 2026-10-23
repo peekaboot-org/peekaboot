@@ -37,23 +37,23 @@ public record AggregateStats(
                 usable.length);
     }
 
-    public static AggregateStats ofAggregates(double[] mins, double[] maxes, double[] avgs, double[] sampleCounts) {
+    public static AggregateStats ofAggregates(List<AggregateStats> window) {
         double min = Double.NaN;
         double max = Double.NaN;
         double weightedSum = 0;
         int totalSamples = 0;
         int usable = 0;
-        double[] usableAvgs = new double[avgs.length];
-        for (int i = 0; i < avgs.length; i++) {
-            if (Double.isNaN(avgs[i])) {
+        double[] usableAvgs = new double[window.size()];
+        for (AggregateStats entry : window) {
+            if (Double.isNaN(entry.avg)) {
                 continue;
             }
-            usableAvgs[usable] = avgs[i];
+            usableAvgs[usable] = entry.avg;
             usable++;
-            min = Double.isNaN(min) ? mins[i] : Math.min(min, mins[i]);
-            max = Double.isNaN(max) ? maxes[i] : Math.max(max, maxes[i]);
-            weightedSum += avgs[i] * sampleCounts[i];
-            totalSamples += (int) sampleCounts[i];
+            min = Double.isNaN(min) ? entry.min : Math.min(min, entry.min);
+            max = Double.isNaN(max) ? entry.max : Math.max(max, entry.max);
+            weightedSum += entry.avg * entry.samples;
+            totalSamples += entry.samples;
         }
         if (usable == 0) {
             return EMPTY;

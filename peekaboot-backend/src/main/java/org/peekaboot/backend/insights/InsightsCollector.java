@@ -188,20 +188,12 @@ public final class InsightsCollector implements SmartLifecycle {
         if (level == 1) {
             rings.tickWindows(n).forEach((id, window) -> entries.put(id, AggregateStats.of(window)));
         } else {
-            rings.statsWindows(level - 1, n).forEach((id, window) -> entries.put(id, aggregateFromFinerLevel(window)));
+            rings.statsWindows(level - 1, n)
+                    .forEach((id, window) -> entries.put(id, AggregateStats.ofAggregates(window)));
         }
         rings.appendStats(level, epochMs, entries);
 
         listener.onRollUp(level, epochMs, entries);
-    }
-
-    private static AggregateStats aggregateFromFinerLevel(List<AggregateStats> window) {
-        double[] mins = window.stream().mapToDouble(AggregateStats::min).toArray();
-        double[] maxes = window.stream().mapToDouble(AggregateStats::max).toArray();
-        double[] avgs = window.stream().mapToDouble(AggregateStats::avg).toArray();
-        double[] sampleCounts =
-                window.stream().mapToDouble(AggregateStats::samples).toArray();
-        return AggregateStats.ofAggregates(mins, maxes, avgs, sampleCounts);
     }
 
     /** One level's rings as the API reads them; see {@link SeriesRings#snapshot(int)}. */
