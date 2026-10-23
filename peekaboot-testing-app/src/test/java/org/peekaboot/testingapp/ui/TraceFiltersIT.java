@@ -46,11 +46,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
         assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='errors']", "aria-pressed"))
                 .isEqualTo("true");
 
-        Object checkedTypesRaw = page.evaluate(
-                "() => [...document.querySelectorAll('#traces-filter input[name=type]:checked')].map(cb => cb.value)");
-        @SuppressWarnings("unchecked")
-        List<String> checkedTypes = (List<String>) checkedTypesRaw;
-        assertThat(checkedTypes).containsExactly("SCHEDULED_JOB");
+        assertThat(checkedTypeChips()).containsExactly("SCHEDULED_JOB");
     }
 
     /**
@@ -74,6 +70,40 @@ class TraceFiltersIT extends PlaywrightTestBase {
                 .isEqualTo("false");
         assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='slow']", "aria-pressed"))
                 .isEqualTo("false");
+    }
+
+    /**
+     * A stale or hand-edited "type" param the backend does not know is dropped there
+     * (the list shows every type), so the tab must drop it too - otherwise the banner
+     * claims a filter is active over an unfiltered list. The corrected URL is part of the
+     * contract: a link must never say "type=FOO" over a list that shows the default view.
+     */
+    @Test
+    void aTracesDeepLinkWithAnUnknownTypeFallsBackToTheDefaultFilter() {
+        openDashboard("#traces?type=FOO", Dashboard.tabReadySelector("traces"));
+
+        assertThat(page.isVisible("#traces-active-filter")).isFalse();
+        assertThat(checkedTypeChips()).isEmpty();
+        assertThat(page.url()).endsWith("#traces");
+    }
+
+    /** Maintenance is an exclusion, not a type chip, so a link naming it as a type falls back the same way. */
+    @Test
+    void aTracesDeepLinkNamingMaintenanceAsATypeFallsBackToTheDefaultFilter() {
+        openDashboard("#traces?type=MAINTENANCE", Dashboard.tabReadySelector("traces"));
+
+        assertThat(page.isVisible("#traces-active-filter")).isFalse();
+        assertThat(page.isChecked(MAINTENANCE_EXCLUSION)).isTrue();
+        assertThat(page.url()).endsWith("#traces");
+    }
+
+    /** The backend folds the type's case; a lower-case link selects the same chip an upper-case one does. */
+    @Test
+    void aTracesDeepLinkTypeIsCaseInsensitive() {
+        openDashboard("#traces?type=scheduled_job", Dashboard.tabReadySelector("traces"));
+
+        assertThat(checkedTypeChips()).containsExactly("SCHEDULED_JOB");
+        assertThat(page.url()).endsWith("#traces?type=SCHEDULED_JOB");
     }
 
     /**
@@ -229,6 +259,13 @@ class TraceFiltersIT extends PlaywrightTestBase {
         assertThat(bottoms)
                 .as("every control's bottom edge on the first control's line")
                 .allSatisfy(bottom -> assertThat(bottom.doubleValue()).isLessThan(firstBottom + 12));
+    }
+
+    /** The values of the type chips the filter row has ticked. */
+    @SuppressWarnings("unchecked")
+    private List<String> checkedTypeChips() {
+        return (List<String>) page.evaluate(
+                "chip => [...document.querySelectorAll(chip + ':checked')].map(cb => cb.value)", TRACE_TYPE_CHIP);
     }
 
     /** The type names traces.js asked the listing endpoint for, or null when it named none. */

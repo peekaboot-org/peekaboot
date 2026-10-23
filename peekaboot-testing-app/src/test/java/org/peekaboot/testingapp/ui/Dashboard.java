@@ -53,13 +53,19 @@ final class Dashboard {
 
     /** Clicks the tab's button and waits for the tab to render its data and finish fading in. */
     void openTab(String tabId) {
+        String ready = tabReadySelector(tabId);
+        page.click(tabButton(tabId));
+        page.waitForSelector(ready);
+        page.waitForFunction(PANEL_FADED_IN, tabId);
+    }
+
+    /** What the tab renders once its own data has arrived, for a test that lands on it some other way. */
+    static String tabReadySelector(String tabId) {
         String ready = TAB_READY_SELECTOR.get(tabId);
         if (ready == null) {
             throw new IllegalArgumentException("no ready selector known for tab '" + tabId + "'");
         }
-        page.click(tabButton(tabId));
-        page.waitForSelector(ready);
-        page.waitForFunction(PANEL_FADED_IN, tabId);
+        return ready;
     }
 
     void openTracesTab() {

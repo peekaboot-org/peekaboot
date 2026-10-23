@@ -149,50 +149,6 @@ class DashboardShellIT extends PlaywrightTestBase {
     }
 
     /**
-     * A stale or hand-edited "type" param the backend does not know is dropped there
-     * (the list shows every type), so the tab must drop it too - otherwise the banner
-     * claims a filter is active over an unfiltered list. The corrected URL is part of the
-     * contract: a link must never say "type=FOO" over a list that shows the default view.
-     */
-    @Test
-    void aTracesDeepLinkWithAnUnknownTypeFallsBackToTheDefaultFilter() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=FOO");
-        page.waitForSelector("#traces-tab.active");
-        page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
-
-        assertThat(page.isVisible("#traces-active-filter")).isFalse();
-        assertThat(page.locator("#traces-filter input[name='type']:checked").count())
-                .isZero();
-        assertThat(page.url()).endsWith("#traces");
-    }
-
-    /** Maintenance is an exclusion, not a type chip, so a link naming it as a type falls back the same way. */
-    @Test
-    void aTracesDeepLinkNamingMaintenanceAsATypeFallsBackToTheDefaultFilter() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=MAINTENANCE");
-        page.waitForSelector("#traces-tab.active");
-        page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
-
-        assertThat(page.isVisible("#traces-active-filter")).isFalse();
-        assertThat(page.isChecked("#traces-filter-exclude-maintenance")).isTrue();
-        assertThat(page.url()).endsWith("#traces");
-    }
-
-    /** The backend folds the type's case; a lower-case link selects the same chip an upper-case one does. */
-    @Test
-    void aTracesDeepLinkTypeIsCaseInsensitive() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=scheduled_job");
-        page.waitForSelector("#traces-tab.active");
-        page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
-
-        @SuppressWarnings("unchecked")
-        List<String> checked = (List<String>) page.evaluate(
-                "() => [...document.querySelectorAll('#traces-filter input[name=type]:checked')].map(cb => cb.value)");
-        assertThat(checked).containsExactly("SCHEDULED_JOB");
-        assertThat(page.url()).endsWith("#traces?type=SCHEDULED_JOB");
-    }
-
-    /**
      * The Insights stream reconnects on its own, and the reconnect re-snapshots every
      * loaded level. That resync is the one path that exists for an application that was
      * just restarting - exactly when a level request can still fail - so a failed
