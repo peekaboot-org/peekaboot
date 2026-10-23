@@ -21,6 +21,7 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskDecorator;
 import org.springframework.core.task.support.CompositeTaskDecorator;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.support.DelegatingErrorHandlingRunnable;
 import org.springframework.util.ErrorHandler;
@@ -199,8 +200,8 @@ class AsyncTaskDecoratorTest {
     }
 
     private AsyncTaskExecutor executorDecoratedAsBootDoes(boolean threadPool) {
-        TaskDecorator decorators = new CompositeTaskDecorator(List.<TaskDecorator>of(
-                decorator, task -> continueObservation(observations.registry().getCurrentObservation(), task)));
+        TaskDecorator decorators =
+                new CompositeTaskDecorator(List.<TaskDecorator>of(decorator, new ContextPropagatingTaskDecorator()));
         if (!threadPool) {
             SimpleAsyncTaskExecutor executor = new SimpleAsyncTaskExecutor();
             executor.setTaskDecorator(decorators);
@@ -210,10 +211,6 @@ class AsyncTaskDecoratorTest {
         executor.setTaskDecorator(decorators);
         executor.initialize();
         return executor;
-    }
-
-    private static Runnable continueObservation(Observation submitting, Runnable task) {
-        return submitting == null ? task : () -> submitting.scoped(task);
     }
 
     private List<Observation.Context> asyncContexts() {

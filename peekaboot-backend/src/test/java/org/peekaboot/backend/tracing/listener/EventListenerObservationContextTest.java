@@ -15,6 +15,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -90,12 +91,6 @@ class EventListenerObservationContextTest {
                 .observe(() -> context.publishEvent(event));
     }
 
-    /** Stands in for Boot's ContextPropagatingTaskDecorator, carrying the observation onto the executor thread. */
-    private static Runnable continueObservation(ObservationRegistry registry, Runnable task) {
-        Observation submitting = registry.getCurrentObservation();
-        return submitting == null ? task : () -> submitting.scoped(task);
-    }
-
     private static ObservationRegistry registryReportingTo(RecordingHandler handler) {
         ObservationRegistry registry = ObservationRegistry.create();
         registry.observationConfig().observationHandler(handler);
@@ -133,7 +128,7 @@ class EventListenerObservationContextTest {
         @Bean
         SimpleAsyncTaskExecutor taskExecutor(ObservationRegistry observationRegistry) {
             SimpleAsyncTaskExecutor executor = new SimpleAsyncTaskExecutor(EXECUTOR_THREAD_PREFIX);
-            executor.setTaskDecorator(task -> continueObservation(observationRegistry, task));
+            executor.setTaskDecorator(new ContextPropagatingTaskDecorator());
             return executor;
         }
 

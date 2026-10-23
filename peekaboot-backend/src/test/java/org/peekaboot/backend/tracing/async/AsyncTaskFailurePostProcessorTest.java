@@ -38,6 +38,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.task.TaskDecorator;
 import org.springframework.core.task.support.CompositeTaskDecorator;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.AsyncAnnotationAdvisor;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
@@ -274,8 +275,7 @@ class AsyncTaskFailurePostProcessorTest {
         ThreadPoolTaskExecutor taskExecutor(ObservationRegistry observationRegistry) {
             ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
             executor.setTaskDecorator(new CompositeTaskDecorator(List.<TaskDecorator>of(
-                    new AsyncTaskDecorator(observationRegistry),
-                    task -> continueObservation(observationRegistry, task))));
+                    new AsyncTaskDecorator(observationRegistry), new ContextPropagatingTaskDecorator())));
             return executor;
         }
 
@@ -292,11 +292,6 @@ class AsyncTaskFailurePostProcessorTest {
                     return handler;
                 }
             };
-        }
-
-        private static Runnable continueObservation(ObservationRegistry registry, Runnable task) {
-            Observation submitting = registry.getCurrentObservation();
-            return submitting == null ? task : () -> submitting.scoped(task);
         }
     }
 
