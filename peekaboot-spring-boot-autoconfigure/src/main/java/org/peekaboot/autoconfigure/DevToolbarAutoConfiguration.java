@@ -8,6 +8,7 @@ import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.filter.RequestCaptureFilter;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.TraceStore;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -38,7 +39,7 @@ import org.springframework.core.env.Environment;
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
 public class DevToolbarAutoConfiguration {
 
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
+    private static final Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
 
     @Bean
     @ConditionalOnMissingBean
