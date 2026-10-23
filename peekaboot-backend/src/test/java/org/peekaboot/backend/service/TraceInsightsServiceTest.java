@@ -617,7 +617,6 @@ class TraceInsightsServiceTest {
         store.setRequest(RequestCompletedEvents.request("trace1")
                 .path("/users")
                 .controller("UserController", "list")
-                .durationMs(100)
                 .build());
 
         Optional<TraceTree> result = service.getTraceInsights("trace1");

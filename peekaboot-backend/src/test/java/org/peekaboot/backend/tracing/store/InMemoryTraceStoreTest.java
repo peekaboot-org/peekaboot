@@ -52,7 +52,6 @@ class InMemoryTraceStoreTest {
         storage.setRequest(RequestCompletedEvents.request("trace1")
                 .path("/api/test")
                 .controller("TestController", "test")
-                .durationMs(50)
                 .build());
 
         var bundle = storage.getTrace("trace1");

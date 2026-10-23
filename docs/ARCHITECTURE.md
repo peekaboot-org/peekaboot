@@ -338,14 +338,11 @@ never has to know those names. Headers, query/form parameters and the resolved c
 class/method are never available without the toolbar, and neither are correlated logs (see
 *Log Capture*).
 
-Request/response body content and uploaded file names have fields reserved on `HttpExchange`
-that `RequestCaptureFilter` never populates. They are not captured, dev-toolbar or not. Those
-fields, and the `null`/`List.of()` arguments passed in their place, are the seam a body-capture
-implementation would fill; they are kept deliberately, and filling them is its own design pass.
-Capture is the easy half. Masking is the hard one, because `MaskingEngine`'s key-name rules
-have no key names to judge in a body: a JSON body is structure, a form post is pairs, an upload
-is bytes. Sizing needs a cap and the truncation marker the Request tab already renders off
-`body.truncated`.
+Request/response body content and uploaded file names are not captured, dev-toolbar or not.
+`HttpExchange` has no fields for them; a body-capture pass adds the fields it fills, and is its
+own design pass. Capture is the easy half. Masking is the hard one, because `MaskingEngine`'s
+key-name rules have no key names to judge in a body: a JSON body is structure, a form post is
+pairs, an upload is bytes. Sizing needs a cap and a truncation marker the Request tab shows.
 
 ### Server-Timing Header
 

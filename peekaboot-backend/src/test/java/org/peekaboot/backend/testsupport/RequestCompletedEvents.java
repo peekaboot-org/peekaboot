@@ -6,7 +6,7 @@ import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
 /**
  * Builds {@link RequestCompletedEvent} fixtures: a {@code GET /} that answered 200 with no
- * headers, parameters, body or controller unless a test says otherwise. Collections default
+ * headers, parameters or controller unless a test says otherwise. Collections default
  * to empty, and can be set to {@code null} explicitly to exercise the null-tolerant readers.
  */
 public final class RequestCompletedEvents {
@@ -28,16 +28,12 @@ public final class RequestCompletedEvents {
         private String path = "/";
         private String queryString;
         private Map<String, String> requestHeaders = Map.of();
-        private String requestBody;
-        private boolean requestBodyTruncated;
         private String controllerClass;
         private String controllerMethod;
         private Map<String, List<String>> queryParams = Map.of();
         private Map<String, List<String>> formParams = Map.of();
-        private List<RequestCompletedEvent.UploadedFile> uploadedFiles = List.of();
         private int status = 200;
         private Map<String, String> responseHeaders = Map.of();
-        private long durationMs;
 
         private Builder(String traceId) {
             this.traceId = traceId;
@@ -63,12 +59,6 @@ public final class RequestCompletedEvents {
             return this;
         }
 
-        public Builder requestBody(String requestBody, boolean truncated) {
-            this.requestBody = requestBody;
-            this.requestBodyTruncated = truncated;
-            return this;
-        }
-
         public Builder controller(String controllerClass, String controllerMethod) {
             this.controllerClass = controllerClass;
             this.controllerMethod = controllerMethod;
@@ -85,11 +75,6 @@ public final class RequestCompletedEvents {
             return this;
         }
 
-        public Builder uploadedFiles(List<RequestCompletedEvent.UploadedFile> uploadedFiles) {
-            this.uploadedFiles = uploadedFiles;
-            return this;
-        }
-
         public Builder status(int status) {
             this.status = status;
             return this;
@@ -100,11 +85,6 @@ public final class RequestCompletedEvents {
             return this;
         }
 
-        public Builder durationMs(long durationMs) {
-            this.durationMs = durationMs;
-            return this;
-        }
-
         public RequestCompletedEvent build() {
             return new RequestCompletedEvent(
                     traceId,
@@ -112,16 +92,12 @@ public final class RequestCompletedEvents {
                     path,
                     queryString,
                     requestHeaders,
-                    requestBody,
-                    requestBodyTruncated,
                     controllerClass,
                     controllerMethod,
                     queryParams,
                     formParams,
-                    uploadedFiles,
                     status,
-                    responseHeaders,
-                    durationMs);
+                    responseHeaders);
         }
     }
 }

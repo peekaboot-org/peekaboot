@@ -18,8 +18,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.PrimitiveIterator;
-import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -392,19 +390,6 @@ class RequestCaptureFilterTest {
         RequestCompletedEvent event = publishedEvent();
         assertThat(event.responseHeaders()).containsEntry("Set-Cookie", "******");
         assertThat(event.responseHeaders()).containsEntry("Content-Type", "application/json");
-    }
-
-    /** The duration spans the chain: the clock is read once before it and once after. */
-    @Test
-    void measuresTheDurationAroundTheChain() throws Exception {
-        CurrentSpans.stub(tracer, "trace1");
-        PrimitiveIterator.OfLong clock = LongStream.of(1_000, 1_250).iterator();
-        filter = new RequestCaptureFilter(
-                tracer, eventPublisher, new MaskingEngine(), PeekabootPaths.defaults(), clock::nextLong);
-
-        filter.doFilter(request, response, chain);
-
-        assertThat(publishedEvent().durationMs()).isEqualTo(250);
     }
 
     @Test

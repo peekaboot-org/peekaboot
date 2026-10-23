@@ -207,25 +207,21 @@ what lets the bucket chips show `filtered / total`.
 ### HTTP Exchange
 `HttpExchange(HttpRequest request, HttpResponse response)`, built from a `RequestCompletedEvent`
 and carried on `TraceTree.httpExchange`. `HttpResponse` is `status` and `headers`. `HttpRequest`
-holds three flat fields and three nested records:
+holds four flat fields and two nested records:
 
 | Field on the wire | Contents |
 |---|---|
 | `method`, `path` | Verb and request URI. |
 | `query` | The query string, values masked. |
 | `headers` | Request headers, values masked. |
-| `body.content`, `body.truncated` | Reserved. |
 | `controller.class`, `controller.method` | The resolved `HandlerMethod`. |
 | `params.query`, `params.form` | Parsed parameters, values masked. |
-| `params.upload` | Reserved. |
 
 `controller.class` is `HttpRequest.Controller.className` in Java, renamed on the wire by
 `@JsonProperty("class")`, since `class` is a Java keyword.
 
-The reserved fields are never populated: `RequestCaptureFilter` passes `null`, `false` and
-`List.of()` for them on every request. They are the seam a body-capture implementation would
-fill; see *Servlet Filters* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for what such a pass has to
-solve first.
+Request bodies and uploads are not captured; see *Servlet Filters* in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for what a body-capture pass has to solve first.
 
 ### Trace Log and Query Info
 `TraceLog(spanId, timestamp, level, message, stackTrace, hiddenFrames, applicationFrames)` is one

@@ -22,7 +22,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.LongSupplier;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
@@ -48,29 +47,17 @@ public class RequestCaptureFilter implements Filter {
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
     private final PeekabootPaths paths;
-    /** Epoch millis; the duration is the difference between two reads around the chain. */
-    private final LongSupplier clock;
 
     public RequestCaptureFilter(
             Tracer tracer,
             ApplicationEventPublisher eventPublisher,
             MaskingEngine maskingEngine,
             PeekabootPaths paths) {
-        this(tracer, eventPublisher, maskingEngine, paths, System::currentTimeMillis);
-    }
-
-    RequestCaptureFilter(
-            Tracer tracer,
-            ApplicationEventPublisher eventPublisher,
-            MaskingEngine maskingEngine,
-            PeekabootPaths paths,
-            LongSupplier clock) {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
         this.maskingEngine = maskingEngine;
         this.tagMasker = new TagMasker(maskingEngine);
         this.paths = paths;
-        this.clock = clock;
     }
 
     @Override
@@ -93,8 +80,6 @@ public class RequestCaptureFilter implements Filter {
         Span currentSpan = tracer.currentSpan();
         setServerTimingHeader(httpResponse, currentSpan);
 
-        long startTime = clock.getAsLong();
-
         int statusOnFailure = 0;
         try {
             chain.doFilter(request, response);
@@ -115,21 +100,18 @@ public class RequestCaptureFilter implements Filter {
                 log.trace("No current trace, skipping request capture");
             } else if (httpRequest.isAsyncStarted()) {
                 // a DeferredResult/Callable/SseEmitter handler has only handed off: its status
-                // and duration are not known until the async cycle completes
-                httpRequest
-                        .getAsyncContext()
-                        .addListener(new CaptureOnCompletion(httpRequest, httpResponse, traceId, startTime));
+                // is not known until the async cycle completes
+                httpRequest.getAsyncContext().addListener(new CaptureOnCompletion(httpRequest, httpResponse, traceId));
             } else {
                 int status = statusOnFailure != 0 ? statusOnFailure : httpResponse.getStatus();
-                capture(httpRequest, httpResponse, traceId, startTime, status);
+                capture(httpRequest, httpResponse, traceId, status);
             }
         }
     }
 
-    private void capture(
-            HttpServletRequest request, HttpServletResponse response, String traceId, long startTime, int status) {
+    private void capture(HttpServletRequest request, HttpServletResponse response, String traceId, int status) {
         try {
-            captureRequest(request, response, traceId, startTime, status);
+            captureRequest(request, response, traceId, status);
         } catch (Exception e) {
             log.warn("Failed to capture request details", e);
         }
@@ -141,19 +123,16 @@ public class RequestCaptureFilter implements Filter {
         private final HttpServletRequest request;
         private final HttpServletResponse response;
         private final String traceId;
-        private final long startTime;
 
-        private CaptureOnCompletion(
-                HttpServletRequest request, HttpServletResponse response, String traceId, long startTime) {
+        private CaptureOnCompletion(HttpServletRequest request, HttpServletResponse response, String traceId) {
             this.request = request;
             this.response = response;
             this.traceId = traceId;
-            this.startTime = startTime;
         }
 
         @Override
         public void onComplete(AsyncEvent event) {
-            capture(request, response, traceId, startTime, response.getStatus());
+            capture(request, response, traceId, response.getStatus());
         }
 
         @Override
@@ -187,10 +166,7 @@ public class RequestCaptureFilter implements Filter {
         response.setHeader("Server-Timing", "trace;desc=\"00-" + traceId + "-" + spanId + "-" + traceFlags + "\"");
     }
 
-    private void captureRequest(
-            HttpServletRequest request, HttpServletResponse response, String traceId, long startTime, int status) {
-        long durationMs = clock.getAsLong() - startTime;
-
+    private void captureRequest(HttpServletRequest request, HttpServletResponse response, String traceId, int status) {
         Map<String, String> requestHeaders = maskedRequestHeaders(request);
         Map<String, String> responseHeaders = maskedResponseHeaders(response);
 
@@ -212,16 +188,12 @@ public class RequestCaptureFilter implements Filter {
                 request.getRequestURI(),
                 maskingEngine.maskQueryString(request.getQueryString()),
                 requestHeaders,
-                null, // request bodies are not captured
-                false, // requestBodyTruncated
                 controllerClass,
                 controllerMethod,
                 queryParams,
                 formParams,
-                List.of(), // uploads are not captured
                 status,
-                responseHeaders,
-                durationMs);
+                responseHeaders);
 
         eventPublisher.publishEvent(event);
         log.trace("Published RequestCompletedEvent for trace {}", traceId);

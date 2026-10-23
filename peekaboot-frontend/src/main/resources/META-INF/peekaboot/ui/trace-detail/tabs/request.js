@@ -6,7 +6,7 @@
 import {MASK_LITERAL} from '../../shared/markup.js';
 import {badge, emptyState} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
-import {byKey, formatCount, formatDurationMs} from '../../shared/format.js';
+import {byKey, formatDurationMs} from '../../shared/format.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
 
 function kvTable(rows) {
@@ -20,11 +20,8 @@ function tableRow(key, value, valueClass) {
     return el('tr', {}, el('td', {text: key}), cell);
 }
 
-/** `note` is the muted aside a title can carry ("(truncated)"). */
-function section(title, body, note) {
-    const heading = el('h3', {className: 'pk-label', text: title});
-    if (note) heading.append(' ', el('span', {className: 'pk-note', text: note}));
-    return el('div', {className: 'pk-request-section'}, heading, body);
+function section(title, body) {
+    return el('div', {className: 'pk-request-section'}, el('h3', {className: 'pk-label', text: title}), body);
 }
 
 export function render(container, trace, view = {}) {
@@ -43,8 +40,6 @@ export function render(container, trace, view = {}) {
         renderController(req),
         renderParams('Query Parameters', req?.params?.query),
         renderParams('Form Parameters', req?.params?.form),
-        renderUploadedFiles(req?.params?.upload, view.locale),
-        renderRequestBody(req?.body),
         renderHeaders('Request Headers', req?.headers, maskLiteral),
         renderHeaders('Response Headers', res?.headers, maskLiteral)
     ].filter(Boolean));
@@ -72,19 +67,6 @@ function renderParams(title, params) {
     if (entries.length === 0) return null;
     return section(title, kvTable(entries.sort(byKey).map(([key, value]) =>
         tableRow(key, Array.isArray(value) ? value.join(', ') : String(value)))));
-}
-
-function renderUploadedFiles(files, locale) {
-    if (!files?.length) return null;
-    return section('Uploaded Files', kvTable(files.map(file =>
-        tableRow(file.originalFilename || file.name || 'unknown',
-            `${file.contentType || '-'} (${formatCount(file.size || 0, 'byte', {locale})})`))));
-}
-
-function renderRequestBody(body) {
-    if (!body?.content) return null;
-    return section('Request Body', el('div', {className: 'pk-code-block', text: body.content}),
-        body.truncated ? '(truncated)' : null);
 }
 
 /**
