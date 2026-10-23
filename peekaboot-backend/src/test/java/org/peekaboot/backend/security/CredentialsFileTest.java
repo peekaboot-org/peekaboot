@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
 
@@ -29,7 +31,6 @@ class CredentialsFileTest {
 
         var stored = file.read();
         assertThat(stored).isPresent();
-        assertThat(stored.get().username()).isEqualTo("orders-admin");
         assertThat(stored.get().createdAt()).isEqualTo(CREATED);
         assertThat(stored.get().passwordHash().matches("s3cret")).isTrue();
     }
@@ -44,7 +45,6 @@ class CredentialsFileTest {
 
         var stored = file.read();
         assertThat(stored).isPresent();
-        assertThat(stored.get().username()).isEqualTo("new-admin");
         assertThat(stored.get().passwordHash().matches("n3wpass")).isTrue();
     }
 
@@ -137,6 +137,32 @@ class CredentialsFileTest {
         try (var entries = Files.list(dir)) {
             assertThat(entries).containsExactly(dir.resolve("security.properties"));
         }
+    }
+
+    /** The username is resolved on every run, so the file records it only for a human reading it. */
+    @Test
+    void write_recordsWhomTheCredentialsAreFor(@TempDir Path dir) throws IOException {
+        var path = dir.resolve("security.properties");
+
+        new CredentialsFile(path).write(credentials("orders-admin", PasswordHash.of("s3cret")));
+
+        assertThat(Files.readString(path)).contains("username=orders-admin");
+    }
+
+    /** Nothing reads the stored username, so a file without one still keeps its password. */
+    @ParameterizedTest
+    @ValueSource(strings = {"", "username=\n", "username=  \n"})
+    void read_keepsThePasswordOfAFileWithoutAUsername(String usernameLine, @TempDir Path dir) throws IOException {
+        var path = dir.resolve("security.properties");
+        Files.writeString(
+                path,
+                usernameLine + "password=" + PasswordHash.of("s3cret").format() + "\ncreated=2026-09-11T08:15:30Z\n");
+
+        var stored = new CredentialsFile(path).read();
+
+        assertThat(stored)
+                .hasValueSatisfying(credentials ->
+                        assertThat(credentials.passwordHash().matches("s3cret")).isTrue());
     }
 
     @Test

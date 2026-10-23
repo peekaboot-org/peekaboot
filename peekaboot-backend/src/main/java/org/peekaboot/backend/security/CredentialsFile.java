@@ -75,6 +75,7 @@ public final class CredentialsFile {
             return false;
         }
         Properties properties = new Properties();
+        // never read back, since the username is resolved on every run; it tells a reader whom the file is for
         properties.setProperty(USERNAME_KEY, credentials.username());
         properties.setProperty(PASSWORD_KEY, credentials.passwordHash().format());
         properties.setProperty(CREATED_KEY, credentials.createdAt().toString());
@@ -89,20 +90,19 @@ public final class CredentialsFile {
     }
 
     private Optional<StoredCredentials> parse(Properties properties) {
-        String username = properties.getProperty(USERNAME_KEY);
         Optional<PasswordHash> hash = PasswordHash.parse(properties.getProperty(PASSWORD_KEY));
-        if (username == null || username.isBlank() || hash.isEmpty()) {
+        if (hash.isEmpty()) {
             log.warn("The Peekaboot credentials file {} holds no usable entry; generating a new password", path);
             return Optional.empty();
         }
         try {
             Instant created = Instant.parse(properties.getProperty(CREATED_KEY, ""));
-            return Optional.of(new StoredCredentials(username, hash.get(), created));
+            return Optional.of(new StoredCredentials(hash.get(), created));
         } catch (DateTimeParseException e) {
             log.warn("The Peekaboot credentials file {} has no readable creation instant", path);
             return Optional.empty();
         }
     }
 
-    record StoredCredentials(String username, PasswordHash passwordHash, Instant createdAt) {}
+    record StoredCredentials(PasswordHash passwordHash, Instant createdAt) {}
 }
