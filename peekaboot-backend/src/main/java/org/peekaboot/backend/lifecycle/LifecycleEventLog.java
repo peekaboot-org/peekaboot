@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.peekaboot.backend.storage.StorageDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -44,6 +45,13 @@ public final class LifecycleEventLog {
         this.loadWait = loadWait;
     }
 
+    /** The log for {@code storage}: backed by its lifecycle file, or in memory alone while storage is off. */
+    public static LifecycleEventLog create(StorageDirectory storage) {
+        return new LifecycleEventLog(storage.file(LifecycleEventFile.FILE_NAME)
+                .map(LifecycleEventFile::new)
+                .orElse(null));
+    }
+
     /** Submits the read; returns immediately. Without a file the log is loaded by definition. */
     public void beginLoad() {
         if (file == null) {
@@ -68,20 +76,12 @@ public final class LifecycleEventLog {
 
     /** Appends as soon as the history is in memory, on a virtual thread so the caller never waits. */
     public void recordWhenLoaded(LifecycleEvent event) {
-        Thread.ofVirtual().name("peekaboot-lifecycle-record").start(() -> {
-            if (awaitLoad()) {
-                append(event);
-            }
-        });
+        Thread.ofVirtual().name("peekaboot-lifecycle-record").start(() -> appendOnceLoaded(event));
     }
 
     /** Appends and persists before returning; drops the event if the history never arrived. */
     public void recordAndPersist(LifecycleEvent event) {
-        if (!awaitLoad()) {
-            log.debug("Peekaboot lifecycle: history not loaded, dropping {} event", event.type());
-            return;
-        }
-        append(event);
+        appendOnceLoaded(event);
     }
 
     /** The history, oldest first. */
@@ -90,6 +90,14 @@ public final class LifecycleEventLog {
         synchronized (events) {
             return List.copyOf(events);
         }
+    }
+
+    private void appendOnceLoaded(LifecycleEvent event) {
+        if (!awaitLoad()) {
+            log.debug("Peekaboot lifecycle: history not loaded, dropping {} event", event.type());
+            return;
+        }
+        append(event);
     }
 
     /**

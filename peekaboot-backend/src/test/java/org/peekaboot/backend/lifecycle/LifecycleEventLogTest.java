@@ -15,8 +15,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.testsupport.LogCapture;
 
 class LifecycleEventLogTest {
@@ -208,5 +211,58 @@ class LifecycleEventLogTest {
         log.recordAndPersist(LifecycleEvent.stop(3_000, 4711));
 
         assertThat(file.read()).hasSize(2);
+    }
+
+    /** The start is dropped for the same reason as the stop above, and says so the same way. */
+    @Test
+    void aStartThatNeverSeesTheHistoryIsDroppedAndSaysSo() {
+        LifecycleEventLog log = new LifecycleEventLog(file(), Duration.ofMillis(50));
+
+        try (LogCapture capture = LogCapture.attach(LifecycleEventLog.class, Level.DEBUG)) {
+            log.recordWhenLoaded(start(1_000).build());
+
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> !capture.appender().list.isEmpty());
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot lifecycle: history not loaded, dropping START event");
+            });
+        }
+    }
+
+    @Test
+    void withStorageEnabledTheLogIsBackedByItsFile() {
+        StorageDirectory storage = storage(true);
+        LifecycleEventLog log = LifecycleEventLog.create(storage);
+        log.beginLoad();
+
+        log.recordAndPersist(LifecycleEvent.stop(3_000, 4711));
+
+        assertThat(new LifecycleEventFile(
+                                storage.file(LifecycleEventFile.FILE_NAME).orElseThrow())
+                        .read())
+                .extracting(LifecycleEvent::epochMs)
+                .containsExactly(3_000L);
+    }
+
+    @Test
+    void withStorageDisabledTheLogStaysInMemory() throws IOException {
+        LifecycleEventLog log = LifecycleEventLog.create(storage(false));
+        log.beginLoad();
+
+        log.recordAndPersist(LifecycleEvent.stop(3_000, 4711));
+
+        assertThat(log.events()).extracting(LifecycleEvent::epochMs).containsExactly(3_000L);
+        try (Stream<Path> written = Files.list(directory)) {
+            assertThat(written).isEmpty();
+        }
+    }
+
+    private StorageDirectory storage(boolean enabled) {
+        PeekabootProperties.Storage storage = new PeekabootProperties.Storage();
+        storage.setEnabled(enabled);
+        storage.setDir(directory.toString());
+        return StorageDirectory.resolve(storage, "orders");
     }
 }

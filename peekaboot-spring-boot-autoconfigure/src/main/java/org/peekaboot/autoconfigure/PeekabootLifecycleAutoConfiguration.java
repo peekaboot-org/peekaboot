@@ -11,7 +11,6 @@ import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.lifecycle.EnvironmentInfo;
 import org.peekaboot.backend.lifecycle.HikariPoolInfo;
-import org.peekaboot.backend.lifecycle.LifecycleEventFile;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.lifecycle.LifecycleEvents;
@@ -146,12 +145,9 @@ public class PeekabootLifecycleAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         public LifecycleEventLog lifecycleEventLog(StorageDirectory storageDirectory) {
-            LifecycleEventLog log = new LifecycleEventLog(storageDirectory
-                    .file(LifecycleEventFile.FILE_NAME)
-                    .map(LifecycleEventFile::new)
-                    .orElse(null));
-            log.beginLoad();
-            return log;
+            LifecycleEventLog eventLog = LifecycleEventLog.create(storageDirectory);
+            eventLog.beginLoad();
+            return eventLog;
         }
 
         @Bean
