@@ -6,10 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
-import org.peekaboot.testingapp.order.NewOrder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -46,13 +44,7 @@ class InsightsPanelFileIT extends TestingAppITBase {
     void placingAnOrderCountsOnTheOrdersPlacedTile() {
         double before = ordersPlacedTile().path("value").asDouble();
 
-        ResponseEntity<String> placed = api.restClient()
-                .post()
-                .uri("/api/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new NewOrder(1L, "WIDGET-3", 1))
-                .retrieve()
-                .toEntity(String.class);
+        ResponseEntity<String> placed = OrderFixtures.placeOrder(api, "WIDGET-3", 1);
 
         assertThat(placed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(ordersPlacedTile().path("value").asDouble()).isEqualTo(before + 1);

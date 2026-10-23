@@ -4,10 +4,15 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
+import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
+import org.springframework.http.ResponseEntity;
 
-/** Saves orders straight through the repositories, for a test that needs one on the orders page. */
+/**
+ * Orders for a test: saved straight through the repositories, for a test that needs one on the
+ * orders page, or placed through the order API, for a test about what placing one does.
+ */
 final class OrderFixtures {
 
     private OrderFixtures() {}
@@ -31,6 +36,11 @@ final class OrderFixtures {
             orderLineRepository.save(line);
         }
         return saved;
+    }
+
+    /** Places an order for customer 1 through {@code POST /api/orders}, answered as served. */
+    static ResponseEntity<String> placeOrder(PeekabootApi api, String sku, int quantity) {
+        return api.postJson("/api/orders", new NewOrder(1L, sku, quantity));
     }
 
     /** Undoes {@link #seedOrder}, so a test leaves the context's shared database as it found it. */

@@ -13,7 +13,6 @@ import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.inventory.InventoryRepository;
 import org.peekaboot.testingapp.inventory.Product;
-import org.peekaboot.testingapp.order.NewOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +20,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.annotation.DirtiesContext;
@@ -87,8 +85,8 @@ class RedisTraceIT {
 
     @Test
     void aRepeatedLookupIsServedFromRedisInsteadOfTheInventory() {
-        placeOrder("GADGET-2");
-        ResponseEntity<String> repeated = placeOrder("GADGET-2");
+        OrderFixtures.placeOrder(traces.api(), "GADGET-2", 1);
+        ResponseEntity<String> repeated = OrderFixtures.placeOrder(traces.api(), "GADGET-2", 1);
 
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(repeated.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
@@ -108,7 +106,7 @@ class RedisTraceIT {
 
     @Test
     void aCacheMissWritesTheProductInsideTheRequestTrace() {
-        ResponseEntity<String> first = placeOrder("WIDGET-3");
+        ResponseEntity<String> first = OrderFixtures.placeOrder(traces.api(), "WIDGET-3", 1);
 
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(first.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
@@ -153,7 +151,7 @@ class RedisTraceIT {
     @Test
     void connectionSetupCommandsAreMaintenance() {
         // Opens the cache's connection if no earlier test in this class did.
-        placeOrder("GADGET-2");
+        OrderFixtures.placeOrder(traces.api(), "GADGET-2", 1);
 
         traces.awaitTraceOfType(
                 RootActionType.MAINTENANCE, listed -> isRedisRootOf(listed, "HELLO"), RedisTraceIT::rootOperation);
@@ -182,16 +180,5 @@ class RedisTraceIT {
 
     private static String rootOperation(JsonNode listed) {
         return listed.path("rootOperation").asString("");
-    }
-
-    private ResponseEntity<String> placeOrder(String sku) {
-        return traces.api()
-                .restClient()
-                .post()
-                .uri("/api/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new NewOrder(1L, sku, 1))
-                .retrieve()
-                .toEntity(String.class);
     }
 }

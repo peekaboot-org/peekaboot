@@ -11,8 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
 import org.peekaboot.backend.domain.trace.EventListenerMarker;
-import org.peekaboot.testingapp.order.NewOrder;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -33,13 +31,7 @@ class EventListenerTraceCaptureIT extends TestingAppITBase {
 
     @BeforeAll
     void placeAnOrder() {
-        ResponseEntity<String> response = api.restClient()
-                .post()
-                .uri("/api/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new NewOrder(1L, "WIDGET-3", 1))
-                .retrieve()
-                .toEntity(String.class);
+        ResponseEntity<String> response = OrderFixtures.placeOrder(api, "WIDGET-3", 1);
         trace = traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), LISTENER_SPANS_CAPTURED);
     }
 

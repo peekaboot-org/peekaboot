@@ -65,19 +65,16 @@ final class PeekabootApi {
      * instead of being thrown, and a redirect is not followed, so a post-redirect-get shows its 302.
      */
     ResponseEntity<String> postForm(String path, MultiValueMap<String, String> form) {
-        return restClient
-                .mutate()
-                // the JDK client's default redirect policy is NEVER
-                .requestFactory(new JdkClientHttpRequestFactory())
-                .build()
-                .post()
-                .uri(path)
+        return answeredAsServed(postAsServed(path)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .accept(MediaType.TEXT_HTML)
-                .body(form)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, (request, response) -> {})
-                .toEntity(String.class);
+                .body(form));
+    }
+
+    /** A JSON POST, answered as served the way {@link #postForm} is. */
+    ResponseEntity<String> postJson(String path, Object body) {
+        return answeredAsServed(
+                postAsServed(path).contentType(MediaType.APPLICATION_JSON).body(body));
     }
 
     JsonNode getJson(String path, Object... uriVariables) {
@@ -92,5 +89,21 @@ final class PeekabootApi {
 
     static JsonNode readJson(String json) {
         return JSON.readTree(json);
+    }
+
+    private RestClient.RequestBodySpec postAsServed(String path) {
+        return restClient
+                .mutate()
+                // the JDK client's default redirect policy is NEVER
+                .requestFactory(new JdkClientHttpRequestFactory())
+                .build()
+                .post()
+                .uri(path);
+    }
+
+    private static ResponseEntity<String> answeredAsServed(RestClient.RequestHeadersSpec<?> request) {
+        return request.retrieve()
+                .onStatus(HttpStatusCode::isError, (req, response) -> {})
+                .toEntity(String.class);
     }
 }

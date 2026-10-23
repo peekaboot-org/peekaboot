@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
-import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +19,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.annotation.DirtiesContext;
@@ -95,7 +92,7 @@ class MultiDataSourceTraceIT {
 
     @Test
     void placingAnOrderReservesStockOnTheInventoryAndWritesTheOrderOnTheOrders() {
-        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "GADGET-1", 1));
+        ResponseEntity<String> response = OrderFixtures.placeOrder(traces.api(), "GADGET-1", 1);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         JsonNode trace =
@@ -110,7 +107,7 @@ class MultiDataSourceTraceIT {
     void anOrderBeyondTheStockIsAConflictAndReservesNothing() {
         int before = stockOf("WIDGET-2");
 
-        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-2", before + 1));
+        ResponseEntity<String> response = OrderFixtures.placeOrder(traces.api(), "WIDGET-2", before + 1);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(stockOf("WIDGET-2")).isEqualTo(before);
@@ -118,7 +115,7 @@ class MultiDataSourceTraceIT {
 
     @Test
     void anOrderForAnUnknownSkuIsABadRequest() {
-        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "NO-SUCH-SKU", 1));
+        ResponseEntity<String> response = OrderFixtures.placeOrder(traces.api(), "NO-SUCH-SKU", 1);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
@@ -143,18 +140,5 @@ class MultiDataSourceTraceIT {
                 .param(sku)
                 .query(Integer.class)
                 .single();
-    }
-
-    /** Hands back an error status instead of throwing, so a test can assert on 400 and 409. */
-    private ResponseEntity<String> placeOrder(NewOrder order) {
-        return traces.api()
-                .restClient()
-                .post()
-                .uri("/api/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(order)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, (request, response) -> {})
-                .toEntity(String.class);
     }
 }

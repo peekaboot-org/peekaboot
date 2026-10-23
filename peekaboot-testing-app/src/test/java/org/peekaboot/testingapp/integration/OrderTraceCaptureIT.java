@@ -10,12 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
-import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
@@ -197,7 +195,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
 
     @Test
     void placingAnOrderIsCapturedAsItsOwnTrace() {
-        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-1", 2));
+        ResponseEntity<String> response = OrderFixtures.placeOrder(api, "WIDGET-1", 2);
 
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
@@ -216,7 +214,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
      */
     @Test
     void placingAnOrderWritesTheOrderAndItsLineOverOneConnection() {
-        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-2", 1));
+        ResponseEntity<String> response = OrderFixtures.placeOrder(api, "WIDGET-2", 1);
 
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
@@ -266,15 +264,5 @@ class OrderTraceCaptureIT extends TestingAppITBase {
                         + "trace root when the scheduler fires it; that root span's "
                         + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
                 .isEqualTo("SCHEDULED_JOB");
-    }
-
-    private ResponseEntity<String> placeOrder(NewOrder order) {
-        return api.restClient()
-                .post()
-                .uri("/api/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(order)
-                .retrieve()
-                .toEntity(String.class);
     }
 }
