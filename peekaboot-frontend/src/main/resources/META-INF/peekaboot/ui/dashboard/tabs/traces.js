@@ -136,9 +136,13 @@ function seedFromUrl(container, params) {
     currentRootOperationFilter = urlOp;
     maintenanceExcluded = urlMaintenanceExcluded;
 
+    syncBucketButtons(container);
+    syncFilterCheckboxes(container);
+}
+
+function syncBucketButtons(container) {
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn =>
         btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket)));
-    syncFilterCheckboxes(container);
 }
 
 function syncFilterCheckboxes(container) {
@@ -189,13 +193,12 @@ function wireControls(container) {
 
     container.querySelector('#traces-loading').appendChild(loadingBlock('Loading traces...'));
 
+    syncBucketButtons(container);
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
-        btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket));
         btn.addEventListener('click', () => {
             if (btn.dataset.bucket === currentBucket) return;
             currentBucket = btn.dataset.bucket;
-            container.querySelectorAll('#traces-bucket .pk-btn').forEach(b =>
-                b.setAttribute('aria-pressed', String(b === btn)));
+            syncBucketButtons(container);
             writeUrlParams();
             tab.refetch();
         });
