@@ -29,35 +29,31 @@ public class IssueDetector {
 
     private SpanNode processSpan(SpanNode span) {
         List<SpanIssue> issues = new ArrayList<>();
+        long durationMs = span.durationMs();
+        long verySlowMs = properties.getVerySlowSpanThresholdMs();
+        long slowMs = properties.getSlowSpanThresholdMs();
+        long slowQueryMs = properties.getSlowQueryThresholdMs();
 
-        if (span.durationMs() >= properties.getVerySlowSpanThresholdMs()) {
-            issues.add(new SpanIssue(
-                    IssueType.VERY_SLOW,
-                    String.format(
-                            "Span took %dms (threshold: %dms)",
-                            span.durationMs(), properties.getVerySlowSpanThresholdMs()),
-                    IssueSeverity.ERROR));
-        } else if (span.durationMs() >= properties.getSlowSpanThresholdMs()) {
-            issues.add(new SpanIssue(
-                    IssueType.SLOW,
-                    String.format(
-                            "Span took %dms (threshold: %dms)", span.durationMs(), properties.getSlowSpanThresholdMs()),
-                    IssueSeverity.WARNING));
+        if (durationMs >= verySlowMs) {
+            issues.add(issue(IssueType.VERY_SLOW, "Span", durationMs, verySlowMs, IssueSeverity.ERROR));
+        } else if (durationMs >= slowMs) {
+            issues.add(issue(IssueType.SLOW, "Span", durationMs, slowMs, IssueSeverity.WARNING));
         }
 
-        if (DbSpans.isQuery(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
-            issues.add(new SpanIssue(
-                    IssueType.SLOW_QUERY,
-                    String.format(
-                            "Query took %dms (threshold: %dms)",
-                            span.durationMs(), properties.getSlowQueryThresholdMs()),
-                    IssueSeverity.WARNING));
+        if (DbSpans.isQuery(span) && durationMs >= slowQueryMs) {
+            issues.add(issue(IssueType.SLOW_QUERY, "Query", durationMs, slowQueryMs, IssueSeverity.WARNING));
         }
 
         List<SpanNode> processedChildren =
                 span.children().stream().map(this::processSpan).toList();
 
         return span.withIssues(issues, processedChildren);
+    }
+
+    private static SpanIssue issue(
+            IssueType type, String subject, long durationMs, long thresholdMs, IssueSeverity severity) {
+        return new SpanIssue(
+                type, String.format("%s took %dms (threshold: %dms)", subject, durationMs, thresholdMs), severity);
     }
 
     private static boolean hasSlowIssue(SpanNode span) {
