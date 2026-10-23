@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.insights.InsightsCollector;
+import org.peekaboot.backend.insights.WorkerThreads;
 import org.peekaboot.backend.insights.web.Subscriber.OutboundEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -269,12 +270,7 @@ public final class InsightsSsePublisher implements InsightsCollector.Listener, S
         if (thread == null) {
             return;
         }
-        thread.interrupt();
-        try {
-            thread.join(2_000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        WorkerThreads.stopAndJoin(List.of(thread));
     }
 
     /** Repeats {@link #dispatchStep()} while subscribers remain and exits once they don't. */

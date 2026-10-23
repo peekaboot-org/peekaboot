@@ -2,6 +2,9 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class IntervalBoundaryTest {
@@ -49,5 +52,27 @@ class IntervalBoundaryTest {
 
         assertThat(boundary.sleepUntilNext(60_000, 5_000)).isEqualTo(60_000);
         assertThat(sleeper.sleptMs).isEqualTo(54_970);
+    }
+
+    /** Each run gets the boundary it was scheduled for; an interrupt during the sleep ends the loop and stays on the flag. */
+    @Test
+    void runEveryHandsEachBoundaryToTheWorkUntilASleepIsInterrupted() {
+        AtomicLong clock = new AtomicLong(10_030);
+        List<Long> boundaries = new ArrayList<>();
+        IntervalBoundary boundary = new IntervalBoundary(clock::get, millis -> {
+            if (boundaries.size() == 3) {
+                throw new InterruptedException();
+            }
+            clock.addAndGet(millis);
+        });
+
+        try {
+            boundary.runEvery(10_000, 0, boundaries::add);
+
+            assertThat(boundaries).containsExactly(20_000L, 30_000L, 40_000L);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
     }
 }

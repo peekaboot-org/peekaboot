@@ -111,20 +111,11 @@ public final class InsightsCollector implements SmartLifecycle {
         }
     }
 
-    /** Interrupts and joins every level thread (up to 2s each), then clears them. */
+    /** Interrupts and joins every level thread (see {@link WorkerThreads}), then clears them. */
     @Override
     public synchronized void stop() {
         running = false;
-        for (Thread thread : threads) {
-            thread.interrupt();
-        }
-        for (Thread thread : threads) {
-            try {
-                thread.join(2_000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
+        WorkerThreads.stopAndJoin(threads);
         threads.clear();
     }
 
@@ -151,14 +142,7 @@ public final class InsightsCollector implements SmartLifecycle {
     private void runLevel(int level) {
         long intervalMs = intervalMillis[level];
         long offsetMs = level == 0 ? 0 : intervalMillis[level - 1] / 2;
-        while (!Thread.currentThread().isInterrupted()) {
-            long boundary;
-            try {
-                boundary = schedule.sleepUntilNext(intervalMs, offsetMs);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
+        schedule.runEvery(intervalMs, offsetMs, boundary -> {
             try {
                 restoreBarrier.arriveBefore(this::restore);
                 if (level == 0) {
@@ -169,7 +153,7 @@ public final class InsightsCollector implements SmartLifecycle {
             } catch (RuntimeException e) {
                 log.warn("Insights {} failed for level {}", level == 0 ? "tick" : "roll-up", level, e);
             }
-        }
+        });
     }
 
     /** Samples every series into level 0 and notifies the listener. */

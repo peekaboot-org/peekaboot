@@ -34,7 +34,6 @@ public final class InsightsSnapshotStore implements SnapshotStore {
     private static final Logger log = LoggerFactory.getLogger(InsightsSnapshotStore.class);
 
     public static final String FILE_NAME = "insights.snapshot";
-    private static final Duration WRITER_JOIN = Duration.ofSeconds(2);
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
 
     private final Path file;
@@ -154,12 +153,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
         Thread thread = writer;
         writer = null;
         if (thread != null) {
-            thread.interrupt();
-            try {
-                thread.join(WRITER_JOIN.toMillis());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            WorkerThreads.stopAndJoin(List.of(thread));
         }
         writeNow();
     }
@@ -215,14 +209,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     private void runWriter() {
-        long intervalMs = interval.toMillis();
-        while (!Thread.currentThread().isInterrupted()) {
-            try {
-                schedule.sleepUntilNext(intervalMs, 0);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
+        schedule.runEvery(interval.toMillis(), 0, boundary -> {
             try {
                 write();
             } catch (IOException e) {
@@ -232,7 +219,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
                 }
                 reportWriteFailure(e);
             }
-        }
+        });
     }
 
     private Optional<InsightsSnapshot> load() {

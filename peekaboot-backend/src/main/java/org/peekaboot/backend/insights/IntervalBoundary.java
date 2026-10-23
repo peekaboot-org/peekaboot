@@ -1,5 +1,6 @@
 package org.peekaboot.backend.insights;
 
+import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
 
 /**
@@ -39,5 +40,22 @@ final class IntervalBoundary {
         long boundary = ((now / intervalMs) + 1) * intervalMs;
         sleeper.sleep(boundary + offsetMs - now);
         return boundary;
+    }
+
+    /**
+     * Runs {@code work} at every boundary {@link #sleepUntilNext} schedules, handing it the
+     * boundary, until the thread is interrupted. {@code work} handles its own failures.
+     */
+    void runEvery(long intervalMs, long offsetMs, LongConsumer work) {
+        while (!Thread.currentThread().isInterrupted()) {
+            long boundary;
+            try {
+                boundary = sleepUntilNext(intervalMs, offsetMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            work.accept(boundary);
+        }
     }
 }
