@@ -33,22 +33,15 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
      */
     private static final int MAX_CAPTURED_LINES = 1000;
 
-    private ApplicationEventPublisher eventPublisher;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public PeekabootLogbackAppender() {
-        setName("peekaboot");
-    }
-
-    public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
+    public PeekabootLogbackAppender(ApplicationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
+        setName("peekaboot");
     }
 
     @Override
     protected void append(ILoggingEvent event) {
-        if (!isStarted()) {
-            return;
-        }
-
         Map<String, String> mdc = event.getMDCPropertyMap();
         String traceId = mdc != null ? mdc.get(TRACE_ID_KEY) : null;
 
@@ -56,19 +49,17 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
             return;
         }
 
-        if (eventPublisher != null) {
-            String spanId = mdc.get(SPAN_ID_KEY);
-            Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
-            String level = event.getLevel().toString();
-            String loggerName = event.getLoggerName();
-            String message = event.getFormattedMessage();
-            String threadName = event.getThreadName();
-            IThrowableProxy throwable = event.getThrowableProxy();
-            String stackTrace = throwable == null ? null : capLines(ThrowableProxyUtil.asString(throwable));
+        String spanId = mdc.get(SPAN_ID_KEY);
+        Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
+        String level = event.getLevel().toString();
+        String loggerName = event.getLoggerName();
+        String message = event.getFormattedMessage();
+        String threadName = event.getThreadName();
+        IThrowableProxy throwable = event.getThrowableProxy();
+        String stackTrace = throwable == null ? null : capLines(ThrowableProxyUtil.asString(throwable));
 
-            eventPublisher.publishEvent(new LogCapturedEvent(
-                    traceId, spanId, timestamp, level, loggerName, message, threadName, stackTrace));
-        }
+        eventPublisher.publishEvent(
+                new LogCapturedEvent(traceId, spanId, timestamp, level, loggerName, message, threadName, stackTrace));
     }
 
     private static String capLines(String trace) {

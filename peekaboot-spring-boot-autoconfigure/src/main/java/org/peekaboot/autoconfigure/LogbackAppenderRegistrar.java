@@ -36,8 +36,7 @@ class LogbackAppenderRegistrar {
             return;
         }
 
-        appender = new PeekabootLogbackAppender();
-        appender.setEventPublisher(eventPublisher);
+        appender = new PeekabootLogbackAppender(eventPublisher);
         appender.setContext(loggerContext);
         appender.start();
 

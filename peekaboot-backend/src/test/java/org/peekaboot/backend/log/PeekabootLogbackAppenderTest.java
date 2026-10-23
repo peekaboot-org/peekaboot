@@ -34,8 +34,7 @@ class PeekabootLogbackAppenderTest {
         loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         captured = new ArrayList<>();
 
-        appender = new PeekabootLogbackAppender();
-        appender.setEventPublisher(event -> {
+        appender = new PeekabootLogbackAppender(event -> {
             if (event instanceof LogCapturedEvent logEvent) {
                 captured.add(logEvent);
             }
