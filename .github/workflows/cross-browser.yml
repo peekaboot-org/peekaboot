@@ -44,7 +44,9 @@ jobs:
           # Hosted runners have the passwordless sudo it wants; a dev machine may not.
           with-deps: 'true'
 
+      # The engine reaches the testing-app's ITs alone, and the push build gates the rest of the
+      # reactor on the same commit. prepare-build has installed the modules upstream of it.
       - name: maven-build-verify
         env:
           BROWSER: ${{ matrix.browser }}
-        run: ./mvnw --batch-mode clean verify -Dpeekaboot.it.browser="$BROWSER"
+        run: ./mvnw --batch-mode -pl peekaboot-testing-app clean verify -Dpeekaboot.it.browser="$BROWSER"

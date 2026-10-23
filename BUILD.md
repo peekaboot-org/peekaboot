@@ -510,9 +510,9 @@ and pushes made with that token trigger no workflows.
 
 ### `cross-browser.yml`
 
-Nightly at 03:17 UTC, and on demand through `workflow_dispatch`: the same `clean verify`
-once per Playwright engine, one `ubuntu-latest` job each, `fail-fast: false` so a red engine
-does not cancel the other two. `-Dpeekaboot.it.browser=<engine>` selects it and
+Nightly at 03:17 UTC, and on demand through `workflow_dispatch`: `peekaboot-testing-app`'s
+`clean verify` once per Playwright engine, one `ubuntu-latest` job each, `fail-fast: false` so
+a red engine does not cancel the other two. `-Dpeekaboot.it.browser=<engine>` selects it and
 `prepare-build` installs that one engine with `--with-deps`, which WebKit on Linux needs for
 its ~60 system libraries. Firefox and WebKit hold back the `chromium-only` tests.
 
