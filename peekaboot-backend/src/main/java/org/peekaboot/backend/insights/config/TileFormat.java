@@ -4,19 +4,13 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 /** How the Overview renders a tile's value; serialised as the word the panel file and the frontend use. */
 public enum TileFormat {
-    DURATION("duration"),
-    DATETIME("datetime"),
-    BYTES("bytes"),
-    COUNT("count");
-
-    private final String wireName;
-
-    TileFormat(String wireName) {
-        this.wireName = wireName;
-    }
+    DURATION,
+    DATETIME,
+    BYTES,
+    COUNT;
 
     @JsonValue
     public String wireName() {
-        return wireName;
+        return WireNames.of(this);
     }
 }
