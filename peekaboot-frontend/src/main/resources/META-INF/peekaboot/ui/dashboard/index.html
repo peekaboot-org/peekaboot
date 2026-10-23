@@ -41,7 +41,7 @@
                          the labels of the three stateful ones in step with their icon. -->
                     <button type="button" class="pk-btn pk-btn--small" id="timezone-toggle" title="Toggle timezone"
                             aria-label="Timezone: browser. Switch to server timezone">
-                        <span id="timezone-icon" aria-hidden="true">&#127760;</span>
+                        <span aria-hidden="true">&#127760;</span>
                         <span id="timezone-label">Browser</span>
                     </button>
                     <span class="pk-header__tz-info" id="tz-info"></span>
@@ -112,7 +112,7 @@
                 </span>
                 <span class="pk-health__right">
                     <span class="pk-health__summary" id="health-summary"></span>
-                    <span class="pk-health__expand" id="health-expand" aria-hidden="true">&#9654;</span>
+                    <span class="pk-health__expand" aria-hidden="true">&#9654;</span>
                 </span>
             </button>
 
@@ -209,10 +209,10 @@
                 <button type="button" class="pk-btn pk-btn--bucket" data-bucket="slow" aria-pressed="false">Slow</button>
             </div>
             <div id="traces-filter" class="pk-filter-row">
-                <span class="pk-filter-row__label pk-label">Type:</span>
+                <span class="pk-label">Type:</span>
                 <!-- checkbox per selectable ROOT_ACTION_TYPES entry, injected by traces.js -->
                 <span id="traces-filter-excluded" class="pk-filter-row__group">
-                    <span class="pk-filter-row__label pk-label">Excluded:</span>
+                    <span class="pk-label">Excluded:</span>
                     <!-- the excludable type's checkbox, injected by traces.js -->
                 </span>
             </div>
