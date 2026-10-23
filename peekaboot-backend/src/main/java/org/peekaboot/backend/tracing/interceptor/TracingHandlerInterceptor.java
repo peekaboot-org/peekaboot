@@ -122,11 +122,7 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         }
 
         if (dispatch.viewObservation != null) {
-            closeScope(dispatch.viewScope);
-            if (ex != null) {
-                dispatch.viewObservation.error(ex);
-            }
-            dispatch.viewObservation.stop();
+            stop(dispatch.viewObservation, dispatch.viewScope, ex);
             log.trace("Stopped view observation");
         }
 
@@ -138,14 +134,18 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         if (dispatch.handlerObservation == null) {
             return;
         }
-        closeScope(dispatch.handlerScope);
-        if (ex != null) {
-            dispatch.handlerObservation.error(ex);
-        }
-        dispatch.handlerObservation.stop();
+        stop(dispatch.handlerObservation, dispatch.handlerScope, ex);
         dispatch.handlerObservation = null;
         dispatch.handlerScope = null;
         log.trace("Stopped handler observation");
+    }
+
+    private static void stop(Observation observation, Observation.Scope scope, Exception ex) {
+        closeScope(scope);
+        if (ex != null) {
+            observation.error(ex);
+        }
+        observation.stop();
     }
 
     /**
