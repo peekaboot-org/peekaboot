@@ -68,7 +68,8 @@ public class PeekabootPathsAutoConfiguration {
 
     private static PeekabootPaths paths(Environment environment, String dispatcherServletPrefix) {
         return new PeekabootPaths(
-                environment.getProperty("management.endpoints.web.base-path", "/actuator"),
+                environment.getProperty(
+                        "management.endpoints.web.base-path", PeekabootPaths.DEFAULT_MANAGEMENT_BASE_PATH),
                 environment.getProperty("server.servlet.context-path", ""),
                 dispatcherServletPrefix);
     }

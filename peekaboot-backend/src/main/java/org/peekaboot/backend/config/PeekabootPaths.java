@@ -36,7 +36,7 @@ public final class PeekabootPaths {
     public static final String CLASSPATH_ROOT = "/META-INF" + BASE_PATH;
 
     /** Spring Boot's default {@code management.endpoints.web.base-path}. */
-    private static final String DEFAULT_MANAGEMENT_BASE_PATH = "/actuator";
+    public static final String DEFAULT_MANAGEMENT_BASE_PATH = "/actuator";
 
     /** springdoc's own default for {@code springdoc.swagger-ui.path}, for the toolbar's idle mode and the lifecycle banner. */
     public static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
