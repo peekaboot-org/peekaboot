@@ -10,8 +10,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.awaitility.core.ConditionTimeoutException;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.springframework.http.HttpHeaders;
@@ -39,9 +37,6 @@ class TraceApiClient {
             .name()
             .equals(trace.path("rootActionType").asString(""));
 
-    /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
-    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
-
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
 
@@ -60,8 +55,7 @@ class TraceApiClient {
     /**
      * Requests {@code path} and returns the trace id its response named in Server-Timing,
      * for any content type and any status: /boom answers 500 by design and is captured all
-     * the same. A response without the header was never captured, which no later read could
-     * tell from a capture that lost everything, so that fails here.
+     * the same.
      */
     String get(String path) {
         return traceIdOf(api.headersOf(path));
@@ -77,13 +71,7 @@ class TraceApiClient {
 
     /** The trace id a captured response names in Server-Timing, for a request made some other way. */
     static String traceIdOf(HttpHeaders headers) {
-        String serverTiming = headers.getFirst("Server-Timing");
-        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
-        if (!matcher.find()) {
-            throw new AssertionError(
-                    "Server-Timing must carry the trace id, or the request was never captured: " + serverTiming);
-        }
-        return matcher.group(1);
+        return ServerTiming.traceId(headers.getFirst("Server-Timing"));
     }
 
     /**
