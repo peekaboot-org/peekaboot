@@ -1,6 +1,7 @@
 package org.peekaboot.backend.lifecycle;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The build a start event reports, read with a fallback each because an application may
@@ -14,18 +15,38 @@ record BuildFacts(String version, String branch, String commitId, String shortCo
 
     private static final int SHORT_COMMIT_LENGTH = 7;
 
+    private static final String BUILD_VERSION = "version";
+    private static final String BUILD_TIME = "time";
+    private static final String GIT_BRANCH = "branch";
+    private static final String GIT_COMMIT_ID = "commit.id";
+    // With git-commit-id's commitIdGenerationMode=full (the testing-app's setting)
+    // the key is commit.id.full, not commit.id.
+    private static final String GIT_COMMIT_ID_FULL = "commit.id.full";
+    private static final String GIT_COMMIT_ID_ABBREV = "commit.id.abbrev";
+    private static final String GIT_BUILD_VERSION = "build.version";
+    private static final String GIT_BUILD_TIME = "build.time";
+
+    /** Every key {@link #of} reads, from both sources; {@link InfoEntries} keeps these and no others. */
+    static final Set<String> READ_KEYS = Set.of(
+            BUILD_VERSION,
+            BUILD_TIME,
+            GIT_BRANCH,
+            GIT_COMMIT_ID,
+            GIT_COMMIT_ID_FULL,
+            GIT_COMMIT_ID_ABBREV,
+            GIT_BUILD_VERSION,
+            GIT_BUILD_TIME);
+
     static BuildFacts of(LifecycleEvent event) {
         Map<String, String> build = event.build();
         Map<String, String> git = event.git();
-        // With git-commit-id's commitIdGenerationMode=full (the testing-app's setting)
-        // the key is commit.id.full, not commit.id.
-        String commitId = first(git.get("commit.id"), git.get("commit.id.full"));
+        String commitId = first(git.get(GIT_COMMIT_ID), git.get(GIT_COMMIT_ID_FULL));
         return new BuildFacts(
-                first(build.get("version"), git.get("build.version")),
-                git.get("branch"),
+                first(build.get(BUILD_VERSION), git.get(GIT_BUILD_VERSION)),
+                git.get(GIT_BRANCH),
                 commitId,
-                shorten(git.get("commit.id.abbrev"), commitId),
-                epochMs(first(build.get("time"), git.get("build.time"))));
+                shorten(git.get(GIT_COMMIT_ID_ABBREV), commitId),
+                epochMs(first(build.get(BUILD_TIME), git.get(GIT_BUILD_TIME))));
     }
 
     /**
