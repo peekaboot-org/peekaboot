@@ -121,8 +121,8 @@ verify-bound static-analysis gates, the JaCoCo and Mockito agent wiring, the
 `spotless-apply-local` profile and the Error Prone compiler config by hand, pins the
 compiler, dependency, surefire and failsafe plugins at the parent's versions, and picks
 up Spring Boot's plugin versions for everything else. `BuildVersionLockstepTest` compares
-its build instant, JaCoCo version and Boot parent version with the root pom; every other
-change to the parent's build config has to be mirrored there by hand. The one deliberate
+the copies its Javadoc lists with the root pom; every other change to the parent's build
+config has to be mirrored there by hand. The one deliberate
 exception is the dependency check: the sample app is the module that violates it (see
 [the dependency check](#the-dependency-check)), and gating an unpublished sample on a
 third-party version clash would buy nothing but two permanent exclusions.
