@@ -15,7 +15,7 @@
  * removes the endpoint outright, and an operator who set that flag will not be
  * surprised; the fetch's error path renders an honest "unavailable" line instead.
  */
-import {badge, cell, emptyState, table} from '../../shared/components.js';
+import {badge, cardTable, cell, emptyState} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
 import {formatDateTime, formatLongDuration, formatNumber} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
@@ -85,10 +85,8 @@ function writePageParam() {
 
 function renderTable(container, context) {
     const target = container.querySelector('#lifecycle-runs');
-    target.innerHTML = '';
-
     if (!runs || runs.length === 0) {
-        target.appendChild(emptyState('No runs recorded yet'));
+        target.replaceChildren(emptyState('No runs recorded yet'));
         return;
     }
 
@@ -107,7 +105,7 @@ function renderTable(container, context) {
     const {locale, timeZone} = context;
 
     const rows = runs.slice(start, start + PAGE_SIZE).map(run => renderRow(run, {locale, timeZone}));
-    target.appendChild(table(COLUMNS, rows, {className: 'pk-table--card'}));
+    cardTable(target, COLUMNS, rows);
     // Rendered whenever there is at least one run, even for a single page, so the
     // control is discoverable and its presence is stable to test.
     target.appendChild(renderPager(totalPages, locale));

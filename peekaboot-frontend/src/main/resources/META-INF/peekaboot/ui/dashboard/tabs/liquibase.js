@@ -1,5 +1,5 @@
 /** The "Liquibase" tab: one table row per change set, in the backend's orderExecuted order; Liquibase records no duration. */
-import {badge, cell, table, textCell} from '../../shared/components.js';
+import {badge, cardTable, cell, textCell} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
 import {formatDateTime} from '../../shared/format.js';
 import {changeSetExecTypeVariant} from '../../shared/severity.js';
@@ -14,15 +14,8 @@ export function isAvailable(data) {
 
 export function render(container, data, {locale, timeZone} = {}) {
     const changeSets = data?.liquibase?.changeSets || [];
-    const target = container.querySelector('#liquibase-changesets');
-    target.innerHTML = '';
-
-    if (changeSets.length === 0) {
-        return;
-    }
-
     const rows = changeSets.map(changeSet => renderRow(changeSet, {locale, timeZone}));
-    target.appendChild(table(COLUMNS, rows, {className: 'pk-table--card'}));
+    cardTable(container.querySelector('#liquibase-changesets'), COLUMNS, rows);
 }
 
 function renderRow(changeSet, {locale, timeZone}) {

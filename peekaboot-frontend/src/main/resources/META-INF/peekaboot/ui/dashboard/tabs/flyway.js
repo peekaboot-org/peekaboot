@@ -5,7 +5,7 @@
  * single scannable row rather than a card, which would spend roughly 130px per
  * migration on three stacked lines.
  */
-import {badge, cell, table, textCell} from '../../shared/components.js';
+import {badge, cardTable, cell, textCell} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {migrationStateVariant} from '../../shared/severity.js';
@@ -21,15 +21,8 @@ export function isAvailable(data) {
 
 export function render(container, data, {locale, timeZone} = {}) {
     const migrations = data?.flyway?.migrations || [];
-    const target = container.querySelector('#flyway-timeline');
-    target.innerHTML = '';
-
-    if (migrations.length === 0) {
-        return;
-    }
-
     const rows = migrations.map(migration => renderRow(migration, {locale, timeZone}));
-    target.appendChild(table(COLUMNS, rows, {className: 'pk-table--card'}));
+    cardTable(container.querySelector('#flyway-timeline'), COLUMNS, rows);
 }
 
 function renderRow(migration, {locale, timeZone}) {

@@ -49,6 +49,11 @@ export function table(columns, rows, {className} = {}) {
         el('table', {className: 'pk-table' + (className ? ` ${className}` : '')}, head, el('tbody', {}, ...rows)));
 }
 
+/** Replaces `target`'s content with a card-styled table of `rows`: the one shape every list-of-records tab shows. */
+export function cardTable(target, columns, rows) {
+    target.replaceChildren(table(columns, rows, {className: 'pk-table--card'}));
+}
+
 /** A table cell: `children` are text or elements; `title` keeps a truncating cell's full value reachable. */
 export function cell({className, title} = {}, ...children) {
     return el('td', {className, title: title || undefined}, ...children);
