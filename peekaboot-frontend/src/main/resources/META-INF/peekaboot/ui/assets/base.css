@@ -48,8 +48,8 @@ mark {
     cursor: pointer;
 }
 
-/* The Peekaboot mark, sized by the surface that shows it (26px in the dashboard header,
-   18px on the toolbar's dashboard link). The url() resolves against this sheet, so it works
+/* The Peekaboot mark, 26px in the dashboard header (.pk-header__logo) and 18px as the toolbar's
+   and the error page's dashboard link (below). The url() resolves against this sheet, so it works
    from inside a shadow root without knowing basePath, and ToolbarShell rewrites it when it
    inlines this sheet. It swaps per theme: the mark's slate magnifier is 1.4:1 on the dark
    --pk-bg and would otherwise vanish. Same reason as .pk-unbutton for living here. */
@@ -59,6 +59,13 @@ mark {
 }
 [data-theme="dark"] .pk-logo-mark, :host([data-theme="dark"]) .pk-logo-mark {
     background-image: url('logo-mark-dark.png');
+}
+a.pk-logo-mark { width: 18px; height: 18px; }
+/* Forced-colors modes drop background images. The mark is the link's only content, so
+   without a fallback the link becomes an invisible 18px box - the aria-label keeps it
+   reachable, but not visible. */
+@media (forced-colors: active) {
+    a.pk-logo-mark { border: 1px solid currentColor; border-radius: var(--pk-radius); }
 }
 
 /* Honour the OS "reduce motion" setting. Peekaboot runs three infinite animations —

@@ -59,15 +59,6 @@
 }
 .pk-toolbar__controller { color: var(--pk-primary-text); }
 
-/* The dashboard link is the Peekaboot mark (.pk-logo-mark, base.css); theme comes off the
-   shadow host, which watchTheme() keeps in sync. */
-.pk-toolbar__link { width: 18px; height: 18px; }
-/* Forced-colors modes drop background images. The mark is this link's only content
-   (it replaced a text glyph), so without a fallback the control becomes an invisible
-   18px box - the aria-label keeps it reachable, but not visible. */
-@media (forced-colors: active) {
-    .pk-toolbar__link { border: 1px solid currentColor; border-radius: var(--pk-radius); }
-}
 .pk-toolbar__metrics { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-md); }
 /* Sits outside .pk-toolbar__open so the copy control inside it is a real, reachable
    button rather than presentational children of the open button. */

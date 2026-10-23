@@ -103,13 +103,6 @@
     font-size: var(--pk-text-xs);
 }
 .pk-error__footer a { color: var(--pk-primary-text); }
-.pk-error__mark { width: 18px; height: 18px; }
-/* Forced-colors modes drop background images, and the mark is this link's only content,
-   which would leave an invisible 18px box where the dashboard link is. Same fallback as
-   the toolbar's dashboard link. */
-@media (forced-colors: active) {
-    .pk-error__mark { border: 1px solid currentColor; border-radius: var(--pk-radius); }
-}
 .pk-error__footer code {
     font-family: var(--pk-font-mono);
     color: var(--pk-text);

@@ -217,7 +217,9 @@ doubled-selector `background-image` override, no JavaScript:
 
 The `url()` resolves against `base.css`'s own URL, which is why it works from inside a
 shadow root without knowing `basePath`, and `ToolbarShell` rewrites it to the served path
-when it inlines the sheet. Each surface only sizes it (`.pk-header__logo`, `.pk-toolbar__link`).
+when it inlines the sheet. The dashboard header sizes it (`.pk-header__logo`). As a link, the
+toolbar's and the error page's dashboard link, `base.css` sizes it (`a.pk-logo-mark`) and gives
+it the border forced-colors modes need, since they drop background images.
 
 To regenerate from new source artwork (the masters live outside this repo, alongside it in
 `peekaboot-org/assets/`), crop to the bounding box, centre it in a square with ~6% padding,

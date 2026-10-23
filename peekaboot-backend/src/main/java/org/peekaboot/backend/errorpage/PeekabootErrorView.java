@@ -73,7 +73,7 @@ public class PeekabootErrorView implements View {
                     </header>
             {{DETAIL}}
                     <footer class="pk-error__footer">
-                        <a class="pk-logo-mark pk-error__mark" href="{{BASE}}/" aria-label="Open Peekaboot dashboard"></a>
+                        <a class="pk-logo-mark" href="{{BASE}}/" aria-label="Open Peekaboot dashboard"></a>
                         <span>Rendered by Peekaboot; set <code>peekaboot.error-page.enabled=false</code> to keep your own error page.</span>
                     </footer>
                 </main>
