@@ -30,7 +30,7 @@ public class LoggersMapper {
             byPackage.computeIfAbsent(packageName, k -> new ArrayList<>()).add(loggerInfo);
 
             totalCount++;
-            if (loggerInfo.isConfigured()) {
+            if (loggerData.configuredLevel() != null) {
                 configuredCount++;
             }
         }
