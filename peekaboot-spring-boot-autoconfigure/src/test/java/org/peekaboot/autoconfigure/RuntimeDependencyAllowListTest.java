@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.autoconfigure.BuildFiles.pom;
 import static org.peekaboot.autoconfigure.BuildFiles.reactorRoot;
+import static org.peekaboot.autoconfigure.BuildFiles.xpathText;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -70,11 +71,11 @@ class RuntimeDependencyAllowListTest {
     /** The coordinate a Dependabot pull request names when it moves each runtime dependency. */
     private Set<String> bumpedRuntimeCoordinates() throws IOException {
         Document rootPom = pom(reactorRoot().resolve("pom.xml"));
-        String reactorGroup = text(rootPom, "/project/groupId");
+        String reactorGroup = xpathText(rootPom, "/project/groupId");
         List<String> importedBoms = new ArrayList<>();
         Set<String> pinnedByTheRootPom = new LinkedHashSet<>();
         for (Node dependency : nodes(rootPom, "/project/dependencyManagement/dependencies/dependency")) {
-            if (text(dependency, "scope").equals("import")) {
+            if (xpathText(dependency, "scope").equals("import")) {
                 importedBoms.add(coordinate(dependency));
             } else {
                 pinnedByTheRootPom.add(coordinate(dependency));
@@ -89,12 +90,12 @@ class RuntimeDependencyAllowListTest {
                 continue;
             }
             for (Node dependency : nodes(modulePom, "/project/dependencies/dependency")) {
-                if (text(dependency, "groupId").equals(reactorGroup)
-                        || !RUNTIME_SCOPES.contains(text(dependency, "scope"))) {
+                if (xpathText(dependency, "groupId").equals(reactorGroup)
+                        || !RUNTIME_SCOPES.contains(xpathText(dependency, "scope"))) {
                     continue;
                 }
                 String coordinate = coordinate(dependency);
-                if (!text(dependency, "version").isEmpty() || pinnedByTheRootPom.contains(coordinate)) {
+                if (!xpathText(dependency, "version").isEmpty() || pinnedByTheRootPom.contains(coordinate)) {
                     coordinates.add(coordinate);
                 } else {
                     coordinates.addAll(importedBoms);
@@ -106,20 +107,13 @@ class RuntimeDependencyAllowListTest {
 
     /** central-publishing-maven-plugin honours skipPublishing, the deploy plugin maven.deploy.skip. */
     private boolean isPublished(Document modulePom) {
-        return !text(modulePom, "/project/properties/skipPublishing").equals("true")
-                && !text(modulePom, "/project/properties/maven.deploy.skip").equals("true");
+        return !xpathText(modulePom, "/project/properties/skipPublishing").equals("true")
+                && !xpathText(modulePom, "/project/properties/maven.deploy.skip")
+                        .equals("true");
     }
 
     private String coordinate(Node dependency) {
-        return text(dependency, "groupId") + ":" + text(dependency, "artifactId");
-    }
-
-    private String text(Node context, String expression) {
-        try {
-            return xpath.evaluate(expression, context).strip();
-        } catch (XPathExpressionException e) {
-            throw new IllegalArgumentException(expression, e);
-        }
+        return xpathText(dependency, "groupId") + ":" + xpathText(dependency, "artifactId");
     }
 
     private List<Node> nodes(Node context, String expression) {

@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.autoconfigure.BuildFiles.pom;
 import static org.peekaboot.autoconfigure.BuildFiles.reactorRoot;
+import static org.peekaboot.autoconfigure.BuildFiles.xpathText;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,8 +20,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import javax.xml.xpath.XPathExpressionException;
-import javax.xml.xpath.XPathFactory;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -116,15 +115,11 @@ class BuildVersionLockstepTest {
     }
 
     private String pomValue(Path file, String expression) throws IOException {
-        try {
-            String value = XPathFactory.newInstance().newXPath().evaluate(expression, pom(file));
-            assertThat(value)
-                    .as("%s in %s", expression, reactorRoot().relativize(file))
-                    .isNotBlank();
-            return value.strip();
-        } catch (XPathExpressionException e) {
-            throw new IllegalArgumentException(expression, e);
-        }
+        String value = xpathText(pom(file), expression);
+        assertThat(value)
+                .as("%s in %s", expression, reactorRoot().relativize(file))
+                .isNotBlank();
+        return value;
     }
 
     private List<String> gradleScriptsPinningAnInstant() throws IOException {

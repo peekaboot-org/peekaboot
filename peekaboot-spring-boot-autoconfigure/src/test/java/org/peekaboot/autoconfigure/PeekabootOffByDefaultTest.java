@@ -17,7 +17,6 @@ import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.context.annotation.ImportCandidates;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.ApplicationContext;
@@ -38,7 +37,8 @@ import org.springframework.util.ClassUtils;
 class PeekabootOffByDefaultTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(registeredAutoConfigurations()))
+            .withConfiguration(
+                    AutoConfigurations.of(RegisteredAutoConfigurations.classes().toArray(Class<?>[]::new)))
             // the DispatcherServlet a servlet application brings, which tells Peekaboot where its dashboard sits
             .withConfiguration(AutoConfigurations.of(DispatcherServletAutoConfiguration.class))
             // the beans the conditional halves look for, so nothing is off for lack of them
@@ -82,7 +82,7 @@ class PeekabootOffByDefaultTest {
     /** A class the registration file does not list is invisible to the two tests above, and to consumers. */
     @Test
     void everyAutoConfigurationInThisPackageIsRegistered() throws IOException {
-        assertThat(Arrays.stream(registeredAutoConfigurations()).map(Class::getName))
+        assertThat(RegisteredAutoConfigurations.classes().stream().map(Class::getName))
                 .containsExactlyInAnyOrderElementsOf(annotatedAutoConfigurations());
     }
 
@@ -103,15 +103,6 @@ class PeekabootOffByDefaultTest {
             }
         }
         return annotated;
-    }
-
-    private static Class<?>[] registeredAutoConfigurations() {
-        ClassLoader classLoader = PeekabootOffByDefaultTest.class.getClassLoader();
-        List<Class<?>> classes = ImportCandidates.load(AutoConfiguration.class, classLoader).getCandidates().stream()
-                .filter(name -> name.startsWith("org.peekaboot."))
-                .<Class<?>>map(name -> ClassUtils.resolveClassName(name, classLoader))
-                .toList();
-        return classes.toArray(Class<?>[]::new);
     }
 
     private static List<String> peekabootBeans(ApplicationContext context) {

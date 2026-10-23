@@ -19,9 +19,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootProperties;
-import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
-import org.springframework.boot.context.annotation.ImportCandidates;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.diagnostics.FailureAnalysis;
@@ -255,7 +253,7 @@ class BooleanSwitchesTest {
      * {@code @ConditionalOnBooleanProperty} on a {@code peekaboot.*} key must land in it.
      */
     @Test
-    void coversEverySwitchAnAutoConfigurationIsGatedOn() throws ClassNotFoundException {
+    void coversEverySwitchAnAutoConfigurationIsGatedOn() {
         Set<String> gatedSwitches = gatedSwitches(condition -> true);
 
         assertThat(gatedSwitches).isNotEmpty();
@@ -264,7 +262,7 @@ class BooleanSwitchesTest {
 
     /** Only these switches refuse {@code no}, so a new {@code havingValue = false} must land here. */
     @Test
-    void coversEverySwitchAnAutoConfigurationIsAlsoGatedOnFalse() throws ClassNotFoundException {
+    void coversEverySwitchAnAutoConfigurationIsAlsoGatedOnFalse() {
         Set<String> gatedOnFalse = gatedSwitches(condition -> !condition.havingValue());
 
         assertThat(gatedOnFalse).isNotEmpty();
@@ -277,7 +275,7 @@ class BooleanSwitchesTest {
      * against them rather than kept by hand. A detected switch never relies on that match.
      */
     @Test
-    void unsetDefaultsAreWhatTheConditionsMatchWhenNothingIsSet() throws ClassNotFoundException {
+    void unsetDefaultsAreWhatTheConditionsMatchWhenNothingIsSet() {
         Map<String, String> matchedWhenUnset = gates().stream()
                 .filter(gate -> gate.condition().matchIfMissing())
                 .collect(Collectors.toMap(
@@ -295,21 +293,16 @@ class BooleanSwitchesTest {
     /** One {@code @ConditionalOnBooleanProperty} on one {@code peekaboot.*} key. */
     private record Gate(String key, ConditionalOnBooleanProperty condition) {}
 
-    private Set<String> gatedSwitches(Predicate<ConditionalOnBooleanProperty> which) throws ClassNotFoundException {
+    private static Set<String> gatedSwitches(Predicate<ConditionalOnBooleanProperty> which) {
         return gates().stream()
                 .filter(gate -> which.test(gate.condition()))
                 .map(Gate::key)
                 .collect(Collectors.toSet());
     }
 
-    private List<Gate> gates() throws ClassNotFoundException {
+    private static List<Gate> gates() {
         List<Gate> gates = new ArrayList<>();
-        for (String className :
-                ImportCandidates.load(AutoConfiguration.class, getClass().getClassLoader())) {
-            if (className.startsWith("org.peekaboot.")) {
-                collectGates(Class.forName(className), gates);
-            }
-        }
+        RegisteredAutoConfigurations.classes().forEach(type -> collectGates(type, gates));
         return gates;
     }
 
