@@ -48,10 +48,8 @@ export function filteredGroupTab({
 }) {
     let currentData = null;
     // The most recent render() call's context - read by the persistent filter listener
-    // (wired once) so a later render's context (its setUrlParams closes over the URL's
-    // tab/detail/subview at *that* call - see main.js's currentContext()) is always what a
-    // later keystroke writes through, not whatever was current the first time this tab
-    // was rendered.
+    // (wired once), so a later keystroke formats its groups with the latest locale and
+    // timeZone instead of whatever was current the first time this tab was rendered.
     let currentContext = null;
 
     const reconcile = urlFilter?.reconcile ?? ((input, container, context) => reconcileTextFilter(input, context));
