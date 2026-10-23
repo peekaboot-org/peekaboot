@@ -40,8 +40,8 @@ import org.springframework.test.context.DynamicPropertySource;
  * directory dies with the class, and a cached context would keep writing into it.
  */
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-// inheritProfiles = false: PlaywrightTestBase carries @ActiveProfiles("test") - merging
-// that in (the default) would activate both "test" and "screenshots", and Spring Boot's
+// inheritProfiles = false: PlaywrightTestBase's @TestingAppTest carries @ActiveProfiles("test") -
+// merging that in (the default) would activate both "test" and "screenshots", and Spring Boot's
 // last-profile-wins rule applies to the *resolved* order rather than declaration order,
 // so "test"'s H2/Flyway-disabled settings would override this profile's Postgres config.
 @ActiveProfiles(profiles = "screenshots", inheritProfiles = false)

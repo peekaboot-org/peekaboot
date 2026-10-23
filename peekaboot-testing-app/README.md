@@ -212,7 +212,7 @@ It runs under the `screenshots` profile (`application-screenshots.yml`), which p
 the real PostgreSQL container from `compose.yml` with Flyway on, so the Flyway, Config,
 Environment and Traces tabs all show genuine content instead of an empty in-memory H2
 state. Docker must be running. The profile is declared `inheritProfiles = false` because
-`PlaywrightTestBase` carries `@ActiveProfiles("test")`, whose H2 settings would otherwise
+`PlaywrightTestBase` carries `@TestingAppTest` and with it `@ActiveProfiles("test")`, whose H2 settings would otherwise
 win. The Lifecycle tab is photographed against a seeded run history
 (`LifecycleHistoryFixture`, shared with `LifecycleTabIT`), since a JUnit launch has storage
 off and would otherwise show the application's own run as the tab's only row. Insights is

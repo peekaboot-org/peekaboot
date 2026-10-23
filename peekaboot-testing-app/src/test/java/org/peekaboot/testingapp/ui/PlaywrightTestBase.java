@@ -26,17 +26,14 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.extension.TestWatcher;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
-import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.TestingAppTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
+@TestingAppTest
 abstract class PlaywrightTestBase {
 
     private static final Logger log = LoggerFactory.getLogger(PlaywrightTestBase.class);

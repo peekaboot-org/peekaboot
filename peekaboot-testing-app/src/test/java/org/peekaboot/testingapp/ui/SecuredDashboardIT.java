@@ -27,8 +27,8 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(
         classes = {TestingApp.class, PeekabootSecurityConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-// inheritProfiles = false for the same reason as ScreenshotCapture: PlaywrightTestBase
-// carries @ActiveProfiles("test"), and that profile is the one that excludes the servlet
+// inheritProfiles = false for the same reason as ScreenshotCapture: PlaywrightTestBase's
+// @TestingAppTest carries @ActiveProfiles("test"), and that profile is the one that excludes the servlet
 // security auto-configuration this whole class exists to exercise.
 @ActiveProfiles(profiles = "security", inheritProfiles = false)
 class SecuredDashboardIT extends PlaywrightTestBase {

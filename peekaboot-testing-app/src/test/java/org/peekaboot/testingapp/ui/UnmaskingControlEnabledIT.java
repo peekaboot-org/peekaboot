@@ -19,8 +19,8 @@ import org.springframework.test.context.ActiveProfiles;
  * same reason {@code UnmaskingEnabledIT} needs its own:
  * {@code peekaboot.enable-unmasking} is read once at context startup via
  * {@code PeekabootProperties}, so the enabled/disabled states can't share a context. The
- * {@code @SpringBootTest} redeclared here (matching {@link PlaywrightTestBase}'s own
- * annotation except for {@code properties}) takes precedence over the inherited one -
+ * {@code @SpringBootTest} redeclared here (matching {@link org.peekaboot.testingapp.TestingAppTest}'s
+ * except for {@code properties}) takes precedence over the inherited one -
  * Spring's test framework resolves the closest occurrence in the class hierarchy.
  *
  * <p>{@code application-test.yml} binds {@code spring.datasource.password} as a fixture
