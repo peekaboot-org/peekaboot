@@ -18,10 +18,6 @@ public class DataSourceMapper {
     }
 
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health, boolean unmask) {
-        if (metadataList == null || metadataList.isEmpty()) {
-            return List.of();
-        }
-
         return metadataList.stream().map(m -> mapSingle(m, health, unmask)).toList();
     }
 

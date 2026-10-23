@@ -101,12 +101,6 @@ class DataSourceMapperTest {
         assertThat(result).isEmpty();
     }
 
-    @Test
-    void mapsANullListToNoDataSources() {
-        List<DataSourceInfo> result = mapper.map(null, null, false);
-        assertThat(result).isEmpty();
-    }
-
     /** The product comes from the parsed JDBC URL, which DataSourceMetadata already carries. */
     @Test
     void carriesTheDatabaseProductOfTheJdbcUrl() {
