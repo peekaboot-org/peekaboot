@@ -29,6 +29,38 @@ public record TraceTree(
         SubtreeView subtree,
         boolean truncated) {
 
+    /**
+     * A trace as {@code TraceTreeMapper} lists it: not yet judged slow, which {@code IssueDetector}
+     * decides once the issues exist, and without the overlay's detail, which {@link #withDetails} adds.
+     */
+    public TraceTree(
+            String traceId,
+            long startTimeMs,
+            long durationMs,
+            TraceStatus status,
+            RootActionType rootActionType,
+            String rootOperation,
+            SpanNode rootSpan,
+            TraceTabSummary summary,
+            SubtreeView subtree,
+            boolean truncated) {
+        this(
+                traceId,
+                startTimeMs,
+                durationMs,
+                status,
+                false,
+                rootActionType,
+                rootOperation,
+                rootSpan,
+                summary,
+                null,
+                List.of(),
+                List.of(),
+                subtree,
+                truncated);
+    }
+
     /** The span tree replaced, together with the badge judged from it. */
     public TraceTree withRootSpan(SpanNode newRootSpan, boolean newSlow) {
         return new TraceTree(

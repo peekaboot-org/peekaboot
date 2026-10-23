@@ -28,6 +28,9 @@ public class TraceTreeMapper {
     private static final Set<String> REDIS_UPKEEP_COMMANDS =
             Set.of("HELLO", "AUTH", "PING", "SELECT", "READONLY", "CLIENT", "INFO", "CLUSTER");
 
+    /** The logs live on the bundle, not the snapshot; {@code TraceLogMapper.withLogsSummary} counts them. */
+    private static final TraceTabSummary.LogsSummary LOGS_COUNTED_LATER = new TraceTabSummary.LogsSummary(0, 0, 0);
+
     private final MaskingEngine maskingEngine;
     private final TagMasker tagMasker;
     private final SqlStatements sqlStatements;
@@ -56,14 +59,10 @@ public class TraceTreeMapper {
                     0L,
                     0L,
                     TraceStatus.OK,
-                    false,
                     RootActionType.UNKNOWN,
                     null,
                     null,
                     TraceTabSummary.empty(),
-                    null,
-                    List.of(),
-                    List.of(),
                     null,
                     traceData.truncated());
         }
@@ -71,8 +70,7 @@ public class TraceTreeMapper {
         List<SpanData> spans = traceData.spans();
 
         Map<String, SpanData> spanById = spans.stream().collect(Collectors.toMap(SpanData::spanId, s -> s));
-        Map<String, List<SpanData>> childrenByParentId =
-                spans.stream().filter(s -> s.parentId() != null).collect(Collectors.groupingBy(SpanData::parentId));
+        Map<String, List<SpanData>> childrenByParentId = childrenByParentId(spans);
 
         SpanData rootSpanData = traceData.rootSpan();
 
@@ -81,7 +79,6 @@ public class TraceTreeMapper {
         attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
 
         TraceTabSummary summary = calculateSummary(spans, rootSpanData, traceData.asyncSpanIds());
-        TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
 
@@ -94,15 +91,11 @@ public class TraceTreeMapper {
                 traceData.traceId(),
                 startTimeMs,
                 durationMs,
-                status,
-                false, // decided by IssueDetector once the issues exist
+                statusOf(summary),
                 rootActionType,
                 rootOperation,
                 rootSpan,
                 summary,
-                null,
-                List.of(),
-                List.of(),
                 null,
                 traceData.truncated());
     }
@@ -123,8 +116,7 @@ public class TraceTreeMapper {
         if (subtreeRootData == null) {
             return map(traceData);
         }
-        Map<String, List<SpanData>> childrenByParentId =
-                spans.stream().filter(s -> s.parentId() != null).collect(Collectors.groupingBy(SpanData::parentId));
+        Map<String, List<SpanData>> childrenByParentId = childrenByParentId(spans);
         String parentId = subtreeRootData.parentId();
         boolean enclosed = parentId != null
                 && spans.stream().anyMatch(span -> span.spanId().equals(parentId));
@@ -137,25 +129,31 @@ public class TraceTreeMapper {
         SpanNode subtreeRoot =
                 buildSpanTree(subtreeRootData, childrenByParentId, queriesOf(traceData), asyncSpanIds, parentIsAsync);
         TraceTabSummary summary = subtreeSummary(subtreeRoot);
-        // the subtree's own errors, not the enclosing trace's: background work that succeeded
-        // must not wear the ERROR badge of the request that dispatched it, which would also
-        // pre-empt the row's own SLOW verdict
-        TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
         return new TraceTree(
                 traceData.traceId(),
                 subtreeRoot.startTimeMs(),
                 subtreeWindowMs(subtreeRoot),
-                status,
-                false, // decided by IssueDetector once the issues exist
+                // the subtree's own errors, not the enclosing trace's: background work that succeeded
+                // must not wear the ERROR badge of the request that dispatched it, which would also
+                // pre-empt the row's own SLOW verdict
+                statusOf(summary),
                 detectRootActionType(subtreeRootData),
                 subtreeRoot.name(),
                 subtreeRoot,
                 summary,
-                null,
-                List.of(),
-                List.of(),
                 new SubtreeView(subtreeRootSpanId, enclosed),
                 traceData.truncated());
+    }
+
+    /** Mutable lists: the orphan and cycle handling re-parents spans by editing them. */
+    private static Map<String, List<SpanData>> childrenByParentId(List<SpanData> spans) {
+        return spans.stream()
+                .filter(s -> s.parentId() != null)
+                .collect(Collectors.groupingBy(SpanData::parentId, Collectors.toCollection(ArrayList::new)));
+    }
+
+    private static TraceStatus statusOf(TraceTabSummary summary) {
+        return summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
     }
 
     /**
@@ -172,7 +170,7 @@ public class TraceTreeMapper {
                 null,
                 new TraceTabSummary.SpansSummary(totals.spanCount, totals.totalDurationMs, totals.errorCount),
                 new TraceTabSummary.QueriesSummary(totals.queryCount, totals.queryDurationMs),
-                new TraceTabSummary.LogsSummary(0, 0, 0));
+                LOGS_COUNTED_LATER);
     }
 
     private static void accumulateSubtree(SpanNode node, SubtreeTotals totals) {
@@ -461,8 +459,7 @@ public class TraceTreeMapper {
                 extractRequestSummary(rootSpanData),
                 new TraceTabSummary.SpansSummary(spans.size(), totalDurationMs, errorCount),
                 new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
-                new TraceTabSummary.LogsSummary(0, 0, 0) // Logs populated later by TraceInsightsService
-                );
+                LOGS_COUNTED_LATER);
     }
 
     private static TraceTabSummary.RequestSummary extractRequestSummary(SpanData rootSpanData) {
