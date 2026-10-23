@@ -22,7 +22,7 @@ export function render(container, trace, view = {}) {
         return;
     }
 
-    const statements = new Map(Array.from(spansOf(trace.rootSpan), span => [span.spanId, span.query]));
+    const statements = new Map(Array.from(spansOf(trace.rootSpan), span => [span.spanId, span.statement]));
     container.replaceChildren(...queries.map((query, index) => queryItem(query, statements.get(query.spanId), index, view)));
 }
 

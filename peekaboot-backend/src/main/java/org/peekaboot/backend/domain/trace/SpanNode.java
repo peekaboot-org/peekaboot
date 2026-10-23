@@ -17,7 +17,7 @@ public record SpanNode(
         List<SpanIssue> issues,
         String errorMessage,
         String errorClass,
-        SqlStatement query,
+        SqlStatement statement,
         Long rowCount,
         boolean asyncEntry) {
 
@@ -44,7 +44,7 @@ public record SpanNode(
                 newIssues,
                 errorMessage,
                 errorClass,
-                query,
+                statement,
                 rowCount,
                 asyncEntry);
     }

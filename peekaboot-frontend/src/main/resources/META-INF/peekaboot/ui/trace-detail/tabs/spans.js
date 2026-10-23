@@ -275,9 +275,9 @@ function nameCell(span, kind, attrsId, queryId, logsId, hasError, display) {
         }));
     }
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
-    // span.query - a batch is still one query, same as the Queries tab's own count - and the
+    // span.statement - a batch is still one query, same as the Queries tab's own count - and the
     // row count of the result-set span it paired to this one (RowCounts) as span.rowCount.
-    if (span.query) {
+    if (span.statement) {
         cell.append(panelToggleButton('pk-span-query-toggle', queryId, queryToggleLabel(span, display.locale)));
     }
     const logCount = display.logsBySpan.get(span.spanId)?.length ?? 0;
@@ -341,7 +341,7 @@ function durationCell(span, totalDuration) {
     });
 }
 
-/** A span's kind, copyable id, error and tags - opened by its name or track. The backend already keeps the statement tags out (they arrive as span.query, shown in queryPanel instead), and events sit on the track. */
+/** A span's kind, copyable id, error and tags - opened by its name or track. The backend already keeps the statement tags out (they arrive as span.statement, shown in queryPanel instead), and events sit on the track. */
 function attrsPanel(span, kind, attrsId) {
     return el('div', {className: 'pk-span-panel pk-span-panel--attrs', attrs: {id: attrsId}},
         el('div', {className: 'pk-span-details__head'},
@@ -362,7 +362,7 @@ function errorSection(span) {
 function queryPanel(span, queryId, locale) {
     return el('div', {className: 'pk-span-panel pk-span-panel--query', attrs: {id: queryId}},
         span.rowCount != null ? el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row', {locale})}) : null,
-        sqlView(span.query));
+        sqlView(span.statement));
 }
 
 /** The span's logs as the Logs tab shows them, stack trace included, from the trace's flat list the row's toggle counts. Opened by that toggle. */

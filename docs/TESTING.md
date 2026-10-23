@@ -96,7 +96,7 @@ exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair 
 `jdbcConnection` for the pool acquisition datasource-micrometer exports, and `asyncTask` for the
 span Peekaboot's async decorator exports. A query fixture's bind
 parameters are its `DbSpans.PARAMETERS_TAG` tag, in the JSON `QueryParameterObservationFilter`
-writes (`.tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")`); `SpanNodes.node(id).query(...)` takes the
+writes (`.tag(DbSpans.PARAMETERS_TAG, "[[\"42\"]]")`); `SpanNodes.node(id).statement(...)` takes the
 mapped `SqlStatement`.
 `TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
 `snapshot()`, so a mapper test gets the root and ordering the store would hand it.

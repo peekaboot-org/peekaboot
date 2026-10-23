@@ -228,7 +228,7 @@ class PeekabootAutoConfigurationTest {
                 .rootSpan()
                 .children()
                 .getFirst()
-                .query();
+                .statement();
     }
 
     /**

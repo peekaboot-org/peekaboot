@@ -55,15 +55,15 @@ public final class DbSpans {
 
     /**
      * The mapped twin. {@link TraceTreeMapper} drops the statement tags (see
-     * {@link #isStatementTag}) once the statement is served as {@link SpanNode#query}, so a
+     * {@link #isStatementTag}) once the statement is served as {@link SpanNode#statement}, so a
      * datasource-proxy query span, whose only qualifying tag was {@code jdbc.query[0]}, is
      * recognised by that field instead.
      */
     public static boolean isQuery(SpanNode span) {
-        return span.query() != null || isQuery(span.kind(), span.tags());
+        return span.statement() != null || isQuery(span.kind(), span.tags());
     }
 
-    /** The tags {@link #sql} reads the statement from, and the parameter tags; served once as {@code SpanNode.query}, not again as tags. */
+    /** The tags {@link #sql} reads the statement from, and the parameter tags; served once as {@code SpanNode.statement}, not again as tags. */
     public static boolean isStatementTag(String key) {
         return STATEMENT_TAGS.contains(key) || BATCH_STATEMENT_TAG.matcher(key).matches();
     }

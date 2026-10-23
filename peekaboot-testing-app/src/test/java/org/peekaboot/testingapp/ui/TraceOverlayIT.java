@@ -531,7 +531,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const container = document.createElement('div');
                 m.render(container, {durationMs: 10, startTimeMs: 0,
                     rootSpan: {spanId: 'a', name: 'a', tags: {'db.system.name': 'h2'},
-                        query: {text: 'select 1', formatted: null, parameters: []}},
+                        statement: {text: 'select 1', formatted: null, parameters: []}},
                     logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
                 const entry = container.querySelector('.pk-gantt-span');
                 const panels = () => [...entry.querySelectorAll('.pk-span-panel')].map(panel => panel.id).join(',');
@@ -788,7 +788,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         Object queryLink = importModule("trace-detail/tabs/queries.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {rootSpan: {spanId: 's1', query: {text: 'SELECT 1', formatted: null, parameters: []}},
+                m.render(container, {rootSpan: {spanId: 's1', statement: {text: 'SELECT 1', formatted: null, parameters: []}},
                     queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {goToSpan: () => {}});
                 const link = container.querySelector('.pk-query-meta button');
                 return [link.className, link.textContent, link.dataset.spanId, link.getAttribute('aria-label')].join('|');
@@ -1760,15 +1760,15 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const panelRowCount = (span, locale) => rendered(span, locale).querySelector('.pk-span-panel--query .pk-span-row-count')?.textContent ?? null;
                 const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
                 const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
-                const query = {text: 'select * from orders', formatted: null, parameters: []};
+                const statement = {text: 'select * from orders', formatted: null, parameters: []};
                 return [
-                    queryButton({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query}),
-                    panelRowCount({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query}),
-                    queryButton({spanId: 'g', name: 'SELECT one', rowCount: 1, query}),
-                    queryButton({spanId: 'h', name: 'SELECT none', query}),
+                    queryButton({spanId: 'a', name: 'SELECT orders', rowCount: 1234, statement}),
+                    panelRowCount({spanId: 'a', name: 'SELECT orders', rowCount: 1234, statement}),
+                    queryButton({spanId: 'g', name: 'SELECT one', rowCount: 1, statement}),
+                    queryButton({spanId: 'h', name: 'SELECT none', statement}),
                     !!rendered({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}).querySelector('.pk-span-query-toggle'),
-                    queryButton({spanId: 'f', name: 'SELECT big', rowCount: 12345, query}, 'de-DE'),
-                    panelRowCount({spanId: 'f', name: 'SELECT big', rowCount: 12345, query}, 'de-DE'),
+                    queryButton({spanId: 'f', name: 'SELECT big', rowCount: 12345, statement}, 'de-DE'),
+                    panelRowCount({spanId: 'f', name: 'SELECT big', rowCount: 12345, statement}, 'de-DE'),
                     errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
                     errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
                     tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
@@ -1877,7 +1877,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
             (() => {
                 const container = document.createElement('div');
                 m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'a',
-                    query: {text: 'select 1', formatted: null, parameters: []},
+                    statement: {text: 'select 1', formatted: null, parameters: []},
                     children: [{spanId: 'b', name: 'b'}]}});
                 const subtree = container.querySelector('.pk-gantt-toggle');
                 const query = container.querySelector('.pk-span-query-toggle');

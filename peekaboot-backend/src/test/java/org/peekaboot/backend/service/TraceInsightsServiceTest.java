@@ -109,7 +109,7 @@ class TraceInsightsServiceTest {
         TraceTree detail = recordingService.getTraceInsights("t1").orElseThrow();
 
         assertThat(formatted).containsExactly("SELECT * FROM users WHERE id = ?");
-        assertThat(detail.rootSpan().children().getFirst().query().formatted())
+        assertThat(detail.rootSpan().children().getFirst().statement().formatted())
                 .isEqualTo("SELECT * FROM users WHERE id = ?");
     }
 
@@ -642,8 +642,8 @@ class TraceInsightsServiceTest {
                 .isEqualTo(withoutDup.summary().spans().count());
         assertThat(withDup.rootSpan().children()).hasSize(1);
         assertThat(withDup.queries()).hasSize(1);
-        assertThat(withDup.rootSpan().children().get(0).query())
-                .isEqualTo(withoutDup.rootSpan().children().get(0).query());
+        assertThat(withDup.rootSpan().children().get(0).statement())
+                .isEqualTo(withoutDup.rootSpan().children().get(0).statement());
     }
 
     @Test

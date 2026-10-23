@@ -426,7 +426,7 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", root, query, statementless, connection));
 
-        assertThat(result.rootSpan().query()).isNull();
+        assertThat(result.rootSpan().statement()).isNull();
         assertThat(result.rootSpan().children())
                 .extracting(SpanNode::spanId, TraceTreeMapperTest::statementText)
                 .containsExactly(
@@ -1159,12 +1159,12 @@ class TraceTreeMapperTest {
     }
 
     /**
-     * The statement a query span carries is served once, masked, as {@code SpanNode.query};
+     * The statement a query span carries is served once, masked, as {@code SpanNode.statement};
      * the raw {@code db.query.text}/{@code db.statement}/{@code jdbc.query[N]} tags it was
      * read from are dropped from the span's tags rather than shipped a second time.
      */
     @Test
-    void dropsTheStatementTagsTheQueryFieldAlreadyCarries() {
+    void dropsTheStatementTagsTheStatementFieldAlreadyCarries() {
         var root = span("root")
                 .named("GET /orders")
                 .kind(Span.Kind.SERVER)
@@ -1229,8 +1229,8 @@ class TraceTreeMapperTest {
         SpanNode node =
                 formattingMapper.map(personLookupTrace()).rootSpan().children().getFirst();
 
-        assertThat(node.query().formatted()).isNotNull();
-        assertThat(node.query().parameters()).containsExactly(List.of("42"));
+        assertThat(node.statement().formatted()).isNotNull();
+        assertThat(node.statement().parameters()).containsExactly(List.of("42"));
     }
 
     @Test
@@ -1251,8 +1251,8 @@ class TraceTreeMapperTest {
         assertThat(node.tags())
                 .doesNotContainKey(DbSpans.PARAMETERS_TAG)
                 .doesNotContainKey(DbSpans.OMITTED_PARAMETER_SETS_TAG);
-        assertThat(node.query().parameters()).containsExactly(List.of("42"));
-        assertThat(node.query().omittedParameterSets()).isEqualTo(3);
+        assertThat(node.statement().parameters()).containsExactly(List.of("42"));
+        assertThat(node.statement().omittedParameterSets()).isEqualTo(3);
     }
 
     /** A request whose one query bound 42. */
@@ -1315,6 +1315,6 @@ class TraceTreeMapperTest {
     }
 
     private static String statementText(SpanNode node) {
-        return node.query() == null ? null : node.query().text();
+        return node.statement() == null ? null : node.statement().text();
     }
 }

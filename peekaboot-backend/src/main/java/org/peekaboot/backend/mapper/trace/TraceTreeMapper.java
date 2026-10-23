@@ -280,9 +280,9 @@ public class TraceTreeMapper {
      * Every tag stays on its own span, masked - http.url etc. may carry a credential the
      * key name alone can't catch. A span's errorMessage and query text are masked the same
      * way: an exception message can echo back the failing request's URL. The statement
-     * tags and the parameters tag are the exception: both are served once, masked, as the
-     * span's {@code query}, and shipping the raw tag beside it would say it twice. That
-     * holds only on a query span, the one shape {@code query} is populated for.
+     * tags and the parameter tags are the exception: they are served once, masked, as the
+     * span's {@code statement}, and shipping the raw tag beside it would say it twice. That
+     * holds only on a query span, the one shape {@code statement} is populated for.
      */
     private Map<String, String> maskedTags(SpanData spanData) {
         if (spanData.tags() == null) {

@@ -112,7 +112,7 @@ final class SpanTree {
     static List<String> statementsUnder(JsonNode span) {
         List<String> statements = new ArrayList<>();
         walk(span, node -> {
-            String text = node.path("query").path("text").asString("");
+            String text = node.path("statement").path("text").asString("");
             if (!text.isEmpty()) {
                 statements.add(text);
             }
@@ -127,7 +127,7 @@ final class SpanTree {
     static JsonNode spanWithStatementContaining(JsonNode trace, String fragment) {
         List<JsonNode> found = new ArrayList<>();
         walk(trace.path("rootSpan"), span -> {
-            if (span.path("query").path("text").asString("").contains(fragment)) {
+            if (span.path("statement").path("text").asString("").contains(fragment)) {
                 found.add(span);
             }
         });

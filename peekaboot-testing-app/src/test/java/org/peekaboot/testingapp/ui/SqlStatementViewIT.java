@@ -22,7 +22,7 @@ class SqlStatementViewIT extends SeededPersonTestBase {
 
         overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-span-query-toggle");
 
-        assertStatementView("#pk-span-query-" + spanId, lookup.path("query"));
+        assertStatementView("#pk-span-query-" + spanId, lookup.path("statement"));
     }
 
     @Test
@@ -32,7 +32,7 @@ class SqlStatementViewIT extends SeededPersonTestBase {
 
         overlay.openTab("queries");
 
-        assertStatementView(queryItem(lookup), lookup.path("query"));
+        assertStatementView(queryItem(lookup), lookup.path("statement"));
     }
 
     // Reading the clipboard back needs the clipboard-read permission, which only Chromium has.
@@ -79,7 +79,7 @@ class SqlStatementViewIT extends SeededPersonTestBase {
         page.navigate(baseUrl + "/persons/" + person.getId());
         JsonNode trace = awaitTrace(toolbar.traceId(), """
                 trace => {
-                    const parameterised = span => span.query?.parameters.length === 1
+                    const parameterised = span => span.statement?.parameters.length === 1
                         || (span.children || []).some(parameterised);
                     return trace.rootSpan != null && parameterised(trace.rootSpan);
                 }""");
@@ -91,7 +91,7 @@ class SqlStatementViewIT extends SeededPersonTestBase {
     }
 
     private static JsonNode parameterisedQuerySpan(JsonNode span) {
-        if (span.path("query").path("parameters").size() == 1) {
+        if (span.path("statement").path("parameters").size() == 1) {
             return span;
         }
         for (JsonNode child : span.path("children")) {

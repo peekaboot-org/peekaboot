@@ -174,13 +174,13 @@ class DbSpansTest {
         return span("s1").kind(Span.Kind.CLIENT).tags(tags).build();
     }
 
-    /** After mapping, the statement tags are gone: the query field is what says "query" then. */
+    /** After mapping, the statement tags are gone: the statement field is what says "query" then. */
     @Test
-    void theMappedTwinTrustsTheQueryField() {
+    void theMappedTwinTrustsTheStatementField() {
         assertThat(DbSpans.isQuery(node("s1")
                         .kind(Span.Kind.CLIENT)
                         .tags(Map.of("jdbc.datasource.name", "primary"))
-                        .query(new SqlStatement("SELECT 1", null, List.of(), 0))
+                        .statement(new SqlStatement("SELECT 1", null, List.of(), 0))
                         .build()))
                 .isTrue();
     }

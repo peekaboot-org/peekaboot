@@ -36,7 +36,7 @@ public final class SpanNodes {
         private List<SpanIssue> issues = List.of();
         private String errorMessage;
         private String errorClass;
-        private SqlStatement query;
+        private SqlStatement statement;
         private Long rowCount;
         private boolean asyncEntry;
 
@@ -95,8 +95,8 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder query(SqlStatement query) {
-            this.query = query;
+        public Builder statement(SqlStatement statement) {
+            this.statement = statement;
             return this;
         }
 
@@ -119,7 +119,7 @@ public final class SpanNodes {
                     issues,
                     errorMessage,
                     errorClass,
-                    query,
+                    statement,
                     rowCount,
                     asyncEntry);
         }

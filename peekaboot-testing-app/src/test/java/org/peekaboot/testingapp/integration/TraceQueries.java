@@ -51,8 +51,8 @@ final class TraceQueries {
         return found.getFirst();
     }
 
-    /** The statement of {@code query}, one entry of {@code trace}'s list: its span's {@code query}. */
+    /** The statement of {@code query}, one entry of {@code trace}'s list: its span's {@code statement}. */
     static JsonNode statementOf(JsonNode trace, JsonNode query) {
-        return SpanTree.spanWithId(trace, SpanTree.spanId(query)).path("query");
+        return SpanTree.spanWithId(trace, SpanTree.spanId(query)).path("statement");
     }
 }

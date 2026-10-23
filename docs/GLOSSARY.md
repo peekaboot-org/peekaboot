@@ -20,7 +20,7 @@ Two records, one concept. `SpanData` is the store's copy of an exported OpenTele
 `spanId` and `parentId`, `Map<String, String>` tags, a nullable Micrometer `Span.Kind` (OTel's
 `INTERNAL` has no Micrometer constant and maps to null), and a `creationOrder` minted in export
 order. `SpanNode` is the mapped tree node the API serves: the same `Span.Kind` and tag map,
-plus `children`, `issues` and a masked `query`. Issues hang off the node and `SpanData` carries
+plus `children`, `issues` and a masked `statement`. Issues hang off the node and `SpanData` carries
 none. A span's logs are the entries of `TraceTree.logs` naming its `spanId`.
 
 ### Root Span
@@ -231,12 +231,20 @@ response, in `TraceTree.logs`, its `spanId` resolved to the span that survived d
 with no span id belongs to no span.
 
 `QueryInfo(spanId, dbSystem, dataSourceName, durationMs, rowCount)` is one query span. Its
-statement is the span's own `SpanNode.query`, masked, and null when the instrumentation recorded
-none; the query is still listed. `dataSourceName` is
+statement is the span's own `SpanNode.statement`, null when the instrumentation recorded none;
+the query is still listed. `dataSourceName` is
 the Hikari pool name (`jdbc.datasource.pool`) unless Hikari generated it (`HikariPool-1`), else
 datasource-proxy's `jdbc.datasource.name`, null when neither is tagged.
 `TraceTree.queries` is populated on the single-trace endpoint only, never on
 the listing.
+
+### SQL Statement
+`SqlStatement(text, formatted, parameters, omittedParameterSets)` is the statement a query span
+carries, served as `SpanNode.statement` and null on every other span. Every part is masked.
+`text` is the SQL as captured, `formatted` the same SQL laid out by `SqlFormatter` (null when
+none is available or it could not lay the SQL out), and `parameters` the bind values as SQL
+literals, one list per parameter set. `omittedParameterSets` counts the sets a capped batch
+left out of that list. The Spans and Queries tabs both render it through `shared/sql-view.js`.
 
 ## The word "insights"
 
