@@ -19,12 +19,14 @@ import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
 class TraceDataBundleTest {
 
+    private static final String SQL = "SELECT * FROM person";
+
     @Test
     void spansReturnsSortedSnapshot() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(createSpan("span3", 3), 100);
-        bundle.addSpan(createSpan("span1", 1), 100);
-        bundle.addSpan(createSpan("span2", 2), 100);
+        bundle.addSpan(span("span3").order(3).build(), 100);
+        bundle.addSpan(span("span1").order(1).build(), 100);
+        bundle.addSpan(span("span2").order(2).build(), 100);
 
         List<SpanData> spans = bundle.snapshot().spans();
 
@@ -36,12 +38,12 @@ class TraceDataBundleTest {
     void addSpanTrimsOldestBeyondLimit() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         for (int i = 1; i <= 3; i++) {
-            bundle.addSpan(createSpan("span" + i, i), 3);
+            bundle.addSpan(span("span" + i).order(i).build(), 3);
         }
         assertThat(bundle.snapshot().truncated()).isFalse();
 
-        bundle.addSpan(createSpan("span4", 4), 3);
-        bundle.addSpan(createSpan("span5", 5), 3);
+        bundle.addSpan(span("span4").order(4).build(), 3);
+        bundle.addSpan(span("span5").order(5).build(), 3);
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
         assertThat(bundle.snapshot().truncated()).isTrue();
@@ -54,8 +56,8 @@ class TraceDataBundleTest {
         // export) before the ancestor containing it does - so the duplicate normally
         // arrives here first, before the real span it needs to be compared against.
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 1);
-        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 2);
+        SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(1).build();
+        SpanData real = jdbcQuery("parent1", SQL).order(2).build();
 
         bundle.addSpan(duplicate, 100);
         bundle.addSpan(real, 100);
@@ -69,8 +71,8 @@ class TraceDataBundleTest {
         // production, since a faithful fold must not assume the child-before-parent
         // ordering is the only one it will ever see.
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 1);
-        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 2);
+        SpanData real = jdbcQuery("parent1", SQL).order(1).build();
+        SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(2).build();
 
         bundle.addSpan(real, 100);
         bundle.addSpan(duplicate, 100);
@@ -84,9 +86,10 @@ class TraceDataBundleTest {
         // that contains it, which in turn ends before the real span - so all three arrive
         // in the reverse of their logical parent-child order.
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        SpanData grandchild = jdbcSpan("rs1", "dup1", "result-set", "dataSource", 1);
-        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 2);
-        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 3);
+        SpanData grandchild =
+                jdbcDuplicate("rs1", "dup1", SQL).named("result-set").order(1).build();
+        SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(2).build();
+        SpanData real = jdbcQuery("parent1", SQL).order(3).build();
 
         bundle.addSpan(grandchild, 100);
         bundle.addSpan(duplicate, 100);
@@ -106,8 +109,8 @@ class TraceDataBundleTest {
     @Test
     void resolveSpanIdFollowsTheRedirectChainToTheSurvivingSpan() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 1);
-        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 2);
+        SpanData duplicate = jdbcDuplicate("dup1", "parent1", SQL).order(1).build();
+        SpanData real = jdbcQuery("parent1", SQL).order(2).build();
 
         bundle.addSpan(duplicate, 100);
         bundle.addSpan(real, 100);
@@ -120,8 +123,11 @@ class TraceDataBundleTest {
     @Test
     void doesNotCollapseAChildWithDifferentTagsFromItsParent() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        SpanData parent = jdbcSpan("parent1", null, "query", "SELECT * FROM person", "sample_app_db", 1);
-        SpanData child = jdbcSpan("child1", "parent1", "query", "SELECT * FROM orders", "dataSource", 2);
+        SpanData parent = jdbcQuery("parent1", "SELECT * FROM person").order(1).build();
+        SpanData child = jdbcQuery("child1", "SELECT * FROM orders")
+                .parent("parent1")
+                .order(2)
+                .build();
 
         bundle.addSpan(parent, 100);
         bundle.addSpan(child, 100);
@@ -138,8 +144,12 @@ class TraceDataBundleTest {
         long order = 1;
         for (int i = 0; i < 5; i++) {
             String realId = "real" + i;
-            bundle.addSpan(jdbcSpan("dup" + i, realId, "query", "SELECT " + i, "dataSource", order++), 5);
-            bundle.addSpan(jdbcSpan(realId, null, "query", "SELECT " + i, "sample_app_db", order++), 5);
+            bundle.addSpan(
+                    jdbcDuplicate("dup" + i, realId, "SELECT " + i)
+                            .order(order++)
+                            .build(),
+                    5);
+            bundle.addSpan(jdbcQuery(realId, "SELECT " + i).order(order++).build(), 5);
         }
 
         assertThat(bundle.snapshot().spans())
@@ -162,8 +172,12 @@ class TraceDataBundleTest {
         long order = 1;
         for (int i = 0; i < pairs; i++) {
             String realId = "real" + i;
-            bundle.addSpan(jdbcSpan("dup" + i, realId, "query", "SELECT " + i, "dataSource", order++), cap);
-            bundle.addSpan(jdbcSpan(realId, null, "query", "SELECT " + i, "sample_app_db", order++), cap);
+            bundle.addSpan(
+                    jdbcDuplicate("dup" + i, realId, "SELECT " + i)
+                            .order(order++)
+                            .build(),
+                    cap);
+            bundle.addSpan(jdbcQuery(realId, "SELECT " + i).order(order++).build(), cap);
         }
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
@@ -195,9 +209,21 @@ class TraceDataBundleTest {
             String gcId = "gc-" + i;
             // arrival order: innermost duplicate first, then the mid duplicate, then the
             // real span - the expected child-before-parent export ordering, three deep
-            bundle.addSpan(jdbcSpan(gcId, dup1Id, "query", "SELECT " + i, "ds-inner", order++), cap);
-            bundle.addSpan(jdbcSpan(dup1Id, survivorId, "query", "SELECT " + i, "ds-mid", order++), cap);
-            bundle.addSpan(jdbcSpan(survivorId, null, "query", "SELECT " + i, "sample_app_db", order++), cap);
+            bundle.addSpan(
+                    jdbcQuery(gcId, "SELECT " + i)
+                            .parent(dup1Id)
+                            .tag("peer.service", "ds-inner")
+                            .order(order++)
+                            .build(),
+                    cap);
+            bundle.addSpan(
+                    jdbcQuery(dup1Id, "SELECT " + i)
+                            .parent(survivorId)
+                            .tag("peer.service", "ds-mid")
+                            .order(order++)
+                            .build(),
+                    cap);
+            bundle.addSpan(jdbcQuery(survivorId, "SELECT " + i).order(order++).build(), cap);
         }
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
@@ -219,7 +245,7 @@ class TraceDataBundleTest {
         try {
             Future<?> writer = executor.submit(() -> {
                 for (int i = 0; i < totalSpans; i++) {
-                    bundle.addSpan(createSpan("span" + i, i), Integer.MAX_VALUE);
+                    bundle.addSpan(span("span" + i).order(i).build(), Integer.MAX_VALUE);
                 }
             });
 
@@ -242,10 +268,10 @@ class TraceDataBundleTest {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         assertThat(bundle.listingRoots().root()).isNull();
 
-        bundle.addSpan(createSpan("child", 1, "parent"), 10);
+        bundle.addSpan(span("child").parent("parent").order(1).build(), 10);
         assertThat(bundle.listingRoots().root().spanId()).isEqualTo("child");
 
-        bundle.addSpan(createSpan("parent", 2, null), 10);
+        bundle.addSpan(span("parent").order(2).build(), 10);
         assertThat(bundle.listingRoots().root().spanId()).isEqualTo("parent");
     }
 
@@ -282,9 +308,9 @@ class TraceDataBundleTest {
     @Test
     void snapshotReportsTheWindowTheSlowBucketAdmittedEvenAfterEviction() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(createSpan("span1", 1, null), 2);
-        bundle.addSpan(createSpan("span2", 2, null), 2);
-        bundle.addSpan(createSpan("span3", 3, null), 2);
+        bundle.addSpan(span("span1").at(100, 50).order(1).build(), 2);
+        bundle.addSpan(span("span2").at(200, 50).order(2).build(), 2);
+        bundle.addSpan(span("span3").at(300, 50).order(3).build(), 2);
 
         TraceData snapshot = bundle.snapshot();
 
@@ -308,8 +334,8 @@ class TraceDataBundleTest {
     @Test
     void snapshotCarriesTheRootSpanTheBundleChose() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(createSpan("child", 1, "parent"), 10);
-        bundle.addSpan(createSpan("parent", 2, null), 10);
+        bundle.addSpan(span("child").parent("parent").order(1).build(), 10);
+        bundle.addSpan(span("parent").order(2).build(), 10);
 
         TraceData snapshot = bundle.snapshot();
 
@@ -328,9 +354,9 @@ class TraceDataBundleTest {
     @Test
     void snapshotsRootIsAnElementOfItsSpansAfterARedirectRewroteItsParent() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        bundle.addSpan(jdbcSpan("a", "dup", "query", "SELECT 1", "sample_app_db", 1), 100);
-        bundle.addSpan(jdbcSpan("b", "a", "query", "SELECT 2", "sample_app_db", 2), 100);
-        bundle.addSpan(jdbcSpan("dup", "b", "query", "SELECT 2", "dataSource", 3), 100);
+        bundle.addSpan(jdbcQuery("a", "SELECT 1").parent("dup").order(1).build(), 100);
+        bundle.addSpan(jdbcQuery("b", "SELECT 2").parent("a").order(2).build(), 100);
+        bundle.addSpan(jdbcDuplicate("dup", "b", "SELECT 2").order(3).build(), 100);
 
         TraceData snapshot = bundle.snapshot();
 
@@ -620,39 +646,6 @@ class TraceDataBundleTest {
         }
 
         assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
-    }
-
-    /** A JDBC-shaped span carrying the same query text every time, differing only by
-     * {@code peerService} - the shape {@link SpanDuplicateMatcher} treats as a duplicate. */
-    private SpanData jdbcSpan(String spanId, String parentId, String name, String peerService, long creationOrder) {
-        return jdbcSpan(spanId, parentId, name, "SELECT * FROM person", peerService, creationOrder);
-    }
-
-    private SpanData jdbcSpan(
-            String spanId, String parentId, String name, String query, String peerService, long creationOrder) {
-        return jdbcQuery(spanId, query)
-                .parent(parentId)
-                .named(name)
-                .tag("peer.service", peerService)
-                .at(creationOrder * 100, 50)
-                .order(creationOrder)
-                .build();
-    }
-
-    private SpanData createSpan(String spanId, long creationOrder, String parentId) {
-        return span(spanId)
-                .parent(parentId)
-                .at(creationOrder * 100, 50)
-                .order(creationOrder)
-                .build();
-    }
-
-    private SpanData createSpan(String spanId, long creationOrder) {
-        return span(spanId)
-                .named("span-" + spanId)
-                .at(0, 10)
-                .order(creationOrder)
-                .build();
     }
 
     /**

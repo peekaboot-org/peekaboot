@@ -1,6 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
@@ -133,10 +134,18 @@ class TraceWritePathBenchmark {
         long order = 1;
         for (int i = 0; i < realQueryCount; i++) {
             String realId = "q" + i;
-            spans.add(jdbcSpan(
-                    "dup" + i, realId, "SELECT * FROM order_line WHERE order_id = " + i, "dataSource", order++));
-            spans.add(jdbcSpan(
-                    realId, rootId, "SELECT * FROM order_line WHERE order_id = " + i, "sample_app_db", order++));
+            String sql = "SELECT * FROM order_line WHERE order_id = " + i;
+            spans.add(jdbcDuplicate("dup" + i, realId, sql)
+                    .in(TRACE_ID)
+                    .at(order, 1)
+                    .order(order++)
+                    .build());
+            spans.add(jdbcQuery(realId, sql)
+                    .in(TRACE_ID)
+                    .parent(rootId)
+                    .at(order, 1)
+                    .order(order++)
+                    .build());
         }
         spans.add(span(rootId)
                 .in(TRACE_ID)
@@ -147,16 +156,5 @@ class TraceWritePathBenchmark {
                 .order(order)
                 .build());
         return spans;
-    }
-
-    private static SpanData jdbcSpan(
-            String spanId, String parentId, String query, String peerService, long creationOrder) {
-        return jdbcQuery(spanId, query)
-                .in(TRACE_ID)
-                .parent(parentId)
-                .tag("peer.service", peerService)
-                .at(creationOrder, 1)
-                .order(creationOrder)
-                .build();
     }
 }
