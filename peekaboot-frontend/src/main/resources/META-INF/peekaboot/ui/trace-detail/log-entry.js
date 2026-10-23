@@ -6,12 +6,13 @@
  */
 import {el, pressedToggle} from '../shared/dom.js';
 import {formatTimeOfDay} from '../shared/format.js';
+import {logLevelVariant} from '../shared/severity.js';
 
 export function logEntry(log, dateOptions, spanCell = null) {
     const row = el('div', {className: 'pk-log__row'},
         el('span', {className: 'pk-log__time', text: formatTimeOfDay(log.timestamp, dateOptions)}),
         spanCell,
-        el('span', {className: `pk-log__level pk-log__level--${String(log.level).toLowerCase()}`, text: log.level}),
+        el('span', {className: `pk-log__level pk-log__level--${logLevelVariant(log.level)}`, text: log.level}),
         el('span', {className: 'pk-log__message', text: log.message}));
 
     const entry = el('div', {className: 'pk-log', attrs: {'data-level': log.level, 'data-span-id': log.spanId || ''}}, row);

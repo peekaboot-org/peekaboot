@@ -284,7 +284,8 @@
 .pk-log__goto-span:hover { color: var(--pk-text); }
 
 .pk-log__level { width: 50px; font-weight: 600; }
-.pk-log__level--trace, .pk-log__level--debug { color: var(--pk-text-muted); }
+/* One modifier per severity.js logLevelVariant(), so a level is coloured the way its badge is. */
+.pk-log__level--muted { color: var(--pk-text-muted); }
 .pk-log__level--info { color: var(--pk-info-text); }
 .pk-log__level--warn { color: var(--pk-warning-text); }
 .pk-log__level--error { color: var(--pk-danger); }
