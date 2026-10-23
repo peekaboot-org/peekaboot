@@ -104,12 +104,26 @@ function reconcileUrlState(context) {
     });
 }
 
-/** Restores every URL-owned piece of state from the given params, missing ones to their defaults. */
+/**
+ * Every URL-owned piece of state as the given params name it, each validated (see
+ * levelFromUrl / panelOverridesFromUrl), missing or bogus ones at their defaults.
+ */
+function stateFromUrl(params) {
+    return {
+        globalLevel: levelFromUrl(params, config.levels, config.levels[0].index),
+        showPercentiles: params.percentiles === '1',
+        showMarkers: params.restarts !== '0',
+        overrides: panelOverridesFromUrl(params, config)
+    };
+}
+
+/** Restores every URL-owned piece of state from the given params. */
 function seedFromUrl(params) {
-    setGlobalLevel(levelFromUrl(params, config.levels, config.levels[0].index));
-    setShowPercentiles(params.percentiles === '1');
-    setShowMarkers(params.restarts !== '0');
-    panels.applyOverrides(panelOverridesFromUrl(params, config));
+    const state = stateFromUrl(params);
+    setGlobalLevel(state.globalLevel);
+    setShowPercentiles(state.showPercentiles);
+    setShowMarkers(state.showMarkers);
+    panels.applyOverrides(state.overrides);
 }
 
 /**
@@ -142,18 +156,12 @@ async function init(container, context) {
             onClosed: () => streamStoppedNote.classList.remove('hidden'),
             onOpen: () => streamStoppedNote.classList.add('hidden')
         });
-        // a deep link may name the state to start in (each value validated - see
-        // levelFromUrl / panelOverridesFromUrl; anything bogus falls back to the default)
+        // a deep link may name the state to start in
         panels = createInsightsPanels({
             container,
             config,
             stream,
-            initial: {
-                globalLevel: levelFromUrl(context.urlParams, config.levels, config.levels[0].index),
-                showPercentiles: context.urlParams.percentiles === '1',
-                showMarkers: context.urlParams.restarts !== '0',
-                overrides: panelOverridesFromUrl(context.urlParams, config)
-            },
+            initial: stateFromUrl(context.urlParams),
             // read at hover time, so a timezone toggle reaches a chart that is not rebuilt for it
             dateOptions: () => ({locale: currentContext.locale, timeZone: currentContext.timeZone}),
             onPanelLevelChange: writeUrlParams,
