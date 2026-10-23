@@ -61,9 +61,9 @@ where `checkstyle.xml` and the rest live. All three tools resolve their plugin p
 relative to their own config file, so a config in `config/` would look for them in
 `config/node_modules`.
 
-`eslint.config.mjs` lints this tree as ES modules and names the three exceptions -
-`assets/theme-boot.js`, `dashboard/boot-recovery.js` and `error-page/reveal.js` - which a
-plain `<script>` tag loads. Add a file that a `<script>` tag loads and it belongs in that
+`eslint.config.mjs` lints this tree as ES modules and names the three exceptions, which a
+plain `<script>` tag loads: `assets/theme-boot.js`, `dashboard/boot-recovery.js` and
+`error-page/reveal.js`. Add a file that a `<script>` tag loads and it belongs in that
 list; leave it out and an `import` in it lints clean and throws in the browser.
 
 `js-defined-css-tokens.json` registers `--pk-gantt-depth`, the one custom property that
@@ -241,7 +241,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `dom.js` | `el(tag, {className, text, title, attrs}, ...children)`, `button(props, ...children)`, `pressedToggle(props, onChange)`. The element builder every surface renders with: text and children become nodes, never parsed markup, so a builder call can carry backend data without escaping it. The only `innerHTML` sites left are cleared containers and the few templates that pass every value through `markup.js`. `pressedToggle` is the one on/off button: `aria-pressed` starts false, flips on every click and is handed to `onChange` (the log reveal control, the SQL view's Formatted and Substitute toggles). |
 | `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate, afterRender, fetchData, loadingMessage, fetchErrorMessage})`. The shell of a dashboard tab that shows a list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `loggers.js`, `meters.js` and `scheduled-tasks.js` (no `inputId`, so no filter) are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`); it runs on `self-fetching-tab.js`'s contract, with loading and error states handled by the shell. `propertyGroupTab({inputId, listId, unmaskSlotId, select, groupName, extraTop, emptyMessage})` is its property-list case: groups of `{key, value}` rows matched on either, plus the "Show secrets" control; `config.js` and `environment.js` are the two callers. |
 | `fonts.js` | `registerBundledFonts(basePath)`. Adds the bundled Geist faces to the document a shadow-rooted surface renders into, which an `@font-face` rule cannot reach. Idempotent, and a no-op on the dashboard, which declares them in `tokens.css`. See *The bundled webfont* above. |
-| `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatDateTimeWith(value, options, display)` (the two above are it with a fixed option set; a caller with its own set passes the whole set, never a delta), `formatNumber(n, {locale})`, `formatCount(n, singular, {plural, locale})`, `formatPlainValue`, `formatMetricValue(value, unit, {locale})`, `formatTileValue`, and `METRIC_UNITS`/`TILE_FORMATS`, the wire words of the backend's `Unit` and `TileFormat` enums (pinned by `SharedModuleIT`, as is `insights-chart.js`'s `CHART_TYPES`). Every count is grouped in the `locale` a caller passes - the dashboard's setting - or the browser's own when it is undefined. |
+| `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatDateTimeWith(value, options, display)` (the two above are it with a fixed option set; a caller with its own set passes the whole set, never a delta), `formatNumber(n, {locale})`, `formatCount(n, singular, {plural, locale})`, `formatPlainValue`, `formatMetricValue(value, unit, {locale})`, `formatTileValue`, and `METRIC_UNITS`/`TILE_FORMATS`, the wire words of the backend's `Unit` and `TileFormat` enums (pinned by `SharedModuleIT`, as is `insights-chart.js`'s `CHART_TYPES`). Every count is grouped in the `locale` a caller passes (the dashboard's setting), or in the browser's own when it is undefined. |
 | `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL`, the fallback for the backend's masked-value literal (`Features.maskLiteral`, `"******"`), used only by the surfaces that never load `/api/features` (the dev toolbar and the overlay it opens). The trace overlay's Request tab is the only reader of either: it marks a header as masked when its value equals `features.maskLiteral`, or this copy when no features were loaded. |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)`, the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend does not decide what is sensitive, only whether the reveal control can work at all. |
@@ -307,7 +307,7 @@ anchors are `data-span-id` on the gantt rows and on `.pk-query-item` (`QueryInfo
 
 A span's row carries its own query and logs as two more panels, not cross-links: a "1 query"
 button opens the statement (`shared/sql-view.js`) and its row count, an "N logs" button opens
-that span's own logs as the Logs tab renders them (`log-entry.js`) - both in place, beside the
+that span's own logs as the Logs tab renders them (`log-entry.js`). Both open in place, beside the
 attributes panel the span's name/track opens (`trace-detail/tabs/spans.js`). Each panel is
 built the first time it opens.
 
@@ -416,22 +416,22 @@ No build step means `main.js` is one module script over a graph of forty-odd sep
 Lose any one of them and the graph never evaluates: nothing hides `#loading`, nothing raises
 `#error`, and the page sits on the spinner with no way out and nothing in the console but a
 failed request. Chromium drops every request in flight, with `net::ERR_NETWORK_CHANGED`,
-whenever the host's network configuration changes - a container taking a veth interface up or
-down is enough, and so is a VPN connecting - so a page open on a working machine meets this
+whenever the host's network configuration changes. A container taking a veth interface up or
+down is enough, and so is a VPN connecting, so a page open on a working machine meets this
 with nothing broken.
 
 `dashboard/boot-recovery.js` is the one thing that can see it, being outside the graph it
 watches. A classic script in `index.html`'s `<head>`, for the same reasons `theme-boot.js` is
 one: a module would share the failure, and an inline block is dropped by a strict CSP. It
 listens for the single `error` event the browser fires at the module script element for the
-whole graph - in the capture phase, since resource errors do not bubble.
+whole graph, in the capture phase, since resource errors do not bubble.
 
 The network change is an instant, not a state, so the first response is one reload: it fetches
 the whole graph again and gets it. One reload per failure episode. A `sessionStorage` marker is
 read and cleared on every load, so the reload finds itself marked and raises `#error` instead of
 reloading again, while a load that works leaves the next one a retry of its own. The marker
 carries the time it was written and counts only for 30 seconds, because it is written before the
-reload commits: one that never navigated - the tab went offline, or was closed in between -
+reload commits. One that never navigated (the tab went offline, or was closed in between)
 would otherwise spend the next episode's retry. Storage that throws takes the banner straight
 away rather than looping on a marker that was never written.
 
@@ -464,7 +464,7 @@ Each of these has been broken at least once and caught only in review. Keep them
 | Role | Tokens | Drawn on |
 |---|---|---|
 | Fill | `--pk-primary`, `--pk-success`, `--pk-warning`, `--pk-info`, `--pk-danger`, `--pk-purple`, `--pk-danger-soft` | Backgrounds: badge fills, buttons, banners. Each carries its own `--pk-on-*` ink on top. |
-| Graphic fill | `--pk-pink` | Small-area fills only: the span tree's consumer-kind fills - its legend dot, row dot, bar and details panel border (`trace-detail.css`). Never carries ink and is never drawn as text, so it has no `--pk-on-*` or `-text` variant. |
+| Graphic fill | `--pk-pink` | Small-area fills only: the span tree's consumer-kind fills: its legend dot, row dot, bar and details panel border (`trace-detail.css`). Never carries ink and is never drawn as text, so it has no `--pk-on-*` or `-text` variant. |
 | Text | `--pk-primary-text`, `--pk-success-text`, `--pk-warning-text`, `--pk-info-text` | The page background (`--pk-bg`, `--pk-bg-alt`, `--pk-bg-hover`): text, focus rings, borders, the selected-tab underline. |
 
 **Change a colour's whole trio together: the fill token, its `--pk-on-*` ink, and its

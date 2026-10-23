@@ -86,8 +86,8 @@ so the value under test is unchanged. It just never appears contiguously in the 
 provider fixture is written the same way and never tidied back together.
 
 ## Accessibility
-`AccessibilityIT` pins the regressions this project has had - a control that lost its
-accessible name, a target under 24px, a contrast pair - one assertion each, with the reasoning
+`AccessibilityIT` pins the regressions this project has had (a control that lost its
+accessible name, a target under 24px, a contrast pair), one assertion each, with the reasoning
 in the Javadoc. `AccessibilitySweepIT` runs axe-core (`com.deque.html.axe-core:playwright`,
 pinned in both builds) over the dashboard, the trace overlay and the toolbar's shadow root at
 WCAG 2.1 A and AA, and expects zero violations. The two do not replace each other: the sweep
@@ -234,7 +234,7 @@ network configuration changes. A container taking a veth interface up or down is
 host side's link-local address arriving about a second after the start drops whatever is in
 flight. The suite's own Testcontainers classes did this to the browser tests running beside
 them, so they carry `@StartsContainers`, which isolates them from every other class. Containers
-started outside the build cannot be kept out - on a machine with other container churn it still
+started outside the build cannot be kept out. On a machine with other container churn it still
 lands a couple of times in a four-minute run. The dashboard is where it showed: no build step
 means `main.js` is a graph of forty-odd separate fetches, and losing one left the shell
 unevaluated, the loading placeholder up and the page mute, which every waiting test read as a
@@ -304,7 +304,7 @@ passes through none of them and takes `overlay.awaitMeasurable(selector)` instea
 No class in this module clears a mutable singleton the suite shares, and none holds a
 `@ResourceLock`. `*IT` classes run concurrently, so a class that cleared the `TraceStore` would
 have to take `@ResourceLock(..., mode = READ_WRITE)` over it while every class pinning its own
-data there took the `READ` side - a lock that serializes half the suite for one class's exact
+data there took the `READ` side. That lock would serialize half the suite for one class's exact
 counts. Pinning is the cheaper answer and the one every class here takes: assert on your own
 trace, never on what the store holds. A class on its own context configuration is isolated
 anyway.
@@ -397,7 +397,7 @@ test author needs on top of it:
   unknown value fails the run instead of falling back. Firefox and WebKit hold back the tests
   tagged `chromium-only`, whose subject is Chromium's own behaviour rather than peekaboot's; a
   Chromium run still executes every one of them. `.github/workflows/cross-browser.yml` runs all
-  three nightly. The webkit engine is Playwright's own WebKit build - what Safari is built on,
+  three nightly. The webkit engine is Playwright's own WebKit build: what Safari is built on,
   at a different version and feature set. It is not Safari and proves nothing about Safari.
 - Write-path benchmark, excluded from the default suite:
   `./mvnw -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`

@@ -147,7 +147,7 @@ same tool versions, reading the same `config/` files, plus the reactor-wide cove
 `build.gradle.kts` declares only its dependencies; `peekaboot-testing-app` adds the Spring
 Boot and git-properties plugins. Gradle has no counterpart to a Maven parent, so what the
 Maven module's `spring-boot-starter-parent` proves (see [The reactor](#the-reactor)) has
-no Gradle equivalent; the module simply shares the conventions.
+no Gradle equivalent; the module shares the conventions.
 
 ### Lockstep
 
@@ -496,7 +496,7 @@ unreleased notes and upserts a draft release named `Unreleased` on the placehold
 `unreleased`, so the notes for the cycle in progress are readable on the Releases page rather
 than only inside a workflow run. A draft
 carries no git tag, since GitHub creates the ref only on publish. So it has no
-`/releases/tag/unreleased` URL - that 404s. GitHub parks it under
+`/releases/tag/unreleased` URL; that one 404s. GitHub parks it under
 `/releases/tag/untagged-<hash>`; find it at the top of the Releases page, badged
 Draft. It is visible only to accounts with write access, so a signed-out visitor
 sees nothing there.
@@ -584,7 +584,7 @@ The `snapshot-version` action in
 [osslabz/github-actions](https://github.com/osslabz/github-actions) derives that version and
 applies it to the reactor for the length of the run; the poms in git never carry it. The same
 action runs in the osslabz repositories, which is why the integration branch is an input
-rather than assumed - most of them settle on `dev`, `bitcoin-commons` and `lnd-rest-client` on
+rather than assumed. Most of them settle on `dev`, `bitcoin-commons` and `lnd-rest-client` on
 `main`. It owns its own tests and the `versions:set` invocation, including the
 `-DupdateBuildOutputTimestampPolicy=never` without which the plugin puts the run's own clock
 where the reproducible-build instant belongs, and it names `versions-maven-plugin` in full so
@@ -597,7 +597,7 @@ validates a release and takes a snapshot as it comes. A release activates both.
 
 What lands is what a release lands, jar, sources and javadoc alike: the plugin publishes
 every attached artifact, and the source and javadoc jars are attached by the main build
-rather than by a profile. The module set matches too - `peekaboot-test-support` and
+rather than by a profile. The module set matches too: `peekaboot-test-support` and
 `peekaboot-coverage` carry `skipPublishing`, `peekaboot-testing-app` carries
 `maven.deploy.skip`.
 
@@ -621,7 +621,7 @@ repositories {
 
 Reading it is anonymous. Central expires a snapshot around 90 days after it lands, and the
 namespace has to have snapshots switched on in the Portal before the first deploy will be
-accepted - a one-off toggle on `org.peekaboot` under Namespaces, with no API behind it.
+accepted. That is a one-off toggle on `org.peekaboot` under Namespaces, with no API behind it.
 
 ## Releasing
 
@@ -748,7 +748,7 @@ Commits sharing a subject collapse to one entry even when their bodies differ, b
 conventional mode git-cliff's `commit.message` holds only the description. Merge commits and
 the `[release]` commits drop out via `filter_unconventional`, neither being conventional.
 `filter_commits` is on with no `.*` catch-all, so an unrecognised type is dropped rather than
-bucketed — which is what the gate is for.
+bucketed. Catching it is the push gate's job.
 
 The push gate is `osslabz/github-actions/commit-subject-check`, which `build-on-push` runs
 with `default-branch: dev`. It rejects any non-merge subject in the pushed range that is not a
@@ -801,7 +801,7 @@ subject, and two tags cut in the same second.
 `git-cliff --bumped-version` takes the highest step among the commits since the most recent
 tag matching `tag_pattern` and applies it to that tag's version: `feat:` gives a minor bump,
 `type!:` or a `BREAKING CHANGE:` footer a major one, anything else a patch. `cliff.toml`
-leaves `[bump]` unset, so those are git-cliff's defaults, and `0.x` is no exception — one
+leaves `[bump]` unset, so those are git-cliff's defaults, and `0.x` is no exception: one
 breaking change takes the project to `1.0.0`. Check the answer before releasing:
 
 ```bash

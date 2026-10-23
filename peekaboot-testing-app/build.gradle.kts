@@ -8,8 +8,8 @@ description = "Peekaboot Testing App - sample application for manual and automat
 
 // In Maven this module deliberately parents to spring-boot-starter-parent, which proves
 // it builds on Boot's plugin defaults and on nothing in peekaboot-parent (BUILD.md, "The
-// reactor"). Gradle has no counterpart to a Maven parent, so this module simply shares
-// the conventions.
+// reactor"). Gradle has no counterpart to a Maven parent, so this module shares the
+// conventions.
 
 val springBootVersion = pomProperty("spring-boot.version")
 

@@ -168,7 +168,7 @@ request, and a new URI adds a tag combination later still. A series whose meters
 still costs a lookup per tick.
 Once a meter or subtract-meter has stayed unresolved for three ticks, `SeriesSampler` logs it,
 once per outage: at WARN for a series the operator's panel file wrote, at DEBUG for one exactly
-as shipped, since an application may simply lack a shipped meter. Tiles log nothing.
+as shipped, since an application may lack a shipped meter. Tiles log nothing.
 
 Overview's stat tiles bypass all of it. `TileTracker` holds one `volatile double` per tile and
 samples on read.
