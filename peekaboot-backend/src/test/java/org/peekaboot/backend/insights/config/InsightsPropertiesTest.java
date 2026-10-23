@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.Duration;
 import java.util.List;
@@ -18,13 +19,12 @@ class InsightsPropertiesTest {
     @Test
     void theDefaultLevelsAreThePersistedHistorysCompatibilityKey() {
         InsightsProperties properties = new InsightsProperties();
-        assertThat(properties.getLevels()).hasSize(3);
-        assertThat(properties.getLevels().get(0).getInterval()).isEqualTo(Duration.ofSeconds(10));
-        assertThat(properties.getLevels().get(0).getSize()).isEqualTo(90);
-        assertThat(properties.getLevels().get(1).getInterval()).isEqualTo(Duration.ofMinutes(1));
-        assertThat(properties.getLevels().get(1).getSize()).isEqualTo(1440);
-        assertThat(properties.getLevels().get(2).getInterval()).isEqualTo(Duration.ofHours(1));
-        assertThat(properties.getLevels().get(2).getSize()).isEqualTo(720);
+        assertThat(properties.getLevels())
+                .extracting(InsightsProperties.Level::getInterval, InsightsProperties.Level::getSize)
+                .containsExactly(
+                        tuple(Duration.ofSeconds(10), 90),
+                        tuple(Duration.ofMinutes(1), 1440),
+                        tuple(Duration.ofHours(1), 720));
         properties.validate(); // must not throw
     }
 
@@ -52,13 +52,21 @@ class InsightsPropertiesTest {
     }
 
     @Test
-    void rejectsEmptyLevelsAndBadSizes() {
+    void rejectsEmptyLevels() {
         InsightsProperties properties = new InsightsProperties();
         properties.setLevels(List.of());
-        assertThatThrownBy(properties::validate).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("at least one level");
+    }
 
+    @Test
+    void rejectsANonPositiveSize() {
+        InsightsProperties properties = new InsightsProperties();
         properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofSeconds(10), 0)));
-        assertThatThrownBy(properties::validate).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("size must be > 0");
     }
 
     /**
@@ -117,20 +125,24 @@ class InsightsPropertiesTest {
                 .hasMessageContaining("max-age");
     }
 
-    /** A YAML null binds through the setter, so both blocks have to say so rather than fail on a dereference. */
+    /** A YAML null binds through the setter, so the block has to say so rather than fail on a dereference. */
     @Test
-    void rejectsBlocksThatWereBoundToNothing() {
+    void rejectsAPersistenceBlockBoundToNothing() {
         InsightsProperties properties = new InsightsProperties();
         properties.setPersistence(null);
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("persistence");
+                .hasMessageContaining("peekaboot.insights.persistence must not be null");
+    }
 
-        InsightsProperties withoutLevels = new InsightsProperties();
-        withoutLevels.setLevels(null);
-        assertThatThrownBy(withoutLevels::validate)
+    /** A YAML null binds through the setter, so the list has to say so rather than fail on a dereference. */
+    @Test
+    void rejectsALevelsListBoundToNothing() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(null);
+        assertThatThrownBy(properties::validate)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("levels");
+                .hasMessageContaining("peekaboot.insights.levels must contain at least one level");
     }
 
     @Test
