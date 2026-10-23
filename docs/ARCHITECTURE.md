@@ -1405,8 +1405,9 @@ not enough, since datasource-proxy's connection and result-set spans carry
 are one number; `TraceTreeMapperTest` pins the equality.
 
 `QueryExtractor` builds each trace's `queries` list from those spans, independently of the span
-tree's own names, one entry per query span. A span whose instrumentation recorded no statement
-is listed with `statement: null`. `DbSpans.sql` checks tags in priority order. The site states the
+tree's own names, one entry per query span. An entry carries no statement: the Queries tab reads
+its span's `query` by `spanId`. A span whose instrumentation recorded no statement is listed all
+the same. `DbSpans.sql` checks tags in priority order. The site states the
 outcome under [the trace view](https://www.peekaboot.org/docs/traces/#the-trace-view);
 the order and the reasons are here:
 
@@ -1417,9 +1418,8 @@ the order and the reasons are here:
 3. `jdbc.query[N]` (datasource-proxy/Micrometer)
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
-`SqlStatements` builds one `SqlStatement` per query span for both `TraceTreeMapper` (`SpanNode.query`)
-and `QueryExtractor` (`QueryInfo.statement`), so the two tabs show the same statement. On the trace
-detail both read it from one `TraceQueries`, so each statement is formatted and masked once. `text` is the
+`SqlStatements` builds one `SqlStatement` per query span for `TraceTreeMapper` (`SpanNode.query`),
+the one copy both tabs show, so each statement is formatted and masked once. `text` is the
 masked SQL. `formatted` is the raw SQL laid out by `HibernateSqlFormatter` (Hibernate's `format_sql`
 style, `FormatStyle.BASIC`, each statement of a batch on its own) and then masked.
 
@@ -1488,7 +1488,7 @@ and ride along on any OTLP export.
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) names each row by `span.name`, OpenTelemetry's own span-name
 summary such as `SELECT customer_order`, and shows the statement in the span's query panel.
-The Queries tab (`trace-detail/tabs/queries.js`) lists `query.statement`. Both show the SQL
+The Queries tab (`trace-detail/tabs/queries.js`) lists each query with its span's `query`. Both show the SQL
 `DbSpans.sql` picks from the tags listed above, with the bind parameters from
 `peekaboot.query.parameters`, and render it through `shared/sql-view.js`. That view highlights
 the SQL with `shared/sql.js`'s own tokenizer and shows it raw by default. On request it shows

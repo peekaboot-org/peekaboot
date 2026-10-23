@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.MissingNode;
 
 /**
  * Reads the span tree a trace of the insights API carries. The API serves the tree already
@@ -85,6 +86,17 @@ final class SpanTree {
 
     static String spanId(JsonNode span) {
         return span.path("spanId").asString("");
+    }
+
+    /** The span whose id is {@code spanId}, or a missing node when the tree holds none. */
+    static JsonNode spanWithId(JsonNode trace, String spanId) {
+        List<JsonNode> found = new ArrayList<>();
+        walk(trace.path("rootSpan"), span -> {
+            if (spanId.equals(spanId(span))) {
+                found.add(span);
+            }
+        });
+        return found.isEmpty() ? MissingNode.getInstance() : found.getFirst();
     }
 
     /** The span names from the root to the first span called {@code name}, or an error when none is. */

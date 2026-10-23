@@ -4,7 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import tools.jackson.databind.JsonNode;
 
-/** Reads a trace's {@code queries} list, the Queries tab's own data, by DataSource or by statement. */
+/**
+ * Reads a trace's {@code queries} list, the Queries tab's own data, by DataSource or by statement.
+ * A query's statement is its span's {@code query}, as the Queries tab reads it.
+ */
 final class TraceQueries {
 
     private TraceQueries() {}
@@ -22,7 +25,7 @@ final class TraceQueries {
         List<String> statements = new ArrayList<>();
         trace.path("queries").forEach(query -> {
             if (dataSourceName.equals(query.path("dataSourceName").asString(""))) {
-                statements.add(query.path("statement").path("text").asString(""));
+                statements.add(statementOf(trace, query).path("text").asString(""));
             }
         });
         return statements;
@@ -36,7 +39,7 @@ final class TraceQueries {
         List<JsonNode> found = new ArrayList<>();
         List<String> statements = new ArrayList<>();
         trace.path("queries").forEach(query -> {
-            String statement = query.path("statement").path("text").asString("");
+            String statement = statementOf(trace, query).path("text").asString("");
             statements.add(statement);
             if (statement.contains(fragment)) {
                 found.add(query);
@@ -46,5 +49,10 @@ final class TraceQueries {
             throw new AssertionError(found.size() + " statements containing '" + fragment + "', among " + statements);
         }
         return found.getFirst();
+    }
+
+    /** The statement of {@code query}, one entry of {@code trace}'s list: its span's {@code query}. */
+    static JsonNode statementOf(JsonNode trace, JsonNode query) {
+        return SpanTree.spanWithId(trace, SpanTree.spanId(query)).path("query");
     }
 }

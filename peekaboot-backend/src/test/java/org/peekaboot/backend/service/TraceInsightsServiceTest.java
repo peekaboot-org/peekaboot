@@ -90,9 +90,9 @@ class TraceInsightsServiceTest {
         assertThat(service.getTraceInsights("fast").orElseThrow().slow()).isFalse();
     }
 
-    /** The span tree and the Queries list carry one statement per query, formatted and masked once. */
+    /** The span tree carries the one statement per query, formatted and masked once. */
     @Test
-    void theDetailFormatsEachQueryOnceForTheTreeAndTheQueriesList() {
+    void theDetailFormatsEachQueryOnce() {
         List<String> formatted = new ArrayList<>();
         SqlFormatter recording = sql -> {
             formatted.add(sql);
@@ -109,8 +109,8 @@ class TraceInsightsServiceTest {
         TraceTree detail = recordingService.getTraceInsights("t1").orElseThrow();
 
         assertThat(formatted).containsExactly("SELECT * FROM users WHERE id = ?");
-        assertThat(detail.queries().getFirst().statement())
-                .isEqualTo(detail.rootSpan().children().getFirst().query());
+        assertThat(detail.rootSpan().children().getFirst().query().formatted())
+                .isEqualTo("SELECT * FROM users WHERE id = ?");
     }
 
     @Test
@@ -342,7 +342,7 @@ class TraceInsightsServiceTest {
         Optional<TraceTree> result = service.getTraceInsights("trace1");
         assertThat(result).isPresent();
         assertThat(result.get().queries()).hasSize(1);
-        assertThat(result.get().queries().get(0).statement().text()).isEqualTo("SELECT * FROM users WHERE id = ?");
+        assertThat(result.get().queries().get(0).spanId()).isEqualTo("span-db-trace1");
         assertThat(result.get().queries().get(0).dbSystem()).isEqualTo("postgresql");
         assertThat(result.get().queries().get(0).durationMs()).isEqualTo(50L);
     }
@@ -643,8 +643,8 @@ class TraceInsightsServiceTest {
                 .isEqualTo(withoutDup.summary().spans().count());
         assertThat(withDup.rootSpan().children()).hasSize(1);
         assertThat(withDup.queries()).hasSize(1);
-        assertThat(withDup.queries().get(0).statement().text())
-                .isEqualTo(withoutDup.queries().get(0).statement().text());
+        assertThat(withDup.rootSpan().children().get(0).query())
+                .isEqualTo(withoutDup.rootSpan().children().get(0).query());
     }
 
     @Test

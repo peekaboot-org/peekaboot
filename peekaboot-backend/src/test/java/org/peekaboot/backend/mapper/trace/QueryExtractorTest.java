@@ -11,8 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.testsupport.TraceDatas;
@@ -37,7 +35,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM users WHERE id = ?");
+        assertThat(queries.get(0).spanId()).isEqualTo("span1");
         assertThat(queries.get(0).dbSystem()).isEqualTo("postgresql");
         assertThat(queries.get(0).durationMs()).isEqualTo(100);
     }
@@ -54,13 +52,13 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).statement().text()).isEqualTo("INSERT INTO orders (user_id) VALUES (?)");
+        assertThat(queries.get(0).spanId()).isEqualTo("span1");
         assertThat(queries.get(0).dbSystem()).isEqualTo("orders_db");
     }
 
-    /** A statement batch is one span carrying jdbc.query[0..N]; every statement belongs to it, in index order. */
+    /** A statement batch is one span carrying jdbc.query[0..N], so it lists as one query. */
     @Test
-    void extract_shouldJoinTheStatementsOfABatchInIndexOrder() {
+    void extract_shouldListABatchAsOneQuery() {
         var batchSpan = query("span1")
                 .tags(Map.of(
                         "jdbc.query[10]", "INSERT INTO t VALUES (10)",
@@ -73,8 +71,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extract(TraceDatas.of("trace1", batchSpan));
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).statement().text())
-                .isEqualTo("INSERT INTO t VALUES (0);\nINSERT INTO t VALUES (2);\nINSERT INTO t VALUES (10)");
+        assertThat(queries.get(0).spanId()).isEqualTo("span1");
     }
 
     @Test
@@ -93,7 +90,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM products");
+        assertThat(queries.get(0).spanId()).isEqualTo("span1");
     }
 
     @Test
@@ -127,7 +124,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(2);
-        assertThat(queries.get(0).statement().text()).isEqualTo("UPDATE users SET active = true");
+        assertThat(queries.get(0).spanId()).isEqualTo("q1");
         assertThat(queries.get(0).rowCount()).isNull();
         assertThat(queries.get(1).rowCount()).isEqualTo(42L);
     }
@@ -151,9 +148,9 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(2);
-        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT * FROM users");
+        assertThat(queries.get(0).spanId()).isEqualTo("q1");
         assertThat(queries.get(0).rowCount()).isEqualTo(10L);
-        assertThat(queries.get(1).statement().text()).isEqualTo("SELECT * FROM orders");
+        assertThat(queries.get(1).spanId()).isEqualTo("q2");
         assertThat(queries.get(1).rowCount()).isEqualTo(25L);
     }
 
@@ -225,14 +222,13 @@ class QueryExtractorTest {
      * summary counts it and the Queries tab lists it, with nothing to show for its text.
      */
     @Test
-    void extract_shouldListAQuerySpanWithoutAStatementWithNullStatement() {
+    void extract_shouldListAQuerySpanWithoutAStatement() {
         var querySpan =
                 query("span1").tags(Map.of("db.system", "postgresql")).order(10).build();
 
         List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries).hasSize(1);
-        assertThat(queries.getFirst().statement()).isNull();
         assertThat(queries.getFirst().dbSystem()).isEqualTo("postgresql");
     }
 
@@ -259,9 +255,7 @@ class QueryExtractorTest {
         List<QueryInfo> queries = extract(traceData);
 
         assertThat(queries).hasSize(3);
-        assertThat(queries.get(0).statement().text()).isEqualTo("SELECT 1");
-        assertThat(queries.get(1).statement().text()).isEqualTo("SELECT 2");
-        assertThat(queries.get(2).statement().text()).isEqualTo("SELECT 3");
+        assertThat(queries).extracting(QueryInfo::spanId).containsExactly("q1", "q2", "q3");
     }
 
     @Test
@@ -386,28 +380,6 @@ class QueryExtractorTest {
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).rowCount()).isNull();
-    }
-
-    /**
-     * The engine's value patterns only, not column-aware SQL literal masking: no attempt
-     * is made to identify which literal belongs to a "password" column, only high-precision
-     * provider-shaped credentials (a JWT, an AWS key, a PEM block, a credential-bearing
-     * URL) embedded in the SQL text.
-     */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-            INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook') | INSERT INTO webhooks (callback_url) VALUES ('https://******@example.com/hook')
-            SELECT * FROM users WHERE email = ?                                                    | SELECT * FROM users WHERE email = ?
-            """)
-    void extract_shouldMaskOnlyProviderShapedCredentialsEmbeddedInSql(String statement, String expected) {
-        var querySpan = query("span1")
-                .tags(Map.of("db.statement", statement, "db.system", "postgresql"))
-                .order(10)
-                .build();
-
-        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
-
-        assertThat(queries).extracting(q -> q.statement().text()).containsExactly(expected);
     }
 
     @Test

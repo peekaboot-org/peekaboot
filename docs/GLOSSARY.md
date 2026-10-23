@@ -234,9 +234,9 @@ captured log event, correlated by the trace and span ids frozen in its MDC. `sta
 response, in `TraceTree.logs`, its `spanId` resolved to the span that survived deduplication. A log
 with no span id belongs to no span.
 
-`QueryInfo(spanId, statement, dbSystem, dataSourceName, durationMs, rowCount)` is one query
-span. `statement` is masked and may be null when the
-instrumentation recorded no statement; the query is still listed. `dataSourceName` is
+`QueryInfo(spanId, dbSystem, dataSourceName, durationMs, rowCount)` is one query span. Its
+statement is the span's own `SpanNode.query`, masked, and null when the instrumentation recorded
+none; the query is still listed. `dataSourceName` is
 the Hikari pool name (`jdbc.datasource.pool`) unless Hikari generated it (`HikariPool-1`), else
 datasource-proxy's `jdbc.datasource.name`, null when neither is tagged.
 `TraceTree.queries` is populated on the single-trace endpoint only, never on

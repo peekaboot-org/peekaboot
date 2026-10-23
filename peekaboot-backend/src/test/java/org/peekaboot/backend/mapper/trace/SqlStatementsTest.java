@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -38,6 +39,26 @@ class SqlStatementsTest {
         assertThat(statement.text()).isEqualTo("select 'https://******@example.com/x' from dual");
         assertThat(statement.formatted())
                 .isEqualTo("    select\n        'https://******@example.com/x' \n    from\n        dual");
+    }
+
+    /**
+     * The engine's value patterns only, not column-aware SQL literal masking: no attempt
+     * is made to identify which literal belongs to a "password" column, only high-precision
+     * provider-shaped credentials (a JWT, an AWS key, a PEM block, a credential-bearing
+     * URL) embedded in the SQL text.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook') | INSERT INTO webhooks (callback_url) VALUES ('https://******@example.com/hook')
+            SELECT * FROM users WHERE email = ?                                                    | SELECT * FROM users WHERE email = ?
+            """)
+    void masksOnlyProviderShapedCredentialsEmbeddedInSql(String sql, String expected) {
+        SqlStatement statement = new SqlStatements(new MaskingEngine(), SqlFormatter.NONE)
+                .of(query("q1")
+                        .tags(Map.of("db.statement", sql, "db.system", "postgresql"))
+                        .build());
+
+        assertThat(statement.text()).isEqualTo(expected);
     }
 
     /** BASIC keeps a literal whole, so the output above cannot tell the order apart; what the formatter receives can. */

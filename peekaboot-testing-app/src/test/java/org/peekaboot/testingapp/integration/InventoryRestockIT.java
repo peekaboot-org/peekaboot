@@ -43,8 +43,9 @@ class InventoryRestockIT extends TestingAppITBase {
 
         JsonNode restock = TraceQueries.queryContaining(trace, "SET quantity = ? WHERE sku = ?");
         assertThat(restock.path("dataSourceName").asString("")).isEqualTo("inventory-db");
-        assertThat(restock.path("statement").path("parameters").size())
-                .as("one parameter set per SKU: %s", restock.path("statement").path("parameters"))
+        JsonNode parameters = TraceQueries.statementOf(trace, restock).path("parameters");
+        assertThat(parameters.size())
+                .as("one parameter set per SKU: %s", parameters)
                 .isEqualTo(7);
     }
 }

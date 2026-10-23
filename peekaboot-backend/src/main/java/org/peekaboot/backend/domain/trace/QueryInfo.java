@@ -1,9 +1,4 @@
 package org.peekaboot.backend.domain.trace;
 
-public record QueryInfo(
-        String spanId,
-        SqlStatement statement,
-        String dbSystem,
-        String dataSourceName,
-        long durationMs,
-        Long rowCount) {}
+/** One query span as the Queries tab lists it; its statement is the span's own {@link SpanNode#query()}. */
+public record QueryInfo(String spanId, String dbSystem, String dataSourceName, long durationMs, Long rowCount) {}

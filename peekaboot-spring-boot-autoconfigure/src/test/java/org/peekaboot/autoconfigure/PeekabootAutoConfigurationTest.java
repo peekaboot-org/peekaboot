@@ -225,9 +225,10 @@ class PeekabootAutoConfigurationTest {
         return context.getBean(TraceInsightsService.class)
                 .getTraceInsights(TraceFixtures.TRACE_ID)
                 .orElseThrow()
-                .queries()
+                .rootSpan()
+                .children()
                 .getFirst()
-                .statement();
+                .query();
     }
 
     /**

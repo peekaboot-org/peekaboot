@@ -20,11 +20,6 @@ public class QueryExtractor {
         String dataSourceName = DbSpans.dataSourceName(span.tags());
 
         return new QueryInfo(
-                span.spanId(),
-                queries.statement(span),
-                dbSystem,
-                dataSourceName,
-                span.durationMs(),
-                queries.rowCount(span.spanId()));
+                span.spanId(), dbSystem, dataSourceName, span.durationMs(), queries.rowCount(span.spanId()));
     }
 }

@@ -22,7 +22,7 @@ class SqlStatementViewIT extends SeededPersonTestBase {
 
         overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-span-query-toggle");
 
-        assertStatementView("#pk-span-query-" + spanId, lookup.path("statement"));
+        assertStatementView("#pk-span-query-" + spanId, lookup.path("query"));
     }
 
     @Test
@@ -32,7 +32,7 @@ class SqlStatementViewIT extends SeededPersonTestBase {
 
         overlay.openTab("queries");
 
-        assertStatementView(queryItem(lookup), lookup.path("statement"));
+        assertStatementView(queryItem(lookup), lookup.path("query"));
     }
 
     // Reading the clipboard back needs the clipboard-read permission, which only Chromium has.
@@ -74,18 +74,33 @@ class SqlStatementViewIT extends SeededPersonTestBase {
                 .isEqualTo(1);
     }
 
-    /** Loads the person's detail page and returns the insights API's entry for its one parameterised query. */
+    /** Loads the person's detail page and returns the insights API's span for its one parameterised query. */
     private JsonNode openDetailPageLookup() {
         page.navigate(baseUrl + "/persons/" + person.getId());
-        JsonNode trace = awaitTrace(
-                toolbar.traceId(),
-                "trace => (trace.queries || []).some(q => q.statement && q.statement.parameters.length === 1)");
-        for (JsonNode query : trace.path("queries")) {
-            if (query.path("statement").path("parameters").size() == 1) {
-                return query;
+        JsonNode trace = awaitTrace(toolbar.traceId(), """
+                trace => {
+                    const parameterised = span => span.query?.parameters.length === 1
+                        || (span.children || []).some(parameterised);
+                    return trace.rootSpan != null && parameterised(trace.rootSpan);
+                }""");
+        JsonNode lookup = parameterisedQuerySpan(trace.path("rootSpan"));
+        if (lookup == null) {
+            throw new AssertionError("no parameterised query in " + trace.path("rootSpan"));
+        }
+        return lookup;
+    }
+
+    private static JsonNode parameterisedQuerySpan(JsonNode span) {
+        if (span.path("query").path("parameters").size() == 1) {
+            return span;
+        }
+        for (JsonNode child : span.path("children")) {
+            JsonNode found = parameterisedQuerySpan(child);
+            if (found != null) {
+                return found;
             }
         }
-        throw new AssertionError("no parameterised query in " + trace.path("queries"));
+        return null;
     }
 
     private void assertStatementView(String scope, JsonNode statement) {

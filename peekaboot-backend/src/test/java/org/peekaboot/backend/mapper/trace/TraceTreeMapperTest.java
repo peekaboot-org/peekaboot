@@ -23,7 +23,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.trace.AsyncTaskMarker;
-import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
@@ -1227,18 +1226,13 @@ class TraceTreeMapperTest {
                 .containsExactly(tuple(Map.of("db.statement", "select * from orders"), null));
     }
 
-    /** Both views read their statement from one TraceQueries, so a query reads the same in the Spans and the Queries tab. */
     @Test
-    void theSpanTreeAndTheQueriesListCarryTheSameStatement() {
-        TraceData traceData = personLookupTrace();
+    void aQuerySpanCarriesItsStatementLaidOutByTheMappersFormatter() {
         TraceTreeMapper formattingMapper = new TraceTreeMapper(new MaskingEngine(), new HibernateSqlFormatter());
-        TraceQueries queries = formattingMapper.queriesOf(traceData);
 
         SpanNode node =
-                formattingMapper.map(traceData, queries).rootSpan().children().getFirst();
-        QueryInfo listed = new QueryExtractor().extract(traceData, queries).getFirst();
+                formattingMapper.map(personLookupTrace()).rootSpan().children().getFirst();
 
-        assertThat(node.query()).isEqualTo(listed.statement());
         assertThat(node.query().formatted()).isNotNull();
         assertThat(node.query().parameters()).containsExactly(List.of("42"));
     }

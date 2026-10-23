@@ -788,8 +788,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
         Object queryLink = importModule("trace-detail/tabs/queries.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {queries: [{statement: {text: 'SELECT 1', formatted: null, parameters: []},
-                    durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {goToSpan: () => {}});
+                m.render(container, {rootSpan: {spanId: 's1', query: {text: 'SELECT 1', formatted: null, parameters: []}},
+                    queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {goToSpan: () => {}});
                 const link = container.querySelector('.pk-query-meta button');
                 return [link.className, link.textContent, link.dataset.spanId, link.getAttribute('aria-label')].join('|');
             })()
@@ -1187,8 +1187,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
         Object labels = importModule("trace-detail/tabs/queries.js", """
             (() => {
                 const queries = [
-                    {statement: {text: 'SELECT 1', formatted: null, parameters: []}, durationMs: 49, dbSystem: 'h2', rowCount: 1},
-                    {statement: {text: 'SELECT 2', formatted: null, parameters: []}, durationMs: 50, dbSystem: 'h2', rowCount: 1}
+                    {durationMs: 49, dbSystem: 'h2', rowCount: 1},
+                    {durationMs: 50, dbSystem: 'h2', rowCount: 1}
                 ];
                 const fallback = document.createElement('div');
                 m.render(fallback, {queries});

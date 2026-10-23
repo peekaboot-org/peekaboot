@@ -95,7 +95,9 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("queries")).hasSize(1);
-        String sql = trace.path("queries").get(0).path("statement").path("text").asString();
+        String sql = TraceQueries.statementOf(trace, trace.path("queries").get(0))
+                .path("text")
+                .asString();
         assertThat(sql)
                 .isEqualTo("INSERT INTO webhooks (callback_url) VALUES "
                         + "('https://******@internal.example.com/callback')");
@@ -122,9 +124,7 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(trace.path("queries")
-                        .get(0)
-                        .path("statement")
+        assertThat(TraceQueries.statementOf(trace, trace.path("queries").get(0))
                         .path("parameters")
                         .toString())
                 .isEqualTo("[[\"'******'\"]]");
