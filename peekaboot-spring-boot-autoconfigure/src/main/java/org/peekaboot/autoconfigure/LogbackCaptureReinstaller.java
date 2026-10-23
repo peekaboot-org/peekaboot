@@ -27,16 +27,12 @@ class LogbackCaptureReinstaller implements ApplicationListener<ApplicationEnviro
     private static final boolean LOGBACK_PRESENT = ClassUtils.isPresent(
             "ch.qos.logback.classic.LoggerContext", LogbackCaptureReinstaller.class.getClassLoader());
 
+    // the guard is the isolation: LogbackAppenderRegistrar, which names the Logback types, loads only past it
     @Override
     public void onApplicationEvent(ApplicationEnvironmentPreparedEvent event) {
         if (LOGBACK_PRESENT) {
-            reattachCaptureAppenders();
+            LogbackAppenderRegistrar.reattachLiveAppenders();
         }
-    }
-
-    /** Kept apart so that no Logback type is resolved when Logback is absent. */
-    private void reattachCaptureAppenders() {
-        LogbackAppenderRegistrar.reattachLiveAppenders();
     }
 
     @Override
