@@ -42,7 +42,6 @@ public class TraceTreeMapper {
         this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
     }
 
-    /** Builds the {@link TraceTree} for a captured trace. */
     public TraceTree map(TraceData traceData) {
         return map(traceData, queriesOf(traceData));
     }
