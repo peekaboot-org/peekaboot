@@ -144,11 +144,10 @@ class InsightsCollectorRestoreTest {
                 .containsExactly(7.0, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 7.0);
     }
 
-    /** One level, one series on gauge "g" fixed at {@code gaugeValue} - the collector's live reading. */
-    private static InsightsCollector collector(long gaugeValue, InsightsCollector.SnapshotSource source) {
-        return collector(gaugeValue, source, System::currentTimeMillis);
-    }
-
+    /**
+     * One level, one series on gauge "g" fixed at {@code gaugeValue} - the collector's live reading.
+     * {@code clock} is what the level thread schedules its boundaries from.
+     */
     private static InsightsCollector collector(
             long gaugeValue, InsightsCollector.SnapshotSource source, LongSupplier clock) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
@@ -163,15 +162,13 @@ class InsightsCollectorRestoreTest {
 
     @Test
     void theFirstTickAppliesWhateverThePersistedSnapshotHeld() throws Exception {
-        InsightsCollector source = collector(7, InsightsCollectors.noSnapshot());
+        InsightsCollector source = collector(7, InsightsCollectors.noSnapshot(), steppingClock(0));
         source.tick(100_000);
         InsightsSnapshot persisted = source.capture();
 
-        // the live clock advances one interval per read, so the first live tick lands on the
-        // boundary right after the persisted one and every later tick on the next: no gap for
-        // the collector to pad with NaN
-        AtomicLong clock = new AtomicLong(99_900);
-        InsightsCollector collector = collector(1, timeout -> Optional.of(persisted), () -> clock.addAndGet(100));
+        // the first live tick lands on the boundary right after the persisted one and every
+        // later tick on the next: no gap for the collector to pad with NaN
+        InsightsCollector collector = collector(1, timeout -> Optional.of(persisted), steppingClock(99_900));
         collector.start();
         try {
             awaitLevel0Samples(collector, 2); // the restored 7 and at least one live tick
@@ -186,15 +183,15 @@ class InsightsCollectorRestoreTest {
 
     @Test
     void aSourceWithNothingToRestoreLeavesLiveSamplesAlone() throws Exception {
-        InsightsCollector collector = collector(1, timeout -> Optional.empty());
+        InsightsCollector collector = collector(1, timeout -> Optional.empty(), steppingClock(0));
         collector.start();
         try {
-            awaitLevel0Samples(collector, 1);
+            awaitLevel0Samples(collector, 2);
         } finally {
             collector.stop();
         }
 
-        // only its own ticks; the persisted 7 that a wrongly-applied restore would carry never shows up
+        // the clock leaves no boundary unticked, so a gap or placeholder could only come from the restore
         double[] ticks = collector.levelData(0).tickValues().get("cpu.process");
         assertThat(collector.levelData(0).endEpochMs()).isGreaterThan(0);
         assertThat(ticks).isNotEmpty();
@@ -237,10 +234,13 @@ class InsightsCollectorRestoreTest {
     @Test
     void aSourceThatThrowsIsAbandonedForGoodAndAskedOnlyOnce() throws Exception {
         AtomicInteger asked = new AtomicInteger();
-        InsightsCollector collector = collector(1, timeout -> {
-            asked.incrementAndGet();
-            throw new RuntimeException("boom");
-        });
+        InsightsCollector collector = collector(
+                1,
+                timeout -> {
+                    asked.incrementAndGet();
+                    throw new RuntimeException("boom");
+                },
+                steppingClock(0));
         try (LogCapture logs = LogCapture.attach(InsightsCollector.class)) {
             collector.start();
             try {
@@ -257,6 +257,12 @@ class InsightsCollectorRestoreTest {
                 assertThat(event.getFormattedMessage()).isEqualTo("Insights tick failed for level 0");
             });
         }
+    }
+
+    /** Starts at {@code startEpochMs} and advances one 100ms interval per read, so no boundary is ever missed. */
+    private static LongSupplier steppingClock(long startEpochMs) {
+        AtomicLong clock = new AtomicLong(startEpochMs);
+        return () -> clock.addAndGet(100);
     }
 
     /** Level 0 holds at least {@code count} samples, restored or ticked live. */
