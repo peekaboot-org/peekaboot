@@ -30,13 +30,9 @@ public final class TreeMasker {
         this.maskingEngine = maskingEngine;
     }
 
-    private Object mask(Object node) {
-        return maskNode(null, node);
-    }
-
     /** Bypasses masking entirely when {@code unmask} is true (see {@link MaskingEngine#mask(String, String, boolean)}). */
     public Object mask(Object node, boolean unmask) {
-        return unmask ? node : mask(node);
+        return unmask ? node : maskNode(null, node);
     }
 
     /**
@@ -46,13 +42,8 @@ public final class TreeMasker {
      * whole subtree, e.g. a {@code @ConfigurationProperties} bean's {@code clientSecret}
      * entry, where the sensitive key names the root, not a nested field.
      */
-    private Object mask(String key, Object node) {
-        return maskNode(key, node);
-    }
-
-    /** Bypasses masking entirely when {@code unmask} is true (see {@link MaskingEngine#mask(String, String, boolean)}). */
     public Object mask(String key, Object node, boolean unmask) {
-        return unmask ? node : mask(key, node);
+        return unmask ? node : maskNode(key, node);
     }
 
     /**
