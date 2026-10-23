@@ -2,14 +2,13 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
-import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.peekaboot.testingapp.entity.CustomerOrder;
-import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
@@ -44,6 +43,8 @@ class OrderTraceCaptureIT extends TestingAppITBase {
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
 
+    private final List<CustomerOrder> seededOrders = new ArrayList<>();
+
     /**
      * Seeded once: every save outside a request is a root trace of its own in the store
      * the UI classes read, and no test here changes the seeded rows.
@@ -51,20 +52,15 @@ class OrderTraceCaptureIT extends TestingAppITBase {
     @BeforeAll
     void seedOrders() {
         for (int i = 1; i <= SEEDED_ORDERS; i++) {
-            CustomerOrder order = new CustomerOrder();
-            order.setReference("PK-200" + i);
-            order.setCustomerId(1L);
-            order.setStatus("PLACED");
-            order.setPlacedAt(Instant.parse("2026-08-20T08:00:00Z").plusSeconds(i * 60L));
-            CustomerOrder saved = orderRepository.save(order);
-
-            OrderLine line = new OrderLine();
-            line.setOrderId(saved.getId());
-            line.setSku("WIDGET-" + i);
-            line.setQuantity(i);
-            line.setUnitPrice(new BigDecimal("19.99"));
-            orderLineRepository.save(line);
+            seededOrders.add(OrderFixtures.seedOrder(
+                    orderRepository, orderLineRepository, 1L, "PLACED", i, "PK-CAPTURE-", "WIDGET-" + i));
         }
+    }
+
+    /** Leaves the context's shared database as this class found it. */
+    @AfterAll
+    void deleteSeededOrders() {
+        seededOrders.forEach(order -> OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order));
     }
 
     @Test
@@ -142,7 +138,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
 
     @Test
     void slowReportLandsInTheSlowBucket() {
-        Long orderId = orderRepository.findAll().getFirst().getId();
+        Long orderId = seededOrders.getFirst().getId();
 
         String traceId = traces.get("/api/orders/" + orderId + "/report");
 
