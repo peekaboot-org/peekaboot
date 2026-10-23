@@ -44,7 +44,7 @@ export function loadingBlock(message) {
  * <tr> elements. `className` is added to the table's own, for a surface's row accents.
  */
 export function table(columns, rows, {className} = {}) {
-    const head = el('thead', {}, el('tr', {}, ...columns.map(label => el('th', {text: label, attrs: {scope: 'col'}}))));
+    const head = el('thead', {}, el('tr', {}, ...columns.map(label => el('th', {className: 'pk-label', text: label, attrs: {scope: 'col'}}))));
     return el('div', {className: 'pk-table-scroll'},
         el('table', {className: 'pk-table' + (className ? ` ${className}` : '')}, head, el('tbody', {}, ...rows)));
 }

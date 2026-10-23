@@ -39,8 +39,8 @@
 .pk-stat { display: inline-flex; align-items: center; gap: var(--pk-space-xs); }
 .pk-stat__duration { font-family: var(--pk-font-mono); }
 
-/* A small uppercase caption: card headers, filter-row labels, the tile and gantt column
-   labels, the overlay's section headings. */
+/* A small uppercase caption: card headers, filter-row labels, table header cells, the tile
+   and gantt column labels, the overlay's section headings. */
 .pk-label {
     font-size: var(--pk-text-xs);
     font-weight: 600;
@@ -280,14 +280,10 @@
    such tab reads the same. --kv is the two-column, header-less key/value form the
    trace-detail overlay's Request tab uses. */
 .pk-table { width: 100%; border-collapse: collapse; font-size: var(--pk-text-xs); }
+/* A header cell is a .pk-label (components.js's table()), which carries its type and ink. */
 .pk-table th {
     padding: var(--pk-space-sm);
     text-align: left;
-    font-weight: 600;
-    font-size: var(--pk-text-xs);
-    color: var(--pk-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     white-space: nowrap;
     border-bottom: 1px solid var(--pk-border);
 }
