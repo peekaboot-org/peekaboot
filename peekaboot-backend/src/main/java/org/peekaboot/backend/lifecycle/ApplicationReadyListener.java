@@ -38,9 +38,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     @Nullable
     private final HikariPoolInfo hikariPoolInfo;
 
-    // Own MaskingEngine instance rather than the shared bean: the lifecycle
-    // auto-configuration also runs in non-web contexts, where the bean does not exist.
-    private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker(new MaskingEngine());
+    private final ConnectionParamsMasker connectionParamsMasker;
 
     public ApplicationReadyListener(
             EnvironmentInfo environmentInfo,
@@ -48,7 +46,8 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             ServerUrlResolver serverUrlResolver,
             List<DataSourceMetadata> dataSourceMetadataList,
             Map<String, DataSource> dataSources,
-            @Nullable HikariPoolInfo hikariPoolInfo) {
+            @Nullable HikariPoolInfo hikariPoolInfo,
+            MaskingEngine maskingEngine) {
 
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
@@ -56,6 +55,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         this.dataSourceMetadataList = dataSourceMetadataList;
         this.dataSources = dataSources;
         this.hikariPoolInfo = hikariPoolInfo;
+        this.connectionParamsMasker = new ConnectionParamsMasker(maskingEngine);
     }
 
     @Override

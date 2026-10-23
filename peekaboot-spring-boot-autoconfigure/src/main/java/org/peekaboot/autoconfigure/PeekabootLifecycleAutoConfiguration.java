@@ -18,6 +18,7 @@ import org.peekaboot.backend.lifecycle.LifecycleEvents;
 import org.peekaboot.backend.lifecycle.LifecycleRuns;
 import org.peekaboot.backend.lifecycle.ServerUrlResolver;
 import org.peekaboot.backend.lifecycle.web.LifecycleController;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -33,6 +34,7 @@ import org.springframework.boot.info.GitProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 
 /**
@@ -45,6 +47,7 @@ import org.springframework.core.env.Environment;
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.LIFECYCLE_ENABLED, matchIfMissing = true)
+@Import(MaskingConfiguration.class)
 public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
@@ -74,7 +77,8 @@ public class PeekabootLifecycleAutoConfiguration {
             ServerUrlResolver serverUrlResolver,
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider,
             ConfigurableListableBeanFactory beanFactory,
-            ObjectProvider<HikariPoolInfo> hikariPoolInfoProvider) {
+            ObjectProvider<HikariPoolInfo> hikariPoolInfoProvider,
+            MaskingEngine maskingEngine) {
         DataSourceMetadataList dataSourceMetadataList =
                 dataSourceMetadataListProvider.getIfAvailable(() -> DataSourceMetadataList.EMPTY);
         return new ApplicationReadyListener(
@@ -83,7 +87,8 @@ public class PeekabootLifecycleAutoConfiguration {
                 serverUrlResolver,
                 dataSourceMetadataList.entries(),
                 ApplicationBeans.ofType(beanFactory, DataSource.class),
-                hikariPoolInfoProvider.getIfAvailable());
+                hikariPoolInfoProvider.getIfAvailable(),
+                maskingEngine);
     }
 
     /**

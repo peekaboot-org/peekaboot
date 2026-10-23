@@ -16,6 +16,7 @@ import net.osslabz.jdbc.PropertySource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -201,7 +202,8 @@ class ApplicationReadyListenerTest {
                         () -> true),
                 metadata,
                 dataSources,
-                hikariPoolInfo);
+                hikariPoolInfo,
+                new MaskingEngine());
 
         try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
             listener.onApplicationEvent(event);

@@ -26,6 +26,7 @@ import org.peekaboot.backend.lifecycle.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.lifecycle.LifecycleRuns;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -77,6 +78,12 @@ class PeekabootLifecycleAutoConfigurationTest {
                     ProjectInfoAutoConfiguration.class,
                     org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
+
+    /** The banner masks connection parameters, so a plain non-web application gets the engine too. */
+    @Test
+    void theBannerGetsTheMaskingEngineInANonWebApplication() {
+        contextRunner.run(context -> assertThat(context).hasSingleBean(MaskingEngine.class));
+    }
 
     @Test
     void buildInfoProviderUsesBuildPropertiesWhenAvailable() {

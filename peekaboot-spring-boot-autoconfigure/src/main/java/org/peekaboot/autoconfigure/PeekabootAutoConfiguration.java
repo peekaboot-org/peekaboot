@@ -45,15 +45,8 @@ import org.springframework.context.annotation.Import;
 @ConditionalOnPeekabootServlet
 @ConditionalOnClass(HealthEndpoint.class)
 @EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})
-@Import(StackTraceRulesConfiguration.class)
+@Import({StackTraceRulesConfiguration.class, MaskingConfiguration.class})
 public class PeekabootAutoConfiguration {
-
-    /** The one rule set every masking site shares: the actuator mappers, MetricsService and the maskers they build on it. */
-    @Bean
-    @ConditionalOnMissingBean
-    public MaskingEngine maskingEngine() {
-        return new MaskingEngine();
-    }
 
     /**
      * Dashboard resource handlers, redirects, interceptor and JSON converter.

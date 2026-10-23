@@ -10,7 +10,6 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -21,6 +20,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 
@@ -37,6 +37,7 @@ import org.springframework.core.env.Environment;
         })
 @ConditionalOnPeekabootServlet
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
+@Import(MaskingConfiguration.class)
 public class DevToolbarAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
@@ -80,13 +81,10 @@ public class DevToolbarAutoConfiguration {
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
             Tracer tracer,
             ApplicationEventPublisher eventPublisher,
-            ObjectProvider<MaskingEngine> maskingEngine,
+            MaskingEngine maskingEngine,
             PeekabootPaths peekabootPaths) {
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
-        // The shared bean when the dashboard is up; a private instance when the toolbar
-        // runs without PeekabootAutoConfiguration (no actuator endpoint classes).
-        registration.setFilter(new RequestCaptureFilter(
-                tracer, eventPublisher, maskingEngine.getIfAvailable(MaskingEngine::new), peekabootPaths));
+        registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher, maskingEngine, peekabootPaths));
         registration.addUrlPatterns("/*");
         // inside Boot's ServerHttpObservationFilter (HIGHEST_PRECEDENCE + 1), so the server
         // span is current, and ahead of Spring Security, so rejected requests are captured too

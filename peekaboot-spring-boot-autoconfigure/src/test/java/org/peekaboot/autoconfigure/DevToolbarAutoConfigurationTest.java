@@ -22,6 +22,7 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.log.PeekabootLogbackAppender;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
@@ -360,13 +361,11 @@ class DevToolbarAutoConfigurationTest {
     }
 
     /**
-     * The toolbar can be on while PeekabootAutoConfiguration - and with it the shared
-     * MaskingEngine bean - is backed off (no actuator endpoint classes on the host
-     * classpath); the capture filter then falls back to a private engine instead of
-     * failing the context.
+     * The toolbar can be on while PeekabootAutoConfiguration is backed off (no actuator endpoint
+     * classes on the host classpath); the capture filter still gets the one MaskingEngine bean.
      */
     @Test
-    void theCaptureFilterWorksWithoutTheDashboardsMaskingEngineBean() {
+    void theCaptureFilterGetsTheMaskingEngineWithoutTheDashboard() {
         new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         DevToolbarAutoConfiguration.class,
@@ -377,7 +376,18 @@ class DevToolbarAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasBean("requestCaptureFilter");
+                    assertThat(context).hasSingleBean(MaskingEngine.class);
                 });
+    }
+
+    /** The dashboard, the toolbar and the banner each import the engine; they share one. */
+    @Test
+    void theDashboardTheToolbarAndTheBannerShareOneMaskingEngine() {
+        contextRunner
+                .withConfiguration(AutoConfigurations.of(PeekabootLifecycleAutoConfiguration.class))
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> assertThat(context).hasSingleBean(MaskingEngine.class));
     }
 
     @Test
