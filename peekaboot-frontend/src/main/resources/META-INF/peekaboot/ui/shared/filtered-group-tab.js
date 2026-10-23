@@ -19,10 +19,10 @@
  *   urlFilter                   -> optional {reconcile(input, container, context),
  *                                  write(input, container, context)} for a tab whose URL
  *                                  state is more than the single "q" the default handles
- *   decorate(listEl, filtered)  -> optional post-processing of the rendered groups
  *   afterRender(container, {groups, filtered, query, context})
  *                               -> optional hook run after every (re-)render, the empty
- *                                  states included - meters.js's match-count readout
+ *                                  states included - meters.js's match-count readout and
+ *                                  header columns
  *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
  *                                  instead of the shared payload render() receives, on the
  *                                  self-fetching-tab.js contract (active-tab guard,
@@ -43,7 +43,7 @@ import {renderUnmaskControl} from './unmask-control.js';
 
 export function filteredGroupTab({
     inputId, listId, select, filterGroup, key, header, items, extraTop,
-    emptyMessage, noMatchMessage, urlFilter, decorate, afterRender,
+    emptyMessage, noMatchMessage, urlFilter, afterRender,
     fetchData, loadingMessage = 'Loading...', fetchErrorMessage = error => `Failed to load: ${error.message}`
 }) {
     let currentData = null;
@@ -143,7 +143,6 @@ export function filteredGroupTab({
             items: (group, list) => items(group, list, query, currentContext),
             expandedKeys: expanded
         });
-        if (decorate) decorate(target, filtered);
         afterRender?.(container, {groups, filtered, query, context: currentContext});
     }
 

@@ -85,13 +85,15 @@ export function kvRow(key, value, {mono = false, tight = false, highlight} = {})
  * A collapsible group. Returns the wrapper plus its header button and list so
  * callers can populate the list and drive state without re-querying. `highlight`,
  * when given, is a plain query string applied to the name via highlightText(); the
- * count is always rendered as plain text.
+ * count is always rendered as plain text. `nameModifier` picks one of the name's
+ * components.css variants (`strong`, `mono`).
  */
-export function group({name, count, expanded = false, highlight} = {}) {
+export function group({name, count, expanded = false, highlight, nameModifier} = {}) {
     const listId = `pk-group-list-${++groupSequence}`;
+    const nameClass = 'pk-group__name' + (nameModifier ? ` pk-group__name--${nameModifier}` : '');
 
     const header = button({className: 'pk-group__header', attrs: {'aria-expanded': String(expanded), 'aria-controls': listId}},
-        withHighlightedText(el('span', {className: 'pk-group__name'}), name == null ? '' : String(name), highlight),
+        withHighlightedText(el('span', {className: nameClass}), name == null ? '' : String(name), highlight),
         el('span', {className: 'pk-group__count', text: count == null ? '' : String(count)}));
     const list = el('div', {className: 'pk-group__list', attrs: {id: listId, hidden: expanded ? null : ''}});
 
@@ -120,7 +122,7 @@ export function meter(percent) {
  * by expandedKeys() so an auto-refresh does not collapse what the user opened.
  *
  *   key(group)         -> stable identity string
- *   header(group)      -> {name, count, highlight}
+ *   header(group)      -> {name, count, highlight, nameModifier}
  *   items(group, list) -> populates the list element
  */
 export function groupList(container, groups, {key, header, items, expandedKeys: expanded}) {

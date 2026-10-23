@@ -91,9 +91,9 @@
 }
 .pk-group__header[aria-expanded="false"]::before { transform: rotate(-90deg); }
 .pk-group__name  { flex: 1; font-weight: 600; color: var(--pk-primary-text); font-size: var(--pk-text-sm); }
-/* Group-name variants: plain .pk-group__name is primary-coloured (property and
-   config groups); --strong for logger packages; --mono for metric names
-   (strong-coloured, monospace, ellipsis-truncated). */
+/* Group-name variants, picked by group()'s nameModifier: plain .pk-group__name is
+   primary-coloured (property and config groups); --strong for logger packages; --mono for
+   metric names (monospace, ellipsis-truncated). */
 .pk-group__name--strong { color: var(--pk-text-strong); }
 /* Monospace only. The colour stays the primary of .pk-group__name: every group header
    is expandable, so they must all carry the same affordance. */

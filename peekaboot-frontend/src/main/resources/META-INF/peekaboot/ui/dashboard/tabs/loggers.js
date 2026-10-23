@@ -24,7 +24,8 @@ const tab = filteredGroupTab({
     header: (group, query, context) => ({
         name: group.packageName,
         count: formatCount(group.loggers.length, 'logger', {locale: context.locale}),
-        highlight: query
+        highlight: query,
+        nameModifier: 'strong'
     }),
     items: (group, list, query) => group.loggers.forEach(logger =>
         list.appendChild(renderLoggerRow(logger, query))),
@@ -34,11 +35,7 @@ const tab = filteredGroupTab({
     ], context.locale),
     emptyMessage: 'No loggers available',
     noMatchMessage: () => 'No loggers matching criteria',
-    urlFilter: {reconcile: reconcileWithUrl, write: writeUrlParams},
-    // pk-group__name defaults to the primary-coloured style; logger package names use
-    // the text-strong modifier instead (see the modifier's doc comment in components.css).
-    decorate: listEl => listEl.querySelectorAll('.pk-group__name')
-        .forEach(name => name.classList.add('pk-group__name--strong'))
+    urlFilter: {reconcile: reconcileWithUrl, write: writeUrlParams}
 });
 
 // The checkbox is this tab's own second filter control: wired once here, its state

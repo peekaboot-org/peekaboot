@@ -28,7 +28,8 @@ const tab = filteredGroupTab({
     header: (metric, query, context) => ({
         name: metric.name,
         count: formatCount(metric.measurements.length, 'measurement', {locale: context.locale}),
-        highlight: query
+        highlight: query,
+        nameModifier: 'mono'
     }),
     items: (metric, list, query, context) => {
         if (metric.description) list.appendChild(el('div', {className: 'pk-metric__description', text: metric.description}));
@@ -37,8 +38,10 @@ const tab = filteredGroupTab({
     },
     emptyMessage: 'No metrics available',
     noMatchMessage: query => `No metrics matching "${query}"`,
-    decorate: decorateGroupHeaders,
-    afterRender: updateCount
+    afterRender: (container, rendered) => {
+        updateCount(container, rendered);
+        addHeaderColumns(container.querySelector('#meters-list'), rendered.filtered);
+    }
 });
 
 export function isAvailable(data, features) {
@@ -65,21 +68,18 @@ function updateCount(container, {groups, filtered, query, context}) {
 
 /**
  * The shared group() header only knows name/count - the metric type badge and unit
- * are appended afterwards, and the name gets the --mono modifier group()'s own doc
- * comment reserves for metric names.
+ * are appended afterwards.
  *
  * The three trailing items move into a .pk-group__meta grid so they line up as columns
  * down the list. The unit cell is always emitted, empty when the metric has no base
  * unit, because a missing cell would slide the count into the unit's column.
  */
-function decorateGroupHeaders(listEl, metrics) {
+function addHeaderColumns(listEl, metrics) {
     const metricsByName = new Map(metrics.map(metric => [metric.name, metric]));
 
     listEl.querySelectorAll('.pk-group').forEach(groupEl => {
         const metric = metricsByName.get(groupEl.dataset.groupKey);
         if (!metric) return;
-
-        groupEl.querySelector('.pk-group__name').classList.add('pk-group__name--mono');
 
         const countEl = groupEl.querySelector('.pk-group__count');
         const meta = el('span', {className: 'pk-group__meta'});
