@@ -333,15 +333,11 @@ class PeekabootErrorViewTest {
     }
 
     private String render(PeekabootErrorView view, Throwable exception) {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/error");
-        req.setServletPath("/error");
-        req.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
-        req.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/boom");
-        req.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
-        MockHttpServletResponse res = new MockHttpServletResponse();
+        request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
+        MockHttpServletResponse rendered = new MockHttpServletResponse();
         try {
-            view.render(Map.of(), req, res);
-            return res.getContentAsString();
+            view.render(Map.of(), request, rendered);
+            return rendered.getContentAsString();
         } catch (IOException e) {
             throw new AssertionError(e);
         }
