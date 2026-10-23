@@ -258,6 +258,36 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 """)).isEqualTo("pk-table-scroll|pk-table pk-x|col:A,col:B|1");
     }
 
+    /** A title only when one is given: an empty title attribute would still hide an ancestor's tooltip. */
+    @Test
+    void badgeCarriesATitleOnlyWhenOneIsGiven() {
+        assertThat(evalBuilders(
+                        "return m.badge('x', 'ok', {title: 'why'}).title + '|' + m.badge('x').hasAttribute('title');"))
+                .isEqualTo("why|false");
+    }
+
+    /** The label is both the tooltip and the accessible name; the glyph is the link's only text. */
+    @Test
+    void iconLinkNamesItselfByItsLabel() {
+        assertThat(evalBuilders("""
+                const link = m.iconLink('#traces?op=a', {label: 'View traces', icon: '>', className: 'pk-x'});
+                return [link.tagName, link.className, link.getAttribute('href'), link.title,
+                    link.getAttribute('aria-label'), link.textContent].join('|');
+                """)).isEqualTo("A|pk-icon-link pk-x|#traces?op=a|View traces|View traces|>");
+    }
+
+    @Test
+    void cellTakesTextAndElementChildrenAndATitleOnlyWhenGiven() {
+        assertThat(evalBuilders("""
+                const td = m.cell({className: 'pk-x'}, 'a ', m.badge('b'));
+                return td.tagName + '|' + td.className + '|' + td.hasAttribute('title') + '|' + td.innerHTML;
+                """)).isEqualTo("TD|pk-x|false|a <span class=\"pk-badge pk-badge--muted\">b</span>");
+        assertThat(evalBuilders("const td = m.textCell('full text', 'pk-x'); return td.title + '|' + td.textContent;"))
+                .isEqualTo("full text|full text");
+        assertThat(evalBuilders("const td = m.textCell(null); return td.hasAttribute('title') + '|' + td.textContent;"))
+                .isEqualTo("false|");
+    }
+
     /** Every builder writes its text as a text node, so a caller's markup stays literal. */
     @Test
     void buildersUseTextContent() {
