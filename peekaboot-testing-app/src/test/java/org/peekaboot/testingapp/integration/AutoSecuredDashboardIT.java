@@ -25,7 +25,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.web.client.RestClient;
 
 /**
  * No unit test can see this: a real deployment launch arms Peekaboot's guard and really
@@ -158,19 +157,8 @@ class AutoSecuredDashboardIT {
             assertThat(secondCredentials.username()).isEqualTo(username);
             assertThat(secondCredentials.plaintext()).isNull();
 
-            int secondPort =
-                    ((WebServerApplicationContext) secondRun).getWebServer().getPort();
-            var response = RestClient.builder()
-                    .baseUrl("http://localhost:" + secondPort)
-                    .defaultStatusHandler(status -> true, (request, resp) -> {})
-                    .build()
-                    .get()
-                    .uri(DASHBOARD_ASSET)
-                    .headers(headers -> headers.setBasicAuth(username, password))
-                    .retrieve()
-                    .toBodilessEntity();
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(apiOf(secondRun).withBasicAuth(username, password).statusOf(DASHBOARD_ASSET))
+                    .isEqualTo(HttpStatus.OK);
         }
     }
 
@@ -180,8 +168,7 @@ class AutoSecuredDashboardIT {
         try (ConfigurableApplicationContext app =
                 boot(dir.resolve("security.properties"), "--spring.mvc.servlet.path=/app")) {
             DashboardCredentials appCredentials = app.getBean(DashboardCredentials.class);
-            PeekabootApi appApi = new PeekabootApi(
-                    ((WebServerApplicationContext) app).getWebServer().getPort());
+            PeekabootApi appApi = apiOf(app);
 
             assertThat(appApi.statusOf("/app" + INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(appApi.withBasicAuth(appCredentials.username(), appCredentials.plaintext())
@@ -199,8 +186,7 @@ class AutoSecuredDashboardIT {
         try (ConfigurableApplicationContext app = boot(
                 dir.resolve("security.properties"), "--spring.mvc.servlet.path=/app", "--peekaboot.dev-toolbar=true")) {
             DashboardCredentials appCredentials = app.getBean(DashboardCredentials.class);
-            PeekabootApi anonymous = new PeekabootApi(
-                    ((WebServerApplicationContext) app).getWebServer().getPort());
+            PeekabootApi anonymous = apiOf(app);
             PeekabootApi signedIn = anonymous.withBasicAuth(appCredentials.username(), appCredentials.plaintext());
 
             assertThat(redirectTarget(signedIn, "/app/peekaboot/")).isEqualTo("/app/peekaboot/ui/dashboard/index.html");
@@ -229,5 +215,10 @@ class AutoSecuredDashboardIT {
 
     private PeekabootApi api() {
         return new PeekabootApi(port);
+    }
+
+    private static PeekabootApi apiOf(ConfigurableApplicationContext app) {
+        return new PeekabootApi(
+                ((WebServerApplicationContext) app).getWebServer().getPort());
     }
 }
