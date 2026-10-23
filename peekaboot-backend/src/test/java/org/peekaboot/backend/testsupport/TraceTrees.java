@@ -35,7 +35,7 @@ public final class TraceTrees {
             this.rootSpan = rootSpan;
             this.summary = new TraceTabSummary(
                     null,
-                    new TraceTabSummary.SpansSummary(rootSpan == null ? 0 : 1, 0),
+                    new TraceTabSummary.SpansSummary(rootSpan == null ? 0 : 1),
                     new TraceTabSummary.QueriesSummary(0, 0L),
                     new TraceTabSummary.LogsSummary(0, 0, 0));
         }

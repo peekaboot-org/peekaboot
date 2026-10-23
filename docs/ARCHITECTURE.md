@@ -1338,7 +1338,7 @@ counted were background work. The first synchronous span of a bundle that held o
 ends the fallback to the full window, so an orphaned task's minutes give way to the request that
 dispatched it.
 
-`TraceTabSummary.SpansSummary`'s `count` and `errorCount` and the query figures deliberately
+`TraceTabSummary.SpansSummary`'s `count`, the query figures and the trace's status deliberately
 cover every span, async ones included: Errors-bucket admission reads the bundle's own error signal, which any span
 sets, so a trace whose only failure was a background task would read OK while sitting in the
 Errors bucket.

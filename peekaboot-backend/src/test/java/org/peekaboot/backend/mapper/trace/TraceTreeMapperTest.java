@@ -287,7 +287,7 @@ class TraceTreeMapperTest {
         assertThat(result.summary().spans().count()).isEqualTo(4);
         assertThat(result.summary().queries().count()).isEqualTo(2);
         assertThat(result.summary().queries().totalDurationMs()).isEqualTo(80L); // 50 + 30
-        assertThat(result.summary().spans().errorCount()).isEqualTo(0);
+        assertThat(result.status()).isEqualTo(TraceStatus.OK);
     }
 
     @Test
@@ -464,7 +464,6 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.summary().spans().errorCount()).isEqualTo(1);
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
     }
 
@@ -522,6 +521,23 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.mapSubtree(traceData, "async");
 
         assertThat(result.summary().spans().count()).isEqualTo(2);
+    }
+
+    @Test
+    void aSubtreeFailsOnItsOwnFailedSpanAndNotOnTheEnclosingTrace() {
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
+        var failedTask = asyncTask("failed").parent("root").at(40, 1_000).build();
+        var deep = span("deep")
+                .parent("failed")
+                .at(50, 900)
+                .error("boom", "java.lang.RuntimeException")
+                .build();
+        var cleanTask = asyncTask("clean").parent("root").at(40, 1_000).build();
+
+        var traceData = TraceDatas.of("trace1", root, failedTask, deep, cleanTask);
+
+        assertThat(mapper.mapSubtree(traceData, "failed").status()).isEqualTo(TraceStatus.HAS_ERRORS);
+        assertThat(mapper.mapSubtree(traceData, "clean").status()).isEqualTo(TraceStatus.OK);
     }
 
     /** An orphan has no parent in the trace, so there is no enclosing trace to link back to. */
@@ -609,7 +625,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void countsErrors() {
+    void aFailedSpanFailsTheTrace() {
         var root =
                 span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
         var errorSpan = span("error")
@@ -624,7 +640,6 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.summary().spans().errorCount()).isEqualTo(1);
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
     }
 

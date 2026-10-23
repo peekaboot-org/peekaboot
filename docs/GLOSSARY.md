@@ -194,7 +194,7 @@ which is the span name, not this field.
 ### Trace Tab Summary
 `TraceTabSummary` carries the counts the toolbar badges and the Traces tab rows show, one
 sub-record per tab of the trace-detail overlay: `RequestSummary(method, path, statusCode)`,
-`SpansSummary(count, errorCount)`, `QueriesSummary(count, totalDurationMs)` and
+`SpansSummary(count)`, `QueriesSummary(count, totalDurationMs)` and
 `LogsSummary(count, errorCount, warnCount)`.
 
 ### Bucket Counts

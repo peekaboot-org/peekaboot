@@ -84,7 +84,7 @@ public class TraceTreeMapper {
                 traceData.traceId(),
                 startTimeMs,
                 durationMs,
-                statusOf(summary),
+                statusOf(spans.stream().anyMatch(SpanData::hasError)),
                 rootActionType,
                 rootOperation,
                 rootSpan,
@@ -121,7 +121,8 @@ public class TraceTreeMapper {
         boolean parentIsAsync = parentId != null && asyncSpanIds.contains(parentId);
         SpanNode subtreeRoot =
                 buildSpanTree(subtreeRootData, childrenByParentId, queriesOf(traceData), asyncSpanIds, parentIsAsync);
-        TraceTabSummary summary = subtreeSummary(subtreeRoot);
+        SubtreeTotals totals = new SubtreeTotals();
+        accumulateSubtree(subtreeRoot, totals);
         return new TraceTree(
                 traceData.traceId(),
                 subtreeRoot.startTimeMs(),
@@ -129,11 +130,11 @@ public class TraceTreeMapper {
                 // the subtree's own errors, not the enclosing trace's: background work that succeeded
                 // must not wear the ERROR badge of the request that dispatched it, which would also
                 // pre-empt the row's own SLOW verdict
-                statusOf(summary),
+                statusOf(totals.anyFailed),
                 RootActionTypes.of(subtreeRootData),
                 subtreeRoot.name(),
                 subtreeRoot,
-                summary,
+                subtreeSummary(totals),
                 new SubtreeView(subtreeRootSpanId, enclosed),
                 traceData.truncated());
     }
@@ -145,21 +146,19 @@ public class TraceTreeMapper {
                 .collect(Collectors.groupingBy(SpanData::parentId, Collectors.toCollection(ArrayList::new)));
     }
 
-    private static TraceStatus statusOf(TraceTabSummary summary) {
-        return summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
+    private static TraceStatus statusOf(boolean anySpanFailed) {
+        return anySpanFailed ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
     }
 
     /**
-     * The subtree's own span, error and query figures - not the enclosing trace's, so a row
+     * The subtree's own span and query figures - not the enclosing trace's, so a row
      * rooted at an async entry reports what that entry point's own work did. No request part:
      * a subtree is not a request.
      */
-    private static TraceTabSummary subtreeSummary(SpanNode subtreeRoot) {
-        SubtreeTotals totals = new SubtreeTotals();
-        accumulateSubtree(subtreeRoot, totals);
+    private static TraceTabSummary subtreeSummary(SubtreeTotals totals) {
         return new TraceTabSummary(
                 null,
-                new TraceTabSummary.SpansSummary(totals.spanCount, totals.errorCount),
+                new TraceTabSummary.SpansSummary(totals.spanCount),
                 new TraceTabSummary.QueriesSummary(totals.queryCount, totals.queryDurationMs),
                 LOGS_COUNTED_LATER);
     }
@@ -167,7 +166,7 @@ public class TraceTreeMapper {
     private static void accumulateSubtree(SpanNode node, SubtreeTotals totals) {
         totals.spanCount++;
         if (node.status() == SpanStatus.ERROR) {
-            totals.errorCount++;
+            totals.anyFailed = true;
         }
         if (DbSpans.isQuery(node)) {
             totals.queryCount++;
@@ -181,7 +180,7 @@ public class TraceTreeMapper {
     /** Mutable running totals for {@link #accumulateSubtree}, folded into a {@link TraceTabSummary} once complete. */
     private static final class SubtreeTotals {
         int spanCount;
-        int errorCount;
+        boolean anyFailed;
         int queryCount;
         long queryDurationMs;
     }
@@ -310,12 +309,8 @@ public class TraceTreeMapper {
     private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
         int dbQueryCount = 0;
         long dbTotalDurationMs = 0L;
-        int errorCount = 0;
 
         for (SpanData span : spans) {
-            if (span.hasError()) {
-                errorCount++;
-            }
             if (DbSpans.isQuery(span)) {
                 dbQueryCount++;
                 dbTotalDurationMs += span.durationMs();
@@ -324,7 +319,7 @@ public class TraceTreeMapper {
 
         return new TraceTabSummary(
                 extractRequestSummary(rootSpanData),
-                new TraceTabSummary.SpansSummary(spans.size(), errorCount),
+                new TraceTabSummary.SpansSummary(spans.size()),
                 new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
                 LOGS_COUNTED_LATER);
     }
