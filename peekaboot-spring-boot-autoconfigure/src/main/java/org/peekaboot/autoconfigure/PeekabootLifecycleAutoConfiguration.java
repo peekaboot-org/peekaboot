@@ -56,7 +56,10 @@ public class PeekabootLifecycleAutoConfiguration {
         return new EnvironmentInfo(environment);
     }
 
-    /** Without build-info.properties the provider reports no build info and the banners leave those lines out. */
+    /**
+     * Without build-info.properties the banners print placeholders: the application name as
+     * "unknown" and "Build information not available" in place of the coordinates.
+     */
     @Bean
     @ConditionalOnMissingBean
     public BuildInfoProvider buildInfoProvider(ObjectProvider<BuildProperties> buildProperties) {
