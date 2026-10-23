@@ -4,10 +4,10 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.jspecify.annotations.Nullable;
@@ -40,12 +40,11 @@ public class MetricsService {
             return MetricsInfo.empty();
         }
 
-        Map<String, List<Meter>> metersByName = meterRegistry.getMeters().stream()
-                .collect(Collectors.groupingBy(
-                        meter -> meter.getId().getName(), LinkedHashMap::new, Collectors.toList()));
+        List<Meter> allMeters = meterRegistry.getMeters();
+        Map<String, List<Meter>> metersByName = allMeters.stream()
+                .collect(Collectors.groupingBy(meter -> meter.getId().getName(), TreeMap::new, Collectors.toList()));
 
         List<MetricGroup> groups = new ArrayList<>();
-        int totalMeasurements = 0;
 
         for (Map.Entry<String, List<Meter>> entry : metersByName.entrySet()) {
             String name = entry.getKey();
@@ -69,14 +68,11 @@ public class MetricsService {
                         .toList();
 
                 measurements.add(new MetricMeasurement(tags, statistics));
-                totalMeasurements++;
             }
 
             groups.add(new MetricGroup(name, description, baseUnit, type, measurements));
         }
 
-        groups.sort(Comparator.comparing(MetricGroup::name));
-
-        return new MetricsInfo(groups.size(), totalMeasurements, groups);
+        return new MetricsInfo(groups.size(), allMeters.size(), groups);
     }
 }
