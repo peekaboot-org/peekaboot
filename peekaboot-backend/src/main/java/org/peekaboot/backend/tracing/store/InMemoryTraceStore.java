@@ -3,9 +3,11 @@ package org.peekaboot.backend.tracing.store;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -22,18 +24,16 @@ public class InMemoryTraceStore implements TraceStore {
     private final int maxSpansPerTrace;
     private final long slowTraceThresholdMs;
     private final int maxLogsPerTrace;
-    private final Map<String, ListedTrace> allTraces;
-    private final Map<String, ListedTrace> errorTraces;
-    private final Map<String, ListedTrace> slowTraces;
+    private final Map<TraceBucket, Map<String, ListedTrace>> buckets = new EnumMap<>(TraceBucket.class);
     private final AtomicLong newestSpanOrder = new AtomicLong();
 
     public InMemoryTraceStore(PeekabootTracingProperties properties) {
         this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
         this.slowTraceThresholdMs = properties.getSlowTraceThresholdMs();
         this.maxLogsPerTrace = properties.getMaxLogsPerTrace();
-        this.allTraces = boundedMap(properties.getMaxTraces());
-        this.errorTraces = boundedMap(properties.getMaxErrorTraces());
-        this.slowTraces = boundedMap(properties.getMaxSlowTraces());
+        buckets.put(TraceBucket.ALL, boundedMap(properties.getMaxTraces()));
+        buckets.put(TraceBucket.ERRORS, boundedMap(properties.getMaxErrorTraces()));
+        buckets.put(TraceBucket.SLOW, boundedMap(properties.getMaxSlowTraces()));
     }
 
     private static Map<String, ListedTrace> boundedMap(int maxEntries) {
@@ -57,10 +57,10 @@ public class InMemoryTraceStore implements TraceStore {
     public void addLog(LogCapturedEvent log) {
         TraceDataBundle bundle = resolveBundle(log.traceId());
         bundle.addLog(log, maxLogsPerTrace);
-        // logs never affect slow classification and can only ever add a trace to
-        // errorTraces, never remove it — so a full classify() pass is unnecessary here.
+        // logs never affect slow classification and can only ever add a trace to the
+        // Errors bucket, never remove it, so a full classify() pass is unnecessary here.
         if (log.isError()) {
-            listIn(errorTraces, bundle);
+            listIn(TraceBucket.ERRORS, bundle);
         }
     }
 
@@ -73,9 +73,7 @@ public class InMemoryTraceStore implements TraceStore {
 
     @Override
     public void discard(String traceId) {
-        allTraces.remove(traceId);
-        errorTraces.remove(traceId);
-        slowTraces.remove(traceId);
+        buckets.values().forEach(bucket -> bucket.remove(traceId));
     }
 
     /**
@@ -84,20 +82,17 @@ public class InMemoryTraceStore implements TraceStore {
      * events. Such a bucket-retained trace re-enters All, at the newest end, on that event.
      */
     private TraceDataBundle resolveBundle(String traceId) {
-        return allTraces
-                .computeIfAbsent(traceId, id -> {
-                    ListedTrace retained = errorTraces.get(id);
-                    if (retained == null) {
-                        retained = slowTraces.get(id);
-                    }
-                    return listedNow(retained != null ? retained.bundle() : new TraceDataBundle(id));
-                })
+        return buckets.get(TraceBucket.ALL)
+                .computeIfAbsent(
+                        traceId,
+                        id -> listedNow(
+                                listedAnywhere(id).map(ListedTrace::bundle).orElseGet(() -> new TraceDataBundle(id))))
                 .bundle();
     }
 
     /** Stamped inside the bucket's lock, so a bucket's insertion order and its stamps agree. */
-    private void listIn(Map<String, ListedTrace> bucket, TraceDataBundle bundle) {
-        bucket.computeIfAbsent(bundle.traceId(), id -> listedNow(bundle));
+    private void listIn(TraceBucket bucket, TraceDataBundle bundle) {
+        buckets.get(bucket).computeIfAbsent(bundle.traceId(), id -> listedNow(bundle));
     }
 
     private ListedTrace listedNow(TraceDataBundle bundle) {
@@ -106,32 +101,25 @@ public class InMemoryTraceStore implements TraceStore {
 
     @Override
     public Optional<TraceDataBundle> getTrace(String traceId) {
-        ListedTrace listed = allTraces.get(traceId);
-        if (listed == null) {
-            listed = errorTraces.get(traceId);
-        }
-        if (listed == null) {
-            listed = slowTraces.get(traceId);
-        }
-        return Optional.ofNullable(listed).map(ListedTrace::bundle);
+        return listedAnywhere(traceId).map(ListedTrace::bundle);
+    }
+
+    /** The first bucket listing the trace, in {@link TraceBucket} order: All, then Errors, then Slow. */
+    private Optional<ListedTrace> listedAnywhere(String traceId) {
+        return buckets.values().stream()
+                .map(bucket -> bucket.get(traceId))
+                .filter(Objects::nonNull)
+                .findFirst();
     }
 
     @Override
     public List<ListedTrace> getTraces(TraceBucket bucket, int limit) {
-        return switch (bucket) {
-            case ALL -> newestFirst(allTraces, limit);
-            case ERRORS -> newestFirst(errorTraces, limit);
-            case SLOW -> newestFirst(slowTraces, limit);
-        };
+        return newestFirst(buckets.get(bucket), limit);
     }
 
     @Override
     public int getTraceCount(TraceBucket bucket) {
-        return switch (bucket) {
-            case ALL -> allTraces.size();
-            case ERRORS -> errorTraces.size();
-            case SLOW -> slowTraces.size();
-        };
+        return buckets.get(bucket).size();
     }
 
     private List<ListedTrace> newestFirst(Map<String, ListedTrace> bucket, int limit) {
@@ -154,12 +142,12 @@ public class InMemoryTraceStore implements TraceStore {
      */
     private void classify(TraceDataBundle bundle) {
         if (bundle.hasError()) {
-            listIn(errorTraces, bundle);
+            listIn(TraceBucket.ERRORS, bundle);
         }
         if (isSlow(bundle)) {
-            listIn(slowTraces, bundle);
+            listIn(TraceBucket.SLOW, bundle);
         } else {
-            slowTraces.remove(bundle.traceId());
+            buckets.get(TraceBucket.SLOW).remove(bundle.traceId());
         }
     }
 
@@ -170,8 +158,6 @@ public class InMemoryTraceStore implements TraceStore {
 
     @Override
     public void clear() {
-        allTraces.clear();
-        errorTraces.clear();
-        slowTraces.clear();
+        buckets.values().forEach(Map::clear);
     }
 }
