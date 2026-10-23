@@ -111,7 +111,10 @@ is `LifecycleEvent.stop`.
 `Credentials.generated(password)`, and `loaded`, `configured` and `unpersisted` beside it,
 build the guard's `DashboardCredentials` in each origin, for one user at one fixed instant.
 `InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings
-rather than the events; the collector's only package-private constructor argument is its clock.
+rather than the events. `InsightsCollectorBuilder.collector(registry)` builds the collector with
+those defaults; it sits in the `insights` test package because the clock is the collector's only
+package-private constructor argument. `Latches.awaitQuietly(latch)` waits inside code that cannot
+throw, such as a gauge a test parks in.
 `FailingWriteResponse` is the `MockHttpServletResponse` whose writes fail the way a container's
 do (first write, or every write), and `PosixPermissions` reads a path's mode for the tests that
 pin owner-only storage. `Requests.get(path)`/`request(method, path)` build the servlet request a

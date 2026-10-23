@@ -1,19 +1,17 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.insights.InsightsCollectorBuilder.collector;
 import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
-import org.peekaboot.backend.testsupport.InsightsCollectors;
 
 class InsightsCollectorLifecycleTest {
 
@@ -34,16 +32,13 @@ class InsightsCollectorLifecycleTest {
                 rollups.countDown();
             }
         };
-        InsightsCollector collector = new InsightsCollector(
-                List.of(
+        InsightsCollector collector = collector(registry)
+                .levels(
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
-                        InsightsProperties.Level.of(Duration.ofMillis(500), 10)),
-                List.of(value("g", "g")),
-                Set.of(),
-                List.of(),
-                registry,
-                listener,
-                InsightsCollectors.noSnapshot());
+                        InsightsProperties.Level.of(Duration.ofMillis(500), 10))
+                .series(value("g", "g"))
+                .listener(listener)
+                .build();
         collector.start();
         try {
             assertThat(ticks.await(3, TimeUnit.SECONDS)).as("ticks arrived").isTrue();

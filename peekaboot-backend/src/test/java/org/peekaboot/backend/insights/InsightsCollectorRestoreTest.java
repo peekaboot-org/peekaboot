@@ -16,7 +16,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
@@ -33,16 +32,12 @@ class InsightsCollectorRestoreTest {
         Gauge.builder("g", () -> 7).register(registry);
         List<SeriesDef> series =
                 List.of(seriesIds).stream().map(id -> value(id, "g")).toList();
-        return new InsightsCollector(
-                List.of(
+        return InsightsCollectorBuilder.collector(registry)
+                .levels(
                         InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
-                        InsightsProperties.Level.of(Duration.ofMinutes(1), 60)),
-                series,
-                Set.of(),
-                List.of(),
-                registry,
-                InsightsCollectors.noOpListener(),
-                InsightsCollectors.noSnapshot());
+                        InsightsProperties.Level.of(Duration.ofMinutes(1), 60))
+                .series(series)
+                .build();
     }
 
     @Test
@@ -158,15 +153,12 @@ class InsightsCollectorRestoreTest {
             long gaugeValue, InsightsCollector.SnapshotSource source, LongSupplier clock) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> gaugeValue).register(registry);
-        return new InsightsCollector(
-                List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 20)),
-                List.of(value("cpu.process", "g")),
-                Set.of(),
-                List.of(),
-                registry,
-                InsightsCollectors.noOpListener(),
-                source,
-                clock);
+        return InsightsCollectorBuilder.collector(registry)
+                .levels(InsightsProperties.Level.of(Duration.ofMillis(100), 20))
+                .series(value("cpu.process", "g"))
+                .source(source)
+                .clock(clock)
+                .build();
     }
 
     @Test
@@ -218,19 +210,16 @@ class InsightsCollectorRestoreTest {
         AtomicInteger asked = new AtomicInteger();
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> 1).register(registry);
-        InsightsCollector collector = new InsightsCollector(
-                List.of(
+        InsightsCollector collector = InsightsCollectorBuilder.collector(registry)
+                .levels(
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
-                        InsightsProperties.Level.of(Duration.ofMillis(500), 20)),
-                List.of(value("cpu.process", "g")),
-                Set.of(),
-                List.of(),
-                registry,
-                InsightsCollectors.noOpListener(),
-                timeout -> {
+                        InsightsProperties.Level.of(Duration.ofMillis(500), 20))
+                .series(value("cpu.process", "g"))
+                .source(timeout -> {
                     asked.incrementAndGet();
                     return Optional.empty();
-                });
+                })
+                .build();
         collector.start();
         try {
             // both level threads have been through the barrier once each has written

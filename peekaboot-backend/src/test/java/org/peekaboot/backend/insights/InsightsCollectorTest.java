@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.insights.InsightsCollectorBuilder.collector;
 import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
@@ -14,7 +15,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -60,14 +60,12 @@ class InsightsCollectorTest {
                 events.add("rollup:" + level + ":" + entries.get("g").avg());
             }
         };
-        collector = new InsightsCollector(
-                levels,
-                List.of(series),
-                Set.of(),
-                List.of(staticTile, liveTile),
-                registry,
-                listener,
-                InsightsCollectors.noSnapshot());
+        collector = collector(registry)
+                .levels(levels)
+                .series(series)
+                .tiles(staticTile, liveTile)
+                .listener(listener)
+                .build();
     }
 
     @Test
@@ -414,8 +412,11 @@ class InsightsCollectorTest {
             Gauge.builder("series." + i, tickNumber::get).register(registry);
             series.add(value("s" + i, "series." + i));
         }
-        return new InsightsCollector(
-                levels, series, Set.of(), List.of(), registry, listener, InsightsCollectors.noSnapshot());
+        return collector(registry)
+                .levels(levels)
+                .series(series)
+                .listener(listener)
+                .build();
     }
 
     /** Ticks {@code racing} on its own thread, tick {@code n} dated {@code n * 10_000}. */
@@ -466,14 +467,10 @@ class InsightsCollectorTest {
                     return 2;
                 })
                 .register(registry);
-        InsightsCollector collector = new InsightsCollector(
-                levels,
-                List.of(value("first", "first"), value("second", "second")),
-                Set.of(),
-                List.of(),
-                registry,
-                InsightsCollectors.noOpListener(),
-                InsightsCollectors.noSnapshot());
+        InsightsCollector collector = collector(registry)
+                .levels(levels)
+                .series(value("first", "first"), value("second", "second"))
+                .build();
         collector.tick(10_000);
         first.set(5);
         parkSecond.set(true);
@@ -500,13 +497,6 @@ class InsightsCollectorTest {
     /** One rate series over {@code test.counter}, on the same registry and levels as the fixture collector. */
     private InsightsCollector rateCollector() {
         SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), Stat.RATE, null, null);
-        return new InsightsCollector(
-                levels,
-                List.of(rate),
-                Set.of(),
-                List.of(),
-                registry,
-                InsightsCollectors.noOpListener(),
-                InsightsCollectors.noSnapshot());
+        return collector(registry).levels(levels).series(rate).build();
     }
 }
