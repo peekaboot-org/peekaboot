@@ -9,6 +9,9 @@ import java.util.Map;
  */
 record BuildFacts(String version, String branch, String commitId, String shortCommitId, Long buildTimeEpochMs) {
 
+    /** No build reported at all: what the first start is compared against. */
+    static final BuildFacts NONE = new BuildFacts(null, null, null, null, null);
+
     private static final int SHORT_COMMIT_LENGTH = 7;
 
     static BuildFacts of(LifecycleEvent event) {

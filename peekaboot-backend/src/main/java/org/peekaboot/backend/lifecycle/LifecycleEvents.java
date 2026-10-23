@@ -16,7 +16,7 @@ public class LifecycleEvents {
 
     public LifecycleEventsResponse events() {
         List<LifecycleEventsResponse.Event> served = new ArrayList<>();
-        BuildFacts previous = null;
+        BuildFacts previous = BuildFacts.NONE;
         LifecycleEvent.Type previousType = null;
         for (LifecycleEvent event : eventLog.events()) {
             if (event.type() == LifecycleEvent.Type.STOP) {
@@ -35,15 +35,15 @@ public class LifecycleEvents {
     /** A marker says only what is new: a field equal to the previous start's is left null. */
     private static LifecycleEventsResponse.Event changedSince(
             BuildFacts current, BuildFacts previous, long epochMs, boolean uncleanPrevious) {
-        String commit = changed(current.commitId(), previous == null ? null : previous.commitId());
+        String commit = changed(current.commitId(), previous.commitId());
         return new LifecycleEventsResponse.Event(
                 "start",
                 epochMs,
-                changed(current.version(), previous == null ? null : previous.version()),
-                changed(current.branch(), previous == null ? null : previous.branch()),
+                changed(current.version(), previous.version()),
+                changed(current.branch(), previous.branch()),
                 commit,
                 commit == null ? null : current.shortCommitId(),
-                changed(current.buildTimeEpochMs(), previous == null ? null : previous.buildTimeEpochMs()),
+                changed(current.buildTimeEpochMs(), previous.buildTimeEpochMs()),
                 uncleanPrevious);
     }
 
