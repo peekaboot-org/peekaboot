@@ -1,12 +1,8 @@
 spring:
-  cache:
-    # No Redis server under this profile; RedisTraceIT brings a container and switches the cache on.
-    type: none
   config:
-    import: classpath:servlet-security-exclusions.yml
-  # No url: Boot's generate-unique-name default gives every Spring context its own
-  # jdbc:h2:mem:<uuid>, so the dozen contexts this suite caches never drop and re-create
-  # each other's schema mid-test (H2 keys in-memory databases by name per JVM).
+    import:
+      - classpath:h2-test-infrastructure.yml
+      - classpath:servlet-security-exclusions.yml
   datasource:
     # Unused by the in-memory H2 connection itself - bound purely so the Config/Environment
     # tabs have a real, secret-looking property to prove the masking engine against
@@ -17,22 +13,12 @@ spring:
     init:
       # OrderStatisticsRepository calls pg_sleep, which H2 lacks; the default mode runs this on embedded databases only.
       schema-locations: classpath:h2-functions.sql
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    open-in-view: false
-  flyway:
-    enabled: false
-  docker:
-    compose:
-      enabled: false
   task:
     scheduling:
       pool:
         size: 1
 
 peekaboot:
-  enabled: true
   dev-toolbar: true
   # application.yml turns this on for the demo; the masking tests need it off.
   enable-unmasking: false
@@ -60,10 +46,6 @@ nested-fixture:
       client-secret: fixture-client-secret
 
 management:
-  health:
-    redis:
-      # The Redis client is on the classpath without a server, which would read as health DOWN.
-      enabled: false
   endpoint:
     health:
       show-details: always
@@ -87,7 +69,3 @@ app:
   # Blank: no profile service under this profile, so person pages make no outbound call.
   profile-service:
     url: ""
-  datasource:
-    inventory:
-      # MODE=MySQL because the inventory runs on MySQL everywhere else; the uuid keeps it per context.
-      url: jdbc:h2:mem:inventory-${random.uuid};MODE=MySQL;DB_CLOSE_DELAY=-1

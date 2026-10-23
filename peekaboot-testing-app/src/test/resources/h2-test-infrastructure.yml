@@ -1,0 +1,34 @@
+# What every H2 test profile runs on: in-memory databases, no containers, no Redis. The test,
+# security and auto-security profiles import it with spring.config.import. An imported file
+# outranks the one importing it, so a key set here is not set again there.
+spring:
+  cache:
+    # No Redis server under these profiles; RedisTraceIT brings a container and switches the cache on.
+    type: none
+  # No datasource url: Boot's generate-unique-name default gives every Spring context its own
+  # jdbc:h2:mem:<uuid>, so the dozen contexts this suite caches never drop and re-create
+  # each other's schema mid-test (H2 keys in-memory databases by name per JVM).
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  flyway:
+    enabled: false
+  docker:
+    compose:
+      enabled: false
+
+peekaboot:
+  enabled: true
+
+management:
+  health:
+    redis:
+      # The Redis client is on the classpath without a server, which would read as health DOWN.
+      enabled: false
+
+app:
+  datasource:
+    inventory:
+      # MODE=MySQL because the inventory runs on MySQL everywhere else; the uuid keeps it per context.
+      url: jdbc:h2:mem:inventory-${random.uuid};MODE=MySQL;DB_CLOSE_DELAY=-1

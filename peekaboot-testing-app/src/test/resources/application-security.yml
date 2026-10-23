@@ -1,32 +1,17 @@
 # The only profile in this module that runs with Spring Security auto-configured, used by
 # SecuredPeekabootIT and SecuredDashboardIT. It deliberately does not build
 # on application-test.yml: that file excludes the servlet security auto-configuration for
-# every other test here (see pom.xml), which is precisely what these two need switched on.
-# Kept to what a secured run actually needs - no masking fixtures, no insights tuning.
+# every other test here (servlet-security-exclusions.yml), which is precisely what these two
+# need switched on. Kept to what a secured run actually needs - no masking fixtures, no
+# insights tuning - so it imports the H2 infrastructure alone.
 spring:
-  cache:
-    # No Redis server under this profile; RedisTraceIT brings a container and switches the cache on.
-    type: none
-  # No datasource url, as in application-test.yml: each context gets its own in-memory H2.
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    open-in-view: false
-  flyway:
-    enabled: false
-  docker:
-    compose:
-      enabled: false
+  config:
+    import: classpath:h2-test-infrastructure.yml
 
 peekaboot:
-  enabled: true
   dev-toolbar: true
 
 management:
-  health:
-    redis:
-      # The Redis client is on the classpath without a server, which would read as health DOWN.
-      enabled: false
   tracing:
     sampling:
       probability: 1.0
@@ -36,9 +21,3 @@ management:
         # As in application-test.yml: SecuredDashboardIT reads the toolbar right after
         # page load, well inside the OTel SDK's 5s default batch delay.
         schedule-delay: 50ms
-
-app:
-  datasource:
-    inventory:
-      # MODE=MySQL because the inventory runs on MySQL everywhere else; the uuid keeps it per context.
-      url: jdbc:h2:mem:inventory-${random.uuid};MODE=MySQL;DB_CLOSE_DELAY=-1

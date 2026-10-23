@@ -393,12 +393,12 @@ methods, which every concurrently running class sees. That is inert there becaus
 context has an endpoint that throws, and the only real remedy, `@Isolated`, stops the whole suite
 for the class.
 
-The database needs no such discipline. `application-test.yml` and `application-security.yml` set
-no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its own
+The database needs no such discipline. `h2-test-infrastructure.yml`, which the `test`, `security`
+and `auto-security` profiles import, sets no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its own
 `jdbc:h2:mem:<uuid>`. H2 keys in-memory databases by name per JVM, so a shared fixed name would
 let each lazily booted context's `ddl-auto: create-drop` wipe the tables under whichever test is
 mid-flight. Two URLs name a database because they need a compatibility mode: `FlywayTabIT`'s
-(`MODE=PostgreSQL`) and the inventory DataSource's in every H2 profile (`MODE=MySQL`), whose
+(`MODE=PostgreSQL`) and the inventory DataSource's in that shared file (`MODE=MySQL`), whose
 `inventory-${random.uuid}` name keeps it per context all the same.
 The `TraceStore` is the only state the shared context's classes contend for.
 
@@ -414,8 +414,8 @@ security auto-configuration (`UserDetailsServiceAutoConfiguration`,
 `ServletWebSecurityAutoConfiguration`, `ManagementWebSecurityAutoConfiguration`), and the `test`,
 `auto-security` and `screenshots` profiles each import it with `spring.config.import`, since
 `AutoSecuredDashboardIT` and `ScreenshotCapture` never load `application-test.yml`. The security
-tests run under their own `security` profile, which imports nothing, so neither has to undo a
-module-wide setting.
+tests run under their own `security` profile, which imports the H2 infrastructure and no
+exclusion, so neither has to undo a module-wide setting.
 
 One gotcha: an inlined `spring.autoconfigure.exclude=...` property *replaces* the profile's
 value for that key rather than merging with it, so a context setting its own exclusion list
