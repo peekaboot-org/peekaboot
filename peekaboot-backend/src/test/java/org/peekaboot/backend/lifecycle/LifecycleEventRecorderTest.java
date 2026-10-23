@@ -133,7 +133,7 @@ class LifecycleEventRecorderTest {
         ApplicationContext context = mock(ApplicationContext.class);
         LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
 
-        recorder.onClosed(closing(context));
+        recorder.onClosed(new ContextClosedEvent(context));
 
         assertThat(log.events()).extracting(LifecycleEvent::type).containsExactly(LifecycleEvent.Type.STOP);
     }
@@ -149,14 +149,8 @@ class LifecycleEventRecorderTest {
         LifecycleEventRecorder recorder =
                 new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, mock(ApplicationContext.class));
 
-        recorder.onClosed(closing(mock(ApplicationContext.class)));
+        recorder.onClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
 
         assertThat(log.events()).isEmpty();
-    }
-
-    private static ContextClosedEvent closing(ApplicationContext context) {
-        ContextClosedEvent event = mock(ContextClosedEvent.class);
-        when(event.getApplicationContext()).thenReturn(context);
-        return event;
     }
 }

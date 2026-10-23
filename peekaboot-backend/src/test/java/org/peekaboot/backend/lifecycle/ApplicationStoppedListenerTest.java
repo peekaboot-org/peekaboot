@@ -23,17 +23,11 @@ class ApplicationStoppedListenerTest {
         return context;
     }
 
-    private static ContextClosedEvent closing(ApplicationContext context) {
-        ContextClosedEvent event = mock(ContextClosedEvent.class);
-        when(event.getApplicationContext()).thenReturn(context);
-        return event;
-    }
-
     private static String banner(Duration uptime, BuildInfoProvider buildInfo) {
         ApplicationContext context = contextUpFor(uptime);
         ApplicationStoppedListener listener = new ApplicationStoppedListener(buildInfo, context, STOP);
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
-            listener.onApplicationEvent(closing(context));
+            listener.onApplicationEvent(new ContextClosedEvent(context));
 
             assertThat(capture.appender().list).hasSize(1);
             return capture.appender().list.get(0).getFormattedMessage();
@@ -50,7 +44,7 @@ class ApplicationStoppedListenerTest {
         ApplicationStoppedListener listener =
                 new ApplicationStoppedListener(new BuildInfoProvider(null), contextUpFor(Duration.ofMinutes(5)), STOP);
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
-            listener.onApplicationEvent(closing(contextUpFor(Duration.ofMinutes(4))));
+            listener.onApplicationEvent(new ContextClosedEvent(contextUpFor(Duration.ofMinutes(4))));
 
             assertThat(capture.appender().list).isEmpty();
         }
