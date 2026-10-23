@@ -120,9 +120,7 @@ class ApplicationReadyListenerTest {
         String report = banner().metadata(metadata).render(ReadyEvents.webApplication(8083));
 
         assertThat(report)
-                .contains(" DB Connection Params: ")
-                .contains("ssl=true")
-                .contains("password=******")
+                .containsPattern(" DB Connection Params: (ssl=true, password=\\*{6}|password=\\*{6}, ssl=true)\n")
                 .doesNotContain("s3cret");
     }
 

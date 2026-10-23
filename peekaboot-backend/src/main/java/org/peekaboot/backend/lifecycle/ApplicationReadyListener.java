@@ -6,6 +6,7 @@ import java.lang.management.MemoryUsage;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
@@ -122,8 +123,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         if (!processInfo.parentProcesses().isEmpty()) {
             String tree = processInfo.parentProcesses().stream()
                     .map(p -> p.command().isEmpty() ? String.valueOf(p.pid()) : p.command() + "(" + p.pid() + ")")
-                    .reduce((a, b) -> a + " -> " + b)
-                    .orElse("");
+                    .collect(Collectors.joining(" -> "));
             LifecycleBanner.text(report, " Process Tree: " + tree);
         }
         LifecycleBanner.rule(report);
@@ -169,8 +169,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             if (!metadata.connectionParams().isEmpty()) {
                 String params = connectionParamsMasker.mask(metadata.connectionParams()).entrySet().stream()
                         .map(e -> e.getKey() + "=" + e.getValue())
-                        .reduce((a, b) -> a + ", " + b)
-                        .orElse("");
+                        .collect(Collectors.joining(", "));
                 LifecycleBanner.line(report, " DB Connection Params: " + params);
             }
 
