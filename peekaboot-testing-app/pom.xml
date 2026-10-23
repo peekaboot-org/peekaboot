@@ -50,9 +50,9 @@
         <!-- A property, not an inline version: the CI workflows key their browser cache on it. -->
         <playwright.version>1.63.0</playwright.version>
         <!-- Not a published artifact: it exists to host the sample app and its UI tests.
-             This module does not inherit peekaboot-parent, so the peekaboot-release
-             profile - and with it central-publishing-maven-plugin - never applies here:
-             a release build runs the plain maven-deploy-plugin for this module, and
+             This module does not inherit peekaboot-parent, so the peekaboot-publish
+             profile, and with it central-publishing-maven-plugin, never applies here.
+             A publishing build runs the plain maven-deploy-plugin for this module, and
              this property is that plugin's skip switch. -->
         <maven.deploy.skip>true</maven.deploy.skip>
     </properties>

@@ -16,7 +16,7 @@
 
     <properties>
         <!-- Not a published artifact: it exists to hold the reactor-wide coverage gate.
-             central-publishing-maven-plugin (peekaboot-release profile) replaces the
+             central-publishing-maven-plugin (peekaboot-publish profile) replaces the
              deploy plugin and ignores maven.deploy.skip; skipPublishing is its per-module
              switch. It keeps this module's pom out of the bundle while the plugin still
              uploads the bundle from here, the last module of the reactor. -->
