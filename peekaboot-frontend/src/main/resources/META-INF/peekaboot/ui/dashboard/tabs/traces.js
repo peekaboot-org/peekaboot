@@ -11,7 +11,7 @@
  */
 import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
-import {formatDurationMs, formatDateTime, formatNumber} from '../../shared/format.js';
+import {formatDurationMs, formatDateTime, formatNumber, shortTarget} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {slowBadge, traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
@@ -325,7 +325,7 @@ function updateFilterIndicator(container) {
             filterParts.push(`Type: ${activeFilters}`);
         }
         if (currentRootOperationFilter !== null) {
-            filterParts.push(`Target: ${currentRootOperationFilter.split('.').pop()}`);
+            filterParts.push(`Target: ${shortTarget(currentRootOperationFilter)}`);
         }
         if (!maintenanceExcluded) {
             filterParts.push(`${rootActionLabel(EXCLUDABLE_TYPE)} included`);

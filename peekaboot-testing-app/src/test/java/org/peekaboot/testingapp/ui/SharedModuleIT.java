@@ -182,6 +182,15 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("format.js", "m.formatDurationMs(null)")).isEqualTo("-");
     }
 
+    /** Class and method, never the method alone: the same method name recurs across classes. */
+    @Test
+    void shortTargetKeepsTheLastTwoSegments() {
+        assertThat(evalModule("format.js", "m.shortTarget('org.example.TaskService.processItems')"))
+                .isEqualTo("TaskService.processItems");
+        assertThat(evalModule("format.js", "m.shortTarget('Task.run')")).isEqualTo("Task.run");
+        assertThat(evalModule("format.js", "m.shortTarget('run')")).isEqualTo("run");
+    }
+
     @Test
     void formatDurationRejectsNegativeValues() {
         assertThat(evalModule("format.js", "m.formatDurationMs(-5)")).isEqualTo("-");

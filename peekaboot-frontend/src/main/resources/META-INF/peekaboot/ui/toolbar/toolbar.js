@@ -26,6 +26,7 @@ import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
 import {bindTheme} from '../shared/theme.js';
 import {readLocaleSetting} from '../shared/storage.js';
+import {shortTarget} from '../shared/format.js';
 import {registerBundledFonts} from '../shared/fonts.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
 import {traceStatParts, durationStat} from '../shared/trace-stats.js';
@@ -106,8 +107,7 @@ function initToolbar(host, data) {
     function renderTrace(trace) {
         const controller = trace.httpExchange?.request?.controller || {};
         if (controller.class && controller.method) {
-            const className = controller.class.split('.').pop();
-            shadow.getElementById('pk-controller').textContent = '→ ' + className + '.' + controller.method;
+            shadow.getElementById('pk-controller').textContent = '→ ' + shortTarget(`${controller.class}.${controller.method}`);
         }
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});

@@ -81,7 +81,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
      * scheduler's own SCHEDULED_JOB traces (rootActionType + rootOperation): a plain
      * "#traces?type=...&op=..." href the hash router lands on, restored by traces.js's own
      * URL reconciliation. Proves the link actually arrives filtered, not just that it
-     * switches tabs.
+     * switches tabs, and that the banner names the target the way the task row did.
      */
     @Test
     void schedulerTracesLinkArrivesFiltered() {
@@ -89,12 +89,14 @@ class TraceFiltersIT extends PlaywrightTestBase {
         dashboard.openTab("scheduled-tasks");
         page.click("#scheduled-tasks-groups .pk-group__header");
         page.waitForSelector(".pk-task__traces-link");
+        String taskTarget = page.textContent("#scheduled-tasks-groups .pk-task__target");
 
         page.click(".pk-task__traces-link");
         page.waitForSelector("#traces-tab.active");
         page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");
 
-        assertThat(page.textContent("#traces-active-filter")).contains("Type:").contains("Target:");
+        assertThat(taskTarget).as("the row shows class and method").contains(".");
+        assertThat(page.textContent("#traces-active-filter")).contains("Type:").contains("Target: " + taskTarget);
         assertThat(page.isChecked(TRACE_TYPE_CHIP + "[value='SCHEDULED_JOB']")).isTrue();
     }
 

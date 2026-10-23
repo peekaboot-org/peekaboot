@@ -147,6 +147,11 @@ export function formatPlainValue(value) {
  */
 export const byKey = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
 
+/** A dotted Java name (a scheduled task's target, a controller's class and method) shortened to its last two segments. */
+export function shortTarget(qualified) {
+    return qualified.split('.').slice(-2).join('.');
+}
+
 /** `Number(n).toLocaleString(locale)` - grouped in `locale`, or the reader's browser locale when it is undefined. */
 export function formatNumber(n, {locale} = {}) {
     return Number(n).toLocaleString(locale);

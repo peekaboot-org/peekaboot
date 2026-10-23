@@ -5,7 +5,7 @@
  */
 import {badge, countSummary, iconLink} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
-import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
+import {formatCount, formatDateTime, formatInterval, shortTarget} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {taskStatusVariant} from '../../shared/severity.js';
 import {buildAppHash} from '../../shared/url-state.js';
@@ -58,9 +58,6 @@ function renderTaskRow(task, type, context) {
     const {locale, timeZone} = context;
     const dateOptions = {locale, timeZone};
 
-    const targetShort = task.target.includes('.')
-        ? task.target.split('.').slice(-2).join('.')
-        : task.target;
     const scheduleDisplay = type === 'CRON'
         ? (task.scheduleDescription || task.schedule)
         : formatFixedInterval(task.intervalMs);
@@ -82,7 +79,7 @@ function renderTaskRow(task, type, context) {
                 timingEl('Next:', task.nextExecution ? formatDateTime(task.nextExecution, dateOptions) : '-'),
                 badge(task.lastStatus || 'PENDING', taskStatusVariant(task.lastStatus)))),
         el('div', {className: 'pk-task__target-row'},
-            el('span', {className: 'pk-task__target', text: targetShort, title: task.target}),
+            el('span', {className: 'pk-task__target', text: shortTarget(task.target), title: task.target}),
             context.features?.tracing ? renderTracesLink(task) : null),
         task.lastException ? renderException(task.lastException) : null);
 }
