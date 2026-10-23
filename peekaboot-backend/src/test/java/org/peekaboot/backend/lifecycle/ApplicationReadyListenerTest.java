@@ -37,8 +37,9 @@ class ApplicationReadyListenerTest {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod", "eu");
 
-        String report = report(
-                ReadyEvents.webApplication(8083), environment, new BuildInfoProvider(new BuildProperties(build)));
+        String report = banner().environment(environment)
+                .buildInfo(new BuildInfoProvider(new BuildProperties(build)))
+                .render(ReadyEvents.webApplication(8083));
 
         assertThat(report)
                 .contains(" Application [orders] ready with active profiles [prod, eu]")
@@ -48,7 +49,7 @@ class ApplicationReadyListenerTest {
     /** Without build-info on the classpath the banner says so instead of printing "unknown:unknown:unknown". */
     @Test
     void banner_saysWhenBuildInfoIsUnavailable() {
-        String report = report(ReadyEvents.webApplication(8083));
+        String report = banner().render(ReadyEvents.webApplication(8083));
 
         assertThat(report)
                 .contains(" Application [unknown] ready with active profiles [default]")
@@ -57,7 +58,7 @@ class ApplicationReadyListenerTest {
 
     @Test
     void banner_linksTheDashboardBelowTheServiceUrlAndSwaggerUi() {
-        String report = report(ReadyEvents.webApplicationServingDashboard(8083));
+        String report = banner().render(ReadyEvents.webApplicationServingDashboard(8083));
 
         assertThat(report)
                 .containsSubsequence(" Service URL:", " Swagger UI:", " Peekaboot Dashboard:")
@@ -66,7 +67,7 @@ class ApplicationReadyListenerTest {
 
     @Test
     void banner_omitsTheDashboardWhenPeekabootDoesNotServeIt() {
-        String report = report(ReadyEvents.webApplication(8083));
+        String report = banner().render(ReadyEvents.webApplication(8083));
 
         assertThat(report).contains(" Service URL:").doesNotContain("Peekaboot Dashboard");
     }
@@ -85,7 +86,7 @@ class ApplicationReadyListenerTest {
         Locale defaultLocale = Locale.getDefault();
         Locale.setDefault(Locale.GERMANY);
         try {
-            String report = report(ReadyEvents.webApplication(8083));
+            String report = banner().render(ReadyEvents.webApplication(8083));
 
             assertThat(report)
                     .containsPattern(" Heap Memory: used=\\d+(\\.\\d)? [KMG]?B, max=[1-9]\\d*(\\.\\d)? [KMG]?B\n")
@@ -115,7 +116,7 @@ class ApplicationReadyListenerTest {
                 "16",
                 "PostgreSQL JDBC Driver");
 
-        String report = report(ReadyEvents.webApplication(8083), List.of(metadata));
+        String report = banner().metadata(metadata).render(ReadyEvents.webApplication(8083));
 
         assertThat(report)
                 .contains(" DB Connection Params: ")
@@ -132,11 +133,10 @@ class ApplicationReadyListenerTest {
             hikari.setMaximumPoolSize(7);
             hikari.setConnectionTimeout(2500);
 
-            String report = report(
-                    ReadyEvents.webApplication(8083),
-                    List.of(metadata),
-                    Map.of("primary", hikari),
-                    new HikariPoolInfo());
+            String report = banner().metadata(metadata)
+                    .dataSources(Map.of("primary", hikari))
+                    .hikari(new HikariPoolInfo())
+                    .render(ReadyEvents.webApplication(8083));
 
             assertThat(report)
                     .contains(" DB Pool: minimumIdle=3, maximumPoolSize=7")
@@ -152,8 +152,9 @@ class ApplicationReadyListenerTest {
     void banner_omitsThePoolLinesWithoutAPoolInfoContributor() {
         DataSourceMetadata metadata = h2Metadata("primary");
 
-        String report = report(
-                ReadyEvents.webApplication(8083), List.of(metadata), Map.of("primary", mock(DataSource.class)), null);
+        String report = banner().metadata(metadata)
+                .dataSources(Map.of("primary", mock(DataSource.class)))
+                .render(ReadyEvents.webApplication(8083));
 
         assertThat(report).contains(" DB Connection [primary]").doesNotContain("DB Pool");
     }
@@ -165,51 +166,63 @@ class ApplicationReadyListenerTest {
         return DataSourceMetadata.fromDataSource(name, dataSource).orElseThrow();
     }
 
-    private static String report(ApplicationReadyEvent event) {
-        return report(event, List.of());
+    private static Banner banner() {
+        return new Banner();
     }
 
-    private static String report(ApplicationReadyEvent event, List<DataSourceMetadata> dataSources) {
-        return report(event, dataSources, Map.of(), null);
-    }
+    /** The listener's collaborators, neutral unless a test sets one: no profiles, no build info, no databases. */
+    private static final class Banner {
+        private Environment environment = new MockEnvironment();
+        private BuildInfoProvider buildInfo = new BuildInfoProvider(null);
+        private List<DataSourceMetadata> metadata = List.of();
+        private Map<String, DataSource> dataSources = Map.of();
+        private HikariPoolInfo hikariPoolInfo;
 
-    private static String report(ApplicationReadyEvent event, Environment environment, BuildInfoProvider buildInfo) {
-        return report(event, environment, buildInfo, List.of(), Map.of(), null);
-    }
+        Banner environment(Environment environment) {
+            this.environment = environment;
+            return this;
+        }
 
-    private static String report(
-            ApplicationReadyEvent event,
-            List<DataSourceMetadata> metadata,
-            Map<String, DataSource> dataSources,
-            HikariPoolInfo hikariPoolInfo) {
-        return report(event, new MockEnvironment(), new BuildInfoProvider(null), metadata, dataSources, hikariPoolInfo);
-    }
+        Banner buildInfo(BuildInfoProvider buildInfo) {
+            this.buildInfo = buildInfo;
+            return this;
+        }
 
-    /** Runs the listener against {@code event} and returns the single banner it logs. */
-    private static String report(
-            ApplicationReadyEvent event,
-            Environment environment,
-            BuildInfoProvider buildInfo,
-            List<DataSourceMetadata> metadata,
-            Map<String, DataSource> dataSources,
-            HikariPoolInfo hikariPoolInfo) {
-        var listener = new ApplicationReadyListener(
-                new EnvironmentInfo(environment),
-                buildInfo,
-                new ServerUrlResolver(
-                        new MockEnvironment(),
-                        new StaticListableBeanFactory().getBeanProvider(PeekabootPaths.class),
-                        () -> true),
-                metadata,
-                dataSources,
-                hikariPoolInfo,
-                new MaskingEngine());
+        Banner metadata(DataSourceMetadata... metadata) {
+            this.metadata = List.of(metadata);
+            return this;
+        }
 
-        try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
-            listener.onApplicationEvent(event);
+        Banner dataSources(Map<String, DataSource> dataSources) {
+            this.dataSources = dataSources;
+            return this;
+        }
 
-            assertThat(capture.appender().list).hasSize(1);
-            return capture.appender().list.get(0).getFormattedMessage();
+        Banner hikari(HikariPoolInfo hikariPoolInfo) {
+            this.hikariPoolInfo = hikariPoolInfo;
+            return this;
+        }
+
+        /** Runs the listener against {@code event} and returns the single banner it logs. */
+        String render(ApplicationReadyEvent event) {
+            var listener = new ApplicationReadyListener(
+                    new EnvironmentInfo(environment),
+                    buildInfo,
+                    new ServerUrlResolver(
+                            new MockEnvironment(),
+                            new StaticListableBeanFactory().getBeanProvider(PeekabootPaths.class),
+                            () -> true),
+                    metadata,
+                    dataSources,
+                    hikariPoolInfo,
+                    new MaskingEngine());
+
+            try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
+                listener.onApplicationEvent(event);
+
+                assertThat(capture.appender().list).hasSize(1);
+                return capture.appender().list.get(0).getFormattedMessage();
+            }
         }
     }
 }
