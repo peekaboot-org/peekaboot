@@ -3,7 +3,6 @@
  * details first and the two header tables last. Every section is the same
  * `<table class="pk-table pk-table--kv">` shape; kvTable/tableRow build it.
  */
-import {MASK_LITERAL} from '../../shared/markup.js';
 import {badge, emptyState} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
 import {byKey, formatDurationMs} from '../../shared/format.js';
@@ -25,7 +24,7 @@ function section(title, body) {
 }
 
 export function render(container, trace, view = {}) {
-    const maskLiteral = view.features?.maskLiteral ?? MASK_LITERAL;
+    const maskLiteral = view.features?.maskLiteral;
     const httpExchange = trace.httpExchange;
     const req = httpExchange?.request;
     const res = httpExchange?.response;

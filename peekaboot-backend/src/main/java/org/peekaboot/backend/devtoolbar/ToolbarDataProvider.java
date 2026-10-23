@@ -1,6 +1,7 @@
 package org.peekaboot.backend.devtoolbar;
 
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import tools.jackson.core.SerializableString;
 import tools.jackson.core.io.CharacterEscapes;
@@ -25,10 +26,12 @@ public class ToolbarDataProvider {
     }
 
     /**
-     * The effective thresholds, under the names {@code /api/features} publishes them: the bar
-     * never fetches that endpoint, and the overlay it opens colours by these.
+     * The effective thresholds and the mask literal, under the names {@code /api/features}
+     * publishes them: the bar never fetches that endpoint, and the overlay it opens colours
+     * and highlights by these.
      */
-    record ToolbarFeatures(long slowSpanThresholdMs, long verySlowSpanThresholdMs, long slowQueryThresholdMs) {}
+    record ToolbarFeatures(
+            long slowSpanThresholdMs, long verySlowSpanThresholdMs, long slowQueryThresholdMs, String maskLiteral) {}
 
     /** What toolbar.js shows for the request the page came from. */
     record ToolbarSummary(
@@ -55,7 +58,8 @@ public class ToolbarDataProvider {
         return new ToolbarFeatures(
                 tracingProperties.getSlowSpanThresholdMs(),
                 tracingProperties.getVerySlowSpanThresholdMs(),
-                tracingProperties.getSlowQueryThresholdMs());
+                tracingProperties.getSlowQueryThresholdMs(),
+                MaskingEngine.MASK_LITERAL);
     }
 
     private static final class ScriptSafeEscapes extends CharacterEscapes {

@@ -1177,9 +1177,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * thresholds, and not a bare literal re-derived on the same line. Imports queries.js
      * directly (SharedModuleIT's pk-blank.html pattern) rather than driving a real slow
      * query through the app, and pins the exact boundary (49ms must NOT get the label;
-     * 50ms - the threshold itself, IssueDetector compares with >= - must), for the
-     * fallback and for a published threshold alike (see severity.js's own boundary tests
-     * in SharedModuleIT). The pill is trace-stats.js's slowBadge(), the one the Traces tab and
+     * 50ms - the threshold itself, IssueDetector compares with >= - must), and that a
+     * threshold one higher moves it (see severity.js's own boundary tests in SharedModuleIT). The pill is trace-stats.js's slowBadge(), the one the Traces tab and
      * the overlay header show, beside the duration rather than in its text.
      */
     @Test
@@ -1190,14 +1189,14 @@ class TraceOverlayIT extends PlaywrightTestBase {
                     {durationMs: 49, dbSystem: 'h2', rowCount: 1},
                     {durationMs: 50, dbSystem: 'h2', rowCount: 1}
                 ];
-                const fallback = document.createElement('div');
-                m.render(fallback, {queries});
+                const atDefault = document.createElement('div');
+                m.render(atDefault, {queries}, {features: {slowQueryThresholdMs: 50}});
                 const published = document.createElement('div');
                 m.render(published, {queries}, {features: {slowQueryThresholdMs: 51}});
                 const labelsIn = el => Array.from(el.querySelectorAll('.pk-query-meta')).map(meta =>
                     meta.querySelector('.pk-query__duration').textContent + '|'
                         + Array.from(meta.querySelectorAll('.pk-badge.pk-badge--warn'), pill => pill.textContent).join());
-                return [...labelsIn(fallback), ...labelsIn(published)];
+                return [...labelsIn(atDefault), ...labelsIn(published)];
             })()
             """);
 

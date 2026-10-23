@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 /**
  * Exercises trace-detail/tabs/request.js directly, with synthetic trace data, rather
@@ -16,8 +17,9 @@ import org.junit.jupiter.api.Test;
  */
 class RequestTabIT extends PlaywrightTestBase {
 
+    /** Rendered with the mask literal every surface hands the tab, /api/features or the toolbar's data blob. */
     private void renderWithTrace(String traceJson) {
-        renderWithTrace(traceJson, "{}");
+        renderWithTrace(traceJson, "{\"features\": {\"maskLiteral\": \"" + MaskingEngine.MASK_LITERAL + "\"}}");
     }
 
     private void renderWithTrace(String traceJson, String viewJson) {
@@ -78,11 +80,7 @@ class RequestTabIT extends PlaywrightTestBase {
                 .isZero();
     }
 
-    /**
-     * A dashboard-opened overlay carries /api/features, whose maskLiteral is the backend's
-     * authoritative spelling - if it ever changes, the highlight must follow it, and the
-     * module-local fallback must lose.
-     */
+    /** The highlight follows the literal it is handed, so a change to the backend's spelling reaches it. */
     @Test
     void requestHeadersHighlightByThePublishedMaskLiteralWhenFeaturesAreInHand() {
         renderWithTrace("""

@@ -1,14 +1,5 @@
 const HTML_ESCAPES = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
 
-/**
- * Fallback for the backend's mask literal, for the surfaces that never load
- * /api/features - the dev toolbar and the overlay it opens. Everywhere else
- * Features.maskLiteral is authoritative; this copy must match MaskingEngine.MASK_LITERAL
- * (which mirrors Spring's own Sanitizer) exactly, or a masked-value comparison on those
- * surfaces silently stops matching (the browser tests pin the two together).
- */
-export const MASK_LITERAL = '******';
-
 /** Escapes text for safe interpolation into an HTML string. */
 export function escapeHtml(text) {
     if (text == null) return '';

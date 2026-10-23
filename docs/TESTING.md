@@ -151,8 +151,8 @@ The frontend is plain ES modules, so a Java enum and its JS mirror drift silentl
 `SharedModuleIT`'s `*MirrorTheBackend*` tests pin `ROOT_ACTION_TYPES`, `TASK_TYPES`,
 `MIGRATION_STATES`, `ISSUE_SEVERITIES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
 `MigrationState`, `IssueSeverity` (its wire words) and Logback's levels, the keys the frontend reads off
-`/api/features` to the `Features` record, and `severity.js`'s `DEFAULT_THRESHOLDS` to the
-properties' defaults. A vocabulary that gains a JS mirror gets a row there. The same suite pins
+`/api/features` to the `Features` record. `ToolbarDataProviderTest` pins the toolbar blob's
+`features` names to the same record. A vocabulary that gains a JS mirror gets a row there. The same suite pins
 `format.js`'s `formatLongDuration` against `UptimeFormat.humanize` unit by unit, and drives
 `dashboard/tabs/insights-store.js` (the browser's mirror of the insights rings) directly, so
 the JS with no Java counterpart is covered too. `SqlStatement`'s JSON (`text`, `formatted`,

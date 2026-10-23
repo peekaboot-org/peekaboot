@@ -9,9 +9,6 @@ import java.util.regex.Pattern;
  */
 final class MaskingRules {
 
-    /** Spring's own literal for a masked value ({@code org.springframework.boot.actuate.endpoint.Sanitizer}). */
-    static final String MASK = "******";
-
     /**
      * Compound, separator-delimited key names. {@link MaskingEngine} normalises both these
      * and the key under test into token lists before comparing, so "api-key", "apiKey" and

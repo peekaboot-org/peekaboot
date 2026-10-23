@@ -22,8 +22,6 @@ import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.TileFormat;
 import org.peekaboot.backend.insights.config.Unit;
 import org.peekaboot.backend.lifecycle.UptimeFormat;
-import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.ui.InlinedStylesheets;
 
 /**
@@ -105,16 +103,6 @@ class SharedModuleIT extends PlaywrightTestBase {
     void escapeHtmlTreatsUndefinedAsEmptyButPreservesFalsyZero() {
         assertThat(evalModule("markup.js", "m.escapeHtml(undefined)")).isEqualTo("");
         assertThat(evalModule("markup.js", "m.escapeHtml(0)")).isEqualTo("0");
-    }
-
-    /**
-     * markup.js's MASK_LITERAL is only the fallback for surfaces that never load
-     * /api/features (the dev toolbar and the overlay it opens); everywhere else the
-     * published Features.maskLiteral wins. Both must spell the literal identically.
-     */
-    @Test
-    void maskLiteralFallbackMirrorsTheBackendConstant() {
-        assertThat(evalModule("markup.js", "m.MASK_LITERAL")).isEqualTo(MaskingEngine.MASK_LITERAL);
     }
 
     /**
@@ -256,37 +244,27 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     @Test
-    void durationSeverityFallsBackToTheDefaultThresholdsWithoutFeatures() {
-        assertThat(evalModule("severity.js", "m.durationSeverity(50)")).isEqualTo("");
-        assertThat(evalModule("severity.js", "m.durationSeverity(101)")).isEqualTo("slow");
-        assertThat(evalModule("severity.js", "m.durationSeverity(501)")).isEqualTo("very-slow");
-        assertThat(evalModule("severity.js", "m.durationSeverity(null)")).isEqualTo("");
-    }
-
-    @Test
     void querySeverityFollowsTheQueryThreshold() {
-        assertThat(evalModule("severity.js", "m.querySeverity(49)")).isEqualTo("");
-        assertThat(evalModule("severity.js", "m.querySeverity(50)")).isEqualTo("slow");
-        assertThat(evalModule("severity.js", "m.querySeverity(null)")).isEqualTo("");
         String features = "{slowQueryThresholdMs: 80}";
+        assertThat(evalModule("severity.js", "m.querySeverity(null, " + features + ")"))
+                .isEqualTo("");
         assertThat(evalModule("severity.js", "m.querySeverity(79, " + features + ")"))
                 .isEqualTo("");
         assertThat(evalModule("severity.js", "m.querySeverity(80, " + features + ")"))
                 .isEqualTo("slow");
     }
 
-    /** The published thresholds win over the defaults; a null published value (tracing off) does not. */
     @Test
     void durationSeverityReadsThePublishedThresholds() {
-        String features = "{slowSpanThresholdMs: 200, verySlowSpanThresholdMs: 300, slowTraceThresholdMs: null}";
+        String features = "{slowSpanThresholdMs: 200, verySlowSpanThresholdMs: 300}";
+        assertThat(evalModule("severity.js", "m.durationSeverity(null, " + features + ")"))
+                .isEqualTo("");
         assertThat(evalModule("severity.js", "m.durationSeverity(150, " + features + ")"))
                 .isEqualTo("");
         assertThat(evalModule("severity.js", "m.durationSeverity(250, " + features + ")"))
                 .isEqualTo("slow");
         assertThat(evalModule("severity.js", "m.durationSeverity(350, " + features + ")"))
                 .isEqualTo("very-slow");
-        assertThat(evalModule("severity.js", "m.threshold(" + features + ", 'slowTraceThresholdMs')"))
-                .isEqualTo(1000);
     }
 
     @Test
@@ -294,28 +272,20 @@ class SharedModuleIT extends PlaywrightTestBase {
         // Pins the boundary itself (ms >= threshold, matching IssueDetector's >=) so an
         // off-by-one in the comparison fails here instead of only showing up on values
         // well past it.
-        assertThat(evalModule("severity.js", "m.durationSeverity(99)")).isEqualTo("");
-        assertThat(evalModule("severity.js", "m.durationSeverity(100)")).isEqualTo("slow");
-        assertThat(evalModule("severity.js", "m.durationSeverity(500)")).isEqualTo("very-slow");
-    }
-
-    /** The backend's defaults are the fallbacks, keyed by the wire names /api/features publishes. */
-    @Test
-    void defaultThresholdsMirrorTheBackendDefaults() {
-        PeekabootTracingProperties tracing = new PeekabootTracingProperties();
-
-        assertThat(evalModule("severity.js", "m.DEFAULT_THRESHOLDS"))
-                .isEqualTo(Map.of(
-                        "slowSpanThresholdMs", (int) tracing.getSlowSpanThresholdMs(),
-                        "verySlowSpanThresholdMs", (int) tracing.getVerySlowSpanThresholdMs(),
-                        "slowQueryThresholdMs", (int) tracing.getSlowQueryThresholdMs(),
-                        "slowTraceThresholdMs", (int) tracing.getSlowTraceThresholdMs()));
+        String features = "{slowSpanThresholdMs: 100, verySlowSpanThresholdMs: 500}";
+        assertThat(evalModule("severity.js", "m.durationSeverity(99, " + features + ")"))
+                .isEqualTo("");
+        assertThat(evalModule("severity.js", "m.durationSeverity(100, " + features + ")"))
+                .isEqualTo("slow");
+        assertThat(evalModule("severity.js", "m.durationSeverity(500, " + features + ")"))
+                .isEqualTo("very-slow");
     }
 
     /**
      * Every key the frontend reads off /api/features is a component of the backend's
      * Features record: the five flags (traces.js, meters.js, insights.js/overview.js,
-     * lifecycle.js and unmask-control.js gate on them) and the threshold keys severity.js formats by.
+     * lifecycle.js and unmask-control.js gate on them) and the threshold keys severity.js
+     * colours by.
      */
     @Test
     void featureKeysReadByTheFrontendMirrorTheBackendRecord() {
@@ -324,10 +294,16 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .toList();
 
         assertThat(published)
-                .contains("tracing", "metrics", "insights", "lifecycle", "unmaskingEnabled", "maskLiteral");
-        @SuppressWarnings("unchecked")
-        List<String> thresholdKeys = (List<String>) evalModule("severity.js", "Object.keys(m.DEFAULT_THRESHOLDS)");
-        assertThat(published).containsAll(thresholdKeys);
+                .contains(
+                        "tracing",
+                        "metrics",
+                        "insights",
+                        "lifecycle",
+                        "unmaskingEnabled",
+                        "maskLiteral",
+                        "slowSpanThresholdMs",
+                        "verySlowSpanThresholdMs",
+                        "slowQueryThresholdMs");
     }
 
     /** The tier is read off the backend's own severity word, so an issue type the frontend has never heard of still colours. */

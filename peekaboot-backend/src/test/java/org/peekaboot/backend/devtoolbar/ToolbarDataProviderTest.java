@@ -2,9 +2,14 @@ package org.peekaboot.backend.devtoolbar;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.RecordComponent;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.domain.features.Features;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import tools.jackson.databind.JsonNode;
 
@@ -83,6 +88,19 @@ class ToolbarDataProviderTest {
             assertThat(features.path("slowSpanThresholdMs").asLong()).isEqualTo(250L);
             assertThat(features.path("verySlowSpanThresholdMs").asLong()).isEqualTo(900L);
             assertThat(features.path("slowQueryThresholdMs").asLong()).isEqualTo(75L);
+            assertThat(features.path("maskLiteral").asString()).isEqualTo(MaskingEngine.MASK_LITERAL);
         }
+    }
+
+    /** The overlay reads the blob's features as it reads /api/features, so every name has to be one that endpoint publishes. */
+    @Test
+    void shouldNameEachFeatureAsTheFeaturesEndpointDoes() {
+        List<String> published = Arrays.stream(Features.class.getRecordComponents())
+                .map(RecordComponent::getName)
+                .toList();
+
+        assertThat(Arrays.stream(ToolbarDataProvider.ToolbarFeatures.class.getRecordComponents())
+                        .map(RecordComponent::getName))
+                .isSubsetOf(published);
     }
 }

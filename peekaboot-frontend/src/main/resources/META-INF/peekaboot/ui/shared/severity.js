@@ -2,23 +2,10 @@
  * Where the dashboard, the toolbar and the trace-detail overlay decide how a duration, a
  * span's issues, a log level or a health status is coloured.
  *
- * The duration thresholds are the backend's effective ones, published once by
- * /api/features (see the backend's Features record) and handed in as `features` by every
- * caller that has them. DEFAULT_THRESHOLDS mirrors the backend defaults, keyed by the same
- * wire names, for the paths that have no features in hand - the dev toolbar, and the
- * overlay it opens.
+ * The duration thresholds are the backend's effective ones, handed in as `features` by every
+ * caller: the dashboard's from /api/features (see the backend's Features record), the dev
+ * toolbar's from its data blob, under the same names.
  */
-export const DEFAULT_THRESHOLDS = Object.freeze({
-    slowSpanThresholdMs: 100,
-    verySlowSpanThresholdMs: 500,
-    slowQueryThresholdMs: 50,
-    slowTraceThresholdMs: 1000
-});
-
-/** The published value when there is one, the default otherwise (slowTraceThresholdMs is null while tracing is off). */
-export function threshold(features, key) {
-    return features?.[key] ?? DEFAULT_THRESHOLDS[key];
-}
 
 /**
  * Severity of a latency, as a CSS modifier suffix, at the span thresholds. Deliberately
@@ -30,8 +17,8 @@ export function threshold(features, key) {
  */
 export function durationSeverity(ms, features) {
     if (ms == null) return '';
-    if (ms >= threshold(features, 'verySlowSpanThresholdMs')) return 'very-slow';
-    if (ms >= threshold(features, 'slowSpanThresholdMs')) return 'slow';
+    if (ms >= features?.verySlowSpanThresholdMs) return 'very-slow';
+    if (ms >= features?.slowSpanThresholdMs) return 'slow';
     return '';
 }
 
@@ -46,7 +33,7 @@ export function severityClass(severity) {
  */
 export function querySeverity(ms, features) {
     if (ms == null) return '';
-    return ms >= threshold(features, 'slowQueryThresholdMs') ? 'slow' : '';
+    return ms >= features?.slowQueryThresholdMs ? 'slow' : '';
 }
 
 /** Every IssueSeverity word the backend sends with an issue, in the enum's order, and the severity suffix each one paints a duration with. */
