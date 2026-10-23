@@ -26,10 +26,9 @@ class TracingHandlerInterceptorTest {
     private MockHttpServletResponse response;
 
     /**
-     * The names of the observations that were stopped, in order. An observation the
-     * interceptor starts and never stops produces no span at all, and the registry's own
-     * assertions count observations whether or not they ever ended, so they cannot tell
-     * that apart from a healthy one.
+     * The names of the observations that were stopped, in stop order. The registry's own
+     * assertions say whether each observation stopped but not in which order, and a nested
+     * dispatch has to end both dispatches' spans in a fixed sequence.
      */
     private final List<String> stoppedObservations = new ArrayList<>();
 
@@ -242,7 +241,7 @@ class TracingHandlerInterceptorTest {
         interceptor.afterConcurrentHandlingStarted(request, response, handler);
 
         // the container re-invokes preHandle on the ASYNC dispatch
-        request.setDispatcherType(jakarta.servlet.DispatcherType.ASYNC);
+        request.setDispatcherType(DispatcherType.ASYNC);
         interceptor.preHandle(request, response, handler);
         interceptor.postHandle(request, response, handler, null);
         interceptor.afterCompletion(request, response, handler, null);
@@ -293,7 +292,6 @@ class TracingHandlerInterceptorTest {
         interceptor.afterCompletion(request, response, outerHandler, null);
     }
 
-    // Test controller for handler method resolution
     static class TestController {
         public void getUsers() {}
     }

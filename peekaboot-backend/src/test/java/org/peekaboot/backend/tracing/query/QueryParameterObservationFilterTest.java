@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationHandler;
-import io.micrometer.observation.ObservationRegistry;
 import java.lang.reflect.Method;
 import java.sql.CallableStatement;
 import java.sql.Connection;
@@ -15,7 +13,6 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sql.DataSource;
 import net.ttddyy.dsproxy.QueryInfo;
 import net.ttddyy.dsproxy.proxy.ParameterSetOperation;
@@ -27,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.mapper.trace.DbSpans;
+import org.peekaboot.backend.testsupport.RecordingObservations;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -36,38 +34,25 @@ import tools.jackson.databind.JsonNode;
  */
 class QueryParameterObservationFilterTest {
 
-    private final List<Observation.Context> stopped = new CopyOnWriteArrayList<>();
+    private final RecordingObservations observations = new RecordingObservations();
 
     private DataSource dataSource;
 
+    /** The table is created on the raw H2 source, so the only observations recorded are the test's own. */
     @BeforeEach
     void instrumentAnH2DataSource() throws SQLException {
-        ObservationRegistry registry = ObservationRegistry.create();
-        registry.observationConfig()
-                .observationFilter(new QueryParameterObservationFilter())
-                .observationHandler(new ObservationHandler<>() {
-                    @Override
-                    public boolean supportsContext(Observation.Context context) {
-                        return true;
-                    }
-
-                    @Override
-                    public void onStop(Observation.Context context) {
-                        stopped.add(context);
-                    }
-                });
+        observations.registry().observationConfig().observationFilter(new QueryParameterObservationFilter());
         JdbcDataSource h2 = new JdbcDataSource();
         h2.setURL("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1");
-        DataSourceObservationListener listener = new DataSourceObservationListener(registry);
+        try (Connection connection = h2.getConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE person (id BIGINT, name VARCHAR(100))");
+        }
+        DataSourceObservationListener listener = new DataSourceObservationListener(observations.registry());
         dataSource = ProxyDataSourceBuilder.create(h2)
                 .listener(listener)
                 .methodListener(listener)
                 .build();
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE person (id BIGINT, name VARCHAR(100))");
-        }
-        stopped.clear();
     }
 
     /** Set out of index order on purpose: the literals follow the placeholders, not the calls. */
@@ -253,7 +238,7 @@ class QueryParameterObservationFilterTest {
     }
 
     private QueryContext queryContext() {
-        List<QueryContext> queries = stopped.stream()
+        List<QueryContext> queries = observations.stopped().stream()
                 .filter(QueryContext.class::isInstance)
                 .map(QueryContext.class::cast)
                 .toList();

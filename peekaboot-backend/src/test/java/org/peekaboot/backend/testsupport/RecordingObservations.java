@@ -81,6 +81,11 @@ public final class RecordingObservations {
         return named(errored, observationName);
     }
 
+    /** Every observation stopped so far, in stop order. */
+    public List<Observation.Context> stopped() {
+        return List.copyOf(stopped);
+    }
+
     /** The next observation named {@code observationName} to stop; a task's stops after its caller's future completes. */
     public Observation.Context awaitStopped(String observationName) throws InterruptedException {
         while (true) {
