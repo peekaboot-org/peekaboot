@@ -1897,9 +1897,16 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         "1 query for this span|true"));
     }
 
+    /** The span rows the Spans tab's gantt shows: rendered, and not hidden by a collapsed parent. */
     private int visibleGanttRows() {
         return ((Number) overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-span')]"
                         + ".filter(entry => entry.style.display !== 'none').length"))
+                .intValue();
+    }
+
+    /** Every span row the Spans tab's gantt has rendered, shown or hidden; a scoped tab renders only its subtree. */
+    private int renderedGanttRows() {
+        return ((Number) overlay.evaluate("root => root.querySelectorAll('#pk-gantt-rows .pk-gantt-row').length"))
                 .intValue();
     }
 
@@ -2367,7 +2374,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(page.url())
                 .as("the async row's own open button lands here - Task 10's own pin")
                 .contains("#traces/" + traceId + "/spans?root=" + asyncSpanId);
-        assertThat(visibleGanttRowCount())
+        assertThat(renderedGanttRows())
                 .as("scoped to the async entry alone; its enclosing request root and spring.handler are excluded")
                 .isEqualTo(1);
         assertThat((String)
@@ -2381,15 +2388,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
         overlay.openTab("spans");
         overlay.waitFor("#pk-gantt-rows");
 
-        assertThat(visibleGanttRowCount())
+        assertThat(renderedGanttRows())
                 .as("a tab round-trip clears the tab's own params, widening back to the full tree")
                 .isGreaterThan(1);
         assertThat(page.url()).as("the param is gone from the URL too").doesNotContain("root=");
-    }
-
-    /** The number of span rows currently rendered in the Spans tab's gantt, scoped or not. */
-    private int visibleGanttRowCount() {
-        return ((Number) overlay.evaluate("root => root.querySelectorAll('#pk-gantt-rows .pk-gantt-row').length"))
-                .intValue();
     }
 }
