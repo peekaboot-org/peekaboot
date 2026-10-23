@@ -42,7 +42,6 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-web")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator")
     testImplementation("io.micrometer:micrometer-observation-test")
-    testImplementation("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
     // the SDK's own SpanData fixture for the exporter tests; versioned by the BOM
     testImplementation("io.opentelemetry:opentelemetry-sdk-testing")
     testImplementation("com.h2database:h2")
