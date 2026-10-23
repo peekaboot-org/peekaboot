@@ -1,14 +1,11 @@
+import {el, button} from './dom.js';
 import {highlightText} from './markup.js';
 
 let groupSequence = 0;
 
 /** A semantic pill. Variant is one of ok, warn, error, error-soft, info, muted (components.css). */
 export function badge(text, variant = 'muted', {title} = {}) {
-    const element = document.createElement('span');
-    element.className = `pk-badge pk-badge--${variant}`;
-    element.textContent = text == null ? '' : String(text);
-    if (title) element.title = title;
-    return element;
+    return el('span', {className: `pk-badge pk-badge--${variant}`, text: text == null ? '' : String(text), title: title || undefined});
 }
 
 /**
@@ -17,33 +14,22 @@ export function badge(text, variant = 'muted', {title} = {}) {
  * is an app hash (see url-state.js's buildAppHash), so the hash router does the rest.
  */
 export function iconLink(href, {label, icon, className}) {
-    const link = document.createElement('a');
-    link.href = href;
-    link.className = 'pk-icon-link' + (className ? ` ${className}` : '');
-    link.title = label;
-    link.setAttribute('aria-label', label);
-    link.textContent = icon;
-    return link;
+    return el('a', {
+        className: 'pk-icon-link' + (className ? ` ${className}` : ''),
+        text: icon,
+        title: label,
+        attrs: {href, 'aria-label': label}
+    });
 }
 
 /** The centred, muted placeholder a list shows when it has nothing to list. */
 export function emptyState(message) {
-    const element = document.createElement('p');
-    element.className = 'pk-empty';
-    element.textContent = message;
-    return element;
+    return el('p', {className: 'pk-empty', text: message});
 }
 
 /** The spinner with its caption that every loading state shows. */
 export function loadingBlock(message) {
-    const element = document.createElement('div');
-    element.className = 'pk-loading';
-    const spinner = document.createElement('div');
-    spinner.className = 'pk-spinner';
-    const caption = document.createElement('p');
-    caption.textContent = message;
-    element.append(spinner, caption);
-    return element;
+    return el('div', {className: 'pk-loading'}, el('div', {className: 'pk-spinner'}), el('p', {text: message}));
 }
 
 /**
@@ -51,37 +37,14 @@ export function loadingBlock(message) {
  * <tr> elements. `className` is added to the table's own, for a surface's row accents.
  */
 export function table(columns, rows, {className} = {}) {
-    const scroll = document.createElement('div');
-    scroll.className = 'pk-table-scroll';
-
-    const element = document.createElement('table');
-    element.className = 'pk-table' + (className ? ` ${className}` : '');
-
-    const head = document.createElement('thead');
-    const headRow = document.createElement('tr');
-    columns.forEach(label => {
-        const th = document.createElement('th');
-        th.scope = 'col';
-        th.textContent = label;
-        headRow.appendChild(th);
-    });
-    head.appendChild(headRow);
-
-    const body = document.createElement('tbody');
-    body.append(...rows);
-
-    element.append(head, body);
-    scroll.appendChild(element);
-    return scroll;
+    const head = el('thead', {}, el('tr', {}, ...columns.map(label => el('th', {text: label, attrs: {scope: 'col'}}))));
+    return el('div', {className: 'pk-table-scroll'},
+        el('table', {className: 'pk-table' + (className ? ` ${className}` : '')}, head, el('tbody', {}, ...rows)));
 }
 
 /** A table cell: `children` are text or elements; `title` keeps a truncating cell's full value reachable. */
 export function cell({className, title} = {}, ...children) {
-    const td = document.createElement('td');
-    if (className) td.className = className;
-    if (title) td.title = title;
-    td.append(...children);
-    return td;
+    return el('td', {className, title: title || undefined}, ...children);
 }
 
 /** A text cell whose title carries the full value, so a truncating column keeps it reachable on hover. */
@@ -89,10 +52,11 @@ export function textCell(text, className) {
     return cell({className, title: text ? String(text) : undefined}, text ?? '');
 }
 
-/** Text with every match of the query wrapped in <mark>, or plain text when there is no query. */
-function setHighlightedText(element, text, highlight) {
+/** `element` holding text with every match of the query wrapped in <mark>, or plain text when there is no query. */
+function withHighlightedText(element, text, highlight) {
     if (highlight) element.innerHTML = highlightText(text, highlight);
     else element.textContent = text;
+    return element;
 }
 
 /**
@@ -104,19 +68,10 @@ function setHighlightedText(element, text, highlight) {
  * for the frontend to know that the rendered text doesn't already say.
  */
 export function kvRow(key, value, {mono = false, tight = false, highlight} = {}) {
-    const row = document.createElement('div');
-    row.className = 'pk-kv' + (tight ? ' pk-kv--tight' : '');
-
-    const keyEl = document.createElement('span');
-    keyEl.className = 'pk-kv__key';
-    setHighlightedText(keyEl, key == null ? '' : String(key), highlight);
-
-    const valueEl = document.createElement('span');
-    valueEl.className = 'pk-kv__value' + (mono ? ' pk-kv__value--mono' : '');
-    setHighlightedText(valueEl, value == null ? '-' : String(value), highlight);
-
-    row.append(keyEl, valueEl);
-    return row;
+    return el('div', {className: 'pk-kv' + (tight ? ' pk-kv--tight' : '')},
+        withHighlightedText(el('span', {className: 'pk-kv__key'}), key == null ? '' : String(key), highlight),
+        withHighlightedText(el('span', {className: 'pk-kv__value' + (mono ? ' pk-kv__value--mono' : '')}),
+            value == null ? '-' : String(value), highlight));
 }
 
 /**
@@ -126,31 +81,12 @@ export function kvRow(key, value, {mono = false, tight = false, highlight} = {})
  * count is always rendered as plain text.
  */
 export function group({name, count, expanded = false, highlight} = {}) {
-    const element = document.createElement('div');
-    element.className = 'pk-group';
-
     const listId = `pk-group-list-${++groupSequence}`;
 
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.className = 'pk-group__header';
-    header.setAttribute('aria-expanded', String(expanded));
-    header.setAttribute('aria-controls', listId);
-
-    const nameEl = document.createElement('span');
-    nameEl.className = 'pk-group__name';
-    setHighlightedText(nameEl, name == null ? '' : String(name), highlight);
-
-    const countEl = document.createElement('span');
-    countEl.className = 'pk-group__count';
-    countEl.textContent = count == null ? '' : String(count);
-
-    header.append(nameEl, countEl);
-
-    const list = document.createElement('div');
-    list.className = 'pk-group__list';
-    list.id = listId;
-    list.toggleAttribute('hidden', !expanded);
+    const header = button({className: 'pk-group__header', attrs: {'aria-expanded': String(expanded), 'aria-controls': listId}},
+        withHighlightedText(el('span', {className: 'pk-group__name'}), name == null ? '' : String(name), highlight),
+        el('span', {className: 'pk-group__count', text: count == null ? '' : String(count)}));
+    const list = el('div', {className: 'pk-group__list', attrs: {id: listId, hidden: expanded ? null : ''}});
 
     header.addEventListener('click', () => {
         const nowExpanded = header.getAttribute('aria-expanded') !== 'true';
@@ -158,8 +94,7 @@ export function group({name, count, expanded = false, highlight} = {}) {
         list.toggleAttribute('hidden', !nowExpanded);
     });
 
-    element.append(header, list);
-    return {element, header, list};
+    return {element: el('div', {className: 'pk-group'}, header, list), header, list};
 }
 
 /** A usage bar. percent is clamped to 0..100 and drives the fill's severity. */
@@ -168,15 +103,9 @@ export function meter(percent) {
     const variant = value >= 90 ? ' pk-meter__fill--danger'
                   : (value >= 70 ? ' pk-meter__fill--warning' : '');
 
-    const element = document.createElement('div');
-    element.className = 'pk-meter';
-
-    const fill = document.createElement('div');
-    fill.className = 'pk-meter__fill' + variant;
+    const fill = el('div', {className: 'pk-meter__fill' + variant});
     fill.style.width = value + '%';
-
-    element.appendChild(fill);
-    return element;
+    return el('div', {className: 'pk-meter'}, fill);
 }
 
 /**
@@ -232,45 +161,37 @@ export function tabStrip(container, tabs, {onSelect, initial, panel} = {}) {
     if (panel) panel.setAttribute('role', 'tabpanel');
 
     const buttons = tabs.map(tab => {
-        let button = container.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
-        if (!button) {
-            button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'pk-tab';
-            button.dataset.tab = tab.id;
-            button.setAttribute('role', 'tab');
-            if (panel) {
-                button.id = `pk-tab-${tab.id}`;
-                button.setAttribute('aria-controls', panel.id);
+        const existing = container.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
+        if (existing) return existing;
+        const built = button({
+            className: 'pk-tab',
+            attrs: {
+                'data-tab': tab.id,
+                role: 'tab',
+                id: panel ? `pk-tab-${tab.id}` : null,
+                'aria-controls': panel ? panel.id : null
             }
-            button.append(tab.label);
-            if (tab.count != null) {
-                const count = document.createElement('span');
-                count.className = 'pk-tab__count';
-                count.textContent = String(tab.count);
-                button.append(' ', count);
-            }
-            container.appendChild(button);
-        }
-        return button;
+        }, tab.label, ...(tab.count != null ? [' ', el('span', {className: 'pk-tab__count', text: String(tab.count)})] : []));
+        container.appendChild(built);
+        return built;
     });
 
-    const visible = () => buttons.filter(button => button.offsetParent !== null);
+    const visible = () => buttons.filter(tabButton => tabButton.offsetParent !== null);
 
     function select(id, {focus = false, silent = false} = {}) {
-        buttons.forEach(button => {
-            const active = button.dataset.tab === id;
-            button.setAttribute('aria-selected', String(active));
-            button.tabIndex = active ? 0 : -1;
-            if (active && focus) button.focus();
-            if (active && panel && button.id) panel.setAttribute('aria-labelledby', button.id);
+        buttons.forEach(tabButton => {
+            const active = tabButton.dataset.tab === id;
+            tabButton.setAttribute('aria-selected', String(active));
+            tabButton.tabIndex = active ? 0 : -1;
+            if (active && focus) tabButton.focus();
+            if (active && panel && tabButton.id) panel.setAttribute('aria-labelledby', tabButton.id);
         });
         if (onSelect && !silent) onSelect(id);
     }
 
     container.addEventListener('click', event => {
-        const button = event.target.closest('.pk-tab');
-        if (button) select(button.dataset.tab);
+        const clicked = event.target.closest('.pk-tab');
+        if (clicked) select(clicked.dataset.tab);
     });
 
     container.addEventListener('keydown', event => {

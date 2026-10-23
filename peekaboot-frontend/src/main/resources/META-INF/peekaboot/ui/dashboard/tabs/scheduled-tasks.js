@@ -4,6 +4,7 @@
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
 import {badge, iconLink} from '../../shared/components.js';
+import {el} from '../../shared/dom.js';
 import {formatCount, formatDateTime, formatInterval, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {taskStatusVariant} from '../../shared/severity.js';
@@ -49,21 +50,16 @@ function groupsByType(tasks) {
 }
 
 function renderSummary(scheduledTasks, locale) {
-    const summaryEl = document.createElement('div');
-    summaryEl.className = 'pk-tasks-summary';
-    summaryEl.appendChild(badge(`Total: ${formatNumber(scheduledTasks.tasks.length, {locale})}`, 'muted'));
-    summaryEl.appendChild(badge(`Cron: ${formatNumber(scheduledTasks.cronCount, {locale})}`, 'muted'));
-    summaryEl.appendChild(badge(`Fixed Delay: ${formatNumber(scheduledTasks.fixedDelayCount, {locale})}`, 'muted'));
-    summaryEl.appendChild(badge(`Fixed Rate: ${formatNumber(scheduledTasks.fixedRateCount, {locale})}`, 'muted'));
-    return summaryEl;
+    return el('div', {className: 'pk-tasks-summary'},
+        badge(`Total: ${formatNumber(scheduledTasks.tasks.length, {locale})}`, 'muted'),
+        badge(`Cron: ${formatNumber(scheduledTasks.cronCount, {locale})}`, 'muted'),
+        badge(`Fixed Delay: ${formatNumber(scheduledTasks.fixedDelayCount, {locale})}`, 'muted'),
+        badge(`Fixed Rate: ${formatNumber(scheduledTasks.fixedRateCount, {locale})}`, 'muted'));
 }
 
 function renderTaskRow(task, type, context) {
     const {locale, timeZone} = context;
     const dateOptions = {locale, timeZone};
-
-    const item = document.createElement('div');
-    item.className = 'pk-task';
 
     const targetShort = task.target.includes('.')
         ? task.target.split('.').slice(-2).join('.')
@@ -72,63 +68,31 @@ function renderTaskRow(task, type, context) {
         ? (task.scheduleDescription || task.schedule)
         : formatFixedInterval(task.intervalMs);
 
-    const row = document.createElement('div');
-    row.className = 'pk-task__row';
-
-    const left = document.createElement('div');
-    left.className = 'pk-task__left';
-    left.appendChild(badge(TYPE_PILL_LABELS[type], 'info'));
-
-    const scheduleEl = document.createElement('span');
-    scheduleEl.className = 'pk-task__schedule';
     // the description truncates when the row is narrow, so the tooltip has to carry it
     // as well as the raw expression it was derived from - when the backend shipped one;
     // a fixed-interval task may carry no schedule string at all
-    scheduleEl.title = task.schedule && scheduleDisplay !== task.schedule
+    const scheduleTitle = task.schedule && scheduleDisplay !== task.schedule
         ? `${scheduleDisplay} (${task.schedule})`
         : scheduleDisplay;
-    scheduleEl.textContent = scheduleDisplay;
-    left.appendChild(scheduleEl);
 
-    const right = document.createElement('div');
-    right.className = 'pk-task__right';
-    right.appendChild(timingEl('Last:', task.lastExecution ? formatDateTime(task.lastExecution, dateOptions) : 'Never'));
-    right.appendChild(timingEl('Next:', task.nextExecution ? formatDateTime(task.nextExecution, dateOptions) : '-'));
-    right.appendChild(badge(task.lastStatus || 'PENDING', taskStatusVariant(task.lastStatus)));
-
-    row.append(left, right);
-    item.appendChild(row);
-
-    const targetRow = document.createElement('div');
-    targetRow.className = 'pk-task__target-row';
-
-    const targetEl = document.createElement('span');
-    targetEl.className = 'pk-task__target';
-    targetEl.title = task.target;
-    targetEl.textContent = targetShort;
-    targetRow.appendChild(targetEl);
-
-    if (context.features?.tracing) {
-        targetRow.appendChild(renderTracesLink(task));
-    }
-
-    item.appendChild(targetRow);
-
-    if (task.lastException) {
-        item.appendChild(renderException(task.lastException));
-    }
-
-    return item;
+    return el('div', {className: 'pk-task'},
+        el('div', {className: 'pk-task__row'},
+            el('div', {className: 'pk-task__left'},
+                badge(TYPE_PILL_LABELS[type], 'info'),
+                el('span', {className: 'pk-task__schedule', text: scheduleDisplay, title: scheduleTitle})),
+            el('div', {className: 'pk-task__right'},
+                timingEl('Last:', task.lastExecution ? formatDateTime(task.lastExecution, dateOptions) : 'Never'),
+                timingEl('Next:', task.nextExecution ? formatDateTime(task.nextExecution, dateOptions) : '-'),
+                badge(task.lastStatus || 'PENDING', taskStatusVariant(task.lastStatus)))),
+        el('div', {className: 'pk-task__target-row'},
+            el('span', {className: 'pk-task__target', text: targetShort, title: task.target}),
+            context.features?.tracing ? renderTracesLink(task) : null),
+        task.lastException ? renderException(task.lastException) : null);
 }
 
 function timingEl(labelText, value) {
-    const el = document.createElement('span');
-    el.className = 'pk-task__timing';
-    const labelEl = document.createElement('span');
-    labelEl.className = 'pk-task__timing-label';
-    labelEl.textContent = labelText;
-    el.append(labelEl, document.createTextNode(' ' + value));
-    return el;
+    return el('span', {className: 'pk-task__timing'},
+        el('span', {className: 'pk-task__timing-label', text: labelText}), ' ' + value);
 }
 
 /**
@@ -145,13 +109,8 @@ function renderTracesLink(task) {
 }
 
 function renderException(lastException) {
-    const el = document.createElement('div');
-    el.className = 'pk-task__exception';
-    const labelEl = document.createElement('span');
-    labelEl.className = 'pk-task__exception-label';
-    labelEl.textContent = 'Error during last Execution:';
-    el.append(labelEl, document.createTextNode(' ' + lastException));
-    return el;
+    return el('div', {className: 'pk-task__exception'},
+        el('span', {className: 'pk-task__exception-label', text: 'Error during last Execution:'}), ' ' + lastException);
 }
 
 function formatFixedInterval(ms) {

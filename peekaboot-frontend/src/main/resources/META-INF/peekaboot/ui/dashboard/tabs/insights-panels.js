@@ -10,6 +10,7 @@
  *   onPanelLevelChange() -> a panel's own level switch or reset was clicked
  *   onZoomChange(zoomed) -> a drag-select zoom was applied or lifted
  */
+import {el} from '../../shared/dom.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {formatInterval, formatMetricValue} from '../../shared/format.js';
 import {lastValue} from './insights-store.js';
@@ -283,10 +284,7 @@ export function createInsightsPanels({
         panel.element.classList.toggle(EMPTY_PANEL_CLASS, empty);
         panel.mount.replaceChildren();
         if (!empty) return;
-        const message = document.createElement('div');
-        message.className = 'pk-note pk-insight-empty';
-        message.textContent = 'No data';
-        panel.mount.appendChild(message);
+        panel.mount.appendChild(el('div', {className: 'pk-note pk-insight-empty', text: 'No data'}));
     }
 
     function destroyChart(panel) {

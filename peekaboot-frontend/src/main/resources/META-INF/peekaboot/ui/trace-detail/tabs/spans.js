@@ -319,36 +319,21 @@ function track(span, traceStart, totalDuration, hasError) {
     // the 0.5% floor only keeps the bar itself visible; the duration cell reports the raw share
     const width = Math.max(Math.min((spanDuration / totalDuration) * 100, 100 - left), 0.5);
 
-    const element = document.createElement('div');
-    element.className = 'pk-gantt-track';
-
-    const bar = document.createElement('div');
-    bar.className = `pk-gantt-bar${hasError ? ' pk-gantt-bar--error' : ''}`;
+    const bar = el('div', {className: `pk-gantt-bar${hasError ? ' pk-gantt-bar--error' : ''}`});
     bar.style.left = `${left}%`;
     bar.style.width = `${width}%`;
-    element.appendChild(bar);
 
-    (span.events || []).forEach(event => {
-        if (event.timestamp) element.appendChild(eventMarker(event, traceStart, totalDuration));
-    });
-    return element;
+    return el('div', {className: 'pk-gantt-track'}, bar,
+        ...(span.events || []).filter(event => event.timestamp).map(event => eventMarker(event, traceStart, totalDuration)));
 }
 
 function eventMarker(event, traceStart, totalDuration) {
     const eventTimeMs = new Date(event.timestamp).getTime();
     const left = Math.max(0, Math.min(100, ((eventTimeMs - traceStart) / totalDuration) * 100));
 
-    const marker = document.createElement('button');
-    marker.type = 'button';
-    marker.className = 'pk-unbutton pk-gantt-event-marker';
+    const marker = button({className: 'pk-unbutton pk-gantt-event-marker', attrs: {'aria-label': `Event: ${event.name}`}},
+        el('span', {className: 'pk-gantt-event-tooltip', text: event.name, attrs: {'aria-hidden': 'true'}}));
     marker.style.left = `${left}%`;
-    marker.setAttribute('aria-label', `Event: ${event.name}`);
-
-    const tooltip = document.createElement('span');
-    tooltip.className = 'pk-gantt-event-tooltip';
-    tooltip.setAttribute('aria-hidden', 'true');
-    tooltip.textContent = event.name;
-    marker.appendChild(tooltip);
     return marker;
 }
 
@@ -357,10 +342,10 @@ function durationCell(span, totalDuration) {
     // the backend's own verdict on this span's latency, where it raised an issue
     const severity = issueSeverity(span.issues);
 
-    const cell = document.createElement('span');
-    cell.className = 'pk-gantt-duration' + (severity ? ` ${severityClass(severity)}` : '');
-    cell.textContent = `${formatDurationMs(span.durationMs)} · ${pct}%`;
-    return cell;
+    return el('span', {
+        className: 'pk-gantt-duration' + (severity ? ` ${severityClass(severity)}` : ''),
+        text: `${formatDurationMs(span.durationMs)} · ${pct}%`
+    });
 }
 
 /** A span's kind, copyable id, error and tags - opened by its name or track. The backend already keeps the statement tags out (they arrive as span.query, shown in queryPanel instead), and events sit on the track. */

@@ -16,6 +16,7 @@
  * surprised; the fetch's error path renders an honest "unavailable" line instead.
  */
 import {badge, cell, emptyState, table} from '../../shared/components.js';
+import {el, button} from '../../shared/dom.js';
 import {formatDateTime, formatLongDuration, formatNumber} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
@@ -113,18 +114,13 @@ function renderTable(container, context) {
 }
 
 function renderRow(run, dateOptions) {
-    const row = document.createElement('tr');
-    if (run.running) row.classList.add('pk-table__stripe--primary');
-    if (run.uncleanExit) row.classList.add('pk-table__stripe--danger');
-
-    row.append(
+    const stripes = [run.running && 'pk-table__stripe--primary', run.uncleanExit && 'pk-table__stripe--danger'];
+    return el('tr', {className: stripes.filter(Boolean).join(' ')},
         startedCell(run, dateOptions),
         ranForCell(run),
         stoppedCell(run, dateOptions),
         downBeforeCell(run),
-        buildCell(run, dateOptions)
-    );
-    return row;
+        buildCell(run, dateOptions));
 }
 
 const SHRINK = {className: 'pk-table__shrink'};
@@ -165,45 +161,23 @@ function downBeforeCell(run) {
 function buildCell(run, dateOptions) {
     // The build time is not shown as its own line (the row is already dense) - it is
     // available on hover instead, same as flyway.js's truncated-script tooltip.
-    const td = cell({
-        className: 'pk-lifecycle-row__build',
-        title: run.buildTimeEpochMs != null ? `Built ${formatDateTime(run.buildTimeEpochMs, dateOptions)}` : undefined
-    });
-
-    const version = document.createElement('div');
-    version.className = 'pk-lifecycle-row__version';
-    version.textContent = run.version || '-';
-    td.appendChild(version);
-
-    if (run.branch || run.shortCommitId) {
-        const meta = document.createElement('div');
-        meta.className = 'pk-lifecycle-row__meta';
-        meta.textContent = [run.branch, run.shortCommitId].filter(Boolean).join(' @ ');
-        td.appendChild(meta);
-    }
-
-    if (run.changed && run.changed.length > 0) {
+    const title = run.buildTimeEpochMs != null ? `Built ${formatDateTime(run.buildTimeEpochMs, dateOptions)}` : undefined;
+    const commit = [run.branch, run.shortCommitId].filter(Boolean).join(' @ ');
+    return cell({className: 'pk-lifecycle-row__build', title},
+        el('div', {className: 'pk-lifecycle-row__version', text: run.version || '-'}),
+        commit ? el('div', {className: 'pk-lifecycle-row__meta', text: commit}) : null,
         // changed names exactly what differs from the previous run (version/branch/
         // commit, in that order) - the badge repeats it verbatim rather than just
         // saying "changed".
-        td.appendChild(badge(`Deployment: ${run.changed.join(', ')}`, 'info'));
-    }
-
-    return td;
+        run.changed && run.changed.length > 0 ? badge(`Deployment: ${run.changed.join(', ')}`, 'info') : null);
 }
 
 function renderPager(totalPages, locale) {
-    const pager = document.createElement('div');
-    pager.className = 'pk-lifecycle-pager';
-
     // The step is all the two buttons differ by: it says where a click goes and, with
     // totalPages, whether there is a page to go to at all.
     function pagerButton(label, delta) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'pk-btn pk-btn--small';
-        btn.textContent = label;
-        btn.disabled = currentPage + delta < 0 || currentPage + delta >= totalPages;
+        const outOfRange = currentPage + delta < 0 || currentPage + delta >= totalPages;
+        const btn = button({className: 'pk-btn pk-btn--small', text: label, attrs: {disabled: outOfRange ? '' : null}});
         btn.addEventListener('click', () => {
             currentPage += delta;
             writePageParam();
@@ -212,10 +186,11 @@ function renderPager(totalPages, locale) {
         return btn;
     }
 
-    const readout = document.createElement('span');
-    readout.className = 'pk-lifecycle-pager__readout';
-    readout.textContent = `Page ${formatNumber(currentPage + 1, {locale})} of ${formatNumber(totalPages, {locale})}`;
-
-    pager.append(pagerButton('Previous', -1), readout, pagerButton('Next', 1));
-    return pager;
+    return el('div', {className: 'pk-lifecycle-pager'},
+        pagerButton('Previous', -1),
+        el('span', {
+            className: 'pk-lifecycle-pager__readout',
+            text: `Page ${formatNumber(currentPage + 1, {locale})} of ${formatNumber(totalPages, {locale})}`
+        }),
+        pagerButton('Next', 1));
 }

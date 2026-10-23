@@ -4,6 +4,7 @@
  * component grid.
  */
 import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
+import {el, button} from '../../shared/dom.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatNumber, formatPlainValue, formatTileValue} from '../../shared/format.js';
@@ -98,49 +99,49 @@ function renderInsightTiles(container, data, context) {
  * (null, or an object with no entries).
  */
 function fillCard(container, selector, value, emptyMessage, fill) {
-    const el = container.querySelector(selector);
-    if (!el) return;
-    el.innerHTML = '';
+    const body = container.querySelector(selector);
+    if (!body) return;
+    body.innerHTML = '';
     if (!value || Object.keys(value).length === 0) {
-        el.appendChild(emptyState(emptyMessage));
+        body.appendChild(emptyState(emptyMessage));
         return;
     }
-    fill(el, value);
+    fill(body, value);
 }
 
 function renderBuildInfo(container, build, dateOptions) {
-    fillCard(container, '#build-info', build, 'No build info available', el => {
-        if (build.name) el.appendChild(kvRow('Name', build.name));
-        if (build.version) el.appendChild(kvRow('Version', build.version));
-        if (build.group) el.appendChild(kvRow('Group', build.group));
-        if (build.artifact) el.appendChild(kvRow('Artifact', build.artifact));
-        if (build.time) el.appendChild(kvRow('Built', formatDateTime(build.time, dateOptions)));
+    fillCard(container, '#build-info', build, 'No build info available', body => {
+        if (build.name) body.appendChild(kvRow('Name', build.name));
+        if (build.version) body.appendChild(kvRow('Version', build.version));
+        if (build.group) body.appendChild(kvRow('Group', build.group));
+        if (build.artifact) body.appendChild(kvRow('Artifact', build.artifact));
+        if (build.time) body.appendChild(kvRow('Built', formatDateTime(build.time, dateOptions)));
     });
 }
 
 function renderGitInfo(container, git, dateOptions) {
-    fillCard(container, '#git-info', git, 'No git info available', el => {
-        if (git.branch) el.appendChild(kvRow('Branch', git.branch));
+    fillCard(container, '#git-info', git, 'No git info available', body => {
+        if (git.branch) body.appendChild(kvRow('Branch', git.branch));
         if (git.commit?.id) {
             const commitId = git.commit.id.abbrev || git.commit.id;
-            el.appendChild(kvRow('Commit', commitId, {mono: true}));
+            body.appendChild(kvRow('Commit', commitId, {mono: true}));
         }
-        if (git.commit?.time) el.appendChild(kvRow('Commit Time', formatDateTime(git.commit.time, dateOptions)));
-        if (git.dirty !== undefined) el.appendChild(kvRow('Dirty', git.dirty ? 'Yes' : 'No'));
+        if (git.commit?.time) body.appendChild(kvRow('Commit Time', formatDateTime(git.commit.time, dateOptions)));
+        if (git.dirty !== undefined) body.appendChild(kvRow('Dirty', git.dirty ? 'Yes' : 'No'));
     });
 }
 
 function renderSpringInfo(container, application) {
-    fillCard(container, '#spring-info', application, 'No Spring info available', el => {
-        if (application.springBootVersion) el.appendChild(kvRow('Boot', application.springBootVersion));
-        if (application.springFrameworkVersion) el.appendChild(kvRow('Framework', application.springFrameworkVersion));
+    fillCard(container, '#spring-info', application, 'No Spring info available', body => {
+        if (application.springBootVersion) body.appendChild(kvRow('Boot', application.springBootVersion));
+        if (application.springFrameworkVersion) body.appendChild(kvRow('Framework', application.springFrameworkVersion));
     });
 }
 
 function renderJavaInfo(container, application) {
-    fillCard(container, '#java-info', application, 'No Java info available', el => {
-        if (application.javaVersion) el.appendChild(kvRow('Version', application.javaVersion));
-        if (application.javaVendor) el.appendChild(kvRow('Vendor', application.javaVendor));
+    fillCard(container, '#java-info', application, 'No Java info available', body => {
+        if (application.javaVersion) body.appendChild(kvRow('Version', application.javaVersion));
+        if (application.javaVendor) body.appendChild(kvRow('Vendor', application.javaVendor));
     });
 }
 
@@ -148,24 +149,24 @@ function renderOsInfo(container, runtime) {
     const os = runtime?.os;
     const process = runtime?.process;
 
-    fillCard(container, '#os-info', os || process ? {os, process} : null, 'No system info available', el => {
+    fillCard(container, '#os-info', os || process ? {os, process} : null, 'No system info available', body => {
         if (os) {
-            if (os.name) el.appendChild(kvRow('OS', `${os.name} ${os.version || ''}`));
-            if (os.arch) el.appendChild(kvRow('Architecture', os.arch));
+            if (os.name) body.appendChild(kvRow('OS', `${os.name} ${os.version || ''}`));
+            if (os.arch) body.appendChild(kvRow('Architecture', os.arch));
         }
 
         if (process) {
             let userDisplay = process.username || '';
             if (process.uid != null) userDisplay += ` (uid=${process.uid}, gid=${process.gid})`;
-            el.appendChild(kvRow('User', userDisplay));
-            el.appendChild(kvRow('PID', process.pid, {mono: true}));
+            body.appendChild(kvRow('User', userDisplay));
+            body.appendChild(kvRow('PID', process.pid, {mono: true}));
 
             if (process.parentProcesses && process.parentProcesses.length > 0) {
                 const tree = process.parentProcesses
                     .map(p => p.command ? `${p.command}(${p.pid})` : String(p.pid))
                     .reverse()
                     .join(' → ');
-                el.appendChild(kvRow('Process Tree', tree, {mono: true}));
+                body.appendChild(kvRow('Process Tree', tree, {mono: true}));
             }
         }
     });
@@ -180,23 +181,23 @@ function renderOsInfo(container, runtime) {
  * arrives null/empty and renders no row at all.
  */
 function renderMachineInfo(container, runtime, locale) {
-    const el = container.querySelector('#machine-info');
-    const previousFamily = el.querySelector('#machine-net-tabs .pk-tab[aria-selected="true"]')?.dataset.tab;
-    el.innerHTML = '';
+    const body = container.querySelector('#machine-info');
+    const previousFamily = body.querySelector('#machine-net-tabs .pk-tab[aria-selected="true"]')?.dataset.tab;
+    body.innerHTML = '';
 
     const machine = runtime?.machine;
     if (!machine) {
-        el.appendChild(emptyState('No machine info available'));
+        body.appendChild(emptyState('No machine info available'));
         return;
     }
 
-    if (machine.cpuCount) el.appendChild(kvRow('CPU Cores', cpuCoresValue(machine, locale)));
-    if (machine.cpuModel) el.appendChild(kvRow('CPU Model', machine.cpuModel));
-    if (machine.totalMemory) el.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
-    if (machine.maxHeap) el.appendChild(kvRow('Max Heap', formatBytes(machine.maxHeap)));
-    el.appendChild(kvRow('Container', machine.container || 'none'));
+    if (machine.cpuCount) body.appendChild(kvRow('CPU Cores', cpuCoresValue(machine, locale)));
+    if (machine.cpuModel) body.appendChild(kvRow('CPU Model', machine.cpuModel));
+    if (machine.totalMemory) body.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
+    if (machine.maxHeap) body.appendChild(kvRow('Max Heap', formatBytes(machine.maxHeap)));
+    body.appendChild(kvRow('Container', machine.container || 'none'));
 
-    renderNetworkAddresses(el, machine.networkAddresses ?? [], previousFamily);
+    renderNetworkAddresses(body, machine.networkAddresses ?? [], previousFamily);
 }
 
 const IP_FAMILIES = [
@@ -218,39 +219,27 @@ function ipFamily(address) {
  * refresh rebuild via previousFamily (the group-expansion convention), never into
  * the URL.
  */
-function renderNetworkAddresses(el, addresses, previousFamily) {
+function renderNetworkAddresses(body, addresses, previousFamily) {
     if (addresses.length === 0) return;
 
-    const strip = document.createElement('div');
-    strip.className = 'pk-tabs';
-    strip.id = 'machine-net-tabs';
-    el.appendChild(strip);
+    const strip = el('div', {className: 'pk-tabs', attrs: {id: 'machine-net-tabs'}});
+    body.appendChild(strip);
 
     const panels = new Map();
     IP_FAMILIES.forEach(({id, label}) => {
         const familyAddresses = addresses.filter(({address}) => ipFamily(address) === id);
+        const buttonId = `machine-net-${id}-btn`;
 
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.id = `machine-net-${id}-btn`;
-        button.className = 'pk-tab' + (familyAddresses.length === 0 ? ' hidden' : '');
-        button.dataset.tab = id;
-        button.setAttribute('role', 'tab');
-        button.setAttribute('aria-controls', `machine-net-${id}`);
-        button.textContent = label;
-        strip.appendChild(button);
+        strip.appendChild(button({
+            className: 'pk-tab' + (familyAddresses.length === 0 ? ' hidden' : ''),
+            text: label,
+            attrs: {id: buttonId, 'data-tab': id, role: 'tab', 'aria-controls': `machine-net-${id}`}
+        }));
 
-        const panel = document.createElement('div');
-        panel.id = `machine-net-${id}`;
-        panel.setAttribute('role', 'tabpanel');
-        panel.setAttribute('aria-labelledby', button.id);
-        familyAddresses.forEach(({address, hostname}) => {
-            const row = document.createElement('div');
-            row.className = 'pk-machine-net__addr';
-            row.textContent = hostname ? `${address} (${hostname})` : address;
-            panel.appendChild(row);
-        });
-        el.appendChild(panel);
+        const panel = el('div', {attrs: {id: `machine-net-${id}`, role: 'tabpanel', 'aria-labelledby': buttonId}},
+            ...familyAddresses.map(({address, hostname}) =>
+                el('div', {className: 'pk-machine-net__addr', text: hostname ? `${address} (${hostname})` : address})));
+        body.appendChild(panel);
         if (familyAddresses.length > 0) panels.set(id, panel);
     });
 
@@ -275,20 +264,20 @@ function cpuCoresValue(machine, locale) {
 }
 
 function renderJvmDefaults(container, server, {locale, timeZone}) {
-    fillCard(container, '#jvm-defaults-info', server, 'No JVM defaults available', el => {
+    fillCard(container, '#jvm-defaults-info', server, 'No JVM defaults available', body => {
         if (server.locale) {
             const localeDisplay = server.localeDisplay ? ` (${server.localeDisplay})` : '';
-            el.appendChild(kvRow('Locale', `${server.locale}${localeDisplay}`));
+            body.appendChild(kvRow('Locale', `${server.locale}${localeDisplay}`));
         }
         if (server.timezone) {
             const tzDisplay = server.timezoneOffset ? ` (UTC${server.timezoneOffset})` : '';
-            el.appendChild(kvRow('Timezone', `${server.timezone}${tzDisplay}`));
+            body.appendChild(kvRow('Timezone', `${server.timezone}${tzDisplay}`));
         }
         if (server.currentTime) {
-            el.appendChild(kvRow('Server Time',
+            body.appendChild(kvRow('Server Time',
                 formatDateTimeWith(server.currentTime, {dateStyle: 'medium', timeStyle: 'medium'}, {locale, timeZone})));
         }
-        if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
+        if (server.fileEncoding) body.appendChild(kvRow('File Encoding', server.fileEncoding));
     });
 }
 
@@ -303,50 +292,32 @@ function renderDataSourcesInfo(container, dataSources) {
 }
 
 function renderDataSourceCard(ds) {
-    const card = document.createElement('div');
-    card.className = 'pk-card';
-    card.dataset.datasource = ds.name || 'DataSource';
+    const name = ds.name || 'DataSource';
+    const header = el('div', {className: 'pk-card__header pk-label'},
+        el('span', {className: 'pk-card__icon', text: '\u{1F5C2}', attrs: {'aria-hidden': 'true'}}),
+        el('h2', {className: 'pk-card__title', text: name}),
+        ds.health ? badge(ds.health, healthSeverity(ds.health)) : null);
 
-    const header = document.createElement('div');
-    header.className = 'pk-card__header pk-label';
-    header.innerHTML = `<span class="pk-card__icon" aria-hidden="true">\u{1F5C2}</span>`
-            + `<h2 class="pk-card__title">${escapeHtml(ds.name || 'DataSource')}</h2>`;
-    if (ds.health) header.appendChild(badge(ds.health, healthSeverity(ds.health)));
-
-    const body = document.createElement('div');
-    body.className = 'pk-card__body';
     const dbProduct = ds.databaseProduct ? (ds.databaseProduct.displayName || ds.databaseProduct) : '-';
-    body.appendChild(kvRow('Database', ds.databaseName));
-    body.appendChild(kvRow('Host', formatHosts(ds.hosts), {mono: true}));
-    body.appendChild(kvRow('User', ds.username));
-    body.appendChild(kvRow('Product', String(dbProduct)));
-    body.appendChild(kvRow('Driver', ds.driver));
+    const body = el('div', {className: 'pk-card__body'},
+        kvRow('Database', ds.databaseName),
+        kvRow('Host', formatHosts(ds.hosts), {mono: true}),
+        kvRow('User', ds.username),
+        kvRow('Product', String(dbProduct)),
+        kvRow('Driver', ds.driver));
 
-    card.append(header, body);
+    const card = el('div', {className: 'pk-card', attrs: {'data-datasource': name}}, header, body);
 
     const params = Object.entries(ds.properties || {});
     if (params.length > 0) {
-        const paramsEl = document.createElement('div');
-        paramsEl.className = 'pk-datasources__params';
-        paramsEl.hidden = true;
-
-        const list = document.createElement('div');
-        list.className = 'pk-datasources__params-list';
         // The backend (MaskingEngine) already masked sensitive connection params -
         // this just renders whatever value it sent, same as every other tab.
-        params.forEach(([key, value]) => {
-            list.appendChild(kvRow(key, value, {tight: true, mono: true}));
-        });
-        paramsEl.appendChild(list);
+        const paramsEl = el('div', {className: 'pk-datasources__params', attrs: {hidden: ''}},
+            el('div', {className: 'pk-datasources__params-list'},
+                ...params.map(([key, value]) => kvRow(key, value, {tight: true, mono: true}))));
 
-        const toggle = document.createElement('div');
-        toggle.className = 'pk-datasources__toggle';
-        const toggleBtn = document.createElement('button');
-        toggleBtn.type = 'button';
-        toggleBtn.className = 'pk-btn pk-btn--small';
-        toggleBtn.textContent = 'Show Connection Params';
-        toggle.appendChild(toggleBtn);
-        body.appendChild(toggle);
+        const toggleBtn = button({className: 'pk-btn pk-btn--small', text: 'Show Connection Params'});
+        body.appendChild(el('div', {className: 'pk-datasources__toggle'}, toggleBtn));
         card.appendChild(paramsEl);
 
         toggleBtn.addEventListener('click', (e) => {
@@ -361,40 +332,36 @@ function renderDataSourceCard(ds) {
 
 /** A usage meter with its caption row. */
 function usageSection(label, caption, percent) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'pk-section';
-    wrapper.appendChild(kvRow(label, caption, {tight: true}));
-    wrapper.appendChild(meter(percent));
-    return wrapper;
+    return el('div', {className: 'pk-section'}, kvRow(label, caption, {tight: true}), meter(percent));
 }
 
 function renderMemoryInfo(container, runtime) {
-    const el = container.querySelector('#memory-info');
-    el.innerHTML = '';
+    const body = container.querySelector('#memory-info');
+    body.innerHTML = '';
 
     const memory = runtime?.memory;
     const storage = runtime?.storage;
 
     if (!memory && (!storage || storage.length === 0)) {
-        el.appendChild(emptyState('No memory info available'));
+        body.appendChild(emptyState('No memory info available'));
         return;
     }
 
     if (memory) {
         const heapPercent = memory.heapUsedPercent;
-        el.appendChild(usageSection('Heap',
+        body.appendChild(usageSection('Heap',
             `${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapMax)} (${heapPercent.toFixed(1)}%)`,
             heapPercent));
 
         if (memory.nonHeapUsed) {
-            el.appendChild(kvRow('Non-Heap', formatBytes(memory.nonHeapUsed), {tight: true}));
+            body.appendChild(kvRow('Non-Heap', formatBytes(memory.nonHeapUsed), {tight: true}));
         }
     }
 
     if (storage && storage.length > 0) {
         storage.forEach(s => {
             const used = s.total - s.free;
-            el.appendChild(usageSection(s.path || 'Disk',
+            body.appendChild(usageSection(s.path || 'Disk',
                 `${formatBytes(used)} used / ${formatBytes(s.total)} total (${formatBytes(s.free)} free)`,
                 s.usedPercent));
         });
@@ -455,33 +422,21 @@ function renderHealthComponents(container, components) {
     }
 
     components.forEach(component => {
-        const card = document.createElement('div');
-        card.className = 'pk-component-grid__card';
-
         const modifier = healthModifier(healthSeverity(component.status || 'UNKNOWN'));
         const dotClass = 'pk-component-grid__dot' + (modifier ? ` pk-component-grid__dot--${modifier}` : '');
+        const detailsText = Object.entries(component.details || {})
+            .filter(([, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
+            .map(([k, v]) => {
+                if (k === 'total' || k === 'free' || k === 'threshold') return `${k}: ${formatBytes(v)}`;
+                return `${k}: ${formatDetailValue(v)}`;
+            })
+            .join('\n');
 
-        let detailsHtml = '';
-        if (component.details && Object.keys(component.details).length > 0) {
-            const detailsText = Object.entries(component.details)
-                .filter(([, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
-                .map(([k, v]) => {
-                    if (k === 'total' || k === 'free' || k === 'threshold') return `${k}: ${formatBytes(v)}`;
-                    return `${k}: ${formatDetailValue(v)}`;
-                })
-                .join('\n');
-            if (detailsText) detailsHtml = `<div class="pk-component-grid__details">${escapeHtml(detailsText)}</div>`;
-        }
-
-        card.innerHTML = `
-            <div class="pk-component-grid__header">
-                <span class="pk-component-grid__name">${escapeHtml(component.name)}</span>
-                <span class="${dotClass}"></span>
-            </div>
-            ${detailsHtml}
-        `;
-
-        grid.appendChild(card);
+        grid.appendChild(el('div', {className: 'pk-component-grid__card'},
+            el('div', {className: 'pk-component-grid__header'},
+                el('span', {className: 'pk-component-grid__name', text: component.name}),
+                el('span', {className: dotClass})),
+            detailsText ? el('div', {className: 'pk-component-grid__details', text: detailsText}) : null));
     });
 }
 

@@ -3,6 +3,7 @@
  * restrictable to loggers with an explicit configured level.
  */
 import {badge} from '../../shared/components.js';
+import {el} from '../../shared/dom.js';
 import {formatCount, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {highlightText} from '../../shared/markup.js';
@@ -34,7 +35,7 @@ const tab = filteredGroupTab({
     // pk-group__name defaults to the primary-coloured style; logger package names use
     // the text-strong modifier instead (see the modifier's doc comment in components.css).
     decorate: listEl => listEl.querySelectorAll('.pk-group__name')
-        .forEach(el => el.classList.add('pk-group__name--strong'))
+        .forEach(name => name.classList.add('pk-group__name--strong'))
 });
 
 // The checkbox is this tab's own second filter control: wired once here, its state
@@ -109,22 +110,13 @@ function matches(logger, query) {
 }
 
 function renderSummary(loggersInfo, locale) {
-    const summaryEl = document.createElement('div');
-    summaryEl.className = 'pk-loggers-summary';
-    summaryEl.appendChild(badge(`Total: ${formatNumber(loggersInfo.totalCount, {locale})}`, 'muted'));
-    summaryEl.appendChild(badge(`Configured: ${formatNumber(loggersInfo.configuredCount, {locale})}`, 'muted'));
-    return summaryEl;
+    return el('div', {className: 'pk-loggers-summary'},
+        badge(`Total: ${formatNumber(loggersInfo.totalCount, {locale})}`, 'muted'),
+        badge(`Configured: ${formatNumber(loggersInfo.configuredCount, {locale})}`, 'muted'));
 }
 
 function renderLoggerRow(logger, query) {
-    const row = document.createElement('div');
-    row.className = 'pk-kv';
-
-    const nameEl = document.createElement('span');
-    nameEl.className = 'pk-kv__key' + (isConfigured(logger) ? ' pk-kv__key--configured' : '');
-    nameEl.innerHTML = highlightText(logger.name, query);
-    row.appendChild(nameEl);
-
-    row.appendChild(badge(logger.effectiveLevel || '-', logLevelVariant(logger.effectiveLevel)));
-    return row;
+    const name = el('span', {className: 'pk-kv__key' + (isConfigured(logger) ? ' pk-kv__key--configured' : '')});
+    name.innerHTML = highlightText(logger.name, query);
+    return el('div', {className: 'pk-kv'}, name, badge(logger.effectiveLevel || '-', logLevelVariant(logger.effectiveLevel)));
 }

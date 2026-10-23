@@ -10,6 +10,7 @@
  * older response never overwrites a newer one.
  */
 import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components.js';
+import {el, button} from '../../shared/dom.js';
 import {formatDurationMs, formatDateTime, formatNumber} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
@@ -237,26 +238,17 @@ function renderTypeFilterCheckboxes(container) {
 
 /** A labelled checkbox that applies its change to the filter state, then refetches. */
 function filterCheckbox(type, applyChange) {
-    const checkboxLabel = document.createElement('label');
-    checkboxLabel.className = 'pk-checkbox-label';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.value = type;
+    const checkbox = el('input', {attrs: {type: 'checkbox', value: type}});
     checkbox.addEventListener('change', () => {
         applyChange();
         writeUrlParams();
         tab.refetch();
     });
 
-    // one flex item, so the icon sits a space from its label rather than a flex gap
-    const icon = document.createElement('span');
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = rootActionIcon(type);
-    const text = document.createElement('span');
-    text.append(icon, ' ' + rootActionLabel(type));
-
-    checkboxLabel.append(checkbox, text);
+    // The label wraps the checkbox, which is how the caller reaches it (parentElement).
+    // The icon and text are one flex item, so the icon sits a space from its label rather than a flex gap.
+    el('label', {className: 'pk-checkbox-label'}, checkbox,
+        el('span', {}, el('span', {text: rootActionIcon(type), attrs: {'aria-hidden': 'true'}}), ' ' + rootActionLabel(type)));
     return checkbox;
 }
 
@@ -346,44 +338,35 @@ function updateFilterIndicator(container) {
 }
 
 function renderTraceItem(trace, context) {
-    const item = document.createElement('div');
-    item.className = 'pk-trace-item';
-    if (trace.traceId) item.dataset.traceId = trace.traceId;
-    // An async row shares its trace's id with that trace's own whole-trace row (one bundle,
-    // several listing rows) - the subtree's root span id is what tells the two apart in the
-    // DOM, for anything, tests included, that needs to address one specific row.
-    if (trace.subtree?.rootSpanId) item.dataset.subtreeRootSpanId = trace.subtree.rootSpanId;
-
     const actionType = trace.rootActionType || 'UNKNOWN';
     const hasErrors = trace.status === 'HAS_ERRORS';
     const rootOperation = trace.rootOperation || '';
 
-    const header = document.createElement('div');
-    header.className = 'pk-trace-item__header';
-
     // A real <button> over the main line alone. The scheduler link and the stats line are
     // its siblings, not its children: the stats carry the traceId's copy control, and a
     // button cannot contain interactive content (see ToolbarShell for the same shape).
-    const openBtn = document.createElement('button');
-    openBtn.type = 'button';
-    openBtn.className = 'pk-unbutton pk-trace-item__open';
-    openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
+    const openBtn = button({className: 'pk-unbutton pk-trace-item__open'},
+        renderMainLine(trace, actionType, hasErrors, rootOperation));
+
+    const header = el('div', {className: 'pk-trace-item__header'},
+        el('div', {className: 'pk-trace-item__body'}, openBtn, renderStats(trace, context)),
+        actionType === 'SCHEDULED_JOB' ? renderSchedulerLink() : null,
+        trace.subtree?.enclosedByStoredTrace ? renderEnclosingTraceLink(trace.traceId) : null);
     if (trace.traceId) {
         openBtn.addEventListener('click', () => context.openTrace(trace.traceId, trace.subtree?.rootSpanId));
         forwardRowClicks(header, openBtn);
     }
 
-    const body = document.createElement('div');
-    body.className = 'pk-trace-item__body';
-    body.appendChild(openBtn);
-    body.appendChild(renderStats(trace, context));
-    header.appendChild(body);
-
-    if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink());
-    if (trace.subtree?.enclosedByStoredTrace) header.appendChild(renderEnclosingTraceLink(trace.traceId));
-
-    item.appendChild(header);
-    return item;
+    return el('div', {
+        className: 'pk-trace-item',
+        attrs: {
+            'data-trace-id': trace.traceId || null,
+            // An async row shares its trace's id with that trace's own whole-trace row (one bundle,
+            // several listing rows) - the subtree's root span id is what tells the two apart in the
+            // DOM, for anything, tests included, that needs to address one specific row.
+            'data-subtree-root-span-id': trace.subtree?.rootSpanId || null
+        }
+    }, header);
 }
 
 /**
@@ -400,46 +383,31 @@ function forwardRowClicks(row, openBtn) {
 }
 
 function renderMainLine(trace, actionType, hasErrors, rootOperation) {
-    const mainLine = document.createElement('div');
-    mainLine.className = 'pk-trace-item__main-line';
-
-    const iconEl = document.createElement('span');
-    iconEl.className = 'pk-trace-item__icon';
-    // role="img" + aria-label, not title: title on a roleless <span> is not reliably
-    // exposed, and when rootOperation is present the action type is shown nowhere else.
-    iconEl.setAttribute('role', 'img');
-    iconEl.setAttribute('aria-label', rootActionLabel(actionType));
-    iconEl.title = rootActionLabel(actionType);
-    iconEl.textContent = rootActionIcon(actionType);
-    mainLine.appendChild(iconEl);
-
-    const pathEl = document.createElement('span');
-    pathEl.className = 'pk-trace-item__path';
-    if (rootOperation) {
-        pathEl.textContent = rootOperation;
-        pathEl.title = rootOperation;
-    } else {
-        pathEl.title = rootActionLabel(actionType);
-        const labelEl = document.createElement('span');
-        labelEl.className = 'pk-trace-item__action-label';
-        labelEl.textContent = rootActionLabel(actionType);
-        pathEl.appendChild(labelEl);
-    }
-    mainLine.appendChild(pathEl);
-
-    const durationEl = document.createElement('span');
-    durationEl.className = 'pk-trace-item__duration';
-    durationEl.textContent = formatDurationMs(trace.durationMs);
-    mainLine.appendChild(durationEl);
+    const actionLabel = rootActionLabel(actionType);
+    const path = rootOperation
+        ? el('span', {className: 'pk-trace-item__path', text: rootOperation, title: rootOperation})
+        : el('span', {className: 'pk-trace-item__path', title: actionLabel},
+            el('span', {className: 'pk-trace-item__action-label', text: actionLabel}));
 
     // trace.slow is the backend's verdict: some span carries a SLOW or VERY_SLOW issue.
     // Not the Slow bucket - that admits a trace by its total duration.
-    if (hasErrors) mainLine.appendChild(badge('ERROR', 'error'));
-    else if (trace.slow) mainLine.appendChild(badge('SLOW', 'warn'));
+    let verdict = null;
+    if (hasErrors) verdict = badge('ERROR', 'error');
+    else if (trace.slow) verdict = badge('SLOW', 'warn');
 
-    if (trace.truncated) mainLine.appendChild(truncatedBadge());
-
-    return mainLine;
+    return el('div', {className: 'pk-trace-item__main-line'},
+        // role="img" + aria-label, not title: title on a roleless <span> is not reliably
+        // exposed, and when rootOperation is present the action type is shown nowhere else.
+        el('span', {
+            className: 'pk-trace-item__icon',
+            text: rootActionIcon(actionType),
+            title: actionLabel,
+            attrs: {role: 'img', 'aria-label': actionLabel}
+        }),
+        path,
+        el('span', {className: 'pk-trace-item__duration', text: formatDurationMs(trace.durationMs)}),
+        verdict,
+        trace.truncated ? truncatedBadge() : null);
 }
 
 /** Plain "jump to Scheduled Tasks" link, deliberately unfiltered. A sibling of the open button, not a descendant, so its click never reaches that button's listener. */
@@ -461,29 +429,17 @@ function renderEnclosingTraceLink(traceId) {
 }
 
 function renderStats(trace, context) {
-    const stats = document.createElement('div');
-    stats.className = 'pk-trace-item__stats';
-
-    // truncated visually so a long list stays scannable, but the full id is what gets
-    // copied - and clicking it copies rather than expanding the row
-    stats.appendChild(copyableId(trace.traceId, {label: 'traceId', truncate: true}));
-
-    const timeEl = document.createElement('span');
-    timeEl.className = 'pk-trace-item__time';
-    timeEl.textContent = trace.startTimeMs
+    const startTime = trace.startTimeMs
         ? formatDateTime(trace.startTimeMs, {locale: context.locale, timeZone: context.timeZone})
         : '-';
-    stats.appendChild(timeEl);
+    const parts = traceStatParts(trace, {features: context.features, locale: context.locale});
 
-    traceStatParts(trace, {features: context.features, locale: context.locale}).forEach((part, index) => {
-        if (index > 0) {
-            const separator = document.createElement('span');
-            separator.className = 'pk-trace-item__stat-separator';
-            separator.textContent = '|';
-            stats.appendChild(separator);
-        }
-        stats.appendChild(part);
-    });
-
-    return stats;
+    return el('div', {className: 'pk-trace-item__stats'},
+        // truncated visually so a long list stays scannable, but the full id is what gets
+        // copied - and clicking it copies rather than expanding the row
+        copyableId(trace.traceId, {label: 'traceId', truncate: true}),
+        el('span', {className: 'pk-trace-item__time', text: startTime}),
+        ...parts.flatMap((part, index) => index > 0
+            ? [el('span', {className: 'pk-trace-item__stat-separator', text: '|'}), part]
+            : [part]));
 }

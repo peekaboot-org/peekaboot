@@ -6,12 +6,14 @@
  * migration on three stacked lines.
  */
 import {badge, cell, table, textCell} from '../../shared/components.js';
+import {el} from '../../shared/dom.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {migrationStateVariant} from '../../shared/severity.js';
 
 export const id = 'flyway';
 
 const COLUMNS = ['Version', 'Description', 'Script', 'Type', 'Duration', 'Installed', 'Status'];
+const STATE_STRIPES = {FAILED: 'pk-table__stripe--danger', PENDING: 'pk-table__stripe--muted'};
 
 export function isAvailable(data) {
     return Boolean(data?.flyway?.migrations?.length);
@@ -31,20 +33,14 @@ export function render(container, data, {locale, timeZone} = {}) {
 }
 
 function renderRow(migration, {locale, timeZone}) {
-    const row = document.createElement('tr');
-    if (migration.state === 'FAILED') row.classList.add('pk-table__stripe--danger');
-    if (migration.state === 'PENDING') row.classList.add('pk-table__stripe--muted');
-
-    row.append(
+    return el('tr', {className: STATE_STRIPES[migration.state]},
         textCell(`V${migration.version}`, 'pk-flyway-row__version pk-table__shrink'),
         textCell(migration.description, 'pk-flyway-row__description'),
         textCell(migration.script, 'pk-table__mono pk-flyway-row__script'),
         textCell(migration.type, 'pk-table__shrink'),
         durationCell(migration.executionTime),
         textCell(formatDateTime(migration.installedOn, {locale, timeZone}), 'pk-table__shrink'),
-        cell({className: 'pk-table__shrink'}, badge(migration.state, migrationStateVariant(migration.state)))
-    );
-    return row;
+        cell({className: 'pk-table__shrink'}, badge(migration.state, migrationStateVariant(migration.state))));
 }
 
 /**

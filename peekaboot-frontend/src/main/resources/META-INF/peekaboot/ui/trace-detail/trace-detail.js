@@ -120,11 +120,9 @@ export function openTraceDetail(traceId, options = {}) {
     const basePath = options.basePath || BASE_PATH;
     registerBundledFonts(basePath);
 
-    const overlayHost = document.createElement('div');
-    overlayHost.id = 'peekaboot-trace-overlay';
-    // The UI tests wait on this to tell one open from the next; everything else of the
-    // overlay sits inside the shadow root.
-    overlayHost.dataset.traceId = traceId;
+    // data-trace-id: the UI tests wait on it to tell one open from the next; everything else
+    // of the overlay sits inside the shadow root.
+    const overlayHost = el('div', {attrs: {id: 'peekaboot-trace-overlay', 'data-trace-id': traceId}});
     // An inline style, not a `:host` rule in trace-detail.css: attachSharedStyles() links
     // that sheet asynchronously, and a CSS-only rule would leave the host collapsed to
     // zero size until it lands. The CSSOM write applies the instant the element exists.
@@ -158,10 +156,9 @@ export function openTraceDetail(traceId, options = {}) {
     // trace fetch - see the Promise.all in fetchAndRender.
     const styleReady = attachSharedStyles(shadow, overlayHost, basePath, `${basePath}/ui/trace-detail/trace-detail.css`);
 
-    const content = document.createElement('div');
-    shadow.appendChild(content);
-    content.replaceChildren(el('div', {className: 'pk-overlay'},
+    const content = el('div', {}, el('div', {className: 'pk-overlay'},
         el('div', {className: 'pk-overlay__loading', text: 'Loading trace data...'})));
+    shadow.appendChild(content);
 
     const display = {locale: options.locale, timeZone: options.timeZone, features: options.features};
     fetchAndRender(content, traceId, {basePath, session, styleReady, urlState: options.urlState, display});

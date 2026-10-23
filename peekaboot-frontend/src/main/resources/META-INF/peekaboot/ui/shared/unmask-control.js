@@ -11,6 +11,8 @@
  * the feature is off, `slot` is left empty rather than holding a hidden button, so the
  * control is genuinely absent from the DOM, not merely invisible.
  */
+import {el, button} from './dom.js';
+
 export function renderUnmaskControl(slot, context) {
     if (!slot) return;
 
@@ -19,37 +21,26 @@ export function renderUnmaskControl(slot, context) {
         return;
     }
 
-    let button = slot.querySelector('.pk-unmask-toggle');
-    if (!button) {
-        button = buildButton(context);
-        slot.replaceChildren(button);
+    let control = slot.querySelector('.pk-unmask-toggle');
+    if (!control) {
+        control = buildButton(context);
+        slot.replaceChildren(control);
     }
-    updateButton(button, Boolean(context.unmaskRequested));
+    updateButton(control, Boolean(context.unmaskRequested));
 }
 
 function buildButton(context) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'pk-btn pk-btn--small pk-unmask-toggle';
-
-    const icon = document.createElement('span');
-    icon.className = 'pk-unmask-toggle__icon';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = '\u{1F441}'; // eye
-
-    const label = document.createElement('span');
-    label.className = 'pk-unmask-toggle__label';
-    label.textContent = 'Show secrets';
-
-    button.append(icon, label);
+    const control = button({className: 'pk-btn pk-btn--small pk-unmask-toggle'},
+        el('span', {className: 'pk-unmask-toggle__icon', text: '\u{1F441}', attrs: {'aria-hidden': 'true'}}), // eye
+        el('span', {className: 'pk-unmask-toggle__label', text: 'Show secrets'}));
     // context.toggleUnmask is a stable function reference owned by main.js (it reads/
     // writes its own module-scoped state directly) - safe to bind once here even though
     // renderUnmaskControl() itself is called again, with a fresh context object, on
     // every subsequent render.
-    button.addEventListener('click', () => context.toggleUnmask());
-    return button;
+    control.addEventListener('click', () => context.toggleUnmask());
+    return control;
 }
 
-function updateButton(button, revealed) {
-    button.setAttribute('aria-pressed', String(revealed));
+function updateButton(control, revealed) {
+    control.setAttribute('aria-pressed', String(revealed));
 }

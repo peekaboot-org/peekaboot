@@ -3,6 +3,7 @@
  * its key/value pairs, with the active Spring profiles shown as a banner above them.
  */
 import {badge} from '../../shared/components.js';
+import {el} from '../../shared/dom.js';
 import {propertyGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'environment';
@@ -23,13 +24,7 @@ export function render(container, data, context) {
 
 function renderActiveProfiles(activeProfiles) {
     if (!activeProfiles || activeProfiles.length === 0) return null;
-    const profilesEl = document.createElement('div');
-    profilesEl.className = 'pk-profiles';
-
-    const label = document.createElement('strong');
-    label.textContent = 'Active Profiles:';
-    profilesEl.appendChild(label);
-
-    activeProfiles.forEach(profile => profilesEl.appendChild(badge(profile, 'info')));
-    return profilesEl;
+    return el('div', {className: 'pk-profiles'},
+        el('strong', {text: 'Active Profiles:'}),
+        ...activeProfiles.map(profile => badge(profile, 'info')));
 }

@@ -50,13 +50,6 @@ export function truncatedBadge() {
  * duration in monospace, coloured by `severity` (a severity.js suffix, or '').
  */
 export function durationStat(lead, ms, severity) {
-    const stat = document.createElement('span');
-    stat.className = 'pk-stat';
-    stat.append(lead, ' ');
-
-    const duration = document.createElement('span');
-    duration.className = 'pk-stat__duration' + (severity ? ` ${severityClass(severity)}` : '');
-    duration.textContent = formatDurationMs(ms);
-    stat.appendChild(duration);
-    return stat;
+    return el('span', {className: 'pk-stat'}, lead, ' ',
+        el('span', {className: 'pk-stat__duration' + (severity ? ` ${severityClass(severity)}` : ''), text: formatDurationMs(ms)}));
 }

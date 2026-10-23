@@ -5,6 +5,7 @@
  * the main dashboard payload.
  */
 import {badge} from '../../shared/components.js';
+import {el} from '../../shared/dom.js';
 import {highlightText} from '../../shared/markup.js';
 import {formatBytes, formatCount, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
@@ -30,12 +31,7 @@ const tab = filteredGroupTab({
         highlight: query
     }),
     items: (metric, list, query, context) => {
-        if (metric.description) {
-            const descEl = document.createElement('div');
-            descEl.className = 'pk-metric__description';
-            descEl.textContent = metric.description;
-            list.appendChild(descEl);
-        }
+        if (metric.description) list.appendChild(el('div', {className: 'pk-metric__description', text: metric.description}));
         metric.measurements.forEach(measurement =>
             list.appendChild(renderMeasurement(measurement, query, metric.baseUnit, context.locale)));
     },
@@ -86,15 +82,9 @@ function decorateGroupHeaders(listEl, metrics) {
         groupEl.querySelector('.pk-group__name').classList.add('pk-group__name--mono');
 
         const countEl = groupEl.querySelector('.pk-group__count');
-        const meta = document.createElement('span');
-        meta.className = 'pk-group__meta';
-
-        const unitEl = document.createElement('span');
-        unitEl.className = 'pk-metric__unit';
-        unitEl.textContent = metric.baseUnit || '';
-
+        const meta = el('span', {className: 'pk-group__meta'});
         countEl.replaceWith(meta);
-        meta.append(badge(metric.type, 'info'), unitEl, countEl);
+        meta.append(badge(metric.type, 'info'), el('span', {className: 'pk-metric__unit', text: metric.baseUnit || ''}), countEl);
     });
 }
 
@@ -111,40 +101,20 @@ function matchesMetricFilter(metric, query) {
 }
 
 function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
-    const el = document.createElement('div');
-    el.className = 'pk-kv';
-
-    const tagsEl = document.createElement('div');
-    tagsEl.className = 'pk-metric__tags';
     const tags = Object.entries(measurement.tags || {});
-    if (tags.length === 0) {
-        tagsEl.innerHTML = '<span class="pk-note pk-metric__no-tags">no tags</span>';
-    } else {
-        tags.forEach(([key, value]) => {
-            const tagEl = document.createElement('span');
-            tagEl.className = 'pk-metric__tag';
-            tagEl.innerHTML = `${highlightText(key, filterQuery)}=${highlightText(value, filterQuery)}`;
-            tagsEl.appendChild(tagEl);
-        });
-    }
+    const tagsEl = el('div', {className: 'pk-metric__tags'},
+        ...(tags.length === 0 ? [el('span', {className: 'pk-note pk-metric__no-tags', text: 'no tags'})] : tags.map(([key, value]) => {
+            const tag = el('span', {className: 'pk-metric__tag'});
+            tag.innerHTML = `${highlightText(key, filterQuery)}=${highlightText(value, filterQuery)}`;
+            return tag;
+        })));
 
-    const statsEl = document.createElement('div');
-    statsEl.className = 'pk-metric__stats';
-    (measurement.statistics || []).forEach(stat => {
-        const statEl = document.createElement('span');
-        statEl.className = 'pk-metric__stat';
-        const nameEl = document.createElement('span');
-        nameEl.className = 'pk-metric__stat-name';
-        nameEl.textContent = stat.name;
-        const valueEl = document.createElement('span');
-        valueEl.className = 'pk-metric__stat-value';
-        valueEl.textContent = formatMeasurementValue(stat.value, baseUnit, locale);
-        statEl.append(nameEl, valueEl);
-        statsEl.appendChild(statEl);
-    });
+    const statsEl = el('div', {className: 'pk-metric__stats'},
+        ...(measurement.statistics || []).map(stat => el('span', {className: 'pk-metric__stat'},
+            el('span', {className: 'pk-metric__stat-name', text: stat.name}),
+            el('span', {className: 'pk-metric__stat-value', text: formatMeasurementValue(stat.value, baseUnit, locale)}))));
 
-    el.append(tagsEl, statsEl);
-    return el;
+    return el('div', {className: 'pk-kv'}, tagsEl, statsEl);
 }
 
 function formatMeasurementValue(value, unit, locale) {

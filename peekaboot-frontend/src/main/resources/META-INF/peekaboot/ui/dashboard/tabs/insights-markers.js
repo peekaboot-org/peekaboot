@@ -23,6 +23,7 @@
  * valToPos for whichever space a given call site needs rather than converting one into
  * the other by hand.
  */
+import {el} from '../../shared/dom.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {formatDateTimeWith} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
@@ -210,9 +211,7 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
         plugin: {
             hooks: {
                 init: u => {
-                    tooltip = document.createElement('div');
-                    tooltip.className = 'pk-insight-marker-tip';
-                    tooltip.hidden = true;
+                    tooltip = el('div', {className: 'pk-insight-marker-tip', attrs: {hidden: ''}});
                     u.over.appendChild(tooltip);
                 },
                 draw,

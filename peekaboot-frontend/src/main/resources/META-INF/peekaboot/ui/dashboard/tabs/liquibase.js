@@ -1,5 +1,6 @@
 /** The "Liquibase" tab: one table row per change set, in the backend's orderExecuted order; Liquibase records no duration. */
 import {badge, cell, table, textCell} from '../../shared/components.js';
+import {el} from '../../shared/dom.js';
 import {formatDateTime} from '../../shared/format.js';
 import {changeSetExecTypeVariant} from '../../shared/severity.js';
 
@@ -25,17 +26,12 @@ export function render(container, data, {locale, timeZone} = {}) {
 }
 
 function renderRow(changeSet, {locale, timeZone}) {
-    const row = document.createElement('tr');
-    if (changeSet.execType === 'FAILED') row.classList.add('pk-table__stripe--danger');
-
-    row.append(
+    return el('tr', {className: changeSet.execType === 'FAILED' ? 'pk-table__stripe--danger' : undefined},
         textCell(changeSet.orderExecuted, 'pk-table__num pk-table__shrink'),
         textCell(changeSet.id, 'pk-liquibase-row__id'),
         textCell(changeSet.author, 'pk-table__shrink'),
         textCell(changeSet.changeLog, 'pk-table__mono pk-liquibase-row__changelog'),
         textCell(changeSet.description, 'pk-liquibase-row__description'),
         textCell(formatDateTime(changeSet.dateExecuted, {locale, timeZone}), 'pk-table__shrink'),
-        cell({className: 'pk-table__shrink'}, badge(changeSet.execType, changeSetExecTypeVariant(changeSet.execType)))
-    );
-    return row;
+        cell({className: 'pk-table__shrink'}, badge(changeSet.execType, changeSetExecTypeVariant(changeSet.execType))));
 }
