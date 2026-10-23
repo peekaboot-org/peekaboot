@@ -5,7 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,6 +23,7 @@ public final class RecordingObservations {
 
     private final ObservationRegistry registry = ObservationRegistry.create();
     private final List<Observation.Context> started = new CopyOnWriteArrayList<>();
+    private final Map<Observation.Context, String> startThreads = Collections.synchronizedMap(new IdentityHashMap<>());
     private final List<Observation.Context> scoped = new CopyOnWriteArrayList<>();
     private final List<Observation.Context> errored = new CopyOnWriteArrayList<>();
     private final BlockingQueue<Observation.Context> stopped = new LinkedBlockingQueue<>();
@@ -34,6 +38,7 @@ public final class RecordingObservations {
 
             @Override
             public void onStart(Observation.Context context) {
+                startThreads.put(context, Thread.currentThread().getName());
                 started.add(context);
             }
 
@@ -60,6 +65,11 @@ public final class RecordingObservations {
 
     public List<Observation.Context> startedNamed(String observationName) {
         return named(started, observationName);
+    }
+
+    /** The name of the thread {@code context}'s observation started on. */
+    public String startThreadOf(Observation.Context context) {
+        return startThreads.get(context);
     }
 
     public List<Observation.Context> scopedNamed(String observationName) {

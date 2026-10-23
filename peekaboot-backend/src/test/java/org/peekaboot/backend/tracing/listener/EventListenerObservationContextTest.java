@@ -4,16 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.listener.Listeners;
 import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.EventListenerMarker;
+import org.peekaboot.backend.testsupport.RecordingObservations;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -45,13 +46,15 @@ class EventListenerObservationContextTest {
 
             assertThat(context.getBean(Listeners.AsyncListener.class).awaitHandled())
                     .isTrue();
-            assertThat(context.getBean(RecordingHandler.class).started)
-                    .filteredOn(start -> start.name().equals(EventListenerMarker.OBSERVATION_NAME))
-                    .filteredOn(start -> start.contextualName().equals("AsyncListener#onOrderPlaced"))
+            RecordingObservations observations = context.getBean(RecordingObservations.class);
+            assertThat(observations.startedNamed(EventListenerMarker.OBSERVATION_NAME))
+                    .filteredOn(start -> "AsyncListener#onOrderPlaced".equals(start.getContextualName()))
                     .singleElement()
                     .satisfies(start -> {
-                        assertThat(start.thread()).startsWith(ListenerContext.EXECUTOR_THREAD_PREFIX);
-                        assertThat(start.parent()).isEqualTo("parent");
+                        assertThat(observations.startThreadOf(start))
+                                .startsWith(ListenerContext.EXECUTOR_THREAD_PREFIX);
+                        assertThat(start.getParentObservation().getContextView().getName())
+                                .isEqualTo("parent");
                     });
         }
     }
@@ -71,9 +74,8 @@ class EventListenerObservationContextTest {
         try (AnnotationConfigApplicationContext context = startedWith(Listeners.NotifyingListener.class)) {
             publishInsideParentObservation(context, new Listeners.OrderPlaced("PK-1"));
 
-            assertThat(context.getBean(RecordingHandler.class).started)
-                    .filteredOn(start -> start.name().equals(EventListenerMarker.OBSERVATION_NAME))
-                    .extracting(Start::contextualName)
+            assertThat(context.getBean(RecordingObservations.class).startedNamed(EventListenerMarker.OBSERVATION_NAME))
+                    .extracting(Observation.Context::getContextualName)
                     .containsExactly("NotifyingListener#onOrderPlaced");
         }
     }
@@ -87,38 +89,16 @@ class EventListenerObservationContextTest {
     }
 
     private static void publishInsideParentObservation(AnnotationConfigApplicationContext context, Object event) {
-        Observation.createNotStarted("parent", context.getBean(ObservationRegistry.class))
-                .observe(() -> context.publishEvent(event));
-    }
-
-    private static ObservationRegistry registryReportingTo(RecordingHandler handler) {
-        ObservationRegistry registry = ObservationRegistry.create();
-        registry.observationConfig().observationHandler(handler);
-        return registry;
+        context.getBean(RecordingObservations.class).runInsideParentObservation(() -> context.publishEvent(event));
     }
 
     @Configuration(proxyBeanMethods = false)
     @EnableTransactionManagement
     @EnableAsync
+    @Import(ObservedContext.class)
     static class ListenerContext {
 
         static final String EXECUTOR_THREAD_PREFIX = "listener-test-";
-
-        @Bean
-        static EventListenerObservationPostProcessor eventListenerObservationPostProcessor(
-                ObjectProvider<ObservationRegistry> observationRegistry) {
-            return new EventListenerObservationPostProcessor(observationRegistry::getObject);
-        }
-
-        @Bean
-        RecordingHandler recordingHandler() {
-            return new RecordingHandler();
-        }
-
-        @Bean
-        ObservationRegistry observationRegistry(RecordingHandler handler) {
-            return registryReportingTo(handler);
-        }
 
         @Bean
         RecordingTransactionManager transactionManager(ObservationRegistry observationRegistry) {
@@ -153,37 +133,13 @@ class EventListenerObservationContextTest {
         }
 
         @Bean
-        RecordingHandler recordingHandler() {
-            return new RecordingHandler();
+        RecordingObservations recordingObservations() {
+            return new RecordingObservations();
         }
 
         @Bean
-        ObservationRegistry observationRegistry(RecordingHandler handler) {
-            return registryReportingTo(handler);
-        }
-    }
-
-    record Start(String name, String contextualName, String thread, String parent) {}
-
-    static class RecordingHandler implements ObservationHandler<Observation.Context> {
-
-        final List<Start> started = new CopyOnWriteArrayList<>();
-
-        @Override
-        public boolean supportsContext(Observation.Context context) {
-            return true;
-        }
-
-        @Override
-        public void onStart(Observation.Context context) {
-            String parent = context.getParentObservation() == null
-                    ? ""
-                    : context.getParentObservation().getContextView().getName();
-            started.add(new Start(
-                    context.getName(),
-                    String.valueOf(context.getContextualName()),
-                    Thread.currentThread().getName(),
-                    parent));
+        ObservationRegistry observationRegistry(RecordingObservations observations) {
+            return observations.registry();
         }
     }
 
