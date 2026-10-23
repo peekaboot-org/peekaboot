@@ -30,8 +30,7 @@
 .pk-toolbar a { color: var(--pk-primary-text); text-decoration: none; }
 .pk-toolbar a:hover { text-decoration: underline; }
 
-/* A .pk-unbutton laid out like the plain flex row it replaces - only its semantics (a real
-   <button>) are new, not its appearance. */
+/* A .pk-unbutton laid out as the bar's wrapping flex row. */
 .pk-toolbar__open {
     display: flex;
     flex-wrap: wrap;

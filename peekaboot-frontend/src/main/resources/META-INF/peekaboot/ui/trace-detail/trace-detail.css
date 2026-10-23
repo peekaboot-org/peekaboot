@@ -69,8 +69,7 @@
 .pk-overlay__close:hover { color: var(--pk-danger); }
 
 /* The overlay's tab strip reuses shared .pk-tabs/.pk-tab and adds its own chrome
-   (padding, alt background). The direct-child selector keeps that chrome off any strip
-   a tab might one day render inside .pk-overlay__content. */
+   (padding, alt background). */
 .pk-overlay__container > .pk-tabs {
     padding: 0 var(--pk-space-lg);
     background: var(--pk-bg-alt);
