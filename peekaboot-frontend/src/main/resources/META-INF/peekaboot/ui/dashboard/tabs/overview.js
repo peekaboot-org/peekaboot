@@ -320,8 +320,7 @@ function renderDataSourceCard(ds) {
         body.appendChild(el('div', {className: 'pk-datasources__toggle'}, toggleBtn));
         card.appendChild(paramsEl);
 
-        toggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
+        toggleBtn.addEventListener('click', () => {
             paramsEl.hidden = !paramsEl.hidden;
             toggleBtn.textContent = paramsEl.hidden ? 'Show Connection Params' : 'Hide Connection Params';
         });
