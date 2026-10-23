@@ -3,7 +3,6 @@ package org.peekaboot.backend.tracing.async;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -40,7 +39,10 @@ class AsyncTaskDecoratorTest {
 
         assertThat(runs).hasValue(1);
         assertThat(asyncContexts()).hasSize(1);
-        assertThat(lowCardinalityValue(asyncContexts().get(0), AsyncTaskMarker.TAG_KEY))
+        assertThat(asyncContexts()
+                        .get(0)
+                        .getLowCardinalityKeyValue(AsyncTaskMarker.TAG_KEY)
+                        .getValue())
                 .isEqualTo(AsyncTaskMarker.TAG_VALUE);
     }
 
@@ -50,7 +52,10 @@ class AsyncTaskDecoratorTest {
 
         observations.runInsideParentObservation(decorated);
 
-        assertThat(highCardinalityValue(asyncContexts().get(0), AsyncTaskMarker.THREAD_TAG_KEY))
+        assertThat(asyncContexts()
+                        .get(0)
+                        .getHighCardinalityKeyValue(AsyncTaskMarker.THREAD_TAG_KEY)
+                        .getValue())
                 .isEqualTo(Thread.currentThread().getName());
     }
 
@@ -215,22 +220,5 @@ class AsyncTaskDecoratorTest {
 
     private List<Observation.Context> asyncContexts() {
         return observations.startedNamed(AsyncTaskMarker.OBSERVATION_NAME);
-    }
-
-    private static String lowCardinalityValue(Observation.Context context, String key) {
-        return valueOf(context.getLowCardinalityKeyValues(), key);
-    }
-
-    private static String highCardinalityValue(Observation.Context context, String key) {
-        return valueOf(context.getHighCardinalityKeyValues(), key);
-    }
-
-    private static String valueOf(Iterable<KeyValue> keyValues, String key) {
-        for (KeyValue keyValue : keyValues) {
-            if (keyValue.getKey().equals(key)) {
-                return keyValue.getValue();
-            }
-        }
-        return null;
     }
 }
