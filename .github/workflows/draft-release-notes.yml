@@ -39,6 +39,7 @@ jobs:
         with:
           # full history: git-cliff resolves the range back to the previous tag
           fetch-depth: 0
+          persist-credentials: false
 
       - name: install-git-cliff
         uses: ./.github/actions/install-git-cliff

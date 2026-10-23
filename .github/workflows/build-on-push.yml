@@ -26,6 +26,7 @@ jobs:
         with:
           # full history: the subject gate and git-cliff read commits back to the previous tag
           fetch-depth: 0
+          persist-credentials: false
 
       # A new branch is checked from where it left origin/dev, which the full-history checkout
       # fetches. A forced push and a dispatched run have no meaningful range and pass.
@@ -97,6 +98,8 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # These branches change the wrapper, and ./gradlew runs its jar. Fails on a jar whose
       # checksum matches no published Gradle release.
