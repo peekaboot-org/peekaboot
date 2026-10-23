@@ -61,7 +61,7 @@ public final class StatsRing {
         int statCount = AggregateStats.STAT_NAMES.size();
         double[][] statColumns = Arrays.copyOf(columns, statCount);
         for (int i = 0; i < columns[0].length; i++) {
-            add(entryAt(statColumns, columns[statCount], i));
+            add(AggregateStats.fromRow(statColumns, i, (int) columns[statCount][i]));
         }
     }
 
@@ -71,21 +71,8 @@ public final class StatsRing {
         double[] counts = samples.last(n);
         List<AggregateStats> result = new ArrayList<>(counts.length);
         for (int i = 0; i < counts.length; i++) {
-            result.add(entryAt(statColumns, counts, i));
+            result.add(AggregateStats.fromRow(statColumns, i, (int) counts[i]));
         }
         return result;
-    }
-
-    /** Row {@code i} of columns laid out in {@link AggregateStats#STAT_NAMES} order, plus its sample count. */
-    private static AggregateStats entryAt(double[][] statColumns, double[] counts, int i) {
-        return new AggregateStats(
-                statColumns[0][i],
-                statColumns[1][i],
-                statColumns[2][i],
-                statColumns[3][i],
-                statColumns[4][i],
-                statColumns[5][i],
-                statColumns[6][i],
-                (int) counts[i]);
     }
 }

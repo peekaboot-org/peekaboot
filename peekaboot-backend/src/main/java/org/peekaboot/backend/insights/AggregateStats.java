@@ -88,6 +88,19 @@ public record AggregateStats(
         return stats;
     }
 
+    /** The inverse of {@link #byName()}: row {@code row} of columns laid out in {@link #STAT_NAMES} order. */
+    static AggregateStats fromRow(double[][] statColumns, int row, int samples) {
+        return new AggregateStats(
+                statColumns[0][row],
+                statColumns[1][row],
+                statColumns[2][row],
+                statColumns[3][row],
+                statColumns[4][row],
+                statColumns[5][row],
+                statColumns[6][row],
+                samples);
+    }
+
     private static double percentile(double[] sorted, double quantile) {
         int rank = (int) Math.ceil(quantile * sorted.length);
         return sorted[Math.max(0, rank - 1)];
