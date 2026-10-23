@@ -1,6 +1,6 @@
 package org.peekaboot.backend.domain.health;
 
-import java.util.Locale;
+import org.peekaboot.backend.text.EnumNames;
 
 public enum HealthStatus {
     UP,
@@ -9,14 +9,6 @@ public enum HealthStatus {
     UNKNOWN;
 
     public static HealthStatus fromString(String status) {
-        if (status == null) {
-            return UNKNOWN;
-        }
-        return switch (status.toUpperCase(Locale.ROOT)) {
-            case "UP" -> UP;
-            case "DOWN" -> DOWN;
-            case "OUT_OF_SERVICE" -> OUT_OF_SERVICE;
-            default -> UNKNOWN;
-        };
+        return EnumNames.byName(HealthStatus.class, status, UNKNOWN);
     }
 }

@@ -3,7 +3,6 @@ package org.peekaboot.backend.service;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -18,6 +17,7 @@ import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.peekaboot.backend.text.EnumNames;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -127,10 +127,9 @@ public class TraceInsightsService {
         }
         Set<RootActionType> types = EnumSet.noneOf(RootActionType.class);
         for (String token : rootActionType.split(",", -1)) {
-            try {
-                types.add(RootActionType.valueOf(token.trim().toUpperCase(Locale.ROOT)));
-            } catch (IllegalArgumentException ignored) {
-                // a name no RootActionType carries asks for nothing
+            RootActionType type = EnumNames.byName(RootActionType.class, token.trim(), null);
+            if (type != null) {
+                types.add(type);
             }
         }
         return types.isEmpty() ? DEFAULT_VIEW_TYPES : types;

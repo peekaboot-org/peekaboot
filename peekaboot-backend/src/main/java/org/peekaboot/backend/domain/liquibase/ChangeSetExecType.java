@@ -1,6 +1,6 @@
 package org.peekaboot.backend.domain.liquibase;
 
-import java.util.Locale;
+import org.peekaboot.backend.text.EnumNames;
 
 public enum ChangeSetExecType {
     EXECUTED,
@@ -11,16 +11,6 @@ public enum ChangeSetExecType {
     UNKNOWN;
 
     public static ChangeSetExecType fromString(String execType) {
-        if (execType == null) {
-            return UNKNOWN;
-        }
-        return switch (execType.toUpperCase(Locale.ROOT)) {
-            case "EXECUTED" -> EXECUTED;
-            case "FAILED" -> FAILED;
-            case "SKIPPED" -> SKIPPED;
-            case "RERAN" -> RERAN;
-            case "MARK_RAN" -> MARK_RAN;
-            default -> UNKNOWN;
-        };
+        return EnumNames.byName(ChangeSetExecType.class, execType, UNKNOWN);
     }
 }

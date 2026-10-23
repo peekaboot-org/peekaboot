@@ -15,6 +15,7 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
+import org.peekaboot.backend.text.EnumNames;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.springframework.http.MediaType;
@@ -125,14 +126,7 @@ public class PeekabootController {
 
     /** Lenient: null, blank and unknown values all mean the All bucket, whatever the case. */
     private static TraceBucket parseBucket(String value) {
-        if (value == null || value.isBlank()) {
-            return TraceBucket.ALL;
-        }
-        try {
-            return TraceBucket.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            return TraceBucket.ALL;
-        }
+        return EnumNames.byName(TraceBucket.class, value, TraceBucket.ALL);
     }
 
     /** Negative limits throw from Stream.limit; the cap bounds the response size. */
