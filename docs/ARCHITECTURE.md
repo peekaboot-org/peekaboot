@@ -193,7 +193,7 @@ Everything runs inside the host application's own process and on its own event b
 ```
 org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
-├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
+├── config/                 # PeekabootProperties, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
 ├── controller/             # PeekabootController: /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
@@ -243,7 +243,7 @@ org.peekaboot.backend/
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and drops events without a `traceId`
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW), then assembles and enriches the tree (see *Trace Assembly and Enrichment*)
-6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW and SLOW_QUERY at `UiTracingProperties`' thresholds. A failed span raises none; its `status` and error fields already say so. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
+6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW and SLOW_QUERY at `PeekabootTracingProperties`' thresholds, which `PeekabootAutoConfiguration` binds whether or not tracing is on. A failed span raises none; its `status` and error fields already say so. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
 
 ### Servlet Filters
 

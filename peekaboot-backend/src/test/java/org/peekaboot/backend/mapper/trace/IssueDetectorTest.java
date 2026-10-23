@@ -14,22 +14,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
 class IssueDetectorTest {
 
-    private UiTracingProperties properties;
+    private PeekabootTracingProperties properties;
     private IssueDetector detector;
 
     @BeforeEach
     void setUp() {
-        properties = new UiTracingProperties();
+        properties = new PeekabootTracingProperties();
         detector = new IssueDetector(properties);
     }
 

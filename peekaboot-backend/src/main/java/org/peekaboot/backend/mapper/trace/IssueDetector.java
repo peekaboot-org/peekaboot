@@ -2,18 +2,18 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
 public class IssueDetector {
 
-    private final UiTracingProperties properties;
+    private final PeekabootTracingProperties properties;
 
-    public IssueDetector(UiTracingProperties properties) {
+    public IssueDetector(PeekabootTracingProperties properties) {
         this.properties = properties;
     }
 

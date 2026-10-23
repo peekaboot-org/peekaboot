@@ -5,7 +5,6 @@ import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.PeekabootWebConfig;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
@@ -44,7 +43,7 @@ import org.springframework.context.annotation.Import;
 @AutoConfiguration(after = {PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class})
 @ConditionalOnPeekabootServlet
 @ConditionalOnClass(HealthEndpoint.class)
-@EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})
+@EnableConfigurationProperties({PeekabootProperties.class, PeekabootTracingProperties.class})
 @Import({StackTraceRulesConfiguration.class, MaskingConfiguration.class})
 public class PeekabootAutoConfiguration {
 
@@ -79,8 +78,8 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public IssueDetector issueDetector(UiTracingProperties uiTracingProperties) {
-        return new IssueDetector(uiTracingProperties);
+    public IssueDetector issueDetector(PeekabootTracingProperties tracingProperties) {
+        return new IssueDetector(tracingProperties);
     }
 
     @Bean
@@ -127,8 +126,7 @@ public class PeekabootAutoConfiguration {
             TraceInsightsService traceInsightsService,
             MetricsService metricsService,
             PeekabootProperties properties,
-            UiTracingProperties uiTracingProperties,
-            ObjectProvider<PeekabootTracingProperties> tracingProperties,
+            PeekabootTracingProperties tracingProperties,
             ObjectProvider<InsightsService> insightsService,
             ObjectProvider<OtelSpanExporter> otelSpanExporter) {
         return new PeekabootController(
@@ -136,8 +134,7 @@ public class PeekabootAutoConfiguration {
                 traceInsightsService,
                 metricsService,
                 properties,
-                uiTracingProperties,
-                tracingProperties.getIfAvailable(),
+                tracingProperties,
                 insightsService.getIfAvailable(),
                 otelSpanExporter.getIfAvailable() != null);
     }

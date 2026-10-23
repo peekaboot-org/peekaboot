@@ -17,7 +17,6 @@ import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.HttpRequest;
@@ -40,6 +39,7 @@ import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.Spans;
 import org.peekaboot.backend.testsupport.TraceStores;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -58,7 +58,7 @@ class TraceInsightsServiceTest {
     void setUp() {
         store = TraceStores.withDefaults();
         traceTreeMapper = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE);
-        issueDetector = new IssueDetector(new UiTracingProperties());
+        issueDetector = new IssueDetector(new PeekabootTracingProperties());
         queryExtractor = new QueryExtractor();
         service = newService(store);
     }

@@ -15,7 +15,7 @@ package org.peekaboot.backend.domain.features;
  *                             outside Peekaboot's view. Meaningless while {@link #tracing} is
  *                             false.
  * @param slowTraceThresholdMs the Slow bucket's admission threshold; null while tracing is
- *                             off, when neither the store nor its properties exist
+ *                             off, when there is no store to admit into
  * @param maskLiteral the exact literal masked values are replaced with ({@code MaskingEngine.MASK_LITERAL});
  *                             the Request tab highlights masked headers by comparing against it
  */

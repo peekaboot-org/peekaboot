@@ -323,7 +323,7 @@ built the first time it opens.
 
 Every number the frontend colours a duration by comes from the backend, once, over
 `GET /peekaboot/api/features` (the `Features` record). Four of them: `slowSpanThresholdMs`
-and `verySlowSpanThresholdMs` (`peekaboot.ui.tracing.*`, what `IssueDetector` raises SLOW
+and `verySlowSpanThresholdMs` (`peekaboot.tracing.*`, what `IssueDetector` raises SLOW
 and VERY_SLOW at), `slowQueryThresholdMs` (SLOW_QUERY) and `slowTraceThresholdMs`
 (`peekaboot.tracing.slow-trace-threshold-ms`, the Slow bucket's admission threshold, `null`
 while tracing is off). The dashboard hands its `features` to every tab and to the overlay

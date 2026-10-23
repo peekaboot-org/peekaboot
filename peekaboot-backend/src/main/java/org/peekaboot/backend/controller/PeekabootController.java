@@ -4,7 +4,6 @@ import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
@@ -34,10 +33,6 @@ public class PeekabootController {
     private final TraceInsightsService traceInsightsService;
     private final MetricsService metricsService;
     private final PeekabootProperties properties;
-    private final UiTracingProperties uiTracingProperties;
-
-    /** Absent, like the trace store, while {@code peekaboot.tracing.enabled} is false. */
-    @Nullable
     private final PeekabootTracingProperties tracingProperties;
 
     @Nullable
@@ -51,15 +46,13 @@ public class PeekabootController {
             TraceInsightsService traceInsightsService,
             MetricsService metricsService,
             PeekabootProperties properties,
-            UiTracingProperties uiTracingProperties,
-            @Nullable PeekabootTracingProperties tracingProperties,
+            PeekabootTracingProperties tracingProperties,
             @Nullable InsightsService insightsService,
             boolean tracingSpansPossible) {
         this.actuatorInsightsService = actuatorInsightsService;
         this.traceInsightsService = traceInsightsService;
         this.metricsService = metricsService;
         this.properties = properties;
-        this.uiTracingProperties = uiTracingProperties;
         this.tracingProperties = tracingProperties;
         this.insightsService = insightsService;
         this.tracingSpansPossible = tracingSpansPossible;
@@ -83,10 +76,10 @@ public class PeekabootController {
                 metricsService.isAvailable(),
                 properties.isEnableUnmasking(),
                 insightsService != null,
-                uiTracingProperties.getSlowSpanThresholdMs(),
-                uiTracingProperties.getVerySlowSpanThresholdMs(),
-                uiTracingProperties.getSlowQueryThresholdMs(),
-                tracingProperties != null ? tracingProperties.getSlowTraceThresholdMs() : null,
+                tracingProperties.getSlowSpanThresholdMs(),
+                tracingProperties.getVerySlowSpanThresholdMs(),
+                tracingProperties.getSlowQueryThresholdMs(),
+                traceInsightsService.isTracingAvailable() ? tracingProperties.getSlowTraceThresholdMs() : null,
                 MaskingEngine.MASK_LITERAL);
     }
 

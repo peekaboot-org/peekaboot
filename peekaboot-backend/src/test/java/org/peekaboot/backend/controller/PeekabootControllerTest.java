@@ -18,7 +18,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
@@ -43,7 +42,6 @@ class PeekabootControllerTest {
     private TraceInsightsService traceInsightsService;
     private MetricsService metricsService;
     private PeekabootProperties properties;
-    private UiTracingProperties uiTracingProperties;
     private PeekabootTracingProperties tracingProperties;
 
     private PeekabootController controller;
@@ -54,7 +52,6 @@ class PeekabootControllerTest {
         traceInsightsService = mock(TraceInsightsService.class);
         metricsService = mock(MetricsService.class);
         properties = new PeekabootProperties();
-        uiTracingProperties = new UiTracingProperties();
         tracingProperties = new PeekabootTracingProperties();
 
         when(metricsService.isAvailable()).thenReturn(true);
@@ -70,7 +67,6 @@ class PeekabootControllerTest {
                 traceInsightsService,
                 metricsService,
                 properties,
-                uiTracingProperties,
                 tracing,
                 insights,
                 spanSourceWired);
@@ -218,9 +214,9 @@ class PeekabootControllerTest {
         /** The frontend colours durations by the same numbers IssueDetector raises issues at. */
         @Test
         void shouldPublishTheEffectiveSpanAndQueryThresholds() {
-            uiTracingProperties.setSlowSpanThresholdMs(250);
-            uiTracingProperties.setVerySlowSpanThresholdMs(900);
-            uiTracingProperties.setSlowQueryThresholdMs(75);
+            tracingProperties.setSlowSpanThresholdMs(250);
+            tracingProperties.setVerySlowSpanThresholdMs(900);
+            tracingProperties.setSlowQueryThresholdMs(75);
 
             Features features = controller.getFeatures();
 
@@ -237,17 +233,18 @@ class PeekabootControllerTest {
 
         @Test
         void shouldPublishTheSlowBucketsAdmissionThreshold() {
+            when(traceInsightsService.isTracingAvailable()).thenReturn(true);
             tracingProperties.setSlowTraceThresholdMs(2500);
 
             assertThat(controller.getFeatures().slowTraceThresholdMs()).isEqualTo(2500L);
         }
 
-        /** With tracing off there is no store and no tracing properties bean - nothing to publish. */
+        /** With tracing off there is no store, so no Slow bucket to publish a threshold for. */
         @Test
         void shouldLeaveTheSlowTraceThresholdNullWhenTracingIsOff() {
-            PeekabootController withoutTracing = controller(null, null, false);
+            when(traceInsightsService.isTracingAvailable()).thenReturn(false);
 
-            assertThat(withoutTracing.getFeatures().slowTraceThresholdMs()).isNull();
+            assertThat(controller.getFeatures().slowTraceThresholdMs()).isNull();
         }
 
         @Test

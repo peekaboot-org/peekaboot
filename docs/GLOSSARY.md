@@ -109,7 +109,7 @@ has two and serialises lowercase through `@JsonValue`. The UI colours a span's d
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
 `issues` empty on every node it builds. Firing conditions:
 [issues](https://www.peekaboot.org/docs/traces/#issues). Thresholds and property names:
-[peekaboot.ui.tracing](https://www.peekaboot.org/docs/configuration/#peekabootuitracing).
+[peekaboot.tracing](https://www.peekaboot.org/docs/configuration/#issue-thresholds).
 
 ### Trace Bucket
 `TraceBucket {ALL, ERRORS, SLOW}`, the three independent maps inside `InMemoryTraceStore` and

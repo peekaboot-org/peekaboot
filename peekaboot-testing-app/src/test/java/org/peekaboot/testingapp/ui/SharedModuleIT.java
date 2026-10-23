@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.peekaboot.backend.domain.liquibase.ChangeSetExecType;
@@ -303,14 +302,13 @@ class SharedModuleIT extends PlaywrightTestBase {
     /** The backend's defaults are the fallbacks, keyed by the wire names /api/features publishes. */
     @Test
     void defaultThresholdsMirrorTheBackendDefaults() {
-        UiTracingProperties ui = new UiTracingProperties();
         PeekabootTracingProperties tracing = new PeekabootTracingProperties();
 
         assertThat(evalModule("severity.js", "m.DEFAULT_THRESHOLDS"))
                 .isEqualTo(Map.of(
-                        "slowSpanThresholdMs", (int) ui.getSlowSpanThresholdMs(),
-                        "verySlowSpanThresholdMs", (int) ui.getVerySlowSpanThresholdMs(),
-                        "slowQueryThresholdMs", (int) ui.getSlowQueryThresholdMs(),
+                        "slowSpanThresholdMs", (int) tracing.getSlowSpanThresholdMs(),
+                        "verySlowSpanThresholdMs", (int) tracing.getVerySlowSpanThresholdMs(),
+                        "slowQueryThresholdMs", (int) tracing.getSlowQueryThresholdMs(),
                         "slowTraceThresholdMs", (int) tracing.getSlowTraceThresholdMs()));
     }
 

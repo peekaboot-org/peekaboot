@@ -60,6 +60,41 @@ class PeekabootAutoConfigurationTest {
                         .isFalse());
     }
 
+    /** Bound without the trace store too: the issue detector and /api/features need them while tracing is off. */
+    @Test
+    void publishesTheIssueThresholdsBoundUnderTracing() {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.enabled=true",
+                        "peekaboot.tracing.slow-span-threshold-ms=250",
+                        "peekaboot.tracing.very-slow-span-threshold-ms=900",
+                        "peekaboot.tracing.slow-query-threshold-ms=75")
+                .run(context -> {
+                    Features features =
+                            context.getBean(PeekabootController.class).getFeatures();
+                    assertThat(features.slowSpanThresholdMs()).isEqualTo(250L);
+                    assertThat(features.verySlowSpanThresholdMs()).isEqualTo(900L);
+                    assertThat(features.slowQueryThresholdMs()).isEqualTo(75L);
+                });
+    }
+
+    /** A 200 ms span is SLOW at the default 100 ms; the configured threshold has to reach the detector to clear it. */
+    @Test
+    void raisesIssuesAtTheSpanThresholdBoundUnderTracing() {
+        tracingRunner()
+                .withPropertyValues("peekaboot.tracing.slow-span-threshold-ms=250")
+                .run(context -> {
+                    context.getBean(TraceStore.class).addSpan(TraceFixtures.rootSpanLasting(200));
+
+                    assertThat(context.getBean(TraceInsightsService.class)
+                                    .getTraceInsights(TraceFixtures.TRACE_ID)
+                                    .orElseThrow()
+                                    .rootSpan()
+                                    .issues())
+                            .isEmpty();
+                });
+    }
+
     @Test
     void registersBeansWhenEnabledAndEndpointClassesPresent() {
         contextRunner.withPropertyValues("peekaboot.enabled=true").run(context -> {
