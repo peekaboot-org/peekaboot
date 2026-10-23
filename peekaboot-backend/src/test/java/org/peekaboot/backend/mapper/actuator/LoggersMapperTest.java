@@ -17,10 +17,10 @@ class LoggersMapperTest {
 
     @Test
     void map_shouldGroupLoggersByPackage() {
-        Map<String, LoggersResponse.LoggerInfo> loggers = new LinkedHashMap<>();
-        loggers.put("com.example.service.UserService", new LoggersResponse.LoggerInfo(null, "INFO"));
-        loggers.put("com.example.controller.UserController", new LoggersResponse.LoggerInfo(null, "DEBUG"));
-        loggers.put("org.springframework.boot.Application", new LoggersResponse.LoggerInfo(null, "WARN"));
+        Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers = new LinkedHashMap<>();
+        loggers.put("com.example.service.UserService", new LoggersResponse.LoggerLevelsDescriptor(null, "INFO"));
+        loggers.put("com.example.controller.UserController", new LoggersResponse.LoggerLevelsDescriptor(null, "DEBUG"));
+        loggers.put("org.springframework.boot.Application", new LoggersResponse.LoggerLevelsDescriptor(null, "WARN"));
 
         LoggersResponse loggersData = new LoggersResponse(loggers);
         LoggersInfo result = mapper.map(loggersData);
@@ -41,9 +41,9 @@ class LoggersMapperTest {
 
     @Test
     void map_shouldCountConfiguredLoggers() {
-        Map<String, LoggersResponse.LoggerInfo> loggers = new LinkedHashMap<>();
-        loggers.put("com.example.Foo", new LoggersResponse.LoggerInfo("DEBUG", "INFO"));
-        loggers.put("com.example.Bar", new LoggersResponse.LoggerInfo(null, "INFO"));
+        Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers = new LinkedHashMap<>();
+        loggers.put("com.example.Foo", new LoggersResponse.LoggerLevelsDescriptor("DEBUG", "INFO"));
+        loggers.put("com.example.Bar", new LoggersResponse.LoggerLevelsDescriptor(null, "INFO"));
 
         LoggersResponse loggersData = new LoggersResponse(loggers);
         LoggersInfo result = mapper.map(loggersData);
@@ -83,7 +83,8 @@ class LoggersMapperTest {
 
     @Test
     void map_shouldHandleSinglePartPackageName() {
-        Map<String, LoggersResponse.LoggerInfo> loggers = Map.of("ROOT", new LoggersResponse.LoggerInfo(null, "INFO"));
+        Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers =
+                Map.of("ROOT", new LoggersResponse.LoggerLevelsDescriptor(null, "INFO"));
         LoggersResponse loggersData = new LoggersResponse(loggers);
         LoggersInfo result = mapper.map(loggersData);
 
@@ -94,9 +95,9 @@ class LoggersMapperTest {
     /** The group is the first two segments; a logger named by exactly two is its own group. */
     @Test
     void map_shouldGroupATwoSegmentLoggerUnderItsOwnName() {
-        Map<String, LoggersResponse.LoggerInfo> loggers = new LinkedHashMap<>();
-        loggers.put("com.example", new LoggersResponse.LoggerInfo("DEBUG", "DEBUG"));
-        loggers.put("com.example.Foo", new LoggersResponse.LoggerInfo(null, "DEBUG"));
+        Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers = new LinkedHashMap<>();
+        loggers.put("com.example", new LoggersResponse.LoggerLevelsDescriptor("DEBUG", "DEBUG"));
+        loggers.put("com.example.Foo", new LoggersResponse.LoggerLevelsDescriptor(null, "DEBUG"));
 
         LoggersInfo result = mapper.map(new LoggersResponse(loggers));
 

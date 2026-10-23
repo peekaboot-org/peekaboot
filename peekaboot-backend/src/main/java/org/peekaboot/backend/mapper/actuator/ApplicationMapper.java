@@ -43,8 +43,8 @@ public class ApplicationMapper {
         return new ApplicationInfo(build, git, bootVersion, frameworkVersion, javaVersion, javaVendor);
     }
 
-    private static GitInfo gitInfo(InfoResponse.GitInfo git) {
-        InfoResponse.GitInfo.CommitInfo commit = git.commit();
+    private static GitInfo gitInfo(InfoResponse.GitDescriptor git) {
+        InfoResponse.GitDescriptor.CommitDescriptor commit = git.commit();
         return new GitInfo(
                 git.branch(), commit == null ? null : new GitInfo.Commit(commitId(commit.id()), commit.time()));
     }

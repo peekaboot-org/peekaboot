@@ -27,7 +27,7 @@ public class RuntimeMapper {
             return null;
         }
 
-        InfoResponse.OsInfo os = info.os();
+        InfoResponse.OsDescriptor os = info.os();
         if (os.name() == null && os.version() == null && os.arch() == null) {
             return null;
         }
@@ -39,7 +39,7 @@ public class RuntimeMapper {
             return null;
         }
 
-        InfoResponse.ProcessInfo.MemoryInfo memory = info.process().memory();
+        InfoResponse.ProcessDescriptor.MemoryDescriptor memory = info.process().memory();
 
         long heapUsed = memory.heap() != null ? zeroIfNull(memory.heap().used()) : 0;
         long heapMax = memory.heap() != null ? zeroIfNull(memory.heap().max()) : 0;
@@ -62,7 +62,7 @@ public class RuntimeMapper {
         }
 
         List<StorageInfo> result = new ArrayList<>();
-        HealthResponse.HealthComponent diskSpace = health.components().get("diskSpace");
+        HealthResponse.ComponentDescriptor diskSpace = health.components().get("diskSpace");
 
         if (diskSpace != null) {
             Map<String, Object> details = diskSpace.details();

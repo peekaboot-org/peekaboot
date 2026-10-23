@@ -7,7 +7,7 @@ import java.util.Map;
  * the top and one entry per health contributor under {@code components}. Absent
  * collections bind as empty (see {@link ActuatorResponseParser}).
  */
-public record HealthResponse(String status, Map<String, HealthComponent> components) {
+public record HealthResponse(String status, Map<String, ComponentDescriptor> components) {
 
     public HealthResponse {
         components = Absent.orEmpty(components);
@@ -18,9 +18,10 @@ public record HealthResponse(String status, Map<String, HealthComponent> compone
      * {@code db} with two DataSources, or any custom composite) carries its children under
      * {@code components} instead.
      */
-    public record HealthComponent(String status, Map<String, Object> details, Map<String, HealthComponent> components) {
+    public record ComponentDescriptor(
+            String status, Map<String, Object> details, Map<String, ComponentDescriptor> components) {
 
-        public HealthComponent {
+        public ComponentDescriptor {
             details = Absent.orEmpty(details);
             components = Absent.orEmpty(components);
         }

@@ -3,26 +3,27 @@ package org.peekaboot.backend.actuator.parsed;
 import java.util.Map;
 
 /** An absent {@code build} section binds as empty (see {@link ActuatorResponseParser}). */
-public record InfoResponse(GitInfo git, Map<String, Object> build, JavaInfo java, OsInfo os, ProcessInfo process) {
+public record InfoResponse(
+        GitDescriptor git, Map<String, Object> build, JavaDescriptor java, OsDescriptor os, ProcessDescriptor process) {
 
     public InfoResponse {
         build = Absent.orEmpty(build);
     }
 
-    public record GitInfo(String branch, CommitInfo commit) {
+    public record GitDescriptor(String branch, CommitDescriptor commit) {
         /** {@code id} is a String, or {@code {full, abbrev}} under {@code management.info.git.mode=full}. */
-        public record CommitInfo(Object id, String time) {}
+        public record CommitDescriptor(Object id, String time) {}
     }
 
-    public record JavaInfo(VendorInfo vendor, String version) {
-        public record VendorInfo(String name) {}
+    public record JavaDescriptor(VendorDescriptor vendor, String version) {
+        public record VendorDescriptor(String name) {}
     }
 
-    public record OsInfo(String arch, String name, String version) {}
+    public record OsDescriptor(String arch, String name, String version) {}
 
-    public record ProcessInfo(MemoryInfo memory) {
-        public record MemoryInfo(HeapInfo heap, HeapInfo nonHeap) {
-            public record HeapInfo(Long max, Long used) {}
+    public record ProcessDescriptor(MemoryDescriptor memory) {
+        public record MemoryDescriptor(MemoryUsageDescriptor heap, MemoryUsageDescriptor nonHeap) {
+            public record MemoryUsageDescriptor(Long max, Long used) {}
         }
     }
 }

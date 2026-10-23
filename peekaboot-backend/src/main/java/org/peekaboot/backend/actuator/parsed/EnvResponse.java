@@ -11,11 +11,11 @@ public record EnvResponse(List<String> activeProfiles, List<PropertySource> prop
         propertySources = Absent.orEmpty(propertySources);
     }
 
-    public record PropertySource(String name, Map<String, PropertyValue> properties) {
+    public record PropertySource(String name, Map<String, PropertyValueDescriptor> properties) {
         public PropertySource {
             properties = Absent.orEmpty(properties);
         }
     }
 
-    public record PropertyValue(Object value, String origin) {}
+    public record PropertyValueDescriptor(Object value, String origin) {}
 }

@@ -49,7 +49,7 @@ class ActuatorResponseParserTest {
         assertThat(response.loggers().loggers())
                 .isNotEmpty()
                 .extractingByKey("ROOT")
-                .extracting(LoggersResponse.LoggerInfo::effectiveLevel)
+                .extracting(LoggersResponse.LoggerLevelsDescriptor::effectiveLevel)
                 .isEqualTo("INFO");
         assertThat(response.flyway()
                         .contexts()
@@ -206,7 +206,7 @@ class ActuatorResponseParserTest {
 
         ActuatorParsedData response = parser.parse(Map.of("health", health));
 
-        HealthResponse.HealthComponent db = response.health().components().get("db");
+        HealthResponse.ComponentDescriptor db = response.health().components().get("db");
         assertThat(db.status()).isEqualTo("DOWN");
         assertThat(db.details()).isEmpty();
         assertThat(db.components()).containsOnlyKeys("primary", "reporting");
@@ -296,7 +296,7 @@ class ActuatorResponseParserTest {
         ActuatorParsedData response = parser.parse(Map.of(
                 "health", Map.of("status", "UP", "components", Map.of("ping", Map.of("status", "UP")))));
 
-        HealthResponse.HealthComponent ping = response.health().components().get("ping");
+        HealthResponse.ComponentDescriptor ping = response.health().components().get("ping");
         assertThat(ping.details()).isEmpty();
         assertThat(ping.components()).isEmpty();
         assertThat(new HealthResponse("UP", null).components()).isEmpty();

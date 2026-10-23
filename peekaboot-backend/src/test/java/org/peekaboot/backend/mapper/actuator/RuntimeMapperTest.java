@@ -16,7 +16,8 @@ class RuntimeMapperTest {
 
     @Test
     void map_shouldExtractOsInfo() {
-        InfoResponse info = new InfoResponse(null, null, null, new InfoResponse.OsInfo("amd64", "Linux", "5.15"), null);
+        InfoResponse info =
+                new InfoResponse(null, null, null, new InfoResponse.OsDescriptor("amd64", "Linux", "5.15"), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os().name()).isEqualTo("Linux");
         assertThat(result.os().version()).isEqualTo("5.15");
@@ -29,7 +30,7 @@ class RuntimeMapperTest {
                 "UP",
                 Map.of(
                         "diskSpace",
-                        new HealthResponse.HealthComponent(
+                        new HealthResponse.ComponentDescriptor(
                                 "UP", Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"), null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
@@ -54,9 +55,10 @@ class RuntimeMapperTest {
                 null,
                 null,
                 null,
-                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
-                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(500_000_000L, 100_000_000L),
-                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(-1L, 50_000_000L))));
+                new InfoResponse.ProcessDescriptor(new InfoResponse.ProcessDescriptor.MemoryDescriptor(
+                        new InfoResponse.ProcessDescriptor.MemoryDescriptor.MemoryUsageDescriptor(
+                                500_000_000L, 100_000_000L),
+                        new InfoResponse.ProcessDescriptor.MemoryDescriptor.MemoryUsageDescriptor(-1L, 50_000_000L))));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory()).isNotNull();
         assertThat(result.memory().heapUsed()).isEqualTo(100_000_000L);
@@ -77,7 +79,7 @@ class RuntimeMapperTest {
                 "UP",
                 Map.of(
                         "diskSpace",
-                        new HealthResponse.HealthComponent("UP", Map.of("total", 1000L, "free", 500L), null)));
+                        new HealthResponse.ComponentDescriptor("UP", Map.of("total", 1000L, "free", 500L), null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).path()).isEqualTo("/");
@@ -90,8 +92,8 @@ class RuntimeMapperTest {
                 null,
                 null,
                 null,
-                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
-                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(0L, 0L), null)));
+                new InfoResponse.ProcessDescriptor(new InfoResponse.ProcessDescriptor.MemoryDescriptor(
+                        new InfoResponse.ProcessDescriptor.MemoryDescriptor.MemoryUsageDescriptor(0L, 0L), null)));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory()).isNull();
     }
@@ -102,14 +104,15 @@ class RuntimeMapperTest {
                 "UP",
                 Map.of(
                         "diskSpace",
-                        new HealthResponse.HealthComponent("UP", Map.of("total", 0L, "free", 0L, "path", "/"), null)));
+                        new HealthResponse.ComponentDescriptor(
+                                "UP", Map.of("total", 0L, "free", 0L, "path", "/"), null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).isEmpty();
     }
 
     @Test
     void map_shouldReturnNullOsInfoWhenAllFieldsAreNull() {
-        InfoResponse info = new InfoResponse(null, null, null, new InfoResponse.OsInfo(null, null, null), null);
+        InfoResponse info = new InfoResponse(null, null, null, new InfoResponse.OsDescriptor(null, null, null), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
     }
@@ -122,8 +125,9 @@ class RuntimeMapperTest {
                 null,
                 null,
                 null,
-                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
-                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(-1L, 100_000_000L), null)));
+                new InfoResponse.ProcessDescriptor(new InfoResponse.ProcessDescriptor.MemoryDescriptor(
+                        new InfoResponse.ProcessDescriptor.MemoryDescriptor.MemoryUsageDescriptor(-1L, 100_000_000L),
+                        null)));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory().heapMax()).isEqualTo(-1L);
         assertThat(result.memory().heapUsedPercent()).isZero();
@@ -136,8 +140,9 @@ class RuntimeMapperTest {
                 null,
                 null,
                 null,
-                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
-                        null, new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(-1L, 50_000_000L))));
+                new InfoResponse.ProcessDescriptor(new InfoResponse.ProcessDescriptor.MemoryDescriptor(
+                        null,
+                        new InfoResponse.ProcessDescriptor.MemoryDescriptor.MemoryUsageDescriptor(-1L, 50_000_000L))));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory()).isNull();
     }
@@ -149,7 +154,7 @@ class RuntimeMapperTest {
                 "UP",
                 Map.of(
                         "diskSpace",
-                        new HealthResponse.HealthComponent(
+                        new HealthResponse.ComponentDescriptor(
                                 "UP", Map.of("total", "500 GB", "free", "200 GB", "path", "/"), null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).isEmpty();

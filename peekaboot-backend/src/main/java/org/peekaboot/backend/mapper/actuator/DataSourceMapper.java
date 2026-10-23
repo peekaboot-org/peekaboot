@@ -46,12 +46,12 @@ public class DataSourceMapper {
             return HealthStatus.UNKNOWN;
         }
 
-        HealthResponse.HealthComponent db = health.components().get("db");
+        HealthResponse.ComponentDescriptor db = health.components().get("db");
         if (db == null) {
             return HealthStatus.UNKNOWN;
         }
 
-        HealthResponse.HealthComponent own = db.components().get(dataSourceName);
+        HealthResponse.ComponentDescriptor own = db.components().get(dataSourceName);
         return HealthStatus.fromString(own != null ? own.status() : db.status());
     }
 }

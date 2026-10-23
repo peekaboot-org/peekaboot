@@ -39,7 +39,7 @@ class DataSourceMapperTest {
         DataSourceMetadata metadata = metadata("primaryDS");
 
         HealthResponse health =
-                new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of(), null)));
+                new HealthResponse("UP", Map.of("db", new HealthResponse.ComponentDescriptor("UP", Map.of(), null)));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), health, false);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
@@ -56,12 +56,12 @@ class DataSourceMapperTest {
                 "DOWN",
                 Map.of(
                         "db",
-                        new HealthResponse.HealthComponent(
+                        new HealthResponse.ComponentDescriptor(
                                 "DOWN",
                                 null,
                                 Map.of(
-                                        "primary", new HealthResponse.HealthComponent("UP", Map.of(), null),
-                                        "reporting", new HealthResponse.HealthComponent("DOWN", Map.of(), null)))));
+                                        "primary", new HealthResponse.ComponentDescriptor("UP", Map.of(), null),
+                                        "reporting", new HealthResponse.ComponentDescriptor("DOWN", Map.of(), null)))));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata("primary"), metadata("reporting")), health, false);
 
@@ -77,10 +77,10 @@ class DataSourceMapperTest {
                 "UP",
                 Map.of(
                         "db",
-                        new HealthResponse.HealthComponent(
+                        new HealthResponse.ComponentDescriptor(
                                 "UP",
                                 null,
-                                Map.of("primary", new HealthResponse.HealthComponent("UP", Map.of(), null)))));
+                                Map.of("primary", new HealthResponse.ComponentDescriptor("UP", Map.of(), null)))));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata("other")), health, false);
 

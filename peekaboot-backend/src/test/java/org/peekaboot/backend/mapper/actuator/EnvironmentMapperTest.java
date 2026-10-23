@@ -31,7 +31,7 @@ class EnvironmentMapperTest {
                         "application.properties",
                         Map.of(
                                 "server.port",
-                                new EnvResponse.PropertyValue(
+                                new EnvResponse.PropertyValueDescriptor(
                                         8080, "class path resource [application.properties] - 3:14")))));
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.propertySources()).hasSize(1);
@@ -60,7 +60,10 @@ class EnvironmentMapperTest {
         EnvResponse env = new EnvResponse(
                 List.of(),
                 List.of(new EnvResponse.PropertySource(
-                        null, Map.of("server.port", new EnvResponse.PropertyValue("8080", "application.properties")))));
+                        null,
+                        Map.of(
+                                "server.port",
+                                new EnvResponse.PropertyValueDescriptor("8080", "application.properties")))));
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.propertySources()).hasSize(1);
         assertThat(result.propertySources().get(0).name()).isEqualTo("unknown");
@@ -72,7 +75,7 @@ class EnvironmentMapperTest {
                 List.of(),
                 List.of(new EnvResponse.PropertySource(
                         "application.properties",
-                        Map.of("some.flag", new EnvResponse.PropertyValue(null, "application.properties")))));
+                        Map.of("some.flag", new EnvResponse.PropertyValueDescriptor(null, "application.properties")))));
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.propertySources().get(0).properties().get(0).value()).isNull();
     }
@@ -85,7 +88,7 @@ class EnvironmentMapperTest {
                         "application.properties",
                         Map.of(
                                 "spring.datasource.password",
-                                new EnvResponse.PropertyValue("hunter2", "application.properties")))));
+                                new EnvResponse.PropertyValueDescriptor("hunter2", "application.properties")))));
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("******");
     }
@@ -98,7 +101,7 @@ class EnvironmentMapperTest {
                         "application.properties",
                         Map.of(
                                 "spring.datasource.password",
-                                new EnvResponse.PropertyValue("hunter2", "application.properties")))));
+                                new EnvResponse.PropertyValueDescriptor("hunter2", "application.properties")))));
         EnvironmentInfo result = mapper.map(env, true);
         assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("hunter2");
     }

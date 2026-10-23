@@ -42,7 +42,8 @@ class ApplicationMapperTest {
     @Test
     void map_shouldExtractGitInfo() {
         InfoResponse info = new InfoResponse(
-                new InfoResponse.GitInfo("main", new InfoResponse.GitInfo.CommitInfo("abc123", "2024-01-01T10:00:00Z")),
+                new InfoResponse.GitDescriptor(
+                        "main", new InfoResponse.GitDescriptor.CommitDescriptor("abc123", "2024-01-01T10:00:00Z")),
                 null,
                 null,
                 null,
@@ -70,14 +71,14 @@ class ApplicationMapperTest {
 
     @Test
     void map_shouldLeaveTheCommitAbsentWhenGitCarriesNone() {
-        InfoResponse info = new InfoResponse(new InfoResponse.GitInfo("main", null), null, null, null, null);
+        InfoResponse info = new InfoResponse(new InfoResponse.GitDescriptor("main", null), null, null, null, null);
 
         assertThat(mapper.map(info, null, false).git()).isEqualTo(new GitInfo("main", null));
     }
 
     @Test
     void map_shouldLeaveTheVendorAbsentWhenJavaCarriesNone() {
-        InfoResponse info = new InfoResponse(null, null, new InfoResponse.JavaInfo(null, "21.0.1"), null, null);
+        InfoResponse info = new InfoResponse(null, null, new InfoResponse.JavaDescriptor(null, "21.0.1"), null, null);
 
         ApplicationInfo result = mapper.map(info, null, false);
 
@@ -90,7 +91,8 @@ class ApplicationMapperTest {
         InfoResponse info = new InfoResponse(
                 null,
                 null,
-                new InfoResponse.JavaInfo(new InfoResponse.JavaInfo.VendorInfo("Eclipse Adoptium"), "21.0.1"),
+                new InfoResponse.JavaDescriptor(
+                        new InfoResponse.JavaDescriptor.VendorDescriptor("Eclipse Adoptium"), "21.0.1"),
                 null,
                 null);
         ApplicationInfo result = mapper.map(info, null, false);
@@ -117,7 +119,8 @@ class ApplicationMapperTest {
 
     private String commitIdShownFor(Object id) {
         InfoResponse info = new InfoResponse(
-                new InfoResponse.GitInfo("main", new InfoResponse.GitInfo.CommitInfo(id, "2024-01-01T10:00:00Z")),
+                new InfoResponse.GitDescriptor(
+                        "main", new InfoResponse.GitDescriptor.CommitDescriptor(id, "2024-01-01T10:00:00Z")),
                 null,
                 null,
                 null,

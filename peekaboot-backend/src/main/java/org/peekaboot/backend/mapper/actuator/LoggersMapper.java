@@ -20,10 +20,10 @@ public class LoggersMapper {
         int totalCount = 0;
         int configuredCount = 0;
 
-        for (Map.Entry<String, LoggersResponse.LoggerInfo> entry :
+        for (Map.Entry<String, LoggersResponse.LoggerLevelsDescriptor> entry :
                 loggersData.loggers().entrySet()) {
             String name = entry.getKey();
-            LoggersResponse.LoggerInfo loggerData = entry.getValue();
+            LoggersResponse.LoggerLevelsDescriptor loggerData = entry.getValue();
 
             LoggerInfo loggerInfo = new LoggerInfo(name, loggerData.configuredLevel(), loggerData.effectiveLevel());
             String packageName = extractPackageName(name);

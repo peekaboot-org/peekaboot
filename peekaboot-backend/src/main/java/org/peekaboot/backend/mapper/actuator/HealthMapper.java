@@ -42,12 +42,12 @@ public class HealthMapper {
      */
     private void appendComponents(
             String namePrefix,
-            Map<String, HealthResponse.HealthComponent> components,
+            Map<String, HealthResponse.ComponentDescriptor> components,
             boolean unmask,
             List<HealthComponent> result) {
-        for (Map.Entry<String, HealthResponse.HealthComponent> entry : components.entrySet()) {
+        for (Map.Entry<String, HealthResponse.ComponentDescriptor> entry : components.entrySet()) {
             String name = namePrefix + entry.getKey();
-            HealthResponse.HealthComponent component = entry.getValue();
+            HealthResponse.ComponentDescriptor component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
             // a custom HealthIndicator can put anything in details, so they are masked as a tree
             result.add(new HealthComponent(name, componentStatus, treeMasker.maskMap(component.details(), unmask)));

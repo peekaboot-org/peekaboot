@@ -37,10 +37,10 @@ public class EnvironmentMapper {
 
     private List<PropertyValue> extractProperties(EnvResponse.PropertySource source, boolean unmask) {
         List<PropertyValue> result = new ArrayList<>();
-        for (Map.Entry<String, EnvResponse.PropertyValue> entry :
+        for (Map.Entry<String, EnvResponse.PropertyValueDescriptor> entry :
                 source.properties().entrySet()) {
             String key = entry.getKey();
-            EnvResponse.PropertyValue pv = entry.getValue();
+            EnvResponse.PropertyValueDescriptor pv = entry.getValue();
             String value = pv.value() != null ? pv.value().toString() : null;
             String origin = pv.origin();
             result.add(new PropertyValue(key, maskingEngine.mask(key, value, unmask), origin));
