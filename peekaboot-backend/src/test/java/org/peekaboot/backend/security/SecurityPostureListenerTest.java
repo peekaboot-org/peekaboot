@@ -5,8 +5,8 @@ import static org.mockito.Mockito.mock;
 
 import ch.qos.logback.classic.Level;
 import java.nio.file.Path;
-import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.testsupport.Credentials;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 
@@ -38,7 +38,7 @@ class SecurityPostureListenerTest {
 
     @Test
     void onApplicationEvent_logsAnInfoPostureAtInfo() {
-        var posture = SecurityPosture.armed("/peekaboot", generated(), FILE, false, false);
+        var posture = SecurityPosture.armed("/peekaboot", Credentials.generated("hunter2"), FILE, false, false);
         var expectedText = posture.report().orElseThrow().text();
 
         try (var logs = LogCapture.attach(SecurityPostureListener.class)) {
@@ -58,14 +58,5 @@ class SecurityPostureListenerTest {
 
             assertThat(logs.appender().list).isEmpty();
         }
-    }
-
-    private static DashboardCredentials generated() {
-        return new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of("hunter2"),
-                "hunter2",
-                Instant.parse("2026-09-11T08:15:30Z"),
-                DashboardCredentials.Origin.GENERATED);
     }
 }

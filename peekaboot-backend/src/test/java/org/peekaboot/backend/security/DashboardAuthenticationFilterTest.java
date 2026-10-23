@@ -11,12 +11,12 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.testsupport.Credentials;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -195,13 +195,7 @@ class DashboardAuthenticationFilterTest {
     }
 
     private static DashboardAuthenticationFilter filter(String password) {
-        var credentials = new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of(password),
-                null,
-                Instant.parse("2026-09-11T08:15:30Z"),
-                DashboardCredentials.Origin.LOADED);
-        return new DashboardAuthenticationFilter(credentials, new CredentialCache());
+        return new DashboardAuthenticationFilter(Credentials.loaded(password), new CredentialCache());
     }
 
     private static String basic(String username, String password) {

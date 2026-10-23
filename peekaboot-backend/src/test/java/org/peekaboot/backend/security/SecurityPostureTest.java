@@ -3,17 +3,15 @@ package org.peekaboot.backend.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.lifecycle.LifecycleBanner;
+import org.peekaboot.backend.testsupport.Credentials;
 
 class SecurityPostureTest {
 
     private static final Path FILE = Path.of("/home/app/.peekaboot/com.acme.orders/security.properties");
-
-    private static final Instant CREATED = Instant.parse("2026-09-11T08:15:30Z");
 
     private static final String DASHBOARD = "/peekaboot";
 
@@ -22,7 +20,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_printsTheGeneratedPasswordOnce() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -36,7 +34,7 @@ class SecurityPostureTest {
     /** One headline whatever else is on the class path: the guard answers for the path on its own. */
     @Test
     void armed_saysTheGuardChallengesEveryRequest() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -47,7 +45,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_namesThePathTheGuardActuallyCovers() {
-        var report = SecurityPosture.armed(DASHBOARD_BEHIND_A_SERVLET_PATH, generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD_BEHIND_A_SERVLET_PATH, Credentials.generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -56,7 +55,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_namesTheSwitchThatHandsThePathToYourOwnSecurity() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -68,7 +67,7 @@ class SecurityPostureTest {
     /** An armed guard is the intended setup, so it is a note, not an alarm. */
     @Test
     void armed_onlyInformsWhileTheToolbarIsOff() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -77,8 +76,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_neverPrintsAPasswordItDidNotGenerate() {
-        var loaded = new DashboardCredentials(
-                "orders-admin", PasswordHash.of("hunter2"), null, CREATED, DashboardCredentials.Origin.LOADED);
+        var loaded = Credentials.loaded("hunter2");
 
         var report = SecurityPosture.armed(DASHBOARD, loaded, FILE, false, false)
                 .report()
@@ -86,18 +84,13 @@ class SecurityPostureTest {
 
         String expectedDate = DateTimeFormatter.ISO_LOCAL_DATE
                 .withZone(ZoneId.systemDefault())
-                .format(CREATED);
+                .format(Credentials.CREATED);
         assertThat(report.text()).doesNotContain("hunter2").contains(expectedDate);
     }
 
     @Test
     void armed_saysNothingAboutAFileForAConfiguredPassword() {
-        var configured = new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of("from-the-vault"),
-                null,
-                CREATED,
-                DashboardCredentials.Origin.CONFIGURED);
+        var configured = Credentials.configured("from-the-vault");
 
         var report = SecurityPosture.armed(DASHBOARD, configured, FILE, false, false)
                 .report()
@@ -108,7 +101,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_warnsThatAWriteFailureWillChangeThePassword() {
-        var report = SecurityPosture.armed(DASHBOARD, unpersisted("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.unpersisted("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -117,7 +110,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_saysStorageIsOffWhenThereIsNoCredentialsFile() {
-        var report = SecurityPosture.armed(DASHBOARD, unpersisted("hunter2"), null, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.unpersisted("hunter2"), null, false, false)
                 .report()
                 .orElseThrow();
 
@@ -130,7 +123,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_warnsAboutTheToolbarWhenItIsOn() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, true, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, true, false)
                 .report()
                 .orElseThrow();
 
@@ -144,7 +137,7 @@ class SecurityPostureTest {
      */
     @Test
     void armed_warnsWhenTheToolbarIsOn() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, true, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, true, false)
                 .report()
                 .orElseThrow();
 
@@ -199,7 +192,7 @@ class SecurityPostureTest {
     /** The error page serves stack traces to anyone, outside the guard; an operator running at WARN has to hear it. */
     @Test
     void armed_warnsWhenTheErrorPageIsOnADeployment() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, false, true)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, true)
                 .report()
                 .orElseThrow();
 
@@ -209,7 +202,7 @@ class SecurityPostureTest {
 
     @Test
     void armed_saysNothingAboutTheErrorPageWhileItIsOff() {
-        var report = SecurityPosture.armed(DASHBOARD, generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
                 .report()
                 .orElseThrow();
 
@@ -223,19 +216,5 @@ class SecurityPostureTest {
 
         assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
         assertThat(report.text()).hasLineCount(2).contains("peekaboot.error-page.enabled=true");
-    }
-
-    private static DashboardCredentials generated(String password) {
-        return new DashboardCredentials(
-                "orders-admin", PasswordHash.of(password), password, CREATED, DashboardCredentials.Origin.GENERATED);
-    }
-
-    private static DashboardCredentials unpersisted(String password) {
-        return new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of(password),
-                password,
-                CREATED,
-                DashboardCredentials.Origin.GENERATED_UNPERSISTED);
     }
 }

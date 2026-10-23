@@ -108,6 +108,8 @@ auto-configuration builds it, from `PeekabootTracingProperties`.
 `LifecycleStarts.start(epochMs)` builds the START event the lifecycle tests replay; a stop
 is `LifecycleEvent.stop`.
 `SeriesDefs.value(id, meter)` is the plain value series the collector tests share.
+`Credentials.generated(password)`, and `loaded`, `configured` and `unpersisted` beside it,
+build the guard's `DashboardCredentials` in each origin, for one user at one fixed instant.
 `InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings
 rather than the events; the collector's only package-private constructor argument is its clock.
 `FailingWriteResponse` is the `MockHttpServletResponse` whose writes fail the way a container's
