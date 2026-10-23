@@ -45,4 +45,6 @@ jobs:
           with-deps: 'true'
 
       - name: maven-build-verify
-        run: ./mvnw --batch-mode clean verify -Dpeekaboot.it.browser=${{ matrix.browser }}
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: ./mvnw --batch-mode clean verify -Dpeekaboot.it.browser="$BROWSER"

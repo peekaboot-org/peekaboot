@@ -19,14 +19,17 @@ runs:
     # is static, so it does not care which glibc the runner image ships.
     - name: install-git-cliff
       shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        SHA512: ${{ inputs.sha512 }}
       run: |
         set -euo pipefail
-        archive="git-cliff-${{ inputs.version }}-x86_64-unknown-linux-musl.tar.gz"
+        archive="git-cliff-${VERSION}-x86_64-unknown-linux-musl.tar.gz"
         target="${RUNNER_TEMP}/git-cliff"
         mkdir -p "$target"
         curl --silent --show-error --fail --location \
           --output "${target}/${archive}" \
-          "https://github.com/orhun/git-cliff/releases/download/v${{ inputs.version }}/${archive}"
-        echo "${{ inputs.sha512 }}  ${target}/${archive}" | sha512sum --check --quiet
+          "https://github.com/orhun/git-cliff/releases/download/v${VERSION}/${archive}"
+        echo "${SHA512}  ${target}/${archive}" | sha512sum --check --quiet
         tar xzf "${target}/${archive}" -C "$target" --strip-components=1
         echo "$target" >> "$GITHUB_PATH"
