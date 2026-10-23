@@ -630,18 +630,21 @@ it never signs or publishes anything. Releases start by hand: run the `release` 
 Actions tab with `dev` selected, and it fails immediately if dispatched from anything else.
 Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does:
 
-1. `./mvnw --batch-mode verify`
-2. The release version resolved with `git-cliff --bumped-version`. `CHANGELOG.md` regenerated
+1. A preflight that fails the run before anything is built when `dev` moved since the
+   dispatch, when no commit but the next development version follows the last tag, or when
+   `main` is not an ancestor of `dev` and so could not fast-forward.
+2. `./mvnw --batch-mode verify`
+3. The release version resolved with `git-cliff --bumped-version`. `CHANGELOG.md` regenerated
    whole against it and staged, and `README.md`'s dependency snippet rewritten to it and
    staged. See [Release notes](#release-notes).
-3. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
+4. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
    picks the staged changelog up, so version bump, changelog and tag are one commit.
-4. `./mvnw -P peekaboot-release release:perform`, then a wait until the release is on repo1.
-5. `main` fast-forwarded to the tagged commit, so it names exactly what was published.
+5. `./mvnw -P peekaboot-release release:perform`, then a wait until the release is on repo1.
+6. `main` fast-forwarded to the tagged commit, so it names exactly what was published.
    Nothing merges back, because `main` originates no commits of its own.
-6. Grouped release notes for the new tag rendered by git-cliff into the release body, and
+7. Grouped release notes for the new tag rendered by git-cliff into the release body, and
    the `unreleased` draft deleted.
-7. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
+8. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
    committed to that repo's `dev`, its `main` fast-forwarded so Pages rebuilds, and the same
    bare version tagged there.
 

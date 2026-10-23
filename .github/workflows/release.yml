@@ -40,6 +40,32 @@ jobs:
           # full history: git-cliff resolves the range back to the previous tag
           fetch-depth: 0
 
+      # Each of these would otherwise fail only after release:prepare has pushed the tag or
+      # the artifacts are on Central. First, so nothing is built or rendered for a doomed run.
+      - name: preflight
+        run: |
+          # A second dispatch queued behind this one by the concurrency group checks out the
+          # SHA dev was at when it was dispatched, so it cannot see the release that just ran.
+          remote_dev="$(git ls-remote origin refs/heads/dev | cut -f1)"
+          if [ "$remote_dev" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::dev moved since this run was dispatched; dispatch again"
+            exit 1
+          fi
+
+          # A release leaves exactly one commit after its tag, the next development version.
+          last_tag="$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2> /dev/null || true)"
+          if [ -n "$last_tag" ] && [ "$(git rev-list --no-merges --count "${last_tag}..HEAD")" -le 1 ]; then
+            echo "::error::nothing to release: no commit since ${last_tag} but the next development version"
+            exit 1
+          fi
+
+          # fast-forward-main pushes without --force, so a main that is not behind dev would
+          # reject it after the publish.
+          if ! git merge-base --is-ancestor refs/remotes/origin/main HEAD; then
+            echo "::error::main is not an ancestor of dev, so it cannot fast-forward to the release"
+            exit 1
+          fi
+
       # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build
         uses: ./.github/actions/prepare-build
