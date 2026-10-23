@@ -570,8 +570,8 @@ class TracesTabIT extends PlaywrightTestBase {
     void theSlowReportTraceIsListedInTheSlowBucket() {
         CustomerOrder order = seedAnOrder();
         try {
-            page.navigate(baseUrl + "/api/orders/" + order.getId() + "/report");
-            String traceId = awaitListedTrace("bucket=slow", "trace => trace.rootOperation.includes('/report')");
+            String traceId = traceIdOf(page.navigate(baseUrl + "/api/orders/" + order.getId() + "/report"));
+            awaitListedTrace("bucket=slow", "trace => trace.traceId === '" + traceId + "'");
 
             page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=slow");
             page.waitForSelector("#traces-bucket .pk-btn[data-bucket='slow'][aria-pressed='true']");
