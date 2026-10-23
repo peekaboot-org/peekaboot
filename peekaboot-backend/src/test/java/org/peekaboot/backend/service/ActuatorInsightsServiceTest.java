@@ -2,9 +2,6 @@ package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
@@ -23,55 +20,53 @@ import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.testsupport.LogCapture;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldMapAllSections() {
-        ActuatorInsightsService service = service(
-                Map.of(
-                        "health", Map.of("status", "UP", "components", Map.of()),
-                        "info",
+        ActuatorInsightsService service = service(Map.of(
+                "health", Map.of("status", "UP", "components", Map.of()),
+                "info",
+                        Map.of(
+                                "build", Map.of("name", "test"),
+                                "os", Map.of("name", "Linux", "version", "5.15", "arch", "amd64")),
+                "spring", Map.of("bootVersion", "4.0.1"),
+                "env", Map.of("activeProfiles", List.of("dev")),
+                "loggers", Map.of("loggers", Map.of("com.example.Foo", Map.of("effectiveLevel", "DEBUG"))),
+                "flyway",
+                        Map.of(
+                                "contexts",
                                 Map.of(
-                                        "build", Map.of("name", "test"),
-                                        "os", Map.of("name", "Linux", "version", "5.15", "arch", "amd64")),
-                        "spring", Map.of("bootVersion", "4.0.1"),
-                        "env", Map.of("activeProfiles", List.of("dev")),
-                        "loggers", Map.of("loggers", Map.of("com.example.Foo", Map.of("effectiveLevel", "DEBUG"))),
-                        "flyway",
-                                Map.of(
-                                        "contexts",
+                                        "application",
                                         Map.of(
-                                                "application",
+                                                "flywayBeans",
                                                 Map.of(
-                                                        "flywayBeans",
+                                                        "flyway",
                                                         Map.of(
-                                                                "flyway",
-                                                                Map.of(
-                                                                        "migrations",
-                                                                        List.of(Map.of(
-                                                                                "version",
-                                                                                "1",
-                                                                                "description",
-                                                                                "Initial",
-                                                                                "state",
-                                                                                "SUCCESS"))))))),
-                        "configprops",
+                                                                "migrations",
+                                                                List.of(Map.of(
+                                                                        "version",
+                                                                        "1",
+                                                                        "description",
+                                                                        "Initial",
+                                                                        "state",
+                                                                        "SUCCESS"))))))),
+                "configprops",
+                        Map.of(
+                                "contexts",
                                 Map.of(
-                                        "contexts",
+                                        "application",
                                         Map.of(
-                                                "application",
+                                                "beans",
                                                 Map.of(
-                                                        "beans",
+                                                        "myBean",
                                                         Map.of(
-                                                                "myBean",
-                                                                Map.of(
-                                                                        "prefix",
-                                                                        "my.config",
-                                                                        "properties",
-                                                                        Map.of("enabled", true))))))),
-                DataSourceMetadataList.EMPTY);
+                                                                "prefix",
+                                                                "my.config",
+                                                                "properties",
+                                                                Map.of("enabled", true))))))));
 
         ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
 
@@ -104,27 +99,25 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldMapLiquibaseChangeSets() {
-        ActuatorInsightsService service = service(
+        ActuatorInsightsService service = service(Map.of(
+                "liquibase",
                 Map.of(
-                        "liquibase",
+                        "contexts",
                         Map.of(
-                                "contexts",
+                                "application",
                                 Map.of(
-                                        "application",
+                                        "liquibaseBeans",
                                         Map.of(
-                                                "liquibaseBeans",
+                                                "liquibase",
                                                 Map.of(
-                                                        "liquibase",
-                                                        Map.of(
-                                                                "changeSets",
-                                                                List.of(Map.of(
-                                                                        "id",
-                                                                        "create-product",
-                                                                        "execType",
-                                                                        "EXECUTED",
-                                                                        "orderExecuted",
-                                                                        1)))))))),
-                DataSourceMetadataList.EMPTY);
+                                                        "changeSets",
+                                                        List.of(Map.of(
+                                                                "id",
+                                                                "create-product",
+                                                                "execType",
+                                                                "EXECUTED",
+                                                                "orderExecuted",
+                                                                1)))))))));
 
         ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
 
@@ -135,7 +128,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldHandleMissingData() {
-        ActuatorInsightsService service = service(Map.of(), DataSourceMetadataList.EMPTY);
+        ActuatorInsightsService service = service(Map.of());
 
         ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
 
@@ -148,17 +141,15 @@ class ActuatorInsightsServiceTest {
     /** The mappers are built inside the service, so the engine it is handed is the one that masks. */
     @Test
     void getInsights_shouldMaskThroughTheEngineItWasGiven() {
-        ActuatorInsightsService service = service(
+        ActuatorInsightsService service = service(Map.of(
+                "env",
                 Map.of(
-                        "env",
-                        Map.of(
-                                "propertySources",
-                                List.of(Map.of(
-                                        "name",
-                                        "application.yml",
-                                        "properties",
-                                        Map.of("db.password", Map.of("value", "hunter2")))))),
-                DataSourceMetadataList.EMPTY);
+                        "propertySources",
+                        List.of(Map.of(
+                                "name",
+                                "application.yml",
+                                "properties",
+                                Map.of("db.password", Map.of("value", "hunter2")))))));
 
         ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
 
@@ -173,17 +164,12 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldDescribeSchedulesInTheRequestLocale() {
-        ActuatorInsightsService service = service(
+        ActuatorInsightsService service = service(Map.of(
+                "scheduledtasks",
                 Map.of(
-                        "scheduledtasks",
-                        Map.of(
-                                "cron",
-                                List.of(Map.of(
-                                        "expression",
-                                        "0 0 * * * *",
-                                        "runnable",
-                                        Map.of("target", "com.example.Task.run"))))),
-                DataSourceMetadataList.EMPTY);
+                        "cron",
+                        List.of(Map.of(
+                                "expression", "0 0 * * * *", "runnable", Map.of("target", "com.example.Task.run"))))));
 
         ActuatorInsightsResponse response = service.getInsights(Locale.GERMAN, false);
 
@@ -194,21 +180,19 @@ class ActuatorInsightsServiceTest {
     /** Boot's {@code management.info.git.mode=full} nests the commit id as {@code {full, abbrev}}. */
     @Test
     void getInsights_shouldShowTheAbbreviatedCommitIdInFullGitMode() {
-        ActuatorInsightsService service = service(
+        ActuatorInsightsService service = service(Map.of(
+                "info",
                 Map.of(
-                        "info",
+                        "git",
                         Map.of(
-                                "git",
+                                "branch",
+                                "main",
+                                "commit",
                                 Map.of(
-                                        "branch",
-                                        "main",
-                                        "commit",
-                                        Map.of(
-                                                "id",
-                                                Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4"),
-                                                "time",
-                                                "2026-01-10T20:52:19Z")))),
-                DataSourceMetadataList.EMPTY);
+                                        "id",
+                                        Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4"),
+                                        "time",
+                                        "2026-01-10T20:52:19Z")))));
 
         ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
 
@@ -218,11 +202,9 @@ class ActuatorInsightsServiceTest {
     /** A section that does not bind is left out like a failed read, so it cannot blank the other tabs. */
     @Test
     void getInsights_shouldKeepTheOtherSectionsWhenOneFailsToParse() {
-        ActuatorInsightsService service = service(
-                Map.of(
-                        "health", Map.of("status", Map.of("code", "UP")),
-                        "env", Map.of("activeProfiles", List.of("dev"))),
-                DataSourceMetadataList.EMPTY);
+        ActuatorInsightsService service = service(Map.of(
+                "health", Map.of("status", Map.of("code", "UP")),
+                "env", Map.of("activeProfiles", List.of("dev"))));
 
         try (LogCapture capture = LogCapture.attach(ActuatorResponseParser.class)) {
             ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
@@ -235,18 +217,26 @@ class ActuatorInsightsServiceTest {
         }
     }
 
-    /** The real actuator service over inline sources, one per section the test supplies. */
-    @SuppressWarnings("unchecked")
+    /** The real actuator service over inline sources, one per section the test supplies, and no DataSource bean. */
+    private static ActuatorInsightsService service(Map<String, Object> sections) {
+        return service(sections, new StaticListableBeanFactory());
+    }
+
     private static ActuatorInsightsService service(Map<String, Object> sections, DataSourceMetadataList dataSources) {
+        StaticListableBeanFactory beanFactory = new StaticListableBeanFactory();
+        beanFactory.addBean("dataSourceMetadataList", dataSources);
+        return service(sections, beanFactory);
+    }
+
+    private static ActuatorInsightsService service(
+            Map<String, Object> sections, StaticListableBeanFactory beanFactory) {
         List<InsightsSource> sources = sections.entrySet().stream()
                 .map(section -> new InsightsSource(section.getKey(), section::getValue))
                 .toList();
-        ObjectProvider<DataSourceMetadataList> dataSourceProvider = mock(ObjectProvider.class);
-        when(dataSourceProvider.getIfAvailable(any())).thenReturn(dataSources);
         return new ActuatorInsightsService(
                 new PeekabootActuatorService(sources),
                 new ActuatorResponseParser(),
                 new MaskingEngine(),
-                dataSourceProvider);
+                beanFactory.getBeanProvider(DataSourceMetadataList.class));
     }
 }
