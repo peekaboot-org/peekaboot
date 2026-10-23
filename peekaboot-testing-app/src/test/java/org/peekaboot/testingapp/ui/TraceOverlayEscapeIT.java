@@ -21,9 +21,7 @@ class TraceOverlayEscapeIT extends PlaywrightTestBase {
 
     @BeforeEach
     void openTheOverlayOverTheDashboard() {
-        openPersonsPage();
-        String traceId = toolbar.traceId();
-        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+        String traceId = seedAnHttpTrace();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-tab");

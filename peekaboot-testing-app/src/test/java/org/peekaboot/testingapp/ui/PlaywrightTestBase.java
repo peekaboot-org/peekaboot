@@ -522,6 +522,15 @@ abstract class PlaywrightTestBase {
         return traceId;
     }
 
+    /** Opens the Traces tab with the caller's own {@link #seedAnHttpTrace() HTTP trace} listed, and returns that trace's id. */
+    protected String openTracesTabWithATrace() {
+        String traceId = seedAnHttpTrace();
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
+        return traceId;
+    }
+
     /** A count as format.js groups it (e.g. "1,234"), stripped of its group separators before parsing. */
     protected static int parseGroupedInt(String grouped) {
         return Integer.parseInt(grouped.replaceAll("[.,]", ""));

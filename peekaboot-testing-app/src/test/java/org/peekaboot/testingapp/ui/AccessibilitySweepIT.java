@@ -36,9 +36,7 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
     void theDashboardHasNoAccessibilityViolations() {
         // the Traces tab renders as an empty list until some trace exists, and an empty list
         // has no rows to find a violation in - so this class seeds its own
-        openPersonsPage();
-        String traceId = toolbar.traceId();
-        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+        String traceId = seedAnHttpTrace();
 
         openDashboard();
 

@@ -178,12 +178,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      */
     @Test
     void clickingATraceRowThenSwitchingTabsUpdatesTheUrl() {
-        openPersonsPage();
-        String traceId = toolbar.traceId();
-        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
-        openDashboard();
-        dashboard.openTracesTab();
-        dashboard.awaitListedTrace(traceId);
+        String traceId = openTracesTabWithATrace();
 
         dashboard.openListedTrace(traceId);
         overlay.openTab("request");

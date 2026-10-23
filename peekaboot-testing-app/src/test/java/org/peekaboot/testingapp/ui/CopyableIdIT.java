@@ -29,7 +29,7 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     private void openPageWithToolbar() {
-        page.navigate(baseUrl + "/");
+        openPersonsPage();
         toolbar.traceId();
     }
 
@@ -92,12 +92,7 @@ class CopyableIdIT extends PlaywrightTestBase {
 
     @Test
     void traceListRendersCopyableIds() {
-        openPageWithToolbar();
-        String traceId = toolbar.traceId();
-        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
-        openDashboard();
-        dashboard.openTracesTab();
-        dashboard.awaitListedTrace(traceId);
+        String traceId = openTracesTabWithATrace();
 
         assertThat(page.getAttribute(Dashboard.traceItem(traceId) + " .pk-copy", "data-pk-copy"))
                 .as("the row shows a shortened id but copies the whole one")

@@ -110,15 +110,6 @@ class TracesTabIT extends PlaywrightTestBase {
                 .asLong();
     }
 
-    /** Opens the Traces tab with the caller's own trace listed, and returns that trace's id. */
-    private String openTracesTabWithATrace() {
-        String traceId = seedAnHttpTrace();
-        openDashboard();
-        dashboard.openTracesTab();
-        dashboard.awaitListedTrace(traceId);
-        return traceId;
-    }
-
     /**
      * The loading block sits above the bucket row, so showing it for a refresh of a list
      * already on screen pushes the controls and the list down for the round trip. Only the
