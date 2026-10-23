@@ -8,7 +8,6 @@ import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -158,15 +157,10 @@ class InsightsTabIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkingStraightToInsightsRendersTheTabAndTheOverviewTiles() {
-        AtomicReference<Route> parkedTabRequest = new AtomicReference<>();
-        page.route("**/api/insights/config", route -> {
-            if (!parkedTabRequest.compareAndSet(null, route)) {
-                route.resume();
-            }
-        });
+        ParkedRequest tabRequest = parkFirst("**/api/insights/config");
         page.navigate(dashboardUrl("#insights"));
         page.waitForSelector("#insights-tab.active");
-        page.waitForCondition(() -> parkedTabRequest.get() != null);
+        tabRequest.awaitParked();
 
         dashboard.openTab("overview");
         page.waitForSelector(
@@ -177,7 +171,7 @@ class InsightsTabIT extends PlaywrightTestBase {
                 .as("the tile row is populated, not left hidden")
                 .isZero();
 
-        parkedTabRequest.get().resume();
+        tabRequest.resume();
         Page.WaitForSelectorOptions attached = new Page.WaitForSelectorOptions()
                 .setState(WaitForSelectorState.ATTACHED)
                 .setTimeout(10000);

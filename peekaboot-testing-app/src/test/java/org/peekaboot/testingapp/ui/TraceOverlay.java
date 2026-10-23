@@ -1,6 +1,11 @@
 package org.peekaboot.testingapp.ui;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.options.WaitForSelectorState;
+import java.time.Duration;
 
 /** The trace-detail overlay (trace-detail.js), opened from the toolbar or a dashboard deep link. */
 final class TraceOverlay extends ShadowHost {
@@ -37,6 +42,21 @@ final class TraceOverlay extends ShadowHost {
     /** Waits for the host alone: openTraceDetail() creates it before any fetch, so this proves an open was started, nothing more. */
     void awaitOpened() {
         page.waitForSelector(HOST);
+    }
+
+    /**
+     * Asserts that no overlay host attaches within {@code window}, {@code because} naming why.
+     * Opening is async (a dynamic import and a fetch), so an absence read straight away
+     * would pass even if something were opening it.
+     */
+    void assertNotOpenedWithin(Duration window, String because) {
+        assertThatThrownBy(() -> page.waitForSelector(
+                        HOST,
+                        new Page.WaitForSelectorOptions()
+                                .setState(WaitForSelectorState.ATTACHED)
+                                .setTimeout((double) window.toMillis())))
+                .as(because)
+                .isInstanceOf(TimeoutError.class);
     }
 
     /** Waits until the overlay open is the one for {@code traceId}, which trace-detail.js stamps on the host. */

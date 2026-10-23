@@ -135,7 +135,8 @@ contexts*), `seedAnHttpTrace()` and `openTracesTabWithATrace()` for a test that 
 its own, `openPageThatLogsAnError()` for the persons page that logs an ERROR (`/?error=true`)
 once its trace carries the log, `importModule(path, expression)` to evaluate an
 expression over an ES module imported into the blank fixture page, `serveWithCsp(urlGlob,
-policy)` and `emulateOsColorScheme(scheme)`.
+policy)`, `parkFirst(urlGlob)` and `loseFirst(urlGlob)` to hold back or abort the first request
+for a route, and `emulateOsColorScheme(scheme)`.
 
 Geometry assertions sit behind the bundled webfont. `Fonts.awaitReady(page)` is awaited by
 `openDashboard`, `openPersonsPage` and `overlay.awaitLoaded()`, the three points a surface

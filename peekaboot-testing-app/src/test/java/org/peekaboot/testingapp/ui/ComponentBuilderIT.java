@@ -2,8 +2,6 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.Route;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -211,18 +209,10 @@ class ComponentBuilderIT extends PlaywrightTestBase {
      */
     @Test
     void staleOverlappingResponseIsSupersededByTheNewerCall() {
-        AtomicReference<Route> parkedFirstRequest = new AtomicReference<>();
-        page.route("**/peekaboot/api/features", route -> {
-            if (!parkedFirstRequest.compareAndSet(null, route)) {
-                route.resume();
-            }
-        });
+        ParkedRequest firstRequest = parkFirst("**/peekaboot/api/features");
         page.onResponse(response -> {
-            if (response.url().endsWith("/peekaboot/api/features")) {
-                Route parked = parkedFirstRequest.getAndSet(null);
-                if (parked != null) {
-                    parked.resume();
-                }
+            if (response.url().endsWith("/peekaboot/api/features") && firstRequest.isParked()) {
+                firstRequest.resume();
             }
         });
 

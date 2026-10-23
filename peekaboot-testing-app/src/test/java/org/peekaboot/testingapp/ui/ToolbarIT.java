@@ -1,12 +1,10 @@
 package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.ColorScheme;
-import com.microsoft.playwright.options.WaitForSelectorState;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -113,12 +111,7 @@ class ToolbarIT extends PlaywrightTestBase {
 
         toolbar.click(".pk-toolbar a");
 
-        assertThatThrownBy(() -> page.waitForSelector(
-                        TraceOverlay.HOST,
-                        new Page.WaitForSelectorOptions()
-                                .setState(WaitForSelectorState.ATTACHED)
-                                .setTimeout(1000)))
-                .isInstanceOf(TimeoutError.class);
+        overlay.assertNotOpenedWithin(Duration.ofSeconds(1), "the dashboard link must not open the overlay");
 
         // Not vacuous: the bar's own action still works on this same page.
         toolbar.traceId();

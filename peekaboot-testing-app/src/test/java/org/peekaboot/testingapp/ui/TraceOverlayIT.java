@@ -1,20 +1,17 @@
 package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.microsoft.playwright.Locator;
-import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
-import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
-import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,7 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
@@ -1292,7 +1288,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * their own thresholds sees the shared link coloured by the defaults instead.
      *
      * <p>The features request is parked (a real request whose real response is merely
-     * held back, the pattern ComponentBuilderIT uses for the api client's race) rather
+     * held back by parkFirst, as ComponentBuilderIT does for the api client's race) rather
      * than stubbed: the assertion is purely about ordering. A bounded wait for the
      * overlay's absence would pass vacuously if the deep link were broken outright, so
      * the same page then proves the overlay does open once the features are released.
@@ -1302,25 +1298,14 @@ class TraceOverlayIT extends PlaywrightTestBase {
         openPersonsPage();
         String traceId = toolbar.traceId();
 
-        AtomicReference<Route> parkedFeatures = new AtomicReference<>();
-        page.route("**/peekaboot/api/features", route -> {
-            if (!parkedFeatures.compareAndSet(null, route)) {
-                route.resume();
-            }
-        });
+        ParkedRequest features = parkFirst("**/peekaboot/api/features");
         page.navigate(dashboardUrl("#traces/" + traceId));
         page.waitForSelector("#traces-tab.active");
-        page.waitForCondition(() -> parkedFeatures.get() != null);
+        features.awaitParked();
 
-        assertThatThrownBy(() -> page.waitForSelector(
-                        TraceOverlay.HOST,
-                        new Page.WaitForSelectorOptions()
-                                .setState(WaitForSelectorState.ATTACHED)
-                                .setTimeout(1000)))
-                .as("no overlay while /api/features is still outstanding")
-                .isInstanceOf(TimeoutError.class);
+        overlay.assertNotOpenedWithin(Duration.ofSeconds(1), "no overlay while /api/features is still outstanding");
 
-        parkedFeatures.get().resume();
+        features.resume();
 
         overlay.waitFor("#pk-gantt-rows");
     }

@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -331,6 +332,29 @@ abstract class PlaywrightTestBase {
             }
         });
         return () -> released.set(true);
+    }
+
+    /**
+     * Holds the first request for {@code urlGlob} at its route and lets every later one
+     * through, over {@link #interceptUntilReleased} and so with the route kept for the test.
+     */
+    protected ParkedRequest parkFirst(String urlGlob) {
+        ParkedRequest parked = new ParkedRequest(page);
+        interceptFirst(urlGlob, parked::park);
+        return parked;
+    }
+
+    /** Aborts the first request for {@code urlGlob}, a real network failure, and lets every later one through. */
+    protected void loseFirst(String urlGlob) {
+        interceptFirst(urlGlob, Route::abort);
+    }
+
+    private void interceptFirst(String urlGlob, Consumer<Route> interception) {
+        AtomicReference<Runnable> release = new AtomicReference<>();
+        release.set(interceptUntilReleased(urlGlob, route -> {
+            release.get().run();
+            interception.accept(route);
+        }));
     }
 
     /**
