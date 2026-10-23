@@ -15,27 +15,12 @@ public class BuildInfoProvider {
         return buildProperties != null ? buildProperties.getName() : "unknown";
     }
 
-    public String getGroup() {
-        return buildProperties != null ? buildProperties.getGroup() : "unknown";
-    }
-
-    public String getArtifact() {
-        return buildProperties != null ? buildProperties.getArtifact() : "unknown";
-    }
-
-    public String getVersion() {
-        return buildProperties != null ? buildProperties.getVersion() : "unknown";
-    }
-
     public String getFormattedInfo() {
         if (buildProperties == null) {
             return "Build information not available";
         }
-        return String.format("%s:%s:%s", getGroup(), getArtifact(), getVersion());
-    }
-
-    public boolean isBuildInfoAvailable() {
-        return buildProperties != null;
+        return String.format(
+                "%s:%s:%s", buildProperties.getGroup(), buildProperties.getArtifact(), buildProperties.getVersion());
     }
 
     /** The build-info entries the lifecycle log keeps; see {@link InfoEntries}. */
