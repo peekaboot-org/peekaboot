@@ -58,21 +58,20 @@ how to override the detection are in
 
 Full docs live at [www.peekaboot.org](https://www.peekaboot.org).
 
-| Page | |
-| --- | --- |
-| [Quick start](https://www.peekaboot.org/docs/quick-start/) | Add the starter, run your app, open the toolbar and the dashboard |
-| [Do I want this in production?](https://www.peekaboot.org/docs/in-production/) | What Peekaboot changes while it is on, what it costs, and how to keep it out of a production build |
-| [Dev toolbar](https://www.peekaboot.org/docs/dev-toolbar/) | A bar at the bottom of every HTML page your app renders, with the request, its trace and its logs |
-| [The dashboard](https://www.peekaboot.org/docs/dashboard/) | A tour of every tab |
-| [Traces](https://www.peekaboot.org/docs/traces/) | The last thousand requests, jobs and messages, with their spans, SQL and logs |
-| [Insights](https://www.peekaboot.org/docs/insights/) | Live charts over the Micrometer meters your app already publishes |
-| [Configuration](https://www.peekaboot.org/docs/configuration/) | Every `peekaboot.*` property, grouped by prefix, with its default |
-| [HTTP API](https://www.peekaboot.org/docs/api/) | The JSON endpoints under `/peekaboot/api` that the dashboard and the toolbar read |
-| [Security](https://www.peekaboot.org/docs/security/) | What Peekaboot exposes when it's on, and how to lock it down |
-| [Troubleshooting](https://www.peekaboot.org/docs/troubleshooting/) | Symptoms, their causes and the fix |
-| [Releases](https://www.peekaboot.org/releases/) | Every release, with its breaking changes, features and fixes |
-| [Acknowledgements](https://www.peekaboot.org/docs/acknowledgements/) | The projects Peekaboot builds on and borrows from |
-| [Contributing](https://www.peekaboot.org/docs/contributing/) | Where the contributor documentation lives |
+- [Quick start](https://www.peekaboot.org/docs/quick-start/)
+- [Do I want this in production?](https://www.peekaboot.org/docs/in-production/)
+- [Dev toolbar](https://www.peekaboot.org/docs/dev-toolbar/)
+- [Error page](https://www.peekaboot.org/docs/error-page/)
+- [The dashboard](https://www.peekaboot.org/docs/dashboard/)
+- [Traces](https://www.peekaboot.org/docs/traces/)
+- [Insights](https://www.peekaboot.org/docs/insights/)
+- [Configuration](https://www.peekaboot.org/docs/configuration/)
+- [HTTP API](https://www.peekaboot.org/docs/api/)
+- [Security](https://www.peekaboot.org/docs/security/)
+- [Troubleshooting](https://www.peekaboot.org/docs/troubleshooting/)
+- [Releases](https://www.peekaboot.org/releases/)
+- [Acknowledgements](https://www.peekaboot.org/docs/acknowledgements/)
+- [Contributing](https://www.peekaboot.org/docs/contributing/)
 
 ## Working on Peekaboot
 
