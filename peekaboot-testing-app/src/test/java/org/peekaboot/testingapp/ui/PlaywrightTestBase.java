@@ -328,7 +328,7 @@ abstract class PlaywrightTestBase {
      * could render a tab with nothing left to bring the rows in.
      */
     protected String openPageThatLogsAnError() {
-        page.navigate(baseUrl + "/?error=true");
+        page.navigate(baseUrl + contextPath() + "/?error=true");
         String traceId = toolbar.traceId();
         awaitTrace(traceId, "trace => (" + ROOT_SPAN_EXPORTED + ")(trace) && (" + ERROR_LOGGED + ")(trace)");
         return traceId;
@@ -341,7 +341,7 @@ abstract class PlaywrightTestBase {
      * read a trace id from.
      */
     protected String triggerOrderEnrichment() {
-        return traceIdOf(page.navigate(baseUrl + "/orders/enrich"));
+        return traceIdOf(page.navigate(baseUrl + contextPath() + "/orders/enrich"));
     }
 
     /** The trace id a response names in its Server-Timing header, for an endpoint with no toolbar to read it from. */
