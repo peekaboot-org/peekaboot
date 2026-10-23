@@ -1,6 +1,5 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import org.peekaboot.backend.actuator.parsed.LiquibaseResponse;
@@ -18,20 +17,13 @@ public class LiquibaseMapper {
             return new LiquibaseInfo(List.of());
         }
 
-        List<ChangeSetInfo> changeSets = new ArrayList<>();
-
-        for (LiquibaseResponse.LiquibaseContext context :
-                liquibaseData.contexts().values()) {
-            for (LiquibaseResponse.LiquibaseBean bean : context.liquibaseBeans().values()) {
-                for (LiquibaseResponse.ChangeSet changeSet : bean.changeSets()) {
-                    changeSets.add(mapChangeSet(changeSet));
-                }
-            }
-        }
-
         // The endpoint answers in the history table's own order; the tab promises orderExecuted.
-        changeSets.sort(EXECUTION_ORDER);
-        return new LiquibaseInfo(changeSets);
+        return new LiquibaseInfo(liquibaseData.contexts().values().stream()
+                .flatMap(context -> context.liquibaseBeans().values().stream())
+                .flatMap(bean -> bean.changeSets().stream())
+                .map(this::mapChangeSet)
+                .sorted(EXECUTION_ORDER)
+                .toList());
     }
 
     private ChangeSetInfo mapChangeSet(LiquibaseResponse.ChangeSet changeSet) {

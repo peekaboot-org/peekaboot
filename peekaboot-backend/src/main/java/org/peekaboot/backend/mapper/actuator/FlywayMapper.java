@@ -1,6 +1,5 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import java.util.ArrayList;
 import java.util.List;
 import org.peekaboot.backend.actuator.parsed.FlywayResponse;
 import org.peekaboot.backend.domain.flyway.FlywayInfo;
@@ -14,19 +13,13 @@ public class FlywayMapper {
             return new FlywayInfo(List.of());
         }
 
-        List<MigrationInfo> migrations = new ArrayList<>();
-
-        for (FlywayResponse.FlywayContext context : flywayData.contexts().values()) {
-            for (FlywayResponse.FlywayBean bean : context.flywayBeans().values()) {
-                for (FlywayResponse.Migration migration : bean.migrations()) {
-                    migrations.add(mapMigration(migration));
-                }
-            }
-        }
-
         // Flyway's own order is kept: versioned ascending, then repeatables. Re-sorting by a
         // parsed version would put 14-digit timestamp versions first and repeatables ahead of all.
-        return new FlywayInfo(migrations);
+        return new FlywayInfo(flywayData.contexts().values().stream()
+                .flatMap(context -> context.flywayBeans().values().stream())
+                .flatMap(bean -> bean.migrations().stream())
+                .map(this::mapMigration)
+                .toList());
     }
 
     private MigrationInfo mapMigration(FlywayResponse.Migration migration) {
