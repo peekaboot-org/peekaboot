@@ -64,12 +64,7 @@ public class DashboardCredentialsResolver {
                 username, PasswordHash.of(generated), generated, Instant.now(), DashboardCredentials.Origin.GENERATED);
         return credentialsFile.write(credentials)
                 ? credentials
-                : new DashboardCredentials(
-                        credentials.username(),
-                        credentials.passwordHash(),
-                        generated,
-                        credentials.createdAt(),
-                        DashboardCredentials.Origin.GENERATED_UNPERSISTED);
+                : credentials.withOrigin(DashboardCredentials.Origin.GENERATED_UNPERSISTED);
     }
 
     private String resolveUsername() {

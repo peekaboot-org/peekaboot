@@ -19,4 +19,22 @@ class DashboardCredentialsTest {
 
         assertThat(credentials.toString()).doesNotContain("s3cret").contains("orders-admin", "GENERATED");
     }
+
+    @Test
+    void withOrigin_changesTheOriginAlone() {
+        var generated = new DashboardCredentials(
+                "orders-admin",
+                PasswordHash.of("s3cret"),
+                "s3cret",
+                Instant.parse("2026-09-11T08:15:30Z"),
+                DashboardCredentials.Origin.GENERATED);
+
+        var unpersisted = generated.withOrigin(DashboardCredentials.Origin.GENERATED_UNPERSISTED);
+
+        assertThat(unpersisted.origin()).isEqualTo(DashboardCredentials.Origin.GENERATED_UNPERSISTED);
+        assertThat(unpersisted)
+                .usingRecursiveComparison()
+                .ignoringFields("origin")
+                .isEqualTo(generated);
+    }
 }

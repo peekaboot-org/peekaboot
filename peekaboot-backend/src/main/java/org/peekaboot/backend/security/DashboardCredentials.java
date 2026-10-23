@@ -27,6 +27,10 @@ public record DashboardCredentials(
         GENERATED_UNPERSISTED
     }
 
+    public DashboardCredentials withOrigin(Origin newOrigin) {
+        return new DashboardCredentials(username, passwordHash, plaintext, createdAt, newOrigin);
+    }
+
     /** The generated toString would print the password into every log that reports the posture. */
     @Override
     public String toString() {
