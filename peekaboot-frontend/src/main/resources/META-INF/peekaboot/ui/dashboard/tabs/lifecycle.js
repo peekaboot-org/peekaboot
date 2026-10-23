@@ -122,7 +122,7 @@ function renderRow(run, dateOptions) {
 const SHRINK = {className: 'pk-table__shrink'};
 
 function startedCell(run, dateOptions) {
-    const td = cell(SHRINK, formatDateTime(run.startedAtEpochMs, dateOptions));
+    const td = cell(SHRINK, formatDateTime(run.startedAt, dateOptions));
     if (run.running) td.append(' ', badge('Running', 'ok'));
     return td;
 }
@@ -139,7 +139,7 @@ function ranForCell(run) {
 }
 
 function stoppedCell(run, dateOptions) {
-    if (run.stoppedAtEpochMs != null) return cell(SHRINK, formatDateTime(run.stoppedAtEpochMs, dateOptions));
+    if (run.stoppedAt != null) return cell(SHRINK, formatDateTime(run.stoppedAt, dateOptions));
     // No stop recorded - either still running (no badge, it is not an error), or it
     // died uncleanly (kill -9, crash, power loss - flagged so it reads as a fact, not
     // as missing data).
@@ -157,7 +157,7 @@ function downBeforeCell(run) {
 function buildCell(run, dateOptions) {
     // The build time is not shown as its own line (the row is already dense) - it is
     // available on hover instead, same as flyway.js's truncated-script tooltip.
-    const title = run.buildTimeEpochMs != null ? `Built ${formatDateTime(run.buildTimeEpochMs, dateOptions)}` : undefined;
+    const title = run.buildTime != null ? `Built ${formatDateTime(run.buildTime, dateOptions)}` : undefined;
     const commit = [run.branch, run.shortCommitId].filter(Boolean).join(' @ ');
     return cell({className: 'pk-lifecycle-row__build', title},
         el('div', {className: 'pk-lifecycle-row__version', text: run.version || '-'}),

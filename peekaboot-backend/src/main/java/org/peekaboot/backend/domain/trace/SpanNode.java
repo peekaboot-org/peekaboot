@@ -1,6 +1,7 @@
 package org.peekaboot.backend.domain.trace;
 
 import io.micrometer.tracing.Span;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -8,7 +9,7 @@ public record SpanNode(
         String spanId,
         String name,
         Span.Kind kind,
-        long startTimeMs,
+        Instant startTime,
         long durationMs,
         SpanStatus status,
         List<SpanNode> children,
@@ -35,7 +36,7 @@ public record SpanNode(
                 spanId,
                 name,
                 kind,
-                startTimeMs,
+                startTime,
                 durationMs,
                 status,
                 newChildren,

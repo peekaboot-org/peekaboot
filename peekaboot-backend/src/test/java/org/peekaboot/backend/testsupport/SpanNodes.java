@@ -1,6 +1,7 @@
 package org.peekaboot.backend.testsupport;
 
 import io.micrometer.tracing.Span;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.domain.trace.SpanEvent;
@@ -27,7 +28,7 @@ public final class SpanNodes {
         private final String spanId;
         private String name = "test-op";
         private Span.Kind kind = Span.Kind.SERVER;
-        private long startTimeMs;
+        private Instant startTime;
         private long durationMs;
         private SpanStatus status = SpanStatus.OK;
         private List<SpanNode> children = List.of();
@@ -54,8 +55,8 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder startTimeMs(long startTimeMs) {
-            this.startTimeMs = startTimeMs;
+        public Builder startTime(Instant startTime) {
+            this.startTime = startTime;
             return this;
         }
 
@@ -110,7 +111,7 @@ public final class SpanNodes {
                     spanId,
                     name,
                     kind,
-                    startTimeMs,
+                    startTime,
                     durationMs,
                     status,
                     children,

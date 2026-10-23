@@ -1,5 +1,6 @@
 package org.peekaboot.backend.lifecycle;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -84,14 +85,14 @@ public class LifecycleRuns {
         Timing timing = Timing.of(start, next, nowEpochMs);
         Long downForMs = downForMs(start, previous);
         return new LifecycleRunsResponse.Run(
-                start.epochMs(),
-                timing.stoppedAtEpochMs(),
+                Instant.ofEpochMilli(start.epochMs()),
+                timing.stoppedAt(),
                 timing.ranForMs(),
                 downForMs,
                 effective.version(),
                 effective.branch(),
                 effective.shortCommitId(),
-                effective.buildTimeEpochMs(),
+                effective.buildTime(),
                 changed,
                 timing.running(),
                 timing.uncleanExit());
@@ -112,7 +113,7 @@ public class LifecycleRuns {
     }
 
     /** How a run ended (or hasn't), derived from the event that follows its start. */
-    private record Timing(Long stoppedAtEpochMs, Long ranForMs, boolean running, boolean uncleanExit) {
+    private record Timing(Instant stoppedAt, Long ranForMs, boolean running, boolean uncleanExit) {
 
         private static Timing of(LifecycleEvent start, LifecycleEvent next, long nowEpochMs) {
             if (next == null) {
@@ -120,7 +121,7 @@ public class LifecycleRuns {
                 return new Timing(null, ranForMs, true, false);
             }
             if (next.type() == LifecycleEvent.Type.STOP) {
-                return new Timing(next.epochMs(), next.epochMs() - start.epochMs(), false, false);
+                return new Timing(Instant.ofEpochMilli(next.epochMs()), next.epochMs() - start.epochMs(), false, false);
             }
             return new Timing(null, null, false, true);
         }

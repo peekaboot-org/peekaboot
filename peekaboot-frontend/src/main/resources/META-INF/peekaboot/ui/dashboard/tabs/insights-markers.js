@@ -25,7 +25,7 @@
  */
 import {el} from '../../shared/dom.js';
 import {escapeHtml} from '../../shared/markup.js';
-import {formatDateTimeWith} from '../../shared/format.js';
+import {formatDateTimeWith, instantMs} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
 
 const BAND_ALPHA = '1f';                  // ~12% - the downtime tint
@@ -48,12 +48,17 @@ function ink() {
     return {stroke, band: withAlpha(stroke, BAND_ALPHA, FALLBACK_BAND)};
 }
 
-/** Stop -> next start pairs, in uPlot's time scale (epoch seconds). */
+/** An event's ISO-8601 timestamp in uPlot's time scale (epoch seconds). */
+function epochSeconds(event) {
+    return instantMs(event.timestamp) / 1000;
+}
+
+/** Stop -> next start pairs, in uPlot's time scale. */
 function downtimes(events) {
     const spans = [];
     for (let i = 0; i < events.length - 1; i++) {
         if (events[i].type === 'stop' && events[i + 1].type === 'start') {
-            spans.push([events[i].epochMs / 1000, events[i + 1].epochMs / 1000]);
+            spans.push([epochSeconds(events[i]), epochSeconds(events[i + 1])]);
         }
     }
     return spans;
@@ -139,7 +144,7 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
         ctx.strokeStyle = colors.stroke;
         ctx.fillStyle = colors.stroke;
         for (const event of events) {
-            const val = clamp(u, event.epochMs / 1000);
+            const val = clamp(u, epochSeconds(event));
             if (val === null) continue;
             // CSS-pixel space: this is what the tooltip's hit test and the panel's
             // data-marker-x both use
@@ -170,12 +175,12 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
 
     function describe({event}) {
         const display = dateOptions();
-        const when = formatDateTimeWith(event.epochMs, TIMESTAMP_OPTIONS, display);
+        const when = formatDateTimeWith(event.timestamp, TIMESTAMP_OPTIONS, display);
         const rows = [];
         if (event.version) rows.push(['Version', event.version]);
         if (event.branch) rows.push(['Branch', event.branch]);
         if (event.shortCommitId) rows.push(['Commit', event.shortCommitId]);
-        if (event.buildTimeEpochMs) rows.push(['Built', formatDateTimeWith(event.buildTimeEpochMs, TIMESTAMP_OPTIONS, display)]);
+        if (event.buildTime) rows.push(['Built', formatDateTimeWith(event.buildTime, TIMESTAMP_OPTIONS, display)]);
 
         const title = `${event.type === 'stop' ? 'Stopped' : 'Started'} ${escapeHtml(when)}`;
         const details = rows

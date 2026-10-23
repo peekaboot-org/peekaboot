@@ -1,5 +1,6 @@
 package org.peekaboot.backend.domain.lifecycle;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -8,7 +9,7 @@ import java.util.List;
  * neighbours') survives in the log.
  *
  * <p>A run reports what was actually running, not a diff: {@code version}, {@code branch},
- * {@code shortCommitId} and {@code buildTimeEpochMs} are carried forward from the last
+ * {@code shortCommitId} and {@code buildTime} are carried forward from the last
  * start that actually reported them, so every row is self-contained. {@code changed} is
  * the separate, explicit answer to "was this a deployment" - which of {@code "version"},
  * {@code "branch"} and {@code "commit"} differ from the previous run, in that order.
@@ -19,7 +20,7 @@ public record LifecycleRunsResponse(List<Run> runs) {
      * One run of the application, oldest-run-has-no-predecessor aside, always comparable
      * to the run before it.
      *
-     * <p>{@code stoppedAtEpochMs} and {@code ranForMs} are both null, and {@code uncleanExit}
+     * <p>{@code stoppedAt} and {@code ranForMs} are both null, and {@code uncleanExit}
      * is true, when the run ended without a matching stop - a crash or a kill leaves no
      * record of when it died. {@code downForMs} is the gap to the event
      * immediately before this run's start, but only when that event is a stop - it is null
@@ -27,14 +28,14 @@ public record LifecycleRunsResponse(List<Run> runs) {
      * start, meaning the previous run ended uncleanly and the downtime is unknowable.
      */
     public record Run(
-            long startedAtEpochMs,
-            Long stoppedAtEpochMs,
+            Instant startedAt,
+            Instant stoppedAt,
             Long ranForMs,
             Long downForMs,
             String version,
             String branch,
             String shortCommitId,
-            Long buildTimeEpochMs,
+            Instant buildTime,
             List<String> changed,
             boolean running,
             boolean uncleanExit) {}

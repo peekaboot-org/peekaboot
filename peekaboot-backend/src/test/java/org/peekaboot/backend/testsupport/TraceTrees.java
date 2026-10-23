@@ -1,5 +1,6 @@
 package org.peekaboot.backend.testsupport;
 
+import java.time.Instant;
 import java.util.List;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
@@ -58,7 +59,7 @@ public final class TraceTrees {
         public TraceTree build() {
             return new TraceTree(
                     traceId,
-                    0L,
+                    Instant.EPOCH,
                     durationMs(),
                     TraceStatus.OK,
                     false,

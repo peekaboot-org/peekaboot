@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.time.Duration;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,9 +40,9 @@ class LifecycleApiIT extends TestingAppITBase {
 
         JsonNode event = events.get(0);
         assertThat(event.required("type").asString()).isEqualTo("start");
-        assertThat(event.required("epochMs").asLong()).isPositive();
+        assertThat(Instant.parse(event.required("timestamp").asString())).isAfter(Instant.EPOCH);
         assertThat(event.required("version").asString()).isEqualTo(buildProperties.getVersion());
-        assertThat(event.required("buildTimeEpochMs").asLong()).isPositive();
+        assertThat(Instant.parse(event.required("buildTime").asString())).isAfter(Instant.EPOCH);
         assertThat(event.required("uncleanPrevious").asBoolean()).isFalse();
     }
 
@@ -73,14 +74,14 @@ class LifecycleApiIT extends TestingAppITBase {
         assertThat(runs).hasSize(1);
 
         JsonNode run = runs.get(0);
-        assertThat(run.required("startedAtEpochMs").asLong()).isPositive();
+        assertThat(Instant.parse(run.required("startedAt").asString())).isAfter(Instant.EPOCH);
         assertThat(run.required("running").asBoolean()).isTrue();
         assertThat(run.required("uncleanExit").asBoolean()).isFalse();
-        assertThat(run.required("stoppedAtEpochMs").isNull()).isTrue();
+        assertThat(run.required("stoppedAt").isNull()).isTrue();
         assertThat(run.required("downForMs").isNull()).isTrue();
         assertThat(run.required("changed")).isEmpty();
         assertThat(run.required("version").asString()).isEqualTo(buildProperties.getVersion());
-        assertThat(run.required("buildTimeEpochMs").asLong()).isPositive();
+        assertThat(Instant.parse(run.required("buildTime").asString())).isAfter(Instant.EPOCH);
     }
 
     /**

@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.lifecycle.LifecycleEventsResponse;
@@ -24,11 +25,11 @@ class LifecycleEventsTest {
 
         LifecycleEventsResponse.Event event = response.events().get(0);
         assertThat(event.type()).isEqualTo("start");
-        assertThat(event.epochMs()).isEqualTo(1_000);
+        assertThat(event.timestamp()).isEqualTo(Instant.ofEpochMilli(1_000));
         assertThat(event.version()).isNull();
         assertThat(event.branch()).isNull();
         assertThat(event.commitId()).isNull();
-        assertThat(event.buildTimeEpochMs()).isNull();
+        assertThat(event.buildTime()).isNull();
     }
 
     @Test
@@ -38,12 +39,12 @@ class LifecycleEventsTest {
 
         LifecycleEventsResponse.Event event = response.events().get(0);
         assertThat(event.type()).isEqualTo("start");
-        assertThat(event.epochMs()).isEqualTo(1_000);
+        assertThat(event.timestamp()).isEqualTo(Instant.ofEpochMilli(1_000));
         assertThat(event.version()).isEqualTo("1.0.0");
         assertThat(event.branch()).isEqualTo("dev");
         assertThat(event.commitId()).isEqualTo("abc1234def");
         assertThat(event.shortCommitId()).isEqualTo("abc1234");
-        assertThat(event.buildTimeEpochMs()).isEqualTo(1_756_000_000_000L);
+        assertThat(event.buildTime()).isEqualTo(Instant.ofEpochMilli(1_756_000_000_000L));
         assertThat(event.uncleanPrevious()).isFalse();
     }
 
@@ -55,11 +56,11 @@ class LifecycleEventsTest {
                 start(3_000).buildTime("1756000000000").build()));
 
         LifecycleEventsResponse.Event second = response.events().get(2);
-        assertThat(second.epochMs()).isEqualTo(3_000);
+        assertThat(second.timestamp()).isEqualTo(Instant.ofEpochMilli(3_000));
         assertThat(second.version()).isNull();
         assertThat(second.branch()).isNull();
         assertThat(second.commitId()).isNull();
-        assertThat(second.buildTimeEpochMs()).isNull();
+        assertThat(second.buildTime()).isNull();
     }
 
     @Test
@@ -90,7 +91,7 @@ class LifecycleEventsTest {
 
         LifecycleEventsResponse.Event stop = response.events().get(1);
         assertThat(stop.type()).isEqualTo("stop");
-        assertThat(stop.epochMs()).isEqualTo(2_000);
+        assertThat(stop.timestamp()).isEqualTo(Instant.ofEpochMilli(2_000));
         assertThat(stop.version()).isNull();
         assertThat(stop.uncleanPrevious()).isNull();
     }

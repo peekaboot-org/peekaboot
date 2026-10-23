@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
@@ -35,9 +36,9 @@ class LifecycleRunsTest {
         LifecycleRunsResponse response = runsFor(List.of(start(1_000).build()), 6_000);
 
         Run run = response.runs().get(0);
-        assertThat(run.startedAtEpochMs()).isEqualTo(1_000);
+        assertThat(run.startedAt()).isEqualTo(Instant.ofEpochMilli(1_000));
         assertThat(run.running()).isTrue();
-        assertThat(run.stoppedAtEpochMs()).isNull();
+        assertThat(run.stoppedAt()).isNull();
         assertThat(run.uncleanExit()).isFalse();
         assertThat(run.ranForMs()).isEqualTo(5_000);
         assertThat(run.downForMs()).isNull();
@@ -55,13 +56,13 @@ class LifecycleRunsTest {
         Run second = runs.get(0);
         Run first = runs.get(1);
 
-        assertThat(first.startedAtEpochMs()).isEqualTo(1_000);
-        assertThat(first.stoppedAtEpochMs()).isEqualTo(4_000);
+        assertThat(first.startedAt()).isEqualTo(Instant.ofEpochMilli(1_000));
+        assertThat(first.stoppedAt()).isEqualTo(Instant.ofEpochMilli(4_000));
         assertThat(first.ranForMs()).isEqualTo(3_000);
         assertThat(first.running()).isFalse();
         assertThat(first.uncleanExit()).isFalse();
 
-        assertThat(second.startedAtEpochMs()).isEqualTo(9_000);
+        assertThat(second.startedAt()).isEqualTo(Instant.ofEpochMilli(9_000));
         assertThat(second.downForMs()).isEqualTo(5_000);
     }
 
@@ -90,7 +91,7 @@ class LifecycleRunsTest {
         Run first = runs.get(1);
 
         assertThat(first.uncleanExit()).isTrue();
-        assertThat(first.stoppedAtEpochMs()).isNull();
+        assertThat(first.stoppedAt()).isNull();
         assertThat(first.ranForMs()).isNull();
         assertThat(first.running()).isFalse();
 
@@ -168,7 +169,9 @@ class LifecycleRunsTest {
                 LifecycleEvent.stop(4_000, 1),
                 start(5_000).build()));
 
-        assertThat(response.runs()).extracting(Run::startedAtEpochMs).containsExactly(5_000L, 3_000L, 1_000L);
+        assertThat(response.runs())
+                .extracting(Run::startedAt)
+                .containsExactly(Instant.ofEpochMilli(5_000), Instant.ofEpochMilli(3_000), Instant.ofEpochMilli(1_000));
     }
 
     /** Not reachable from a live application - the log always ends on this run's own start. */
@@ -179,6 +182,6 @@ class LifecycleRunsTest {
         Run run = response.runs().get(0);
 
         assertThat(run.running()).isFalse();
-        assertThat(run.stoppedAtEpochMs()).isEqualTo(4_000);
+        assertThat(run.stoppedAt()).isEqualTo(Instant.ofEpochMilli(4_000));
     }
 }

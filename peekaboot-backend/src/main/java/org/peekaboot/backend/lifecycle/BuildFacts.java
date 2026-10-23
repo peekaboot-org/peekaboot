@@ -1,5 +1,6 @@
 package org.peekaboot.backend.lifecycle;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
@@ -8,7 +9,7 @@ import java.util.Set;
  * carry build info, git info, or both. Both projections over the log ({@link LifecycleEvents}
  * and {@link LifecycleRuns}) read their fields off this one record.
  */
-record BuildFacts(String version, String branch, String commitId, String shortCommitId, Long buildTimeEpochMs) {
+record BuildFacts(String version, String branch, String commitId, String shortCommitId, Instant buildTime) {
 
     /** No build reported at all: what the first start is compared against. */
     static final BuildFacts NONE = new BuildFacts(null, null, null, null, null);
@@ -46,7 +47,7 @@ record BuildFacts(String version, String branch, String commitId, String shortCo
                 git.get(GIT_BRANCH),
                 commitId,
                 shorten(git.get(GIT_COMMIT_ID_ABBREV), commitId),
-                epochMs(first(build.get(BUILD_TIME), git.get(GIT_BUILD_TIME))));
+                instant(first(build.get(BUILD_TIME), git.get(GIT_BUILD_TIME))));
     }
 
     /**
@@ -63,7 +64,7 @@ record BuildFacts(String version, String branch, String commitId, String shortCo
                 first(branch, fallback.branch),
                 first(commitId, fallback.commitId),
                 first(shortCommitId, fallback.shortCommitId),
-                first(buildTimeEpochMs, fallback.buildTimeEpochMs));
+                first(buildTime, fallback.buildTime));
     }
 
     private static <T> T first(T preferred, T fallback) {
@@ -80,9 +81,10 @@ record BuildFacts(String version, String branch, String commitId, String shortCo
         return commitId.length() > SHORT_COMMIT_LENGTH ? commitId.substring(0, SHORT_COMMIT_LENGTH) : commitId;
     }
 
-    private static Long epochMs(String value) {
+    /** The log stores a build time as epoch millis. */
+    private static Instant instant(String value) {
         try {
-            return value == null ? null : Long.valueOf(value);
+            return value == null ? null : Instant.ofEpochMilli(Long.parseLong(value));
         } catch (NumberFormatException e) {
             return null;
         }

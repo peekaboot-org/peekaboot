@@ -1,5 +1,6 @@
 package org.peekaboot.backend.domain.trace;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -15,7 +16,7 @@ import java.util.List;
  */
 public record TraceTree(
         String traceId,
-        long startTimeMs,
+        Instant startTime,
         long durationMs,
         TraceStatus status,
         boolean slow,
@@ -35,7 +36,7 @@ public record TraceTree(
      */
     public TraceTree(
             String traceId,
-            long startTimeMs,
+            Instant startTime,
             long durationMs,
             TraceStatus status,
             RootActionType rootActionType,
@@ -46,7 +47,7 @@ public record TraceTree(
             boolean truncated) {
         this(
                 traceId,
-                startTimeMs,
+                startTime,
                 durationMs,
                 status,
                 false,
@@ -65,7 +66,7 @@ public record TraceTree(
     public TraceTree withRootSpan(SpanNode newRootSpan, boolean newSlow) {
         return new TraceTree(
                 traceId,
-                startTimeMs,
+                startTime,
                 durationMs,
                 status,
                 newSlow,
@@ -83,7 +84,7 @@ public record TraceTree(
     public TraceTree withSummary(TraceTabSummary newSummary) {
         return new TraceTree(
                 traceId,
-                startTimeMs,
+                startTime,
                 durationMs,
                 status,
                 slow,
@@ -102,7 +103,7 @@ public record TraceTree(
     public TraceTree withDetails(HttpExchange newHttpExchange, List<TraceLog> newLogs, List<QueryInfo> newQueries) {
         return new TraceTree(
                 traceId,
-                startTimeMs,
+                startTime,
                 durationMs,
                 status,
                 slow,

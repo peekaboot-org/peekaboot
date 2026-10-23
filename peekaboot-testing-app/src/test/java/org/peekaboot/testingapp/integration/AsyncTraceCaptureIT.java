@@ -6,6 +6,7 @@ import ch.qos.logback.classic.Level;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -202,8 +203,7 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
             assertThat(row.path("durationMs").asLong())
                     .as("the row spans its subtree's window, from the enrichment's start to the "
                             + "nested notification's end")
-                    .isEqualTo(
-                            endMs(notification) - enrichment.path("startTimeMs").asLong());
+                    .isEqualTo(endMs(notification) - startMs(enrichment));
         });
     }
 
@@ -363,6 +363,10 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
     }
 
     private static long endMs(JsonNode span) {
-        return span.path("startTimeMs").asLong() + span.path("durationMs").asLong();
+        return startMs(span) + span.path("durationMs").asLong();
+    }
+
+    private static long startMs(JsonNode span) {
+        return Instant.parse(span.path("startTime").asString()).toEpochMilli();
     }
 }

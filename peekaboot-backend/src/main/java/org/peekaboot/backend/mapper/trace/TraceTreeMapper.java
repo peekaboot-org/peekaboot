@@ -49,7 +49,7 @@ public class TraceTreeMapper {
         if (traceData.spans().isEmpty()) {
             return new TraceTree(
                     traceData.traceId(),
-                    0L,
+                    null,
                     0L,
                     TraceStatus.OK,
                     RootActionType.UNKNOWN,
@@ -75,14 +75,13 @@ public class TraceTreeMapper {
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
 
-        long startTimeMs = traceData.startTime() != null ? traceData.startTime().toEpochMilli() : 0L;
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
         String rootOperation = rootSpanData != null ? rootSpanData.name() : null;
         RootActionType rootActionType = RootActionTypes.of(rootSpanData);
 
         return new TraceTree(
                 traceData.traceId(),
-                startTimeMs,
+                traceData.startTime(),
                 durationMs,
                 statusOf(spans.stream().anyMatch(SpanData::hasError)),
                 rootActionType,
@@ -125,7 +124,7 @@ public class TraceTreeMapper {
         accumulateSubtree(subtreeRoot, totals);
         return new TraceTree(
                 traceData.traceId(),
-                subtreeRoot.startTimeMs(),
+                subtreeRoot.startTime(),
                 subtreeWindowMs(subtreeRoot),
                 // the subtree's own errors, not the enclosing trace's: background work that succeeded
                 // must not wear the ERROR badge of the request that dispatched it, which would also
@@ -190,17 +189,22 @@ public class TraceTreeMapper {
      * its parent, which is the ordering that makes this whole feature necessary.
      */
     private static long subtreeWindowMs(SpanNode root) {
-        long start = root.startTimeMs();
-        long end = latestEndMs(root, root.startTimeMs() + root.durationMs());
+        long start = startMs(root);
+        long end = latestEndMs(root, start + root.durationMs());
         return Math.max(end - start, 0);
     }
 
     private static long latestEndMs(SpanNode node, long latest) {
-        long end = Math.max(latest, node.startTimeMs() + node.durationMs());
+        long end = Math.max(latest, startMs(node) + node.durationMs());
         for (SpanNode child : node.children()) {
             end = latestEndMs(child, end);
         }
         return end;
+    }
+
+    /** Epoch millis, zero for a span whose start was never recorded. */
+    private static long startMs(SpanNode node) {
+        return node.startTime() != null ? node.startTime().toEpochMilli() : 0L;
     }
 
     private void attachOrphansToRoot(
@@ -255,13 +259,12 @@ public class TraceTreeMapper {
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
-        long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
 
         return new SpanNode(
                 spanData.spanId(),
                 spanData.name(),
                 spanData.kind(),
-                startTimeMs,
+                spanData.startTime(),
                 spanData.durationMs(),
                 status,
                 children,

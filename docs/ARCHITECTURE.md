@@ -124,7 +124,7 @@ switched off still shows one start marker for the run in progress.
 
 `GET /peekaboot/api/lifecycle/events`, gated by `peekaboot.lifecycle.enabled`, serves the log
 as start/stop markers. For each start, `LifecycleEvents` compares it against the previous start
-already in the log: `version`, `branch`, `commitId`/`shortCommitId` and `buildTimeEpochMs` are
+already in the log: `version`, `branch`, `commitId`/`shortCommitId` and `buildTime` are
 included only when they differ, and all four are present on the log's first entry. A start
 whose predecessor is itself a start, with no stop between, is flagged `uncleanPrevious`.
 Computing the diff server-side gives the browser one definition of "what changed" instead of
@@ -135,12 +135,12 @@ data from `/peekaboot/api/insights/*` and draws them as restart markers over the
 the same log. A chart marker only wants to say what's new, so `LifecycleEvents` nulls a field
 the moment it repeats the previous start. A table row has no previous cell to inherit from, so
 `LifecycleRuns` makes every run stand on its own. `version`, `branch`, `shortCommitId` and
-`buildTimeEpochMs` are carried forward from the last start that reported them. `changed` is the
+`buildTime` are carried forward from the last start that reported them. `changed` is the
 separate, explicit answer to whether this run was a deployment: which of `version`, `branch`
 and `commit` differ from the run before. The oldest run has no predecessor, so it is never a
 deployment.
 
-A run's `stoppedAtEpochMs` and `ranForMs` are null, not a guess, when its start has no matching
+A run's `stoppedAt` and `ranForMs` are null, not a guess, when its start has no matching
 stop: a `kill -9` writes nothing, so when that run ended is genuinely unknown. `downForMs`, the
 gap since the previous run stopped, is null for the same reason whenever the previous run has
 no recorded stop. Null there means unknowable, not zero. The 1000-event cap means a long-lived
@@ -393,6 +393,17 @@ bean. The dashboard reads camelCase names, tests some fields with `!== null` (`l
 and parses every `Instant` as an ISO-8601 string. An application that sets
 `spring.jackson.property-naming-strategy`, `default-property-inclusion=non_null` or
 `datatype.datetime.write-dates-as-timestamps` must not silently reshape that.
+
+Every point in time a response carries is an `Instant` on its record, so it reaches the browser
+as ISO-8601 to the nanosecond, named without a unit (`startTime`, `timestamp`, `startedAt`).
+WebKit's `Date.parse` rounds the digits past the millisecond where Chromium and Firefox drop
+them, so the browser reads every instant through `format.js`'s `instantMs`, which cuts them
+first and agrees with Java's `toEpochMilli` (`TraceOverlayIT.readsNanosecondStartsToTheMillisecond`). Epoch millis remain only where the
+browser does arithmetic on a chart series: a level's `endEpochMs` and the insights stream's
+`epochMs`, from which every sample's x position is counted back. A duration is a `long` named
+`...Ms`. `ServerInfo.currentTime` is the one string: the JVM's clock as an ISO-8601 offset
+date-time in the JVM's zone, which the Overview renders in the dashboard's chosen zone like
+every other time.
 
 `PeekabootJsonMessageConverter` (registered first by `PeekabootWebConfig`) claims every return
 value whose class lives under `org.peekaboot.backend.`. The scope has to be the value's type,

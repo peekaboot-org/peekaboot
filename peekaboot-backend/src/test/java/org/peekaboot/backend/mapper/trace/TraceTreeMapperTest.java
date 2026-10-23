@@ -481,7 +481,7 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().spanId()).isEqualTo("async");
         assertThat(result.rootActionType()).isEqualTo(RootActionType.ASYNC_TASK);
         assertThat(result.rootOperation()).isEqualTo(AsyncTaskMarker.CONTEXTUAL_NAME);
-        assertThat(result.startTimeMs()).isEqualTo(40);
+        assertThat(result.startTime()).isEqualTo(Instant.EPOCH.plusMillis(40));
         assertThat(result.durationMs()).isEqualTo(240_000);
     }
 
@@ -501,7 +501,7 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.mapSubtree(traceData, "async");
 
-        assertThat(result.startTimeMs()).isEqualTo(40);
+        assertThat(result.startTime()).isEqualTo(Instant.EPOCH.plusMillis(40));
         assertThat(result.durationMs()).isEqualTo(240_060);
     }
 
@@ -766,8 +766,8 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void convertsTimesToMilliseconds() {
-        var baseTime = Instant.parse("2024-01-15T10:00:00Z");
+    void servesStartsAsInstantsAndDurationsInMilliseconds() {
+        var baseTime = Instant.parse("2024-01-15T10:00:00.123456789Z");
         var span = span("span1")
                 .kind(Span.Kind.SERVER)
                 .at(baseTime, Duration.ofMillis(150))
@@ -777,9 +777,9 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.startTimeMs()).isEqualTo(baseTime.toEpochMilli());
+        assertThat(result.startTime()).isEqualTo(baseTime);
         assertThat(result.durationMs()).isEqualTo(150L);
-        assertThat(result.rootSpan().startTimeMs()).isEqualTo(baseTime.toEpochMilli());
+        assertThat(result.rootSpan().startTime()).isEqualTo(baseTime);
         assertThat(result.rootSpan().durationMs()).isEqualTo(150L);
     }
 

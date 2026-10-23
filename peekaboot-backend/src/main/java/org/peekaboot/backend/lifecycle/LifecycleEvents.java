@@ -1,5 +1,6 @@
 package org.peekaboot.backend.lifecycle;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -20,11 +21,15 @@ public class LifecycleEvents {
         LifecycleEvent.Type previousType = null;
         for (LifecycleEvent event : eventLog.events()) {
             if (event.type() == LifecycleEvent.Type.STOP) {
-                served.add(
-                        new LifecycleEventsResponse.Event("stop", event.epochMs(), null, null, null, null, null, null));
+                served.add(new LifecycleEventsResponse.Event(
+                        "stop", Instant.ofEpochMilli(event.epochMs()), null, null, null, null, null, null));
             } else {
                 BuildFacts build = BuildFacts.of(event);
-                served.add(changedSince(build, previous, event.epochMs(), previousType == LifecycleEvent.Type.START));
+                served.add(changedSince(
+                        build,
+                        previous,
+                        Instant.ofEpochMilli(event.epochMs()),
+                        previousType == LifecycleEvent.Type.START));
                 previous = build;
             }
             previousType = event.type();
@@ -34,16 +39,16 @@ public class LifecycleEvents {
 
     /** A marker says only what is new: a field equal to the previous start's is left null. */
     private static LifecycleEventsResponse.Event changedSince(
-            BuildFacts current, BuildFacts previous, long epochMs, boolean uncleanPrevious) {
+            BuildFacts current, BuildFacts previous, Instant timestamp, boolean uncleanPrevious) {
         String commit = changed(current.commitId(), previous.commitId());
         return new LifecycleEventsResponse.Event(
                 "start",
-                epochMs,
+                timestamp,
                 changed(current.version(), previous.version()),
                 changed(current.branch(), previous.branch()),
                 commit,
                 commit == null ? null : current.shortCommitId(),
-                changed(current.buildTimeEpochMs(), previous.buildTimeEpochMs()),
+                changed(current.buildTime(), previous.buildTime()),
                 uncleanPrevious);
     }
 

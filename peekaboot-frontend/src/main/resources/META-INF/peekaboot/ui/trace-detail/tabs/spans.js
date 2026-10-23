@@ -19,7 +19,7 @@
  * depth 0 and every bar to the left edge.
  */
 import {el, button} from '../../shared/dom.js';
-import {byKey, formatCount, formatDurationMs, formatTimelineTicks} from '../../shared/format.js';
+import {byKey, formatCount, formatDurationMs, formatTimelineTicks, instantMs} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {sqlView} from '../../shared/sql-view.js';
@@ -38,7 +38,7 @@ export function render(container, trace, context = {}) {
     const rootSpan = scopedRoot || trace.rootSpan;
     // the 1 keeps a zero-length trace from dividing by zero in every position below
     const totalDuration = (scopedRoot ? subtreeWindowMs(scopedRoot) : trace.durationMs) || 1;
-    const traceStart = (scopedRoot ? scopedRoot.startTimeMs : trace.startTimeMs) || 0;
+    const traceStart = startMs(scopedRoot || trace);
     const ticks = formatTimelineTicks(totalDuration);
 
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
@@ -181,11 +181,16 @@ function findSpan(root, spanId) {
     return null;
 }
 
+/** A span's start as epoch milliseconds, 0 for none: the falsy start the fallbacks below test for. */
+function startMs(span) {
+    return instantMs(span.startTime) || 0;
+}
+
 /** A subtree's own wall-clock window: a child can outlive its parent, which is why this exists. */
 function subtreeWindowMs(span) {
-    const end = Array.from(spansOf(span), member => member.startTimeMs + (member.durationMs || 0))
+    const end = Array.from(spansOf(span), member => startMs(member) + (member.durationMs || 0))
         .reduce((latest, memberEnd) => Math.max(latest, memberEnd));
-    return Math.max(end - span.startTimeMs, 0);
+    return Math.max(end - startMs(span), 0);
 }
 
 function spanKind(span) {
@@ -238,7 +243,7 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
     // against that duration would put them off the end of the chart. They get their own
     // basis - the entry row itself keeps the trace's, or its bar would claim a start time
     // it does not have and report a share its siblings' column cannot be read against.
-    const childrenStart = span.asyncEntry ? span.startTimeMs : traceStart;
+    const childrenStart = span.asyncEntry ? startMs(span) : traceStart;
     const childrenDuration = span.asyncEntry ? (subtreeWindowMs(span) || 1) : totalDuration;
     (span.children || []).forEach(child =>
         renderSpanEntries(container, child, depth + 1, childrenStart, childrenDuration, display));
@@ -303,7 +308,7 @@ function panelToggleButton(className, panelId, label) {
 }
 
 function track(span, traceStart, totalDuration, hasError) {
-    const spanStart = span.startTimeMs || traceStart;
+    const spanStart = startMs(span) || traceStart;
     const spanDuration = span.durationMs || 0;
     // Clipped to the track at both ends: an async entry's own bar is measured against a trace
     // duration its work is excluded from, so it can start or end past the right edge, and a bar
@@ -321,7 +326,7 @@ function track(span, traceStart, totalDuration, hasError) {
 }
 
 function eventMarker(event, traceStart, totalDuration) {
-    const eventTimeMs = new Date(event.timestamp).getTime();
+    const eventTimeMs = instantMs(event.timestamp);
     const left = Math.max(0, Math.min(100, ((eventTimeMs - traceStart) / totalDuration) * 100));
 
     const marker = button({className: 'pk-unbutton pk-gantt-event-marker', attrs: {'aria-label': `Event: ${event.name}`}},

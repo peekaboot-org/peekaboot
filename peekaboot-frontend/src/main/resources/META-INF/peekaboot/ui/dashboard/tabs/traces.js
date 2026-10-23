@@ -435,8 +435,8 @@ function renderEnclosingTraceLink(traceId) {
 }
 
 function renderStats(trace, context) {
-    const startTime = trace.startTimeMs
-        ? formatDateTime(trace.startTimeMs, {locale: context.locale, timeZone: context.timeZone})
+    const startTime = trace.startTime
+        ? formatDateTime(trace.startTime, {locale: context.locale, timeZone: context.timeZone})
         : '-';
     const parts = traceStatParts(trace, {features: context.features, locale: context.locale});
 

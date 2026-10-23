@@ -1,5 +1,6 @@
 package org.peekaboot.backend.domain.lifecycle;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -15,11 +16,11 @@ public record LifecycleEventsResponse(List<Event> events) {
     /** {@code type} is {@code "start"} or {@code "stop"}; every build field may be null. */
     public record Event(
             String type,
-            long epochMs,
+            Instant timestamp,
             String version,
             String branch,
             String commitId,
             String shortCommitId,
-            Long buildTimeEpochMs,
+            Instant buildTime,
             Boolean uncleanPrevious) {}
 }
