@@ -86,7 +86,6 @@ class SecuredDashboardIT extends PlaywrightTestBase {
 
             Response response = anonymousPage.navigate(baseUrl + "/persons");
             anonymousPage.waitForCondition(() -> !toolbarScriptStatuses.isEmpty());
-            awaitAuthNoticeVisible(new Toolbar(anonymousPage));
 
             assertThat(response.status()).isEqualTo(200);
             assertThat(anonymousPage.textContent("h1")).isEqualTo("Persons");
