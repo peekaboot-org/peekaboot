@@ -7,14 +7,11 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.util.StreamUtils;
-import org.springframework.web.client.RestClient;
 
 /**
  * Swagger UI, curl and fetch() send {@code Accept: *}{@code /*}; they must get the JSON error
@@ -26,34 +23,19 @@ class ErrorPageContentNegotiationIT {
     private static final String OVERRIDE_PAGE_FAILURE =
             "Request processing failed: java.lang.IllegalStateException: order reconciliation gateway is unreachable";
 
-    private record ErrorResponse(HttpStatusCode status, MediaType contentType, String body) {}
+    record ErrorResponse(HttpStatusCode status, HttpHeaders headers, String body) {
 
-    private static ErrorResponse fetch(int port, String path, String accept) {
-        return RestClient.create("http://localhost:" + port)
-                .get()
-                .uri(path)
-                .header("Accept", accept)
-                .exchange((request, response) -> new ErrorResponse(
-                        response.getStatusCode(),
-                        response.getHeaders().getContentType(),
-                        StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8)));
+        MediaType contentType() {
+            return headers.getContentType();
+        }
     }
 
-    private static ErrorResponse fetchBoom(int port, String accept) {
-        return fetch(port, "/boom", accept);
-    }
-
-    @Nested
-    @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-    @ActiveProfiles("test")
-    class DefaultPath {
-
-        @LocalServerPort
-        private int port;
+    /** What both paths answer alike; JUnit runs these once per subclass, on that subclass's context. */
+    abstract static class EitherPath extends TestingAppITBase {
 
         @Test
         void aWildcardClientGetsJson() {
-            ErrorResponse response = fetchBoom(port, "*/*");
+            ErrorResponse response = fetchBoom("*/*");
 
             assertThat(response.contentType()).isNotNull();
             assertThat(response.contentType().isCompatibleWith(MediaType.APPLICATION_JSON))
@@ -63,40 +45,39 @@ class ErrorPageContentNegotiationIT {
 
         @Test
         void anHtmlClientGetsThePage() {
-            assertThat(fetchBoom(port, "text/html").body()).contains("pk-error");
+            assertThat(fetchBoom("text/html").body()).contains("pk-error");
+        }
+
+        ErrorResponse fetch(String path, String accept) {
+            return api.restClient()
+                    .get()
+                    .uri(path)
+                    .header("Accept", accept)
+                    .exchange((request, response) -> new ErrorResponse(
+                            response.getStatusCode(),
+                            HttpHeaders.copyOf(response.getHeaders()),
+                            StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8)));
+        }
+
+        ErrorResponse fetchBoom(String accept) {
+            return fetch("/boom", accept);
         }
     }
+
+    @Nested
+    class DefaultPath extends EitherPath {}
 
     @Nested
     @SpringBootTest(
             classes = TestingApp.class,
             webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
             properties = "peekaboot.error-page.override=true")
-    @ActiveProfiles("test")
-    class OverridePath {
-
-        @LocalServerPort
-        private int port;
-
-        @Test
-        void aWildcardClientGetsJson() {
-            ErrorResponse response = fetchBoom(port, "*/*");
-
-            assertThat(response.contentType()).isNotNull();
-            assertThat(response.contentType().isCompatibleWith(MediaType.APPLICATION_JSON))
-                    .isTrue();
-            assertThat(response.body()).doesNotContain("pk-error");
-        }
-
-        @Test
-        void anHtmlClientGetsThePage() {
-            assertThat(fetchBoom(port, "text/html").body()).contains("pk-error");
-        }
+    class OverridePath extends EitherPath {
 
         /** PersonController's id is a long; Spring answers "abc" with 400, and so must the page that outranks it. */
         @Test
         void anHtmlClientKeepsSpringsBadRequestForAnUnconvertiblePathVariable() {
-            ErrorResponse response = fetch(port, "/persons/abc", "text/html");
+            ErrorResponse response = fetch("/persons/abc", "text/html");
 
             assertThat(response.status()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.body()).contains("pk-error");
@@ -105,12 +86,7 @@ class ErrorPageContentNegotiationIT {
         /** The page stands where the container would have logged the failure, so the line lands on the request's trace. */
         @Test
         void logsTheExceptionAgainstTheRequestsTrace() {
-            HttpHeaders headers = RestClient.create("http://localhost:" + port)
-                    .get()
-                    .uri("/boom")
-                    .header("Accept", "text/html")
-                    .exchange((request, response) -> response.getHeaders());
-            TraceApiClient traces = new TraceApiClient(port);
+            HttpHeaders headers = fetchBoom("text/html").headers();
 
             traces.awaitTrace(TraceApiClient.traceIdOf(headers), TraceApiClient.errorLogged(OVERRIDE_PAGE_FAILURE));
         }
