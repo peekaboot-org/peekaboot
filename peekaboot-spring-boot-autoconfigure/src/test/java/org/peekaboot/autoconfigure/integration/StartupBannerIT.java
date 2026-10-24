@@ -1,10 +1,15 @@
 package org.peekaboot.autoconfigure.integration;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
-import org.junit.jupiter.api.Test;
+import java.util.stream.Stream;
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -22,39 +27,32 @@ import org.springframework.context.ConfigurableApplicationContext;
  */
 class StartupBannerIT {
 
-    @Test
-    void bannerLinksTheDashboardOfARunningApplication() {
+    /** Without a DispatcherServlet prefix, and behind one: the link follows the prefix. */
+    @ParameterizedTest(name = "dashboard at {1}")
+    @MethodSource("servletPaths")
+    void bannerLinksTheDashboardOfARunningApplication(List<String> servletPathProperties, String dashboardPath) {
         try (BannerCapture bannerCapture = new BannerCapture();
                 ConfigurableApplicationContext context = new SpringApplicationBuilder(TestApplication.class)
                         .profiles("integration")
                         .properties("server.port=0")
+                        .properties(servletPathProperties.toArray(String[]::new))
                         .listeners(bannerCapture)
                         .run()) {
 
             int port = ((WebServerApplicationContext) context).getWebServer().getPort();
 
-            assertThat(bannerCapture.banners()).hasSize(1);
-            assertThat(bannerCapture.banners().get(0).getFormattedMessage())
+            assertThat(bannerCapture.banners())
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage, as(InstanceOfAssertFactories.STRING))
                     .containsSubsequence(" Service URL:", " Peekaboot Dashboard:")
-                    .contains(" Peekaboot Dashboard: http://localhost:" + port + "/peekaboot/");
+                    .contains(" Peekaboot Dashboard: http://localhost:" + port + dashboardPath);
         }
     }
 
-    @Test
-    void bannerLinksTheDashboardBehindTheDispatcherServletPrefix() {
-        try (BannerCapture bannerCapture = new BannerCapture();
-                ConfigurableApplicationContext context = new SpringApplicationBuilder(TestApplication.class)
-                        .profiles("integration")
-                        .properties("server.port=0", "spring.mvc.servlet.path=/app")
-                        .listeners(bannerCapture)
-                        .run()) {
-
-            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
-
-            assertThat(bannerCapture.banners()).hasSize(1);
-            assertThat(bannerCapture.banners().get(0).getFormattedMessage())
-                    .contains(" Peekaboot Dashboard: http://localhost:" + port + "/app/peekaboot/");
-        }
+    private static Stream<Arguments> servletPaths() {
+        return Stream.of(
+                Arguments.of(List.of(), "/peekaboot/"),
+                Arguments.of(List.of("spring.mvc.servlet.path=/app"), "/app/peekaboot/"));
     }
 
     /**

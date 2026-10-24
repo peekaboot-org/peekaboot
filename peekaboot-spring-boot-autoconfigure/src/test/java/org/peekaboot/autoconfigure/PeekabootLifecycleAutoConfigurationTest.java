@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.pool.HikariPool;
 import java.sql.SQLException;
@@ -248,8 +249,10 @@ class PeekabootLifecycleAutoConfigurationTest {
             ApplicationReadyEvent event = new ApplicationReadyEvent(
                     new SpringApplication(), new String[0], context.getSourceApplicationContext(), Duration.ZERO);
             context.getBean(ApplicationReadyListener.class).onApplicationEvent(event);
-            assertThat(capture.appender().list).hasSize(1);
-            return capture.appender().list.get(0).getFormattedMessage();
+            return assertThat(capture.appender().list)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .actual();
         }
     }
 

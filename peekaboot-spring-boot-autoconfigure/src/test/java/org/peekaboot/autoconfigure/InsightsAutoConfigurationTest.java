@@ -1,13 +1,16 @@
 package org.peekaboot.autoconfigure;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootJson;
@@ -139,11 +142,12 @@ class InsightsAutoConfigurationTest {
     }
 
     private static String assertStartupInfo(LogCapture startupLog) {
-        assertThat(startupLog.appender().list).singleElement().satisfies(event -> {
-            assertThat(event.getLevel()).isEqualTo(Level.INFO);
-            assertThat(event.getFormattedMessage()).startsWith("Peekaboot insights:");
-        });
-        return startupLog.appender().list.get(0).getFormattedMessage();
+        return assertThat(startupLog.appender().list)
+                .singleElement()
+                .satisfies(event -> assertThat(event.getLevel()).isEqualTo(Level.INFO))
+                .extracting(ILoggingEvent::getFormattedMessage, as(InstanceOfAssertFactories.STRING))
+                .startsWith("Peekaboot insights:")
+                .actual();
     }
 
     /** A single 100ms level, so one tick arrives in well under the awaits above. */

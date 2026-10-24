@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,8 +34,10 @@ class ApplicationStoppedListenerTest {
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
             listener.onApplicationEvent(new ContextClosedEvent(context));
 
-            assertThat(capture.appender().list).hasSize(1);
-            return capture.appender().list.get(0).getFormattedMessage();
+            return assertThat(capture.appender().list)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .actual();
         }
     }
 

@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -309,8 +310,10 @@ class ApplicationReadyListenerTest {
             try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
                 listenerOf(event.getApplicationContext()).onApplicationEvent(event);
 
-                assertThat(capture.appender().list).hasSize(1);
-                return capture.appender().list.get(0).getFormattedMessage();
+                return assertThat(capture.appender().list)
+                        .singleElement()
+                        .extracting(ILoggingEvent::getFormattedMessage)
+                        .actual();
             }
         }
 

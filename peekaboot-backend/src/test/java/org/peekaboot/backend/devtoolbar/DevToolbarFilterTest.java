@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static org.peekaboot.backend.testsupport.Requests.get;
 
 import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.DispatcherType;
@@ -656,12 +657,15 @@ class DevToolbarFilterTest {
         try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
             filter.doFilter(request, response, chain);
 
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
-                assertThat(event.getThrowableProxy()).isNull();
-            });
             assertThat(aborted.writeAttempts()).isEqualTo(1);
-            return capture.appender().list.get(0).getFormattedMessage();
+            return assertThat(capture.appender().list)
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                        assertThat(event.getThrowableProxy()).isNull();
+                    })
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .actual();
         }
     }
 
