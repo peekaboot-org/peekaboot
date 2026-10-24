@@ -14,6 +14,106 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         page.waitForSelector("#group");
     }
 
+    /**
+     * WCAG contrast ratio between an element's computed color and the effective fill
+     * behind it: its own background-color, or - where that is fully transparent, like
+     * a details panel's tag key - the nearest ancestor's.
+     */
+    private double contrastRatio(String selector) {
+        @SuppressWarnings("unchecked")
+        List<String> inkAndFill = (List<String>) page.evaluate("""
+                (sel) => {
+                    const start = document.querySelector(sel);
+                    for (let el = start; el; el = el.parentElement) {
+                        const fill = getComputedStyle(el).backgroundColor;
+                        const c = fill.match(/\\d+(\\.\\d+)?/g).map(Number);
+                        if (c.length < 4 || c[3] > 0) return [getComputedStyle(start).color, fill];
+                    }
+                    throw new Error('no opaque background behind ' + sel);
+                }
+                """, selector);
+        return ColourVision.contrastRatio(inkAndFill.get(0), inkAndFill.get(1));
+    }
+
+    private String backgroundColor(String selector) {
+        return (String) page.evalOnSelector(selector, "el => getComputedStyle(el).backgroundColor");
+    }
+
+    /** Moves the pointer clear of every button and waits for the resting paint. */
+    private void awaitResting(String selector) {
+        page.mouse().move(0, 0);
+        awaitSettledPaint(selector, false);
+    }
+
+    /** Hovers {@code selector} and waits for its hover cue to finish. */
+    private void awaitHovered(String selector) {
+        page.hover(selector);
+        awaitSettledPaint(selector, true);
+    }
+
+    /**
+     * Waits until the element is in the wanted hover state and every transition it started has
+     * finished, so the read that follows sees the end state - .pk-btn transitions both its
+     * background-color and its filter over 0.2s.
+     *
+     * <p>Equal consecutive reads are not proof of a settled paint: a transition that has not
+     * advanced between two samples - one whose hover style has not landed yet, or one starved of
+     * frames - satisfies that just as well as a finished one. The cue's own starting value is
+     * brightness(1), which renders as the untouched fill, so sampling there makes the hovered
+     * fill compare equal to the resting one.
+     */
+    private void awaitSettledPaint(String selector, boolean hovered) {
+        page.evalOnSelector(selector, """
+                async (el, hovered) => {
+                    const deadline = Date.now() + 5000;
+                    while (Date.now() < deadline) {
+                        if (el.matches(':hover') === hovered) {
+                            // finished rejects on a transition a later style change replaces, and
+                            // never resolves while the timeline is starved, so the deadline rather
+                            // than the promise bounds this wait.
+                            const done = Promise.all(el.getAnimations().map(a => a.finished.catch(() => {})));
+                            await Promise.race([done, new Promise(r => setTimeout(r, deadline - Date.now()))]);
+                            if (el.matches(':hover') === hovered && el.getAnimations().length === 0) return;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    throw new Error('paint never settled: hover=' + el.matches(':hover')
+                            + ' filter=' + getComputedStyle(el).filter);
+                }
+                """, hovered);
+    }
+
+    /**
+     * The ink/fill pair as actually rendered: a brightness() filter - the pressed-button
+     * hover cue - multiplies every channel of ink and fill alike in sRGB space (the CSS
+     * shorthand filters operate in sRGB, clamped at white), which the computed color/
+     * backgroundColor that {@link #contrastRatio} reads never reflects.
+     */
+    private RenderedInkAndFill renderedInkAndFill(String selector) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> computed = (Map<String, Object>) page.evaluate("""
+                (sel) => {
+                    const style = getComputedStyle(document.querySelector(sel));
+                    const brightness = style.filter.match(/brightness\\((\\d*\\.?\\d+)\\)/);
+                    return {ink: style.color, fill: style.backgroundColor, brightness: brightness ? Number(brightness[1]) : 1};
+                }
+                """, selector);
+        double brightness = ((Number) computed.get("brightness")).doubleValue();
+        double[] ink = brightened(ColourVision.channels((String) computed.get("ink")), brightness);
+        double[] fill = brightened(ColourVision.channels((String) computed.get("fill")), brightness);
+        return new RenderedInkAndFill(Arrays.stream(fill).boxed().toList(), ColourVision.contrastRatio(ink, fill));
+    }
+
+    /** What a brightness() filter does to a colour: every sRGB channel scaled, clamped at white. */
+    private static double[] brightened(double[] channels, double factor) {
+        return Arrays.stream(channels)
+                .map(channel -> Math.min(255, channel * factor))
+                .toArray();
+    }
+
+    /** The fill's rendered channels, and its contrast ratio with the rendered ink. */
+    private record RenderedInkAndFill(List<Double> fill, double contrastRatio) {}
+
     @Test
     void badgeVariantsUseTheirSemanticColours() {
         openFixture();
@@ -219,106 +319,6 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         assertThat(meterTypeBadgesOutsideTheirColumn("#meter-group")).isEmpty();
     }
-
-    /**
-     * WCAG contrast ratio between an element's computed color and the effective fill
-     * behind it: its own background-color, or - where that is fully transparent, like
-     * a details panel's tag key - the nearest ancestor's.
-     */
-    private double contrastRatio(String selector) {
-        @SuppressWarnings("unchecked")
-        List<String> inkAndFill = (List<String>) page.evaluate("""
-                (sel) => {
-                    const start = document.querySelector(sel);
-                    for (let el = start; el; el = el.parentElement) {
-                        const fill = getComputedStyle(el).backgroundColor;
-                        const c = fill.match(/\\d+(\\.\\d+)?/g).map(Number);
-                        if (c.length < 4 || c[3] > 0) return [getComputedStyle(start).color, fill];
-                    }
-                    throw new Error('no opaque background behind ' + sel);
-                }
-                """, selector);
-        return ColourVision.contrastRatio(inkAndFill.get(0), inkAndFill.get(1));
-    }
-
-    private String backgroundColor(String selector) {
-        return (String) page.evalOnSelector(selector, "el => getComputedStyle(el).backgroundColor");
-    }
-
-    /** Moves the pointer clear of every button and waits for the resting paint. */
-    private void awaitResting(String selector) {
-        page.mouse().move(0, 0);
-        awaitSettledPaint(selector, false);
-    }
-
-    /** Hovers {@code selector} and waits for its hover cue to finish. */
-    private void awaitHovered(String selector) {
-        page.hover(selector);
-        awaitSettledPaint(selector, true);
-    }
-
-    /**
-     * Waits until the element is in the wanted hover state and every transition it started has
-     * finished, so the read that follows sees the end state - .pk-btn transitions both its
-     * background-color and its filter over 0.2s.
-     *
-     * <p>Equal consecutive reads are not proof of a settled paint: a transition that has not
-     * advanced between two samples - one whose hover style has not landed yet, or one starved of
-     * frames - satisfies that just as well as a finished one. The cue's own starting value is
-     * brightness(1), which renders as the untouched fill, so sampling there makes the hovered
-     * fill compare equal to the resting one.
-     */
-    private void awaitSettledPaint(String selector, boolean hovered) {
-        page.evalOnSelector(selector, """
-                async (el, hovered) => {
-                    const deadline = Date.now() + 5000;
-                    while (Date.now() < deadline) {
-                        if (el.matches(':hover') === hovered) {
-                            // finished rejects on a transition a later style change replaces, and
-                            // never resolves while the timeline is starved, so the deadline rather
-                            // than the promise bounds this wait.
-                            const done = Promise.all(el.getAnimations().map(a => a.finished.catch(() => {})));
-                            await Promise.race([done, new Promise(r => setTimeout(r, deadline - Date.now()))]);
-                            if (el.matches(':hover') === hovered && el.getAnimations().length === 0) return;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 50));
-                    }
-                    throw new Error('paint never settled: hover=' + el.matches(':hover')
-                            + ' filter=' + getComputedStyle(el).filter);
-                }
-                """, hovered);
-    }
-
-    /**
-     * The ink/fill pair as actually rendered: a brightness() filter - the pressed-button
-     * hover cue - multiplies every channel of ink and fill alike in sRGB space (the CSS
-     * shorthand filters operate in sRGB, clamped at white), which the computed color/
-     * backgroundColor that {@link #contrastRatio} reads never reflects.
-     */
-    private RenderedInkAndFill renderedInkAndFill(String selector) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> computed = (Map<String, Object>) page.evaluate("""
-                (sel) => {
-                    const style = getComputedStyle(document.querySelector(sel));
-                    const brightness = style.filter.match(/brightness\\((\\d*\\.?\\d+)\\)/);
-                    return {ink: style.color, fill: style.backgroundColor, brightness: brightness ? Number(brightness[1]) : 1};
-                }
-                """, selector);
-        double brightness = ((Number) computed.get("brightness")).doubleValue();
-        double[] ink = brightened(ColourVision.channels((String) computed.get("ink")), brightness);
-        double[] fill = brightened(ColourVision.channels((String) computed.get("fill")), brightness);
-        return new RenderedInkAndFill(Arrays.stream(fill).boxed().toList(), ColourVision.contrastRatio(ink, fill));
-    }
-
-    /** What a brightness() filter does to a colour: every sRGB channel scaled, clamped at white. */
-    private static double[] brightened(double[] channels, double factor) {
-        return Arrays.stream(channels)
-                .map(channel -> Math.min(255, channel * factor))
-                .toArray();
-    }
-
-    /** The fill's rendered channels, and its contrast ratio with the rendered ink. */
-    private record RenderedInkAndFill(List<Double> fill, double contrastRatio) {}
 
     /**
      * Pressed buttons are excluded from the generic hover fill swap (their fill IS their

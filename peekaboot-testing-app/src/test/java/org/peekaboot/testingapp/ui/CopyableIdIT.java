@@ -33,6 +33,18 @@ class CopyableIdIT extends PlaywrightTestBase {
         toolbar.traceId();
     }
 
+    /**
+     * Opens the overlay for a trace guaranteed to carry at least one log (the root
+     * span's own PersonController.persons() error log - see TraceOverlayIT's
+     * logsFilterChipUsesTheContrastTunedForeground, which relies on the same /?error=true
+     * path), then switches to the Logs tab.
+     */
+    private void openLogsTabWithAtLeastOneLogRow() {
+        openPageThatLogsAnError();
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+    }
+
     @Test
     void toolbarShowsTheFullTraceIdWithItsLabel() {
         openPageWithToolbar();
@@ -97,18 +109,6 @@ class CopyableIdIT extends PlaywrightTestBase {
         assertThat(page.getAttribute(Dashboard.traceItem(traceId) + " .pk-copy", "data-pk-copy"))
                 .as("the row shows a shortened id but copies the whole one")
                 .isEqualTo(traceId);
-    }
-
-    /**
-     * Opens the overlay for a trace guaranteed to carry at least one log (the root
-     * span's own PersonController.persons() error log - see TraceOverlayIT's
-     * logsFilterChipUsesTheContrastTunedForeground, which relies on the same /?error=true
-     * path), then switches to the Logs tab.
-     */
-    private void openLogsTabWithAtLeastOneLogRow() {
-        openPageThatLogsAnError();
-        toolbar.openOverlay();
-        overlay.openLogsTab();
     }
 
     /**

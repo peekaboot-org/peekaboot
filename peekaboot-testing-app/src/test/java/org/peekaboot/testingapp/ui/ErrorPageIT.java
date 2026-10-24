@@ -18,6 +18,24 @@ class ErrorPageIT extends PlaywrightTestBase {
     private static final ThrowingConsumer<Double> TRACE_IS_SINGLE_SPACED =
             step -> assertThat(step).isCloseTo(1.0, within(0.05));
 
+    /**
+     * The distance from each visible line of the trace to the next, and from the last one to
+     * the bottom of the box's content, in line heights.
+     */
+    private List<Double> lineStepsOfTheTrace() {
+        List<?> steps = (List<?>) page.evaluate("() => {"
+                + " const frames = document.querySelector('.pk-error__frames');"
+                + " const style = getComputedStyle(frames);"
+                + " const lineHeight = parseFloat(style.lineHeight);"
+                + " const tops = [...frames.querySelectorAll('.pk-stack-trace__frame, .pk-stack-trace__hidden-summary')]"
+                + "     .filter(line => line.checkVisibility())"
+                + "     .map(line => line.getBoundingClientRect().top);"
+                + " const contentBottom = frames.getBoundingClientRect().top + frames.clientTop"
+                + "     + frames.clientHeight - parseFloat(style.paddingBottom);"
+                + " return [...tops.slice(1), contentBottom].map((next, i) => (next - tops[i]) / lineHeight); }");
+        return steps.stream().map(step -> ((Number) step).doubleValue()).toList();
+    }
+
     @Test
     void theErrorPageNamesTheExceptionAndItsStackTrace() {
         page.navigate(baseUrl + "/boom");
@@ -124,24 +142,6 @@ class ErrorPageIT extends PlaywrightTestBase {
         assertThat(copied.lines())
                 .hasSize(page.locator(".pk-stack-trace__frame").count()
                         + page.locator(".pk-stack-trace__hidden-summary").count());
-    }
-
-    /**
-     * The distance from each visible line of the trace to the next, and from the last one to
-     * the bottom of the box's content, in line heights.
-     */
-    private List<Double> lineStepsOfTheTrace() {
-        List<?> steps = (List<?>) page.evaluate("() => {"
-                + " const frames = document.querySelector('.pk-error__frames');"
-                + " const style = getComputedStyle(frames);"
-                + " const lineHeight = parseFloat(style.lineHeight);"
-                + " const tops = [...frames.querySelectorAll('.pk-stack-trace__frame, .pk-stack-trace__hidden-summary')]"
-                + "     .filter(line => line.checkVisibility())"
-                + "     .map(line => line.getBoundingClientRect().top);"
-                + " const contentBottom = frames.getBoundingClientRect().top + frames.clientTop"
-                + "     + frames.clientHeight - parseFloat(style.paddingBottom);"
-                + " return [...tops.slice(1), contentBottom].map((next, i) => (next - tops[i]) / lineHeight); }");
-        return steps.stream().map(step -> ((Number) step).doubleValue()).toList();
     }
 
     /** A host with script-src 'self' drops the inline copy; the linked one still arms the control. */

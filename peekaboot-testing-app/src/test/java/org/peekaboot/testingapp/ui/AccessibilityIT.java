@@ -276,12 +276,6 @@ class AccessibilityIT extends PlaywrightTestBase {
         assertMinimumHitTarget(".pk-log .pk-span-tree-link");
     }
 
-    private void assertMinimumHitTarget(String selector) {
-        BoundingBox box = page.locator(selector).first().boundingBox();
-        assertThat(box.width).as("%s width", selector).isGreaterThanOrEqualTo(24.0);
-        assertThat(box.height).as("%s height", selector).isGreaterThanOrEqualTo(24.0);
-    }
-
     /**
      * .pk-gantt-name clips overflow so a long span name ellipses instead of widening the row,
      * and that same clip crops the base focus ring's positive offset off the chevron and the
@@ -318,6 +312,12 @@ class AccessibilityIT extends PlaywrightTestBase {
 
         page.keyboard().press("Tab");
         assertFocusRingInsideNameCell(".pk-span-query-toggle");
+    }
+
+    private void assertMinimumHitTarget(String selector) {
+        BoundingBox box = page.locator(selector).first().boundingBox();
+        assertThat(box.width).as("%s width", selector).isGreaterThanOrEqualTo(24.0);
+        assertThat(box.height).as("%s height", selector).isGreaterThanOrEqualTo(24.0);
     }
 
     /**

@@ -28,6 +28,18 @@ import org.springframework.test.context.TestPropertySource;
         })
 class FlywayTabIT extends PlaywrightTestBase {
 
+    /** The versions of the {@code V<n>__*.sql} files this application ships, as the tab renders them. */
+    private static String[] migrationVersions() throws Exception {
+        Resource[] migrations = new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/V*.sql");
+        return Arrays.stream(migrations)
+                .map(migration -> versionOf(requireNonNull(migration.getFilename())))
+                .toArray(String[]::new);
+    }
+
+    private static String versionOf(String migrationFileName) {
+        return migrationFileName.substring(0, migrationFileName.indexOf("__"));
+    }
+
     @Test
     void flywayTabListsEveryMigrationAsApplied() throws Exception {
         openDashboard();
@@ -40,18 +52,6 @@ class FlywayTabIT extends PlaywrightTestBase {
         assertThat(page.textContent("#flyway-timeline"))
                 .as("every migration on the classpath reached the schema history")
                 .contains(migrationVersions());
-    }
-
-    /** The versions of the {@code V<n>__*.sql} files this application ships, as the tab renders them. */
-    private static String[] migrationVersions() throws Exception {
-        Resource[] migrations = new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/V*.sql");
-        return Arrays.stream(migrations)
-                .map(migration -> versionOf(requireNonNull(migration.getFilename())))
-                .toArray(String[]::new);
-    }
-
-    private static String versionOf(String migrationFileName) {
-        return migrationFileName.substring(0, migrationFileName.indexOf("__"));
     }
 
     /**

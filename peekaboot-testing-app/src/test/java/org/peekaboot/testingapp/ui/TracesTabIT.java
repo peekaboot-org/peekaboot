@@ -96,6 +96,27 @@ class TracesTabIT extends PlaywrightTestBase {
                 .asLong();
     }
 
+    /** A JS predicate on the trace JSON: a reconciler run's own trace, carrying its WARN about {@code order}. */
+    private static String warnedAbout(CustomerOrder order) {
+        return "trace => trace.rootActionType === 'SCHEDULED_JOB' && (trace.logs || []).some(log => "
+                + "log.level === 'WARN' && log.message === 'order " + order.getReference()
+                + " is still PLACED and has not been acknowledged')";
+    }
+
+    /** Undoes {@link #seedAnOrder()}, so a test that seeds its own order leaves the shared H2 database as it found it. */
+    private void deleteOrder(CustomerOrder order) {
+        OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+    }
+
+    /** The page size traces.js asked the listing endpoint for. */
+    private static int pageSizeOf(Response listing) {
+        Matcher matcher = TRACES_PAGE_SIZE_PARAM.matcher(listing.url());
+        assertThat(matcher.find())
+                .as("traces.js names its page size: %s", listing.url())
+                .isTrue();
+        return Integer.parseInt(matcher.group(1));
+    }
+
     /**
      * The loading block sits above the bucket row, so showing it for a refresh of a list
      * already on screen pushes the controls and the list down for the round trip. Only the
@@ -272,18 +293,6 @@ class TracesTabIT extends PlaywrightTestBase {
         } finally {
             deleteOrder(order);
         }
-    }
-
-    /** A JS predicate on the trace JSON: a reconciler run's own trace, carrying its WARN about {@code order}. */
-    private static String warnedAbout(CustomerOrder order) {
-        return "trace => trace.rootActionType === 'SCHEDULED_JOB' && (trace.logs || []).some(log => "
-                + "log.level === 'WARN' && log.message === 'order " + order.getReference()
-                + " is still PLACED and has not been acknowledged')";
-    }
-
-    /** Undoes {@link #seedAnOrder()}, so a test that seeds its own order leaves the shared H2 database as it found it. */
-    private void deleteOrder(CustomerOrder order) {
-        OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
     }
 
     /** The positive control for TracesTabWithoutSpanSourceIT: with a span exporter wired, the tab lists as usual. */
@@ -510,15 +519,6 @@ class TracesTabIT extends PlaywrightTestBase {
         page.evaluate("() => window.dispatchEvent(new Event('hashchange'))");
 
         assertThat(page.getAttribute(TraceOverlay.HOST, "data-test-marker")).isEqualTo("stable");
-    }
-
-    /** The page size traces.js asked the listing endpoint for. */
-    private static int pageSizeOf(Response listing) {
-        Matcher matcher = TRACES_PAGE_SIZE_PARAM.matcher(listing.url());
-        assertThat(matcher.find())
-                .as("traces.js names its page size: %s", listing.url())
-                .isTrue();
-        return Integer.parseInt(matcher.group(1));
     }
 
     /**

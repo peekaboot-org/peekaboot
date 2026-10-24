@@ -16,6 +16,21 @@ import tools.jackson.databind.node.ObjectNode;
 
 class OverviewMachineIT extends PlaywrightTestBase {
 
+    /** What the card renders a byte count as; the same module the card builds its rows with. */
+    private String formatBytes(long bytes) {
+        // As a string: Playwright's argument serializer takes no Java long.
+        return (String) page.evaluate(
+                "async (value) => (await import('/peekaboot/ui/shared/format.js')).formatBytes(Number(value))",
+                String.valueOf(bytes));
+    }
+
+    /** Splits by address family the way the card does: a ":" in the literal means IPv6. */
+    private static List<NetworkAddress> family(List<NetworkAddress> addresses, boolean ipv6) {
+        return addresses.stream()
+                .filter(address -> address.address().contains(":") == ipv6)
+                .toList();
+    }
+
     /**
      * The Total Memory row against the machine this JVM runs on, formatted by the shared
      * formatter the row itself uses - a card of labels over placeholder numbers passes a
@@ -48,14 +63,6 @@ class OverviewMachineIT extends PlaywrightTestBase {
         page.waitForSelector("#machine-info .pk-kv");
 
         assertThat(dashboard.kvValue("#machine-info", "Max Heap")).isEqualTo(formatBytes(servedHeapMax));
-    }
-
-    /** What the card renders a byte count as; the same module the card builds its rows with. */
-    private String formatBytes(long bytes) {
-        // As a string: Playwright's argument serializer takes no Java long.
-        return (String) page.evaluate(
-                "async (value) => (await import('/peekaboot/ui/shared/format.js')).formatBytes(Number(value))",
-                String.valueOf(bytes));
     }
 
     @Test
@@ -179,13 +186,6 @@ class OverviewMachineIT extends PlaywrightTestBase {
         assertThat(page.isVisible("#machine-net-" + nextFamily)).isTrue();
         assertThat(page.evaluate("() => document.querySelector('#machine-net-" + nextFamily + "-btn').tabIndex"))
                 .isEqualTo(0);
-    }
-
-    /** Splits by address family the way the card does: a ":" in the literal means IPv6. */
-    private static List<NetworkAddress> family(List<NetworkAddress> addresses, boolean ipv6) {
-        return addresses.stream()
-                .filter(address -> address.address().contains(":") == ipv6)
-                .toList();
     }
 
     @Test
