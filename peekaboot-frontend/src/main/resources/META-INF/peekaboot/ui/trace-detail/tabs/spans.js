@@ -367,7 +367,7 @@ function errorSection(span) {
 function queryPanel(span, queryId, locale) {
     return el('div', {className: 'pk-span-panel pk-span-panel--query', attrs: {id: queryId}},
         span.rowCount != null ? el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row', {locale})}) : null,
-        sqlView(span.statement));
+        sqlView(span.statement, {locale}));
 }
 
 /** The span's logs as the Logs tab shows them, stack trace included, from the trace's flat list the row's toggle counts. Opened by that toggle. */

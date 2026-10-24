@@ -634,6 +634,23 @@ class SpansTabIT extends TraceOverlayTestBase {
                 """)).isEqualTo(true);
     }
 
+    /** The query panel hands the dashboard's locale to the statement it shows. */
+    @Test
+    void theQueryPanelCountsOmittedParameterSetsInTheDashboardLocale() {
+        Object note = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const statement = {text: 'insert 1', formatted: null, parameters: [['1']], omittedParameterSets: 1234};
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z',
+                    rootSpan: {spanId: 'a', name: 'INSERT t', statement}}, {locale: 'de-DE'});
+                container.querySelector('.pk-gantt-all-details').click();
+                return container.querySelector('.pk-span-panel--query .pk-sql__params-omitted').textContent;
+            })()
+            """);
+
+        assertThat(note).isEqualTo("1.234 parameter sets omitted");
+    }
+
     /**
      * The Spans tab renders the facts the backend serves rather than re-deriving them from
      * tags and names: the query row's row count is {@code span.rowCount}, which the backend

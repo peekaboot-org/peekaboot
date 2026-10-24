@@ -6,6 +6,7 @@
  * with a note after the last where the backend capped the batch.
  *
  * `statement` is the backend's SqlStatement: {text, formatted, parameters, omittedParameterSets}.
+ * The omitted count groups in `locale`, the dashboard's chosen one.
  * Both toggles start off and are not remembered; a toggle re-renders the code block, and adds or
  * removes the Substitute toggle when the SQL shown changes whether it fits.
  */
@@ -14,7 +15,7 @@ import {copyableText} from './copyable.js';
 import {formatCount} from './format.js';
 import {placeholderCount, renderSql, substitute, textOf, tokenize} from './sql.js';
 
-export function sqlView(statement) {
+export function sqlView(statement, {locale} = {}) {
     const parameterSets = statement.parameters || [];
     const omitted = statement.omittedParameterSets || 0;
     const state = {formatted: false, substituted: false};
@@ -59,7 +60,7 @@ export function sqlView(statement) {
         code,
         ...parameterSets.map((literals, index) => parameterList(literals, index, parameterSets.length)),
         omitted > 0
-            ? el('p', {className: 'pk-sql__params-omitted', text: `${formatCount(omitted, 'parameter set')} omitted`})
+            ? el('p', {className: 'pk-sql__params-omitted', text: `${formatCount(omitted, 'parameter set', {locale})} omitted`})
             : null);
 }
 

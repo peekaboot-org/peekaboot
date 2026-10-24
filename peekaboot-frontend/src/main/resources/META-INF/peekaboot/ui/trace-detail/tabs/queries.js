@@ -51,7 +51,7 @@ function queryItem(query, statement, index, view) {
         el('div', {className: 'pk-query-header'},
             el('span', {className: 'pk-query-system', text: `${index + 1}. ${queryLabel(query)}`}),
             meta),
-        statement ? sqlView(statement) : el('div', {className: 'pk-code-block', text: 'Unknown query'}));
+        statement ? sqlView(statement, {locale: view.locale}) : el('div', {className: 'pk-code-block', text: 'Unknown query'}));
 }
 
 /** A query named by its DataSource alone already shows that name as its system, so it is not repeated. */

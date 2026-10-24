@@ -127,6 +127,22 @@ class SqlViewModuleIT extends PlaywrightTestBase {
     }
 
     @Test
+    void countsTheOmittedSetsInTheDashboardLocale() {
+        Object note = importModule(
+                "shared/sql-view.js",
+                """
+                (() => {
+                    const view = m.sqlView(JSON.parse(arg), {locale: 'de-DE'});
+                    return view.querySelector('.pk-sql__params-omitted').textContent;
+                })()
+                """,
+                "{\"text\": \"insert into t values (?)\", \"formatted\": null, \"parameters\":"
+                        + " [[\"1\"]], \"omittedParameterSets\": 1234}");
+
+        assertThat(note).isEqualTo("1.234 parameter sets omitted");
+    }
+
+    @Test
     void countsASingleOmittedParameterSetInTheSingular() {
         assertThat(inView(
                         "{\"text\": \"insert into t values (?)\", \"formatted\": null, \"parameters\":"

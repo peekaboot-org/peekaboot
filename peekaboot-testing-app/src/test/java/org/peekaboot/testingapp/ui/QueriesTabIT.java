@@ -173,6 +173,22 @@ class QueriesTabIT extends TraceOverlayTestBase {
         assertThat(durationLabels).containsExactly("49ms|", "50ms|SLOW", "49ms|", "50ms|");
     }
 
+    /** The tab hands the dashboard's locale to the statement it shows. */
+    @Test
+    void queriesTabCountsOmittedParameterSetsInTheDashboardLocale() {
+        Object note = importModule("trace-detail/tabs/queries.js", """
+            (() => {
+                const statement = {text: 'INSERT 1', formatted: null, parameters: [['1']], omittedParameterSets: 1234};
+                const container = document.createElement('div');
+                m.render(container, {rootSpan: {spanId: 's1', statement},
+                    queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {locale: 'de-DE'});
+                return container.querySelector('.pk-sql__params-omitted').textContent;
+            })()
+            """);
+
+        assertThat(note).isEqualTo("1.234 parameter sets omitted");
+    }
+
     /** The label adds the DataSource name only where it says more than the system already does. */
     @Test
     void queriesTabNamesTheDataSourceBesideTheSystemOnlyWhenItAddsSomething() {
