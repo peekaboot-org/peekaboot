@@ -46,7 +46,7 @@ import tools.jackson.databind.JsonNode;
  * its own.
  *
  * <p>The property below is read by nothing. It gives this class a test-context cache key, and so
- * a {@code TraceStore}, of its own: {@code TraceOverlayIT} also hits {@code /orders/enrich} and
+ * a {@code TraceStore}, of its own: {@code SpansTabIT} also hits {@code /orders/enrich} and
  * could insert an async row inside this class's before/after snapshot window (see
  * {@link #anAsyncTaskDispatchedOutsideARequestIsNotObserved()}).
  */

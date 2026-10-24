@@ -17,7 +17,7 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>The browser-driven tests that depend on captured logs
  * ({@code ToolbarIT.toolbarShowsErrorLogCountWhenRequestLogsAnError} and
- * {@code TraceOverlayIT.logsFilterChipUsesTheContrastTunedForeground}) fail with an
+ * {@code LogsTabIT.logsFilterChipUsesTheContrastTunedForeground}) fail with an
  * opaque Playwright timeout when this breaks. This test fails with the actual count
  * instead, and pins the boundary: green here plus red there means the regression is in the
  * frontend render, not in capture.

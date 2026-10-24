@@ -405,7 +405,7 @@ Every point in time a response carries is an `Instant` on its record, so it reac
 as ISO-8601 to the nanosecond, named without a unit (`startTime`, `timestamp`, `startedAt`).
 WebKit's `Date.parse` rounds the digits past the millisecond where Chromium and Firefox drop
 them, so the browser reads every instant through `format.js`'s `instantMs`, which cuts them
-first and agrees with Java's `toEpochMilli` (`TraceOverlayIT.readsNanosecondStartsToTheMillisecond`). Epoch millis remain only where the
+first and agrees with Java's `toEpochMilli` (`SpansTabIT.readsNanosecondStartsToTheMillisecond`). Epoch millis remain only where the
 browser does arithmetic on a chart series: a level's `endEpochMs` and the insights stream's
 `epochMs`, from which every sample's x position is counted back. A duration is a `long` named
 `...Ms`. `ServerInfo.currentTime` is the one string: the JVM's clock as an ISO-8601 offset

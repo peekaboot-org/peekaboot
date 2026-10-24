@@ -79,8 +79,8 @@ class DashboardShellIT extends PlaywrightTestBase {
      * The header is a neutral --pk-bg surface, so the wordmark takes --pk-text-strong
      * rather than an on-fill ink - a bare `color: white` on a --pk-primary slab scores only
      * 2.53:1 in dark theme.
-     * Pinning the literal resolved colour (matching TraceOverlayIT's contrast
-     * regression tests) catches a revert to any hardcoded colour, which "looks right" in
+     * Pinning the literal resolved colour (matching LogsTabIT's contrast
+     * regression test) catches a revert to any hardcoded colour, which "looks right" in
      * one theme and would pass every other test here.
      *
      * Both tests deliberately set the stored preference to the opposite of the emulated
