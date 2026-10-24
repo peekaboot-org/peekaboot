@@ -7,7 +7,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.BucketCounts;
-import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
@@ -15,12 +14,15 @@ import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.HttpExchangeMapper;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
+import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.mapper.trace.TraceLogMapper;
 import org.peekaboot.backend.mapper.trace.TraceQueries;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.text.EnumNames;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -54,16 +56,20 @@ public class TraceInsightsService {
     private final QueryExtractor queryExtractor;
     private final TraceLogMapper traceLogMapper;
 
+    /**
+     * The mappers are built here rather than injected, as in {@link ActuatorInsightsService}:
+     * the service is the one place the masking policy enters the trace pipeline.
+     */
     public TraceInsightsService(
             @Nullable TraceStore traceStore,
-            TraceTreeMapper traceTreeMapper,
-            IssueDetector issueDetector,
-            QueryExtractor queryExtractor,
+            MaskingEngine maskingEngine,
+            SqlFormatter sqlFormatter,
+            PeekabootTracingProperties tracingProperties,
             StackTraceRules stackTraceRules) {
         this.traceStore = traceStore;
-        this.traceTreeMapper = traceTreeMapper;
-        this.issueDetector = issueDetector;
-        this.queryExtractor = queryExtractor;
+        this.traceTreeMapper = new TraceTreeMapper(maskingEngine, sqlFormatter);
+        this.issueDetector = new IssueDetector(tracingProperties);
+        this.queryExtractor = new QueryExtractor();
         this.traceLogMapper = new TraceLogMapper(stackTraceRules);
     }
 
@@ -182,12 +188,14 @@ public class TraceInsightsService {
 
     private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
         RequestCompletedEvent reqEvent = bundle.request();
-        HttpExchange httpExchange = reqEvent != null ? HttpExchangeMapper.map(reqEvent) : null;
         // an @Async task may log meanwhile, so the badges and the list count one read
         List<LogCapturedEvent> logs = bundle.logs();
 
         return traceLogMapper
                 .withLogsSummary(tree, logs)
-                .withDetails(httpExchange, traceLogMapper.map(bundle, logs), queries);
+                .withDetails(
+                        reqEvent != null ? HttpExchangeMapper.map(reqEvent) : null,
+                        traceLogMapper.map(bundle, logs),
+                        queries);
     }
 }

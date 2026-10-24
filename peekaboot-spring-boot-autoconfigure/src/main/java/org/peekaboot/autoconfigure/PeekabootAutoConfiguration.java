@@ -12,10 +12,7 @@ import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.mapper.trace.HibernateSqlFormatter;
-import org.peekaboot.backend.mapper.trace.IssueDetector;
-import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
-import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
@@ -35,8 +32,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
 /**
- * Core auto-configuration: the dashboard controller, the actuator/trace services, their
- * mappers and the servlet web config, each an explicit {@link Bean @Bean} method. Every
+ * Core auto-configuration: the dashboard controller, the actuator/trace services and the
+ * servlet web config, each an explicit {@link Bean @Bean} method. Every
  * bean is {@link ConditionalOnMissingBean @ConditionalOnMissingBean} and keeps the name
  * component scanning would derive from its class (some are looked up by exactly that
  * name, e.g. {@code ServerUrlResolver#DASHBOARD_CONFIG_BEAN_NAME}), so an application
@@ -77,24 +74,6 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TraceTreeMapper traceTreeMapper(MaskingEngine maskingEngine, ObjectProvider<SqlFormatter> sqlFormatter) {
-        return new TraceTreeMapper(maskingEngine, sqlFormatter.getIfAvailable(() -> SqlFormatter.NONE));
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public IssueDetector issueDetector(PeekabootTracingProperties tracingProperties) {
-        return new IssueDetector(tracingProperties);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public QueryExtractor queryExtractor() {
-        return new QueryExtractor();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     public ActuatorInsightsService actuatorInsightsService(
             ActuatorReadings actuatorReadings,
             ActuatorResponseParser actuatorResponseParser,
@@ -116,12 +95,16 @@ public class PeekabootAutoConfiguration {
     @ConditionalOnMissingBean
     public TraceInsightsService traceInsightsService(
             ObjectProvider<TraceStore> traceStore,
-            TraceTreeMapper traceTreeMapper,
-            IssueDetector issueDetector,
-            QueryExtractor queryExtractor,
+            MaskingEngine maskingEngine,
+            ObjectProvider<SqlFormatter> sqlFormatter,
+            PeekabootTracingProperties tracingProperties,
             StackTraceRules stackTraceRules) {
         return new TraceInsightsService(
-                traceStore.getIfAvailable(), traceTreeMapper, issueDetector, queryExtractor, stackTraceRules);
+                traceStore.getIfAvailable(),
+                maskingEngine,
+                sqlFormatter.getIfAvailable(() -> SqlFormatter.NONE),
+                tracingProperties,
+                stackTraceRules);
     }
 
     @Bean

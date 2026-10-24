@@ -29,10 +29,7 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.peekaboot.backend.mapper.trace.IssueDetector;
-import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
-import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
@@ -49,17 +46,11 @@ import tools.jackson.databind.JsonNode;
 class TraceInsightsServiceTest {
 
     private InMemoryTraceStore store;
-    private TraceTreeMapper traceTreeMapper;
-    private IssueDetector issueDetector;
-    private QueryExtractor queryExtractor;
     private TraceInsightsService service;
 
     @BeforeEach
     void setUp() {
         store = TraceStores.withDefaults();
-        traceTreeMapper = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE);
-        issueDetector = new IssueDetector(new PeekabootTracingProperties());
-        queryExtractor = new QueryExtractor();
         service = newService(store);
     }
 
@@ -100,9 +91,9 @@ class TraceInsightsServiceTest {
         };
         TraceInsightsService recordingService = new TraceInsightsService(
                 store,
-                new TraceTreeMapper(new MaskingEngine(), recording),
-                issueDetector,
-                queryExtractor,
+                new MaskingEngine(),
+                recording,
+                new PeekabootTracingProperties(),
                 new StackTraceRules(List.of(), List.of()));
         addTraceWithDbSpan("t1", 100);
 
@@ -843,9 +834,9 @@ class TraceInsightsServiceTest {
             TraceStore store, List<String> exclusions, List<String> applicationPackages) {
         return new TraceInsightsService(
                 store,
-                traceTreeMapper,
-                issueDetector,
-                queryExtractor,
+                new MaskingEngine(),
+                SqlFormatter.NONE,
+                new PeekabootTracingProperties(),
                 new StackTraceRules(exclusions, applicationPackages));
     }
 

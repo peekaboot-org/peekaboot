@@ -702,7 +702,7 @@ hooks that run before or outside the application context are registered in
 
 | Class | Registered via | Purpose |
 |-------|----------------|---------|
-| `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, trace mappers, web config |
+| `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
 | `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration and the `TomcatForwardResponseCustomizer` bean |
 | `TraceCaptureAutoConfiguration` | `.imports` | Request capture filter registration and the `LogbackAppenderRegistrar` bean, both feeding the trace store |
@@ -743,7 +743,10 @@ The ten actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
 `mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the
 `MaskingEngine`, so the one override point for that pipeline is the service itself. They
 are stateless and need at most the engine, and ten `@ConditionalOnMissingBean` methods
-nobody overrode bought nothing but wiring.
+nobody overrode bought nothing but wiring. The trace mappers follow the same rule:
+`TraceInsightsService` builds `TraceTreeMapper`, `IssueDetector`, `QueryExtractor` and
+`TraceLogMapper` from the `MaskingEngine`, the `SqlFormatter`, `PeekabootTracingProperties`
+and `StackTraceRules`.
 
 ### Conditional Loading
 
