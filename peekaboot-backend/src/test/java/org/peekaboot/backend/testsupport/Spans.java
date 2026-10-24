@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
 /**

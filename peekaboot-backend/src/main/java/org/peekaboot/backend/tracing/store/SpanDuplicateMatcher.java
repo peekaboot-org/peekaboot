@@ -3,6 +3,7 @@ package org.peekaboot.backend.tracing.store;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * Decides whether two spans are the same JDBC call captured twice - a host with two

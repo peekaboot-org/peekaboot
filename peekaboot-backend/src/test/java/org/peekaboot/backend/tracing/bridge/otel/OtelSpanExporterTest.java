@@ -68,7 +68,7 @@ class OtelSpanExporterTest {
                 createTestSpan(traceId, "0000000000000001", "first", SpanKind.SERVER),
                 createTestSpan(traceId, "0000000000000002", "second", SpanKind.CLIENT)));
 
-        List<org.peekaboot.backend.tracing.store.SpanData> spans = storedSpans(traceId);
+        List<org.peekaboot.backend.tracing.event.SpanData> spans = storedSpans(traceId);
         assertThat(spans).hasSize(2);
         assertThat(spans.get(1).creationOrder()).isGreaterThan(spans.get(0).creationOrder());
     }
@@ -84,10 +84,10 @@ class OtelSpanExporterTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(publishedEvents).hasSize(1);
 
-        List<org.peekaboot.backend.tracing.store.SpanData> spans = storedSpans(traceId);
+        List<org.peekaboot.backend.tracing.event.SpanData> spans = storedSpans(traceId);
         assertThat(spans).hasSize(1);
 
-        org.peekaboot.backend.tracing.store.SpanData stored = spans.getFirst();
+        org.peekaboot.backend.tracing.event.SpanData stored = spans.getFirst();
         assertThat(stored.name()).isEqualTo("test-operation");
         assertThat(stored.kind()).isEqualTo(io.micrometer.tracing.Span.Kind.SERVER);
         assertThat(stored.traceId()).isEqualTo(traceId);
@@ -107,10 +107,10 @@ class OtelSpanExporterTest {
 
         assertThat(publishedEvents).hasSize(3);
         assertThat(storedSpans(traceId1))
-                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
                 .containsExactly("aaaa000000000001", "aaaa000000000002");
         assertThat(storedSpans(traceId2))
-                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
                 .containsExactly("aaaa000000000003");
     }
 
@@ -210,7 +210,7 @@ class OtelSpanExporterTest {
         exporter.export(List.of(peekabootCall, root));
 
         assertThat(storedSpans(traceId))
-                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
                 .containsExactly("0000000000000002", rootSpanId);
     }
 
@@ -235,7 +235,7 @@ class OtelSpanExporterTest {
         exporter.export(List.of(healthCheck, root));
 
         assertThat(storedSpans(traceId))
-                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
                 .containsExactly("0000000000000002", rootSpanId);
     }
 
@@ -260,7 +260,7 @@ class OtelSpanExporterTest {
         exporter.export(List.of(jdbcChild, root));
 
         assertThat(storedSpans(traceId))
-                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
                 .containsExactly("0000000000000002", rootSpanId);
     }
 
@@ -377,7 +377,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.errorMessage()).isEqualTo("boom");
         assertThat(stored.errorClass()).isEqualTo("ERROR");
     }
@@ -394,7 +394,7 @@ class OtelSpanExporterTest {
             span.setStatus(StatusCode.ERROR);
         });
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
         assertThat(stored.errorMessage()).isEqualTo("pool exhausted");
     }
@@ -406,7 +406,7 @@ class OtelSpanExporterTest {
             span.setStatus(StatusCode.ERROR, "described by the app");
         });
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
         assertThat(stored.errorMessage()).isEqualTo("described by the app");
     }
@@ -436,7 +436,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.parentId()).isEqualTo(parentSpanId);
     }
 
@@ -449,7 +449,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.tags()).containsEntry("db.system", "postgresql");
     }
 
@@ -469,7 +469,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.events()).hasSize(1);
         assertThat(stored.events().getFirst().name()).isEqualTo("cache-miss");
         assertThat(stored.events().getFirst().timestamp()).isEqualTo(eventInstant);
@@ -493,11 +493,11 @@ class OtelSpanExporterTest {
      * OTel {@link SpanData}: the store's own {@code SpanData} record must stay fully qualified
      * at every call site regardless, but this centralizes the lookup expression itself.
      */
-    private List<org.peekaboot.backend.tracing.store.SpanData> storedSpans(String traceId) {
+    private List<org.peekaboot.backend.tracing.event.SpanData> storedSpans(String traceId) {
         return storage.getTrace(traceId).orElseThrow().snapshot().spans();
     }
 
-    private org.peekaboot.backend.tracing.store.SpanData storedSpan(String traceId) {
+    private org.peekaboot.backend.tracing.event.SpanData storedSpan(String traceId) {
         return storedSpans(traceId).getFirst();
     }
 

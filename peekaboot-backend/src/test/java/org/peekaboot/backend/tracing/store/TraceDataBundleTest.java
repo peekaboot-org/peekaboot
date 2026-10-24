@@ -16,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
 class TraceDataBundleTest {

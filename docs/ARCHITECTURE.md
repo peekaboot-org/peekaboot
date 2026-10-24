@@ -217,7 +217,7 @@ org.peekaboot.backend/
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate), RootActionTypes,
-│                           # SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
+│                           # TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
 ├── masking/                # MaskingEngine (one bean, from MaskingConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
@@ -231,13 +231,14 @@ org.peekaboot.backend/
 │   ├── bridge/otel/        # OtelSpanExporter
 │   ├── capture/            # RequestCaptureFilter, PeekabootLogbackAppender: the request and log sources beside the span bridge
 │   ├── config/             # PeekabootTracingProperties
-│   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent, TraceDiscardedEvent
+│   ├── event/              # What capture hands the store, and the store keeps: SpanData (+ SpanDataEvent), LogCapturedEvent,
+│   │                       # RequestCompletedEvent, TraceDiscardedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
 │   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
 │   ├── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
 │   │                       # AsyncMembership, Window, ListingRoots, ListedTrace,
-│   │                       # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
+│   │                       # SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
 │   └── tags/               # The span-tag vocabulary capture, store and mappers share: AsyncTaskMarker,
 │                           # EventListenerMarker, QueryParameterTags (Peekaboot's own keys), HttpSpanTags,
 │                           # Tags (reading foreign conventions)
@@ -1288,8 +1289,8 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    `TraceInsightsService` calls it on both trace endpoints.
 3. `TraceInsightsService.enrichWithDetails` adds what only the stored bundle knows: the flat log
    list, each entry's `spanId` resolved through the bundle's duplicate redirects, the
-   `HttpExchange` and `QueryExtractor`'s queries. The log list and its count come from
-   `TraceLogMapper`, to which it delegates. It runs on
+   `HttpExchange` (from `HttpExchangeMapper`) and `QueryExtractor`'s queries. The log list and
+   its count come from `TraceLogMapper`, to which it delegates. It runs on
    `GET /peekaboot/api/traces/{traceId}/insights` only. The listing endpoint gets step 1, a log
    *count* for the row badges, and step 2, so its trees carry issues but no log list and no
    queries. An async row takes `TraceTreeMapper.mapSubtree` for step 1 and counts only the logs

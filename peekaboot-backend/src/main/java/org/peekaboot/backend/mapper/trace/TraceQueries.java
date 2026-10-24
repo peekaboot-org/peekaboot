@@ -2,7 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.util.Map;
 import org.peekaboot.backend.domain.trace.SqlStatement;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 /**

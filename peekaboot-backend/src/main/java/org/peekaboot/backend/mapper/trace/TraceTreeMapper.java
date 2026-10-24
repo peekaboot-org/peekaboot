@@ -17,7 +17,7 @@ import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 

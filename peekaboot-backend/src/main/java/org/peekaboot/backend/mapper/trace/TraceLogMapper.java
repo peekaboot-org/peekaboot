@@ -1,4 +1,4 @@
-package org.peekaboot.backend.service;
+package org.peekaboot.backend.mapper.trace;
 
 import java.util.HashSet;
 import java.util.List;
@@ -17,16 +17,16 @@ import org.peekaboot.backend.tracing.store.TraceDataBundle;
  * A trace's captured logs as the dashboard shows them: each log named by the span that survived
  * folding, its stack trace folded, and the list's badges counted by level.
  */
-final class TraceLogMapper {
+public final class TraceLogMapper {
 
     private final StackTraceRules stackTraceRules;
 
-    TraceLogMapper(StackTraceRules stackTraceRules) {
+    public TraceLogMapper(StackTraceRules stackTraceRules) {
         this.stackTraceRules = stackTraceRules;
     }
 
     /** {@code logs} is one read of {@code bundle.logs()}, so the caller can count the same list it maps. */
-    List<TraceLog> map(TraceDataBundle bundle, List<LogCapturedEvent> logs) {
+    public List<TraceLog> map(TraceDataBundle bundle, List<LogCapturedEvent> logs) {
         return logs.stream().map(e -> toTraceLog(bundle, e)).toList();
     }
 
@@ -36,7 +36,7 @@ final class TraceLogMapper {
      * the row - are not its to show. Resolved through the bundle for the same reason the
      * detail's logs are: a log's MDC span id may name a span folded away since.
      */
-    List<LogCapturedEvent> logsWithin(SpanNode subtreeRoot, TraceDataBundle bundle) {
+    public List<LogCapturedEvent> logsWithin(SpanNode subtreeRoot, TraceDataBundle bundle) {
         Set<String> spanIds = new HashSet<>();
         collectSpanIds(subtreeRoot, spanIds);
         return bundle.logs().stream()
@@ -53,7 +53,7 @@ final class TraceLogMapper {
     }
 
     /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */
-    TraceTree withLogsSummary(TraceTree tree, List<LogCapturedEvent> logs) {
+    public TraceTree withLogsSummary(TraceTree tree, List<LogCapturedEvent> logs) {
         TraceTabSummary summary = tree.summary();
         return tree.withSummary(
                 new TraceTabSummary(summary.request(), summary.spans(), summary.queries(), logsSummary(logs)));

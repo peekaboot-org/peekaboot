@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
 /**

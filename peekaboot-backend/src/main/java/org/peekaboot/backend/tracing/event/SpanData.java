@@ -1,4 +1,4 @@
-package org.peekaboot.backend.tracing.store;
+package org.peekaboot.backend.tracing.event;
 
 import io.micrometer.tracing.Span;
 import java.time.Duration;

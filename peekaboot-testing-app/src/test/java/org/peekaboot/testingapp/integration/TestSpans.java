@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * Builds {@link SpanData} for the tests that write straight to the store. Every field has a

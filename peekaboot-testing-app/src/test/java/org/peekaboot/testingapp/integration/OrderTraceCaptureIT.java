@@ -87,7 +87,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
      * (datasource-micrometer-opentelemetry over the H2 datasource, the same library
      * {@code db.query.text} priority in {@code QueryExtractor.findSql} targets - see
      * {@code docs/ARCHITECTURE.md}'s <em>Query Extraction</em> section), not a hand-built
-     * {@link org.peekaboot.backend.tracing.store.SpanData}.
+     * {@link org.peekaboot.backend.tracing.event.SpanData}.
      *
      * <p>Hibernate's real generated statement is lower-case ({@code "select
      * co1_0.id,co1_0.customer_id,...,co1_0.status from customer_order co1_0"} for the

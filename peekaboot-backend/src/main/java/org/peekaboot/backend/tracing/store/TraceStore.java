@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /** Receives raw span data, logs and request info and answers per-trace lookups. */
 public interface TraceStore {

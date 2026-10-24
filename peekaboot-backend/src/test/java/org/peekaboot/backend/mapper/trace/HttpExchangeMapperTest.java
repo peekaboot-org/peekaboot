@@ -1,17 +1,18 @@
-package org.peekaboot.backend.domain.trace;
+package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
-class HttpExchangeTest {
+class HttpExchangeMapperTest {
 
     @Test
-    void from_mapsAllFieldsWhenPresent() {
+    void map_mapsAllFieldsWhenPresent() {
         RequestCompletedEvent event = RequestCompletedEvents.request("trace-1")
                 .method("POST")
                 .path("/api/users")
@@ -24,7 +25,7 @@ class HttpExchangeTest {
                 .responseHeaders(Map.of("Location", "/api/users/1"))
                 .build();
 
-        HttpExchange exchange = HttpExchange.from(event);
+        HttpExchange exchange = HttpExchangeMapper.map(event);
 
         assertThat(exchange.request().method()).isEqualTo("POST");
         assertThat(exchange.request().path()).isEqualTo("/api/users");
@@ -39,32 +40,32 @@ class HttpExchangeTest {
     }
 
     @Test
-    void from_defaultsNullQueryParamsToEmptyMap() {
-        HttpExchange exchange = HttpExchange.from(
+    void map_defaultsNullQueryParamsToEmptyMap() {
+        HttpExchange exchange = HttpExchangeMapper.map(
                 RequestCompletedEvents.request("trace-1").queryParams(null).build());
 
         assertThat(exchange.request().params().query()).isEmpty();
     }
 
     @Test
-    void from_defaultsNullFormParamsToEmptyMap() {
-        HttpExchange exchange = HttpExchange.from(
+    void map_defaultsNullFormParamsToEmptyMap() {
+        HttpExchange exchange = HttpExchangeMapper.map(
                 RequestCompletedEvents.request("trace-1").formParams(null).build());
 
         assertThat(exchange.request().params().form()).isEmpty();
     }
 
     @Test
-    void from_defaultsNullRequestHeadersToEmptyMap() {
-        HttpExchange exchange = HttpExchange.from(
+    void map_defaultsNullRequestHeadersToEmptyMap() {
+        HttpExchange exchange = HttpExchangeMapper.map(
                 RequestCompletedEvents.request("trace-1").requestHeaders(null).build());
 
         assertThat(exchange.request().headers()).isEmpty();
     }
 
     @Test
-    void from_defaultsNullResponseHeadersToEmptyMap() {
-        HttpExchange exchange = HttpExchange.from(
+    void map_defaultsNullResponseHeadersToEmptyMap() {
+        HttpExchange exchange = HttpExchangeMapper.map(
                 RequestCompletedEvents.request("trace-1").responseHeaders(null).build());
 
         assertThat(exchange.response().headers()).isEmpty();

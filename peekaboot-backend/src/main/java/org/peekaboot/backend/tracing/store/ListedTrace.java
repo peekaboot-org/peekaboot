@@ -1,5 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
+import org.peekaboot.backend.tracing.event.SpanData;
+
 /**
  * A trace as one bucket lists it. {@code listedAt} is the export order of the newest span the
  * store had received when the trace entered the bucket, so it compares with any span's

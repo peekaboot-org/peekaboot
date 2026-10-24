@@ -8,7 +8,7 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.peekaboot.backend.domain.trace.SpanNode;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import org.peekaboot.backend.tracing.tags.Tags;
 

@@ -60,7 +60,7 @@ public class OtelSpanExporter implements SpanExporter {
                 }
                 continue;
             }
-            org.peekaboot.backend.tracing.store.SpanData spanData = convertToSpanData(otelSpan, tags);
+            org.peekaboot.backend.tracing.event.SpanData spanData = convertToSpanData(otelSpan, tags);
             eventPublisher.publishEvent(new SpanDataEvent(spanData));
         }
         return CompletableResultCode.ofSuccess();
@@ -99,12 +99,12 @@ public class OtelSpanExporter implements SpanExporter {
         return CompletableResultCode.ofSuccess();
     }
 
-    private org.peekaboot.backend.tracing.store.SpanData convertToSpanData(
+    private org.peekaboot.backend.tracing.event.SpanData convertToSpanData(
             SpanData otelSpan, Map<String, String> tags) {
         Instant startTime = nanosToInstant(otelSpan.getStartEpochNanos());
         Instant endTime = nanosToInstant(otelSpan.getEndEpochNanos());
 
-        List<org.peekaboot.backend.tracing.store.SpanData.Event> events = extractEvents(otelSpan);
+        List<org.peekaboot.backend.tracing.event.SpanData.Event> events = extractEvents(otelSpan);
 
         String parentId = otelSpan.getParentSpanContext().isValid()
                 ? otelSpan.getParentSpanContext().getSpanId()
@@ -126,7 +126,7 @@ public class OtelSpanExporter implements SpanExporter {
             }
         }
 
-        return new org.peekaboot.backend.tracing.store.SpanData(
+        return new org.peekaboot.backend.tracing.event.SpanData(
                 otelSpan.getSpanContext().getTraceId(),
                 otelSpan.getSpanContext().getSpanId(),
                 parentId,
@@ -165,12 +165,12 @@ public class OtelSpanExporter implements SpanExporter {
         return last;
     }
 
-    private List<org.peekaboot.backend.tracing.store.SpanData.Event> extractEvents(SpanData otelSpan) {
+    private List<org.peekaboot.backend.tracing.event.SpanData.Event> extractEvents(SpanData otelSpan) {
         return otelSpan.getEvents().stream().map(this::convertEvent).toList();
     }
 
-    private org.peekaboot.backend.tracing.store.SpanData.Event convertEvent(EventData event) {
-        return new org.peekaboot.backend.tracing.store.SpanData.Event(
+    private org.peekaboot.backend.tracing.event.SpanData.Event convertEvent(EventData event) {
+        return new org.peekaboot.backend.tracing.event.SpanData.Event(
                 event.getName(), nanosToInstant(event.getEpochNanos()));
     }
 

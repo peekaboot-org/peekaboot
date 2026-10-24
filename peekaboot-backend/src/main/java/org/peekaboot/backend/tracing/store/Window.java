@@ -3,6 +3,7 @@ package org.peekaboot.backend.tracing.store;
 import java.time.Duration;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * The wall-clock window a set of spans covers: the earliest start and the latest end folded in

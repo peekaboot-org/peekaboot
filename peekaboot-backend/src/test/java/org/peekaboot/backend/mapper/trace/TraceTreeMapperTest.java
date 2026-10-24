@@ -30,7 +30,7 @@ import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.testsupport.TraceDatas;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.tags.QueryParameterTags;

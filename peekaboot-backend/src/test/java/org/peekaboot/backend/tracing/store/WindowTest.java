@@ -6,6 +6,7 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 class WindowTest {
 

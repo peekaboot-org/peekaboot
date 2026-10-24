@@ -1,6 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
 import java.util.List;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * The spans a bundle's listing rows start from, read in one go by

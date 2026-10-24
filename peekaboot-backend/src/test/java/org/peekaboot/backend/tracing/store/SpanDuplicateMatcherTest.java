@@ -8,6 +8,7 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 class SpanDuplicateMatcherTest {
 

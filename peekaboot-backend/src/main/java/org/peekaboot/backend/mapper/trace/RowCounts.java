@@ -3,7 +3,7 @@ package org.peekaboot.backend.mapper.trace;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 /**

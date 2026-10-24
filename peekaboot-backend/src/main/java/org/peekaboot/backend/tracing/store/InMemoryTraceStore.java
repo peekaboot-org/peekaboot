@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * In-memory {@link TraceStore}: three insertion-ordered buckets, each capped at its own size

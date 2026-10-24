@@ -1,4 +1,4 @@
-package org.peekaboot.backend.service;
+package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Logs.log;
@@ -13,8 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.peekaboot.backend.mapper.trace.SqlFormatter;
-import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceRules;

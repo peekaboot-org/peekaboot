@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 class InMemoryTraceStoreTest {
 

@@ -1,4 +1,4 @@
-package org.peekaboot.backend.tracing.store;
+package org.peekaboot.backend.tracing.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Spans.span;

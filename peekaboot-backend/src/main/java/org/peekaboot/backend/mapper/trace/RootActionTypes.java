@@ -4,7 +4,7 @@ import io.micrometer.tracing.Span;
 import java.util.Map;
 import java.util.Set;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 import org.peekaboot.backend.tracing.tags.Tags;

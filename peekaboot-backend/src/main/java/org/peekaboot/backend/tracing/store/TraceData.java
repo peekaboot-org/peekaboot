@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * A trace as the store holds it, read out in one go by {@link TraceDataBundle#snapshot()}.

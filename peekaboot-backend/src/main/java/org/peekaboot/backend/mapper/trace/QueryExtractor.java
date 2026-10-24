@@ -2,7 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.util.List;
 import org.peekaboot.backend.domain.trace.QueryInfo;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 public class QueryExtractor {

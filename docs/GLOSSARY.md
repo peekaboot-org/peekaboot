@@ -206,8 +206,8 @@ what lets the bucket chips show `filtered / total`.
 
 ### HTTP Exchange
 `HttpExchange(HttpRequest request, HttpResponse response)`, built from a `RequestCompletedEvent`
-and carried on `TraceTree.httpExchange`. `HttpResponse` is `status` and `headers`. `HttpRequest`
-holds four flat fields and two nested records:
+by `HttpExchangeMapper` and carried on `TraceTree.httpExchange`. `HttpResponse` is `status` and
+`headers`. `HttpRequest` holds four flat fields and two nested records:
 
 | Field on the wire | Contents |
 |---|---|

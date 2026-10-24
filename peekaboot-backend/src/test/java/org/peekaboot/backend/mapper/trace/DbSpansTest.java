@@ -171,7 +171,7 @@ class DbSpansTest {
                 .isEqualTo("my-HikariPool-1");
     }
 
-    private static org.peekaboot.backend.tracing.store.SpanData clientSpan(Map<String, String> tags) {
+    private static org.peekaboot.backend.tracing.event.SpanData clientSpan(Map<String, String> tags) {
         return span("s1").kind(Span.Kind.CLIENT).tags(tags).build();
     }
 

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * Write-path benchmark harness for the deduplicating span cap: the cap counts real spans

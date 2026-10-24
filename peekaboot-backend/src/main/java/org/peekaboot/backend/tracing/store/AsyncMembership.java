@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
  * Which of a bundle's spans belong to an async subtree, and the synchronous window over the

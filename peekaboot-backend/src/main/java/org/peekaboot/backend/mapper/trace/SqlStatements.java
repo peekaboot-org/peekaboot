@@ -6,7 +6,7 @@ import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
