@@ -3,7 +3,7 @@
  * carries its span's id (the backend's QueryInfo.spanId) as a stable anchor, so the
  * Spans tab's query link can land on it - and links back to that span in the span tree
  * via view.goToSpan (see trace-detail.js's jumpToElement). Its statement is that span's
- * own `query`, the one copy the backend serves.
+ * own `statement`, the one copy the backend serves.
  */
 import {emptyState} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
