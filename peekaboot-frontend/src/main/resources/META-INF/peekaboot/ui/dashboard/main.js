@@ -239,8 +239,7 @@ function toggleUnmask() {
 
 /**
  * Fetched once at boot, before the first fetchData() - feeds every registered tab's
- * (optional) isAvailable(data, features) check, which drives the traces/meters tab
- * buttons (see traces.js/meters.js's own isAvailable) once the first fetchData() ->
+ * (optional) isAvailable(data, features) check once the first fetchData() ->
  * renderData() cycle runs.
  */
 async function fetchFeatures() {
