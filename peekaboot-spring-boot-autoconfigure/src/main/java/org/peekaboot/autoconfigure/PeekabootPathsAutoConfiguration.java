@@ -14,9 +14,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 /**
- * The single {@link PeekabootPaths} instance every consumer shares. The guard, both toolbar
- * filters, the error page, the tracing interceptor's exclusions and the span exporter's skip all
- * read it.
+ * The single {@link PeekabootPaths} instance every consumer shares. The guard, the toolbar
+ * filter, the request capture filter, the error page, the tracing interceptor's exclusions and
+ * the span exporter's skip all read it.
  *
  * <p>It is built once from three resolved values. {@code management.endpoints.web.base-path}
  * moves the actuator exclusion. {@code server.servlet.context-path} keeps the exporter's skip
