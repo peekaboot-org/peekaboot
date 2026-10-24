@@ -628,6 +628,7 @@ class TraceInsightsServiceTest {
         assertThat(withDup.rootSpan().children()).hasSize(1);
         assertThat(withDup.queries()).hasSize(1);
         assertThat(withDup.rootSpan().children().get(0).statement())
+                .isNotNull()
                 .isEqualTo(withoutDup.rootSpan().children().get(0).statement());
     }
 
