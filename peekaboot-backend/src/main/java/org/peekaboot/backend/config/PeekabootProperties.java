@@ -108,9 +108,10 @@ public class PeekabootProperties {
     public static class Unmasking {
 
         /**
-         * Allows the dashboard to show property values unmasked. The endpoints that return
-         * property values take an unmask query parameter; while this is false, no request
-         * obtains unmasked values, whatever it asks for.
+         * Allows the dashboard to show the insights response's masked values unmasked: the
+         * environment, config, build info, health details and datasource properties. Only
+         * /api/actuator/all/insights takes the unmask query parameter; while this is false, no
+         * request obtains unmasked values, whatever it asks for.
          */
         private boolean enabled = false;
 
