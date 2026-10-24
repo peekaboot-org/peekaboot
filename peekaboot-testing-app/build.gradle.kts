@@ -53,7 +53,7 @@ dependencies {
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("com.microsoft.playwright:playwright:${pomProperty("playwright.version")}")
     // the axe-core rule engine, in lockstep with pom.xml
-    testImplementation("com.deque.html.axe-core:playwright:4.13.0")
+    testImplementation("com.deque.html.axe-core:playwright:4.14.0")
 }
 
 // The Maven module's annotationProcessorPaths lists Error Prone alone, so its jar carries no
