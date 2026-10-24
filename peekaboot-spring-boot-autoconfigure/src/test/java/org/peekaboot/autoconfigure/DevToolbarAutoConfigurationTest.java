@@ -59,24 +59,6 @@ class DevToolbarAutoConfigurationTest {
                 });
     }
 
-    @Configuration(proxyBeanMethods = false)
-    static class UserSameNamedBeansConfig {
-
-        static final ToolbarDataProvider TOOLBAR_DATA_PROVIDER =
-                new ToolbarDataProvider(new PeekabootTracingProperties());
-        static final FilterRegistrationBean<DevToolbarFilter> FILTER_REGISTRATION = new FilterRegistrationBean<>();
-
-        @Bean
-        ToolbarDataProvider toolbarDataProvider() {
-            return TOOLBAR_DATA_PROVIDER;
-        }
-
-        @Bean
-        FilterRegistrationBean<DevToolbarFilter> devToolbarFilter() {
-            return FILTER_REGISTRATION;
-        }
-    }
-
     /**
      * The springdoc property decides where idle mode applies; it has to reach the filter. springdoc
      * serves a slash-less value at the same place, since Spring's pattern parser adds the slash.
@@ -226,6 +208,24 @@ class DevToolbarAutoConfigurationTest {
         @Bean
         Tracer tracer() {
             return mock(Tracer.class);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class UserSameNamedBeansConfig {
+
+        static final ToolbarDataProvider TOOLBAR_DATA_PROVIDER =
+                new ToolbarDataProvider(new PeekabootTracingProperties());
+        static final FilterRegistrationBean<DevToolbarFilter> FILTER_REGISTRATION = new FilterRegistrationBean<>();
+
+        @Bean
+        ToolbarDataProvider toolbarDataProvider() {
+            return TOOLBAR_DATA_PROVIDER;
+        }
+
+        @Bean
+        FilterRegistrationBean<DevToolbarFilter> devToolbarFilter() {
+            return FILTER_REGISTRATION;
         }
     }
 }

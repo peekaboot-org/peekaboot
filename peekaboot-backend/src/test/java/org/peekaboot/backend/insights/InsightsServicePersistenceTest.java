@@ -76,6 +76,26 @@ class InsightsServicePersistenceTest {
         return registry;
     }
 
+    /** start()'s one INFO summary line is deliberate; pin it here rather than let it reach the console. */
+    private static void start(InsightsService service) {
+        try (LogCapture capture = LogCapture.attach(InsightsService.class, Level.INFO)) {
+            service.start();
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage()).startsWith("Peekaboot insights:");
+            });
+        }
+    }
+
+    private static List<Double> heapUsedValues(InsightsService service) {
+        return service.data(0).series().get("heap.used").values();
+    }
+
+    private static Double lastNonNull(List<Double> values) {
+        List<Double> nonNull = values.stream().filter(Objects::nonNull).toList();
+        return nonNull.isEmpty() ? null : nonNull.get(nonNull.size() - 1);
+    }
+
     @Test
     void historyOutlivesTheRunThatCollectedIt() {
         InsightsService first = service(true, registryReading(7));
@@ -115,26 +135,6 @@ class InsightsServicePersistenceTest {
         } finally {
             second.stop();
         }
-    }
-
-    /** start()'s one INFO summary line is deliberate; pin it here rather than let it reach the console. */
-    private static void start(InsightsService service) {
-        try (LogCapture capture = LogCapture.attach(InsightsService.class, Level.INFO)) {
-            service.start();
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.INFO);
-                assertThat(event.getFormattedMessage()).startsWith("Peekaboot insights:");
-            });
-        }
-    }
-
-    private static List<Double> heapUsedValues(InsightsService service) {
-        return service.data(0).series().get("heap.used").values();
-    }
-
-    private static Double lastNonNull(List<Double> values) {
-        List<Double> nonNull = values.stream().filter(Objects::nonNull).toList();
-        return nonNull.isEmpty() ? null : nonNull.get(nonNull.size() - 1);
     }
 
     @Test

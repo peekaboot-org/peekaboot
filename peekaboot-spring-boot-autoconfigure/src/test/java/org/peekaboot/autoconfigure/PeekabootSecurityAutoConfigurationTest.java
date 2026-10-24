@@ -35,26 +35,6 @@ class PeekabootSecurityAutoConfigurationTest {
     private static final AutoConfigurations ERROR_PAGE =
             AutoConfigurations.of(ErrorPageAutoConfiguration.class, ErrorMvcAutoConfiguration.class);
 
-    /**
-     * Every case that resolves {@code DashboardCredentials} persists a password through
-     * {@code CredentialsFile}, so every test turns storage on and points
-     * {@code peekaboot.storage.dir} at a disposable directory rather than the real
-     * {@code user.home}.
-     */
-    private static WebApplicationContextRunner runner(Path storageDir) {
-        return new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        DispatcherServletAutoConfiguration.class,
-                        PeekabootPathsAutoConfiguration.class,
-                        PeekabootStorageAutoConfiguration.class,
-                        PeekabootSecurityAutoConfiguration.class))
-                .withPropertyValues(
-                        "peekaboot.enabled=true",
-                        "peekaboot.security.enabled=true",
-                        "peekaboot.storage.enabled=true",
-                        "peekaboot.storage.dir=" + storageDir);
-    }
-
     @Test
     void registersTheGuardWhenSecurityIsEnabled(@TempDir Path storageDir) {
         runner(storageDir).run(context -> {
@@ -445,5 +425,25 @@ class PeekabootSecurityAutoConfigurationTest {
     private static FilterRegistrationBean<?> passThrough() {
         Filter filter = (request, response, chain) -> chain.doFilter(request, response);
         return new FilterRegistrationBean<>(filter);
+    }
+
+    /**
+     * Every case that resolves {@code DashboardCredentials} persists a password through
+     * {@code CredentialsFile}, so every test turns storage on and points
+     * {@code peekaboot.storage.dir} at a disposable directory rather than the real
+     * {@code user.home}.
+     */
+    private static WebApplicationContextRunner runner(Path storageDir) {
+        return new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        DispatcherServletAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class,
+                        PeekabootStorageAutoConfiguration.class,
+                        PeekabootSecurityAutoConfiguration.class))
+                .withPropertyValues(
+                        "peekaboot.enabled=true",
+                        "peekaboot.security.enabled=true",
+                        "peekaboot.storage.enabled=true",
+                        "peekaboot.storage.dir=" + storageDir);
     }
 }

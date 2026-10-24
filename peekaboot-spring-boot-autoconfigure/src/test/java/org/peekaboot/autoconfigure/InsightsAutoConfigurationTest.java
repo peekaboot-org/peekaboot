@@ -58,17 +58,6 @@ class InsightsAutoConfigurationTest {
         }
     }
 
-    @Configuration
-    static class UserSameNamedBeansConfig {
-
-        static final InsightsSsePublisher SSE_PUBLISHER = new InsightsSsePublisher(PeekabootJson.MAPPER);
-
-        @Bean
-        InsightsSsePublisher insightsSsePublisher() {
-            return SSE_PUBLISHER;
-        }
-    }
-
     @Test
     void backsOffWithoutMeterRegistry() {
         contextRunner.run(context -> {
@@ -179,6 +168,17 @@ class InsightsAutoConfigurationTest {
         @Bean
         SimpleMeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
+        }
+    }
+
+    @Configuration
+    static class UserSameNamedBeansConfig {
+
+        static final InsightsSsePublisher SSE_PUBLISHER = new InsightsSsePublisher(PeekabootJson.MAPPER);
+
+        @Bean
+        InsightsSsePublisher insightsSsePublisher() {
+            return SSE_PUBLISHER;
         }
     }
 }

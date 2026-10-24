@@ -411,19 +411,6 @@ class OtelSpanExporterTest {
         assertThat(stored.errorMessage()).isEqualTo("described by the app");
     }
 
-    /** Runs one span through the real SDK into the exporter; returns its trace id. */
-    private String exportThroughTheSdk(java.util.function.Consumer<io.opentelemetry.api.trace.Span> body) {
-        try (SdkTracerProvider provider = SdkTracerProvider.builder()
-                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
-                .build()) {
-            io.opentelemetry.api.trace.Span span =
-                    provider.get("test").spanBuilder("op").startSpan();
-            body.accept(span);
-            span.end();
-            return span.getSpanContext().getTraceId();
-        }
-    }
-
     @Test
     void extractsParentSpanIdWhenParentContextIsValid() {
         String traceId = "0123456789abcdef0123456789abcdef";
@@ -517,5 +504,18 @@ class OtelSpanExporterTest {
                 .setStatus(StatusData.ok())
                 .setResource(Resource.create(Attributes.of(SERVICE_NAME_KEY, "test-service")))
                 .setInstrumentationScopeInfo(InstrumentationScopeInfo.create("test"));
+    }
+
+    /** Runs one span through the real SDK into the exporter; returns its trace id. */
+    private String exportThroughTheSdk(java.util.function.Consumer<io.opentelemetry.api.trace.Span> body) {
+        try (SdkTracerProvider provider = SdkTracerProvider.builder()
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
+                .build()) {
+            io.opentelemetry.api.trace.Span span =
+                    provider.get("test").spanBuilder("op").startSpan();
+            body.accept(span);
+            span.end();
+            return span.getSpanContext().getTraceId();
+        }
     }
 }

@@ -845,40 +845,6 @@ class TraceTreeMapperTest {
         assertThat(result.rootActionType()).isEqualTo(expected);
     }
 
-    private static Stream<Arguments> rootActionTypeGrid() {
-        Map<String, String> none = Map.of();
-        Map<String, String> http = Map.of("http.method", "GET");
-        Map<String, String> rpc = Map.of("rpc.system", "grpc");
-        Map<String, String> messaging = Map.of("messaging.system", "kafka");
-        Map<String, String> db = Map.of("db.system", "postgresql");
-        return Stream.of(
-                Arguments.of(Span.Kind.SERVER, none, RootActionType.HTTP_REQUEST),
-                Arguments.of(Span.Kind.SERVER, http, RootActionType.HTTP_REQUEST),
-                Arguments.of(Span.Kind.SERVER, rpc, RootActionType.RPC_CALL),
-                Arguments.of(Span.Kind.SERVER, messaging, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(Span.Kind.SERVER, db, RootActionType.HTTP_REQUEST),
-                Arguments.of(Span.Kind.CLIENT, none, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.CLIENT, http, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.CLIENT, rpc, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.CLIENT, messaging, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(Span.Kind.CLIENT, db, RootActionType.DATABASE),
-                Arguments.of(Span.Kind.PRODUCER, none, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.PRODUCER, http, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.PRODUCER, rpc, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.PRODUCER, messaging, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.PRODUCER, db, RootActionType.UNKNOWN),
-                Arguments.of(Span.Kind.CONSUMER, none, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(Span.Kind.CONSUMER, http, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(Span.Kind.CONSUMER, rpc, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(Span.Kind.CONSUMER, messaging, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(Span.Kind.CONSUMER, db, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(null, none, RootActionType.UNKNOWN),
-                Arguments.of(null, http, RootActionType.UNKNOWN),
-                Arguments.of(null, rpc, RootActionType.UNKNOWN),
-                Arguments.of(null, messaging, RootActionType.MESSAGE_CONSUMER),
-                Arguments.of(null, db, RootActionType.UNKNOWN));
-    }
-
     @Test
     void detectsScheduledJobRootActionTypeFromScheduledTaskTags() {
         // The shape Spring's DefaultScheduledTaskObservationConvention actually produces:
@@ -1271,21 +1237,6 @@ class TraceTreeMapperTest {
         assertThat(node.statement().omittedParameterSets()).isEqualTo(3);
     }
 
-    /** A request whose one query bound 42. */
-    private static TraceData personLookupTrace() {
-        var root = span("root")
-                .named("GET /persons/42")
-                .kind(Span.Kind.SERVER)
-                .at(0, 100)
-                .build();
-        var lookup = jdbcQuery("q1", "select p.email from person p where p.id=?")
-                .parent("root")
-                .at(10, 20)
-                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\"]]")
-                .build();
-        return TraceDatas.of("trace1", root, lookup);
-    }
-
     /**
      * The row count belongs to the query a reader is looking at, not to the {@code result-set}
      * span datasource-proxy records it on. The pairing is {@link RowCounts}', the one the
@@ -1332,5 +1283,54 @@ class TraceTreeMapperTest {
 
     private static String statementText(SpanNode node) {
         return node.statement() == null ? null : node.statement().text();
+    }
+
+    private static Stream<Arguments> rootActionTypeGrid() {
+        Map<String, String> none = Map.of();
+        Map<String, String> http = Map.of("http.method", "GET");
+        Map<String, String> rpc = Map.of("rpc.system", "grpc");
+        Map<String, String> messaging = Map.of("messaging.system", "kafka");
+        Map<String, String> db = Map.of("db.system", "postgresql");
+        return Stream.of(
+                Arguments.of(Span.Kind.SERVER, none, RootActionType.HTTP_REQUEST),
+                Arguments.of(Span.Kind.SERVER, http, RootActionType.HTTP_REQUEST),
+                Arguments.of(Span.Kind.SERVER, rpc, RootActionType.RPC_CALL),
+                Arguments.of(Span.Kind.SERVER, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.SERVER, db, RootActionType.HTTP_REQUEST),
+                Arguments.of(Span.Kind.CLIENT, none, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CLIENT, http, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CLIENT, rpc, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CLIENT, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CLIENT, db, RootActionType.DATABASE),
+                Arguments.of(Span.Kind.PRODUCER, none, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, http, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, rpc, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, messaging, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, db, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CONSUMER, none, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, http, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, rpc, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, db, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(null, none, RootActionType.UNKNOWN),
+                Arguments.of(null, http, RootActionType.UNKNOWN),
+                Arguments.of(null, rpc, RootActionType.UNKNOWN),
+                Arguments.of(null, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(null, db, RootActionType.UNKNOWN));
+    }
+
+    /** A request whose one query bound 42. */
+    private static TraceData personLookupTrace() {
+        var root = span("root")
+                .named("GET /persons/42")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build();
+        var lookup = jdbcQuery("q1", "select p.email from person p where p.id=?")
+                .parent("root")
+                .at(10, 20)
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\"]]")
+                .build();
+        return TraceDatas.of("trace1", root, lookup);
     }
 }

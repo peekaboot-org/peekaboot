@@ -58,6 +58,34 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         return application;
     }
 
+    private static void setIfGiven(MockEnvironment environment, String key, Boolean value) {
+        if (value != null) {
+            environment.setProperty(key, value.toString());
+        }
+    }
+
+    static Stream<Arguments> everySwitchOnEveryLaunch() {
+        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
+                .flatMap(key -> Stream.of(LocalDevDetector.LaunchKind.values())
+                        .map(launchKind -> Arguments.of(key, launchKind)));
+    }
+
+    /** The seam for the failsFast tests on bundled files: what the post-processor finds under a bundled file's name. */
+    private static PeekabootDefaultsEnvironmentPostProcessor postProcessorReading(
+            Function<String, Resource> bundledDefaults) {
+        return new PeekabootDefaultsEnvironmentPostProcessor(Supplier::get) {
+            @Override
+            LocalDevDetector.LaunchKind launchKind() {
+                return LocalDevDetector.LaunchKind.DEPLOYMENT;
+            }
+
+            @Override
+            Resource bundledDefaults(String resourceName) {
+                return bundledDefaults.apply(resourceName);
+            }
+        };
+    }
+
     /**
      * The four switches follow the launch detection unless set explicitly, and each on its
      * own: switching Peekaboot on deliberately outside a local run neither injects the toolbar
@@ -128,12 +156,6 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isEqualTo(expectDefaults);
         assertThat(environment.getProperty("management.info.java.enabled") != null)
                 .isEqualTo(expectDefaults);
-    }
-
-    private static void setIfGiven(MockEnvironment environment, String key, Boolean value) {
-        if (value != null) {
-            environment.setProperty(key, value.toString());
-        }
     }
 
     @Test
@@ -607,12 +629,6 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isFalse();
     }
 
-    static Stream<Arguments> everySwitchOnEveryLaunch() {
-        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
-                .flatMap(key -> Stream.of(LocalDevDetector.LaunchKind.values())
-                        .map(launchKind -> Arguments.of(key, launchKind)));
-    }
-
     /** Every switch has a reading once its blank is set aside, whichever launch detected what. */
     @ParameterizedTest(name = "{0}='''' on {1}")
     @MethodSource("everySwitchOnEveryLaunch")
@@ -689,22 +705,6 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThat(environment.getProperty(PeekabootPropertyKeys.ENABLED)).isEqualTo("true");
         assertThat(environment.getPropertySources().contains("peekabootDefaults"))
                 .isTrue();
-    }
-
-    /** The seam for the two tests above: what the post-processor finds under a bundled file's name. */
-    private static PeekabootDefaultsEnvironmentPostProcessor postProcessorReading(
-            Function<String, Resource> bundledDefaults) {
-        return new PeekabootDefaultsEnvironmentPostProcessor(Supplier::get) {
-            @Override
-            LocalDevDetector.LaunchKind launchKind() {
-                return LocalDevDetector.LaunchKind.DEPLOYMENT;
-            }
-
-            @Override
-            Resource bundledDefaults(String resourceName) {
-                return bundledDefaults.apply(resourceName);
-            }
-        };
     }
 
     @Test

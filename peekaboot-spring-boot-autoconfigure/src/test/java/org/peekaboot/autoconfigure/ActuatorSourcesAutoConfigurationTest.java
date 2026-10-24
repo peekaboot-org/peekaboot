@@ -70,15 +70,6 @@ class ActuatorSourcesAutoConfigurationTest {
         LIQUIBASE_LOGGER.setLevel(liquibaseLevel);
     }
 
-    private static Object read(ApplicationContext context, String id) {
-        return context.getBeansOfType(InsightsSource.class).values().stream()
-                .filter(source -> source.id().equals(id))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("no source with id " + id))
-                .read()
-                .get();
-    }
-
     /** The whole point of owning the endpoint: the application's setting must not reach it. */
     @Test
     void envSourceReadsRealValuesWhileTheApplicationHidesThemFromItsOwnActuator() {
@@ -351,5 +342,14 @@ class ActuatorSourcesAutoConfigurationTest {
         public AdditionalHealthEndpointPath getAdditionalPath() {
             return null;
         }
+    }
+
+    private static Object read(ApplicationContext context, String id) {
+        return context.getBeansOfType(InsightsSource.class).values().stream()
+                .filter(source -> source.id().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no source with id " + id))
+                .read()
+                .get();
     }
 }

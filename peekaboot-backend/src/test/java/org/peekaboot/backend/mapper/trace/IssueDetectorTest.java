@@ -42,29 +42,6 @@ class IssueDetectorTest {
         assertThat(result.rootSpan().issues()).containsExactly(expected);
     }
 
-    static Stream<Arguments> spansPastOneThreshold() {
-        return Stream.of(
-                Arguments.of(
-                        Named.of(
-                                "150ms, between the slow and very-slow thresholds",
-                                node("span1").durationMs(150).build()),
-                        new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING)),
-                Arguments.of(
-                        Named.of(
-                                "600ms, past the very-slow threshold",
-                                node("span1").durationMs(600).build()),
-                        new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR)),
-                Arguments.of(
-                        Named.of(
-                                "an 80ms query, past the slow-query threshold",
-                                node("span1")
-                                        .kind(Span.Kind.CLIENT)
-                                        .durationMs(80)
-                                        .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"))
-                                        .build()),
-                        new SpanIssue(IssueType.SLOW_QUERY, IssueSeverity.WARNING)));
-    }
-
     /** The thresholds are inclusive: a span exactly on one trips it. */
     @Test
     void aSpanExactlyOnAThresholdTripsIt() {
@@ -254,5 +231,28 @@ class IssueDetectorTest {
                 .durationMs(durationMs)
                 .tags(tags)
                 .build();
+    }
+
+    static Stream<Arguments> spansPastOneThreshold() {
+        return Stream.of(
+                Arguments.of(
+                        Named.of(
+                                "150ms, between the slow and very-slow thresholds",
+                                node("span1").durationMs(150).build()),
+                        new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING)),
+                Arguments.of(
+                        Named.of(
+                                "600ms, past the very-slow threshold",
+                                node("span1").durationMs(600).build()),
+                        new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR)),
+                Arguments.of(
+                        Named.of(
+                                "an 80ms query, past the slow-query threshold",
+                                node("span1")
+                                        .kind(Span.Kind.CLIENT)
+                                        .durationMs(80)
+                                        .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"))
+                                        .build()),
+                        new SpanIssue(IssueType.SLOW_QUERY, IssueSeverity.WARNING)));
     }
 }

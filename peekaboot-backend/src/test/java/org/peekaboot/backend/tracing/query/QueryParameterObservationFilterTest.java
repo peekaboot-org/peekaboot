@@ -110,18 +110,6 @@ class QueryParameterObservationFilterTest {
                 .isNull();
     }
 
-    private void insertBatchOf(int size) throws SQLException {
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement insert = connection.prepareStatement("INSERT INTO person (id, name) VALUES (?, ?)")) {
-            for (long id = 1; id <= size; id++) {
-                insert.setLong(1, id);
-                insert.setString(2, "n" + id);
-                insert.addBatch();
-            }
-            insert.executeBatch();
-        }
-    }
-
     /** setNull's second argument is the SQL type, not a value. */
     @Test
     void rendersSetNullAsNull() throws SQLException {
@@ -236,5 +224,17 @@ class QueryParameterObservationFilterTest {
                 .as("one statement ran, so one query observation stopped")
                 .hasSize(1);
         return queries.getFirst();
+    }
+
+    private void insertBatchOf(int size) throws SQLException {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement insert = connection.prepareStatement("INSERT INTO person (id, name) VALUES (?, ?)")) {
+            for (long id = 1; id <= size; id++) {
+                insert.setLong(1, id);
+                insert.setString(2, "n" + id);
+                insert.addBatch();
+            }
+            insert.executeBatch();
+        }
     }
 }

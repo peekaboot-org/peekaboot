@@ -400,19 +400,6 @@ class InsightsSsePublisherTest {
         }
     }
 
-    /** More events than the dispatch queue holds, so a wedged dispatcher makes it overflow. */
-    private static void flood(InsightsSsePublisher publisher) {
-        for (int i = 0; i < 400; i++) {
-            publisher.onTick(i, Map.of("a", 1.0));
-        }
-    }
-
-    private static long overflowWarnings(LogCapture logs) {
-        return logs.appender().list.stream()
-                .filter(event -> event.getFormattedMessage().contains("dispatch queue full"))
-                .count();
-    }
-
     /**
      * One peer that has stopped reading must not stall delivery to the others: each
      * subscriber's events go through a bounded lane of its own, drained by its own sender
@@ -812,5 +799,18 @@ class InsightsSsePublisherTest {
         Object result() {
             return WebAsyncUtils.getAsyncManager(request).getConcurrentResult();
         }
+    }
+
+    /** More events than the dispatch queue holds, so a wedged dispatcher makes it overflow. */
+    private static void flood(InsightsSsePublisher publisher) {
+        for (int i = 0; i < 400; i++) {
+            publisher.onTick(i, Map.of("a", 1.0));
+        }
+    }
+
+    private static long overflowWarnings(LogCapture logs) {
+        return logs.appender().list.stream()
+                .filter(event -> event.getFormattedMessage().contains("dispatch queue full"))
+                .count();
     }
 }

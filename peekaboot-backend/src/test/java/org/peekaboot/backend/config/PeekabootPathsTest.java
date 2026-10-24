@@ -66,12 +66,6 @@ class PeekabootPathsTest {
         assertThat(matchesAnExcludePattern(path)).isFalse();
     }
 
-    private boolean matchesAnExcludePattern(String path) {
-        PathPatternParser parser = new PathPatternParser();
-        return Arrays.stream(paths.excludePatterns())
-                .anyMatch(pattern -> parser.parse(pattern).matches(PathContainer.parsePath(path)));
-    }
-
     /** The actuator exclusion follows {@code management.endpoints.web.base-path}, not a fixed prefix. */
     @Test
     void aCustomManagementBasePathReplacesTheActuatorExclusion() {
@@ -269,5 +263,11 @@ class PeekabootPathsTest {
         assertThat(underApp.pathWithinDispatcherServlet("/application/swagger-ui/index.html"))
                 .isNull();
         assertThat(paths.pathWithinDispatcherServlet("/swagger-ui/index.html")).isEqualTo("/swagger-ui/index.html");
+    }
+
+    private boolean matchesAnExcludePattern(String path) {
+        PathPatternParser parser = new PathPatternParser();
+        return Arrays.stream(paths.excludePatterns())
+                .anyMatch(pattern -> parser.parse(pattern).matches(PathContainer.parsePath(path)));
     }
 }

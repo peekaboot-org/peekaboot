@@ -59,19 +59,6 @@ class PeekabootControllerTest {
         controller = controller(null, false, false);
     }
 
-    /** The controller over the test's fields, with the three constructor arguments the feature tests vary. */
-    private PeekabootController controller(InsightsService insights, boolean spanSourceWired, boolean lifecycle) {
-        return new PeekabootController(
-                actuatorInsightsService,
-                traceInsightsService,
-                metricsService,
-                properties,
-                tracingProperties,
-                insights,
-                spanSourceWired,
-                lifecycle);
-    }
-
     @Nested
     class GetTracesInsights {
 
@@ -365,5 +352,18 @@ class PeekabootControllerTest {
                 .traceId(traceId)
                 .rootActionType(RootActionType.HTTP_REQUEST)
                 .build();
+    }
+
+    /** The controller over the test's fields, with the three constructor arguments the feature tests vary. */
+    private PeekabootController controller(InsightsService insights, boolean spanSourceWired, boolean lifecycle) {
+        return new PeekabootController(
+                actuatorInsightsService,
+                traceInsightsService,
+                metricsService,
+                properties,
+                tracingProperties,
+                insights,
+                spanSourceWired,
+                lifecycle);
     }
 }

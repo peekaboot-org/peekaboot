@@ -26,19 +26,6 @@ import org.peekaboot.testsupport.LogCapture;
 
 class InsightsCollectorRestoreTest {
 
-    private static InsightsCollector collector(String... seriesIds) {
-        SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        Gauge.builder("g", () -> 7).register(registry);
-        List<SeriesDef> series =
-                List.of(seriesIds).stream().map(id -> value(id, "g")).toList();
-        return InsightsCollectorBuilder.collector(registry)
-                .levels(
-                        InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
-                        InsightsProperties.Level.of(Duration.ofMinutes(1), 60))
-                .series(series)
-                .build();
-    }
-
     @Test
     void capturedRingsComeBackWithTheirGapsAndTheirSampleCounts() {
         InsightsCollector source = collector("cpu.process");
@@ -120,16 +107,6 @@ class InsightsCollectorRestoreTest {
         assertThat(decoded.series().get("brand.new").get(1)[7]).containsExactly(0.0); // no samples behind the gap
     }
 
-    private static InsightsSnapshot roundTrip(InsightsSnapshot snapshot) throws IOException {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream out = new DataOutputStream(bytes)) {
-            InsightsSnapshotCodec.write(out, snapshot);
-        }
-        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
-            return InsightsSnapshotCodec.readBody(in, InsightsSnapshotCodec.readHeader(in));
-        }
-    }
-
     @Test
     void theFirstTickAfterARestoreFillsTheGapTheOutageLeft() {
         InsightsCollector source = collector("cpu.process");
@@ -141,22 +118,6 @@ class InsightsCollectorRestoreTest {
 
         assertThat(restored.levelData(0).tickValues().get("cpu.process"))
                 .containsExactly(7.0, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 7.0);
-    }
-
-    /**
-     * One level, one series on gauge "g" fixed at {@code gaugeValue} - the collector's live reading.
-     * {@code clock} is what the level thread schedules its boundaries from.
-     */
-    private static InsightsCollector collector(
-            long gaugeValue, InsightsCollector.SnapshotSource source, LongSupplier clock) {
-        SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        Gauge.builder("g", () -> gaugeValue).register(registry);
-        return InsightsCollectorBuilder.collector(registry)
-                .levels(InsightsProperties.Level.of(Duration.ofMillis(100), 20))
-                .series(value("cpu.process", "g"))
-                .source(source)
-                .clock(clock)
-                .build();
     }
 
     @Test
@@ -269,5 +230,44 @@ class InsightsCollectorRestoreTest {
         await().atMost(Duration.ofSeconds(5))
                 .pollInterval(Duration.ofMillis(20))
                 .until(() -> collector.levelData(0).count() >= count);
+    }
+
+    private static InsightsCollector collector(String... seriesIds) {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("g", () -> 7).register(registry);
+        List<SeriesDef> series =
+                List.of(seriesIds).stream().map(id -> value(id, "g")).toList();
+        return InsightsCollectorBuilder.collector(registry)
+                .levels(
+                        InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
+                        InsightsProperties.Level.of(Duration.ofMinutes(1), 60))
+                .series(series)
+                .build();
+    }
+
+    private static InsightsSnapshot roundTrip(InsightsSnapshot snapshot) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bytes)) {
+            InsightsSnapshotCodec.write(out, snapshot);
+        }
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            return InsightsSnapshotCodec.readBody(in, InsightsSnapshotCodec.readHeader(in));
+        }
+    }
+
+    /**
+     * One level, one series on gauge "g" fixed at {@code gaugeValue} - the collector's live reading.
+     * {@code clock} is what the level thread schedules its boundaries from.
+     */
+    private static InsightsCollector collector(
+            long gaugeValue, InsightsCollector.SnapshotSource source, LongSupplier clock) {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("g", () -> gaugeValue).register(registry);
+        return InsightsCollectorBuilder.collector(registry)
+                .levels(InsightsProperties.Level.of(Duration.ofMillis(100), 20))
+                .series(value("cpu.process", "g"))
+                .source(source)
+                .clock(clock)
+                .build();
     }
 }

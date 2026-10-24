@@ -142,13 +142,6 @@ class ErrorPageAutoConfigurationTest {
                 });
     }
 
-    private static Throwable exceptionWithVendorFrame() {
-        IllegalStateException exception = new IllegalStateException("boom");
-        exception.setStackTrace(
-                new StackTraceElement[] {new StackTraceElement("com.acme.vendor.Client", "call", "Client.java", 42)});
-        return exception;
-    }
-
     /**
      * Neither optional type is guaranteed on the classpath - Jersey is a servlet app with no
      * {@code DispatcherServlet} - and without a class-level guard, {@code @ConditionalOnWebApplication}
@@ -338,18 +331,6 @@ class ErrorPageAutoConfigurationTest {
                 .run(context -> assertThat(context).doesNotHaveBean(PeekabootErrorExceptionResolver.class));
     }
 
-    @Configuration(proxyBeanMethods = false)
-    static class OwnErrorView {
-
-        static final View VIEW =
-                (model, request, response) -> response.getWriter().write("the application's own page");
-
-        @Bean(name = "error")
-        View errorView() {
-            return VIEW;
-        }
-    }
-
     /** Boot hands this switch to Spring's own resolvers; Peekaboot's, which runs ahead of them, follows it too. */
     @Test
     void theExceptionResolverFollowsSpringMvcLogResolvedException() {
@@ -401,5 +382,24 @@ class ErrorPageAutoConfigurationTest {
     private static PeekabootErrorView ownView() {
         return new PeekabootErrorView(
                 new DefaultErrorAttributes(), new StackTraceRules(List.of(), List.of()), PeekabootPaths.defaults());
+    }
+
+    private static Throwable exceptionWithVendorFrame() {
+        IllegalStateException exception = new IllegalStateException("boom");
+        exception.setStackTrace(
+                new StackTraceElement[] {new StackTraceElement("com.acme.vendor.Client", "call", "Client.java", 42)});
+        return exception;
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class OwnErrorView {
+
+        static final View VIEW =
+                (model, request, response) -> response.getWriter().write("the application's own page");
+
+        @Bean(name = "error")
+        View errorView() {
+            return VIEW;
+        }
     }
 }

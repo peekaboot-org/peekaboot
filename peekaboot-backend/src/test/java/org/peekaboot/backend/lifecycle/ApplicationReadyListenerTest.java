@@ -239,24 +239,6 @@ class ApplicationReadyListenerTest {
         }
     }
 
-    /** Each line as its label: {@code =} for the frame, {@code -} for a rule, the title as is, blank as blank. */
-    private static List<String> skeleton(String report) {
-        return Stream.of(report.split("\n", -1))
-                .filter(line -> !line.startsWith(" Process Tree: "))
-                .map(line -> {
-                    if (line.equals(BannerFrame.SEPARATOR)) {
-                        return "=";
-                    }
-                    if (line.equals(BannerFrame.LINE)) {
-                        return "-";
-                    }
-                    return line.startsWith(" ::")
-                            ? line
-                            : line.replaceAll("[:\\[].*", "").trim();
-                })
-                .toList();
-    }
-
     /**
      * In a parent/child hierarchy the child's ready event is published to the parent too; the
      * parent has logged its own banner already and must not log a second one for the child.
@@ -347,5 +329,23 @@ class ApplicationReadyListenerTest {
                     new MaskingEngine(),
                     ownContext);
         }
+    }
+
+    /** Each line as its label: {@code =} for the frame, {@code -} for a rule, the title as is, blank as blank. */
+    private static List<String> skeleton(String report) {
+        return Stream.of(report.split("\n", -1))
+                .filter(line -> !line.startsWith(" Process Tree: "))
+                .map(line -> {
+                    if (line.equals(BannerFrame.SEPARATOR)) {
+                        return "=";
+                    }
+                    if (line.equals(BannerFrame.LINE)) {
+                        return "-";
+                    }
+                    return line.startsWith(" ::")
+                            ? line
+                            : line.replaceAll("[:\\[].*", "").trim();
+                })
+                .toList();
     }
 }

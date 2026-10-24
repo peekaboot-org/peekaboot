@@ -51,6 +51,13 @@ class LifecycleEventLogTest {
         return log;
     }
 
+    private StorageDirectory storage(boolean enabled) {
+        PeekabootProperties.Storage storage = new PeekabootProperties.Storage();
+        storage.setEnabled(enabled);
+        storage.setDir(directory.toString());
+        return StorageDirectory.resolve(storage, "orders");
+    }
+
     @Test
     void aRecordedStartOutlivesTheRunThatWroteIt() {
         LifecycleEventLog first = loaded(file());
@@ -257,12 +264,5 @@ class LifecycleEventLogTest {
         try (Stream<Path> written = Files.list(directory)) {
             assertThat(written).isEmpty();
         }
-    }
-
-    private StorageDirectory storage(boolean enabled) {
-        PeekabootProperties.Storage storage = new PeekabootProperties.Storage();
-        storage.setEnabled(enabled);
-        storage.setDir(directory.toString());
-        return StorageDirectory.resolve(storage, "orders");
     }
 }

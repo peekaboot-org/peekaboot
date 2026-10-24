@@ -306,18 +306,6 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.getContentAsString()).isEmpty();
     }
 
-    static Stream<Arguments> bodyReplacingOverloads() {
-        return Stream.of(
-                overload("sendError(int)", w -> w.sendError(500)),
-                overload("sendRedirect(String, int)", w -> w.sendRedirect("/elsewhere", 301)),
-                overload("sendRedirect(String, boolean)", w -> w.sendRedirect("/elsewhere", false)),
-                overload("sendRedirect(String, int, boolean)", w -> w.sendRedirect("/elsewhere", 301, false)));
-    }
-
-    private static Arguments overload(String name, ThrowingConsumer<ContentBufferingResponseWrapper> send) {
-        return Arguments.of(Named.of(name, send));
-    }
-
     /** An HTML body past the cap streams through rather than being held in heap; it gets no toolbar. */
     @Test
     void htmlBodyBeyondTheCapSwitchesToPassthrough() throws IOException {
@@ -510,5 +498,17 @@ class ContentBufferingResponseWrapperTest {
         public void setWriteListener(WriteListener listener) {
             // not needed by the wrapper under test
         }
+    }
+
+    static Stream<Arguments> bodyReplacingOverloads() {
+        return Stream.of(
+                overload("sendError(int)", w -> w.sendError(500)),
+                overload("sendRedirect(String, int)", w -> w.sendRedirect("/elsewhere", 301)),
+                overload("sendRedirect(String, boolean)", w -> w.sendRedirect("/elsewhere", false)),
+                overload("sendRedirect(String, int, boolean)", w -> w.sendRedirect("/elsewhere", 301, false)));
+    }
+
+    private static Arguments overload(String name, ThrowingConsumer<ContentBufferingResponseWrapper> send) {
+        return Arguments.of(Named.of(name, send));
     }
 }

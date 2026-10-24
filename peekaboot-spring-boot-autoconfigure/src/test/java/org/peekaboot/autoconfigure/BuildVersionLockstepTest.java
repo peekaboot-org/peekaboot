@@ -107,51 +107,6 @@ class BuildVersionLockstepTest {
                 "the testing-app's spring-boot-starter-parent must be the Boot line the root pom imports");
     }
 
-    private void assertTestingAppMatchesRoot(String rootExpression, String testingAppExpression, String why)
-            throws IOException {
-        assertThat(pomValue(reactorRoot().resolve("peekaboot-testing-app/pom.xml"), testingAppExpression))
-                .as(why)
-                .isEqualTo(pomValue(reactorRoot().resolve("pom.xml"), rootExpression));
-    }
-
-    private String pomValue(Path file, String expression) throws IOException {
-        String value = xpathText(pom(file), expression);
-        assertThat(value)
-                .as("%s in %s", expression, reactorRoot().relativize(file))
-                .isNotBlank();
-        return value;
-    }
-
-    private List<String> gradleScriptsPinningAnInstant() throws IOException {
-        Path root = reactorRoot();
-        List<String> offenders = new ArrayList<>();
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                return PRUNED_DIRECTORIES.contains(dir.getFileName().toString())
-                        ? FileVisitResult.SKIP_SUBTREE
-                        : FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                if (file.getFileName().toString().endsWith(".gradle.kts") && pinsAnInstant(file)) {
-                    offenders.add(root.relativize(file).toString());
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
-        return offenders;
-    }
-
-    private boolean pinsAnInstant(Path script) {
-        try {
-            return ISO_INSTANT.matcher(Files.readString(script)).find();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
     /**
      * Each row is one value with no pom property behind it, so the Gradle build spells it out
      * itself. Maven is the system of record; a row fails the moment the two spellings differ.
@@ -322,5 +277,50 @@ class BuildVersionLockstepTest {
             properties.load(in);
         }
         return properties;
+    }
+
+    private void assertTestingAppMatchesRoot(String rootExpression, String testingAppExpression, String why)
+            throws IOException {
+        assertThat(pomValue(reactorRoot().resolve("peekaboot-testing-app/pom.xml"), testingAppExpression))
+                .as(why)
+                .isEqualTo(pomValue(reactorRoot().resolve("pom.xml"), rootExpression));
+    }
+
+    private String pomValue(Path file, String expression) throws IOException {
+        String value = xpathText(pom(file), expression);
+        assertThat(value)
+                .as("%s in %s", expression, reactorRoot().relativize(file))
+                .isNotBlank();
+        return value;
+    }
+
+    private List<String> gradleScriptsPinningAnInstant() throws IOException {
+        Path root = reactorRoot();
+        List<String> offenders = new ArrayList<>();
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                return PRUNED_DIRECTORIES.contains(dir.getFileName().toString())
+                        ? FileVisitResult.SKIP_SUBTREE
+                        : FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                if (file.getFileName().toString().endsWith(".gradle.kts") && pinsAnInstant(file)) {
+                    offenders.add(root.relativize(file).toString());
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return offenders;
+    }
+
+    private boolean pinsAnInstant(Path script) {
+        try {
+            return ISO_INSTANT.matcher(Files.readString(script)).find();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

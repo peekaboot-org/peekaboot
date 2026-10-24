@@ -47,6 +47,13 @@ class LifecycleEventRecorderTest {
         return log;
     }
 
+    private static ApplicationReadyEvent ready(ConfigurableApplicationContext context, long timestamp) {
+        ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
+        when(event.getApplicationContext()).thenReturn(context);
+        when(event.getTimestamp()).thenReturn(timestamp);
+        return event;
+    }
+
     @Test
     void aReadyApplicationIsRecordedWithTheBuildAndGitFactsTheViewsRead() {
         LifecycleEventLog log = log();
@@ -122,13 +129,6 @@ class LifecycleEventRecorderTest {
         await().atMost(Duration.ofSeconds(5))
                 .during(Duration.ofMillis(300))
                 .until(() -> log.events().stream().map(LifecycleEvent::epochMs).toList(), List.of(2L)::equals);
-    }
-
-    private static ApplicationReadyEvent ready(ConfigurableApplicationContext context, long timestamp) {
-        ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
-        when(event.getApplicationContext()).thenReturn(context);
-        when(event.getTimestamp()).thenReturn(timestamp);
-        return event;
     }
 
     @Test

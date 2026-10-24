@@ -171,10 +171,6 @@ class DbSpansTest {
                 .isEqualTo("my-HikariPool-1");
     }
 
-    private static org.peekaboot.backend.tracing.event.SpanData clientSpan(Map<String, String> tags) {
-        return span("s1").kind(Span.Kind.CLIENT).tags(tags).build();
-    }
-
     /** After mapping, the statement tags are gone: the statement field is what says "query" then. */
     @Test
     void theMappedTwinTrustsTheStatementField() {
@@ -216,5 +212,9 @@ class DbSpansTest {
         assertThat(DbSpans.isStatementTag(QueryParameterTags.PARAMETERS_TAG)).isTrue();
         assertThat(DbSpans.isStatementTag(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
                 .isTrue();
+    }
+
+    private static org.peekaboot.backend.tracing.event.SpanData clientSpan(Map<String, String> tags) {
+        return span("s1").kind(Span.Kind.CLIENT).tags(tags).build();
     }
 }

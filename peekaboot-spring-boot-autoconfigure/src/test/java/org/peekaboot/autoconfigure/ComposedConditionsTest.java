@@ -29,13 +29,6 @@ class ComposedConditionsTest {
 
     private static final List<String> SWITCH_VALUES = List.of("unset", "true", "false");
 
-    static Stream<Arguments> composedAndCopiedStacks() {
-        return Stream.of(
-                Arguments.of(ComposedServlet.class, CopiedServlet.class),
-                Arguments.of(ComposedTracing.class, CopiedTracing.class),
-                Arguments.of(ComposedTracingWithASwitch.class, CopiedTracingWithASwitch.class));
-    }
-
     @ParameterizedTest
     @MethodSource("composedAndCopiedStacks")
     void matchesInExactlyTheLaunchesTheCopiedStackMatchesIn(Class<?> composed, Class<?> copied) {
@@ -138,4 +131,11 @@ class ComposedConditionsTest {
     @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.TRACING_ENABLED, matchIfMissing = true)
     @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.TRACING_ASYNC, matchIfMissing = true)
     static class CopiedTracingWithASwitch {}
+
+    static Stream<Arguments> composedAndCopiedStacks() {
+        return Stream.of(
+                Arguments.of(ComposedServlet.class, CopiedServlet.class),
+                Arguments.of(ComposedTracing.class, CopiedTracing.class),
+                Arguments.of(ComposedTracingWithASwitch.class, CopiedTracingWithASwitch.class));
+    }
 }

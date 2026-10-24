@@ -199,15 +199,6 @@ class PeekabootErrorExceptionResolverTest {
         assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @ResponseStatus(HttpStatus.CONFLICT)
-    static class AnnotatedException extends RuntimeException {}
-
-    @ResponseStatus(code = HttpStatus.CONFLICT, reason = "Already booked")
-    static class ReasonedException extends RuntimeException {}
-
-    @ResponseStatus(code = HttpStatus.CONFLICT, reason = "booking.taken")
-    static class MessageCodeReasonedException extends RuntimeException {}
-
     /** Spring resolves a reason through the application's MessageSource; so does the page. */
     @Test
     void resolvesAReasonThatIsAMessageCode() {
@@ -227,17 +218,6 @@ class PeekabootErrorExceptionResolverTest {
 
         assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(response.getHeader("Retry-After")).isEqualTo("30");
-    }
-
-    private static ResponseStatusException tooManyRequests(@Nullable Throwable cause) {
-        return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, null, cause) {
-            @Override
-            public HttpHeaders getHeaders() {
-                HttpHeaders headers = new HttpHeaders();
-                headers.add("Retry-After", "30");
-                return headers;
-            }
-        };
     }
 
     @Test
@@ -329,14 +309,6 @@ class PeekabootErrorExceptionResolverTest {
         ModelAndView modelAndView = resolver.resolveException(request, response, null, annotated);
 
         assertThat(modelAndView.getStatus()).isEqualTo(HttpStatus.CONFLICT);
-    }
-
-    /** Two exceptions, each other's cause: Throwable.initCause refuses only self-causation. */
-    private static RuntimeException cycle() {
-        RuntimeException first = new RuntimeException("first");
-        RuntimeException second = new RuntimeException("second", first);
-        first.initCause(second);
-        return first;
     }
 
     @Test
@@ -511,5 +483,33 @@ class PeekabootErrorExceptionResolverTest {
                 resolver.resolveException(request, response, null, new IllegalStateException("boom"));
 
         assertThat(modelAndView).isNull();
+    }
+
+    @ResponseStatus(HttpStatus.CONFLICT)
+    static class AnnotatedException extends RuntimeException {}
+
+    @ResponseStatus(code = HttpStatus.CONFLICT, reason = "Already booked")
+    static class ReasonedException extends RuntimeException {}
+
+    @ResponseStatus(code = HttpStatus.CONFLICT, reason = "booking.taken")
+    static class MessageCodeReasonedException extends RuntimeException {}
+
+    private static ResponseStatusException tooManyRequests(@Nullable Throwable cause) {
+        return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, null, cause) {
+            @Override
+            public HttpHeaders getHeaders() {
+                HttpHeaders headers = new HttpHeaders();
+                headers.add("Retry-After", "30");
+                return headers;
+            }
+        };
+    }
+
+    /** Two exceptions, each other's cause: Throwable.initCause refuses only self-causation. */
+    private static RuntimeException cycle() {
+        RuntimeException first = new RuntimeException("first");
+        RuntimeException second = new RuntimeException("second", first);
+        first.initCause(second);
+        return first;
     }
 }

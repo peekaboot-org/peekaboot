@@ -155,52 +155,6 @@ class TraceCaptureAutoConfigurationTest {
     }
 
     /**
-     * Reproduces what Spring Boot's {@code LogbackLoggingSystem.stopAndReset} does - stopping
-     * the logger context (which drops every listener, reset-resistant ones included) and then
-     * resetting it - restores Logback's configuration through {@code autoConfig()} (which picks
-     * up this module's {@code logback-test.xml}), and then fires the event that carries the repair.
-     */
-    private void reinitialiseLogback() throws Exception {
-        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-        loggerContext.stop();
-        loggerContext.reset();
-        new ContextInitializer(loggerContext).autoConfig();
-        loggerContext.start();
-
-        new LogbackCaptureReinstaller()
-                .onApplicationEvent(new ApplicationEnvironmentPreparedEvent(
-                        new DefaultBootstrapContext(),
-                        new SpringApplication(),
-                        new String[0],
-                        new StandardEnvironment()));
-    }
-
-    /**
-     * Only events carrying a traceId in the MDC are captured. The event has to travel up to
-     * the root logger, where the capture appender hangs, so root's other appenders - the
-     * console - are unhooked for the one statement rather than additivity switched off.
-     */
-    private void logWithTraceId(String message) {
-        Logger root = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(Logger.ROOT_LOGGER_NAME);
-        List<Appender<ILoggingEvent>> unhooked = new ArrayList<>();
-        Iterator<Appender<ILoggingEvent>> it = root.iteratorForAppenders();
-        while (it.hasNext()) {
-            Appender<ILoggingEvent> appender = it.next();
-            if (!(appender instanceof PeekabootLogbackAppender)) {
-                unhooked.add(appender);
-            }
-        }
-        unhooked.forEach(root::detachAppender);
-        MDC.put("traceId", "0123456789abcdef0123456789abcdef");
-        try {
-            LoggerFactory.getLogger(TraceCaptureAutoConfigurationTest.class).error(message);
-        } finally {
-            MDC.remove("traceId");
-            unhooked.forEach(root::addAppender);
-        }
-    }
-
-    /**
      * The repair only reaches a running application context if Spring Boot instantiates the
      * listener for every application, after the re-initialisation it is undoing.
      */
@@ -214,21 +168,6 @@ class TraceCaptureAutoConfigurationTest {
         assertThat(new LogbackCaptureReinstaller().getOrder())
                 .as("must run after LoggingApplicationListener, which performs the reset")
                 .isGreaterThan(LoggingApplicationListener.DEFAULT_ORDER);
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    static class CapturedLogRecorder {
-
-        private final List<String> messages = new CopyOnWriteArrayList<>();
-
-        @EventListener
-        void onLogCaptured(LogCapturedEvent event) {
-            messages.add(event.message());
-        }
-
-        List<String> messages() {
-            return messages;
-        }
     }
 
     /**
@@ -289,6 +228,67 @@ class TraceCaptureAutoConfigurationTest {
         @Bean
         Tracer tracer() {
             return mock(Tracer.class);
+        }
+    }
+
+    /**
+     * Reproduces what Spring Boot's {@code LogbackLoggingSystem.stopAndReset} does - stopping
+     * the logger context (which drops every listener, reset-resistant ones included) and then
+     * resetting it - restores Logback's configuration through {@code autoConfig()} (which picks
+     * up this module's {@code logback-test.xml}), and then fires the event that carries the repair.
+     */
+    private void reinitialiseLogback() throws Exception {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.stop();
+        loggerContext.reset();
+        new ContextInitializer(loggerContext).autoConfig();
+        loggerContext.start();
+
+        new LogbackCaptureReinstaller()
+                .onApplicationEvent(new ApplicationEnvironmentPreparedEvent(
+                        new DefaultBootstrapContext(),
+                        new SpringApplication(),
+                        new String[0],
+                        new StandardEnvironment()));
+    }
+
+    /**
+     * Only events carrying a traceId in the MDC are captured. The event has to travel up to
+     * the root logger, where the capture appender hangs, so root's other appenders - the
+     * console - are unhooked for the one statement rather than additivity switched off.
+     */
+    private void logWithTraceId(String message) {
+        Logger root = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(Logger.ROOT_LOGGER_NAME);
+        List<Appender<ILoggingEvent>> unhooked = new ArrayList<>();
+        Iterator<Appender<ILoggingEvent>> it = root.iteratorForAppenders();
+        while (it.hasNext()) {
+            Appender<ILoggingEvent> appender = it.next();
+            if (!(appender instanceof PeekabootLogbackAppender)) {
+                unhooked.add(appender);
+            }
+        }
+        unhooked.forEach(root::detachAppender);
+        MDC.put("traceId", "0123456789abcdef0123456789abcdef");
+        try {
+            LoggerFactory.getLogger(TraceCaptureAutoConfigurationTest.class).error(message);
+        } finally {
+            MDC.remove("traceId");
+            unhooked.forEach(root::addAppender);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class CapturedLogRecorder {
+
+        private final List<String> messages = new CopyOnWriteArrayList<>();
+
+        @EventListener
+        void onLogCaptured(LogCapturedEvent event) {
+            messages.add(event.message());
+        }
+
+        List<String> messages() {
+            return messages;
         }
     }
 }

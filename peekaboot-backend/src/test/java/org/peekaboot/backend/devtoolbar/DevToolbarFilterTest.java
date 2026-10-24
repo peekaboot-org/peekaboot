@@ -360,24 +360,6 @@ class DevToolbarFilterTest {
                 new IOException("An established connection was aborted by the software in your host machine"));
     }
 
-    /** A client abort surfaces as a single DEBUG line without a stack trace, and no retry; returns that line. */
-    private String assertHandledAsClientAbort(IOException failure) throws Exception {
-        FailingWriteResponse aborted = new FailingWriteResponse(failure, false);
-        response = aborted;
-        chainWritesHtml("<html><body></body></html>");
-
-        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
-            filter.doFilter(request, response, chain);
-
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
-                assertThat(event.getThrowableProxy()).isNull();
-            });
-            assertThat(aborted.writeAttempts()).isEqualTo(1);
-            return capture.appender().list.get(0).getFormattedMessage();
-        }
-    }
-
     /** Once bytes have gone out there is no response left to fall back to; the failure is reported once. */
     @Test
     void aWriteFailureOnACommittedResponseIsWarnedAboutOnceAndNotRetried() throws Exception {
@@ -541,29 +523,6 @@ class DevToolbarFilterTest {
         assertThat(response.getContentAsString()).contains("\"idle\":true");
     }
 
-    /** Every path default in place, with springdoc's UI configured at {@code swaggerUiPath}. */
-    private DevToolbarFilter filterWith(ToolbarDataProvider provider, String swaggerUiPath) {
-        return new DevToolbarFilter(
-                provider, tracer, PeekabootPaths.defaults(), swaggerUiPath, PeekabootPaths.DEFAULT_API_DOCS_PATH);
-    }
-
-    /** Under spring.mvc.servlet.path the container maps the DispatcherServlet's prefix as the servlet path. */
-    private static MockHttpServletRequest underTheDispatcherServletsPrefix(String pathInfo) {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/app" + pathInfo);
-        request.setServletPath("/app");
-        request.setPathInfo(pathInfo);
-        return request;
-    }
-
-    private DevToolbarFilter filterUnderTheDispatcherServletsPrefix() {
-        return new DevToolbarFilter(
-                toolbarDataProvider,
-                tracer,
-                new PeekabootPaths("/actuator", "", "/app"),
-                PeekabootPaths.DEFAULT_SWAGGER_UI_PATH,
-                PeekabootPaths.DEFAULT_API_DOCS_PATH);
-    }
-
     @Test
     void skipsTheDashboardUnderTheDispatcherServletsPrefix() throws Exception {
         request = underTheDispatcherServletsPrefix("/peekaboot/ui/dashboard/index.html");
@@ -686,5 +645,46 @@ class DevToolbarFilterTest {
                 })
                 .when(chain)
                 .doFilter(eq(request), any());
+    }
+
+    /** A client abort surfaces as a single DEBUG line without a stack trace, and no retry; returns that line. */
+    private String assertHandledAsClientAbort(IOException failure) throws Exception {
+        FailingWriteResponse aborted = new FailingWriteResponse(failure, false);
+        response = aborted;
+        chainWritesHtml("<html><body></body></html>");
+
+        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
+            filter.doFilter(request, response, chain);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+            assertThat(aborted.writeAttempts()).isEqualTo(1);
+            return capture.appender().list.get(0).getFormattedMessage();
+        }
+    }
+
+    /** Every path default in place, with springdoc's UI configured at {@code swaggerUiPath}. */
+    private DevToolbarFilter filterWith(ToolbarDataProvider provider, String swaggerUiPath) {
+        return new DevToolbarFilter(
+                provider, tracer, PeekabootPaths.defaults(), swaggerUiPath, PeekabootPaths.DEFAULT_API_DOCS_PATH);
+    }
+
+    /** Under spring.mvc.servlet.path the container maps the DispatcherServlet's prefix as the servlet path. */
+    private static MockHttpServletRequest underTheDispatcherServletsPrefix(String pathInfo) {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/app" + pathInfo);
+        request.setServletPath("/app");
+        request.setPathInfo(pathInfo);
+        return request;
+    }
+
+    private DevToolbarFilter filterUnderTheDispatcherServletsPrefix() {
+        return new DevToolbarFilter(
+                toolbarDataProvider,
+                tracer,
+                new PeekabootPaths("/actuator", "", "/app"),
+                PeekabootPaths.DEFAULT_SWAGGER_UI_PATH,
+                PeekabootPaths.DEFAULT_API_DOCS_PATH);
     }
 }

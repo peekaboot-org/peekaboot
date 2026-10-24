@@ -50,13 +50,6 @@ class BooleanSwitchesTest {
     /** Both read these as false, except where a condition also matches only {@code false}. */
     private static final List<String> READ_AS_FALSE_LENIENTLY = List.of("no", "OFF", "0", " false", "false ");
 
-    static Stream<Arguments> everySwitchWithEveryRefusedValue() {
-        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
-                .flatMap(key -> Stream.concat(
-                                READ_AS_TRUE_ONLY_BY_THE_BINDER.stream(), UNREADABLE_BY_THE_BINDER.stream())
-                        .map(value -> Arguments.of(key, value)));
-    }
-
     @ParameterizedTest(name = "{0}=''{1}''")
     @MethodSource("everySwitchWithEveryRefusedValue")
     void refusesAValueTheBinderReadsDifferentlyFromTheConditions(String key, String value) {
@@ -80,31 +73,12 @@ class BooleanSwitchesTest {
         assertThatCode(() -> BooleanSwitches.requireUnambiguous(environment)).doesNotThrowAnyException();
     }
 
-    /**
-     * A {@code true}-only condition and the binder both take these as off, so they behave as
-     * {@code false} did on every released version.
-     */
-    static Stream<Arguments> everySwitchGatedOnlyOnTrueWithEveryLenientFalse() {
-        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
-                .filter(key -> !PeekabootPropertyKeys.SWITCHES_ALSO_GATED_ON_FALSE.contains(key))
-                .flatMap(key -> READ_AS_FALSE_LENIENTLY.stream().map(value -> Arguments.of(key, value)));
-    }
-
     @ParameterizedTest(name = "{0}=''{1}''")
     @MethodSource("everySwitchGatedOnlyOnTrueWithEveryLenientFalse")
     void acceptsALenientFalseWhereOnlyTrueIsMatched(String key, String value) {
         MockEnvironment environment = new MockEnvironment().withProperty(key, value);
 
         assertThatCode(() -> BooleanSwitches.requireUnambiguous(environment)).doesNotThrowAnyException();
-    }
-
-    /**
-     * A {@code havingValue = false} condition matches neither {@code true} nor {@code no}, so
-     * {@code no} drops both of the beans it chooses between while the binder reads plain false.
-     */
-    static Stream<Arguments> everySwitchAlsoGatedOnFalseWithEveryLenientFalse() {
-        return PeekabootPropertyKeys.SWITCHES_ALSO_GATED_ON_FALSE.stream()
-                .flatMap(key -> READ_AS_FALSE_LENIENTLY.stream().map(value -> Arguments.of(key, value)));
     }
 
     @ParameterizedTest(name = "{0}=''{1}''")
@@ -159,11 +133,6 @@ class BooleanSwitchesTest {
         BooleanSwitches.treatBlanksAsUnset(environment, Map.of(PeekabootPropertyKeys.ENABLED, false));
 
         assertThat(environment.getProperty(PeekabootPropertyKeys.ENABLED)).isEqualTo("true");
-    }
-
-    static Stream<Arguments> everyUnsetDefault() {
-        return PeekabootPropertyKeys.UNSET_SWITCH_DEFAULTS.entrySet().stream()
-                .map(entry -> Arguments.of(entry.getKey(), entry.getValue()));
     }
 
     /** With nothing beneath, a blank reads as the switch's own default. */
@@ -324,5 +293,36 @@ class BooleanSwitchesTest {
         String[] names = condition.name().length > 0 ? condition.name() : condition.value();
         String prefix = StringUtils.hasText(condition.prefix()) ? condition.prefix() + "." : "";
         return Arrays.stream(names).map(name -> prefix + name);
+    }
+
+    static Stream<Arguments> everySwitchWithEveryRefusedValue() {
+        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
+                .flatMap(key -> Stream.concat(
+                                READ_AS_TRUE_ONLY_BY_THE_BINDER.stream(), UNREADABLE_BY_THE_BINDER.stream())
+                        .map(value -> Arguments.of(key, value)));
+    }
+
+    /**
+     * A {@code true}-only condition and the binder both take these as off, so they behave as
+     * {@code false} did on every released version.
+     */
+    static Stream<Arguments> everySwitchGatedOnlyOnTrueWithEveryLenientFalse() {
+        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream()
+                .filter(key -> !PeekabootPropertyKeys.SWITCHES_ALSO_GATED_ON_FALSE.contains(key))
+                .flatMap(key -> READ_AS_FALSE_LENIENTLY.stream().map(value -> Arguments.of(key, value)));
+    }
+
+    /**
+     * A {@code havingValue = false} condition matches neither {@code true} nor {@code no}, so
+     * {@code no} drops both of the beans it chooses between while the binder reads plain false.
+     */
+    static Stream<Arguments> everySwitchAlsoGatedOnFalseWithEveryLenientFalse() {
+        return PeekabootPropertyKeys.SWITCHES_ALSO_GATED_ON_FALSE.stream()
+                .flatMap(key -> READ_AS_FALSE_LENIENTLY.stream().map(value -> Arguments.of(key, value)));
+    }
+
+    static Stream<Arguments> everyUnsetDefault() {
+        return PeekabootPropertyKeys.UNSET_SWITCH_DEFAULTS.entrySet().stream()
+                .map(entry -> Arguments.of(entry.getKey(), entry.getValue()));
     }
 }

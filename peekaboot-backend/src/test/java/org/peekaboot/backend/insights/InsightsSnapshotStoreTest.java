@@ -64,6 +64,24 @@ class InsightsSnapshotStoreTest {
         return store.awaitSnapshot(Duration.ofSeconds(5));
     }
 
+    static Stream<Arguments> takeOverOutcomes() {
+        return Stream.of(
+                Arguments.of(Named.of("history never taken over: the file stays", false), new double[] {1.0, 2.0}),
+                Arguments.of(Named.of("history taken over: this run's samples replace it", true), new double[] {9.0}));
+    }
+
+    /** Discarding a file is announced with one INFO line - deliberate; pinned here rather than reaching the console. */
+    private static Optional<InsightsSnapshot> discardIsAnnounced(Supplier<Optional<InsightsSnapshot>> load) {
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
+            Optional<InsightsSnapshot> restored = load.get();
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage()).contains("starting with empty history");
+            });
+            return restored;
+        }
+    }
+
     @Test
     void anAbsentFileIsSimplyNoHistory() {
         assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
@@ -145,12 +163,6 @@ class InsightsSnapshotStoreTest {
                 .get()
                 .extracting(restored -> restored.series().get("cpu.process").get(0)[0])
                 .isEqualTo(expected);
-    }
-
-    static Stream<Arguments> takeOverOutcomes() {
-        return Stream.of(
-                Arguments.of(Named.of("history never taken over: the file stays", false), new double[] {1.0, 2.0}),
-                Arguments.of(Named.of("history taken over: this run's samples replace it", true), new double[] {9.0}));
     }
 
     /** A capture taken before the restore landed holds none of the history it would overwrite. */
@@ -272,18 +284,6 @@ class InsightsSnapshotStoreTest {
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
                 .isEmpty();
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
-    }
-
-    /** Discarding a file is announced with one INFO line - deliberate; pinned here rather than reaching the console. */
-    private static Optional<InsightsSnapshot> discardIsAnnounced(Supplier<Optional<InsightsSnapshot>> load) {
-        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
-            Optional<InsightsSnapshot> restored = load.get();
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.INFO);
-                assertThat(event.getFormattedMessage()).contains("starting with empty history");
-            });
-            return restored;
-        }
     }
 
     @Test

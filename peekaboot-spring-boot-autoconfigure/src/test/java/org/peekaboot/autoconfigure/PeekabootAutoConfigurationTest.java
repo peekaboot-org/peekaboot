@@ -170,23 +170,6 @@ class PeekabootAutoConfigurationTest {
                 });
     }
 
-    @Configuration(proxyBeanMethods = false)
-    static class UserSameNamedBeansConfig {
-
-        static final MaskingEngine MASKING_ENGINE = new MaskingEngine();
-        static final MetricsService METRICS_SERVICE = new MetricsService(null, MASKING_ENGINE);
-
-        @Bean
-        MaskingEngine maskingEngine() {
-            return MASKING_ENGINE;
-        }
-
-        @Bean
-        MetricsService metricsService() {
-            return METRICS_SERVICE;
-        }
-    }
-
     @Test
     void doesNotRegisterBeansWhenPeekabootDisabled() {
         contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
@@ -291,26 +274,6 @@ class PeekabootAutoConfigurationTest {
                 });
     }
 
-    private static WebApplicationContextRunner tracingRunner() {
-        return new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class))
-                .withPropertyValues("peekaboot.enabled=true");
-    }
-
-    private static SqlStatement capturedStatement(AssertableWebApplicationContext context) {
-        TraceStore traceStore = context.getBean(TraceStore.class);
-        TraceFixtures.addRootSpan(traceStore);
-        traceStore.addSpan(TraceFixtures.query("select 1"));
-        return context.getBean(TraceInsightsService.class)
-                .getTraceInsights(TraceFixtures.TRACE_ID)
-                .orElseThrow()
-                .rootSpan()
-                .children()
-                .getFirst()
-                .statement();
-    }
-
     /**
      * {@code features.tracing} only says the trace store exists; it says nothing about
      * whether anything can fill it. The store is wired by {@code PeekabootTracingAutoConfiguration}
@@ -351,5 +314,42 @@ class PeekabootAutoConfigurationTest {
                         assertThat(features.tracingSpansPossible()).isFalse();
                     });
         }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class UserSameNamedBeansConfig {
+
+        static final MaskingEngine MASKING_ENGINE = new MaskingEngine();
+        static final MetricsService METRICS_SERVICE = new MetricsService(null, MASKING_ENGINE);
+
+        @Bean
+        MaskingEngine maskingEngine() {
+            return MASKING_ENGINE;
+        }
+
+        @Bean
+        MetricsService metricsService() {
+            return METRICS_SERVICE;
+        }
+    }
+
+    private static WebApplicationContextRunner tracingRunner() {
+        return new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true");
+    }
+
+    private static SqlStatement capturedStatement(AssertableWebApplicationContext context) {
+        TraceStore traceStore = context.getBean(TraceStore.class);
+        TraceFixtures.addRootSpan(traceStore);
+        traceStore.addSpan(TraceFixtures.query("select 1"));
+        return context.getBean(TraceInsightsService.class)
+                .getTraceInsights(TraceFixtures.TRACE_ID)
+                .orElseThrow()
+                .rootSpan()
+                .children()
+                .getFirst()
+                .statement();
     }
 }
