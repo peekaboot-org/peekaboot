@@ -32,20 +32,18 @@ class InMemoryTraceStoreTest {
     void anAddedSpanIsStored() {
         storage.addSpan(spanIn("trace1", "span1"));
 
-        var bundle = storage.getTrace("trace1");
-        assertThat(bundle).isPresent();
-        assertThat(bundle.get().snapshot().spans()).hasSize(1);
-        assertThat(bundle.get().snapshot().spans().getFirst().spanId()).isEqualTo("span1");
+        var bundle = storage.getTrace("trace1").orElseThrow();
+        assertThat(bundle.snapshot().spans()).hasSize(1);
+        assertThat(bundle.snapshot().spans().getFirst().spanId()).isEqualTo("span1");
     }
 
     @Test
     void anAddedLogIsStored() {
         storage.addLog(log("trace1").saying("test message").build());
 
-        var bundle = storage.getTrace("trace1");
-        assertThat(bundle).isPresent();
-        assertThat(bundle.get().logs()).hasSize(1);
-        assertThat(bundle.get().logs().getFirst().message()).isEqualTo("test message");
+        var bundle = storage.getTrace("trace1").orElseThrow();
+        assertThat(bundle.logs()).hasSize(1);
+        assertThat(bundle.logs().getFirst().message()).isEqualTo("test message");
     }
 
     @Test
@@ -55,10 +53,9 @@ class InMemoryTraceStoreTest {
                 .controller("TestController", "test")
                 .build());
 
-        var bundle = storage.getTrace("trace1");
-        assertThat(bundle).isPresent();
-        assertThat(bundle.get().request()).isNotNull();
-        assertThat(bundle.get().request().path()).isEqualTo("/api/test");
+        var bundle = storage.getTrace("trace1").orElseThrow();
+        assertThat(bundle.request()).isNotNull();
+        assertThat(bundle.request().path()).isEqualTo("/api/test");
     }
 
     @Test
@@ -69,11 +66,10 @@ class InMemoryTraceStoreTest {
         storage.addLog(log("trace1").saying("log1").build());
         storage.setRequest(RequestCompletedEvents.minimal("trace1"));
 
-        var bundle = storage.getTrace("trace1");
-        assertThat(bundle).isPresent();
-        assertThat(bundle.get().snapshot().spans()).hasSize(2);
-        assertThat(bundle.get().logs()).hasSize(1);
-        assertThat(bundle.get().request()).isNotNull();
+        var bundle = storage.getTrace("trace1").orElseThrow();
+        assertThat(bundle.snapshot().spans()).hasSize(2);
+        assertThat(bundle.logs()).hasSize(1);
+        assertThat(bundle.request()).isNotNull();
     }
 
     @Test
@@ -482,9 +478,8 @@ class InMemoryTraceStoreTest {
             store.addLog(log("t1").saying("log" + i).build());
         }
 
-        var bundle = store.getTrace("t1");
-        assertThat(bundle).isPresent();
-        assertThat(bundle.get().logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+        var bundle = store.getTrace("t1").orElseThrow();
+        assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
     }
 
     @Test

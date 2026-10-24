@@ -31,11 +31,10 @@ class PasswordHashTest {
     void parse_roundTripsAFormattedHash() {
         var hash = PasswordHash.of("correct-horse");
 
-        var parsed = PasswordHash.parse(hash.format());
+        var parsed = PasswordHash.parse(hash.format()).orElseThrow();
 
-        assertThat(parsed).isPresent();
-        assertThat(parsed.get().matches("correct-horse")).isTrue();
-        assertThat(parsed.get().format()).isEqualTo(hash.format());
+        assertThat(parsed.matches("correct-horse")).isTrue();
+        assertThat(parsed.format()).isEqualTo(hash.format());
     }
 
     @Test

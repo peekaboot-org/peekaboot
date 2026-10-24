@@ -26,10 +26,9 @@ class CredentialsFileTest {
 
         assertThat(file.write(Credentials.generated("s3cret"))).isTrue();
 
-        var stored = file.read();
-        assertThat(stored).isPresent();
-        assertThat(stored.get().createdAt()).isEqualTo(Credentials.CREATED);
-        assertThat(stored.get().passwordHash().matches("s3cret")).isTrue();
+        var stored = file.read().orElseThrow();
+        assertThat(stored.createdAt()).isEqualTo(Credentials.CREATED);
+        assertThat(stored.passwordHash().matches("s3cret")).isTrue();
     }
 
     @Test
@@ -39,9 +38,8 @@ class CredentialsFileTest {
 
         assertThat(file.write(Credentials.generated("n3wpass"))).isTrue();
 
-        var stored = file.read();
-        assertThat(stored).isPresent();
-        assertThat(stored.get().passwordHash().matches("n3wpass")).isTrue();
+        var stored = file.read().orElseThrow();
+        assertThat(stored.passwordHash().matches("n3wpass")).isTrue();
     }
 
     @Test

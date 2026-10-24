@@ -24,12 +24,12 @@ class DataSourceMetadataTest {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:metadata-test;DB_CLOSE_DELAY=-1");
 
-        Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("primary", dataSource);
+        DataSourceMetadata metadata =
+                DataSourceMetadata.fromDataSource("primary", dataSource).orElseThrow();
 
-        assertThat(metadata).isPresent();
-        assertThat(metadata.get().dataSourceName()).isEqualTo("primary");
-        assertThat(metadata.get().databaseProductName()).isEqualTo("H2");
-        assertThat(metadata.get().databaseProduct()).isEqualTo(DatabaseProduct.H2);
+        assertThat(metadata.dataSourceName()).isEqualTo("primary");
+        assertThat(metadata.databaseProductName()).isEqualTo("H2");
+        assertThat(metadata.databaseProduct()).isEqualTo(DatabaseProduct.H2);
     }
 
     @Test
@@ -37,10 +37,9 @@ class DataSourceMetadataTest {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:metadata-test-2;DB_CLOSE_DELAY=-1");
 
-        Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("primary", dataSource);
+        DataSourceMetadata m =
+                DataSourceMetadata.fromDataSource("primary", dataSource).orElseThrow();
 
-        assertThat(metadata).isPresent();
-        DataSourceMetadata m = metadata.get();
         assertThat(m.username()).isEqualTo("");
         assertThat(m.hosts()).isEmpty();
         assertThat(m.databaseName()).isEqualTo("metadata-test-2");

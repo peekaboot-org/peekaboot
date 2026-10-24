@@ -157,20 +157,18 @@ class TraceInsightsServiceTest {
     @Test
     void theDetailReturnsTheTransformedTrace() {
         addTrace("trace1", 100, false);
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
-        assertThat(result).isPresent();
-        assertThat(result.get().traceId()).isEqualTo("trace1");
-        assertThat(result.get().durationMs()).isEqualTo(100L);
+        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+        assertThat(result.traceId()).isEqualTo("trace1");
+        assertThat(result.durationMs()).isEqualTo(100L);
     }
 
     @Test
     void theDetailDetectsIssues() {
         // A trace with a slow span (200ms > 100ms threshold)
         addTrace("trace1", 200, false);
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
-        assertThat(result).isPresent();
-        assertThat(result.get().rootSpan().issues()).isNotEmpty();
-        assertThat(result.get().rootSpan().issues()).extracting(SpanIssue::type).contains(IssueType.SLOW);
+        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+        assertThat(result.rootSpan().issues()).isNotEmpty();
+        assertThat(result.rootSpan().issues()).extracting(SpanIssue::type).contains(IssueType.SLOW);
     }
 
     @Test
@@ -212,11 +210,10 @@ class TraceInsightsServiceTest {
                 .inSpan("span-trace1")
                 .saying("Test log message from trace")
                 .build());
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
-        assertThat(result).isPresent();
-        assertThat(result.get().logs()).hasSize(1);
-        assertThat(result.get().logs().get(0).message()).isEqualTo("Test log message from trace");
-        assertThat(result.get().logs().get(0).level()).isEqualTo("INFO");
+        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+        assertThat(result.logs()).hasSize(1);
+        assertThat(result.logs().get(0).message()).isEqualTo("Test log message from trace");
+        assertThat(result.logs().get(0).level()).isEqualTo("INFO");
     }
 
     /** The service folds with the rules it was built with; {@link TraceLogMapperTest} pins the folding itself. */
@@ -297,9 +294,8 @@ class TraceInsightsServiceTest {
     void theDetailCarriesEmptyLogsWhenNoneAreStored() {
         // no logs stored for this trace
         addTrace("trace1", 100, false);
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
-        assertThat(result).isPresent();
-        assertThat(result.get().logs()).isEmpty();
+        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+        assertThat(result.logs()).isEmpty();
     }
 
     /** The list has no detail to carry, but its trees still say "none" as a list, never as null. */
@@ -330,21 +326,19 @@ class TraceInsightsServiceTest {
     void theDetailExtractsQueries() {
         // A trace with a DB span
         addTraceWithDbSpan("trace1", 100);
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
-        assertThat(result).isPresent();
-        assertThat(result.get().queries()).hasSize(1);
-        assertThat(result.get().queries().get(0).spanId()).isEqualTo("span-db-trace1");
-        assertThat(result.get().queries().get(0).dbSystem()).isEqualTo("postgresql");
-        assertThat(result.get().queries().get(0).durationMs()).isEqualTo(50L);
+        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+        assertThat(result.queries()).hasSize(1);
+        assertThat(result.queries().get(0).spanId()).isEqualTo("span-db-trace1");
+        assertThat(result.queries().get(0).dbSystem()).isEqualTo("postgresql");
+        assertThat(result.queries().get(0).durationMs()).isEqualTo(50L);
     }
 
     @Test
     void theDetailCarriesEmptyQueriesWhenThereAreNoDbSpans() {
         // A trace without DB spans
         addTrace("trace1", 100, false);
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
-        assertThat(result).isPresent();
-        assertThat(result.get().queries()).isEmpty();
+        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+        assertThat(result.queries()).isEmpty();
     }
 
     @Test
@@ -645,10 +639,9 @@ class TraceInsightsServiceTest {
         }
         TraceInsightsService cappedService = newService(cappedStore);
 
-        Optional<TraceTree> result = cappedService.getTraceInsights("t1");
+        TraceTree result = cappedService.getTraceInsights("t1").orElseThrow();
 
-        assertThat(result).isPresent();
-        assertThat(result.get().truncated()).isTrue();
+        assertThat(result.truncated()).isTrue();
     }
 
     @Test

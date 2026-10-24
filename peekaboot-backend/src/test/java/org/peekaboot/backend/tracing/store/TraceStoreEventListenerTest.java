@@ -34,8 +34,7 @@ class TraceStoreEventListenerTest {
     void onLogCaptured_forwardsLogToStore() {
         listener.onLogCaptured(log("trace1").build());
 
-        assertThat(store.getTrace("trace1")).isPresent();
-        assertThat(store.getTrace("trace1").get().logs()).hasSize(1);
+        assertThat(store.getTrace("trace1").orElseThrow().logs()).hasSize(1);
     }
 
     @Test

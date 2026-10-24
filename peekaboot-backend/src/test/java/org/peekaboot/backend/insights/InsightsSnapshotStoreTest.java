@@ -118,10 +118,9 @@ class InsightsSnapshotStoreTest {
         writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
-        Optional<InsightsSnapshot> restored = loadWith(store(Duration.ofDays(30)));
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
 
-        assertThat(restored).isPresent();
-        assertThat(restored.get().series().get("cpu.process").get(0)[0]).containsExactly(1.0, 2.0);
+        assertThat(restored.series().get("cpu.process").get(0)[0]).containsExactly(1.0, 2.0);
         assertThat(directory.resolve("insights.snapshot.tmp")).doesNotExist();
     }
 
@@ -159,8 +158,7 @@ class InsightsSnapshotStoreTest {
         second.start(() -> ownSamplesOnly(9.0), () -> historyRestored);
         second.stop();
 
-        assertThat(loadWith(store(Duration.ofDays(30))))
-                .get()
+        assertThat(loadWith(store(Duration.ofDays(30))).orElseThrow())
                 .extracting(restored -> restored.series().get("cpu.process").get(0)[0])
                 .isEqualTo(expected);
     }
@@ -184,8 +182,7 @@ class InsightsSnapshotStoreTest {
                 restored::get);
         second.stop();
 
-        assertThat(loadWith(store(Duration.ofDays(30))))
-                .get()
+        assertThat(loadWith(store(Duration.ofDays(30))).orElseThrow())
                 .extracting(persisted -> persisted.series().get("cpu.process").get(0)[0])
                 .isEqualTo(new double[] {1.0, 2.0});
     }
