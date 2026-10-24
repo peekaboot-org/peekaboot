@@ -8,10 +8,10 @@ import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
+import org.peekaboot.backend.lifecycle.ActiveProfilesLine;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
-import org.peekaboot.backend.lifecycle.EnvironmentInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.lifecycle.LifecycleEvents;
@@ -52,8 +52,8 @@ public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public EnvironmentInfo environmentInfo(Environment environment) {
-        return new EnvironmentInfo(environment);
+    public ActiveProfilesLine activeProfilesLine(Environment environment) {
+        return new ActiveProfilesLine(environment);
     }
 
     /** Without build-info.properties the ready banner prints "Build information not available" in place of the coordinates. */
@@ -72,7 +72,7 @@ public class PeekabootLifecycleAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ApplicationReadyListener applicationReadyListener(
-            EnvironmentInfo environmentInfo,
+            ActiveProfilesLine activeProfilesLine,
             BuildInfoProvider buildInfoProvider,
             ApplicationIdentity applicationIdentity,
             ServerUrlResolver serverUrlResolver,
@@ -84,7 +84,7 @@ public class PeekabootLifecycleAutoConfiguration {
         DataSourceMetadataList dataSourceMetadataList =
                 dataSourceMetadataListProvider.getIfAvailable(() -> DataSourceMetadataList.EMPTY);
         return new ApplicationReadyListener(
-                environmentInfo,
+                activeProfilesLine,
                 buildInfoProvider,
                 applicationIdentity,
                 serverUrlResolver,

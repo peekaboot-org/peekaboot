@@ -334,7 +334,7 @@ class ApplicationReadyListenerTest {
 
         ApplicationReadyListener listenerOf(ApplicationContext ownContext) {
             return new ApplicationReadyListener(
-                    new EnvironmentInfo(environment),
+                    new ActiveProfilesLine(environment),
                     buildInfo,
                     identity,
                     new ServerUrlResolver(

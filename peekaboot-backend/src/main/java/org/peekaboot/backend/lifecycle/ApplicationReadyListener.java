@@ -31,7 +31,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private static final Logger log = LoggerFactory.getLogger(ApplicationReadyListener.class);
 
-    private final EnvironmentInfo environmentInfo;
+    private final ActiveProfilesLine activeProfilesLine;
 
     private final BuildInfoProvider buildInfoProvider;
 
@@ -52,7 +52,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     private final ApplicationContext ownContext;
 
     public ApplicationReadyListener(
-            EnvironmentInfo environmentInfo,
+            ActiveProfilesLine activeProfilesLine,
             BuildInfoProvider buildInfoProvider,
             ApplicationIdentity applicationIdentity,
             ServerUrlResolver serverUrlResolver,
@@ -62,7 +62,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             MaskingEngine maskingEngine,
             ApplicationContext ownContext) {
 
-        this.environmentInfo = environmentInfo;
+        this.activeProfilesLine = activeProfilesLine;
         this.buildInfoProvider = buildInfoProvider;
         this.applicationIdentity = applicationIdentity;
         this.serverUrlResolver = serverUrlResolver;
@@ -96,7 +96,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     private void appendApplicationInfo(StringBuilder report) {
 
         String appName = applicationIdentity.displayName();
-        String profiles = environmentInfo.getActiveProfilesAsString();
+        String profiles = activeProfilesLine.describe();
         BannerFrame.line(report, String.format(" Application [%s] ready with active profiles [%s]", appName, profiles));
     }
 

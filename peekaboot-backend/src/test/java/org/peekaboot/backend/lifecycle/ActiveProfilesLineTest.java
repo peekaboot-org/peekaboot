@@ -5,14 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
-class EnvironmentInfoTest {
+class ActiveProfilesLineTest {
 
     @Test
     void theActiveProfilesAreListedInOrder() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod", "eu");
 
-        assertThat(new EnvironmentInfo(environment).getActiveProfilesAsString()).isEqualTo("prod, eu");
+        assertThat(new ActiveProfilesLine(environment).describe()).isEqualTo("prod, eu");
     }
 
     /** With nothing activated Spring runs the default profiles, so those are what the banner names. */
@@ -21,6 +21,6 @@ class EnvironmentInfoTest {
         MockEnvironment environment = new MockEnvironment();
         environment.setDefaultProfiles("local");
 
-        assertThat(new EnvironmentInfo(environment).getActiveProfilesAsString()).isEqualTo("local");
+        assertThat(new ActiveProfilesLine(environment).describe()).isEqualTo("local");
     }
 }
