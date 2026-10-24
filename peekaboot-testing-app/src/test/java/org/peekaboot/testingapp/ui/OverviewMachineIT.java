@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
+import java.lang.management.ManagementFactory;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.runtime.ContainerRuntime;
@@ -62,6 +64,27 @@ class OverviewMachineIT extends PlaywrightTestBase {
         openDashboard();
         page.waitForSelector("#machine-info .pk-kv");
 
+        assertThat(dashboard.kvValue("#machine-info", "Max Heap")).isEqualTo(formatBytes(servedHeapMax));
+    }
+
+    /**
+     * Max Heap end to end: the info endpoint's process memory, mapped into the insights
+     * response this page read, then rendered on the row. The app runs in this JVM.
+     */
+    @Test
+    void maxHeapRowShowsTheServedHeapMaximumOfThisJvm() {
+        Response insights = page.waitForResponse(
+                response -> response.url().contains("/peekaboot/api/actuator/all/insights"), this::openDashboard);
+        long servedHeapMax = readJson(insights.text())
+                .path("runtime")
+                .path("memory")
+                .path("heapMax")
+                .asLong();
+        page.waitForSelector("#machine-info .pk-kv");
+        long jvmHeapMax =
+                ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getMax();
+
+        assertThat(servedHeapMax).isEqualTo(jvmHeapMax);
         assertThat(dashboard.kvValue("#machine-info", "Max Heap")).isEqualTo(formatBytes(servedHeapMax));
     }
 
