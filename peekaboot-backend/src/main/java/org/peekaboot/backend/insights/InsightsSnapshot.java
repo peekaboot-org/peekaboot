@@ -11,13 +11,12 @@ import java.util.stream.Stream;
  * levels &ge; 1. Unlike {@link LevelData}, which serves the API, this carries the
  * internal {@code samples} column: the next roll-up weights its average by it.
  */
-public record InsightsSnapshot(long writtenAtEpochMs, List<Level> levels, Map<String, List<double[][]>> series) {
+record InsightsSnapshot(long writtenAtEpochMs, List<Level> levels, Map<String, List<double[][]>> series) {
 
     /** The aggregated columns, in the order the file stores them: the statistics, then the sample count. */
-    public static final List<String> STAT_COLUMNS = Stream.concat(
-                    AggregateStats.STAT_NAMES.stream(), Stream.of("samples"))
+    static final List<String> STAT_COLUMNS = Stream.concat(AggregateStats.STAT_NAMES.stream(), Stream.of("samples"))
             .toList();
 
     /** One level's geometry and how much of its ring is filled. */
-    public record Level(long intervalMs, int size, long endEpochMs, int count) {}
+    record Level(long intervalMs, int size, long endEpochMs, int count) {}
 }

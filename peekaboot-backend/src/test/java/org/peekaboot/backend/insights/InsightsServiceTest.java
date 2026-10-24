@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.Unit;
-import org.peekaboot.backend.testsupport.InsightsCollectors;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.DefaultResourceLoader;

@@ -26,7 +26,6 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.insights.config.TileDef;
 import org.peekaboot.backend.insights.config.TileFormat;
-import org.peekaboot.backend.testsupport.InsightsCollectors;
 
 class InsightsCollectorTest {
 

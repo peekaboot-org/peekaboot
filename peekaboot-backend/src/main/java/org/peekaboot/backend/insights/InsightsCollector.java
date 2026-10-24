@@ -39,7 +39,7 @@ public final class InsightsCollector {
      * reach a write - never on the startup path, which is why loading a snapshot cannot
      * slow an application's boot.
      */
-    public interface SnapshotSource {
+    interface SnapshotSource {
 
         /** The persisted rings, or empty if there are none or they did not arrive in time. */
         Optional<InsightsSnapshot> awaitSnapshot(Duration timeout);
@@ -55,7 +55,7 @@ public final class InsightsCollector {
     private final SnapshotRestoreBarrier restoreBarrier;
     private final IntervalBoundary schedule;
 
-    public InsightsCollector(
+    InsightsCollector(
             List<InsightsProperties.Level> levels,
             List<SeriesDef> series,
             Set<String> shippedSeriesIds,
@@ -118,7 +118,7 @@ public final class InsightsCollector {
     }
 
     /** Names the level threads would run under, without starting anything. */
-    List<String> threadNames() {
+    private List<String> threadNames() {
         List<String> names = new ArrayList<>(rings.levelCount());
         names.add("peekaboot-insights-tick");
         for (int level = 1; level < rings.levelCount(); level++) {

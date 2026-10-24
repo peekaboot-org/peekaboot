@@ -12,7 +12,7 @@ import org.peekaboot.backend.config.PeekabootJson;
  * {@code statValues} carries aggregated windows for levels &ge; 1
  * (seriesId -&gt; statName -&gt; values, oldest first).
  */
-public record LevelData(
+record LevelData(
         int level,
         long intervalMs,
         long endEpochMs,
@@ -24,7 +24,7 @@ public record LevelData(
      * The API's view: the {@code double[]} columns boxed to {@code List<Double>} with NaN
      * mapped to null - Jackson would emit invalid JSON ({@code NaN}) otherwise.
      */
-    public LevelDataResponse toResponse() {
+    LevelDataResponse toResponse() {
         Map<String, LevelDataResponse.SeriesData> series = new LinkedHashMap<>();
         if (level == 0) {
             for (Map.Entry<String, double[]> entry : tickValues.entrySet()) {

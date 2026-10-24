@@ -9,7 +9,7 @@ import java.util.Optional;
  * application's own {@code peekaboot.stack-trace.exclude}, then the exclusions it already keeps
  * for its log file in {@code logging.exception-conversion-word}, then a built-in list.
  */
-public final class ExclusionPatterns {
+final class ExclusionPatterns {
 
     /**
      * Reflection, the container, the web framework, the template engine and the drivers and
@@ -18,7 +18,7 @@ public final class ExclusionPatterns {
      * {@code logging.exception-conversion-word}, which is read ahead of this, or through the
      * property.
      */
-    public static final List<String> DEFAULT = List.of(
+    static final List<String> DEFAULT = List.of(
             "java.lang.reflect.Method",
             "jdk.internal.reflect",
             "sun.reflect",
@@ -38,7 +38,7 @@ public final class ExclusionPatterns {
 
     private ExclusionPatterns() {}
 
-    public static List<String> resolve(List<String> explicit, String conversionWord) {
+    static List<String> resolve(List<String> explicit, String conversionWord) {
         if (explicit != null && !explicit.isEmpty()) {
             return List.copyOf(explicit);
         }

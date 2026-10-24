@@ -35,7 +35,7 @@ public final class LifecycleEventLog {
     private final CountDownLatch loaded = new CountDownLatch(1);
     private volatile boolean writeFailureLogged;
 
-    public LifecycleEventLog(LifecycleEventFile file) {
+    LifecycleEventLog(LifecycleEventFile file) {
         this(file, LOAD_WAIT);
     }
 

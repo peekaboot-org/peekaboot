@@ -23,7 +23,7 @@ import org.peekaboot.backend.tracing.tags.Tags;
  * and result-set spans carry {@code jdbc.datasource.name} and {@code jdbc.row-count} and are
  * not queries.
  */
-public final class DbSpans {
+final class DbSpans {
 
     /** datasource-proxy's per-statement tag; a batch carries one per statement. */
     private static final Pattern BATCH_STATEMENT_TAG = Pattern.compile("jdbc\\.query\\[(\\d+)\\]");
@@ -45,7 +45,7 @@ public final class DbSpans {
 
     private DbSpans() {}
 
-    public static boolean isQuery(SpanData span) {
+    static boolean isQuery(SpanData span) {
         return isQuery(span.kind(), span.tags());
     }
 
@@ -55,24 +55,24 @@ public final class DbSpans {
      * datasource-proxy query span, whose only qualifying tag was {@code jdbc.query[0]}, is
      * recognised by that field instead.
      */
-    public static boolean isQuery(SpanNode span) {
+    static boolean isQuery(SpanNode span) {
         return span.statement() != null || isQuery(span.kind(), span.tags());
     }
 
     /** The tags {@link #sql} reads the statement from, and the parameter tags; served once as {@code SpanNode.statement}, not again as tags. */
-    public static boolean isStatementTag(String key) {
+    static boolean isStatementTag(String key) {
         return STATEMENT_TAGS.contains(key) || BATCH_STATEMENT_TAG.matcher(key).matches();
     }
 
     /** datasource-proxy's result-set span: the one that carries the row count of the query before it. */
-    public static boolean isResultSet(SpanData span) {
+    static boolean isResultSet(SpanData span) {
         return RESULT_SET_SPAN_NAME.equals(span.name())
                 && span.tags() != null
                 && span.tags().containsKey(ROW_COUNT_TAG);
     }
 
     /** The parsed row count of a result-set span; null for any other span, or a count that does not parse. */
-    public static Long rowCount(SpanData span) {
+    static Long rowCount(SpanData span) {
         if (!isResultSet(span)) {
             return null;
         }
@@ -94,7 +94,7 @@ public final class DbSpans {
      * order - then the span's own name when it looks like SQL. Null when the
      * instrumentation recorded no statement at all.
      */
-    public static String sql(SpanData span) {
+    static String sql(SpanData span) {
         Map<String, String> tags = span.tags();
         if (tags != null) {
             String sql = Tags.first(tags, "db.query.text", "db.statement");
@@ -113,7 +113,7 @@ public final class DbSpans {
      * OpenTelemetry {@code db.system.name} ahead of its superseded spelling {@code db.system},
      * then datasource-proxy's datasource name or peer service. Null when nothing named one.
      */
-    public static String system(Map<String, String> tags) {
+    static String system(Map<String, String> tags) {
         return Tags.first(tags, "db.system.name", "db.system", "jdbc.datasource.name", "peer.service");
     }
 
@@ -122,7 +122,7 @@ public final class DbSpans {
      * A pool name Hikari generated ({@code HikariPool-1}) names nothing, so it is skipped, the way
      * datasource-micrometer skips it when it names a DataSource.
      */
-    public static String dataSourceName(Map<String, String> tags) {
+    static String dataSourceName(Map<String, String> tags) {
         String pool = tags.get("jdbc.datasource.pool");
         if (pool != null && !GENERATED_POOL_NAME.matcher(pool).matches()) {
             return pool;

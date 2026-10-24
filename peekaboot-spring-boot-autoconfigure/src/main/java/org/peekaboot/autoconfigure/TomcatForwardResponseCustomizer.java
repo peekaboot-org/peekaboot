@@ -11,7 +11,7 @@ import org.springframework.util.ReflectionUtils;
  * leave a {@code forward:} view as an empty 200. Tomcat without the setter (before 10.1.20)
  * closes the response instead and is left alone.
  */
-public class TomcatForwardResponseCustomizer implements TomcatContextCustomizer {
+class TomcatForwardResponseCustomizer implements TomcatContextCustomizer {
 
     private static final Method SET_SUSPEND_WRAPPED_RESPONSE_AFTER_FORWARD =
             ReflectionUtils.findMethod(Context.class, "setSuspendWrappedResponseAfterForward", boolean.class);

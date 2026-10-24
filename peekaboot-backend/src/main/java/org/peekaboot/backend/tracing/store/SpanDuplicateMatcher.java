@@ -11,7 +11,7 @@ import org.peekaboot.backend.tracing.event.SpanData;
  * other, differing only in which service-identifier tag carries the real datasource name. Used by
  * {@link TraceDataBundle}, which folds duplicates away incrementally as spans are written.
  */
-public final class SpanDuplicateMatcher {
+final class SpanDuplicateMatcher {
 
     /**
      * One key per datasource decorator. A third would make the triple-nested fold in
@@ -23,7 +23,7 @@ public final class SpanDuplicateMatcher {
 
     /** True if {@code a} and {@code b} carry the same name and the same tags, ignoring
      * whichever of the two service-identifier keys each happens to set. */
-    public static boolean isDuplicate(SpanData a, SpanData b) {
+    static boolean isDuplicate(SpanData a, SpanData b) {
         return a.name().equals(b.name()) && filterServiceKeys(a.tags()).equals(filterServiceKeys(b.tags()));
     }
 

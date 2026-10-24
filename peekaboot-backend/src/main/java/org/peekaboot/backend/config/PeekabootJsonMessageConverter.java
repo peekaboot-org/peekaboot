@@ -11,11 +11,11 @@ import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
  * every Peekaboot controller returns a Peekaboot type and nothing else does. Read-only
  * requests only, so it never reads.
  */
-public final class PeekabootJsonMessageConverter extends JacksonJsonHttpMessageConverter {
+final class PeekabootJsonMessageConverter extends JacksonJsonHttpMessageConverter {
 
     private static final String PEEKABOOT_PACKAGE_PREFIX = "org.peekaboot.backend.";
 
-    public PeekabootJsonMessageConverter() {
+    PeekabootJsonMessageConverter() {
         super(PeekabootJson.MAPPER);
     }
 

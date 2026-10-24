@@ -29,11 +29,11 @@ import org.slf4j.LoggerFactory;
  * configuration has since changed - costs the history and nothing else: the file is
  * deleted, the rings start empty, and the application never notices.
  */
-public final class InsightsSnapshotStore implements SnapshotStore {
+final class InsightsSnapshotStore implements SnapshotStore {
 
     private static final Logger log = LoggerFactory.getLogger(InsightsSnapshotStore.class);
 
-    public static final String FILE_NAME = "insights.snapshot";
+    static final String FILE_NAME = "insights.snapshot";
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
 
     private final Path file;
@@ -52,7 +52,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
     private volatile boolean writeFailureLogged;
     private volatile boolean unclaimedHistory;
 
-    public InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
+    InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
         this(file, geometry, interval, maxAge, new IntervalBoundary(System::currentTimeMillis, Thread::sleep));
     }
 

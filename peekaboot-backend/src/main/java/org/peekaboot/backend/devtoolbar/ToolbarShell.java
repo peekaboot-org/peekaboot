@@ -21,7 +21,7 @@ import org.springframework.web.util.HtmlUtils;
  * <p>Every URL the shell writes is relative to the base path handed to {@link #render}, so
  * a page served behind a {@code server.servlet.context-path} gets links that resolve.
  */
-public class ToolbarShell {
+class ToolbarShell {
 
     /**
      * Every sheet the bar loads, in cascade order, relative to the base path: the shared sheets
@@ -85,7 +85,7 @@ public class ToolbarShell {
     /** {@link #TEMPLATE} with the stylesheets already in place; only the base path and the data blob remain. */
     private final String shell;
 
-    public ToolbarShell() {
+    ToolbarShell() {
         this.shell = STYLESHEETS.fillInto(TEMPLATE);
     }
 
@@ -104,7 +104,7 @@ public class ToolbarShell {
      *     prefix behind the request's context path and the DispatcherServlet's prefix
      * @param dataJson the toolbar data blob, already script-safe (see ToolbarDataProvider)
      */
-    public String render(String basePath, String dataJson) {
+    String render(String basePath, String dataJson) {
         return Placeholders.fill(shell, Map.of("BASE", HtmlUtils.htmlEscape(basePath), "DATA", dataJson));
     }
 }

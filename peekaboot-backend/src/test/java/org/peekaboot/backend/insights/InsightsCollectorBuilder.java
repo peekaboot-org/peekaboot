@@ -8,13 +8,12 @@ import java.util.function.LongSupplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
-import org.peekaboot.backend.testsupport.InsightsCollectors;
 
 /**
  * Builds the {@link InsightsCollector} a test needs. Unless the test says otherwise it has
  * one 10s x 90 level, no series and no tiles, a listener that ignores every event, no
- * persisted snapshot, and the wall clock. Lives beside the collector because the clock is
- * only settable through its package-private constructor.
+ * persisted snapshot, and the wall clock. Lives beside the collector because its constructor
+ * is package-private.
  */
 final class InsightsCollectorBuilder {
 

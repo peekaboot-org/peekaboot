@@ -12,7 +12,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * of a staging box has no business keeping any of it. A consumer's Spring Security
  * chain covering the path adds the same headers itself - without one, nothing does.
  */
-public class ApiSecurityHeadersInterceptor implements HandlerInterceptor {
+class ApiSecurityHeadersInterceptor implements HandlerInterceptor {
 
     private static final String X_CONTENT_TYPE_OPTIONS = "X-Content-Type-Options";
 

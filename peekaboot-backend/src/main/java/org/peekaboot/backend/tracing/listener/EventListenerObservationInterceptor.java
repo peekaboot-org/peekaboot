@@ -19,12 +19,12 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.util.ClassUtils;
 
 /** Observes one call of an application's {@code @EventListener} method as a span of its own, while one is current. */
-public class EventListenerObservationInterceptor implements MethodInterceptor {
+class EventListenerObservationInterceptor implements MethodInterceptor {
 
     private final Supplier<ObservationRegistry> observationRegistry;
     private final Map<ListenerMethod, ListenerSpanLabels> spanLabels = new ConcurrentHashMap<>();
 
-    public EventListenerObservationInterceptor(Supplier<ObservationRegistry> observationRegistry) {
+    EventListenerObservationInterceptor(Supplier<ObservationRegistry> observationRegistry) {
         this.observationRegistry = observationRegistry;
     }
 

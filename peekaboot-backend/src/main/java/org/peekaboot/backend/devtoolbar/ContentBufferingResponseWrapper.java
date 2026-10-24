@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets;
  * is true once the real response is, and {@code sendError}/{@code sendRedirect} drop
  * what was buffered, since the container replaces the body either way.
  */
-public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
+class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
 
     private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String CONTENT_TYPE_HEADER = "Content-Type";
@@ -50,7 +50,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     /** Runs between draining the writer and the hand-over; a seam for the concurrent-write test. */
     private final Runnable beforeHandOver;
 
-    public ContentBufferingResponseWrapper(HttpServletResponse response) {
+    ContentBufferingResponseWrapper(HttpServletResponse response) {
         this(response, () -> {});
     }
 
@@ -92,7 +92,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     /** Whether the declared content type is HTML, the only kind the toolbar goes into; false while none is declared. */
-    public boolean isHtml() {
+    boolean isHtml() {
         return isHtml(getContentType());
     }
 
@@ -106,7 +106,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
      * concurrent write that landed between the first drain and the switch sat in the encoder
      * unflushed, and in passthrough nothing drains the writer at end of request.
      */
-    public void enablePassthrough() throws IOException {
+    void enablePassthrough() throws IOException {
         if (passthrough) {
             return;
         }
@@ -149,7 +149,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         }
     }
 
-    public boolean isPassthrough() {
+    boolean isPassthrough() {
         return passthrough;
     }
 
@@ -246,7 +246,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         super.sendRedirect(location, sc, clearBuffer);
     }
 
-    public String getContentAsString() {
+    String getContentAsString() {
         if (writer == null) {
             return buffer.toString(charset());
         }
@@ -255,12 +255,12 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     /** The response's declared character encoding, UTF-8 while none is declared. */
-    public Charset charset() {
+    Charset charset() {
         String encoding = getCharacterEncoding();
         return encoding != null ? Charset.forName(encoding) : StandardCharsets.UTF_8;
     }
 
-    public void copyBodyToResponse() throws IOException {
+    void copyBodyToResponse() throws IOException {
         if (passthrough) {
             return;
         }
@@ -271,7 +271,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         }
     }
 
-    public void copyBodyToResponse(byte[] content) throws IOException {
+    void copyBodyToResponse(byte[] content) throws IOException {
         getResponse().setContentLength(content.length);
         getResponse().getOutputStream().write(content);
         committed = true;

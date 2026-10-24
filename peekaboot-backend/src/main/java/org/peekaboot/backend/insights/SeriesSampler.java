@@ -24,7 +24,7 @@ import org.slf4j.event.Level;
  * combinations (e.g. new URIs) can appear at any time. Rates divide by the time that
  * really elapsed since the previous sample, not by the nominal tick interval.
  */
-public final class SeriesSampler {
+final class SeriesSampler {
 
     private static final Logger log = LoggerFactory.getLogger(SeriesSampler.class);
 
@@ -33,7 +33,7 @@ public final class SeriesSampler {
      * an unknown name there is most likely a typo. A shipped series logs at debug: the
      * application may simply not have that meter (no DataSource, no request served yet).
      */
-    public enum UnresolvedMeterReport {
+    enum UnresolvedMeterReport {
         WARN(Level.WARN),
         DEBUG(Level.DEBUG),
         NONE(null);
@@ -61,7 +61,7 @@ public final class SeriesSampler {
     private final Outage meterOutage;
     private final Outage subtractMeterOutage;
 
-    public SeriesSampler(SeriesDef def, MeterRegistry registry, UnresolvedMeterReport report) {
+    SeriesSampler(SeriesDef def, MeterRegistry registry, UnresolvedMeterReport report) {
         this.def = def;
         this.registry = registry;
         this.meterOutage = new Outage(
@@ -80,7 +80,7 @@ public final class SeriesSampler {
                 UNRESOLVED_METER_REPORT_TICKS);
     }
 
-    public double sample(long elapsedMillis) {
+    double sample(long elapsedMillis) {
         List<Meter> meters = matching(def.meter());
         meterOutage.track(meters.isEmpty());
         return switch (def.stat()) {
