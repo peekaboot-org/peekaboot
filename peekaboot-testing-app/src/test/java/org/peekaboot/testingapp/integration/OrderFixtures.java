@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import org.peekaboot.testingapp.entity.CustomerOrder;
@@ -7,6 +9,7 @@ import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 /**
@@ -54,9 +57,13 @@ public final class OrderFixtures {
         return saved;
     }
 
-    /** Places an order for customer 1 through {@code POST /api/orders}, answered as served. */
+    /** Places an order for customer 1 through {@code POST /api/orders}; anything but a 201 fails here. */
     static ResponseEntity<String> placeOrder(PeekabootApi api, String sku, int quantity) {
-        return api.postJson("/api/orders", new NewOrder(1L, sku, quantity));
+        ResponseEntity<String> response = api.postJson("/api/orders", new NewOrder(1L, sku, quantity));
+        assertThat(response.getStatusCode())
+                .as("POST /api/orders answered %s", response.getBody())
+                .isEqualTo(HttpStatus.CREATED);
+        return response;
     }
 
     /** Undoes {@link #seedOrder}, so a test leaves the context's shared database as it found it. */

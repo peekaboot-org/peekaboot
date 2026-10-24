@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingAppTest;
 import org.peekaboot.testingapp.entity.CustomerOrder;
+import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -99,7 +100,8 @@ class MultiDataSourceTraceIT {
     void anOrderBeyondTheStockIsAConflictAndReservesNothing() {
         int before = stockOf("WIDGET-2");
 
-        ResponseEntity<String> response = OrderFixtures.placeOrder(traces.api(), "WIDGET-2", before + 1);
+        ResponseEntity<String> response =
+                traces.api().postJson("/api/orders", new NewOrder(1L, "WIDGET-2", before + 1));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(stockOf("WIDGET-2")).isEqualTo(before);
@@ -107,7 +109,7 @@ class MultiDataSourceTraceIT {
 
     @Test
     void anOrderForAnUnknownSkuIsABadRequest() {
-        ResponseEntity<String> response = OrderFixtures.placeOrder(traces.api(), "NO-SUCH-SKU", 1);
+        ResponseEntity<String> response = traces.api().postJson("/api/orders", new NewOrder(1L, "NO-SUCH-SKU", 1));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
