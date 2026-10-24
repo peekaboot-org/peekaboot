@@ -6,8 +6,7 @@ import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
-import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse.Run;
+import org.peekaboot.backend.lifecycle.LifecycleRunsResponse.Run;
 
 class LifecycleRunsTest {
 

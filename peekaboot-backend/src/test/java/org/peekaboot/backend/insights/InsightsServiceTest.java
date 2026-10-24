@@ -10,8 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
-import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.Unit;

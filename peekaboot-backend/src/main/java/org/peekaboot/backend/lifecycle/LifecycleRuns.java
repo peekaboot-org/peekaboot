@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.LongSupplier;
-import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
 
 /**
  * Turns the raw log into what the dashboard tabulates: one row per start, how long it

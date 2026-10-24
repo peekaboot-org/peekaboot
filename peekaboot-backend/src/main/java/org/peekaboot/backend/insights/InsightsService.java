@@ -8,8 +8,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.peekaboot.backend.config.PeekabootJson;
-import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
-import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.PanelConfigLoader;
 import org.peekaboot.backend.insights.config.PanelDef;

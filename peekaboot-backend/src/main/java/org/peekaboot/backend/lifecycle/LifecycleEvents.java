@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import org.peekaboot.backend.domain.lifecycle.LifecycleEventsResponse;
 
 /** Turns the raw log into what the dashboard draws: a time, and only what changed with it. */
 public class LifecycleEvents {

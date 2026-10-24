@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.config.PeekabootJson;
-import org.peekaboot.backend.domain.insights.LevelDataResponse;
 
 /**
  * Point-in-time copy of one level's ring contents. {@code tickValues} carries

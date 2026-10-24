@@ -1,9 +1,9 @@
 package org.peekaboot.backend.insights.web;
 
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
-import org.peekaboot.backend.domain.insights.LevelDataResponse;
+import org.peekaboot.backend.insights.InsightsConfigResponse;
 import org.peekaboot.backend.insights.InsightsService;
+import org.peekaboot.backend.insights.LevelDataResponse;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;

@@ -1,4 +1,4 @@
-package org.peekaboot.backend.domain.lifecycle;
+package org.peekaboot.backend.lifecycle;
 
 import java.time.Instant;
 import java.util.List;

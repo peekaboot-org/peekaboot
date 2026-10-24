@@ -1,4 +1,4 @@
-package org.peekaboot.backend.domain.insights;
+package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

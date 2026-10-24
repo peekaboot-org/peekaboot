@@ -201,17 +201,18 @@ org.peekaboot.backend/
 ├── controller/             # PeekabootController: /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
+│   ├── actuator/           # ActuatorInsightsResponse: the dashboard's aggregate DTO, one field per section below
 │   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
-│   ├── insights/ (incl. ActuatorInsightsResponse, the dashboard's aggregate DTO), lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
+│   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
 ├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
 │                           # (peekaboot.error-page.override), StackTraceHtml
 ├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
-├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
+├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, LevelDataResponse): InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
 │   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
-├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info, DataSourceMetadata + DataSourceMetadataList, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present), ByteFormat (the one byte formatter; insights uses it too)
+├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info, DataSourceMetadata + DataSourceMetadataList, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present), ByteFormat (the one byte formatter; insights uses it too)
 │   └── web/                # LifecycleController: /peekaboot/api/lifecycle/*
 ├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation

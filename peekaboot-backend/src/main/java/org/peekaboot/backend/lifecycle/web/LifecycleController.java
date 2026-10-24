@@ -1,10 +1,10 @@
 package org.peekaboot.backend.lifecycle.web;
 
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.domain.lifecycle.LifecycleEventsResponse;
-import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
 import org.peekaboot.backend.lifecycle.LifecycleEvents;
+import org.peekaboot.backend.lifecycle.LifecycleEventsResponse;
 import org.peekaboot.backend.lifecycle.LifecycleRuns;
+import org.peekaboot.backend.lifecycle.LifecycleRunsResponse;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

@@ -1,4 +1,4 @@
-package org.peekaboot.backend.domain.insights;
+package org.peekaboot.backend.insights;
 
 import java.util.List;
 import java.util.Map;

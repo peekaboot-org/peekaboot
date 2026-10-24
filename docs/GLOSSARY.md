@@ -256,7 +256,9 @@ The word carries two unrelated features in the URL space, plus a prose shorthand
 - **The insights suffix** marks the enriched read models: `/peekaboot/api/actuator/all/insights`,
   `/peekaboot/api/traces/insights` and `/peekaboot/api/traces/{traceId}/insights`. Nothing to do
   with the tab. `PeekabootController` serves them; `ActuatorInsightsResponse` and
-  `TraceInsightsResponse` are their payloads.
+  `TraceInsightsResponse` are their payloads. An `InsightsSource` bean is one actuator reading,
+  keyed by endpoint id, that `ActuatorInsightsResponse` is built from, so its name follows the
+  suffix too.
 - **Insights Data** in prose means the enriched shape itself: `TraceTree` and `SpanNode` rather
   than `TraceData` and `SpanData`.
 
