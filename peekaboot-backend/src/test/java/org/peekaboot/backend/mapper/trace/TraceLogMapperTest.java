@@ -23,7 +23,8 @@ import org.peekaboot.backend.tracing.store.TraceDataBundle;
 
 class TraceLogMapperTest {
 
-    private final TraceLogMapper mapper = new TraceLogMapper(new StackTraceRules(List.of(), List.of()));
+    private final TraceLogMapper mapper =
+            new TraceLogMapper(new MaskingEngine(), new StackTraceRules(List.of(), List.of()));
     private InMemoryTraceStore store;
 
     @BeforeEach
@@ -74,14 +75,59 @@ class TraceLogMapperTest {
         String trace = "java.lang.IllegalStateException: boom\r"
                 + "\tat org.peekaboot.app.Thing.method(Thing.java:10)\n"
                 + "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)\n";
-        TraceLogMapper folding =
-                new TraceLogMapper(new StackTraceRules(List.of("org.springframework"), List.of("org.peekaboot.app")));
         store.addLog(log("t1").inSpan("root").withStackTrace(trace).build());
 
-        TraceLog result = mapped(folding).getFirst();
+        TraceLog result = mapped(folding()).getFirst();
 
         assertThat(result.stackTrace()).isEqualTo("""
                         java.lang.IllegalStateException: boom
+                        \tat org.peekaboot.app.Thing.method(Thing.java:10)
+                        \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)""");
+        assertThat(result.applicationFrames()).containsExactly(new StackTraceFolding.Range(1, 2));
+        assertThat(result.hiddenFrames()).containsExactly(new StackTraceFolding.Range(2, 3));
+    }
+
+    /** A log line can echo the failing request's URL, credentials and all, as a span's errorMessage can. */
+    @Test
+    void aLogsMessageAndStackTraceReachTheWireMasked() {
+        String trace = """
+                java.lang.IllegalStateException: GET https://admin:hunter2@example.com/api failed
+                \tat org.peekaboot.app.Thing.method(Thing.java:10)
+                \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)
+                """;
+        store.addLog(log("t1")
+                .inSpan("root")
+                .saying("calling https://admin:hunter2@example.com/api")
+                .withStackTrace(trace)
+                .build());
+
+        TraceLog result = mapped(folding()).getFirst();
+
+        assertThat(result.message()).isEqualTo("calling https://******@example.com/api");
+        assertThat(result.stackTrace()).isEqualTo("""
+                        java.lang.IllegalStateException: GET https://******@example.com/api failed
+                        \tat org.peekaboot.app.Thing.method(Thing.java:10)
+                        \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)""");
+        assertThat(result.applicationFrames()).containsExactly(new StackTraceFolding.Range(1, 2));
+        assertThat(result.hiddenFrames()).containsExactly(new StackTraceFolding.Range(2, 3));
+    }
+
+    /** Masked before folding: a secret spanning lines matches only in the whole trace, never line by line. */
+    @Test
+    void aPrivateKeySpanningStackTraceLinesIsMaskedWhole() {
+        String trace = """
+                java.lang.IllegalStateException: bad key -----BEGIN PRIVATE KEY-----
+                MIIEvQIBADANBgkqhkiG9w0BAQEFAASC
+                -----END PRIVATE KEY-----
+                \tat org.peekaboot.app.Thing.method(Thing.java:10)
+                \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)
+                """;
+        store.addLog(log("t1").inSpan("root").withStackTrace(trace).build());
+
+        TraceLog result = mapped(folding()).getFirst();
+
+        assertThat(result.stackTrace()).isEqualTo("""
+                        java.lang.IllegalStateException: bad key ******
                         \tat org.peekaboot.app.Thing.method(Thing.java:10)
                         \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1)""");
         assertThat(result.applicationFrames()).containsExactly(new StackTraceFolding.Range(1, 2));
@@ -158,6 +204,11 @@ class TraceLogMapperTest {
 
         assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(5, 1, 2));
         assertThat(result.summary().spans()).isEqualTo(tree.summary().spans());
+    }
+
+    private static TraceLogMapper folding() {
+        return new TraceLogMapper(
+                new MaskingEngine(), new StackTraceRules(List.of("org.springframework"), List.of("org.peekaboot.app")));
     }
 
     private TraceDataBundle bundle() {

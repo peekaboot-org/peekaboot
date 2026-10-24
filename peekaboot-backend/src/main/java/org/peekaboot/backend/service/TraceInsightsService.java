@@ -70,7 +70,7 @@ public class TraceInsightsService {
         this.traceTreeMapper = new TraceTreeMapper(maskingEngine, sqlFormatter);
         this.issueDetector = new IssueDetector(tracingProperties);
         this.queryExtractor = new QueryExtractor();
-        this.traceLogMapper = new TraceLogMapper(stackTraceRules);
+        this.traceLogMapper = new TraceLogMapper(maskingEngine, stackTraceRules);
     }
 
     /**

@@ -1294,7 +1294,8 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
 3. `TraceInsightsService.enrichWithDetails` adds what only the stored bundle knows: the flat log
    list, each entry's `spanId` resolved through the bundle's duplicate redirects, the
    `HttpExchange` (from `HttpExchangeMapper`) and `QueryExtractor`'s queries. The log list and
-   its count come from `TraceLogMapper`, to which it delegates. It runs on
+   its count come from `TraceLogMapper`, to which it delegates and which masks each log's
+   message and stack trace by value shape. It runs on
    `GET /peekaboot/api/traces/{traceId}/insights` only. The listing endpoint gets step 1, a log
    *count* for the row badges, and step 2, so its trees carry issues but no log list and no
    queries. An async row takes `TraceTreeMapper.mapSubtree` for step 1 and counts only the logs
