@@ -1,5 +1,6 @@
 package org.peekaboot.testingapp.ui;
 
+import com.microsoft.playwright.Response;
 import java.util.Map;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
  * of the overlay's test classes needs.
  */
 abstract class TraceOverlayTestBase extends PlaywrightTestBase {
+
+    /** Opens after which a geometry assertion stops waiting for the dashboard to paint Geist. */
+    private static final int MEASURABLE_OPENS = 3;
 
     @Autowired
     protected TraceStore traceStore;
@@ -52,6 +56,29 @@ abstract class TraceOverlayTestBase extends PlaywrightTestBase {
         openTraceDeepLink(traceId);
         overlay.waitFor("#pk-gantt-rows");
         return traceId;
+    }
+
+    /**
+     * {@link #openTraceDeepLink(String)} for a geometry assertion: waits for {@code selector}
+     * and returns once the Spans tab paints in Geist. tokens.css loads it with font-display:
+     * optional, so a face that arrives after its block period reports loaded while the
+     * document keeps the fallback for good. A reload asks again, and normally finds the face
+     * in the HTTP cache.
+     */
+    protected Response openTraceDeepLinkToMeasure(String traceId, String selector) {
+        Response navigation = openTraceDeepLink(traceId);
+        for (int opens = 1; ; opens++) {
+            overlay.waitFor(selector);
+            Fonts.awaitReady(page);
+            if (overlay.paintsInTheBundledSans(".pk-gantt-header__name")) {
+                return navigation;
+            }
+            if (opens == MEASURABLE_OPENS) {
+                throw new IllegalStateException("the dashboard painted the fallback font on " + opens + " opens");
+            }
+            navigation = page.reload();
+            overlay.awaitTrace(traceId);
+        }
     }
 
     protected void openOverlayFromTheDashboard(String traceId) {

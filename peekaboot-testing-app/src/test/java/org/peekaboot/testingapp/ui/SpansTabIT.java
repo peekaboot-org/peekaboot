@@ -497,8 +497,7 @@ class SpansTabIT extends TraceOverlayTestBase {
         String traceId = toolbar.traceId();
         serveWithCsp("**/peekaboot/ui/dashboard/index.html", "style-src 'self'");
 
-        Response navigation = openTraceDeepLink(traceId);
-        overlay.awaitMeasurable(".pk-gantt-span[data-depth='2']");
+        Response navigation = openTraceDeepLinkToMeasure(traceId, ".pk-gantt-span[data-depth='2']");
 
         assertThat(navigation.headers())
                 .as("the policy reached the document under test")
@@ -575,8 +574,7 @@ class SpansTabIT extends TraceOverlayTestBase {
         page.setViewportSize(1280, 800);
         String traceId = storeDeepQueryTrace();
 
-        openTraceDeepLink(traceId);
-        overlay.awaitMeasurable(".pk-span-logs-toggle");
+        openTraceDeepLinkToMeasure(traceId, ".pk-span-logs-toggle");
 
         assertThat(overlay.evaluate("root => [...root.querySelectorAll('.pk-gantt-name__text')]"
                         + ".filter(name => name.scrollWidth > name.clientWidth).map(name => name.textContent)"))
@@ -600,8 +598,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .at(0, 10)
                 .build());
 
-        openTraceDeepLink(traceId);
-        overlay.awaitMeasurable(".pk-gantt-name__text");
+        openTraceDeepLinkToMeasure(traceId, ".pk-gantt-name__text");
 
         BoundingBox nameCellBox =
                 page.locator(TraceOverlay.HOST + " .pk-gantt-name").first().boundingBox();
@@ -626,8 +623,7 @@ class SpansTabIT extends TraceOverlayTestBase {
         page.setViewportSize(375, 667);
         String traceId = storeDeepQueryTrace();
 
-        openTraceDeepLink(traceId);
-        overlay.awaitMeasurable(".pk-span-logs-toggle");
+        openTraceDeepLinkToMeasure(traceId, ".pk-span-logs-toggle");
 
         assertThat(overlay.evaluate("""
                 root => [...root.querySelectorAll('.pk-gantt-row')].every(row => {

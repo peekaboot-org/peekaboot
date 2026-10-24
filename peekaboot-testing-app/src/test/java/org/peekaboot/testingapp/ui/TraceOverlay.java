@@ -6,6 +6,8 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 
 /** The trace-detail overlay (trace-detail.js), opened from the toolbar or a dashboard deep link. */
 final class TraceOverlay extends ShadowHost {
@@ -30,13 +32,13 @@ final class TraceOverlay extends ShadowHost {
     }
 
     /**
-     * Waits for {@code selector} and then the webfont, the two things a geometry assertion
-     * needs. A test that navigates straight to a deep link never passes through
-     * {@link #awaitLoaded()} and would otherwise measure the system fallback.
+     * Whether the text at {@code textSelector} paints in Geist rather than the fallback. It must
+     * name one unclipped text: a container's extent is set by the layout, not its glyphs.
      */
-    void awaitMeasurable(String selector) {
-        waitFor(selector);
-        Fonts.awaitReady(page);
+    @SuppressWarnings("unchecked")
+    boolean paintsInTheBundledSans(String textSelector) {
+        return Fonts.paintsTheProbedFamily(
+                (Map<String, Object>) evaluate(Fonts.PROBE, List.of(Fonts.SANS, textSelector)));
     }
 
     /** Waits for the host alone: openTraceDetail() creates it before any fetch, so this proves an open was started, nothing more. */

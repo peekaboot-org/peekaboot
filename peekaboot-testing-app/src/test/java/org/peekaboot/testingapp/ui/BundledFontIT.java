@@ -26,58 +26,21 @@ import org.junit.jupiter.api.Test;
  */
 class BundledFontIT extends PlaywrightTestBase {
 
-    private static final String SANS = "Geist";
-    private static final String MONO = "Geist Mono";
-
     /** Where the woff2 files are served from; a request to anywhere else is a CDN and fails the suite. */
     private static final String FONT_PATH = "/peekaboot/ui/vendor/geist/";
-
-    /**
-     * Loads {@code family}, then measures {@code selector}'s own text twice: once as the
-     * cascade renders it, once with {@code family} removed from that element's font stack.
-     * Equal widths mean the page is painting the fallback whatever it asks for. {@code root}
-     * is the document or a shadow root, so a shadow surface is measured in the scope it
-     * really renders in. A Range is used rather than the element box because a block element
-     * measures its container, not its glyphs.
-     */
-    private static final String FONT_PROBE = """
-            async (root, args) => {
-                const [family, selector] = args;
-                const node = root.querySelector(selector);
-                const style = getComputedStyle(node);
-                const declared = style.fontFamily;
-                await document.fonts.load(style.fontSize + ' "' + family + '"');
-                const range = document.createRange();
-                range.selectNodeContents(node);
-                const painted = range.getBoundingClientRect().width;
-                const inlineBefore = node.style.fontFamily;
-                node.style.fontFamily = declared.split(',')
-                    .filter(entry => entry.trim().replace(/['"]/g, '') !== family)
-                    .join(',');
-                const withoutTheFamily = range.getBoundingClientRect().width;
-                node.style.fontFamily = inlineBefore;
-                return {
-                    loadedFace: [...document.fonts].some(face =>
-                        face.family.replace(/['"]/g, '') === family && face.status === 'loaded'),
-                    paintedWidth: painted,
-                    fallbackWidth: withoutTheFamily,
-                    firstDeclared: declared.split(',')[0].trim().replace(/['"]/g, '')
-                };
-            }
-            """;
 
     @Test
     void theDashboardRendersInTheBundledSans() {
         openDashboard();
 
-        assertRendersIn(probeDocument(SANS, ".pk-header h1"), SANS);
+        assertRendersIn(probeDocument(Fonts.SANS, ".pk-header h1"), Fonts.SANS);
     }
 
     @Test
     void theDashboardRendersMonospaceTextInTheBundledMono() {
         openDashboard();
 
-        assertRendersIn(probeDocument(MONO, "#build-info .pk-kv__key"), MONO);
+        assertRendersIn(probeDocument(Fonts.MONO, "#build-info .pk-kv__key"), Fonts.MONO);
     }
 
     /** The bar is shadow-rooted, so tokens.css's @font-face never reaches it. */
@@ -86,7 +49,7 @@ class BundledFontIT extends PlaywrightTestBase {
         openPersonsPage();
         toolbar.traceId();
 
-        assertRendersIn(toolbar.evaluate(FONT_PROBE, List.of(SANS, ".pk-toolbar__path")), SANS);
+        assertRendersIn(toolbar.evaluate(Fonts.PROBE, List.of(Fonts.SANS, ".pk-toolbar__path")), Fonts.SANS);
     }
 
     /** The overlay is shadow-rooted too, and opens over host pages the dashboard's CSS never touched. */
@@ -95,7 +58,7 @@ class BundledFontIT extends PlaywrightTestBase {
         openPersonsPage();
         toolbar.openOverlay();
 
-        assertRendersIn(overlay.evaluate(FONT_PROBE, List.of(SANS, ".pk-overlay__title-method")), SANS);
+        assertRendersIn(overlay.evaluate(Fonts.PROBE, List.of(Fonts.SANS, ".pk-overlay__title-method")), Fonts.SANS);
     }
 
     /** A span row's query toggle is a button, which takes the engine's own button font unless told to inherit. */
@@ -105,7 +68,7 @@ class BundledFontIT extends PlaywrightTestBase {
         toolbar.openOverlay();
         overlay.waitFor(".pk-span-query-toggle");
 
-        assertRendersIn(overlay.evaluate(FONT_PROBE, List.of(SANS, ".pk-span-query-toggle")), SANS);
+        assertRendersIn(overlay.evaluate(Fonts.PROBE, List.of(Fonts.SANS, ".pk-span-query-toggle")), Fonts.SANS);
     }
 
     /**
@@ -141,7 +104,7 @@ class BundledFontIT extends PlaywrightTestBase {
     }
 
     private Map<String, Object> probeDocument(String family, String selector) {
-        return asProbe(page.evaluate("args => (" + FONT_PROBE + ")(document, args)", List.of(family, selector)));
+        return asProbe(page.evaluate("args => (" + Fonts.PROBE + ")(document, args)", List.of(family, selector)));
     }
 
     private static void assertRendersIn(Object probeResult, String family) {

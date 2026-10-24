@@ -349,7 +349,14 @@ face: a measurement taken while it loads measures the system fallback and passes
 
 The three points a surface first becomes measurable own the wait: `openDashboard()`,
 `openPersonsPage()` and `overlay.awaitLoaded()`. A test that navigates straight to a deep link
-passes through none of them and takes `overlay.awaitMeasurable(selector)` instead.
+passes through none of them and opens it with `openTraceDeepLinkToMeasure(traceId, selector)`
+instead.
+
+A loaded face is not a painted one on the dashboard. tokens.css uses `font-display: optional`, so
+a face that arrives after its block period reports `loaded` while the document keeps the fallback
+for its lifetime. A cold font fetch on a loaded machine does that. `openTraceDeepLinkToMeasure`
+measures the Spans tab's header text with and without Geist and reloads while the two widths
+match.
 
 ## Isolation in shared Spring contexts
 No class in this module clears a mutable singleton the suite shares, and none holds a
