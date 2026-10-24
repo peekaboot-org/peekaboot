@@ -196,7 +196,8 @@ Everything runs inside the host application's own process and on its own event b
 
 ```
 org.peekaboot.backend/
-├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
+├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
+│   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
 ├── controller/             # PeekabootController: /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
@@ -222,7 +223,7 @@ org.peekaboot.backend/
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
 │                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
-├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
+├── service/                # ActuatorInsightsService, TraceInsightsService, ...
 ├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page and the Logs tab fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
 ├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
@@ -376,7 +377,7 @@ Nothing stops any other tool that can read response headers from doing the same.
 
 The backend implements a Backend-for-Frontend pattern:
 
-1. **Raw actuator data**: `PeekabootActuatorService` invokes actuator endpoints in-process (see below)
+1. **Raw actuator data**: `ActuatorReadings` invokes actuator endpoints in-process (see below)
 2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed records. A section the service could not read is null, and so is one that does not bind to its record, each section parsing on its own; inside a section, a collection the response left out binds as empty (the records' compact constructors), so the mappers guard the section and nothing below it
 3. **Domain mapping**: individual mappers transform to domain models
 4. **Aggregation**: `ActuatorInsightsService` combines all data for the dashboard
@@ -429,7 +430,7 @@ record and `InsightsController`'s 400 body included, both under that package pre
 
 ### In-Process Actuator Invocation
 
-Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` holds a
+Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a
 list of `InsightsSource` beans, one per source id (`spring`, `health`, `info`,
 `env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`, `liquibase`, declared once as
 constants on `ActuatorParsedData`). Each is a record

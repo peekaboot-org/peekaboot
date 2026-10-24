@@ -388,7 +388,7 @@ against it. `SharedJvmLogbackLoggingSystem`, registered in the module's test
 start leave it alone, so after that first start no start denies a log event or detaches an
 appender. `ContextBootLoggingIT` pins both. A trace's logs are therefore final once its root span
 is stored, and a test waits for the log it asserts on like any other fact. The same context is
-why `PeekabootActuatorServiceIT` re-levels and redirects one logger for the length of each of its
+why `ActuatorReadingsIT` re-levels and redirects one logger for the length of each of its
 methods, which every concurrently running class sees. That is inert there because only its own
 context has an endpoint that throws, and the only real remedy, `@Isolated`, stops the whole suite
 for the class.

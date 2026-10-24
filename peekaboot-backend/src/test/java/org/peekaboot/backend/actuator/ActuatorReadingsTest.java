@@ -1,4 +1,4 @@
-package org.peekaboot.backend.service;
+package org.peekaboot.backend.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
@@ -7,44 +7,43 @@ import ch.qos.logback.classic.Level;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.testsupport.LogCapture;
 
-class PeekabootActuatorServiceTest {
+class ActuatorReadingsTest {
 
     @Test
-    void getInsightsData_keysEachSourceByItsId() {
-        PeekabootActuatorService service = new PeekabootActuatorService(List.of(
+    void readAll_keysEachSourceByItsId() {
+        ActuatorReadings readings = new ActuatorReadings(List.of(
                 new InsightsSource("spring", () -> Map.of("bootVersion", "4.1.1")),
                 new InsightsSource("info", () -> Map.of("app", "demo"))));
 
-        assertThat(service.getInsightsData())
+        assertThat(readings.readAll())
                 .containsExactly(entry("spring", Map.of("bootVersion", "4.1.1")), entry("info", Map.of("app", "demo")));
     }
 
     /** A source whose backing bean is absent says so with null rather than failing. */
     @Test
-    void getInsightsData_leavesOutASourceThatReadsNullWithoutLogging() {
-        try (LogCapture capture = LogCapture.attach(PeekabootActuatorService.class, Level.DEBUG)) {
-            PeekabootActuatorService service = new PeekabootActuatorService(
+    void readAll_leavesOutASourceThatReadsNullWithoutLogging() {
+        try (LogCapture capture = LogCapture.attach(ActuatorReadings.class, Level.DEBUG)) {
+            ActuatorReadings readings = new ActuatorReadings(
                     List.of(new InsightsSource("health", () -> null), new InsightsSource("info", () -> Map.of())));
 
-            assertThat(service.getInsightsData()).doesNotContainKey("health").containsKey("info");
+            assertThat(readings.readAll()).doesNotContainKey("health").containsKey("info");
             assertThat(capture.appender().list).isEmpty();
         }
     }
 
     @Test
-    void getInsightsData_leavesOutASourceThatFailsAndWarnsWithTheCauseOnceOnly() {
-        try (LogCapture capture = LogCapture.attach(PeekabootActuatorService.class, Level.DEBUG)) {
-            PeekabootActuatorService service = new PeekabootActuatorService(List.of(
+    void readAll_leavesOutASourceThatFailsAndWarnsWithTheCauseOnceOnly() {
+        try (LogCapture capture = LogCapture.attach(ActuatorReadings.class, Level.DEBUG)) {
+            ActuatorReadings readings = new ActuatorReadings(List.of(
                     new InsightsSource("loggers", () -> {
                         throw new IllegalStateException("boom");
                     }),
                     new InsightsSource("info", () -> Map.of("app", "demo"))));
 
-            Map<String, Object> data = service.getInsightsData();
-            service.getInsightsData();
+            Map<String, Object> data = readings.readAll();
+            readings.readAll();
 
             assertThat(data).doesNotContainKey("loggers").containsKey("info");
             assertThat(capture.appender().list).hasSize(2);

@@ -10,7 +10,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * Proves masking end to end through the real HTTP API, not just at the mapper/
  * service unit level (see ConfigMapperTest, EnvironmentMapperTest, ActuatorResponseParserTest,
- * PeekabootActuatorServiceIT): a secret-looking property comes back masked from the
+ * ActuatorReadingsIT): a secret-looking property comes back masked from the
  * endpoint the dashboard reads.
  *
  * <p>application-test.yml binds {@code spring.datasource.password} as a fixture value

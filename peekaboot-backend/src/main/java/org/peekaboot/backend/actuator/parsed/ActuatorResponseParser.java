@@ -11,7 +11,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Parses the raw Map response from PeekabootActuatorService into typed actuator beans.
+ * Parses the raw Map response from ActuatorReadings into typed actuator beans.
  * An endpoint the service could not invoke is absent from that map and parses as null;
  * the others are unaffected. Each section binds on its own, so one that does not fit its
  * record parses as null too, logged like a failed read, and cannot take the others with it.

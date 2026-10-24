@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -18,7 +19,6 @@ import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
-import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
@@ -71,8 +71,8 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public PeekabootActuatorService peekabootActuatorService(ObjectProvider<InsightsSource> sources) {
-        return new PeekabootActuatorService(sources.orderedStream().toList());
+    public ActuatorReadings actuatorReadings(ObjectProvider<InsightsSource> sources) {
+        return new ActuatorReadings(sources.orderedStream().toList());
     }
 
     @Bean
@@ -96,12 +96,12 @@ public class PeekabootAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ActuatorInsightsService actuatorInsightsService(
-            PeekabootActuatorService peekabootActuatorService,
+            ActuatorReadings actuatorReadings,
             ActuatorResponseParser actuatorResponseParser,
             MaskingEngine maskingEngine,
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataList) {
         return new ActuatorInsightsService(
-                peekabootActuatorService, actuatorResponseParser, maskingEngine, dataSourceMetadataList);
+                actuatorReadings, actuatorResponseParser, maskingEngine, dataSourceMetadataList);
     }
 
     /** The registry is absent on an application without Boot's metrics auto-configuration; the service then reports itself unavailable. */

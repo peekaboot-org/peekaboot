@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import net.osslabz.jdbc.DatabaseProduct;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
@@ -234,7 +235,7 @@ class ActuatorInsightsServiceTest {
                 .map(section -> new InsightsSource(section.getKey(), section::getValue))
                 .toList();
         return new ActuatorInsightsService(
-                new PeekabootActuatorService(sources),
+                new ActuatorReadings(sources),
                 new ActuatorResponseParser(),
                 new MaskingEngine(),
                 beanFactory.getBeanProvider(DataSourceMetadataList.class));

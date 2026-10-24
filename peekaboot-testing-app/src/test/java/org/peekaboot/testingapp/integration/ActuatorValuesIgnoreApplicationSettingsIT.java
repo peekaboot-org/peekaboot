@@ -87,7 +87,7 @@ class ActuatorValuesIgnoreApplicationSettingsIT extends TestingAppITBase {
     }
 
     /**
-     * {@code PeekabootActuatorService} reads the {@code HealthEndpoint} bean directly rather
+     * {@code ActuatorReadings} reads the {@code HealthEndpoint} bean directly rather
      * than its web response, so the components and their details reach the dashboard whatever
      * the application chose for {@code show-details} - the value set here is what a host that
      * never widened its own health endpoint has.

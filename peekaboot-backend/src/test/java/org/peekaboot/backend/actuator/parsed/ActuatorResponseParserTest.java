@@ -77,7 +77,7 @@ class ActuatorResponseParserTest {
 
     @Test
     void parsesAnAbsentEndpointAsNull() {
-        // PeekabootActuatorService leaves out an endpoint that failed to invoke;
+        // ActuatorReadings leaves out an endpoint that failed to invoke;
         // the others must still parse.
         Map<String, Object> data = new LinkedHashMap<>(rawData);
         data.remove("env");

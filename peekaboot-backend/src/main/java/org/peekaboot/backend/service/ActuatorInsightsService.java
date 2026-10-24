@@ -3,6 +3,7 @@ package org.peekaboot.backend.service;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
@@ -24,7 +25,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 public final class ActuatorInsightsService {
 
-    private final PeekabootActuatorService actuatorService;
+    private final ActuatorReadings actuatorReadings;
     private final ActuatorResponseParser responseParser;
     private final HealthMapper healthMapper;
     private final RuntimeMapper runtimeMapper;
@@ -43,11 +44,11 @@ public final class ActuatorInsightsService {
      * the engine, so the service is the one place the masking policy enters the pipeline.
      */
     public ActuatorInsightsService(
-            PeekabootActuatorService actuatorService,
+            ActuatorReadings actuatorReadings,
             ActuatorResponseParser responseParser,
             MaskingEngine maskingEngine,
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider) {
-        this.actuatorService = actuatorService;
+        this.actuatorReadings = actuatorReadings;
         this.responseParser = responseParser;
         this.healthMapper = new HealthMapper(maskingEngine);
         this.runtimeMapper = new RuntimeMapper();
@@ -71,7 +72,7 @@ public final class ActuatorInsightsService {
      * property values, so none of them re-derives it.
      */
     public ActuatorInsightsResponse getInsights(Locale locale, boolean unmask) {
-        Map<String, Object> rawData = actuatorService.getInsightsData();
+        Map<String, Object> rawData = actuatorReadings.readAll();
         ActuatorParsedData typed = responseParser.parse(rawData);
 
         return new ActuatorInsightsResponse(

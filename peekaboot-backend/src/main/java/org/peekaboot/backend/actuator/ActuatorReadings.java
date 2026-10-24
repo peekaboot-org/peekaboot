@@ -1,11 +1,10 @@
-package org.peekaboot.backend.service;
+package org.peekaboot.backend.actuator;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import org.peekaboot.backend.actuator.InsightsSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,16 +21,16 @@ import org.slf4j.LoggerFactory;
  * the bean and the source then contributes no entry, same as an absent Flyway or logging
  * system.
  */
-public final class PeekabootActuatorService {
+public final class ActuatorReadings {
 
-    private static final Logger log = LoggerFactory.getLogger(PeekabootActuatorService.class);
+    private static final Logger log = LoggerFactory.getLogger(ActuatorReadings.class);
 
     private final List<InsightsSource> sources;
 
     /** Sources whose failure was reported at WARN; their later failures log at DEBUG. */
     private final Set<String> reportedFailures = ConcurrentHashMap.newKeySet();
 
-    public PeekabootActuatorService(List<InsightsSource> sources) {
+    public ActuatorReadings(List<InsightsSource> sources) {
         this.sources = List.copyOf(sources);
     }
 
@@ -41,7 +40,7 @@ public final class PeekabootActuatorService {
      * persistently broken endpoint does not warn on every dashboard refresh. One that reads
      * null contributes no entry and logs nothing.
      */
-    public Map<String, Object> getInsightsData() {
+    public Map<String, Object> readAll() {
         Map<String, Object> results = new LinkedHashMap<>();
         for (InsightsSource source : sources) {
             read(source, results);

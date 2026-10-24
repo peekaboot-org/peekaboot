@@ -17,13 +17,13 @@ import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.service.ActuatorInsightsService;
-import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,31 +35,28 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest(classes = TestingApp.class)
 @ActiveProfiles("test")
-@Import({
-    PeekabootActuatorServiceIT.DataSourceMetadataFixtureConfig.class,
-    PeekabootActuatorServiceIT.ThrowingSourceConfig.class
-})
-class PeekabootActuatorServiceIT {
+@Import({ActuatorReadingsIT.DataSourceMetadataFixtureConfig.class, ActuatorReadingsIT.ThrowingSourceConfig.class})
+class ActuatorReadingsIT {
 
     @Autowired
-    private PeekabootActuatorService service;
+    private ActuatorReadings readings;
 
     @Autowired
     private ActuatorInsightsService insightsService;
 
-    private LogCapture serviceLog;
+    private LogCapture readingsLog;
 
-    // The throwing endpoint makes every getInsightsData() call log its failure - WARN with
+    // The throwing endpoint makes every readAll() call log its failure - WARN with
     // the cause the first time, DEBUG afterwards; capture both so they can be asserted on
     // and never reach the console.
     @BeforeEach
     void captureServiceLog() {
-        serviceLog = LogCapture.attach(PeekabootActuatorService.class, Level.DEBUG);
+        readingsLog = LogCapture.attach(ActuatorReadings.class, Level.DEBUG);
     }
 
     @AfterEach
     void releaseServiceLog() {
-        serviceLog.close();
+        readingsLog.close();
     }
 
     // flyway.enabled: false in the test profile leaves the flyway source absent from
@@ -69,7 +66,7 @@ class PeekabootActuatorServiceIT {
     // liquibase is present: the test profile migrates the inventory DataSource.
     @Test
     void insightsDataIsASubsetOfTheConsumedEndpointIds() {
-        Map<String, Object> data = service.getInsightsData();
+        Map<String, Object> data = readings.readAll();
 
         Set<String> allowed = Arrays.stream(ActuatorParsedData.class.getRecordComponents())
                 .map(RecordComponent::getName)
@@ -80,21 +77,21 @@ class PeekabootActuatorServiceIT {
 
     /**
      * The repeat call is what this asserts on: {@code reportedFailures} lives on the
-     * service instance, so whether the first call of a method is the context's first
+     * bean instance, so whether the first call of a method is the context's first
      * failure depends on test order, but a call made after one in the same method never
      * is. That pins the DEBUG half of "WARN once, DEBUG afterwards" against a real
-     * container; PeekabootActuatorServiceTest pins the WARN and its cause.
+     * container; ActuatorReadingsTest pins the WARN and its cause.
      */
     @Test
     void aFailingEndpointIsLeftOutAndLoggedWithoutBreakingTheOthers() {
-        service.getInsightsData();
-        serviceLog.appender().list.clear();
+        readings.readAll();
+        readingsLog.appender().list.clear();
 
-        Map<String, Object> data = service.getInsightsData();
+        Map<String, Object> data = readings.readAll();
 
         assertThat(data).doesNotContainKey("loggers");
         assertThat(data).containsKeys("health", "info", "env");
-        assertThat(serviceLog.appender().list)
+        assertThat(readingsLog.appender().list)
                 .filteredOn(event -> event.getFormattedMessage().contains("'loggers' failed"))
                 .singleElement()
                 .satisfies(event -> {
