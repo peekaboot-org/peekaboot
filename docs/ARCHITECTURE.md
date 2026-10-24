@@ -208,6 +208,7 @@ org.peekaboot.backend/
 │   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
 │   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
+│   ├── property/           # PropertyGroup, Property: the one shape the Environment and Config sections share
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
 ├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
 │                           # (peekaboot.error-page.override), StackTraceHtml
