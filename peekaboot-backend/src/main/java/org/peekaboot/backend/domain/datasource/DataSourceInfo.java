@@ -20,5 +20,5 @@ public record DataSourceInfo(
         HealthStatus health,
         Map<String, String> properties) {
 
-    public record Host(String hostname, Integer port, String instanceName) {}
+    public record Host(String hostname, Integer port) {}
 }

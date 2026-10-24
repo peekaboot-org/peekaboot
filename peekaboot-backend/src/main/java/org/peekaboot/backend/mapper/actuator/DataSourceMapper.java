@@ -30,7 +30,7 @@ public class DataSourceMapper {
                 metadata.databaseProduct().name(),
                 metadata.driverName(),
                 metadata.hosts().stream()
-                        .map(host -> new DataSourceInfo.Host(host.hostname(), host.port(), host.instanceName()))
+                        .map(host -> new DataSourceInfo.Host(host.hostname(), host.port()))
                         .toList(),
                 metadata.databaseName(),
                 metadata.username(),

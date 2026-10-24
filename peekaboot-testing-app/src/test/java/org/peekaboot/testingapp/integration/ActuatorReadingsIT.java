@@ -108,7 +108,7 @@ class ActuatorReadingsIT {
         assertThat(dataSources).hasSize(1);
         DataSourceInfo dataSource = dataSources.getFirst();
         assertThat(dataSource.name()).isEqualTo("primary");
-        assertThat(dataSource.hosts()).containsExactly(new DataSourceInfo.Host("db.example.com", 5432, null));
+        assertThat(dataSource.hosts()).containsExactly(new DataSourceInfo.Host("db.example.com", 5432));
         assertThat(dataSource.properties()).containsEntry("MODE", "MEMORY").containsEntry("password", "******");
     }
 

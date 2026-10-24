@@ -131,8 +131,7 @@ class DataSourceMapperTest {
 
         assertThat(json)
                 .contains("\"databaseProduct\":\"POSTGRESQL\"")
-                .contains("\"hosts\":[{\"hostname\":\"db1\",\"port\":5432,\"instanceName\":null},"
-                        + "{\"hostname\":\"db2\",\"port\":1433,\"instanceName\":\"SQLEXPRESS\"}]");
+                .contains("\"hosts\":[{\"hostname\":\"db1\",\"port\":5432},{\"hostname\":\"db2\",\"port\":1433}]");
     }
 
     @Test

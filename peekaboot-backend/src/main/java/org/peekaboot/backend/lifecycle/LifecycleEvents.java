@@ -21,7 +21,7 @@ public class LifecycleEvents {
         for (LifecycleEvent event : eventLog.events()) {
             if (event.type() == LifecycleEvent.Type.STOP) {
                 served.add(new LifecycleEventsResponse.Event(
-                        "stop", Instant.ofEpochMilli(event.epochMs()), null, null, null, null, null, null));
+                        "stop", Instant.ofEpochMilli(event.epochMs()), null, null, null, null, null));
             } else {
                 BuildFacts build = BuildFacts.of(event);
                 served.add(changedSince(
@@ -39,14 +39,13 @@ public class LifecycleEvents {
     /** A marker says only what is new: a field equal to the previous start's is left null. */
     private static LifecycleEventsResponse.Event changedSince(
             BuildFacts current, BuildFacts previous, Instant timestamp, boolean uncleanPrevious) {
-        String commit = changed(current.commitId(), previous.commitId());
+        boolean commitChanged = !Objects.equals(current.commitId(), previous.commitId());
         return new LifecycleEventsResponse.Event(
                 "start",
                 timestamp,
                 changed(current.version(), previous.version()),
                 changed(current.branch(), previous.branch()),
-                commit,
-                commit == null ? null : current.shortCommitId(),
+                commitChanged ? current.shortCommitId() : null,
                 changed(current.buildTime(), previous.buildTime()),
                 uncleanPrevious);
     }

@@ -19,7 +19,6 @@ public record LifecycleEventsResponse(List<Event> events) {
             Instant timestamp,
             String version,
             String branch,
-            String commitId,
             String shortCommitId,
             Instant buildTime,
             Boolean uncleanPrevious) {}

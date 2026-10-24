@@ -232,7 +232,7 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void formatHostsRendersHostnamePortAndFallbacks() {
         // API host objects carry "hostname" (net.osslabz.jdbc.Host), not "host"
-        assertThat(evalModule("format.js", "m.formatHosts([{hostname: '127.0.0.1', port: 5432, instanceName: null}])"))
+        assertThat(evalModule("format.js", "m.formatHosts([{hostname: '127.0.0.1', port: 5432}])"))
                 .isEqualTo("127.0.0.1:5432");
         assertThat(evalModule(
                         "format.js", "m.formatHosts([{hostname: 'db1', port: 5432}, {hostname: 'db2', port: 5433}])"))

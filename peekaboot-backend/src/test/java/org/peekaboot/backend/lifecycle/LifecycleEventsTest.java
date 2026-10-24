@@ -27,7 +27,7 @@ class LifecycleEventsTest {
         assertThat(event.timestamp()).isEqualTo(Instant.ofEpochMilli(1_000));
         assertThat(event.version()).isNull();
         assertThat(event.branch()).isNull();
-        assertThat(event.commitId()).isNull();
+        assertThat(event.shortCommitId()).isNull();
         assertThat(event.buildTime()).isNull();
     }
 
@@ -41,7 +41,6 @@ class LifecycleEventsTest {
         assertThat(event.timestamp()).isEqualTo(Instant.ofEpochMilli(1_000));
         assertThat(event.version()).isEqualTo("1.0.0");
         assertThat(event.branch()).isEqualTo("dev");
-        assertThat(event.commitId()).isEqualTo("abc1234def");
         assertThat(event.shortCommitId()).isEqualTo("abc1234");
         assertThat(event.buildTime()).isEqualTo(Instant.ofEpochMilli(1_756_000_000_000L));
         assertThat(event.uncleanPrevious()).isFalse();
@@ -58,7 +57,7 @@ class LifecycleEventsTest {
         assertThat(second.timestamp()).isEqualTo(Instant.ofEpochMilli(3_000));
         assertThat(second.version()).isNull();
         assertThat(second.branch()).isNull();
-        assertThat(second.commitId()).isNull();
+        assertThat(second.shortCommitId()).isNull();
         assertThat(second.buildTime()).isNull();
     }
 
@@ -71,7 +70,7 @@ class LifecycleEventsTest {
         LifecycleEventsResponse.Event second = response.events().get(1);
         assertThat(second.branch()).isEqualTo("feat/x");
         assertThat(second.version()).isNull();
-        assertThat(second.commitId()).isNull();
+        assertThat(second.shortCommitId()).isNull();
     }
 
     @Test
@@ -103,7 +102,6 @@ class LifecycleEventsTest {
 
         assertThat(served.version()).isEqualTo("1.0.0");
         assertThat(served.branch()).isNull();
-        assertThat(served.commitId()).isNull();
         assertThat(served.shortCommitId()).isNull();
     }
 }

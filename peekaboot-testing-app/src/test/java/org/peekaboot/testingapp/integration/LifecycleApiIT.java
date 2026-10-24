@@ -60,8 +60,6 @@ class LifecycleApiIT extends TestingAppITBase {
         JsonNode run = awaitFirst("/peekaboot/api/lifecycle/runs", "runs").get(0);
 
         assertThat(event.required("branch").asString()).isEqualTo(git.getBranch());
-        // the pom's full generation mode writes commit.id.full, a key getCommitId() does not read
-        assertThat(event.required("commitId").asString()).isEqualTo(git.get("commit.id.full"));
         assertThat(event.required("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
         assertThat(run.required("branch").asString()).isEqualTo(git.getBranch());
         assertThat(run.required("shortCommitId").asString()).isEqualTo(git.getShortCommitId());

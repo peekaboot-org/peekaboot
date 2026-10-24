@@ -125,8 +125,9 @@ switched off still shows one start marker for the run in progress.
 
 `GET /peekaboot/api/lifecycle/events`, gated by `peekaboot.lifecycle.enabled`, serves the log
 as start/stop markers. For each start, `LifecycleEvents` compares it against the previous start
-already in the log: `version`, `branch`, `commitId`/`shortCommitId` and `buildTime` are
-included only when they differ, and all four are present on the log's first entry. A start
+already in the log: `version`, `branch`, `shortCommitId` and `buildTime` are included only
+when they differ, and all four are present on the log's first entry. The commit is compared by
+its full id. A start
 whose predecessor is itself a start, with no stop between, is flagged `uncleanPrevious`.
 Computing the diff server-side gives the browser one definition of "what changed" instead of
 reimplementing it wherever a marker is drawn. The dashboard fetches these alongside the ring
