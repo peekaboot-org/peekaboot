@@ -7,9 +7,12 @@ import com.microsoft.playwright.Mouse;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.BoundingBox;
 import io.micrometer.tracing.Span;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -50,6 +53,9 @@ class TracesTabIT extends PlaywrightTestBase {
     /** OrderService.listOrders' deliberate N+1: findByOrderId, countByOrderId, existsById. */
     private static final int QUERIES_PER_ORDER = 3;
 
+    /** The orders the N+1 test seeds: the H2 database starts empty, so a single order bounds nothing. */
+    private static final int N_PLUS_ONE_ORDERS = 8;
+
     /** The shared query stat on a listed trace row (trace-stats.js): grouped, like every other count. */
     private static final Pattern QUERY_STAT = Pattern.compile("([\\d,.]+) quer(?:y|ies)");
 
@@ -67,7 +73,7 @@ class TracesTabIT extends PlaywrightTestBase {
         return awaitListedTrace("bucket=errors", "trace => trace.traceId === '" + traceId + "'");
     }
 
-    /** One order with one line, for a test that needs a row to read rather than a query count. */
+    /** One order with one line. */
     private CustomerOrder seedAnOrder() {
         return OrderFixtures.seedOrder(
                 orderRepository, orderLineRepository, 1L, "PLACED", 1, "PK-TABS-", "WIDGET-TABS");
@@ -97,6 +103,16 @@ class TracesTabIT extends PlaywrightTestBase {
         return "trace => trace.rootActionType === 'SCHEDULED_JOB' && (trace.logs || []).some(log => "
                 + "log.level === 'WARN' && log.message === 'order " + order.getReference()
                 + " is still PLACED and has not been acknowledged')";
+    }
+
+    /**
+     * The ids of the orders in the shared database. Ids are never reused, so an id in two
+     * snapshots names an order that existed for the whole time between them.
+     */
+    private Set<Long> orderIds() {
+        Set<Long> ids = new HashSet<>();
+        orderRepository.findAll().forEach(order -> ids.add(order.getId()));
+        return ids;
     }
 
     /** Undoes {@link #seedAnOrder()}, so a test that seeds its own order leaves the shared H2 database as it found it. */
@@ -520,14 +536,19 @@ class TracesTabIT extends PlaywrightTestBase {
     /**
      * What the README promises the {@code /orders} page shows: the deliberate N+1's queries
      * counted on the listed trace row, rendered as the shared query stat. The count is read
-     * off the row, not off the API, because the row is what a reader judges the page by.
+     * off the row, not off the API, because the row is what a reader judges the page by. Only
+     * the orders present before and after the page count, as other classes seed and delete
+     * their own orders meanwhile.
      */
     @Test
     void theOrdersPageTraceListsTheQueryCountOfItsNPlusOne() {
-        CustomerOrder order = seedAnOrder();
+        List<CustomerOrder> seeded =
+                Stream.generate(this::seedAnOrder).limit(N_PLUS_ONE_ORDERS).toList();
         try {
-            long orders = orderRepository.count();
+            Set<Long> ordersOnThePage = orderIds();
             page.navigate(baseUrl + "/orders");
+            ordersOnThePage.retainAll(orderIds());
+            int orders = ordersOnThePage.size();
             String traceId = toolbar.traceId();
             awaitTrace(traceId, ROOT_SPAN_EXPORTED);
 
@@ -549,9 +570,9 @@ class TracesTabIT extends PlaywrightTestBase {
                     .as(
                             "the N+1 runs one query for the list plus %d per order, over %d orders",
                             QUERIES_PER_ORDER, orders)
-                    .isGreaterThanOrEqualTo((int) (orders * QUERIES_PER_ORDER + 1));
+                    .isGreaterThanOrEqualTo(orders * QUERIES_PER_ORDER + 1);
         } finally {
-            deleteOrder(order);
+            seeded.forEach(this::deleteOrder);
         }
     }
 
