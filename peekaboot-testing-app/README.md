@@ -213,9 +213,10 @@ repository, which may hold an older install and would then photograph that code.
 the second flag.
 
 It runs under the `screenshots` profile (`application-screenshots.yml`), which points at
-the real PostgreSQL container from `compose.yml` with Flyway on, so the Flyway, Config,
-Environment and Traces tabs all show genuine content instead of an empty in-memory H2
-state. Docker must be running. The profile is declared `inheritProfiles = false` because
+the real PostgreSQL container from `compose.yml` with Flyway on. The inventory DataSource
+keeps `application.yml`'s MySQL from the same file, which Liquibase migrates. So the Flyway,
+Liquibase, Config, Environment and Traces tabs all show genuine content instead of an empty
+in-memory H2 state. Docker must be running. The profile is declared `inheritProfiles = false` because
 `PlaywrightTestBase` carries `@TestingAppTest` and with it `@ActiveProfiles("test")`, whose H2 settings would otherwise
 win. The Lifecycle tab is photographed against a seeded run history
 (`LifecycleHistoryFixture`, shared with `LifecycleTabIT`), since a JUnit launch has storage
@@ -252,7 +253,7 @@ not in a note asking the next person to remember.
 
 The tool's file names are canonical and follow the dashboard's own tab ids:
 `dashboard-<tab>-<theme>.png` (`overview`, `insights`, `lifecycle`, `traces`, `meters`,
-`environment`, `flyway`, `loggers`, `config`, `scheduled-tasks`),
+`environment`, `flyway`, `liquibase`, `loggers`, `config`, `scheduled-tasks`),
 `dashboard-<environment|config>-revealed-<theme>.png`, `trace-detail-<theme>.png`,
 `trace-detail-queries-<theme>.png`, `trace-detail-async-<theme>.png`,
 `toolbar-collapsed-<theme>.png` and `error-page-<theme>.png`. The website's

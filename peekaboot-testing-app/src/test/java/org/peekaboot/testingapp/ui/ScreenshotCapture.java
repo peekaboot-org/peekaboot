@@ -66,6 +66,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
             "meters",
             "environment",
             "flyway",
+            "liquibase",
             "loggers",
             "config",
             "scheduled-tasks");
