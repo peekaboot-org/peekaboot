@@ -221,7 +221,7 @@
 .pk-query-system { color: var(--pk-text-muted); }
 .pk-query-meta { display: flex; gap: var(--pk-space-md); align-items: center; }
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
-/* A block of captured text kept verbatim - a query's SQL, a request body. */
+/* A block of captured text kept verbatim - a query's SQL. */
 .pk-code-block { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: var(--pk-space-sm); border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 /* A captured statement (shared/sql-view.js), in a span's details panel and in the Queries tab. */
 .pk-sql { display: flex; flex-direction: column; gap: var(--pk-space-xs); }
