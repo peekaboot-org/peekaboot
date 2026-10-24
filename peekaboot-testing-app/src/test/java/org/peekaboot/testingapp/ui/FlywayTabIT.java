@@ -73,6 +73,18 @@ class FlywayTabIT extends PlaywrightTestBase {
                 .hasSize(migrations.length);
     }
 
+    /** The Duration column reads each migration's execution time off the real response. */
+    @Test
+    void everyMigrationShowsItsExecutionTime() {
+        openDashboard();
+        dashboard.openTab("flyway");
+
+        assertThat(page.locator("#flyway-timeline .pk-table tbody tr td:nth-child(5)")
+                        .allTextContents())
+                .isNotEmpty()
+                .allMatch(duration -> duration.matches("<1ms|\\d+ms|\\d+\\.\\d{2}[sm]"));
+    }
+
     /**
      * A migration's execution time is coloured by nothing. The span thresholds (100 ms and
      * 500 ms by default) describe request spans; a schema migration that takes seconds is
@@ -86,7 +98,7 @@ class FlywayTabIT extends PlaywrightTestBase {
                 const container = document.createElement('div');
                 container.innerHTML = '<div id="flyway-timeline"></div>';
                 m.render(container, {flyway: {migrations: [{version: '1', description: 'init',
-                    script: 'V1__init.sql', type: 'SQL', executionTime: 5000, installedOn: 0, state: 'SUCCESS'}]}}, {});
+                    script: 'V1__init.sql', type: 'SQL', executionTimeMs: 5000, installedOn: 0, state: 'SUCCESS'}]}}, {});
                 return container.querySelector('td.pk-table__num').className;
             })()
             """);

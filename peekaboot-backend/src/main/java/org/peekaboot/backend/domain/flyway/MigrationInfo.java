@@ -8,5 +8,5 @@ public record MigrationInfo(
         String type,
         MigrationState state,
         Instant installedOn,
-        Integer executionTime,
+        Integer executionTimeMs,
         String script) {}

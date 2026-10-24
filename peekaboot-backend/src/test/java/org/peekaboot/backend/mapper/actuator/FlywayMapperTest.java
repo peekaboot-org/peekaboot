@@ -55,7 +55,7 @@ class FlywayMapperTest {
                         MigrationInfo::version,
                         MigrationInfo::description,
                         MigrationInfo::state,
-                        MigrationInfo::executionTime,
+                        MigrationInfo::executionTimeMs,
                         MigrationInfo::installedOn,
                         MigrationInfo::script,
                         MigrationInfo::type)

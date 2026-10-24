@@ -416,9 +416,10 @@ them, so the browser reads every instant through `format.js`'s `instantMs`, whic
 first and agrees with Java's `toEpochMilli` (`SpansTabIT.readsNanosecondStartsToTheMillisecond`). Epoch millis remain only where the
 browser does arithmetic on a chart series: a level's `endEpochMs` and the insights stream's
 `epochMs`, from which every sample's x position is counted back. A duration is a `long` named
-`...Ms`. `ServerInfo.currentTime` is the one string: the JVM's clock as an ISO-8601 offset
-date-time in the JVM's zone, which the Overview renders in the dashboard's chosen zone like
-every other time.
+`...Ms`, `MigrationInfo.executionTimeMs` included. Two times are strings.
+`ServerInfo.currentTime` is the JVM's clock as an ISO-8601 offset date-time in the JVM's zone,
+which the Overview renders in the dashboard's chosen zone like every other time.
+`GitInfo.Commit.time` is the actuator's own string, passed through.
 
 `PeekabootJsonMessageConverter` (registered first by `PeekabootWebConfig`) claims every return
 value whose class lives under `org.peekaboot.backend.`. The scope has to be the value's type,
