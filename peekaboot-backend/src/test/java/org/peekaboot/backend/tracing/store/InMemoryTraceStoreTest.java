@@ -476,17 +476,6 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void clearEmptiesAllBuckets() {
-        storage.addSpan(errorSpan("t1"));
-        storage.clear();
-
-        assertThat(storage.getTraceCount(TraceBucket.ALL)).isZero();
-        assertThat(storage.getTraceCount(TraceBucket.ERRORS)).isZero();
-        assertThat(storage.getTraceCount(TraceBucket.SLOW)).isZero();
-        assertThat(storage.getTrace("t1")).isEmpty();
-    }
-
-    @Test
     void logsAreCappedPerTrace() {
         InMemoryTraceStore store = TraceStores.with(p -> p.setMaxLogsPerTrace(3));
         for (int i = 1; i <= 5; i++) {

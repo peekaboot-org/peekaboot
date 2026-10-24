@@ -27,7 +27,4 @@ public interface TraceStore {
     List<ListedTrace> getTraces(TraceBucket bucket, int limit);
 
     int getTraceCount(TraceBucket bucket);
-
-    /** Test hook: drops every trace from every bucket. Nothing in production calls it. */
-    void clear();
 }

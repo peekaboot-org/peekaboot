@@ -157,9 +157,4 @@ public class InMemoryTraceStore implements TraceStore {
         Duration window = bundle.synchronousWindow();
         return window != null && window.toMillis() >= slowTraceThresholdMs;
     }
-
-    @Override
-    public void clear() {
-        buckets.values().forEach(Map::clear);
-    }
 }
