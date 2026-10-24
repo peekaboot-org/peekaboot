@@ -322,11 +322,9 @@ built the first time it opens.
 ## Thresholds and the SLOW badge
 
 Every number the frontend colours a duration by comes from the backend, once, over
-`GET /peekaboot/api/features` (the `Features` record). Four of them: `slowSpanThresholdMs`
+`GET /peekaboot/api/features` (the `Features` record). Three of them: `slowSpanThresholdMs`
 and `verySlowSpanThresholdMs` (`peekaboot.tracing.*`, what `IssueDetector` raises SLOW
-and VERY_SLOW at), `slowQueryThresholdMs` (SLOW_QUERY) and `slowTraceThresholdMs`
-(`peekaboot.tracing.slow-trace-threshold-ms`, the Slow bucket's admission threshold, `null`
-while tracing is off). The dashboard hands its `features` to every tab and to the overlay
+and VERY_SLOW at) and `slowQueryThresholdMs` (SLOW_QUERY). The dashboard hands its `features` to every tab and to the overlay
 it opens (`openTraceDetail(traceId, {locale, timeZone, features})`). The dev toolbar never
 fetches `/api/features`; its data blob carries the three span and query thresholds as
 `features` under the same names (`ToolbarDataProvider`), with the mask literal, and the bar
@@ -349,7 +347,7 @@ thresholds.
 The Traces tab's SLOW badge means "some span in this trace carries a SLOW or VERY_SLOW
 issue". That is the backend's per-trace `slow` flag, set by `IssueDetector`, and it is
 deliberately not "this trace is in the Slow bucket". The bucket admits a trace by total
-duration (`slowTraceThresholdMs`, 1 s by default); the badge reports a single span at or
+duration (`peekaboot.tracing.slow-trace-threshold-ms`, 1 s by default); the badge reports a single span at or
 above the span threshold (100 ms). A 300 ms request with one 150 ms query shows the badge
 under *All* and never appears under *Slow*. A 1.2 s request made of twelve 100 ms spans
 appears under *Slow* and shows the badge too.

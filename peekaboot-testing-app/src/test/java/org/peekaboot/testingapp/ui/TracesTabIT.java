@@ -87,13 +87,9 @@ class TracesTabIT extends PlaywrightTestBase {
         };
     }
 
-    /** What the frontend colours and buckets a trace duration by; the Slow bucket's admission threshold. */
+    /** The Slow bucket's admission threshold, as the store was configured with it. */
     private long slowTraceThresholdMs() {
-        return awaitJson(
-                        contextPath() + "/peekaboot/api/features",
-                        "features => features.slowTraceThresholdMs",
-                        "/api/features named no slow-trace threshold")
-                .asLong();
+        return tracingProperties.getSlowTraceThresholdMs();
     }
 
     /** A JS predicate on the trace JSON: a reconciler run's own trace, carrying its WARN about {@code order}. */

@@ -85,7 +85,6 @@ public class PeekabootController {
                 tracingProperties.getSlowSpanThresholdMs(),
                 tracingProperties.getVerySlowSpanThresholdMs(),
                 tracingProperties.getSlowQueryThresholdMs(),
-                traceInsightsService.isTracingAvailable() ? tracingProperties.getSlowTraceThresholdMs() : null,
                 MaskingEngine.MASK_LITERAL);
     }
 

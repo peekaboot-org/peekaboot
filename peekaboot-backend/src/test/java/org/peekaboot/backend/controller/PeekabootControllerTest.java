@@ -218,22 +218,6 @@ class PeekabootControllerTest {
         }
 
         @Test
-        void shouldPublishTheSlowBucketsAdmissionThreshold() {
-            when(traceInsightsService.isTracingAvailable()).thenReturn(true);
-            tracingProperties.setSlowTraceThresholdMs(2500);
-
-            assertThat(controller.getFeatures().slowTraceThresholdMs()).isEqualTo(2500L);
-        }
-
-        /** With tracing off there is no store, so no Slow bucket to publish a threshold for. */
-        @Test
-        void shouldLeaveTheSlowTraceThresholdNullWhenTracingIsOff() {
-            when(traceInsightsService.isTracingAvailable()).thenReturn(false);
-
-            assertThat(controller.getFeatures().slowTraceThresholdMs()).isNull();
-        }
-
-        @Test
         void shouldReportTracingSpansPossibleWhenASpanSourceIsWired() {
             PeekabootController withSpanSource = controller(null, true, false);
 

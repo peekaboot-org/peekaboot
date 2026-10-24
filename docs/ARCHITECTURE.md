@@ -253,7 +253,7 @@ org.peekaboot.backend/
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and drops events without a `traceId`
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW), then assembles and enriches the tree (see *Trace Assembly and Enrichment*)
-6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW and SLOW_QUERY at `PeekabootTracingProperties`' thresholds, which `PeekabootAutoConfiguration` binds whether or not tracing is on. A failed span raises none; its `status` and error fields already say so. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
+6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW and SLOW_QUERY at `PeekabootTracingProperties`' thresholds, which `PeekabootAutoConfiguration` binds whether or not tracing is on. A failed span raises none; its `status` and error fields already say so. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds (`Features`), so the frontend colours by the same numbers instead of keeping a copy
 
 ### Servlet Filters
 
