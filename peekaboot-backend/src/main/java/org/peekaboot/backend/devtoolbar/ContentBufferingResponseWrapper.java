@@ -1,4 +1,4 @@
-package org.peekaboot.backend.filter;
+package org.peekaboot.backend.devtoolbar;
 
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;

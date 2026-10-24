@@ -6,7 +6,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import org.peekaboot.backend.log.PeekabootLogbackAppender;
+import org.peekaboot.backend.tracing.capture.PeekabootLogbackAppender;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 

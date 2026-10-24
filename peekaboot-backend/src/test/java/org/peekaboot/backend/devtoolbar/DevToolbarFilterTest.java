@@ -1,4 +1,4 @@
-package org.peekaboot.backend.filter;
+package org.peekaboot.backend.devtoolbar;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,7 +31,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.testsupport.CurrentSpans;
 import org.peekaboot.backend.testsupport.FailingWriteResponse;
 import org.peekaboot.backend.testsupport.Requests;

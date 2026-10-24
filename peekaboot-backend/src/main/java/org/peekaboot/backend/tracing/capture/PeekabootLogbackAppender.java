@@ -1,4 +1,4 @@
-package org.peekaboot.backend.log;
+package org.peekaboot.backend.tracing.capture;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.IThrowableProxy;

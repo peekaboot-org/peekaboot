@@ -1,4 +1,4 @@
-package org.peekaboot.backend.log;
+package org.peekaboot.backend.tracing.capture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

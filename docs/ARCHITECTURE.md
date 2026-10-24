@@ -200,7 +200,7 @@ org.peekaboot.backend/
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
 ├── controller/             # PeekabootController: /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
-├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
+├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── actuator/           # ActuatorInsightsResponse: the dashboard's aggregate DTO, one field per section below
 │   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
@@ -209,13 +209,11 @@ org.peekaboot.backend/
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
 ├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
 │                           # (peekaboot.error-page.override), StackTraceHtml
-├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
 ├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, LevelDataResponse): InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
 │   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
 ├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info
 │   └── web/                # LifecycleController: /peekaboot/api/lifecycle/*
-├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate), RootActionTypes,
@@ -231,6 +229,7 @@ org.peekaboot.backend/
 ├── tracing/                # In-memory tracing
 │   ├── async/              # AsyncTaskDecorator, AsyncTaskFailurePostProcessor, AsyncTaskFailureInterceptor, RunningAsyncTask
 │   ├── bridge/otel/        # OtelSpanExporter
+│   ├── capture/            # RequestCaptureFilter, PeekabootLogbackAppender: the request and log sources beside the span bridge
 │   ├── config/             # PeekabootTracingProperties
 │   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent, TraceDiscardedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor

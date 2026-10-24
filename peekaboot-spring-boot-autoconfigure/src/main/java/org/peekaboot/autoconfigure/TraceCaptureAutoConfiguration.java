@@ -2,8 +2,8 @@ package org.peekaboot.autoconfigure;
 
 import io.micrometer.tracing.Tracer;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.filter.RequestCaptureFilter;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.tracing.capture.RequestCaptureFilter;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

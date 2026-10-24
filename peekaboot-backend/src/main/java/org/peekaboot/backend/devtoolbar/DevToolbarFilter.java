@@ -1,4 +1,4 @@
-package org.peekaboot.backend.filter;
+package org.peekaboot.backend.devtoolbar;
 
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -16,8 +16,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
-import org.peekaboot.backend.devtoolbar.ToolbarShell;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

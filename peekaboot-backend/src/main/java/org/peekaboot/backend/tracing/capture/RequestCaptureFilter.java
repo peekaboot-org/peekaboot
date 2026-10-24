@@ -1,4 +1,4 @@
-package org.peekaboot.backend.filter;
+package org.peekaboot.backend.tracing.capture;
 
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
