@@ -1,13 +1,17 @@
 package org.peekaboot.testingapp.integration;
 
+import static java.util.stream.Collectors.toMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TimeZone;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingAppTest;
@@ -126,6 +130,39 @@ class MultiDataSourceTraceIT {
                 .isNotEmpty()
                 .allSatisfy(timestamp ->
                         assertThat(timestamp.toInstant()).isCloseTo(Instant.now(), within(1, ChronoUnit.MINUTES)));
+    }
+
+    /** Liquibase stamps DATEEXECUTED with MySQL's NOW() and reads it back for the endpoint in the JVM's zone. */
+    @Test
+    void theLiquibaseTabShowsWhenMySqlRanEachChangeSetOnAJvmOutsideMySqlsZone() {
+        Map<String, Instant> ranAt = inventory
+                .sql("SELECT ID, UNIX_TIMESTAMP(DATEEXECUTED) FROM DATABASECHANGELOG")
+                .query((row, rowNumber) -> Map.entry(row.getString(1), Instant.ofEpochSecond(row.getLong(2))))
+                .list()
+                .stream()
+                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        JsonNode changeSets;
+        TimeZone jvmZone = TimeZone.getDefault();
+        // The container's MySQL runs on UTC; a JVM on any other zone exposes a reading placed in the wrong one.
+        TimeZone.setDefault(TimeZone.getTimeZone(ZoneOffset.ofHours(2)));
+        try {
+            changeSets = traces.api()
+                    .getJson("/peekaboot/api/actuator/all/insights")
+                    .path("liquibase")
+                    .path("changeSets");
+        } finally {
+            TimeZone.setDefault(jvmZone);
+        }
+
+        assertThat(ranAt).isNotEmpty();
+        assertThat(changeSets
+                        .valueStream()
+                        .collect(toMap(
+                                changeSet -> changeSet.path("id").asString(),
+                                changeSet -> Instant.parse(
+                                        changeSet.path("dateExecuted").asString()))))
+                .isEqualTo(ranAt);
     }
 
     private int stockOf(String sku) {

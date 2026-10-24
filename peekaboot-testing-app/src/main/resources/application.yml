@@ -73,6 +73,8 @@ app:
       password: inventory_pwd
       configuration:
         pool-name: inventory-db
-        # DATETIME has no zone; the default reads it as JVM-local, so Liquibase's dateExecuted would be hours off.
+        # DATETIME has no zone; the default reads it as JVM-local, not in the server zone MySQL's NOW() wrote it in.
         data-source-properties:
           connectionTimeZone: SERVER
+          # Liquibase places a LocalDateTime in the JVM's zone; a Timestamp read in the server's zone keeps the instant.
+          treatMysqlDatetimeAsTimestamp: true
