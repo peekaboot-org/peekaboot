@@ -17,7 +17,7 @@
  *
  * The bar never fetches /api/features: the blob's `features` carries the effective
  * thresholds under the same names, for the bar's query total and the overlay it opens. The
- * trace's own duration is coloured by the backend's trace.slow, as on the Traces tab. Its
+ * trace's own duration is coloured by the backend's trace.slow, as the overlay header does. Its
  * counts group in the dashboard's chosen locale, read through storage.js's readLocaleSetting().
  */
 import {createClient} from '../shared/api.js';
