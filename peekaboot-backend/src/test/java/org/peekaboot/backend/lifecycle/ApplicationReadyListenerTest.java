@@ -18,7 +18,10 @@ import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.datasource.DataSourceMetadata;
+import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.text.BannerFrame;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -241,10 +244,10 @@ class ApplicationReadyListenerTest {
         return Stream.of(report.split("\n", -1))
                 .filter(line -> !line.startsWith(" Process Tree: "))
                 .map(line -> {
-                    if (line.equals(LifecycleBanner.SEPARATOR)) {
+                    if (line.equals(BannerFrame.SEPARATOR)) {
                         return "=";
                     }
-                    if (line.equals(LifecycleBanner.LINE)) {
+                    if (line.equals(BannerFrame.LINE)) {
                         return "-";
                     }
                     return line.startsWith(" ::")

@@ -6,8 +6,8 @@ import java.nio.file.Path;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.lifecycle.LifecycleBanner;
 import org.peekaboot.backend.testsupport.Credentials;
+import org.peekaboot.backend.text.BannerFrame;
 
 class SecurityPostureTest {
 
@@ -150,7 +150,7 @@ class SecurityPostureTest {
                 SecurityPosture.disabledOnADeployment(DASHBOARD, false).report().orElseThrow();
 
         assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
-        assertThat(report.text()).doesNotContain(LifecycleBanner.SEPARATOR).hasLineCount(1);
+        assertThat(report.text()).doesNotContain(BannerFrame.SEPARATOR).hasLineCount(1);
     }
 
     @Test

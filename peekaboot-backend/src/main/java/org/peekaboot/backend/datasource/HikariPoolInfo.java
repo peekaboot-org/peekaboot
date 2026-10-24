@@ -1,4 +1,4 @@
-package org.peekaboot.backend.lifecycle;
+package org.peekaboot.backend.datasource;
 
 import com.zaxxer.hikari.HikariConfigMXBean;
 import com.zaxxer.hikari.HikariDataSource;
@@ -6,10 +6,10 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 /**
- * Reads a Hikari pool's sizing for the ready banner. The only lifecycle class that names a
+ * Reads a Hikari pool's sizing for the ready banner. The only backend class that names a
  * HikariCP type: PeekabootLifecycleAutoConfiguration creates it under
  * {@code @ConditionalOnClass(HikariDataSource)} only, so an application on another pool
- * never loads it and {@link ApplicationReadyListener} stays free of Hikari references.
+ * never loads it and {@code ApplicationReadyListener} stays free of Hikari references.
  */
 public final class HikariPoolInfo {
 

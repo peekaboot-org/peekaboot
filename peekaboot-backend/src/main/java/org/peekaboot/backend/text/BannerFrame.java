@@ -1,7 +1,7 @@
-package org.peekaboot.backend.lifecycle;
+package org.peekaboot.backend.text;
 
-/** The frame Peekaboot's startup and shutdown banners are drawn in, shared so they cannot drift apart. */
-public final class LifecycleBanner {
+/** The frame Peekaboot's log banners (startup, shutdown, security posture) are drawn in, shared so they cannot drift apart. */
+public final class BannerFrame {
 
     public static final String SEPARATOR =
             "===========================================================================================";
@@ -9,7 +9,7 @@ public final class LifecycleBanner {
     public static final String LINE =
             " ------------------------------------------------------------------------------------------";
 
-    private LifecycleBanner() {}
+    private BannerFrame() {}
 
     /** Opens a banner with its title block, ready for the report's own lines. */
     public static StringBuilder open(String title) {

@@ -21,7 +21,7 @@ import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.TileFormat;
 import org.peekaboot.backend.insights.config.Unit;
-import org.peekaboot.backend.lifecycle.UptimeFormat;
+import org.peekaboot.backend.text.UptimeFormat;
 import org.peekaboot.backend.ui.InlinedStylesheets;
 
 /**

@@ -3,9 +3,9 @@ package org.peekaboot.backend.mapper.actuator;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
+import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
-import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
 import org.peekaboot.backend.masking.MaskingEngine;
 

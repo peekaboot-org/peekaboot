@@ -12,9 +12,9 @@ import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
-import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 class DataSourceMapperTest {

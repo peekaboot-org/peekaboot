@@ -10,9 +10,13 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.ApplicationIdentity;
+import org.peekaboot.backend.datasource.DataSourceMetadata;
+import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.text.BannerFrame;
+import org.peekaboot.backend.text.ByteFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -75,7 +79,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             return;
         }
 
-        StringBuilder report = LifecycleBanner.open("ApplicationReady");
+        StringBuilder report = BannerFrame.open("ApplicationReady");
 
         appendApplicationInfo(report);
         appendServiceUrl(report, event);
@@ -84,7 +88,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         appendMemoryInfo(report);
         appendDatabaseInfo(report);
 
-        LifecycleBanner.close(report);
+        BannerFrame.close(report);
 
         log.info(report.toString());
     }
@@ -93,42 +97,36 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         String appName = applicationIdentity.displayName();
         String profiles = environmentInfo.getActiveProfilesAsString();
-        LifecycleBanner.line(
-                report, String.format(" Application [%s] ready with active profiles [%s]", appName, profiles));
+        BannerFrame.line(report, String.format(" Application [%s] ready with active profiles [%s]", appName, profiles));
     }
 
     private void appendServiceUrl(StringBuilder report, ApplicationReadyEvent event) {
 
-        serverUrlResolver
-                .resolveServiceUrl(event)
-                .ifPresent(url -> LifecycleBanner.line(report, " Service URL: " + url));
-        serverUrlResolver
-                .resolveSwaggerUiUrl(event)
-                .ifPresent(url -> LifecycleBanner.line(report, " Swagger UI: " + url));
+        serverUrlResolver.resolveServiceUrl(event).ifPresent(url -> BannerFrame.line(report, " Service URL: " + url));
+        serverUrlResolver.resolveSwaggerUiUrl(event).ifPresent(url -> BannerFrame.line(report, " Swagger UI: " + url));
         serverUrlResolver
                 .resolveDashboardUrl(event)
-                .ifPresent(url -> LifecycleBanner.line(report, " Peekaboot Dashboard: " + url));
+                .ifPresent(url -> BannerFrame.line(report, " Peekaboot Dashboard: " + url));
     }
 
     private void appendBuildInfo(StringBuilder report) {
 
-        LifecycleBanner.line(report, " Application Info: " + buildInfoProvider.getFormattedInfo());
+        BannerFrame.line(report, " Application Info: " + buildInfoProvider.getFormattedInfo());
     }
 
     private void appendSystemInfo(StringBuilder report) {
 
-        LifecycleBanner.line(
-                report, " Default Timezone: " + TimeZone.getDefault().getID());
-        LifecycleBanner.line(report, " Java VM Name: " + System.getProperty("java.vm.name"));
-        LifecycleBanner.line(report, " Java VM Version: " + System.getProperty("java.version"));
+        BannerFrame.line(report, " Default Timezone: " + TimeZone.getDefault().getID());
+        BannerFrame.line(report, " Java VM Name: " + System.getProperty("java.vm.name"));
+        BannerFrame.line(report, " Java VM Version: " + System.getProperty("java.version"));
 
         String osName = System.getProperty("os.name");
         String osVersion = System.getProperty("os.version");
         String osArch = System.getProperty("os.arch");
-        LifecycleBanner.line(report, String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch));
+        BannerFrame.line(report, String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch));
 
         ProcessInfo processInfo = ProcessInfo.current();
-        LifecycleBanner.text(
+        BannerFrame.text(
                 report,
                 String.format(
                         " Process User: %s (uid=%s, gid=%s, pid=%d)",
@@ -137,9 +135,9 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             String tree = processInfo.parentProcesses().stream()
                     .map(p -> p.command().isEmpty() ? String.valueOf(p.pid()) : p.command() + "(" + p.pid() + ")")
                     .collect(Collectors.joining(" -> "));
-            LifecycleBanner.text(report, " Process Tree: " + tree);
+            BannerFrame.text(report, " Process Tree: " + tree);
         }
-        LifecycleBanner.rule(report);
+        BannerFrame.rule(report);
     }
 
     private void appendMemoryInfo(StringBuilder report) {
@@ -148,11 +146,11 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         MemoryUsage heapMemory = memoryMXBean.getHeapMemoryUsage();
         MemoryUsage nonHeapMemory = memoryMXBean.getNonHeapMemoryUsage();
 
-        LifecycleBanner.text(
+        BannerFrame.text(
                 report,
                 String.format(
                         " Heap Memory: used=%s, max=%s", ByteFormat.humanize(heapMemory.getUsed()), maxOf(heapMemory)));
-        LifecycleBanner.line(
+        BannerFrame.line(
                 report,
                 String.format(
                         " Non-Heap Memory: used=%s, max=%s",
@@ -167,26 +165,26 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     private void appendDatabaseInfo(StringBuilder report) {
 
         if (dataSourceMetadataList.isEmpty()) {
-            LifecycleBanner.line(report, " Database: No database configured");
+            BannerFrame.line(report, " Database: No database configured");
             return;
         }
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
-            LifecycleBanner.text(
+            BannerFrame.text(
                     report,
                     String.format(
                             " DB Connection [%s]: %s on %s (user: %s)",
                             metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()));
-            LifecycleBanner.blankLine(report);
+            BannerFrame.blankLine(report);
 
             if (!metadata.connectionParams().isEmpty()) {
                 String params = connectionParamsMasker.mask(metadata.connectionParams()).entrySet().stream()
                         .map(e -> e.getKey() + "=" + e.getValue())
                         .collect(Collectors.joining(", "));
-                LifecycleBanner.line(report, " DB Connection Params: " + params);
+                BannerFrame.line(report, " DB Connection Params: " + params);
             }
 
-            LifecycleBanner.line(
+            BannerFrame.line(
                     report,
                     String.format(
                             " DB Version: %s %s", metadata.databaseProductName(), metadata.databaseProductVersion()));
@@ -203,14 +201,14 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         DataSource dataSource = dataSources.get(dataSourceName);
         hikariPoolInfo.settingsOf(dataSource).ifPresent(settings -> {
-            LifecycleBanner.text(
+            BannerFrame.text(
                     report,
                     String.format(
                             " DB Pool: minimumIdle=%d, maximumPoolSize=%d",
                             settings.minimumIdle(), settings.maximumPoolSize()));
-            LifecycleBanner.blankLine(report);
+            BannerFrame.blankLine(report);
 
-            LifecycleBanner.line(report, " Connection Timeout: " + settings.connectionTimeoutMs() + " ms");
+            BannerFrame.line(report, " Connection Timeout: " + settings.connectionTimeoutMs() + " ms");
         });
     }
 }

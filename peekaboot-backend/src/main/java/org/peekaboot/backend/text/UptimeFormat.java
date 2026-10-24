@@ -1,9 +1,8 @@
-package org.peekaboot.backend.lifecycle;
+package org.peekaboot.backend.text;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import org.peekaboot.backend.text.CountFormat;
 
 /**
  * Renders how long something ran the way a person would say it: the three largest

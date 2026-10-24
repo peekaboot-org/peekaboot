@@ -5,7 +5,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
-import org.peekaboot.backend.lifecycle.LifecycleBanner;
+import org.peekaboot.backend.text.BannerFrame;
 
 /**
  * What Peekaboot says about the dashboard's protection at startup, and how loudly.
@@ -72,21 +72,20 @@ public final class SecurityPosture {
             boolean devToolbarOn,
             boolean errorPageOnADeployment) {
 
-        StringBuilder report = LifecycleBanner.open("Peekaboot Security");
-        LifecycleBanner.line(report, " Peekaboot challenges every " + dashboardPath + "/** request with HTTP Basic.");
-        LifecycleBanner.line(report, " Username: " + credentials.username());
-        LifecycleBanner.line(report, passwordLine(credentials, credentialsFile));
+        StringBuilder report = BannerFrame.open("Peekaboot Security");
+        BannerFrame.line(report, " Peekaboot challenges every " + dashboardPath + "/** request with HTTP Basic.");
+        BannerFrame.line(report, " Username: " + credentials.username());
+        BannerFrame.line(report, passwordLine(credentials, credentialsFile));
         if (devToolbarOn) {
-            LifecycleBanner.line(
+            BannerFrame.line(
                     report,
                     " The dev toolbar is on: its requests will now raise a credential dialog on ordinary pages.");
         }
         if (errorPageOnADeployment) {
-            LifecycleBanner.line(report, " " + ERROR_PAGE_ON_A_DEPLOYMENT);
+            BannerFrame.line(report, " " + ERROR_PAGE_ON_A_DEPLOYMENT);
         }
-        LifecycleBanner.line(
-                report, " To use your own security instead, set peekaboot.security.enabled=false: " + DOCS);
-        LifecycleBanner.close(report);
+        BannerFrame.line(report, " To use your own security instead, set peekaboot.security.enabled=false: " + DOCS);
+        BannerFrame.close(report);
 
         Level level = devToolbarOn || errorPageOnADeployment ? Level.WARN : Level.INFO;
         return new SecurityPosture(new Report(level, report.toString()));

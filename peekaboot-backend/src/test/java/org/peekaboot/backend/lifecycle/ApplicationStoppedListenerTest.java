@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.ApplicationIdentity;
+import org.peekaboot.backend.text.BannerFrame;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
@@ -86,13 +87,13 @@ class ApplicationStoppedListenerTest {
         String report = banner(Duration.ofMinutes(5), UNNAMED);
 
         assertThat(report)
-                .isEqualTo("\n" + LifecycleBanner.SEPARATOR + "\n"
+                .isEqualTo("\n" + BannerFrame.SEPARATOR + "\n"
                         + " :: ApplicationStopped :: \n"
-                        + LifecycleBanner.SEPARATOR + "\n"
+                        + BannerFrame.SEPARATOR + "\n"
                         + " Application [unknown] stopped after 5 minutes\n"
-                        + LifecycleBanner.LINE + "\n"
+                        + BannerFrame.LINE + "\n"
                         + " Up since (context start): 2026-09-09 10:10:30\n"
                         + " Stopped:                  2026-09-09 10:15:30\n"
-                        + LifecycleBanner.SEPARATOR);
+                        + BannerFrame.SEPARATOR);
     }
 }

@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import org.peekaboot.backend.config.ApplicationIdentity;
+import org.peekaboot.backend.text.BannerFrame;
+import org.peekaboot.backend.text.UptimeFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -52,15 +54,15 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
         Instant started = Instant.ofEpochMilli(ownContext.getStartupDate());
         Instant stopped = clock.instant();
 
-        StringBuilder report = LifecycleBanner.open("ApplicationStopped");
-        LifecycleBanner.line(
+        StringBuilder report = BannerFrame.open("ApplicationStopped");
+        BannerFrame.line(
                 report,
                 String.format(
                         " Application [%s] stopped after %s",
                         applicationIdentity.displayName(), UptimeFormat.humanize(Duration.between(started, stopped))));
-        LifecycleBanner.text(report, " Up since (context start): " + timestamp.format(started));
-        LifecycleBanner.text(report, " Stopped:                  " + timestamp.format(stopped));
-        LifecycleBanner.close(report);
+        BannerFrame.text(report, " Up since (context start): " + timestamp.format(started));
+        BannerFrame.text(report, " Stopped:                  " + timestamp.format(stopped));
+        BannerFrame.close(report);
 
         log.info(report.toString());
     }

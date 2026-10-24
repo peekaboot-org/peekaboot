@@ -1,4 +1,4 @@
-package org.peekaboot.backend.lifecycle;
+package org.peekaboot.backend.text;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
