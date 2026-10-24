@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.entity.CustomerOrder;
-import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +46,7 @@ class OrderTotalsIT extends TestingAppITBase {
 
     @Test
     void aPlacedOrderIsPricedFromTheInventoryAndNamesItsCustomerById() {
-        ResponseEntity<String> response = api.postJson("/api/orders", new NewOrder(999L, "WIDGET-1", 3));
+        ResponseEntity<String> response = OrderFixtures.placeOrder(api, 999L, "WIDGET-1", 3);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         JsonNode summary = PeekabootApi.readJson(response.getBody());
         try {

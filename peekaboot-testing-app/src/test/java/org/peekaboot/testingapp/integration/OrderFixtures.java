@@ -59,7 +59,12 @@ public final class OrderFixtures {
 
     /** Places an order for customer 1 through {@code POST /api/orders}; anything but a 201 fails here. */
     static ResponseEntity<String> placeOrder(PeekabootApi api, String sku, int quantity) {
-        ResponseEntity<String> response = api.postJson("/api/orders", new NewOrder(1L, sku, quantity));
+        return placeOrder(api, 1L, sku, quantity);
+    }
+
+    /** Places an order for {@code customerId} through {@code POST /api/orders}; anything but a 201 fails here. */
+    static ResponseEntity<String> placeOrder(PeekabootApi api, long customerId, String sku, int quantity) {
+        ResponseEntity<String> response = api.postJson("/api/orders", new NewOrder(customerId, sku, quantity));
         assertThat(response.getStatusCode())
                 .as("POST /api/orders answered %s", response.getBody())
                 .isEqualTo(HttpStatus.CREATED);

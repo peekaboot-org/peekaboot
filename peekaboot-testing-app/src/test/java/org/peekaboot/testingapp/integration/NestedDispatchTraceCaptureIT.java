@@ -45,10 +45,10 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
     void forwardingRequestCapturesBothDispatches() {
         JsonNode trace = traces.awaitTrace(traces.get("/people"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(describedNames(trace, "handler.name"))
+        assertThat(SpanTree.tagValues(trace, "handler.name"))
                 .as("the forwarding controller and the one it forwards to each get a span")
                 .containsExactlyInAnyOrder("PersonController.people", "PersonController.persons");
-        assertThat(describedNames(trace, "view.name"))
+        assertThat(SpanTree.tagValues(trace, "view.name"))
                 .as("an outer view span left unstopped is never exported - it would be missing here")
                 .containsExactlyInAnyOrder("forward:/persons", "persons");
     }
@@ -102,13 +102,6 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
         assertThat(serverSpanNames(trace))
                 .as("a trace holds the one request that started it")
                 .containsExactly("http get /persons");
-    }
-
-    /** Every {@code tagKey} tag, {@code handler.name} or {@code view.name}, tree-wide. */
-    private static List<String> describedNames(JsonNode trace, String tagKey) {
-        return collect(trace.path("rootSpan"), span -> span.path("tags").has(tagKey)).stream()
-                .map(span -> span.path("tags").path(tagKey).asString(""))
-                .toList();
     }
 
     /** The inbound requests the trace holds - more than one means two requests were glued together. */
