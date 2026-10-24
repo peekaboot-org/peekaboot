@@ -94,9 +94,12 @@ class DbSpansTest {
     @Test
     void sqlJoinsTheStatementsOfABatchInIndexOrder() {
         assertThat(DbSpans.sql(span("s1")
-                        .tags(Map.of("jdbc.query[1]", "INSERT 1", "jdbc.query[0]", "INSERT 0"))
+                        .tags(Map.of(
+                                "jdbc.query[10]", "INSERT INTO t VALUES (10)",
+                                "jdbc.query[0]", "INSERT INTO t VALUES (0)",
+                                "jdbc.query[2]", "INSERT INTO t VALUES (2)"))
                         .build()))
-                .isEqualTo("INSERT 0;\nINSERT 1");
+                .isEqualTo("INSERT INTO t VALUES (0);\nINSERT INTO t VALUES (2);\nINSERT INTO t VALUES (10)");
     }
 
     @Test
