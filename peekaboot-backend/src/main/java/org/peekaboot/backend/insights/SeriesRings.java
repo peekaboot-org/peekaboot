@@ -16,7 +16,7 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
  * <p>Written by one collector thread per level, and once by {@link #restore} ahead of their
  * first write; read by the API and the snapshot writer. A tick or roll-up lands as one write
  * under one lock: its gap fill, every series' sample and the stamp that dates them. A restore
- * holds the same lock, and {@link #levelData(int)}, {@link #capture()} and the roll-up window
+ * holds the same lock, and {@link #levelData(int)}, {@link #capture(long)} and the roll-up window
  * reads run under it, so a reader sees whole ticks only. Meters are sampled before the write, so
  * the lock covers in-memory appends and nothing slower.
  */
@@ -187,7 +187,7 @@ final class SeriesRings {
      * whole ticks only, one sample count for every series, and its {@code endEpochMs} dates
      * the newest of them.
      */
-    InsightsSnapshot capture() {
+    InsightsSnapshot capture(long writtenAtEpochMs) {
         synchronized (lock) {
             long[] endEpochMs = new long[intervalMillis.length];
             for (int level = 0; level < intervalMillis.length; level++) {
@@ -212,7 +212,7 @@ final class SeriesRings {
                 levels.add(new InsightsSnapshot.Level(
                         intervalMillis[level], levelSizes[level], endEpochMs[level], counts[level]));
             }
-            return new InsightsSnapshot(System.currentTimeMillis(), levels, series);
+            return new InsightsSnapshot(writtenAtEpochMs, levels, series);
         }
     }
 
@@ -246,7 +246,7 @@ final class SeriesRings {
     /**
      * Brings a series the snapshot did not supply up to the length the snapshot's other
      * series have. Every level carries one sample count for all series at once - both in
-     * {@link #capture()} and in the file - so a series left short would have the next
+     * {@link #capture(long)} and in the file - so a series left short would have the next
      * capture promise more values in its header than it writes. Gaps are also what the
      * window deserves: the series was not being sampled for it, and a gap is exactly what
      * the charts already draw for that.

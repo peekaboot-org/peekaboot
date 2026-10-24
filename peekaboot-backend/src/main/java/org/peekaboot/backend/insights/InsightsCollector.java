@@ -66,7 +66,10 @@ public final class InsightsCollector {
         this(levels, series, shippedSeriesIds, tiles, registry, listener, snapshotSource, System::currentTimeMillis);
     }
 
-    /** {@code clock} supplies the epoch millis the level threads schedule their boundaries from; tests fix it. */
+    /**
+     * {@code clock} supplies the epoch millis the level threads schedule their boundaries from
+     * and a capture is dated with; tests fix it.
+     */
     InsightsCollector(
             List<InsightsProperties.Level> levels,
             List<SeriesDef> series,
@@ -197,9 +200,9 @@ public final class InsightsCollector {
         return rings.levelData(level);
     }
 
-    /** The rings as persistence writes them; see {@link SeriesRings#capture()}. */
+    /** The rings as persistence writes them, dated by the collector's clock; see {@link SeriesRings#capture(long)}. */
     InsightsSnapshot capture() {
-        return rings.capture();
+        return rings.capture(schedule.now());
     }
 
     /** Applies persisted history to the rings, once, ahead of a level thread's first write. */

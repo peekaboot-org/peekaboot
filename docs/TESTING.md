@@ -17,12 +17,14 @@
   never a fixed `Thread.sleep`. Where a test would otherwise sit out a production timeout, the
   class offers a package-private seam instead (`LifecycleEventLog(file, loadWait)`).
 - Wall clocks and host facts come through seams, never through `System.currentTimeMillis()`
-  read inside the class under test. `LifecycleRuns` and `InsightsCollector` take a
-  `LongSupplier` clock; `IntervalBoundary` takes that clock plus a `Sleeper`, so a schedule is
-  asserted exactly, and `InsightsSnapshotStore` takes an `IntervalBoundary` built on a fixed
-  clock, which dates the file and paces the writer alike; `ApplicationStoppedListener` and
-  `ServerInfo.current(Locale, Clock)` take a `java.time.Clock`, whose zone is the one the
-  timestamps render in. `ContainerRuntime`, `NetworkAddress`, `MachineInfo` and `ProcessInfo`
+  read inside the class under test. Wall time is a `java.time.Clock`: `LifecycleRuns`,
+  `LifecycleEventRecorder`, `DashboardCredentialsResolver`, `CredentialCache`,
+  `ApplicationStoppedListener` and `ServerInfo.current(Locale, Clock)` take one, and where a
+  timestamp is rendered, the clock's zone is the one it renders in. A `LongSupplier` is kept
+  only where a test scripts a sequence of readings: `InsightsCollector` takes one, which also
+  dates its captures, and `IntervalBoundary` takes that clock plus a `Sleeper`, so a schedule
+  is asserted exactly. `InsightsSnapshotStore` takes an `IntervalBoundary` built on a fixed
+  clock, which dates the file and paces the writer alike. `ContainerRuntime`, `NetworkAddress`, `MachineInfo` and `ProcessInfo`
   each read the host through a package-private `Signals` record a test states outright. A test
   that computes its expected value with the same call the production code makes proves
   nothing; it gets a seam instead.

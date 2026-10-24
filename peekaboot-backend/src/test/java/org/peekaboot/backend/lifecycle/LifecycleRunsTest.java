@@ -3,7 +3,9 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.lifecycle.LifecycleRunsResponse.Run;
@@ -20,7 +22,7 @@ class LifecycleRunsTest {
         LifecycleEventLog log = new LifecycleEventLog(null);
         log.beginLoad();
         events.forEach(log::recordAndPersist);
-        return new LifecycleRuns(log, () -> nowEpochMs).runs();
+        return new LifecycleRuns(log, Clock.fixed(Instant.ofEpochMilli(nowEpochMs), ZoneOffset.UTC)).runs();
     }
 
     @Test

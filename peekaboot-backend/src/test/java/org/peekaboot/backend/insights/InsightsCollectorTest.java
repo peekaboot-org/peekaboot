@@ -378,6 +378,15 @@ class InsightsCollectorTest {
         InsightsSnapshotCodec.write(new DataOutputStream(OutputStream.nullOutputStream()), snapshot);
     }
 
+    /** The snapshot store ages a restored file by this stamp, so it reads the clock the boundaries come from. */
+    @Test
+    void aCaptureIsDatedByTheCollectorsClock() {
+        InsightsCollector dated =
+                collector(registry).clock(() -> 1_756_000_000_000L).build();
+
+        assertThat(dated.capture().writtenAtEpochMs()).isEqualTo(1_756_000_000_000L);
+    }
+
     /**
      * A tick samples every series before it appends any, so level data read while it is
      * still sampling sees only the previous whole tick. The chart dates sample i from

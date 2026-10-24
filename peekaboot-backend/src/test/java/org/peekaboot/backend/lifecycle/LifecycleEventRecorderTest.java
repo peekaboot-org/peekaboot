@@ -1,6 +1,7 @@
 package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -8,7 +9,10 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
@@ -128,14 +132,18 @@ class LifecycleEventRecorderTest {
     }
 
     @Test
-    void aClosingContextIsRecordedAsAStop() {
+    void aClosingContextIsRecordedAsAStopAtTheClocksInstant() {
         LifecycleEventLog log = log();
         ApplicationContext context = mock(ApplicationContext.class);
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
+        Clock clock = Clock.fixed(Instant.parse("2026-09-11T08:00:00Z"), ZoneOffset.UTC);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context, clock);
 
         recorder.onClosed(new ContextClosedEvent(context));
 
-        assertThat(log.events()).extracting(LifecycleEvent::type).containsExactly(LifecycleEvent.Type.STOP);
+        assertThat(log.events())
+                .extracting(LifecycleEvent::type, LifecycleEvent::epochMs)
+                .containsExactly(tuple(LifecycleEvent.Type.STOP, clock.millis()));
     }
 
     /**

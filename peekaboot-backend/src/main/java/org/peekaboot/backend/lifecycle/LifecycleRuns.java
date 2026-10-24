@@ -1,11 +1,11 @@
 package org.peekaboot.backend.lifecycle;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.LongSupplier;
 
 /**
  * Turns the raw log into what the dashboard tabulates: one row per start, how long it
@@ -21,14 +21,14 @@ import java.util.function.LongSupplier;
 public class LifecycleRuns {
 
     private final LifecycleEventLog eventLog;
-    private final LongSupplier clock;
+    private final Clock clock;
 
     public LifecycleRuns(LifecycleEventLog eventLog) {
-        this(eventLog, System::currentTimeMillis);
+        this(eventLog, Clock.systemUTC());
     }
 
-    /** {@code clock} supplies the epoch millis a still-running run is measured up to; tests fix it. */
-    LifecycleRuns(LifecycleEventLog eventLog, LongSupplier clock) {
+    /** {@code clock} supplies the instant a still-running run is measured up to; tests fix it. */
+    LifecycleRuns(LifecycleEventLog eventLog, Clock clock) {
         this.eventLog = eventLog;
         this.clock = clock;
     }
@@ -37,7 +37,7 @@ public class LifecycleRuns {
         List<LifecycleEvent> events = eventLog.events();
         List<LifecycleRunsResponse.Run> runs = new ArrayList<>();
         BuildFacts carried = null;
-        long nowEpochMs = clock.getAsLong();
+        long nowEpochMs = clock.millis();
         for (int i = 0; i < events.size(); i++) {
             LifecycleEvent event = events.get(i);
             if (event.type() != LifecycleEvent.Type.START) {

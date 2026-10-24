@@ -1,7 +1,7 @@
 package org.peekaboot.backend.security;
 
 import java.security.SecureRandom;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -33,11 +33,23 @@ public class DashboardCredentialsResolver {
     @Nullable
     private final String applicationName;
 
+    private final Clock clock;
+
     public DashboardCredentialsResolver(
             PeekabootProperties.Security security, CredentialsFile credentialsFile, @Nullable String applicationName) {
+        this(security, credentialsFile, applicationName, Clock.systemUTC());
+    }
+
+    /** {@code clock} supplies the instant new credentials are dated with; tests fix it. */
+    DashboardCredentialsResolver(
+            PeekabootProperties.Security security,
+            CredentialsFile credentialsFile,
+            @Nullable String applicationName,
+            Clock clock) {
         this.security = security;
         this.credentialsFile = credentialsFile;
         this.applicationName = applicationName;
+        this.clock = clock;
     }
 
     public DashboardCredentials resolve() {
@@ -46,7 +58,11 @@ public class DashboardCredentialsResolver {
         String configured = security.getPassword();
         if (configured != null && !configured.isBlank()) {
             return new DashboardCredentials(
-                    username, PasswordHash.of(configured), null, Instant.now(), DashboardCredentials.Origin.CONFIGURED);
+                    username,
+                    PasswordHash.of(configured),
+                    null,
+                    clock.instant(),
+                    DashboardCredentials.Origin.CONFIGURED);
         }
 
         Optional<CredentialsFile.StoredCredentials> stored = credentialsFile.read();
@@ -61,7 +77,11 @@ public class DashboardCredentialsResolver {
 
         String generated = generatePassword();
         DashboardCredentials credentials = new DashboardCredentials(
-                username, PasswordHash.of(generated), generated, Instant.now(), DashboardCredentials.Origin.GENERATED);
+                username,
+                PasswordHash.of(generated),
+                generated,
+                clock.instant(),
+                DashboardCredentials.Origin.GENERATED);
         return credentialsFile.write(credentials)
                 ? credentials
                 : credentials.withOrigin(DashboardCredentials.Origin.GENERATED_UNPERSISTED);

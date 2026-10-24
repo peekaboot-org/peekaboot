@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -23,6 +26,26 @@ class DashboardCredentialsResolverTest {
         assertThat(credentials.passwordHash().matches("from-the-vault")).isTrue();
         assertThat(credentials.plaintext()).isNull();
         assertThat(file.read()).isEmpty();
+    }
+
+    @Test
+    void resolve_datesConfiguredAndGeneratedCredentialsByTheClock(@TempDir Path dir) {
+        var clock = Clock.fixed(Instant.parse("2026-09-11T08:00:00Z"), ZoneOffset.UTC);
+        var security = new PeekabootProperties.Security();
+        security.setPassword("from-the-vault");
+
+        var configured = new DashboardCredentialsResolver(
+                        security, CredentialsFile.unpersisted(), "orders-service", clock)
+                .resolve();
+        var generated = new DashboardCredentialsResolver(
+                        new PeekabootProperties.Security(),
+                        new CredentialsFile(dir.resolve("security.properties")),
+                        "orders-service",
+                        clock)
+                .resolve();
+
+        assertThat(configured.createdAt()).isEqualTo(clock.instant());
+        assertThat(generated.createdAt()).isEqualTo(clock.instant());
     }
 
     @Test
