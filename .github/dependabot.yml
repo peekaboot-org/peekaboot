@@ -25,6 +25,10 @@ updates:
       spring-boot:
         patterns:
           - "org.springframework.boot:*"
+    ignore:
+      # Its WebKit 27.2 reports a CSP violation for every <select>: https://bugs.webkit.org/show_bug.cgi?id=327212
+      - dependency-name: "com.microsoft.playwright:playwright"
+        versions: ["1.64.0"]
   # The parallel Gradle build must stay in lockstep with Maven (BUILD.md); it reads
   # buildSrc and every build.gradle.kts.
   - package-ecosystem: "gradle"
