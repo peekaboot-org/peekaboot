@@ -43,7 +43,7 @@
              bump both in one pull request. -->
         <pmd.version>7.28.0</pmd.version>
         <!-- surefire and failsafe ship as one release. -->
-        <surefire.version>3.6.0</surefire.version>
+        <surefire.version>3.6.1</surefire.version>
 
         <jacoco.version>0.8.15</jacoco.version>
         <!-- The one switch that turns the coverage gate off, data guard included. -->
