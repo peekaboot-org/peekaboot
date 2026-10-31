@@ -82,10 +82,6 @@ public final class TestSpans {
             return this;
         }
 
-        public SpanBuilder error(String errorMessage, String errorClass) {
-            return exception(errorClass, errorMessage, null);
-        }
-
         /** The exception the span recorded, as the exporter captures it. */
         public SpanBuilder exception(String type, String message, String stackTrace) {
             this.exception = new CapturedExceptionInfo(type, message, stackTrace);

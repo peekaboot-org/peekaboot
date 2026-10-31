@@ -80,7 +80,7 @@ class IssueDetectorTest {
         SpanNode span = node("span1")
                 .durationMs(50)
                 .status(SpanStatus.ERROR)
-                .error("Connection refused: db:5432", "java.net.ConnectException")
+                .exception("java.net.ConnectException", "Connection refused: db:5432")
                 .build();
 
         TraceTree result = detector.detectIssues(tree(span).build());

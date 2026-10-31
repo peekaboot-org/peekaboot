@@ -135,7 +135,7 @@ class InMemoryTraceStoreTest {
                 .in("t1")
                 .parent("s1")
                 .named("failing-op")
-                .error("boom", "java.lang.RuntimeException")
+                .exception("java.lang.RuntimeException", "boom")
                 .build());
 
         assertThat(listedTraceIds(storage, TraceBucket.ERRORS, 10)).containsExactly("t1");
@@ -307,8 +307,10 @@ class InMemoryTraceStoreTest {
     @Test
     void classificationIsIdempotent() {
         storage.addSpan(errorSpan("t1"));
-        storage.addSpan(
-                span("s2").in("t1").error("boom", "java.lang.RuntimeException").build());
+        storage.addSpan(span("s2")
+                .in("t1")
+                .exception("java.lang.RuntimeException", "boom")
+                .build());
         storage.addLog(log("t1").at("ERROR").saying("boom").build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
@@ -450,7 +452,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(span("s1")
                 .in("t1")
                 .at(START, Duration.ofMillis(150))
-                .error("boom", "java.lang.RuntimeException")
+                .exception("java.lang.RuntimeException", "boom")
                 .build());
         store.addLog(log("t1").saying("probe").build());
 
@@ -509,7 +511,7 @@ class InMemoryTraceStoreTest {
     private static SpanData errorSpan(String traceId) {
         return span(traceId + "-s")
                 .in(traceId)
-                .error("boom", "java.lang.RuntimeException")
+                .exception("java.lang.RuntimeException", "boom")
                 .build();
     }
 }

@@ -171,8 +171,8 @@ public final class Spans {
             return this;
         }
 
-        public SpanBuilder error(String errorMessage, String errorClass) {
-            return exception(errorClass, errorMessage, null);
+        public SpanBuilder exception(String type, String message) {
+            return exception(type, message, null);
         }
 
         /** The exception the span recorded, as the exporter captures it. */

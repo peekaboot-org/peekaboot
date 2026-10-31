@@ -201,7 +201,7 @@ class TraceTreeMapperTest {
                 .kind(Span.Kind.CLIENT)
                 .parent("gone")
                 .at(0, 5)
-                .error("Connection refused", "java.net.ConnectException")
+                .exception("java.net.ConnectException", "Connection refused")
                 .build();
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", failed));
@@ -552,7 +552,7 @@ class TraceTreeMapperTest {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
         var async = asyncTask("async")
                 .parent("root")
-                .error("boom", "java.lang.RuntimeException")
+                .exception("java.lang.RuntimeException", "boom")
                 .at(40, 1_000)
                 .build();
 
@@ -626,7 +626,7 @@ class TraceTreeMapperTest {
         var deep = span("deep")
                 .parent("failed")
                 .at(50, 900)
-                .error("boom", "java.lang.RuntimeException")
+                .exception("java.lang.RuntimeException", "boom")
                 .build();
         var cleanTask = asyncTask("clean").parent("root").at(40, 1_000).build();
 
@@ -729,7 +729,7 @@ class TraceTreeMapperTest {
                 .named("error-op")
                 .kind(Span.Kind.CLIENT)
                 .at(10, 50)
-                .error("Connection refused", "java.net.ConnectException")
+                .exception("java.net.ConnectException", "Connection refused")
                 .build();
 
         var traceData = TraceDatas.of("trace1", root, errorSpan);
@@ -752,9 +752,9 @@ class TraceTreeMapperTest {
                 .named("error-op")
                 .kind(Span.Kind.CLIENT)
                 .at(10, 50)
-                .error(
-                        "HttpClientErrorException: 401 on GET \"https://api.x/v1?api_key=SECRET\"",
-                        "org.springframework.web.client.HttpClientErrorException")
+                .exception(
+                        "org.springframework.web.client.HttpClientErrorException",
+                        "HttpClientErrorException: 401 on GET \"https://api.x/v1?api_key=SECRET\"")
                 .build();
 
         var traceData = TraceDatas.of("trace1", root, errorSpan);
@@ -961,7 +961,7 @@ class TraceTreeMapperTest {
                 .named("error-op")
                 .kind(Span.Kind.CLIENT)
                 .at(10, 50)
-                .error("Error", "Exception")
+                .exception("Exception", "Error")
                 .build();
 
         var traceData = TraceDatas.of("trace1", okSpan, errorChild);

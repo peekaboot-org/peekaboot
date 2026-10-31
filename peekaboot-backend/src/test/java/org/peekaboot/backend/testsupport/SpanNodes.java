@@ -90,8 +90,8 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder error(String errorMessage, String errorClass) {
-            this.exception = new SpanExceptionInfo(errorClass, errorMessage, null, List.of(), List.of());
+        public Builder exception(String type, String message) {
+            this.exception = new SpanExceptionInfo(type, message, null, List.of(), List.of());
             return this;
         }
 

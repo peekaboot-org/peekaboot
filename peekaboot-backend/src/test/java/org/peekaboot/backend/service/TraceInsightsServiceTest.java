@@ -123,7 +123,7 @@ class TraceInsightsServiceTest {
     void getInsightsQueriesRequestedBucket() {
         store.addSpan(span("s1")
                 .in("terr")
-                .error("boom", "java.lang.RuntimeException")
+                .exception("java.lang.RuntimeException", "boom")
                 .build());
         store.addSpan(span("s2").in("tok").build());
 
@@ -138,7 +138,7 @@ class TraceInsightsServiceTest {
     void responseCarriesBucketCounts() {
         store.addSpan(span("s1")
                 .in("terr")
-                .error("boom", "java.lang.RuntimeException")
+                .exception("java.lang.RuntimeException", "boom")
                 .build());
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
@@ -879,7 +879,7 @@ class TraceInsightsServiceTest {
     private void addTrace(String traceId, long durationMs, boolean hasError) {
         Spans.SpanBuilder root = rootSpan(traceId, "test-operation", Span.Kind.SERVER, durationMs);
         if (hasError) {
-            root.error("Test error", "TestException");
+            root.exception("TestException", "Test error");
         }
         store.addSpan(root.build());
     }
@@ -920,7 +920,7 @@ class TraceInsightsServiceTest {
     /** The same hand-off, from a request that then failed while the background work did not. */
     private void addFailedRequestWithAsyncWork(String traceId, long requestMs, long asyncMs) {
         store.addSpan(rootSpan(traceId, "test-operation", Span.Kind.SERVER, requestMs)
-                .error("Test error", "TestException")
+                .exception("TestException", "Test error")
                 .build());
         store.addSpan(asyncTaskSpan(traceId, requestMs, asyncMs));
     }
