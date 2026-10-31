@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
@@ -22,9 +23,11 @@ import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.JsonNode;
 
 /**
  * No unit test can see this: a real deployment launch arms Peekaboot's guard and really
@@ -82,6 +85,30 @@ class AutoSecuredDashboardIT {
         String challenge = api().headersOf("/peekaboot/").getFirst("WWW-Authenticate");
 
         assertThat(challenge).startsWith("Basic realm=\"Peekaboot\"");
+    }
+
+    @Test
+    void theRefusalCarriesAProblemBody() {
+        JsonNode problem = api().restClient()
+                .get()
+                .uri(INSIGHTS_API)
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange((request, response) -> {
+                    assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+                    return PeekabootApi.readJson(new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8));
+                });
+
+        assertThat(problem.path("status").asInt()).isEqualTo(401);
+        assertThat(problem.path("detail").asString("")).contains("HTTP Basic");
+    }
+
+    /** The guard refuses before the API's header interceptor runs, so these come from the guard itself. */
+    @Test
+    void theRefusalIsNeitherStoredNorSniffed() {
+        HttpHeaders headers = api().headersOf(INSIGHTS_API);
+
+        assertThat(headers.getCacheControl()).isEqualTo("no-store");
+        assertThat(headers.getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
     }
 
     @Test

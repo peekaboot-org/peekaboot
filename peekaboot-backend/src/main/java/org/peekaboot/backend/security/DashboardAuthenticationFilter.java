@@ -1,5 +1,6 @@
 package org.peekaboot.backend.security;
 
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,8 +13,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.config.ApiSecurityHeaders;
+import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.problem.ApiProblem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 
 /**
  * Challenges every {@code /peekaboot/**} request that does not carry Peekaboot's own credentials.
@@ -36,6 +41,8 @@ public class DashboardAuthenticationFilter implements Filter {
     private static final String CHALLENGE_HEADER = "WWW-Authenticate";
     private static final String CHALLENGE = "Basic realm=\"Peekaboot\", charset=\"UTF-8\"";
     private static final String BASIC_PREFIX = "Basic ";
+    private static final ApiProblem CHALLENGED = ApiProblem.unauthorized(
+            "Peekaboot's dashboard and API need Peekaboot's own credentials, sent with HTTP Basic.");
 
     private final DashboardCredentials credentials;
     private final CredentialCache cache;
@@ -61,7 +68,7 @@ public class DashboardAuthenticationFilter implements Filter {
             if (header != null) {
                 logFailedVerification(httpRequest, header);
             }
-            challenge(httpResponse);
+            challenge(httpRequest, httpResponse);
             return;
         }
 
@@ -113,11 +120,26 @@ public class DashboardAuthenticationFilter implements Filter {
 
     private record Presented(String username, String password) {}
 
-    /** A bare 401 rather than {@code sendError}, which would dispatch to the error page and re-enter the chain. */
-    private static void challenge(HttpServletResponse response) {
+    /**
+     * A 401 with a problem body, set rather than sent: {@code sendError} would dispatch to the error
+     * page and re-enter the chain. The guard answers before the API's header interceptor runs, so it
+     * sets {@link ApiSecurityHeaders} itself. An include gets nothing from it. An include cannot set
+     * the status, so the including response keeps its own, and a body would land inside the
+     * including page. A committed response gets no body either, since its status is already sent
+     * and it would only gain trailing bytes.
+     */
+    private static void challenge(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setHeader(CHALLENGE_HEADER, CHALLENGE);
-        response.setContentLength(0);
+        ApiSecurityHeaders.apply(response);
+        if (request.getDispatcherType() == DispatcherType.INCLUDE || response.isCommitted()) {
+            response.setContentLength(0);
+            return;
+        }
+        byte[] body = PeekabootJson.MAPPER.writeValueAsBytes(CHALLENGED);
+        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+        response.setContentLength(body.length);
+        response.getOutputStream().write(body);
     }
 
     /**

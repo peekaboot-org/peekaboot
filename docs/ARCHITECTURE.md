@@ -443,6 +443,10 @@ The advice's scope, `org.peekaboot.backend`, leaves the application's controller
 error handling, and it is ordered first so an application-wide `@RestControllerAdvice` cannot
 reshape Peekaboot's errors (`ApiProblemHandlerTest`).
 
+The guard's 401 from `DashboardAuthenticationFilter` carries the same body. An include into the
+dashboard gets nothing from the guard. An include cannot set the status, so the including
+response keeps its own, and a body would land inside the including page.
+
 Enumerated parameters (`bucket`, `rootActionType`) go through `RequestParameters`, which refuses
 a value it does not know and lists the accepted ones, where a default would answer a typo with
 the wrong list.
