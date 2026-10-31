@@ -220,7 +220,7 @@ org.peekaboot.backend/
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate), RootActionTypes,
-│                           # TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
+│                           # TraceSummaries, TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
 ├── masking/                # MaskingEngine (one bean, from MaskingConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
@@ -1291,8 +1291,8 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
 
 1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
    It re-parents orphans under the root the snapshot names, masks tags, error messages and
-   query text, classifies the root action type and computes the tab summary. It leaves
-   `TraceTree.slow` false and every `SpanNode.issues` list empty.
+   query text, classifies the root action type and computes the tab summary through
+   `TraceSummaries`. It leaves `TraceTree.slow` false and every `SpanNode.issues` list empty.
    **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in and decides `TraceTree.slow`.
    `TraceInsightsService` calls it on both trace endpoints.
@@ -1439,7 +1439,7 @@ the starter carries the instrumentation rather than leaving both cases reading a
 the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag. `jdbc.*` alone is
 not enough, since datasource-proxy's connection and result-set spans carry
 `jdbc.datasource.name`/`jdbc.row-count` and are not queries. The predicate is shared by
-`TraceTreeMapper` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY) and
+`TraceSummaries` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY) and
 `QueryExtractor` (the `queries` list), so the three numbers a trace reports about its queries
 are one number; `TraceTreeMapperTest` pins the equality.
 

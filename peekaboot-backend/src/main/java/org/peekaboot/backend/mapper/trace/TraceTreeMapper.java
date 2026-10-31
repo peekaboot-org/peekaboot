@@ -19,12 +19,8 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
-import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 
 public class TraceTreeMapper {
-
-    /** The logs live on the bundle, not the snapshot; {@code TraceLogMapper.withLogsSummary} counts them. */
-    private static final TraceTabSummary.LogsSummary LOGS_COUNTED_LATER = new TraceTabSummary.LogsSummary(0, 0, 0);
 
     private final MaskingEngine maskingEngine;
     private final TagMasker tagMasker;
@@ -72,7 +68,7 @@ public class TraceTreeMapper {
         // exported) under the root so they don't silently vanish from the tree
         attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
 
-        TraceTabSummary summary = calculateSummary(spans, rootSpanData);
+        TraceTabSummary summary = TraceSummaries.ofTrace(spans, rootSpanData);
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
 
@@ -96,9 +92,9 @@ public class TraceTreeMapper {
     /**
      * The same trace seen from one of its spans: the tree built from that span's own
      * descendants, timed by their window rather than the trace's, classified from that span,
-     * summarised over those spans alone - see {@link #subtreeSummary} - and ended OK or in error
-     * by them. What the listing's async rows render. A span no longer stored maps as the whole
-     * trace: the cap can evict an entry between listing and mapping.
+     * summarised over those spans alone ({@link TraceSummaries#ofSubtree}) and ended OK or in
+     * error by them. What the listing's async rows render. A span no longer stored maps
+     * as the whole trace: the cap can evict an entry between listing and mapping.
      */
     public TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId) {
         List<SpanData> spans = traceData.spans();
@@ -134,7 +130,7 @@ public class TraceTreeMapper {
                 RootActionTypes.of(subtreeRootData),
                 subtreeRoot.name(),
                 subtreeRoot,
-                subtreeSummary(totals),
+                TraceSummaries.ofSubtree(totals.spanCount, totals.queryCount, totals.queryDurationMs),
                 new SubtreeView(subtreeRootSpanId, enclosed),
                 traceData.truncated());
     }
@@ -148,19 +144,6 @@ public class TraceTreeMapper {
 
     private static TraceStatus statusOf(boolean anySpanFailed) {
         return anySpanFailed ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
-    }
-
-    /**
-     * The subtree's own span and query figures - not the enclosing trace's, so a row
-     * rooted at an async entry reports what that entry point's own work did. No request part:
-     * a subtree is not a request.
-     */
-    private static TraceTabSummary subtreeSummary(SubtreeTotals totals) {
-        return new TraceTabSummary(
-                null,
-                new TraceTabSummary.SpansSummary(totals.spanCount),
-                new TraceTabSummary.QueriesSummary(totals.queryCount, totals.queryDurationMs),
-                LOGS_COUNTED_LATER);
     }
 
     private static void accumulateSubtree(SpanNode node, SubtreeTotals totals) {
@@ -309,37 +292,5 @@ public class TraceTreeMapper {
         return spanData.events().stream()
                 .map(e -> new SpanEvent(e.name(), e.timestamp()))
                 .toList();
-    }
-
-    private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
-        int dbQueryCount = 0;
-        long dbTotalDurationMs = 0L;
-
-        for (SpanData span : spans) {
-            if (DbSpans.isQuery(span)) {
-                dbQueryCount++;
-                dbTotalDurationMs += span.durationMs();
-            }
-        }
-
-        return new TraceTabSummary(
-                extractRequestSummary(rootSpanData),
-                new TraceTabSummary.SpansSummary(spans.size()),
-                new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
-                LOGS_COUNTED_LATER);
-    }
-
-    private static TraceTabSummary.RequestSummary extractRequestSummary(SpanData rootSpanData) {
-        if (rootSpanData == null || rootSpanData.tags() == null) {
-            return null;
-        }
-        Map<String, String> tags = rootSpanData.tags();
-        String method = HttpSpanTags.method(tags);
-        String path = HttpSpanTags.path(tags);
-        Integer statusCode = HttpSpanTags.statusCode(tags);
-        if (method == null && path == null && statusCode == null) {
-            return null;
-        }
-        return new TraceTabSummary.RequestSummary(method, path, statusCode);
     }
 }
