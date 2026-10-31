@@ -3,11 +3,13 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
@@ -76,6 +78,21 @@ class HostJacksonSettingsIT extends TestingAppITBase {
         JsonNode nextExecution = tasks.get(0).path("nextExecution");
         assertThat(nextExecution.isString()).isTrue();
         assertThatCode(() -> Instant.parse(nextExecution.asString())).doesNotThrowAnyException();
+    }
+
+    /** The wire convention holds for problems too, so the host's non_null keeps the null {@code parameter}. */
+    @Test
+    void aProblemKeepsItsNullParameter() {
+        JsonNode problem = api.restClient()
+                .get()
+                .uri("/peekaboot/api/traces/00000000000000000000000000000000/insights")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange((request, response) ->
+                        PeekabootApi.readJson(new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8)));
+
+        assertThat(problem.path("status").asInt()).isEqualTo(404);
+        assertThat(problem.has("parameter")).isTrue();
+        assertThat(problem.path("parameter").isNull()).isTrue();
     }
 
     @RestController

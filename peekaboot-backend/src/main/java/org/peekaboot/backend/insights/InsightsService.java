@@ -14,6 +14,7 @@ import org.peekaboot.backend.insights.config.PanelDef;
 import org.peekaboot.backend.insights.config.PanelsFile;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
+import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.backend.text.ByteFormat;
 import org.slf4j.Logger;
@@ -207,9 +208,12 @@ public final class InsightsService implements SmartLifecycle {
                 panel.id(), panel.title(), panel.chart(), panel.unit(), panel.level(), seriesResponses);
     }
 
-    public LevelDataResponse data(int level) {
-        if (level < 0 || level >= properties.getLevels().size()) {
-            throw new IllegalArgumentException("Unknown insights level: " + level);
+    /** One level's history; a missing ({@code null}) or unknown {@code level} is refused naming the accepted range. */
+    public LevelDataResponse data(Integer level) {
+        int levels = properties.getLevels().size();
+        if (level == null || level < 0 || level >= levels) {
+            String refused = level == null ? "level is required." : "Unknown insights level " + level + ".";
+            throw ApiProblemException.badParameter("level", refused + " Accepted: 0 to " + (levels - 1) + ".");
         }
         return collector.levelData(level).toResponse();
     }

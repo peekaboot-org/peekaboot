@@ -1,12 +1,11 @@
 package org.peekaboot.backend.insights.web;
 
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.insights.InsightsConfigResponse;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.LevelDataResponse;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,8 +29,9 @@ public class InsightsController {
         return service.config();
     }
 
+    /** {@code level} is optional here so that its refusal can name the accepted range. */
     @GetMapping(value = "/data", produces = MediaType.APPLICATION_JSON_VALUE)
-    public LevelDataResponse data(@RequestParam("level") int level) {
+    public LevelDataResponse data(@RequestParam(name = "level", required = false) @Nullable Integer level) {
         return service.data(level);
     }
 
@@ -39,12 +39,4 @@ public class InsightsController {
     public SseEmitter stream() {
         return publisher.subscribe();
     }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    ResponseEntity<ErrorResponse> badRequest(IllegalArgumentException e) {
-        return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
-    }
-
-    /** A record rather than a Map, so the 400 body goes through the Peekaboot converter too. */
-    record ErrorResponse(String error) {}
 }

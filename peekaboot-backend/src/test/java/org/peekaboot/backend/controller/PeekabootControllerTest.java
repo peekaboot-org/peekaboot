@@ -1,6 +1,7 @@
 package org.peekaboot.backend.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,13 +29,12 @@ import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceBucket;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 
 class PeekabootControllerTest {
 
@@ -131,20 +131,19 @@ class PeekabootControllerTest {
             TraceTree traceTree = createTraceTree("trace-456");
             when(traceInsightsService.getTraceInsights("trace-456")).thenReturn(Optional.of(traceTree));
 
-            ResponseEntity<TraceTree> result = controller.getTraceInsights("trace-456");
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(result.getBody()).isNotNull();
-            assertThat(result.getBody().traceId()).isEqualTo("trace-456");
+            assertThat(controller.getTraceInsights("trace-456")).isSameAs(traceTree);
         }
 
         @Test
-        void shouldReturn404WhenTraceNotFound() {
-            when(traceInsightsService.getTraceInsights("unknown")).thenReturn(Optional.empty());
+        void shouldRefuseAnUnknownTraceAsNotFound() {
+            when(traceInsightsService.getTraceInsights("trace-789")).thenReturn(Optional.empty());
 
-            ResponseEntity<TraceTree> result = controller.getTraceInsights("unknown");
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.getTraceInsights("trace-789"))
+                    .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                        assertThat(e.problem().status()).isEqualTo(404);
+                        assertThat(e.problem().parameter()).isNull();
+                        assertThat(e.problem().detail()).contains("trace-789");
+                    });
         }
     }
 

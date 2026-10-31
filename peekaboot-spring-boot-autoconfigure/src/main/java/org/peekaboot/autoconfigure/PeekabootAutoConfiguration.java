@@ -14,6 +14,7 @@ import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.mapper.trace.HibernateSqlFormatter;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.ApiProblemHandler;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
@@ -127,6 +128,12 @@ public class PeekabootAutoConfiguration {
                 insightsService.getIfAvailable(),
                 otelSpanExporter.getIfAvailable() != null,
                 lifecycleController.getIfAvailable() != null);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ApiProblemHandler apiProblemHandler() {
+        return new ApiProblemHandler();
     }
 
     /** Only with Hibernate on the classpath; without it every query's {@code formatted} SQL is null. */

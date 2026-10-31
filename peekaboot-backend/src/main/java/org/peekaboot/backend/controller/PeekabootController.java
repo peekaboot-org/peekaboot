@@ -11,6 +11,8 @@ import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.ApiProblem;
+import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
@@ -18,7 +20,6 @@ import org.peekaboot.backend.text.EnumNames;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -132,10 +133,10 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/{traceId}/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<TraceTree> getTraceInsights(@PathVariable(name = "traceId") String traceId) {
+    public TraceTree getTraceInsights(@PathVariable(name = "traceId") String traceId) {
         return traceInsightsService
                 .getTraceInsights(traceId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ApiProblemException(ApiProblem.notFound(
+                        "No trace " + traceId + " in the store. The id is unknown or evicted, or tracing is off.")));
     }
 }

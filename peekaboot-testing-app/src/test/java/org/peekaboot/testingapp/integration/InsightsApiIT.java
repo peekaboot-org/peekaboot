@@ -21,17 +21,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
 import tools.jackson.databind.JsonNode;
 
 /**
  * Contract tests for the insights REST/SSE API against the real, auto-configured
- * app - config shape, tick data growing over the ring, the 400 on an invalid level,
- * and an actual "tick" SSE event on the wire. The test profile's insights levels
- * (see application-test.yml) tick every 250ms specifically so these assertions -
- * and the Playwright specs that reuse the same profile - don't need to wait out
- * the 10s production default.
+ * app: config shape, tick data growing over the ring, and an actual "tick" SSE event on the
+ * wire. ApiProblemIT covers the 400 on an invalid level. The test profile's insights levels
+ * (see application-test.yml) tick every 250ms so these assertions and the Playwright
+ * specs that reuse the same profile don't need to wait out the 10s production default.
  */
 class InsightsApiIT extends TestingAppITBase {
 
@@ -60,17 +57,6 @@ class InsightsApiIT extends TestingAppITBase {
         assertThat(values)
                 .as("one value per tick the response counted, or the ring and the wire disagree")
                 .hasSize(data.get("count").asInt());
-    }
-
-    @Test
-    void invalidLevelIsBadRequest() {
-        HttpStatusCode status = api.restClient()
-                .get()
-                .uri("/peekaboot/api/insights/data?level=9")
-                .accept(MediaType.APPLICATION_JSON)
-                .exchange((req, res) -> res.getStatusCode());
-
-        assertThat(status.value()).isEqualTo(400);
     }
 
     @Test

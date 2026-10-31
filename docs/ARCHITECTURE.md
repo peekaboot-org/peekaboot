@@ -429,7 +429,19 @@ writes byte for byte what an unconfigured Boot application writes, so a host wit
 Jackson settings sees the same bytes either way
 (`PeekabootJsonMessageConverterTest.writesCamelCaseNullsAndIsoInstants` pins the wire shape).
 Every Peekaboot response goes through it, `PeekabootController.getFeatures()`'s `Features`
-record and `InsightsController`'s 400 body included, both under that package prefix.
+record and the `ApiProblem` error bodies included, both under that package prefix.
+
+### API errors
+
+`ApiProblemHandler` answers a 400 for a bad or missing parameter, a 404 for an unknown trace id
+and a `ResponseStatusException`, such as the insights stream's 503, with an `ApiProblem`. That is
+an RFC 9457 body served as `application/problem+json`, whose `parameter` names the request
+parameter at fault, or is null. A 405, a 406 or an unexpected 500 keeps the application's usual
+error response.
+
+The advice's scope, `org.peekaboot.backend`, leaves the application's controllers their own
+error handling, and it is ordered first so an application-wide `@RestControllerAdvice` cannot
+reshape Peekaboot's errors (`ApiProblemHandlerTest`).
 
 ### In-Process Actuator Invocation
 
