@@ -23,7 +23,7 @@ import {byKey, formatCount, formatDurationMs, formatTimelineTicks, instantMs} fr
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {sqlView} from '../../shared/sql-view.js';
-import {logEntry} from '../log-entry.js';
+import {logEntry, stackTraceParts} from '../log-entry.js';
 
 const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
 
@@ -216,9 +216,9 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
     const attrsId = `pk-span-attrs-${span.spanId}`;
     const queryId = `pk-span-query-${span.spanId}`;
     const logsId = `pk-span-logs-${span.spanId}`;
-    // the backend's verdict, read once per span: ERROR whenever it recorded an error message
-    // or class, and everything that marks the span as erroneous - the name, the bar, its
-    // accessible name - reads this one flag rather than re-deriving it.
+    // the backend's verdict, read once per span: ERROR whenever the span failed. The name,
+    // the bar and its accessible name all mark the span erroneous from this one flag rather
+    // than re-deriving it.
     const hasError = span.status === 'ERROR';
 
     const entry = el('div', {className: `pk-gantt-span pk-gantt-kind--${kind}${span.asyncEntry ? ' pk-gantt-span--async' : ''}`});
@@ -356,11 +356,20 @@ function attrsPanel(span, kind, attrsId) {
         tagList(span.tags));
 }
 
+/**
+ * An anonymous exception class has no name to serve, and one thrown without a message leaves
+ * only its stack trace. That trace is still worth showing, and an empty danger line above it
+ * would claim a heading with nothing in it.
+ */
 function errorSection(span) {
-    if (!span.errorMessage && !span.errorClass) return null;
-    return el('div', {className: 'pk-span-details__error'},
-        span.errorClass ? el('div', {className: 'pk-span-details__error-class', text: span.errorClass}) : null,
-        span.errorMessage ? el('div', {className: 'pk-span-details__error-message', text: span.errorMessage}) : null);
+    const exception = span.exception;
+    if (!exception || (!exception.type && !exception.message && !exception.stackTrace)) return null;
+    const heading = exception.type || exception.message
+        ? el('div', {className: 'pk-span-details__error'},
+            exception.type ? el('div', {className: 'pk-span-details__error-class', text: exception.type}) : null,
+            exception.message ? el('div', {className: 'pk-span-details__error-message', text: exception.message}) : null)
+        : null;
+    return el('div', {className: 'pk-span-details__exception'}, heading, ...stackTraceParts(exception));
 }
 
 /** The statement (shared/sql-view.js), plus the row count of the result-set span RowCounts paired to it - opened by the row's query toggle. */

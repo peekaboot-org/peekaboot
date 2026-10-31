@@ -67,7 +67,7 @@ public class TraceInsightsService {
             PeekabootTracingProperties tracingProperties,
             StackTraceRules stackTraceRules) {
         this.traceStore = traceStore;
-        this.traceTreeMapper = new TraceTreeMapper(maskingEngine, sqlFormatter);
+        this.traceTreeMapper = new TraceTreeMapper(maskingEngine, sqlFormatter, stackTraceRules);
         this.issueDetector = new IssueDetector(tracingProperties);
         this.queryExtractor = new QueryExtractor();
         this.traceLogMapper = new TraceLogMapper(maskingEngine, stackTraceRules);

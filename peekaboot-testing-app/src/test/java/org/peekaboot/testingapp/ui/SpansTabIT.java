@@ -285,21 +285,21 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .isEqualTo(0);
         @SuppressWarnings("unchecked")
         List<String> renderedFrames = (List<String>) overlay.evaluate(
-                "(root, panel) => [...root.querySelectorAll(panel + ' .pk-log__trace .pk-stack-trace__frame')].map(el => el.textContent)",
+                "(root, panel) => [...root.querySelectorAll(panel + ' .pk-stack-trace-block .pk-stack-trace__frame')].map(el => el.textContent)",
                 panel);
         assertThat(renderedFrames)
                 .containsExactlyElementsOf(
                         List.of(errorLog.path("stackTrace").asString().split("\n", -1)));
 
-        String hiddenRuns = panel + " .pk-log__trace details.pk-stack-trace__hidden";
+        String hiddenRuns = panel + " .pk-stack-trace-block details.pk-stack-trace__hidden";
         assertThat(page.locator(hiddenRuns).count()).isGreaterThan(0);
         assertThat(page.locator(hiddenRuns + "[open]").count()).isEqualTo(0);
 
-        page.click(panel + " .pk-log__reveal");
+        page.click(panel + " .pk-stack-trace-reveal");
 
         assertThat(page.locator(hiddenRuns + "[open]").count())
                 .isEqualTo(page.locator(hiddenRuns).count());
-        assertThat(page.getAttribute(panel + " .pk-log__reveal", "aria-pressed"))
+        assertThat(page.getAttribute(panel + " .pk-stack-trace-reveal", "aria-pressed"))
                 .isEqualTo("true");
     }
 
@@ -686,7 +686,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     queryButton({spanId: 'f', name: 'SELECT big', rowCount: 12345, statement}, 'de-DE'),
                     panelRowCount({spanId: 'f', name: 'SELECT big', rowCount: 12345, statement}, 'de-DE'),
                     errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
-                    errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
+                    errorBar({spanId: 'd', name: 'x', status: 'OK', exception: {type: 'ignored', message: 'ignored'}}),
                     tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
                 ];
             })()
@@ -921,9 +921,9 @@ class SpansTabIT extends TraceOverlayTestBase {
      * An error span says what went wrong where the reader is looking: its name takes the
      * danger colour on the row, following the backend's status verdict like the bar does,
      * its row carries a visible "error" chip, and its details panel leads with the exception
-     * class and message the backend recorded. A span that recorded neither renders no error
-     * section and no chip. The chip is aria-hidden: the name button's accessible name above
-     * already ends in ", error".
+     * class and message the backend recorded, then shows the exception's stack trace, folded
+     * as a log's is. A span that recorded neither renders no error section and no chip. The
+     * chip is aria-hidden: the name button's accessible name above already ends in ", error".
      */
     @Test
     void anErrorSpansDetailsShowTheExceptionItRecorded() {
@@ -931,8 +931,13 @@ class SpansTabIT extends TraceOverlayTestBase {
             (() => {
                 const container = document.createElement('div');
                 m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'root', children: [
-                    {spanId: 'b', name: 'http get', status: 'ERROR',
-                        errorClass: 'org.springframework.web.client.ResourceAccessException', errorMessage: 'Connection refused'},
+                    {spanId: 'b', name: 'http get', status: 'ERROR', exception: {
+                        type: 'org.springframework.web.client.ResourceAccessException', message: 'Connection refused',
+                        stackTrace: 'org.springframework.web.client.ResourceAccessException: Connection refused\\n'
+                            + '\\tat org.peekaboot.app.Client.call(Client.java:1)\\n'
+                            + '\\tat org.springframework.web.client.RestClient.get(RestClient.java:2)\\n'
+                            + '\\tat org.springframework.web.client.RestClient.exchange(RestClient.java:3)',
+                        hiddenFrames: [{start: 2, endExclusive: 4}], applicationFrames: [{start: 1, endExclusive: 2}]}},
                     {spanId: 'c', name: 'ok', status: 'OK'}]}});
                 container.querySelector('.pk-gantt-all-details').click();
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
@@ -943,6 +948,10 @@ class SpansTabIT extends TraceOverlayTestBase {
                     erroneous('b'),
                     entry('b').querySelector('.pk-span-details__error-class')?.textContent ?? null,
                     entry('b').querySelector('.pk-span-details__error-message')?.textContent ?? null,
+                    entry('b').querySelector('.pk-span-details__exception .pk-stack-trace__frame--app')?.textContent ?? null,
+                    entry('b').querySelector('.pk-span-details__exception details.pk-stack-trace__hidden summary')?.textContent ?? null,
+                    !!entry('b').querySelector('.pk-span-details__exception .pk-stack-trace-reveal'),
+                    entry('c').querySelector('.pk-span-details__exception') === null,
                     nameToggle('b').getAttribute('aria-label'),
                     errorChips('b').length,
                     errorChips('b')[0].textContent,
@@ -962,6 +971,10 @@ class SpansTabIT extends TraceOverlayTestBase {
                         true,
                         "org.springframework.web.client.ResourceAccessException",
                         "Connection refused",
+                        "\tat org.peekaboot.app.Client.call(Client.java:1)",
+                        "2 frames hidden",
+                        true,
+                        true,
                         "http get, internal span, error",
                         1,
                         "error",
@@ -970,6 +983,32 @@ class SpansTabIT extends TraceOverlayTestBase {
                         true,
                         "ok, internal span",
                         0);
+    }
+
+    /**
+     * An exception the backend could name neither the class nor the message of (an anonymous
+     * class thrown without a message) still shows its stack trace, with no empty danger line
+     * standing above it.
+     */
+    @Test
+    void anExceptionWithOnlyAStackTraceShowsTheTraceAlone() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'root', children: [
+                    {spanId: 'b', name: 'task', status: 'ERROR', exception: {type: null, message: null,
+                        stackTrace: 'org.peekaboot.app.Jobs$1\\n\\tat org.peekaboot.app.Jobs.run(Jobs.java:1)',
+                        hiddenFrames: [], applicationFrames: [{start: 1, endExclusive: 2}]}}]}});
+                container.querySelector('.pk-gantt-all-details').click();
+                const entry = container.querySelector('.pk-gantt-row[data-span-id="b"]').closest('.pk-gantt-span');
+                return [
+                    entry.querySelector('.pk-span-details__exception .pk-stack-trace__frame--app')?.textContent ?? null,
+                    entry.querySelector('.pk-span-details__error') === null
+                ];
+            })()
+            """);
+
+        assertThat(facts).isEqualTo(List.of("\tat org.peekaboot.app.Jobs.run(Jobs.java:1)", true));
     }
 
     /**

@@ -164,7 +164,8 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
 
         JsonNode asyncSpan = SpanTree.descendantNamed(trace, AsyncTaskMarker.CONTEXTUAL_NAME);
         assertThat(asyncSpan.path("status").asString("")).isEqualTo("ERROR");
-        assertThat(asyncSpan.path("errorMessage").asString("")).isEqualTo("enrichment of PK-2001 was rejected");
+        assertThat(asyncSpan.path("exception").path("message").asString(""))
+                .isEqualTo("enrichment of PK-2001 was rejected");
         traces.awaitTraceInBucket("errors", traceId);
         assertThat(asyncRowStatus(traceId))
                 .as("the async row is summarised over its own subtree, which now holds the failed span")

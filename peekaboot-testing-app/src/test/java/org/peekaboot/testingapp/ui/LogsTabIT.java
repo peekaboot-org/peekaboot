@@ -84,7 +84,7 @@ class LogsTabIT extends TraceOverlayTestBase {
                 (root, message) => {
                     const row = [...root.querySelectorAll('.pk-log')]
                         .find(entry => entry.querySelector('.pk-log__message').textContent === message);
-                    const frames = [...row.querySelectorAll('.pk-log__trace .pk-stack-trace__frame')];
+                    const frames = [...row.querySelectorAll('.pk-stack-trace-block .pk-stack-trace__frame')];
                     return {
                         lines: frames.map(frame => frame.textContent),
                         applicationFrames: frames.flatMap((frame, i) =>
@@ -181,7 +181,7 @@ class LogsTabIT extends TraceOverlayTestBase {
      * straight in the way {@code AccessibilityIT} already does for other log-row elements.
      *
      * <p>The counts above are a coarse smoke test; the real pin is the last assertion -
-     * every {@code .pk-stack-trace__frame} rendered inside {@code .pk-log__trace}, read off in
+     * every {@code .pk-stack-trace__frame} rendered inside {@code .pk-stack-trace-block}, read off in
      * document order and compared line for line against the trace's own {@code stackTrace}
      * field. A walk that loses track of where a hidden run ends - rendering its frames once
      * inside the {@code <details>} and again as loose frames below it - or one that drops a
@@ -207,16 +207,18 @@ class LogsTabIT extends TraceOverlayTestBase {
         toolbar.openOverlay();
         overlay.openLogsTab();
 
-        assertThat(page.locator(".pk-log__trace details.pk-stack-trace__hidden").count())
+        assertThat(page.locator(".pk-stack-trace-block details.pk-stack-trace__hidden")
+                        .count())
                 .isGreaterThan(0);
-        assertThat(page.locator(".pk-log__trace .pk-stack-trace__frame--app").count())
+        assertThat(page.locator(".pk-stack-trace-block .pk-stack-trace__frame--app")
+                        .count())
                 .isGreaterThan(0);
 
         String stackTrace = capturedStackTrace(traceId);
         @SuppressWarnings("unchecked")
         List<String> renderedFrames = (List<String>)
                 overlay.evaluate(
-                        "root => [...root.querySelectorAll('.pk-log__trace .pk-stack-trace__frame')].map(el => el.textContent)");
+                        "root => [...root.querySelectorAll('.pk-stack-trace-block .pk-stack-trace__frame')].map(el => el.textContent)");
         assertThat(renderedFrames).containsExactlyElementsOf(List.of(stackTrace.split("\n", -1)));
     }
 
@@ -226,7 +228,7 @@ class LogsTabIT extends TraceOverlayTestBase {
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
-        overlay.waitFor(".pk-log__trace");
+        overlay.waitFor(".pk-stack-trace-block");
 
         assertThat(overlay.evaluate("root => { const frame = root.querySelector('.pk-stack-trace__frame--app');"
                         + " return frame && getComputedStyle(frame).fontWeight; }"))
@@ -248,28 +250,28 @@ class LogsTabIT extends TraceOverlayTestBase {
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
-        overlay.waitFor(".pk-log__reveal");
+        overlay.waitFor(".pk-stack-trace-reveal");
 
         int rowsWithHiddenRuns = (int) (Integer) overlay.evaluate("root => [...root.querySelectorAll('.pk-log')]"
                 + ".filter(row => row.querySelector('details.pk-stack-trace__hidden')).length");
-        assertThat(page.locator(".pk-log__reveal").count()).isEqualTo(rowsWithHiddenRuns);
+        assertThat(page.locator(".pk-stack-trace-reveal").count()).isEqualTo(rowsWithHiddenRuns);
 
-        page.click(".pk-log__reveal");
+        page.click(".pk-stack-trace-reveal");
 
-        assertThat(page.locator(".pk-log__trace details.pk-stack-trace__hidden[open]")
+        assertThat(page.locator(".pk-stack-trace-block details.pk-stack-trace__hidden[open]")
                         .count())
-                .isEqualTo(page.locator(".pk-log__trace details.pk-stack-trace__hidden")
+                .isEqualTo(page.locator(".pk-stack-trace-block details.pk-stack-trace__hidden")
                         .count());
-        assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("true");
-        assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
+        assertThat(page.getAttribute(".pk-stack-trace-reveal", "aria-pressed")).isEqualTo("true");
+        assertThat(page.textContent(".pk-stack-trace-reveal")).isEqualTo("Show full stack trace");
 
-        page.click(".pk-log__reveal");
+        page.click(".pk-stack-trace-reveal");
 
-        assertThat(page.locator(".pk-log__trace details.pk-stack-trace__hidden[open]")
+        assertThat(page.locator(".pk-stack-trace-block details.pk-stack-trace__hidden[open]")
                         .count())
                 .isEqualTo(0);
-        assertThat(page.getAttribute(".pk-log__reveal", "aria-pressed")).isEqualTo("false");
-        assertThat(page.textContent(".pk-log__reveal")).isEqualTo("Show full stack trace");
+        assertThat(page.getAttribute(".pk-stack-trace-reveal", "aria-pressed")).isEqualTo("false");
+        assertThat(page.textContent(".pk-stack-trace-reveal")).isEqualTo("Show full stack trace");
     }
 
     /**
@@ -324,7 +326,7 @@ class LogsTabIT extends TraceOverlayTestBase {
 
         page.locator(".pk-log")
                 .filter(new Locator.FilterOptions().setHasText(REJECTED_ROW_LOG))
-                .locator(".pk-log__reveal")
+                .locator(".pk-stack-trace-reveal")
                 .click();
         assertThat(renderedLogRow(REJECTED_ROW_LOG).get("openRuns"))
                 .isEqualTo(lengthsOf(thrownLogs.get(REJECTED_ROW_LOG).path("hiddenFrames"))

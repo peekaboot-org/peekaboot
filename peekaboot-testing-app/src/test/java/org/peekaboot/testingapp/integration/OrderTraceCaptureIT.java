@@ -170,6 +170,29 @@ class OrderTraceCaptureIT extends TestingAppITBase {
                 .isEqualTo("HAS_ERRORS");
     }
 
+    /**
+     * Tomcat logs /boom's stack trace after the span ended, with no trace id in the MDC, so the
+     * trace's only copy of it is the exception its spans recorded.
+     */
+    @Test
+    void aFailingRequestsSpanCarriesTheExceptionWithItsStackTrace() {
+        JsonNode trace = traces.awaitTrace(traces.get("/boom"), TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        JsonNode exception = SpanTree.exceptions(trace).stream()
+                .filter(each -> "java.lang.IllegalStateException"
+                        .equals(each.path("type").asString("")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no span recorded the IllegalStateException: " + trace));
+        assertThat(exception.path("message").asString("")).isEqualTo("order reconciliation gateway is unreachable");
+        String[] lines = exception.path("stackTrace").asString("").split("\n", -1);
+        assertThat(lines[0]).isEqualTo("java.lang.IllegalStateException: order reconciliation gateway is unreachable");
+        JsonNode applicationFrames = exception.path("applicationFrames");
+        assertThat(applicationFrames)
+                .as("the throwing frame is the application's own")
+                .isNotEmpty();
+        assertThat(lines[applicationFrames.get(0).path("start").asInt()]).contains("OrderController.boom");
+    }
+
     /** The console hides this line (logback-test.xml), so Peekaboot capturing it is what keeps it asserted. */
     @Test
     void failingEndpointsLoggedErrorIsCapturedAgainstItsTrace() {

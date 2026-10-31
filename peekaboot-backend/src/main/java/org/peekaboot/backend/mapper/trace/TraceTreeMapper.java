@@ -17,20 +17,21 @@ import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 public class TraceTreeMapper {
 
-    private final MaskingEngine maskingEngine;
     private final TagMasker tagMasker;
     private final SqlStatements sqlStatements;
+    private final SpanExceptions spanExceptions;
 
     /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
-    public TraceTreeMapper(MaskingEngine maskingEngine, SqlFormatter sqlFormatter) {
-        this.maskingEngine = maskingEngine;
+    public TraceTreeMapper(MaskingEngine maskingEngine, SqlFormatter sqlFormatter, StackTraceRules stackTraceRules) {
         this.tagMasker = new TagMasker(maskingEngine);
         this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
+        this.spanExceptions = new SpanExceptions(maskingEngine, stackTraceRules);
     }
 
     public TraceTree map(TraceData traceData) {
@@ -243,7 +244,6 @@ public class TraceTreeMapper {
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
-        var exception = spanData.exception();
 
         return new SpanNode(
                 spanData.spanId(),
@@ -256,8 +256,7 @@ public class TraceTreeMapper {
                 maskedTags(spanData),
                 mapEvents(spanData),
                 List.of(), // issues added by IssueDetector
-                maskingEngine.maskValue(exception != null ? exception.message() : null),
-                exception != null ? exception.type() : null,
+                spanExceptions.of(spanData.exception()),
                 queries.statement(spanData),
                 queries.rowCount(spanData.spanId()),
                 isAsync && !parentIsAsync);
@@ -265,7 +264,7 @@ public class TraceTreeMapper {
 
     /**
      * Every tag stays on its own span, masked - http.url etc. may carry a credential the
-     * key name alone can't catch. A span's errorMessage and query text are masked the same
+     * key name alone can't catch. A span's exception message and query text are masked the same
      * way: an exception message can echo back the failing request's URL. The statement
      * tags and the parameter tags are the exception: they are served once, masked, as the
      * span's {@code statement}, and shipping the raw tag beside it would say it twice. That

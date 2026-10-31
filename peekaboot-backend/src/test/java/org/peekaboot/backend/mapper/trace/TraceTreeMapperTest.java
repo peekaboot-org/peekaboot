@@ -23,12 +23,15 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.trace.RootActionType;
+import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.testsupport.TraceDatas;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
@@ -37,7 +40,13 @@ import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 
 class TraceTreeMapperTest {
 
-    private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE);
+    private final TraceTreeMapper mapper =
+            new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()));
+
+    private final TraceTreeMapper foldingMapper = new TraceTreeMapper(
+            new MaskingEngine(),
+            SqlFormatter.NONE,
+            new StackTraceRules(List.of("org.springframework"), List.of("org.peekaboot.app")));
 
     /** child2 is created before child1 but starts after it, so only the start-time sort puts child1 first. */
     @Test
@@ -578,7 +587,7 @@ class TraceTreeMapperTest {
         var taskQuery =
                 jdbcQuery("q-task", "select 2").parent("async").at(50, 5).build();
 
-        new TraceTreeMapper(new MaskingEngine(), recording)
+        new TraceTreeMapper(new MaskingEngine(), recording, new StackTraceRules(List.of(), List.of()))
                 .mapSubtree(TraceDatas.of("trace1", root, requestQuery, async, taskQuery), "async");
 
         assertThat(formatted).containsExactly("select 2");
@@ -644,7 +653,7 @@ class TraceTreeMapperTest {
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
     }
 
-    // errorMessage/errorClass go through the masker like tags do: a realistic exception
+    // exception.message goes through the masker like tags do: a realistic exception
     // message can itself carry a credential, e.g. an HTTP client exception that echoes the
     // failing request's URL back with a query-string API key attached.
     @Test
@@ -666,7 +675,78 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(traceData);
 
         SpanNode maskedErrorSpan = result.rootSpan().children().getFirst();
-        assertThat(maskedErrorSpan.errorMessage()).doesNotContain("SECRET").contains("api_key=******");
+        assertThat(maskedErrorSpan.exception().message())
+                .doesNotContain("SECRET")
+                .contains("api_key=******");
+    }
+
+    /** A failed span's message and trace can echo a credential, and the dashboard folds them as it folds a log's. */
+    @Test
+    void servesAFailedSpansExceptionMaskedAndFolded() {
+        String stackTrace = """
+                java.lang.IllegalStateException: GET https://api.x/v1?api_key=SECRET failed
+                \tat org.peekaboot.app.OrderController.boom(OrderController.java:42)
+                \tat org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:1)
+                \tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:2)""";
+        var root = span("root")
+                .named("GET /boom")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .exception("java.lang.IllegalStateException", "GET https://api.x/v1?api_key=SECRET failed", stackTrace)
+                .build();
+
+        SpanExceptionInfo exception =
+                foldingMapper.map(TraceDatas.of("trace1", root)).rootSpan().exception();
+
+        assertThat(exception.type()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(exception.message()).doesNotContain("SECRET").contains("api_key=******");
+        assertThat(exception.stackTrace()).doesNotContain("SECRET").startsWith("java.lang.IllegalStateException");
+        assertThat(exception.applicationFrames()).containsExactly(new Range(1, 2));
+        assertThat(exception.hiddenFrames()).containsExactly(new Range(2, 4));
+    }
+
+    /** String.lines() splits on a lone \r where the browser's split('\n') does not; the ranges must index what the wire carries. */
+    @Test
+    void anExceptionMessageCarryingACarriageReturnKeepsItsRangesOnTheWireLines() {
+        String stackTrace = """
+                java.lang.IllegalStateException: first\rsecond
+                \tat org.peekaboot.app.OrderController.boom(OrderController.java:42)
+                """;
+        var root = span("root")
+                .named("GET /boom")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .exception("java.lang.IllegalStateException", "first\rsecond", stackTrace)
+                .build();
+
+        SpanExceptionInfo exception =
+                foldingMapper.map(TraceDatas.of("trace1", root)).rootSpan().exception();
+
+        String[] wireLines = exception.stackTrace().split("\n", -1);
+        assertThat(wireLines[exception.applicationFrames().getFirst().start()])
+                .contains("org.peekaboot.app.OrderController.boom");
+    }
+
+    @Test
+    void aSpanThatFailedWithoutAnExceptionEventServesOnlyItsMessage() {
+        var root = span("root")
+                .named("GET /boom")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .exception(null, "boom", null)
+                .build();
+
+        assertThat(foldingMapper.map(TraceDatas.of("trace1", root)).rootSpan().exception())
+                .isEqualTo(new SpanExceptionInfo(null, "boom", null, List.of(), List.of()));
+    }
+
+    @Test
+    void aSpanThatDidNotFailHasNoException() {
+        var root =
+                span("root").named("GET /ok").kind(Span.Kind.SERVER).at(0, 100).build();
+
+        assertThat(foldingMapper.map(TraceDatas.of("trace1", root)).rootSpan().exception())
+                .isNull();
     }
 
     @Test
@@ -1206,7 +1286,8 @@ class TraceTreeMapperTest {
 
     @Test
     void aQuerySpanCarriesItsStatementLaidOutByTheMappersFormatter() {
-        TraceTreeMapper formattingMapper = new TraceTreeMapper(new MaskingEngine(), new HibernateSqlFormatter());
+        TraceTreeMapper formattingMapper = new TraceTreeMapper(
+                new MaskingEngine(), new HibernateSqlFormatter(), new StackTraceRules(List.of(), List.of()));
 
         SpanNode node =
                 formattingMapper.map(personLookupTrace()).rootSpan().children().getFirst();

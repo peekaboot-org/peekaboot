@@ -84,6 +84,17 @@ final class SpanTree {
         return spans;
     }
 
+    /** Every exception a span of the trace carries, in walk order. */
+    static List<JsonNode> exceptions(JsonNode trace) {
+        List<JsonNode> exceptions = new ArrayList<>();
+        walk(trace.path("rootSpan"), span -> {
+            if (span.path("exception").isObject()) {
+                exceptions.add(span.path("exception"));
+            }
+        });
+        return exceptions;
+    }
+
     static String spanId(JsonNode span) {
         return span.path("spanId").asString("");
     }

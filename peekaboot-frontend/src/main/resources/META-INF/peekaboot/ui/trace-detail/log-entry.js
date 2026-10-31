@@ -2,7 +2,8 @@
  * Trace-detail overlay - one captured log as both the Logs tab and a span's details panel show
  * it: time, level, message and the folded stack trace with its reveal control. The Logs tab
  * passes its span cell (filter-to-span, tree link, copyable id) to sit after the time; a span's
- * panel passes none, since every entry there already belongs to that span.
+ * panel passes none, since every entry there already belongs to that span. The span's panel
+ * also renders a failed span's exception through stackTraceParts.
  */
 import {el, pressedToggle} from '../shared/dom.js';
 import {formatTimeOfDay} from '../shared/format.js';
@@ -15,34 +16,37 @@ export function logEntry(log, dateOptions, spanCell = null) {
         el('span', {className: `pk-log__level pk-log__level--${logLevelVariant(log.level)}`, text: log.level}),
         el('span', {className: 'pk-log__message', text: log.message}));
 
-    const entry = el('div', {className: 'pk-log', attrs: {'data-level': log.level, 'data-span-id': log.spanId || ''}}, row);
-
-    if (log.stackTrace) {
-        const trace = traceBlock(log);
-        // A control that reveals nothing must not appear - see shared/unmask-control.js.
-        if ((log.hiddenFrames || []).length > 0) entry.append(revealControl(trace));
-        entry.append(trace);
-    }
-
-    return entry;
+    return el('div', {className: 'pk-log', attrs: {'data-level': log.level, 'data-span-id': log.spanId || ''}},
+        row, ...stackTraceParts(log));
 }
 
 /**
- * The trace a log record carried, with the runs the backend marked hidden closed behind a
- * <details>. The ranges come from the server, which owns the exclusion list; this renders what
- * it is told and classifies nothing. hiddenFrames arrives empty when folding is switched off
- * (the server empties its own exclusion list), so that state needs no flag of its own here -
- * every line just renders in the open, ranges-driven the same as the folded case.
+ * A captured stack trace, a log record's or a failed span's exception, as its reveal control
+ * followed by the folded trace. Empty where it carries no stackTrace.
  */
-function traceBlock(log) {
-    const lines = log.stackTrace.split('\n');
+export function stackTraceParts(folded) {
+    if (!folded.stackTrace) return [];
+    const trace = traceBlock(folded);
+    // A control that reveals nothing must not appear (shared/unmask-control.js).
+    return (folded.hiddenFrames || []).length > 0 ? [revealControl(trace), trace] : [trace];
+}
+
+/**
+ * The trace with the runs the backend marked hidden closed behind a <details>. The ranges
+ * come from the server, which owns the exclusion list; this renders what it is told and
+ * classifies nothing. hiddenFrames arrives empty when folding is switched off (the server
+ * empties its own exclusion list), so that state needs no flag of its own here. Every line
+ * renders in the open, driven by the ranges the same as the folded case.
+ */
+function traceBlock(folded) {
+    const lines = folded.stackTrace.split('\n');
     const app = new Set();
-    (log.applicationFrames || []).forEach(r => {
+    (folded.applicationFrames || []).forEach(r => {
         for (let i = r.start; i < r.endExclusive; i++) app.add(i);
     });
-    const hidden = new Map((log.hiddenFrames || []).map(r => [r.start, r]));
+    const hidden = new Map((folded.hiddenFrames || []).map(r => [r.start, r]));
 
-    const pre = el('pre', {className: 'pk-stack-trace pk-log__trace', attrs: {tabindex: '0', 'aria-label': 'Stack trace'}});
+    const pre = el('pre', {className: 'pk-stack-trace pk-stack-trace-block', attrs: {tabindex: '0', 'aria-label': 'Stack trace'}});
     for (let i = 0; i < lines.length; ) {
         const run = hidden.get(i);
         if (run) {
@@ -71,9 +75,9 @@ function frameLine(text, applicationFrame) {
     return el('span', {className: applicationFrame ? 'pk-stack-trace__frame pk-stack-trace__frame--app' : 'pk-stack-trace__frame', text});
 }
 
-/** One control per log row: opens or closes every hidden run inside that row's trace at once. */
+/** One control per trace: opens or closes every hidden run inside it at once. */
 function revealControl(pre) {
-    return pressedToggle({className: 'pk-btn pk-btn--small pk-log__reveal', text: 'Show full stack trace'}, open => {
+    return pressedToggle({className: 'pk-btn pk-btn--small pk-stack-trace-reveal', text: 'Show full stack trace'}, open => {
         pre.querySelectorAll('details.pk-stack-trace__hidden').forEach(run => {
             run.open = open;
         });

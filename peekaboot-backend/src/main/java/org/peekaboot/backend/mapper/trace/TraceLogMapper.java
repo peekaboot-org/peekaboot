@@ -8,8 +8,6 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
-import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
@@ -22,11 +20,11 @@ public final class TraceLogMapper {
 
     private final MaskingEngine maskingEngine;
 
-    private final StackTraceRules stackTraceRules;
+    private final WireStackTraces stackTraces;
 
     public TraceLogMapper(MaskingEngine maskingEngine, StackTraceRules stackTraceRules) {
         this.maskingEngine = maskingEngine;
-        this.stackTraceRules = stackTraceRules;
+        this.stackTraces = new WireStackTraces(maskingEngine, stackTraceRules);
     }
 
     /** {@code logs} is one read of {@code bundle.logs()}, so the caller can count the same list it maps. */
@@ -72,30 +70,18 @@ public final class TraceLogMapper {
     /**
      * Folding happens here rather than at capture: the full trace stays on the event, and these
      * ranges are only the rendering hint the browser needs so it classifies nothing itself. The
-     * message and trace are masked like a span's errorMessage: either can echo the failing
-     * request's URL. The trace is masked whole, before folding, so a secret spanning lines (a PEM
-     * key) still matches and the ranges index the masked lines.
+     * message and trace are masked like a failed span's exception: either can echo the failing
+     * request's URL.
      */
     private TraceLog toTraceLog(TraceDataBundle bundle, LogCapturedEvent e) {
-        String wireStackTrace = null;
-        List<Range> hiddenFrames = List.of();
-        List<Range> applicationFrames = List.of();
-        if (e.stackTrace() != null) {
-            FoldedTrace folded = stackTraceRules.fold(maskingEngine.maskValue(e.stackTrace()));
-            // The ranges index into folded.lines(), not the raw captured string: String.lines() splits
-            // on a lone \r where the browser's split('\n') would not, so sending anything else back
-            // would leave the two disagreeing about which line a given index names.
-            wireStackTrace = String.join("\n", folded.lines());
-            hiddenFrames = folded.hidden();
-            applicationFrames = folded.applicationFrames();
-        }
+        WireStackTraces.WireStackTrace trace = stackTraces.of(e.stackTrace());
         return new TraceLog(
                 bundle.resolveSpanId(e.spanId()),
                 e.timestamp(),
                 e.level(),
                 maskingEngine.maskValue(e.message()),
-                wireStackTrace,
-                hiddenFrames,
-                applicationFrames);
+                trace.text(),
+                trace.hiddenFrames(),
+                trace.applicationFrames());
     }
 }

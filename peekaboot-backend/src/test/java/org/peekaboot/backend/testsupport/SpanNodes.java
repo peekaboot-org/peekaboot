@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.domain.trace.SpanEvent;
+import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
@@ -35,8 +36,7 @@ public final class SpanNodes {
         private Map<String, String> tags = Map.of();
         private List<SpanEvent> events = List.of();
         private List<SpanIssue> issues = List.of();
-        private String errorMessage;
-        private String errorClass;
+        private SpanExceptionInfo exception;
         private SqlStatement statement;
         private Long rowCount;
         private boolean asyncEntry;
@@ -91,8 +91,7 @@ public final class SpanNodes {
         }
 
         public Builder error(String errorMessage, String errorClass) {
-            this.errorMessage = errorMessage;
-            this.errorClass = errorClass;
+            this.exception = new SpanExceptionInfo(errorClass, errorMessage, null, List.of(), List.of());
             return this;
         }
 
@@ -118,8 +117,7 @@ public final class SpanNodes {
                     tags,
                     events,
                     issues,
-                    errorMessage,
-                    errorClass,
+                    exception,
                     statement,
                     rowCount,
                     asyncEntry);

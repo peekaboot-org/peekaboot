@@ -204,6 +204,8 @@
 /* The panel's own ground and padding already set its entries apart from the rows around it. */
 .pk-span-panel--logs .pk-log { align-self: stretch; padding: 0; border-bottom: none; }
 .pk-span-details__head { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: wrap; color: var(--pk-text-muted); }
+/* A column, so the reveal control's align-self applies; the danger colour stays on the class and message. */
+.pk-span-details__exception { display: flex; flex-direction: column; }
 .pk-span-details__error { color: var(--pk-danger); font-family: var(--pk-font-mono); overflow-wrap: anywhere; }
 .pk-span-details__error-class { font-weight: 600; }
 .pk-span-tags { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--pk-space-md); row-gap: 2px; margin: 0; font-family: var(--pk-font-mono); }
@@ -292,11 +294,12 @@
 .pk-log__level--error { color: var(--pk-danger); }
 .pk-log__message { flex: 1; overflow-wrap: anywhere; }
 
-/* The trace a log entry carried (log-entry.js's traceBlock, a components.css
-   .pk-stack-trace), rendered only when log.stackTrace is present. align-self keeps the
-   toggle from stretching to the row's full width under .pk-log's column flex. */
-.pk-log__reveal { align-self: flex-start; margin-top: var(--pk-space-xs); }
-.pk-log__trace { margin: var(--pk-space-xs) 0 0; }
+/* The trace a log entry or a failed span's exception carried (log-entry.js's
+   stackTraceParts, a components.css .pk-stack-trace), rendered only when it has a
+   stackTrace. align-self keeps the toggle from stretching to the full width under its
+   parent's column flex. */
+.pk-stack-trace-reveal { align-self: flex-start; margin-top: var(--pk-space-xs); }
+.pk-stack-trace-block { margin: var(--pk-space-xs) 0 0; }
 
 /* Cross-link jump target (trace-detail.js's jumpToElement): briefly tinted and
    ring-marked - design tokens only, visible in both themes - so the eye lands where

@@ -4,6 +4,7 @@ import io.micrometer.tracing.Span;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 public record SpanNode(
         String spanId,
@@ -16,8 +17,7 @@ public record SpanNode(
         Map<String, String> tags,
         List<SpanEvent> events,
         List<SpanIssue> issues,
-        String errorMessage,
-        String errorClass,
+        @Nullable SpanExceptionInfo exception,
         SqlStatement statement,
         Long rowCount,
         boolean asyncEntry) {
@@ -43,8 +43,7 @@ public record SpanNode(
                 tags,
                 events,
                 newIssues,
-                errorMessage,
-                errorClass,
+                exception,
                 statement,
                 rowCount,
                 asyncEntry);

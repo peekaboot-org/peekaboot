@@ -87,7 +87,7 @@ class TraceLogMapperTest {
         assertThat(result.hiddenFrames()).containsExactly(new StackTraceFolding.Range(2, 3));
     }
 
-    /** A log line can echo the failing request's URL, credentials and all, as a span's errorMessage can. */
+    /** A log line can echo the failing request's URL, credentials and all, as a failed span's exception message can. */
     @Test
     void aLogsMessageAndStackTraceReachTheWireMasked() {
         String trace = """
@@ -184,8 +184,9 @@ class TraceLogMapperTest {
         store.addLog(log("t1").inSpan("async-child").saying("inside").build());
         store.addLog(log("t1").inSpan(null).saying("nowhere").build());
         TraceDataBundle bundle = bundle();
-        TraceTree subtree =
-                new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE).mapSubtree(bundle.snapshot(), "async");
+        TraceTree subtree = new TraceTreeMapper(
+                        new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()))
+                .mapSubtree(bundle.snapshot(), "async");
 
         assertThat(mapper.logsWithin(subtree.rootSpan(), bundle))
                 .extracting(LogCapturedEvent::message)
@@ -198,7 +199,9 @@ class TraceLogMapperTest {
             store.addLog(log("t1").inSpan("root").at(level).build());
         }
         TraceDataBundle bundle = bundle();
-        TraceTree tree = new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE).map(bundle.snapshot());
+        TraceTree tree = new TraceTreeMapper(
+                        new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()))
+                .map(bundle.snapshot());
 
         TraceTree result = mapper.withLogsSummary(tree, bundle.logs());
 

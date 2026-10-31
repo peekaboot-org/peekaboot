@@ -226,7 +226,7 @@ org.peekaboot.backend/
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
 │                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
 ├── service/                # ActuatorInsightsService, TraceInsightsService, ...
-├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page and the Logs tab fold a stack trace
+├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page, the Logs tab and a span's details panel fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
 ├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
 ├── tracing/                # In-memory tracing
@@ -607,7 +607,8 @@ that failed, never the dispatch that rendered the page.
 
 One classifier, `StackTraceFolding.fold`, decides which frames fold away on both surfaces a
 trace reaches: `StackTraceHtml` renders it into the error page's `<pre>`, and
-`TraceLogMapper.toTraceLog` renders it into the wire `TraceLog` the Logs tab consumes.
+`WireStackTraces` renders it into the wire `TraceLog` the Logs tab consumes and into a failed
+span's `exception`.
 Both callers pass it the same `exclusions` and `applicationPackages`; neither surface
 classifies anything of its own.
 
@@ -1290,7 +1291,7 @@ Three collaborators turn a stored bundle into what the API returns, and the spli
 get wrong: `TraceTreeMapper` builds the tree and nothing else.
 
 1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
-   It re-parents orphans under the root the snapshot names, masks tags, error messages and
+   It re-parents orphans under the root the snapshot names, masks tags, exceptions and
    query text, classifies the root action type and computes the tab summary through
    `TraceSummaries`. It leaves `TraceTree.slow` false and every `SpanNode.issues` list empty.
    **It attaches no issues and correlates no logs.**
@@ -1300,11 +1301,13 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    list, each entry's `spanId` resolved through the bundle's duplicate redirects, the
    `HttpExchange` (from `HttpExchangeMapper`) and `QueryExtractor`'s queries. The log list and
    its count come from `TraceLogMapper`, to which it delegates and which masks each log's
-   message and stack trace by value shape. It runs on
-   `GET /peekaboot/api/traces/{traceId}/insights` only. The listing endpoint gets step 1, a log
-   *count* for the row badges, and step 2, so its trees carry issues but no log list and no
-   queries. An async row takes `TraceTreeMapper.mapSubtree` for step 1 and counts only the logs
-   `TraceLogMapper.logsWithin` finds in its own subtree.
+   message and stack trace by value shape, the trace through `WireStackTraces`. A failed span's
+   `exception` goes through the same `WireStackTraces`, so its stack trace is masked whole and
+   then folded exactly as a log's is. It runs on `GET /peekaboot/api/traces/{traceId}/insights`
+   only. The listing endpoint gets step 1, a log *count* for the row badges, and step 2, so its
+   trees carry issues but no log list and no queries. An async row takes
+   `TraceTreeMapper.mapSubtree` for step 1 and counts only the logs `TraceLogMapper.logsWithin`
+   finds in its own subtree.
 
 Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
 output through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`,
