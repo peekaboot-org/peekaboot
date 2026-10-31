@@ -42,6 +42,22 @@ class IssueDetectorTest {
         assertThat(result.rootSpan().issues()).containsExactly(expected);
     }
 
+    /** The spans of a trace still running are judged like any others, and a slow one marks the trace slow. */
+    @Test
+    void judgesTheSubtreesOfAnInFlightTrace() {
+        SpanNode slowOrphan =
+                node("orphan").durationMs(properties.getSlowSpanThresholdMs()).build();
+        TraceTree inFlight =
+                tree(null).complete(false).orphans(List.of(slowOrphan)).build();
+
+        TraceTree judged = detector.detectIssues(inFlight);
+
+        assertThat(judged.orphans().getFirst().issues())
+                .extracting(SpanIssue::type)
+                .containsExactly(IssueType.SLOW);
+        assertThat(judged.slow()).isTrue();
+    }
+
     /** The thresholds are inclusive: a span exactly on one trips it. */
     @Test
     void aSpanExactlyOnAThresholdTripsIt() {

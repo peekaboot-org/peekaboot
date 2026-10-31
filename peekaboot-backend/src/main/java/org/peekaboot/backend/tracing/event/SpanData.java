@@ -7,10 +7,17 @@ import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * A finished span, as {@code OtelSpanExporter} converts it from the SDK's.
+ *
+ * @param remoteParent the parent span context came from another process, so it will never be
+ *                     exported here unless this application called itself
+ */
 public record SpanData(
         String traceId,
         String spanId,
         String parentId,
+        boolean remoteParent,
         String name,
         Span.Kind kind,
         Instant startTime,
@@ -40,6 +47,17 @@ public record SpanData(
     /** Returns a copy of this span re-parented to {@code newParentId}. */
     public SpanData withParentId(String newParentId) {
         return new SpanData(
-                traceId, spanId, newParentId, name, kind, startTime, endTime, tags, events, exception, creationOrder);
+                traceId,
+                spanId,
+                newParentId,
+                remoteParent,
+                name,
+                kind,
+                startTime,
+                endTime,
+                tags,
+                events,
+                exception,
+                creationOrder);
     }
 }

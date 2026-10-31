@@ -102,6 +102,7 @@ public final class Spans {
         private final String spanId;
         private String traceId = DEFAULT_TRACE_ID;
         private String parentId;
+        private boolean remoteParent;
         private String name = "op";
         private Span.Kind kind;
         private Instant startTime = Instant.EPOCH;
@@ -122,6 +123,13 @@ public final class Spans {
 
         public SpanBuilder parent(String parentId) {
             this.parentId = parentId;
+            return this;
+        }
+
+        /** A parent propagated from another process, as an inbound request continuing a caller's trace has. */
+        public SpanBuilder remoteParent(String parentId) {
+            this.parentId = parentId;
+            this.remoteParent = true;
             return this;
         }
 
@@ -183,6 +191,7 @@ public final class Spans {
                     traceId,
                     spanId,
                     parentId,
+                    remoteParent,
                     name,
                     kind,
                     startTime,

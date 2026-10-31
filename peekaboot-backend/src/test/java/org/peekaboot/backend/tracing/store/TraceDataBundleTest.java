@@ -7,6 +7,7 @@ import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
+import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
@@ -257,34 +258,132 @@ class TraceDataBundleTest {
         assertThat(bundle.snapshot().spans()).hasSize(totalSpans);
     }
 
-    /** The root is the first stored span whose parent is not stored - a child that exported before its parent is not it. */
+    /** Children export before their parents, so until a span without a parent arrives the stored spans are pieces of a request still running. */
     @Test
-    void rootSpanIsTheFirstStoredSpanWhoseParentIsNotStored() {
+    void aTraceIsInFlightUntilASpanWithoutAParentArrives() {
         TraceDataBundle bundle = new TraceDataBundle("trace1", 10, NO_CAP);
-        assertThat(bundle.listingRoots().root()).isNull();
+        bundle.addSpan(
+                span("query").named("SELECT person").parent("handler").order(1).build());
+        bundle.addSpan(span("handler")
+                .named("PersonController.list")
+                .parent("root")
+                .order(2)
+                .build());
 
-        bundle.addSpan(span("child").parent("parent").order(1).build());
-        assertThat(bundle.listingRoots().root().spanId()).isEqualTo("child");
+        TraceData inFlight = bundle.snapshot();
+        assertThat(inFlight.rootSpan()).isNull();
+        assertThat(inFlight.complete()).isFalse();
+        assertThat(bundle.listingRoots().fragment()).isTrue();
 
-        bundle.addSpan(span("parent").order(2).build());
-        assertThat(bundle.listingRoots().root().spanId()).isEqualTo("parent");
+        bundle.addSpan(span("root").named("GET /persons").order(3).build());
+
+        TraceData complete = bundle.snapshot();
+        assertThat(complete.rootSpan().spanId()).isEqualTo("root");
+        assertThat(complete.complete()).isTrue();
+        assertThat(bundle.listingRoots().fragment()).isFalse();
     }
 
-    /** An orphaned task is its trace's root and its only entry, until the request it ran for arrives. */
+    /** An inbound request continuing a caller's trace has a parent that is never exported here; it is this trace's root. */
     @Test
-    void listingRootsNameTheRootAndTheAsyncEntriesOfOneMoment() {
+    void aSpanContinuingACallersTraceIsItsRoot() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 10, NO_CAP);
+        bundle.addSpan(
+                span("query").named("SELECT person").parent("inbound").order(1).build());
+        bundle.addSpan(span("inbound")
+                .named("GET /persons")
+                .kind(Span.Kind.SERVER)
+                .remoteParent("caller-in-another-service")
+                .order(2)
+                .build());
+
+        TraceData snapshot = bundle.snapshot();
+        assertThat(snapshot.rootSpan().spanId()).isEqualTo("inbound");
+        assertThat(snapshot.complete()).isTrue();
+    }
+
+    /**
+     * An application calling itself: the inner request's span has a remote parent that is this
+     * application's own client span. It roots the trace only until that span arrives, and the
+     * real root outranks it.
+     */
+    @Test
+    void aSpanWithoutAParentOutranksOneContinuingARemoteCaller() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 10, NO_CAP);
+        bundle.addSpan(span("inner")
+                .named("GET /api/person/{id}")
+                .kind(Span.Kind.SERVER)
+                .remoteParent("client")
+                .order(1)
+                .build());
+        assertThat(bundle.snapshot().rootSpan().spanId()).isEqualTo("inner");
+
+        bundle.addSpan(span("client")
+                .named("http get")
+                .kind(Span.Kind.CLIENT)
+                .parent("handler")
+                .order(2)
+                .build());
+        TraceData clientArrived = bundle.snapshot();
+        assertThat(clientArrived.rootSpan()).isNull();
+        assertThat(clientArrived.complete()).isFalse();
+
+        bundle.addSpan(span("handler")
+                .named("OrderController.orders")
+                .parent("root")
+                .order(3)
+                .build());
+        bundle.addSpan(span("root")
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .order(4)
+                .build());
+        assertThat(bundle.snapshot().rootSpan().spanId()).isEqualTo("root");
+    }
+
+    /** Late async work can push the root out past the span cap; the request still ended. */
+    @Test
+    void aTraceStaysCompleteAfterTheCapEvictsItsRoot() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 2, NO_CAP);
+        bundle.addSpan(
+                span("child").named("SELECT person").parent("root").order(1).build());
+        bundle.addSpan(span("root").named("GET /persons").order(2).build());
+        bundle.addSpan(
+                span("late-1").named("late work one").parent("root").order(3).build());
+        bundle.addSpan(
+                span("late-2").named("late work two").parent("root").order(4).build());
+
+        TraceData snapshot = bundle.snapshot();
+        assertThat(snapshot.spans()).extracting(SpanData::spanId).containsExactly("late-1", "late-2");
+        assertThat(snapshot.rootSpan()).isNull();
+        assertThat(snapshot.complete()).isTrue();
+        assertThat(bundle.listingRoots().fragment()).isFalse();
+    }
+
+    /** An orphaned task is no root. It stays an entry, so the listing shows it as a row of its own. */
+    @Test
+    void anOrphanedTaskIsAnEntryOfAnInFlightTrace() {
         TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);
         bundle.addSpan(asyncSpan("async", "root", 40, 1_000));
 
         ListingRoots orphaned = bundle.listingRoots();
-        assertThat(orphaned.root().spanId()).isEqualTo("async");
+        assertThat(orphaned.root()).isNull();
+        assertThat(orphaned.fragment()).isTrue();
         assertThat(orphaned.asyncEntries()).extracting(SpanData::spanId).containsExactly("async");
 
         bundle.addSpan(plainSpan("root", null, 0, 50));
 
         ListingRoots enclosed = bundle.listingRoots();
         assertThat(enclosed.root().spanId()).isEqualTo("root");
+        assertThat(enclosed.fragment()).isFalse();
         assertThat(enclosed.asyncEntries()).extracting(SpanData::spanId).containsExactly("async");
+    }
+
+    @Test
+    void anEmptyBundleIsNeitherCompleteNorAFragment() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", NO_CAP, NO_CAP);
+
+        assertThat(bundle.snapshot().complete()).isFalse();
+        assertThat(bundle.listingRoots().fragment()).isFalse();
     }
 
     @Test
@@ -340,14 +439,13 @@ class TraceDataBundleTest {
     }
 
     /**
-     * The mapper hangs the tree from the snapshot's root and skips it by equality when it
-     * re-parents orphans, so the root must be the same value the span list carries, parent
-     * redirects included. A cycle is the only shape where no span is parentless and the
-     * fallback picks a span whose parent a fold rewrote; it does not occur in production,
-     * but the invariant must hold for every shape the fold can leave.
+     * A cycle has no span without a parent, so it reads as in flight;
+     * {@code TraceTreeMapperTest.aTraceThatIsOnlyACycleStillShowsEverySpan} shows the mapper still
+     * serves every span. It does not occur in production, but the rule must hold for every shape
+     * the fold can leave.
      */
     @Test
-    void snapshotsRootIsAnElementOfItsSpansAfterARedirectRewroteItsParent() {
+    void aTraceThatIsOnlyACycleHasNoRoot() {
         TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
         bundle.addSpan(jdbcQuery("a", "SELECT 1").parent("dup").order(1).build());
         bundle.addSpan(jdbcQuery("b", "SELECT 2").parent("a").order(2).build());
@@ -355,9 +453,8 @@ class TraceDataBundleTest {
 
         TraceData snapshot = bundle.snapshot();
 
-        assertThat(snapshot.rootSpan().spanId()).isEqualTo("a");
-        assertThat(snapshot.rootSpan().parentId()).isEqualTo("b");
-        assertThat(snapshot.spans()).contains(snapshot.rootSpan());
+        assertThat(snapshot.rootSpan()).isNull();
+        assertThat(snapshot.complete()).isFalse();
     }
 
     @Test

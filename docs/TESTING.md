@@ -103,7 +103,8 @@ takes the mapped `SqlStatement`.
 `TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
 `snapshot()`, so a mapper test gets the root and ordering the store would hand it.
 `SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the
-mapped `TraceTree` around one. `Logs.log(traceId)` builds a `LogCapturedEvent`,
+mapped `TraceTree` around one, complete and without orphans unless its `complete` and `orphans`
+setters say otherwise. `Logs.log(traceId)` builds a `LogCapturedEvent`,
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`.

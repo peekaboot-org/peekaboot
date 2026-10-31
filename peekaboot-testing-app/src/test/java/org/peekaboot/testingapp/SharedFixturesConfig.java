@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp;
 
 import io.micrometer.tracing.Tracer;
+import org.peekaboot.fixtures.HeldRequestController;
 import org.peekaboot.fixtures.LateSpanController;
 import org.peekaboot.fixtures.MaskingFixtureController;
 import org.peekaboot.testingapp.integration.NestedConfigPropertiesFixture;
@@ -36,5 +37,10 @@ public class SharedFixturesConfig {
     @Bean
     LateSpanController lateSpanController(Tracer tracer) {
         return new LateSpanController(tracer);
+    }
+
+    @Bean
+    HeldRequestController heldRequestController(Tracer tracer) {
+        return new HeldRequestController(tracer);
     }
 }

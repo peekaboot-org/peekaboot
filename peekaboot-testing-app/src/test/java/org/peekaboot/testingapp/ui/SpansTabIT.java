@@ -119,6 +119,24 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .isEqualTo(true);
     }
 
+    /** A trace whose root has not arrived draws each arrived subtree from the left edge, in the order the backend sent them. */
+    @Test
+    void anInFlightTraceDrawsEachArrivedSubtreeAtTheTop() {
+        Object rows = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 30, startTime: '1970-01-01T00:00:00Z', rootSpan: null, orphans: [
+                    {spanId: 'a', name: 'earlier', startTime: '1970-01-01T00:00:00.010Z', durationMs: 5},
+                    {spanId: 'b', name: 'later', startTime: '1970-01-01T00:00:00.020Z', durationMs: 10,
+                        children: [{spanId: 'c', name: 'child', startTime: '1970-01-01T00:00:00.021Z', durationMs: 5}]}]});
+                return Array.from(container.querySelectorAll('.pk-gantt-span'))
+                    .map(entry => entry.querySelector('.pk-gantt-row').dataset.spanId + ':' + entry.dataset.depth);
+            })()
+            """);
+
+        assertThat(rows).isEqualTo(List.of("a:0", "b:0", "c:1"));
+    }
+
     /**
      * One switch opens every span's details panel, and closes them all again. Its label names
      * what the next click does, worked out from the panels themselves, so it stays true after

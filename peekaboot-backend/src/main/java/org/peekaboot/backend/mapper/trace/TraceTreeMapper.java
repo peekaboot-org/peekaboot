@@ -50,9 +50,11 @@ public class TraceTreeMapper {
                     null,
                     0L,
                     TraceStatus.OK,
+                    traceData.complete(),
                     RootActionType.UNKNOWN,
                     null,
                     null,
+                    List.of(),
                     TraceTabSummary.empty(),
                     null,
                     traceData.truncated());
@@ -64,14 +66,18 @@ public class TraceTreeMapper {
         Map<String, List<SpanData>> childrenByParentId = childrenByParentId(spans);
 
         SpanData rootSpanData = traceData.rootSpan();
-
-        // Re-parent orphan subtrees (parent not in this trace, e.g. not yet
-        // exported) under the root so they don't silently vanish from the tree
-        attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
+        SpanNode rootSpan = null;
+        List<SpanNode> orphans = List.of();
+        if (rootSpanData != null) {
+            // Re-parent orphan subtrees (parent not in this trace, e.g. not yet
+            // exported) under the root so they don't silently vanish from the tree
+            attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
+            rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
+        } else {
+            orphans = mapOrphans(spans, spanById, childrenByParentId, queries, traceData.asyncSpanIds());
+        }
 
         TraceTabSummary summary = TraceSummaries.ofTrace(spans, rootSpanData);
-
-        SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
 
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
         String rootOperation = rootSpanData != null ? rootSpanData.name() : null;
@@ -82,9 +88,11 @@ public class TraceTreeMapper {
                 traceData.startTime(),
                 durationMs,
                 statusOf(spans.stream().anyMatch(SpanData::hasError)),
+                traceData.complete(),
                 rootActionType,
                 rootOperation,
                 rootSpan,
+                orphans,
                 summary,
                 null,
                 traceData.truncated());
@@ -128,9 +136,12 @@ public class TraceTreeMapper {
                 // must not wear the ERROR badge of the request that dispatched it, which would also
                 // pre-empt the row's own SLOW verdict
                 statusOf(totals.anyFailed),
+                // an async row's own root is stored by construction
+                true,
                 RootActionTypes.of(subtreeRootData),
                 subtreeRoot.name(),
                 subtreeRoot,
+                List.of(),
                 TraceSummaries.ofSubtree(totals.spanCount, totals.queryCount, totals.queryDurationMs),
                 new SubtreeView(subtreeRootSpanId, enclosed),
                 traceData.truncated());
@@ -197,9 +208,6 @@ public class TraceTreeMapper {
             Map<String, SpanData> spanById,
             Map<String, List<SpanData>> childrenByParentId,
             SpanData rootSpanData) {
-        if (rootSpanData == null) {
-            return;
-        }
         // in a cycle the root has a stored parent; cutting that edge is what ends the walk.
         // map(TraceData) is public, so the root need not be one of `spans` and the group can be absent
         List<SpanData> rootSiblings =
@@ -224,6 +232,31 @@ public class TraceTreeMapper {
                     .computeIfAbsent(rootSpanData.spanId(), k -> new ArrayList<>())
                     .addAll(orphans);
         }
+    }
+
+    /**
+     * The stored subtrees of a trace whose root is null, earliest start first: every span whose
+     * parent is not stored heads one. A trace that is nothing but a cycle has no such span, so its
+     * earliest-created span heads it, its parent edge cut to end the walk.
+     */
+    private List<SpanNode> mapOrphans(
+            List<SpanData> spans,
+            Map<String, SpanData> spanById,
+            Map<String, List<SpanData>> childrenByParentId,
+            TraceQueries queries,
+            Set<String> asyncSpanIds) {
+        List<SpanData> heads = spans.stream()
+                .filter(span -> span.parentId() == null || !spanById.containsKey(span.parentId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (heads.isEmpty()) {
+            SpanData first = spans.getFirst();
+            childrenByParentId.get(first.parentId()).remove(first);
+            heads.add(first);
+        }
+        return heads.stream()
+                .sorted(Comparator.comparing(SpanData::startTime, Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(head -> buildSpanTree(head, childrenByParentId, queries, asyncSpanIds, false))
+                .toList();
     }
 
     private SpanNode buildSpanTree(

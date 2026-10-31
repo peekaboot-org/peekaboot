@@ -63,6 +63,7 @@ final class TraceFixtures {
                 TRACE_ID,
                 spanId,
                 parentId,
+                false,
                 name,
                 kind,
                 start,

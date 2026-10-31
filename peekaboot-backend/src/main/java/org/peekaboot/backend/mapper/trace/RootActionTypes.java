@@ -43,11 +43,11 @@ public final class RootActionTypes {
     }
 
     /**
-     * Classifies a root span that isn't inbound. Note what is deliberately absent: no
-     * {@code http.}/{@code rpc.} check. Those tags on a non-SERVER root describe an
-     * <em>outbound</em> call that became the root only because its caller's span hasn't
-     * been exported yet, so they say nothing about what started the trace - UNKNOWN is
-     * the honest answer there, not HTTP_REQUEST.
+     * Classifies a root span that isn't inbound. It has no {@code http.}/{@code rpc.} check on
+     * purpose. On a non-SERVER root those tags describe an <em>outbound</em> call, which says
+     * nothing about what started the trace, so such a root reads UNKNOWN. The store never roots
+     * a trace at a span with a local parent, but this method classifies whatever span it is
+     * handed.
      */
     private static RootActionType detectNonServerActionType(
             Span.Kind kind, String name, String parentId, Map<String, String> tags) {
@@ -79,12 +79,9 @@ public final class RootActionTypes {
         // contextual name "connection" (JdbcObservationDocumentation.CONNECTION) singles out
         // the acquisition.
         //
-        // The parent check is what makes "outside traced work" true rather than merely
-        // apparent, and it is the same caveat the http./rpc. note above states. A request on
-        // an excluded prefix - Peekaboot's own, or the actuator's - has its root span skipped,
-        // so a connection acquired while serving it is the only span stored under that trace
-        // id and becomes the bundle's apparent root. Only a span that carried no parent at all
-        // was really acquired outside a trace.
+        // The parent check keeps this rule to a connection acquired outside any trace. The
+        // store never roots a trace at a span with a local parent, but this method classifies
+        // whatever span it is handed.
         if (kind == Span.Kind.CLIENT
                 && parentId == null
                 && "connection".equals(name)

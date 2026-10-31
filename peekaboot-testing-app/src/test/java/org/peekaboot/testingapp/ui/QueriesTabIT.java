@@ -103,6 +103,31 @@ class QueriesTabIT extends TraceOverlayTestBase {
         assertThat(logLink).isEqualTo("pk-unbutton pk-icon-btn pk-span-tree-link|⤶|s1|Show span s1 in the span tree");
     }
 
+    /** While the root is missing, the Queries and Logs tabs still find their spans, in the arrived subtrees. */
+    @Test
+    void theQueriesAndLogsTabsFindTheirSpansInAnInFlightTrace() {
+        Object statement = importModule("trace-detail/tabs/queries.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {rootSpan: null, orphans: [{spanId: 's1', name: 'SELECT 1',
+                        statement: {text: 'SELECT 1', formatted: null, parameters: []}}],
+                    queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {goToSpan: () => {}});
+                return container.textContent.includes('SELECT 1');
+            })()
+            """);
+        Object spanName = importModule("trace-detail/tabs/logs.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {rootSpan: null, orphans: [{spanId: 's1', name: 'PersonService.find'}],
+                    logs: [{spanId: 's1', level: 'INFO', message: 'x', timestamp: '2026-01-01T00:00:00Z'}]}, {goToSpan: () => {}});
+                return container.querySelector('.pk-log__span')?.textContent ?? null;
+            })()
+            """);
+
+        assertThat(statement).isEqualTo(true);
+        assertThat(spanName).isEqualTo("PersonService.find");
+    }
+
     /**
      * An async subtree starts collapsed, so a Queries link to a span inside one points at a
      * hidden row: the scroll and the focus do nothing there and the flash lands out of sight.

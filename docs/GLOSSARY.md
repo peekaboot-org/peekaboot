@@ -24,11 +24,15 @@ plus `children`, `issues` and a masked `statement`. Issues hang off the node and
 none. A span's logs are the entries of `TraceTree.logs` naming its `spanId`.
 
 ### Root Span
-`TraceDataBundle` chooses it, once: the earliest-created stored span whose parent is not stored,
-with deduplication redirects resolved, else the earliest-created span. `snapshot()` carries that
-choice to `TraceTreeMapper` as `TraceData.rootSpan`, and `listingRoots()` answers the same rule
-without a copy so the list filters can classify a bundle without building a tree.
-`TraceTree.rootSpan` is the mapped `SpanNode` at the top.
+`TraceDataBundle` chooses it, once: the earliest-created stored span without a parent, else the
+earliest-created one continuing a remote caller's trace (its parent remote and not stored, with
+deduplication redirects resolved), else none. A trace has none while its request is still
+running, and once the span cap evicted its root (see `TraceData.complete`).
+`snapshot()` carries that choice to `TraceTreeMapper` as `TraceData.rootSpan`, beside
+`TraceData.complete`, and `listingRoots()` answers the same rule without a copy so the list
+filters can classify a bundle without building a tree.
+`TraceTree.rootSpan` is the mapped `SpanNode` at the top. While it is null, `TraceTree.orphans`
+holds the stored subtrees instead.
 
 ### Root Action Type
 `RootActionType`, serialised by constant name. `RootActionTypes.of`
@@ -59,17 +63,18 @@ The first rule that matches wins:
    Any other parentless Redis command stays `DATABASE`.
 6. `DATABASE`: CLIENT kind with any `db.*` tag.
 7. `MAINTENANCE` for connection pool upkeep: CLIENT kind, no parent id, the name `connection`
-   and any `jdbc.datasource.*` tag. The parent check matters in both `MAINTENANCE` rules: a
-   request on an excluded prefix has its root span skipped, so a span created while serving it
-   becomes the stored trace's apparent root while still carrying a parent id.
+   and any `jdbc.datasource.*` tag. The parent check keeps both `MAINTENANCE` rules to spans
+   that ran outside any trace. The store never roots a trace at a span with a local parent, but
+   `RootActionTypes.of` classifies whatever span it is handed.
 8. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
-   lands here on purpose: it is an outbound call whose caller has not been exported.
+   lands here on purpose: it is an outbound call, not a request this application served.
 
 `MAINTENANCE` is the one constant `TraceInsightsService.DEFAULT_VIEW_TYPES` leaves out, so a
 listing request naming no type gets every other type. The Traces tab lifts that exclusion with its
 Excluded checkbox (`#traces-filter-exclude-maintenance`, `excluded=none` in the URL).
-`rootActionType=*` asks for the store as it stands. Separately, `isIncompleteFragment` drops any bundle whose root still carries a parent
-id and is not SERVER-kind, which is a different suppression from the default view.
+`rootActionType=*` asks for the store as it stands. Separately, the listing leaves out a
+trace's own row while `ListingRoots.fragment` is set (spans stored, trace not complete), which is
+a different suppression from the default view.
 
 ### Root Operation
 `TraceTree.rootOperation` is `rootSpanData.name()` verbatim: no reformatting, no case change.

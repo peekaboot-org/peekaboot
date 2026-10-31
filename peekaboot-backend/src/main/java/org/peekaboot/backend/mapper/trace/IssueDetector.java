@@ -18,13 +18,10 @@ public class IssueDetector {
     }
 
     public TraceTree detectIssues(TraceTree trace) {
-        if (trace.rootSpan() == null) {
-            return trace;
-        }
-
-        SpanNode processedRoot = processSpan(trace.rootSpan());
-
-        return trace.withRootSpan(processedRoot, hasSlowIssue(processedRoot));
+        SpanNode root = trace.rootSpan() == null ? null : processSpan(trace.rootSpan());
+        List<SpanNode> orphans = trace.orphans().stream().map(this::processSpan).toList();
+        boolean slow = (root != null && hasSlowIssue(root)) || orphans.stream().anyMatch(IssueDetector::hasSlowIssue);
+        return trace.withSpans(root, orphans, slow);
     }
 
     private SpanNode processSpan(SpanNode span) {

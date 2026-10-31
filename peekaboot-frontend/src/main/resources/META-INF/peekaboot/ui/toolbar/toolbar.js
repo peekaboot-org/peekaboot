@@ -153,8 +153,9 @@ function initToolbar(host, data) {
 
 /**
  * Fetches the trace's insights on the fixed schedule above, calling onTrace for every
- * attempt that brings a trace with a root span - a 404 or an empty result leaves the
- * previous render standing - and onNothingArrived once if no attempt ever did. Stops
+ * attempt that brings a complete trace (one whose root span arrived, even if the span cap
+ * evicted it since). A 404 or a trace still in progress leaves the previous render standing,
+ * and onNothingArrived runs once if no attempt brought a complete trace. Stops
  * silently the moment stillCurrent() says the bar has moved on to another trace.
  */
 function pollTrace(client, traceId, {stillCurrent, onTrace, onNothingArrived}) {
@@ -170,7 +171,7 @@ function pollTrace(client, traceId, {stillCurrent, onTrace, onNothingArrived}) {
             client.get('/api/traces/' + traceId + '/insights')
                 .then(trace => {
                     if (!stillCurrent()) return;
-                    if (trace && trace.rootSpan) {
+                    if (trace && trace.complete) {
                         onTrace(trace);
                         rendered = true;
                     } else if (last && !rendered) {

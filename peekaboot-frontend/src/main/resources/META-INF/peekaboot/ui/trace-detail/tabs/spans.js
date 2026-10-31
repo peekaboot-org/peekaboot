@@ -34,8 +34,8 @@ const PANEL_BUILDERS = new WeakMap();
 export function render(container, trace, context = {}) {
     // "?root=<spanId>" narrows the tab to one subtree. Scoped to this tab like every other
     // tab's params, so a tab round-trip widens it back out again (see url-state.js).
-    const scopedRoot = context.filters?.root ? findSpan(trace.rootSpan, context.filters.root) : null;
-    const rootSpan = scopedRoot || trace.rootSpan;
+    const scopedRoot = context.filters?.root ? findSpan(trace, context.filters.root) : null;
+    const tops = scopedRoot ? [scopedRoot] : topLevelSpans(trace);
     // the 1 keeps a zero-length trace from dividing by zero in every position below
     const totalDuration = (scopedRoot ? subtreeWindowMs(scopedRoot) : trace.durationMs) || 1;
     const traceStart = startMs(scopedRoot || trace);
@@ -44,14 +44,14 @@ export function render(container, trace, context = {}) {
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
     const allDetailsToggle = button({className: 'pk-btn pk-btn--small pk-gantt-all-details', text: 'Show all details'});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
-        el('div', {className: 'pk-gantt-toolbar'}, kindLegend(rootSpan), allDetailsToggle),
+        el('div', {className: 'pk-gantt-toolbar'}, kindLegend(tops), allDetailsToggle),
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick})))),
         entries));
 
     const display = {locale: context.locale, timeZone: context.timeZone, logsBySpan: logsBySpan(trace.logs)};
-    renderSpanEntries(entries, rootSpan, 0, traceStart, totalDuration, display);
+    tops.forEach(top => renderSpanEntries(entries, top, 0, traceStart, totalDuration, display));
 
     // Collapsed by default: the subtree's work is not what the caller waited for, so it
     // starts out of the way. Reuses the subtree toggle rather than a second mechanism.
@@ -167,15 +167,25 @@ export function revealRow(row) {
     }
 }
 
+/** The trees the tab draws: the span tree, or for a trace whose root has not arrived, each subtree that has. */
+function topLevelSpans(trace) {
+    return trace.rootSpan ? [trace.rootSpan] : (trace.orphans || []);
+}
+
+/** Every span of the trace, depth first: the root's tree, or each arrived subtree in turn. */
+export function* traceSpans(trace) {
+    for (const top of topLevelSpans(trace)) yield* spansOf(top);
+}
+
 /** Every span of the tree under `root`, `root` first, depth first. */
-export function* spansOf(root) {
+function* spansOf(root) {
     if (!root) return;
     yield root;
     for (const child of root.children || []) yield* spansOf(child);
 }
 
-function findSpan(root, spanId) {
-    for (const span of spansOf(root)) {
+function findSpan(trace, spanId) {
+    for (const span of traceSpans(trace)) {
         if (span.spanId === spanId) return span;
     }
     return null;
@@ -199,8 +209,8 @@ function spanKind(span) {
 }
 
 /** The kinds this trace has, in KIND_LABELS order: the key to the row dots and bar colours. */
-function kindLegend(rootSpan) {
-    const present = new Set(Array.from(spansOf(rootSpan), spanKind));
+function kindLegend(tops) {
+    const present = new Set(tops.flatMap(top => Array.from(spansOf(top), spanKind)));
     return el('ul', {className: 'pk-gantt-legend', attrs: {'aria-label': 'Span kinds'}},
         ...Object.keys(KIND_LABELS).filter(kind => present.has(kind)).map(kind =>
             el('li', {className: `pk-gantt-legend__item pk-gantt-kind--${kind}`}, kindDot(), KIND_LABELS[kind])));

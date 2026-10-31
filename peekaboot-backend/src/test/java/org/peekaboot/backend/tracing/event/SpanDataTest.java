@@ -21,7 +21,8 @@ class SpanDataTest {
 
     @Test
     void aSpanWithoutAnEndHasNoDuration() {
-        SpanData span = new SpanData("t1", "s1", null, "op", null, Instant.EPOCH, null, Map.of(), List.of(), null, 1L);
+        SpanData span =
+                new SpanData("t1", "s1", null, false, "op", null, Instant.EPOCH, null, Map.of(), List.of(), null, 1L);
 
         assertThat(span.duration()).isNull();
         assertThat(span.durationMs()).isZero();
@@ -34,19 +35,13 @@ class SpanDataTest {
 
     @Test
     void aSpanWithAnExceptionHasAnErrorEvenWithNothingKnownAboutIt() {
-        SpanData span = new SpanData(
-                "t1",
-                "s1",
-                null,
-                "op",
-                null,
-                Instant.EPOCH,
-                Instant.EPOCH,
-                Map.of(),
-                List.of(),
-                new CapturedExceptionInfo(null, null, null),
-                1L);
+        assertThat(span("s1").exception(null, null, null).build().hasError()).isTrue();
+    }
 
-        assertThat(span.hasError()).isTrue();
+    @Test
+    void aReparentedCopyKeepsItsParentRemote() {
+        SpanData inbound = span("s1").remoteParent("caller").build();
+
+        assertThat(inbound.withParentId("survivor").remoteParent()).isTrue();
     }
 }

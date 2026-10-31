@@ -45,6 +45,13 @@ export function truncatedBadge() {
     });
 }
 
+/** The one wording for a trace whose root span has not arrived, wherever the trace is shown. */
+export function inProgressBadge() {
+    return badge('IN PROGRESS', 'info', {
+        title: 'The root span has not arrived, so this shows the spans that have. The request may still be running.'
+    });
+}
+
 /** The one wording for a SLOW verdict: the backend's on a trace (the Traces tab, the overlay header) and the query threshold's on a query. */
 export function slowBadge() {
     return badge('SLOW', 'warn');

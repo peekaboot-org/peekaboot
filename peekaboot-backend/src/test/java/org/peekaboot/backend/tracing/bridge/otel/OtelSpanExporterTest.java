@@ -482,6 +482,19 @@ class OtelSpanExporterTest {
 
         org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.parentId()).isEqualTo(parentSpanId);
+        assertThat(stored.remoteParent()).isFalse();
+    }
+
+    @Test
+    void marksAParentPropagatedFromAnotherProcessAsRemote() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        SpanContext caller = SpanContext.createFromRemoteParent(
+                traceId, "aaaaaaaaaaaaaaaa", TraceFlags.getSampled(), TraceState.getDefault());
+        exporter.export(List.of(testSpanBuilder(traceId, "0000000000000001", "GET /persons", SpanKind.SERVER)
+                .setParentSpanContext(caller)
+                .build()));
+
+        assertThat(storedSpan(traceId).remoteParent()).isTrue();
     }
 
     @Test

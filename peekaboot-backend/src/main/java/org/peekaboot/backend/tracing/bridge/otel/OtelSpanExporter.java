@@ -3,6 +3,7 @@ package org.peekaboot.backend.tracing.bridge.otel;
 import io.micrometer.tracing.Span;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.sdk.common.CompletableResultCode;
@@ -111,9 +112,9 @@ public class OtelSpanExporter implements SpanExporter {
 
         List<org.peekaboot.backend.tracing.event.SpanData.Event> events = extractEvents(otelSpan);
 
-        String parentId = otelSpan.getParentSpanContext().isValid()
-                ? otelSpan.getParentSpanContext().getSpanId()
-                : null;
+        SpanContext parent = otelSpan.getParentSpanContext();
+        String parentId = parent.isValid() ? parent.getSpanId() : null;
+        boolean remoteParent = parent.isValid() && parent.isRemote();
 
         CapturedExceptionInfo exception = capturedException(otelSpan);
 
@@ -121,6 +122,7 @@ public class OtelSpanExporter implements SpanExporter {
                 otelSpan.getSpanContext().getTraceId(),
                 otelSpan.getSpanContext().getSpanId(),
                 parentId,
+                remoteParent,
                 otelSpan.getName(),
                 mapKind(otelSpan.getKind()),
                 startTime,

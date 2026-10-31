@@ -1,6 +1,5 @@
 package org.peekaboot.backend.service;
 
-import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -14,7 +13,6 @@ import org.peekaboot.backend.tracing.store.ListingRoots;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
-import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
 /**
  * Expands a bucket's bundles into listing rows and applies the root-level filters, so
@@ -59,10 +57,11 @@ final class RowSources {
      * the bundle rather than a snapshot, because snapshotting every bundle in a bucket is the
      * cost this pass exists to avoid.
      *
-     * <p>The trace's own row is skipped when its root is an incomplete fragment - see
-     * {@link #isIncompleteFragment} - but that skip applies only to the trace's own row: an
-     * async entry inside a fragment bundle is still real work, so the bundle can still
-     * contribute rows even when its own root is filtered out.
+     * <p>The trace's own row is left out while the bundle is a fragment
+     * ({@link ListingRoots#fragment()}): listing pieces of a request still running, or of an
+     * excluded request whose root is never coming, puts a phantom entry in front of the user
+     * that disappears again on its own. An async entry inside a fragment is real work, so it is
+     * still listed as a row of its own.
      *
      * <p>An async row is listed from its entry span's export, or from when the trace entered
      * the bucket if that came later: a row cannot have appeared in a bucket before its trace did.
@@ -72,13 +71,14 @@ final class RowSources {
         ListingRoots roots = bundle.listingRoots();
         SpanData root = roots.root();
         List<RowSource> rows = new ArrayList<>();
-        if (!isIncompleteFragment(root)) {
+        if (!roots.fragment()) {
             rows.add(new RowSource(bundle, root, false, listed.listedAt()));
         }
         for (SpanData entry : roots.asyncEntries()) {
             // a purely async bundle's entry span is its trace's own row, added above as a whole
-            // trace with no SubtreeView; any other entry is a subtree row, which
-            // TraceInsightsService maps through TraceTreeMapper.mapSubtree
+            // trace with no SubtreeView; any other entry, and every entry of a bundle with no
+            // root, is a subtree row, which TraceInsightsService maps through
+            // TraceTreeMapper.mapSubtree
             if (root != null && entry.spanId().equals(root.spanId())) {
                 continue;
             }
@@ -98,30 +98,6 @@ final class RowSources {
     private static boolean matchesRootFilters(SpanData root, Set<RootActionType> actionTypes, String rootOperation) {
         return (actionTypes.isEmpty() || actionTypes.contains(RootActionTypes.of(root)))
                 && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null, rootOperation));
-    }
-
-    /**
-     * Whether the bundle holds a piece of a trace rather than a trace of its own.
-     * {@link TraceDataBundle#listingRoots()} answers with the first span whose parent it does
-     * not hold, so a root still carrying a parent id is one whose real parent never
-     * arrived.
-     *
-     * <p>For a SERVER root that is an inbound request continuing a caller's trace: this
-     * application's work starts there and the trace is its own, so it stays listed. For
-     * anything else it is a fragment - a request on an excluded prefix (Peekaboot's own,
-     * the actuator's) has its root span skipped, which leaves whatever it did meanwhile,
-     * typically the connection it acquired, stored alone under that trace id until the
-     * skipped root reaches the exporter and discards it. Listing it in the meantime puts a
-     * phantom entry in front of the user that disappears again on its own.
-     *
-     * <p>An async-marked span whose parent never arrived is exempted: it is work that really
-     * ran, not somebody else's trace seen through a hole, so it is listed rather than hidden.
-     */
-    private static boolean isIncompleteFragment(SpanData root) {
-        return root != null
-                && root.parentId() != null
-                && root.kind() != Span.Kind.SERVER
-                && !AsyncTaskMarker.isMarked(root.tags());
     }
 
     /** The chip sends a substring of the operation name, so a partial, case-insensitive match is the contract. */

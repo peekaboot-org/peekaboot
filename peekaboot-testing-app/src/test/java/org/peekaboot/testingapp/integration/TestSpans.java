@@ -97,6 +97,7 @@ public final class TestSpans {
                     traceId,
                     spanId,
                     parentId,
+                    false,
                     name,
                     kind,
                     startTime,

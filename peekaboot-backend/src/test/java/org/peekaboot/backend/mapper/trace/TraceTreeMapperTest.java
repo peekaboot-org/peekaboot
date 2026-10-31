@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
+import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.redisCommand;
 import static org.peekaboot.backend.testsupport.Spans.resultSet;
@@ -27,6 +28,7 @@ import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SubtreeView;
+import org.peekaboot.backend.domain.trace.TraceOutcome;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -122,6 +124,9 @@ class TraceTreeMapperTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(orphanNode.children()).extracting(SpanNode::spanId).containsExactly("orphan-child");
+        assertThat(result.complete()).isTrue();
+        assertThat(result.outcome()).isEqualTo(TraceOutcome.OK);
+        assertThat(result.orphans()).isEmpty();
     }
 
     /** Two parentless spans: the earlier-created one is the root and the other hangs under it. */
@@ -136,18 +141,99 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().children()).extracting(SpanNode::spanId).containsExactly("second");
     }
 
-    /** No span is parentless in a cycle; the earliest-created one is the root and its own parent edge is cut. */
+    /** A cycle has no span without a parent and no span whose parent is missing; its spans are still shown. */
     @Test
-    void aCycleHangsFromTheEarliestSpanWithoutLoopingForever() {
-        var a = span("a").parent("b").named("a-op").at(0, 100).order(1).build();
-        var b = span("b").parent("a").named("b-op").at(10, 50).order(2).build();
+    void aTraceThatIsOnlyACycleStillShowsEverySpan() {
+        // the three spans of TraceDataBundleTest.aTraceThatIsOnlyACycleHasNoRoot
+        TraceTree result = mapper.map(TraceDatas.of(
+                "trace1",
+                jdbcQuery("a", "SELECT 1").parent("dup").order(1).build(),
+                jdbcQuery("b", "SELECT 2").parent("a").order(2).build(),
+                jdbcDuplicate("dup", "b", "SELECT 2").order(3).build()));
 
-        TraceTree result = mapper.map(TraceDatas.of("trace1", a, b));
-
-        assertThat(result.rootSpan().spanId()).isEqualTo("a");
-        assertThat(result.rootSpan().children()).extracting(SpanNode::spanId).containsExactly("b");
-        assertThat(result.rootSpan().children().getFirst().children()).isEmpty();
+        assertThat(result.orphans()).hasSize(1);
+        List<String> shown = new ArrayList<>();
+        collectIds(result.orphans().getFirst(), shown);
+        assertThat(shown).containsExactlyInAnyOrder("a", "b");
         assertThat(result.summary().spans().count()).isEqualTo(2);
+    }
+
+    /** Each stored subtree of a trace whose root has not arrived is served on its own, earliest start first. */
+    @Test
+    void mapsAnInFlightTraceAsItsStoredSubtrees() {
+        var later = span("later")
+                .named("PersonService.find")
+                .parent("gone-1")
+                .at(20, 10)
+                .order(1)
+                .build();
+        var laterChild = span("later-child")
+                .named("SELECT person")
+                .kind(Span.Kind.CLIENT)
+                .parent("later")
+                .at(21, 5)
+                .order(2)
+                .build();
+        var earlier = span("earlier")
+                .named("AuditService.record")
+                .parent("gone-2")
+                .at(10, 5)
+                .order(3)
+                .build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", later, laterChild, earlier));
+
+        assertThat(result.rootSpan()).isNull();
+        assertThat(result.complete()).isFalse();
+        assertThat(result.outcome()).isEqualTo(TraceOutcome.IN_PROGRESS);
+        assertThat(result.orphans()).extracting(SpanNode::spanId).containsExactly("earlier", "later");
+        assertThat(result.orphans().get(1).children())
+                .extracting(SpanNode::spanId)
+                .containsExactly("later-child");
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
+    }
+
+    /** A failure inside a trace still running does not end it: the outcome waits for the root. */
+    @Test
+    void anInFlightTraceIsInProgressEvenWithAFailedSpan() {
+        var failed = span("failed")
+                .named("http get")
+                .kind(Span.Kind.CLIENT)
+                .parent("gone")
+                .at(0, 5)
+                .error("Connection refused", "java.net.ConnectException")
+                .build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", failed));
+
+        assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
+        assertThat(result.outcome()).isEqualTo(TraceOutcome.IN_PROGRESS);
+    }
+
+    /** The span cap evicted the root of a request that ended: it stays complete and shows what is left. */
+    @Test
+    void aCompleteTraceWhoseRootWasEvictedServesEveryStoredSpanAsOrphans() {
+        var lateOne = span("late-1")
+                .named("late work one")
+                .parent("root")
+                .at(10, 5)
+                .order(3)
+                .build();
+        var lateTwo = span("late-2")
+                .named("late work two")
+                .parent("root")
+                .at(20, 5)
+                .order(4)
+                .build();
+        var rootEvicted = new TraceData(
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), null, true, List.of(lateOne, lateTwo), Set.of(), true);
+
+        TraceTree result = mapper.map(rootEvicted);
+
+        assertThat(result.complete()).isTrue();
+        assertThat(result.outcome()).isEqualTo(TraceOutcome.OK);
+        assertThat(result.rootSpan()).isNull();
+        assertThat(result.orphans()).extracting(SpanNode::spanId).containsExactly("late-1", "late-2");
     }
 
     @Test
@@ -651,6 +737,7 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(traceData);
 
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
+        assertThat(result.outcome()).isEqualTo(TraceOutcome.ERROR);
     }
 
     // exception.message goes through the masker like tags do: a realistic exception
@@ -751,7 +838,7 @@ class TraceTreeMapperTest {
 
     @Test
     void mapsAnEmptyTraceToARootlessTree() {
-        var traceData = new TraceData("trace1", null, null, null, List.of(), Set.of(), false);
+        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), false);
 
         TraceTree result = mapper.map(traceData);
 
@@ -759,6 +846,8 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan()).isNull();
         assertThat(result.summary().spans().count()).isEqualTo(0);
         assertThat(result.status()).isEqualTo(TraceStatus.OK);
+        assertThat(result.complete()).isFalse();
+        assertThat(result.outcome()).isEqualTo(TraceOutcome.IN_PROGRESS);
         // No root span means nothing to classify from - not a guess at the commonest type.
         assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
@@ -781,7 +870,7 @@ class TraceTreeMapperTest {
                 .at(0, 100)
                 .build();
         var traceData = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, List.of(listed), Set.of(), false);
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, true, List.of(listed), Set.of(), false);
 
         TraceTree result = mapper.map(traceData);
 
@@ -830,7 +919,7 @@ class TraceTreeMapperTest {
                 .at(0, 100)
                 .build();
         var truncated = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), singleSpan, List.of(singleSpan), Set.of(), true);
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), singleSpan, true, List.of(singleSpan), Set.of(), true);
 
         TraceTree result = mapper.map(truncated);
 
@@ -839,7 +928,7 @@ class TraceTreeMapperTest {
 
     @Test
     void carriesTheTruncatedFlagEvenForAnEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, List.of(), Set.of(), true);
+        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), true);
 
         TraceTree result = mapper.map(traceData);
 
@@ -883,8 +972,9 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().children().get(0).status()).isEqualTo(SpanStatus.ERROR);
     }
 
+    /** A span whose local parent has not arrived is a piece of a request still running, not its root. */
     @Test
-    void aLoneSpanWithAMissingParentIsTheRoot() {
+    void aLoneSpanWithAMissingParentRootsNothing() {
         var orphan = span("orphan")
                 .parent("missing-parent")
                 .named("orphan-op")
@@ -894,8 +984,8 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", orphan));
 
-        assertThat(result.rootSpan()).isNotNull();
-        assertThat(result.rootSpan().spanId()).isEqualTo("orphan");
+        assertThat(result.rootSpan()).isNull();
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
     // --- Root Action Type Detection Tests ---
@@ -1111,21 +1201,16 @@ class TraceTreeMapperTest {
     }
 
     /**
-     * The fragment an excluded request leaves behind. Peekaboot skips the root span of its
-     * own and the actuator's requests, and a child span ends before its parent does, so the
-     * connection acquired inside such a request can be the only span stored under that trace
-     * id - which makes it the bundle's apparent root. Its parent id says what the tags cannot:
-     * the acquisition happened inside traced work, so it is not the standalone acquisition
-     * MAINTENANCE names.
+     * A connection acquired inside traced work, such as an excluded request whose root span
+     * Peekaboot skips. Its parent id says what the tags cannot: it is not the standalone
+     * acquisition MAINTENANCE names.
      */
     @Test
     void doesNotClassifyAConnectionSpanWithAnUnexportedParentAsMaintenance() {
         var connectionSpan =
                 jdbcConnection("child").parent("root-span-never-exported").build();
 
-        TraceTree result = mapper.map(TraceDatas.of("trace1", connectionSpan));
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
+        assertThat(RootActionTypes.of(connectionSpan)).isEqualTo(RootActionType.UNKNOWN);
     }
 
     @Test
@@ -1182,12 +1267,10 @@ class TraceTreeMapperTest {
     /** The same fragment an excluded request leaves as the connection rule guards against. */
     @Test
     void keepsARedisUpkeepCommandWithAnUnexportedParentAsDatabase() {
-        var rootSpan =
+        var command =
                 redisCommand("child", "INFO").parent("root-span-never-exported").build();
 
-        TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
+        assertThat(RootActionTypes.of(command)).isEqualTo(RootActionType.DATABASE);
     }
 
     /** A parentless command the application issued stays listed, as a parentless JDBC query does. */
@@ -1360,6 +1443,11 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().children())
                 .extracting(SpanNode::spanId, SpanNode::rowCount)
                 .containsExactly(tuple("q1", 10L), tuple("rs", null), tuple("q2", null), tuple("rs2", null));
+    }
+
+    private static void collectIds(SpanNode node, List<String> ids) {
+        ids.add(node.spanId());
+        node.children().forEach(child -> collectIds(child, ids));
     }
 
     private static String statementText(SpanNode node) {

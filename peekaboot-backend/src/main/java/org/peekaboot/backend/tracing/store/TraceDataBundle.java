@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
@@ -54,6 +55,8 @@ public class TraceDataBundle {
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
     /** Set once the cap drops a real span, never for a folded duplicate; a trimmed trace stays marked. */
     private boolean truncated = false;
+    /** Never cleared: a root the span cap evicts later leaves the trace complete. */
+    private boolean parentlessSpanStored;
     // Classification signals, maintained span by span in store() so InMemoryTraceStore's
     // classify() never has to copy and sort the whole trace per arriving span. fullWindow gives
     // the trace's start and the all-async fallback. A folded-away duplicate carries its
@@ -122,6 +125,9 @@ public class TraceDataBundle {
         spansById.put(span.spanId(), span);
         if (span.hasError()) {
             hasErrorSpan = true;
+        }
+        if (span.parentId() == null) {
+            parentlessSpanStored = true;
         }
         fullWindow = fullWindow.including(span);
         if (span.parentId() != null) {
@@ -318,7 +324,7 @@ public class TraceDataBundle {
 
     /**
      * Everything a reader needs about the spans, taken under one lock so the list, the root,
-     * the window and the truncated flag describe the same moment.
+     * the completeness, the window and the truncated flag describe the same moment.
      */
     public TraceData snapshot() {
         synchronized (spansLock) {
@@ -327,11 +333,13 @@ public class TraceDataBundle {
                     .sorted(Comparator.comparingLong(SpanData::creationOrder))
                     .toList();
             // the root is one of the resolved copies, so the mapper's equality skip finds it in the list
+            SpanData root = rootOf(spans);
             return new TraceData(
                     traceId,
                     fullWindow.start(),
                     synchronousWindow(),
-                    rootOf(spans),
+                    root,
+                    isComplete(root),
                     spans,
                     asyncMembership.members(),
                     truncated);
@@ -351,37 +359,46 @@ public class TraceDataBundle {
     }
 
     /**
-     * The root and the async entry spans, read under one lock so they describe the same moment:
-     * a root read before the request's span arrived would otherwise match an orphaned entry read
-     * after it and hide that entry's row. Read without copying, so the listing can classify
-     * every bundle in a bucket without a snapshot per bundle.
+     * The root, the fragment flag and the async entry spans, read under one lock so they
+     * describe the same moment. Read without copying, so the listing can classify every bundle
+     * in a bucket without a snapshot per bundle.
      */
     public ListingRoots listingRoots() {
         synchronized (spansLock) {
-            return new ListingRoots(rootOf(spansById.values()), asyncEntrySpans());
+            SpanData root = rootOf(spansById.values());
+            return new ListingRoots(root, !isComplete(root) && !spansById.isEmpty(), asyncEntrySpans());
         }
     }
 
+    private boolean isComplete(@Nullable SpanData root) {
+        return parentlessSpanStored || root != null;
+    }
+
     /**
-     * The span the tree hangs from: the earliest-created stored span whose parent is not
-     * stored, else the earliest-created span. The one definition of the root, over stored
-     * spans or their resolved copies; must run under {@code spansLock}, as it consults
-     * {@link #parentRedirects}.
+     * The span the tree hangs from: the earliest-created stored span without a parent, else the
+     * earliest-created one continuing a remote caller's trace, its parent remote and not stored.
+     * None while neither is stored. Spans export as they end and a parent ends after its children,
+     * so that is a request still running, or a complete one whose root the span cap evicted
+     * (see {@link TraceData#complete}). A remote parent can be this application's own client
+     * span, when it called itself; it is stored once it ends, and from then on the span below it
+     * roots nothing. The one definition of the root, over stored spans or their resolved copies;
+     * must run under {@code spansLock}, as it consults {@link #parentRedirects}.
      */
-    private SpanData rootOf(Collection<SpanData> spans) {
-        SpanData root = null;
-        SpanData earliest = null;
+    private @Nullable SpanData rootOf(Collection<SpanData> spans) {
+        SpanData parentless = null;
+        SpanData continuingCaller = null;
         for (SpanData span : spans) {
-            if (earliest == null || span.creationOrder() < earliest.creationOrder()) {
-                earliest = span;
-            }
-            String parentId = resolve(span.parentId());
-            boolean parentless = parentId == null || !spansById.containsKey(parentId);
-            if (parentless && (root == null || span.creationOrder() < root.creationOrder())) {
-                root = span;
+            if (span.parentId() == null) {
+                parentless = earlier(parentless, span);
+            } else if (span.remoteParent() && !spansById.containsKey(resolve(span.parentId()))) {
+                continuingCaller = earlier(continuingCaller, span);
             }
         }
-        return root != null ? root : earliest;
+        return parentless != null ? parentless : continuingCaller;
+    }
+
+    private static SpanData earlier(@Nullable SpanData current, SpanData candidate) {
+        return current == null || candidate.creationOrder() < current.creationOrder() ? candidate : current;
     }
 
     /** Whether any span stored or log captured so far was an error; maintained as each arrives, no span copy. */

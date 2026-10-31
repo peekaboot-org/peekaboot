@@ -3,9 +3,14 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.fixtures.LateSpanController;
+import org.peekaboot.testingapp.integration.TestSpans;
 import org.springframework.beans.factory.annotation.Autowired;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The collapsed bar polls in four fixed attempts out to 4.75s rather than stopping the moment a
@@ -40,6 +45,12 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
     @Autowired
     private LateSpanController lateSpanController;
 
+    @Autowired
+    private TraceStore traceStore;
+
+    @Autowired
+    private PeekabootTracingProperties tracingProperties;
+
     @Test
     void collapsedBarPicksUpASpanThatEndsAfterTheResponse() throws InterruptedException {
         ParkedRequest firstRead = parkFirst("**/api/traces/*/insights");
@@ -60,6 +71,40 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
         assertThat(renderedDurationMs(laterRender))
                 .isGreaterThan(renderedDurationMs(firstRender))
                 .isGreaterThanOrEqualTo((double) LateSpanController.LATE_WORK.toMillis());
+    }
+
+    /**
+     * Spans ending after the response can push the root out past the span cap. The request
+     * still ended, so the trace stays complete with a null root, and the bar renders what is
+     * left rather than reading it as a trace that never arrived. Written straight to the
+     * store: no endpoint issues five hundred late spans.
+     */
+    @Test
+    void collapsedBarRendersACompleteTraceWhoseRootLateSpansEvicted() {
+        ParkedRequest firstRead = parkFirst("**/api/traces/*/insights");
+        openPersonsPage();
+        String barTraceId = toolbar.traceId();
+
+        firstRead.awaitParked();
+        JsonNode stored = awaitTrace(barTraceId, ROOT_SPAN_EXPORTED);
+        String rootSpanId = stored.path("rootSpan").path("spanId").asString();
+        Instant rootStart =
+                Instant.parse(stored.path("rootSpan").path("startTime").asString());
+        int cap = tracingProperties.getMaxSpansPerTrace();
+        for (int i = 0; i < cap; i++) {
+            traceStore.addSpan(TestSpans.span(barTraceId, String.format("late%012x", i))
+                    .parent(rootSpanId)
+                    .named("late work")
+                    .at(rootStart.toEpochMilli() + 1, 1)
+                    .build());
+        }
+        awaitTrace(barTraceId, "trace => trace.complete && trace.rootSpan === null");
+        firstRead.resume();
+
+        // a rendered stat line or the pending one, whichever the bar settles on first
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics .pk-stat') !== null", null, 10_000);
+
+        assertThat(toolbar.text("#pk-metrics")).contains(cap + " spans");
     }
 
     /**

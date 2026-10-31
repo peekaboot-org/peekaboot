@@ -628,8 +628,9 @@ streamed body. The last attempt lands 4.75s after the response finished. With
 `peekaboot-dev-toolbar-defaults.yml`'s 200ms span export delay (see `docs/ARCHITECTURE.md`,
 *Default Properties*), a trace still absent by then is not coming, and the bar falls back to
 a pending placeholder ("? spans", "? queries", "? logs", the stat line's own words) rather than
-leaving a spinner up forever. A response that arrived but was empty (a 404, or `rootSpan`
-missing) leaves the previous render standing.
+leaving a spinner up forever. A response that brought no complete trace (a 404, or
+`complete: false`) leaves the previous render standing. A complete trace renders even when the
+span cap evicted its root.
 
 `ToolbarLateSpanIT` pins this: it releases a late span only after the first attempt has
 rendered, and needs a later attempt to pick it up. A ladder that stops after its first

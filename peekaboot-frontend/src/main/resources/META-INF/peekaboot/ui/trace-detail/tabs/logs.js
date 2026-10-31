@@ -11,11 +11,11 @@ import {copyableId} from '../../shared/copyable.js';
 import {emptyState} from '../../shared/components.js';
 import {logEntry} from '../log-entry.js';
 import {spanTreeLink} from '../span-tree-link.js';
-import {spansOf} from './spans.js';
+import {traceSpans} from './spans.js';
 
-/** A spanId -> name lookup over the span tree, to name the span each log row belongs to. */
-function buildSpanNames(rootSpan) {
-    return new Map(Array.from(spansOf(rootSpan), span => [span.spanId, span.name]));
+/** A spanId -> name lookup over every span of the trace, to name the span each log row belongs to. */
+function buildSpanNames(trace) {
+    return new Map(Array.from(traceSpans(trace), span => [span.spanId, span.name]));
 }
 
 function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
@@ -54,7 +54,7 @@ function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
  * own applies where it is absent.
  */
 export function render(container, trace, view = {}) {
-    const spanNames = buildSpanNames(trace.rootSpan);
+    const spanNames = buildSpanNames(trace);
     const logs = trace.logs || [];
 
     if (logs.length === 0) {

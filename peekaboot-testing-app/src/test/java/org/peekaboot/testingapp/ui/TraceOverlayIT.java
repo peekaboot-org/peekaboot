@@ -571,4 +571,21 @@ class TraceOverlayIT extends TraceOverlayTestBase {
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
                 .doesNotContain("slow");
     }
+
+    /** A trace read before its root arrived says so in the header, and its Spans tab shows what did arrive. */
+    @Test
+    void anInFlightTraceSaysSoAndShowsTheSpansThatArrived() {
+        String traceId = "overlay-in-flight-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "query")
+                .parent("handler-not-yet-exported")
+                .named("SELECT person")
+                .kind(Span.Kind.CLIENT)
+                .at(5, 2)
+                .build());
+
+        openTraceDeepLink(traceId, "/spans");
+
+        overlay.waitFor(".pk-gantt-row[data-span-id='query']");
+        assertThat(overlay.text(".pk-overlay__meta .pk-badge--info")).isEqualTo("IN PROGRESS");
+    }
 }

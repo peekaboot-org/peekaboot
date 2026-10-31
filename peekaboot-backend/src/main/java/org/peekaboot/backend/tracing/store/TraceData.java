@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.event.SpanData;
 
 /**
@@ -14,9 +15,14 @@ import org.peekaboot.backend.tracing.event.SpanData;
  * @param duration      the window the bundle's non-async spans have covered, or every span's
  *                      while all of them are async; {@link TraceDataBundle#synchronousWindow()}.
  *                      What may lower it is in "Async Subtree Timing" in docs/ARCHITECTURE.md
- * @param rootSpan      the span the tree hangs from, chosen by the bundle: the earliest-created
- *                      span whose parent is not stored, else the earliest-created span; null for
- *                      a trace with no spans
+ * @param rootSpan      the span the tree hangs from: the earliest-created stored span without a
+ *                      parent, else the earliest-created one continuing a remote caller's trace;
+ *                      null while neither is stored
+ * @param complete      a span without a parent has been stored, or one continuing a remote
+ *                      caller's trace is; stays true once a span without a parent was stored, so a
+ *                      root the span cap evicted later leaves the trace complete, with
+ *                      {@code rootSpan} null and every stored span served under the mapped
+ *                      trace's {@code orphans}
  * @param spans         in creation order, never null
  * @param asyncSpanIds  the ids of spans belonging to an async subtree - the marked entry spans
  *                      and their descendants. Empty for the overwhelming majority of traces
@@ -26,7 +32,8 @@ public record TraceData(
         String traceId,
         Instant startTime,
         Duration duration,
-        SpanData rootSpan,
+        @Nullable SpanData rootSpan,
+        boolean complete,
         List<SpanData> spans,
         Set<String> asyncSpanIds,
         boolean truncated) {}

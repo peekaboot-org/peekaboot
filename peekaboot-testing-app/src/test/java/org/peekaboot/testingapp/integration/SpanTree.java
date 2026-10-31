@@ -22,6 +22,15 @@ final class SpanTree {
         return names;
     }
 
+    /** Every span name under the trace's {@code orphans}, the subtrees served while its root is null, in walk order. */
+    static List<String> orphanNames(JsonNode trace) {
+        List<String> names = new ArrayList<>();
+        for (JsonNode orphan : trace.path("orphans")) {
+            walk(orphan, span -> names.add(span.path("name").asString("")));
+        }
+        return names;
+    }
+
     /** Every tag key set on any span of the trace, so an assertion can name one that must be absent. */
     static List<String> tagKeys(JsonNode trace) {
         List<String> keys = new ArrayList<>();

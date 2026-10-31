@@ -499,14 +499,14 @@ class TraceInsightsServiceTest {
 
     /**
      * The case the fragment rule must not catch: an inbound request continuing a caller's
-     * trace carries a parent id that never arrives either, but a SERVER root is the start
-     * of this application's work and a trace in its own right.
+     * trace carries a parent id that never arrives either, but that parent is remote, so the
+     * span is the start of this application's work and a trace in its own right.
      */
     @Test
     void anInboundTraceContinuingARemoteCallerIsStillListed() {
         store.addSpan(span("span-inbound")
                 .in("remote1")
-                .parent("caller-span-in-another-service")
+                .remoteParent("caller-span-in-another-service")
                 .named("GET /users/{id}")
                 .kind(Span.Kind.SERVER)
                 .at(0, 100)
@@ -516,6 +516,26 @@ class TraceInsightsServiceTest {
         assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
                 .extracting(TraceTree::traceId)
                 .containsExactly("remote1");
+    }
+
+    /** A SERVER span is no root on its kind alone: one whose local parent has not arrived is a request still running. */
+    @Test
+    void aRequestStillRunningIsListedOnceItsRootArrives() {
+        store.addSpan(span("span-inner")
+                .in("running1")
+                .parent("span-running1")
+                .named("GET /api/person/{id}")
+                .kind(Span.Kind.SERVER)
+                .at(5, 20)
+                .build());
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces()).isEmpty();
+
+        store.addSpan(rootSpan("running1", "GET /orders", Span.Kind.SERVER, 100).build());
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
+                .extracting(TraceTree::traceId)
+                .containsExactly("running1");
     }
 
     /** The way past the default view's exclusion for a client that wants the store as it is. */

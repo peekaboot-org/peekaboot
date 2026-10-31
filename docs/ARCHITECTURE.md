@@ -1291,9 +1291,10 @@ Three collaborators turn a stored bundle into what the API returns, and the spli
 get wrong: `TraceTreeMapper` builds the tree and nothing else.
 
 1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
-   It re-parents orphans under the root the snapshot names, masks tags, exceptions and
-   query text, classifies the root action type and computes the tab summary through
-   `TraceSummaries`. It leaves `TraceTree.slow` false and every `SpanNode.issues` list empty.
+   It re-parents orphans under the root the snapshot names, or serves the stored subtrees as
+   `TraceTree.orphans` when it names none, masks tags, exceptions and query text, classifies
+   the root action type and computes the tab summary through `TraceSummaries`. It leaves
+   `TraceTree.slow` false and every `SpanNode.issues` list empty.
    **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in and decides `TraceTree.slow`.
    `TraceInsightsService` calls it on both trace endpoints.
@@ -1310,27 +1311,51 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    finds in its own subtree.
 
 Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
-output through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`,
+output through `TraceTree.withSpans`/`withSummary`/`withDetails` and `SpanNode.withIssues`,
 so a stage names only the components it adds.
 
 `TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
-creation order, the root span, the trace window and the `truncated` flag. The root is chosen
-there and nowhere else: the earliest-created stored span whose parent is not stored, else the
-earliest-created span. `TraceDataBundle.listingRoots()` answers the same rule without a copy,
-which is what the listing filters classify by, so the row a filter admits and the tree the mapper
-builds agree on what started the trace. `attachOrphansToRoot` then re-parents every other span
+creation order, the root span, the `complete` flag, the trace window and the `truncated` flag.
+The root is chosen there and nowhere else: the earliest-created stored span without a parent,
+else the earliest-created stored span continuing a remote caller's trace (`SpanData.remoteParent`,
+its parent not stored), else none. Spans export as they end, children first, so a trace with
+neither is a request still running and none of its stored spans is its root.
+
+`TraceData.complete` and `ListingRoots.fragment` come from that same definition. A trace is
+complete while it has a root, and stays complete once a span without a parent was stored, so a
+root the span cap evicts later leaves the trace complete with `rootSpan` null. A fragment is a
+bundle that stores spans but is not complete. A root continuing a remote caller's trace keeps the
+trace complete only while it is the root, never stickily, because of the self-call window below:
+there the remote parent is the application's own CLIENT span, and its arrival must make the trace
+read in progress again.
+
+An application calling itself over HTTP gets the rule wrong for a moment. The inner SERVER
+span's remote parent is the application's own CLIENT span, so the trace reads complete between
+the inner span's export and the CLIENT span's, in progress again once the CLIENT span arrives,
+and complete once the real root does.
+
+`TraceDataBundle.listingRoots()` answers the same rule without a copy, which is what the listing
+filters classify by, so the row a filter admits and the tree the mapper builds agree on what
+started the trace. `attachOrphansToRoot` then re-parents every other span
 whose parent is not in the trace onto that root, so a subtree whose parent has not been exported
-yet does not silently vanish. What moves the window is in *Async Subtree Timing*. `truncated` travels on the snapshot rather than being derived
-from the span list: the list is already deduplicated and already capped, so nothing in it can
-say whether real spans were dropped.
+yet does not silently vanish. Without a root, `mapOrphans` serves each span whose parent is not
+stored as the head of one `TraceTree.orphans` subtree, earliest start first. A trace that is
+nothing but a cycle has no such span, so its earliest-created span heads the one subtree, its
+parent edge cut to end the walk. A complete trace whose root the cap evicted is served the same
+way: `complete: true`, `rootSpan: null`, every stored span under `orphans`. With a root,
+`orphans` is `[]`. `TraceTree.outcome` is `IN_PROGRESS` while the trace is not complete, else
+`ERROR` or `OK` by its status. What moves the window is in *Async Subtree Timing*. `truncated`
+travels on the snapshot rather than being derived from the span list: the list is already
+deduplicated and already capped, so nothing in it can say whether real spans were dropped.
 
 `InMemoryTraceStore` opens a bundle on the first span, log line or `RequestCompletedEvent` it
 sees for a trace id. The request usually comes first: `RequestCaptureFilter` publishes it as the
 response finishes, while spans wait for the exporter's batch. So
 `GET /peekaboot/api/traces/{traceId}/insights` for a request just served can answer `200` with
-`rootSpan: null` and an empty summary. A `404` means the store has never seen the id. The
-toolbar's fetch schedule treats a null root like a `404` and tries again (see *The collapsed
-bar's trace fetch schedule* in [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md)).
+`rootSpan: null`, `orphans: []`, `complete: false`, `outcome: IN_PROGRESS` and an empty
+summary. A `404` means the store has never seen the id. The toolbar's fetch schedule treats a
+trace that is not complete like a `404` and tries again (see *The collapsed bar's trace fetch
+schedule* in [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md)).
 
 ### Span Deduplication
 
@@ -1551,14 +1576,16 @@ photographs both, so `trace-detail-queries-*` is the shipped image demonstrating
 TraceData
 ├── traceId: String
 ├── startTime, duration      # see Async Subtree Timing
-├── rootSpan: SpanData       # chosen once by the bundle
+├── rootSpan: SpanData       # chosen once by the bundle; null while in flight
+├── complete: boolean        # sticky once a parentless span was stored
 ├── spans: List<SpanData>    # creation order
 └── truncated: boolean
 
 SpanData
 ├── traceId, spanId, parentId
+├── remoteParent: boolean             # parent propagated from another process
 ├── name, kind
-├── startTime, endTime        # duration() derives from these
+├── startTime, endTime                # duration() derives from these
 ├── tags: Map<String, String>
 ├── events: List<Event>
 ├── exception: CapturedExceptionInfo  # null unless the span failed

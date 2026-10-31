@@ -36,6 +36,9 @@ class TraceApiClient {
             .name()
             .equals(trace.path("rootActionType").asString(""));
 
+    /** The trace's root has arrived: {@code complete} is the API's own word for it, so nothing is inferred from the tree. */
+    static final Predicate<JsonNode> COMPLETE = trace -> trace.path("complete").asBoolean(false);
+
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
 

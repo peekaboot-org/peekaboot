@@ -12,7 +12,7 @@ import {querySeverity, severityClass} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {slowBadge} from '../../shared/trace-stats.js';
 import {spanTreeLink} from '../span-tree-link.js';
-import {spansOf} from './spans.js';
+import {traceSpans} from './spans.js';
 
 export function render(container, trace, view = {}) {
     const queries = trace.queries || [];
@@ -22,7 +22,7 @@ export function render(container, trace, view = {}) {
         return;
     }
 
-    const statements = new Map(Array.from(spansOf(trace.rootSpan), span => [span.spanId, span.statement]));
+    const statements = new Map(Array.from(traceSpans(trace), span => [span.spanId, span.statement]));
     container.replaceChildren(...queries.map((query, index) => queryItem(query, statements.get(query.spanId), index, view)));
 }
 
