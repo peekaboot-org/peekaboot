@@ -1,6 +1,7 @@
 package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
@@ -31,6 +32,7 @@ import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
@@ -351,17 +353,6 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
     }
 
-    /** A filter naming nothing recognizable falls back to the default view, not to no filter at all. */
-    @Test
-    void aRootActionTypeFilterWithNoRecognizedTypeFallsBackToTheDefaultView() {
-        addTrace("trace1", 100, false);
-        addConnectionPoolTrace("pool1");
-
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "not-a-real-type", null);
-
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
-    }
-
     @Test
     void theListFiltersByRootOperationWithAPartialCaseInsensitiveMatch() {
         addTraceWithOperation("trace1", "GET /api/Users", 100);
@@ -385,13 +376,39 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void invalidTypesInACommaSeparatedFilterAreIgnored() {
-        addTrace("trace1", 100, false);
-        addConsumerTrace("trace2", 100);
+    void refusesAnUnknownTypeInTheFilter() {
+        assertThatThrownBy(() -> service.getInsights(10, TraceBucket.ALL, "http_request,bogus", null))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("rootActionType");
+                    assertThat(e.problem().detail())
+                            .contains("'bogus'")
+                            .contains("HTTP_REQUEST")
+                            .endsWith(", * on its own.");
+                });
+    }
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request,bogus", null);
+    /** The refusal must not list {@code *} as accepted where it refuses that very token. */
+    @Test
+    void refusesTheWildcardInAListSayingItStandsAlone() {
+        assertThatThrownBy(() -> service.getInsights(10, TraceBucket.ALL, "http_request,*", null))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().detail())
+                                .startsWith("Unknown rootActionType '*'.")
+                                .endsWith(", UNKNOWN, * on its own."));
+    }
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    /** The refusal is about the request, so it does not wait on there being a store to filter. */
+    @Test
+    void refusesAnUnknownTypeWithTracingOff() {
+        assertThatThrownBy(() -> newService(null).getInsights(10, TraceBucket.ALL, "bogus", null))
+                .isInstanceOf(ApiProblemException.class);
+    }
+
+    @Test
+    void refusesAnEmptyTypeInTheFilter() {
+        assertThatThrownBy(() -> service.getInsights(10, TraceBucket.ALL, "http_request,", null))
+                .isInstanceOf(ApiProblemException.class);
     }
 
     /**

@@ -73,10 +73,9 @@ class TraceFiltersIT extends PlaywrightTestBase {
     }
 
     /**
-     * A stale or hand-edited "type" param the backend does not know is dropped there
-     * (the list shows every type), so the tab must drop it too - otherwise the banner
-     * claims a filter is active over an unfiltered list. The corrected URL is part of the
-     * contract: a link must never say "type=FOO" over a list that shows the default view.
+     * A stale or hand-edited "type" param the backend does not know is refused there, so the
+     * tab must drop it before asking, or the list fails to load. The corrected URL is part
+     * of the contract: a link must never say "type=FOO" over a list that shows the default view.
      */
     @Test
     void aTracesDeepLinkWithAnUnknownTypeFallsBackToTheDefaultFilter() {

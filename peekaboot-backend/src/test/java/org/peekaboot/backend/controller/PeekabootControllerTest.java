@@ -81,10 +81,11 @@ class PeekabootControllerTest {
         }
 
         @Test
-        void shouldFallBackToAllBucketForInvalidValue() {
-            controller.getTracesInsights(100, "not-a-bucket", null, null);
-
-            verify(traceInsightsService).getInsights(100, TraceBucket.ALL, null, null);
+        void shouldRefuseAnUnknownBucket() {
+            assertThatThrownBy(() -> controller.getTracesInsights(100, "not-a-bucket", null, null))
+                    .isInstanceOfSatisfying(
+                            ApiProblemException.class,
+                            e -> assertThat(e.problem().parameter()).isEqualTo("bucket"));
         }
 
         @Test

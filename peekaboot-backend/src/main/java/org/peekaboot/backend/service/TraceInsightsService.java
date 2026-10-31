@@ -19,9 +19,9 @@ import org.peekaboot.backend.mapper.trace.TraceLogMapper;
 import org.peekaboot.backend.mapper.trace.TraceQueries;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.RequestParameters;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
-import org.peekaboot.backend.text.EnumNames;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -47,6 +47,9 @@ public class TraceInsightsService {
 
     /** The one {@code rootActionType} value that asks for every type, the hidden ones included. */
     private static final String EVERY_TYPE = "*";
+
+    /** How a refusal lists {@link #EVERY_TYPE}, which a list of types refuses as one of its tokens. */
+    private static final String EVERY_TYPE_ALONE = EVERY_TYPE + " on its own";
 
     @Nullable
     private final TraceStore traceStore;
@@ -89,11 +92,11 @@ public class TraceInsightsService {
      */
     public TraceInsightsResponse getInsights(
             int limit, TraceBucket bucket, String rootActionType, String rootOperation) {
+        Set<RootActionType> actionTypeFilter = parseRootActionTypes(rootActionType);
         if (traceStore == null) {
             return EMPTY_RESPONSE;
         }
 
-        Set<RootActionType> actionTypeFilter = parseRootActionTypes(rootActionType);
         final String operationFilter = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
         // filtered on each row's root span alone; only the returned page is mapped (and masked)
@@ -122,10 +125,10 @@ public class TraceInsightsService {
     }
 
     /**
-     * Parses a comma-separated list of {@link RootActionType} names, silently dropping
-     * invalid values. A request that names no recognizable type asks for
-     * {@link #DEFAULT_VIEW_TYPES}; {@link #EVERY_TYPE} asks for every type, which is the
-     * empty set here since an empty set filters nothing away.
+     * Parses a comma-separated list of {@link RootActionType} names, refusing a name it does
+     * not know. A request that names no type asks for {@link #DEFAULT_VIEW_TYPES};
+     * {@link #EVERY_TYPE} asks for every type, which is the empty set here since an empty set
+     * filters nothing away.
      */
     private Set<RootActionType> parseRootActionTypes(String rootActionType) {
         if (rootActionType == null || rootActionType.isBlank()) {
@@ -136,12 +139,9 @@ public class TraceInsightsService {
         }
         Set<RootActionType> types = EnumSet.noneOf(RootActionType.class);
         for (String token : rootActionType.split(",", -1)) {
-            RootActionType type = EnumNames.byName(RootActionType.class, token.trim(), null);
-            if (type != null) {
-                types.add(type);
-            }
+            types.add(RequestParameters.enumValue("rootActionType", RootActionType.class, token, EVERY_TYPE_ALONE));
         }
-        return types.isEmpty() ? DEFAULT_VIEW_TYPES : types;
+        return types;
     }
 
     private TraceTree mapRow(RowSource row) {

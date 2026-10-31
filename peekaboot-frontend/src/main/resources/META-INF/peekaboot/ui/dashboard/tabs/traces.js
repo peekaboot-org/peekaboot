@@ -115,11 +115,9 @@ function reconcileWithUrl(container, context) {
  * matches (the steady state on every render while this tab's own filter is active).
  */
 function seedFromUrl(container, params) {
-    // Validated against the canonical lists - an unrecognized bucket (a typo, a stale link)
-    // would otherwise sail straight through to the backend and back as a literal "undefined"
-    // in the empty-state message, and an unknown type would leave the backend on its
-    // default view while the banner here still claimed a filter. The case fold mirrors
-    // the backend's own.
+    // Validated against the canonical lists, since the backend refuses an unrecognized bucket
+    // or type (a typo, a stale link) and the list would fail to load.
+    // The case fold mirrors the backend's own.
     const urlBucket = Object.keys(BUCKET_EMPTY_MESSAGES).includes(params.bucket) ? params.bucket : 'all';
     const urlTypes = (params.type ? params.type.split(',') : [])
         .map(type => type.toUpperCase())

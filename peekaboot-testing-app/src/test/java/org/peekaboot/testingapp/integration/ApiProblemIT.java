@@ -20,6 +20,8 @@ class ApiProblemIT extends TestingAppITBase {
     @CsvSource(
             delimiter = '|',
             value = {
+                "/peekaboot/api/traces/insights?bucket=eror | bucket",
+                "/peekaboot/api/traces/insights?rootActionType=HTTP_REQUEST,NOPE | rootActionType",
                 "/peekaboot/api/traces/insights?limit=abc | limit",
                 "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask",
                 "/peekaboot/api/insights/data?level=abc | level",
@@ -36,6 +38,25 @@ class ApiProblemIT extends TestingAppITBase {
         assertThat(answer.body().path("status").asInt()).isEqualTo(400);
         assertThat(answer.body().path("parameter").asString("")).isEqualTo(parameter);
         assertThat(answer.body().path("detail").asString("")).isNotBlank();
+    }
+
+    @Test
+    void anUnknownBucketNamesTheAcceptedValues() {
+        assertThat(fetch("/peekaboot/api/traces/insights?bucket=eror")
+                        .body()
+                        .path("detail")
+                        .asString(""))
+                .isEqualTo("Unknown bucket 'eror'. Accepted: ALL, ERRORS, SLOW.");
+    }
+
+    @Test
+    void theWildcardInAListOfTypesIsRefusedAsAcceptedOnlyOnItsOwn() {
+        assertThat(fetch("/peekaboot/api/traces/insights?rootActionType=HTTP_REQUEST,*")
+                        .body()
+                        .path("detail")
+                        .asString(""))
+                .startsWith("Unknown rootActionType '*'.")
+                .endsWith(", UNKNOWN, * on its own.");
     }
 
     @Test

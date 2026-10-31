@@ -13,10 +13,10 @@ import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.problem.ApiProblem;
 import org.peekaboot.backend.problem.ApiProblemException;
+import org.peekaboot.backend.problem.RequestParameters;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
-import org.peekaboot.backend.text.EnumNames;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.springframework.http.MediaType;
@@ -122,9 +122,10 @@ public class PeekabootController {
                 sanitizeLimit(limit), parseBucket(bucket), rootActionType, rootOperation);
     }
 
-    /** Lenient: null, blank and unknown values all mean the All bucket, whatever the case. */
     private static TraceBucket parseBucket(String value) {
-        return EnumNames.byName(TraceBucket.class, value, TraceBucket.ALL);
+        return value == null || value.isBlank()
+                ? TraceBucket.ALL
+                : RequestParameters.enumValue("bucket", TraceBucket.class, value);
     }
 
     /** Negative limits throw from Stream.limit; the cap bounds the response size. */

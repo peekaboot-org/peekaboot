@@ -443,6 +443,10 @@ The advice's scope, `org.peekaboot.backend`, leaves the application's controller
 error handling, and it is ordered first so an application-wide `@RestControllerAdvice` cannot
 reshape Peekaboot's errors (`ApiProblemHandlerTest`).
 
+Enumerated parameters (`bucket`, `rootActionType`) go through `RequestParameters`, which refuses
+a value it does not know and lists the accepted ones, where a default would answer a typo with
+the wrong list.
+
 ### In-Process Actuator Invocation
 
 Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a
