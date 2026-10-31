@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.example.security.PeekabootSecurityConfig;
+import org.peekaboot.fixtures.RequestThreadObservations;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -48,6 +49,9 @@ class SecuredPeekabootIT {
     private int port;
 
     private PeekabootApi api;
+
+    @Autowired
+    private RequestThreadObservations observations;
 
     @BeforeEach
     void connect() {
@@ -127,6 +131,20 @@ class SecuredPeekabootIT {
     @Test
     void theApplicationsOwnPathsStayAnonymouslyReachable() {
         assertThat(api.statusOf("/persons")).isEqualTo(HttpStatus.OK);
+    }
+
+    /** The application's security chain observes every request it guards; on a dashboard request nothing it starts may be observed. */
+    @Test
+    void theApplicationsSecurityChainStartsNoObservationOnADashboardRequest() {
+        api.statusOf("/persons");
+        assertThat(observations.startedServing("/persons"))
+                .as("Spring Security's chain is observed on an application request, or this test proves nothing")
+                .anySatisfy(name -> assertThat(name).startsWith("spring.security"));
+
+        assertThat(api.withBasicAuth("admin", "admin-password").statusOf(INSIGHTS_API))
+                .isEqualTo(HttpStatus.OK);
+
+        assertThat(observations.startedServing("/peekaboot")).isEmpty();
     }
 
     /**

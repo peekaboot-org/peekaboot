@@ -1041,12 +1041,26 @@ finished span it sees into `TraceStore` as well. Turning `peekaboot.tracing.enab
 the rest of the app's OpenTelemetry setup (sampling, other exporters such as Zipkin, Jaeger or
 an OTLP backend) untouched.
 
-It skips Peekaboot's own requests span by span, using the same `PeekabootPaths` prefixes
-the filters and the interceptor use. Only SERVER spans are judged: the prefixes describe
-inbound requests, so an outbound call whose remote path happens to start with one (a health
-check against another service, say) stays in its trace. A child of such a request carries
-neither the path tag nor the route name, so skipping a *root* also publishes a
-`TraceDiscardedEvent`;
+A dashboard request never becomes an observation. `PeekabootRequestObservationPredicate`, an
+`ObservationPredicate` bean that Boot applies to the application's registry, rejects the server
+observation of every request under `PeekabootPaths.dashboardPath()`. The dashboard's polling
+never reaches `http.server.requests`, the http-* insights or the SDK.
+
+The predicate also rejects every observation started while `RequestContextHolder` holds a
+dashboard request. Micrometer does not make a rejected observation the thread's current one, so
+without that the request's own work (the in-process health check's JDBC calls, Spring
+Security's filter-chain observations) would start root traces of their own.
+`RequestContextFilter` binds the request before Spring Security's chain runs. A filter working
+outside that binding, such as Spring Session's `SessionRepositoryFilter` committing a session
+after the chain, can still start root traces for a dashboard request. `RootActionTypes`
+classifies most of them as `MAINTENANCE`, which the default view hides.
+
+The exporter still skips the other excluded prefixes (the actuator, the static assets,
+`/error`) span by span, judging each SERVER span's path tag against the same `PeekabootPaths`
+prefixes the filters and the interceptor use. Only SERVER spans are judged: the prefixes
+describe inbound requests, so an outbound call whose remote path happens to start with one (a
+health check against another service, say) stays in its trace. A child of such a request
+carries no path tag, so skipping a *root* also publishes a `TraceDiscardedEvent`;
 `TraceStoreEventListener` turns that into `TraceStore.discard`, which drops the trace from all
 three buckets. Everything else becomes a `SpanData` published as a `SpanDataEvent`. An error is
 recorded only for a span whose status code is `ERROR`, as a `CapturedExceptionInfo` read off

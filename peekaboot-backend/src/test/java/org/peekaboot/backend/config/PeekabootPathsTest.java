@@ -1,6 +1,7 @@
 package org.peekaboot.backend.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Requests.get;
 
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
@@ -263,6 +264,43 @@ class PeekabootPathsTest {
         assertThat(underApp.pathWithinDispatcherServlet("/application/swagger-ui/index.html"))
                 .isNull();
         assertThat(paths.pathWithinDispatcherServlet("/swagger-ui/index.html")).isEqualTo("/swagger-ui/index.html");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "/peekaboot, true",
+        "/peekaboot/, true",
+        "/peekaboot/api/traces/insights, true",
+        "/peekabootx, false",
+        "/actuator/health, false",
+        "/static/app.css, false",
+        "/error, false",
+        "/api/peekaboot/x, false"
+    })
+    void aDashboardRequestIsPeekabootsOwnPathAndNothingWider(String path, boolean dashboard) {
+        assertThat(PeekabootPaths.defaults().isDashboardRequest(get(path))).isEqualTo(dashboard);
+    }
+
+    @Test
+    void aDashboardRequestIsJudgedBehindTheDispatcherServletsPrefix() {
+        PeekabootPaths underApp = new PeekabootPaths("/actuator", "", "/app");
+        MockHttpServletRequest moved = new MockHttpServletRequest("GET", "/app/peekaboot/api/features");
+        moved.setServletPath("/app");
+        moved.setPathInfo("/peekaboot/api/features");
+
+        assertThat(underApp.isDashboardRequest(moved)).isTrue();
+        assertThat(underApp.isDashboardRequest(get("/peekaboot/api/features")))
+                .as("outside the DispatcherServlet's prefix nothing serves the dashboard")
+                .isFalse();
+    }
+
+    @Test
+    void aDashboardRequestBehindAContextPathIsStillOne() {
+        MockHttpServletRequest request = get("/peekaboot/api/features");
+        request.setContextPath("/shop");
+        request.setRequestURI("/shop/peekaboot/api/features");
+
+        assertThat(PeekabootPaths.defaults().isDashboardRequest(request)).isTrue();
     }
 
     private boolean matchesAnExcludePattern(String path) {

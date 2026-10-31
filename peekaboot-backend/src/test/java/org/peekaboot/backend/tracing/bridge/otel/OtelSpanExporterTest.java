@@ -153,18 +153,6 @@ class OtelSpanExporterTest {
         assertThat(storage.getTrace(traceId)).isEmpty();
     }
 
-    @Test
-    void skipsSpanWhenNameContainsPeekabootPath() {
-        String traceId = "0123456789abcdef0123456789abcdef";
-        SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /peekaboot/api/traces", SpanKind.SERVER)
-                .build();
-
-        exporter.export(List.of(span));
-
-        assertThat(publishedEvents).isEmpty();
-        assertThat(storage.getTrace(traceId)).isEmpty();
-    }
-
     /**
      * Children export before their root, so the JDBC span of a {@code /actuator/health}
      * probe is already stored when the root arrives without a path Peekaboot keeps;
@@ -189,31 +177,6 @@ class OtelSpanExporterTest {
         exporter.export(List.of(root));
 
         assertThat(storage.getTrace(traceId)).isEmpty();
-    }
-
-    /**
-     * The exclusions describe inbound requests. An outbound call is never Peekaboot's own
-     * request, however its name is spelled, so a CLIENT span stays in its trace.
-     */
-    @Test
-    void keepsAClientSpanWhoseNameSpellsThePeekabootPrefix() {
-        String traceId = "0123456789abcdef0123456789abcdef";
-        String rootSpanId = "0000000000000001";
-        SpanContext rootContext =
-                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
-        SpanData peekabootCall = testSpanBuilder(
-                        traceId, "0000000000000002", "GET /peekaboot/api/features", SpanKind.CLIENT)
-                .setParentSpanContext(rootContext)
-                .build();
-        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /api/users", SpanKind.SERVER)
-                .setAttributes(Attributes.of(URL_PATH_KEY, "/api/users"))
-                .build();
-
-        exporter.export(List.of(peekabootCall, root));
-
-        assertThat(storedSpans(traceId))
-                .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
-                .containsExactly("0000000000000002", rootSpanId);
     }
 
     /**
@@ -242,9 +205,8 @@ class OtelSpanExporterTest {
     }
 
     /**
-     * A host route that merely spells Peekaboot's prefix deeper in its own path is not
-     * Peekaboot's request: its path tag says so, and a span that carries one is judged by
-     * it alone - otherwise the name match would discard the whole trace.
+     * A host route that spells Peekaboot's prefix deeper in its own path is not Peekaboot's
+     * request. The prefixes match where the path starts, so the whole trace stays.
      */
     @Test
     void keepsAHostRouteWhosePathSpellsThePeekabootPrefix() {

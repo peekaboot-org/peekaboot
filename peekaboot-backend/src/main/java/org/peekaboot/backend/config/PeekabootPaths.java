@@ -170,6 +170,16 @@ public final class PeekabootPaths {
         return isExcluded(path);
     }
 
+    /**
+     * A request to Peekaboot's own UI or API: {@link #BASE_PATH} and below, behind the
+     * DispatcherServlet's prefix. Narrower than {@link #isExcluded}, which also names the
+     * actuator, the static assets and the error path. Those serve the application's traffic.
+     */
+    public boolean isDashboardRequest(HttpServletRequest request) {
+        String path = pathWithinDispatcherServlet(pathWithinApplication(request));
+        return path != null && (BASE_PATH.equals(path) || path.startsWith(BASE_PATH + "/"));
+    }
+
     /** The same exclusions as Spring MVC path patterns, for registering the interceptor; {@code /x/**} matches {@code /x} too. */
     public String[] excludePatterns() {
         return excludedPrefixes.stream().map(prefix -> prefix + "**").toArray(String[]::new);

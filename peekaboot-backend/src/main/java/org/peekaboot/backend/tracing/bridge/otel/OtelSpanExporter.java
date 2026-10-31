@@ -27,7 +27,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Copies every span the host's OpenTelemetry SDK exports into Peekaboot's own store, as a
- * {@link SpanDataEvent} per span, leaving out Peekaboot's own requests. Runs beside
+ * {@link SpanDataEvent} per span, leaving out requests on the excluded prefixes. Runs beside
  * whatever other exporter the application has configured, never instead of it.
  */
 public class OtelSpanExporter implements SpanExporter {
@@ -55,7 +55,7 @@ public class OtelSpanExporter implements SpanExporter {
         for (SpanData otelSpan : spans) {
             Map<String, String> tags = extractAttributes(otelSpan);
             if (shouldSkipSpan(otelSpan, tags)) {
-                // A skipped root ends a trace that is Peekaboot's own. The discard assumes
+                // A skipped root ends an excluded request's trace. The discard assumes
                 // nothing more arrives under that id: the excluded prefixes serve no endpoint
                 // that outlives its response, so the children exported alongside the root and
                 // the logs arrived synchronously. A later event would rebuild the id as an
@@ -73,26 +73,19 @@ public class OtelSpanExporter implements SpanExporter {
     }
 
     /**
-     * Peekaboot's own requests, recognised by the span's HTTP path or, for a span carrying
-     * no path at all, its name. The path tag carries the servlet context path while the
-     * name (Spring's matched route pattern) does not, so the path goes through the
-     * context-stripping check - and it decides alone, since a host route such as
-     * {@code /admin/peekaboot/status} spells the prefix without being Peekaboot's request.
-     * Only SERVER spans are judged: the exclusions describe inbound requests, and an
-     * outbound call to a remote {@code /actuator/health} is part of its trace. Judged per
-     * span: the children of such a request carry neither and are stored, which is what the
-     * discard in {@link #export} undoes once their root arrives.
+     * A request on one of {@link PeekabootPaths}'s excluded prefixes, recognised by the span's
+     * HTTP path. The path tag carries the servlet context path, so it goes through the
+     * context-stripping check. Only SERVER spans are judged: the exclusions describe inbound
+     * requests, and an outbound call to a remote {@code /actuator/health} is part of its trace.
+     * Judged per span: the children of such a request carry no path and are stored, which is
+     * what the discard in {@link #export} undoes once their root arrives.
      */
     private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
         if (span.getKind() != SpanKind.SERVER) {
             return false;
         }
         String path = HttpSpanTags.path(tags);
-        if (path != null) {
-            return paths.isExcludedRequestPath(path);
-        }
-        String name = span.getName();
-        return name != null && name.contains(PeekabootPaths.BASE_PATH + "/");
+        return path != null && paths.isExcludedRequestPath(path);
     }
 
     @Override
