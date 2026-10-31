@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 
@@ -107,8 +108,7 @@ public final class Spans {
         private Duration duration = Duration.ZERO;
         private final Map<String, String> tags = new LinkedHashMap<>();
         private List<SpanData.Event> events = List.of();
-        private String errorMessage;
-        private String errorClass;
+        private CapturedExceptionInfo exception;
         private long creationOrder = NEXT_CREATION_ORDER.incrementAndGet();
 
         private SpanBuilder(String spanId) {
@@ -164,8 +164,12 @@ public final class Spans {
         }
 
         public SpanBuilder error(String errorMessage, String errorClass) {
-            this.errorMessage = errorMessage;
-            this.errorClass = errorClass;
+            return exception(errorClass, errorMessage, null);
+        }
+
+        /** The exception the span recorded, as the exporter captures it. */
+        public SpanBuilder exception(String type, String message, String stackTrace) {
+            this.exception = new CapturedExceptionInfo(type, message, stackTrace);
             return this;
         }
 
@@ -185,8 +189,7 @@ public final class Spans {
                     startTime.plus(duration),
                     Map.copyOf(tags),
                     events,
-                    errorMessage,
-                    errorClass,
+                    exception,
                     creationOrder);
         }
     }

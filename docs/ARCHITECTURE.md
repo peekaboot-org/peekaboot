@@ -1048,9 +1048,11 @@ neither the path tag nor the route name, so skipping a *root* also publishes a
 `TraceDiscardedEvent`;
 `TraceStoreEventListener` turns that into `TraceStore.discard`, which drops the trace from all
 three buckets. Everything else becomes a `SpanData` published as a `SpanDataEvent`. An error is
-recorded only for a span whose status code is `ERROR`: the message is the status description,
-falling back to the `exception` event's `exception.message` when empty, and the class is that
-event's `exception.type`, or `ERROR` where the span recorded no exception event.
+recorded only for a span whose status code is `ERROR`, as a `CapturedExceptionInfo` read off
+the span's last `exception` event (`exception.type`, `exception.message`,
+`exception.stacktrace`, the trace capped at `CapturedStackTraces.MAX_LINES` like a log's). The
+status description fills in a missing message, and a span that failed without an exception
+event carries only that.
 
 `tracing/bridge/otel` is the only bridge. There is no Brave/Zipkin one, so an application wired
 to Micrometer Tracing's Brave bridge instead of the OpenTelemetry SDK captures nothing. The
@@ -1556,7 +1558,7 @@ SpanData
 ├── startTime, endTime        # duration() derives from these
 ├── tags: Map<String, String>
 ├── events: List<Event>
-├── errorMessage, errorClass
+├── exception: CapturedExceptionInfo  # null unless the span failed
 └── creationOrder: long
 ```
 

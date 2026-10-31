@@ -21,10 +21,32 @@ class SpanDataTest {
 
     @Test
     void aSpanWithoutAnEndHasNoDuration() {
-        SpanData span =
-                new SpanData("t1", "s1", null, "op", null, Instant.EPOCH, null, Map.of(), List.of(), null, null, 1L);
+        SpanData span = new SpanData("t1", "s1", null, "op", null, Instant.EPOCH, null, Map.of(), List.of(), null, 1L);
 
         assertThat(span.duration()).isNull();
         assertThat(span.durationMs()).isZero();
+    }
+
+    @Test
+    void aSpanWithoutAnExceptionHasNoError() {
+        assertThat(span("s1").build().hasError()).isFalse();
+    }
+
+    @Test
+    void aSpanWithAnExceptionHasAnErrorEvenWithNothingKnownAboutIt() {
+        SpanData span = new SpanData(
+                "t1",
+                "s1",
+                null,
+                "op",
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                Map.of(),
+                List.of(),
+                new CapturedExceptionInfo(null, null, null),
+                1L);
+
+        assertThat(span.hasError()).isTrue();
     }
 }

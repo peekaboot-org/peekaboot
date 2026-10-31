@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.bridge.otel;
 
 import io.micrometer.tracing.Span;
 import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.sdk.common.CompletableResultCode;
@@ -14,7 +15,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.stacktrace.CapturedStackTraces;
+import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
@@ -32,6 +36,7 @@ public class OtelSpanExporter implements SpanExporter {
 
     private static final AttributeKey<String> EXCEPTION_TYPE = AttributeKey.stringKey("exception.type");
     private static final AttributeKey<String> EXCEPTION_MESSAGE = AttributeKey.stringKey("exception.message");
+    private static final AttributeKey<String> EXCEPTION_STACKTRACE = AttributeKey.stringKey("exception.stacktrace");
 
     private final ApplicationEventPublisher eventPublisher;
     private final PeekabootPaths paths;
@@ -110,21 +115,7 @@ public class OtelSpanExporter implements SpanExporter {
                 ? otelSpan.getParentSpanContext().getSpanId()
                 : null;
 
-        String errorMessage = null;
-        String errorClass = null;
-        if (otelSpan.getStatus().getStatusCode() == StatusCode.ERROR) {
-            // the bridge sets the description to the throwable's message when it has one;
-            // the recorded exception event is the only carrier of its class
-            EventData exception = lastExceptionEvent(otelSpan);
-            errorMessage = otelSpan.getStatus().getDescription();
-            if (errorMessage.isEmpty() && exception != null) {
-                errorMessage = exception.getAttributes().get(EXCEPTION_MESSAGE);
-            }
-            errorClass = exception != null ? exception.getAttributes().get(EXCEPTION_TYPE) : null;
-            if (errorClass == null) {
-                errorClass = "ERROR";
-            }
-        }
+        CapturedExceptionInfo exception = capturedException(otelSpan);
 
         return new org.peekaboot.backend.tracing.event.SpanData(
                 otelSpan.getSpanContext().getTraceId(),
@@ -136,8 +127,7 @@ public class OtelSpanExporter implements SpanExporter {
                 endTime,
                 tags,
                 events,
-                errorMessage,
-                errorClass,
+                exception,
                 creationOrder.incrementAndGet());
     }
 
@@ -153,6 +143,30 @@ public class OtelSpanExporter implements SpanExporter {
             }
         });
         return tags;
+    }
+
+    /**
+     * The SDK writes the class, message and full stack trace onto the exception event; the status
+     * description only fills in the message of a span that recorded no exception, or one without
+     * a message. Only an ERROR status counts: an application may record an exception it handled.
+     */
+    private static @Nullable CapturedExceptionInfo capturedException(SpanData otelSpan) {
+        if (otelSpan.getStatus().getStatusCode() != StatusCode.ERROR) {
+            return null;
+        }
+        String description = otelSpan.getStatus().getDescription();
+        String statusMessage = description.isEmpty() ? null : description;
+        EventData event = lastExceptionEvent(otelSpan);
+        if (event == null) {
+            return new CapturedExceptionInfo(null, statusMessage, null);
+        }
+        Attributes attributes = event.getAttributes();
+        String message = attributes.get(EXCEPTION_MESSAGE);
+        String stackTrace = attributes.get(EXCEPTION_STACKTRACE);
+        return new CapturedExceptionInfo(
+                attributes.get(EXCEPTION_TYPE),
+                message != null ? message : statusMessage,
+                stackTrace != null ? CapturedStackTraces.capLines(stackTrace) : null);
     }
 
     private static EventData lastExceptionEvent(SpanData otelSpan) {

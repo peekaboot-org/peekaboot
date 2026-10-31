@@ -26,7 +26,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.stacktrace.CapturedStackTraces;
 import org.peekaboot.backend.testsupport.TraceStores;
+import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
@@ -368,47 +370,102 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void convertsErrorStatusToErrorMessageAndClass() {
+    void aFailedSpanWithoutAnExceptionEventCarriesItsStatusDescriptionAsTheMessage() {
         String traceId = "0123456789abcdef0123456789abcdef";
-        String spanId = "0000000000000001";
-        SpanData span = testSpanBuilder(traceId, spanId, "op", SpanKind.SERVER)
+        SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
                 .setStatus(StatusData.create(StatusCode.ERROR, "boom"))
                 .build();
 
         exporter.export(List.of(span));
 
+        assertThat(storedSpan(traceId).exception()).isEqualTo(new CapturedExceptionInfo(null, "boom", null));
+    }
+
+    @Test
+    void aFailedSpanWithNeitherAnExceptionNorADescriptionStillFails() {
+        String traceId = exportThroughTheSdk(span -> span.setStatus(StatusCode.ERROR));
+
         org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
-        assertThat(stored.errorMessage()).isEqualTo("boom");
-        assertThat(stored.errorClass()).isEqualTo("ERROR");
+        assertThat(stored.hasError()).isTrue();
+        assertThat(stored.exception()).isEqualTo(new CapturedExceptionInfo(null, null, null));
     }
 
     /**
-     * Micrometer's OTel bridge records a thrown exception as an {@code exception} event and
-     * sets the status description to its message when it has one; the event is the only
-     * carrier of the exception class, and of the message when the throwable had none.
+     * Micrometer's OTel bridge records a thrown exception as an {@code exception} event, which
+     * the SDK fills with the class, the message and the whole stack trace.
      */
     @Test
-    void takesTheErrorClassAndMessageFromTheRecordedExceptionWhenTheStatusHasNoDescription() {
+    void capturesTheRecordedExceptionWithItsStackTrace() {
+        IllegalStateException thrown = new IllegalStateException("pool exhausted");
         String traceId = exportThroughTheSdk(span -> {
-            span.recordException(new IllegalStateException("pool exhausted"));
-            span.setStatus(StatusCode.ERROR);
+            span.recordException(thrown);
+            span.setStatus(StatusCode.ERROR, "pool exhausted");
         });
 
-        org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
-        assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
-        assertThat(stored.errorMessage()).isEqualTo("pool exhausted");
+        CapturedExceptionInfo exception = storedSpan(traceId).exception();
+        assertThat(exception.type()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(exception.message()).isEqualTo("pool exhausted");
+        assertThat(exception.stackTrace().lines().toList())
+                .startsWith("java.lang.IllegalStateException: pool exhausted")
+                .anySatisfy(line -> assertThat(line)
+                        .startsWith("\tat " + OtelSpanExporterTest.class.getName()
+                                + ".capturesTheRecordedExceptionWithItsStackTrace("));
     }
 
+    /** The bridge describes the status with the same message; only an application overriding the description makes them differ. */
     @Test
-    void keepsTheStatusDescriptionAsTheMessageAndStillTakesTheClassFromTheRecordedException() {
+    void takesTheMessageFromTheRecordedExceptionOverTheStatusDescription() {
+        IllegalStateException thrown = new IllegalStateException("pool exhausted");
         String traceId = exportThroughTheSdk(span -> {
-            span.recordException(new IllegalStateException("pool exhausted"));
+            span.recordException(thrown);
             span.setStatus(StatusCode.ERROR, "described by the app");
         });
 
+        assertThat(storedSpan(traceId).exception().message()).isEqualTo("pool exhausted");
+    }
+
+    @Test
+    void fallsBackToTheStatusDescriptionForAnExceptionWithoutAMessage() {
+        IllegalStateException thrown = new IllegalStateException();
+        String traceId = exportThroughTheSdk(span -> {
+            span.recordException(thrown);
+            span.setStatus(StatusCode.ERROR, "described by the app");
+        });
+
+        CapturedExceptionInfo exception = storedSpan(traceId).exception();
+        assertThat(exception.type()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(exception.message()).isEqualTo("described by the app");
+    }
+
+    /** A handled exception an application records for the record does not fail the span. */
+    @Test
+    void anExceptionRecordedOnASpanThatDidNotFailIsNotItsError() {
+        IllegalStateException handled = new IllegalStateException("handled");
+        String traceId = exportThroughTheSdk(span -> span.recordException(handled));
+
         org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
-        assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
-        assertThat(stored.errorMessage()).isEqualTo("described by the app");
+        assertThat(stored.exception()).isNull();
+        assertThat(stored.hasError()).isFalse();
+    }
+
+    /** A StackOverflowError's trace runs to 1024 frames; a span keeps no more of it than a logged one does. */
+    @Test
+    void capsAStackTraceAtTheLinesALoggedOneKeeps() {
+        IllegalStateException deep = new IllegalStateException("too deep");
+        StackTraceElement[] frames = new StackTraceElement[1500];
+        for (int i = 0; i < frames.length; i++) {
+            frames[i] = new StackTraceElement("com.example.Recursor", "recurse", "Recursor.java", i);
+        }
+        deep.setStackTrace(frames);
+        String traceId = exportThroughTheSdk(span -> {
+            span.recordException(deep);
+            span.setStatus(StatusCode.ERROR);
+        });
+
+        List<String> lines =
+                storedSpan(traceId).exception().stackTrace().lines().toList();
+        assertThat(lines).hasSize(CapturedStackTraces.MAX_LINES + 1);
+        assertThat(lines.getLast()).isEqualTo("... 501 lines omitted");
     }
 
     @Test

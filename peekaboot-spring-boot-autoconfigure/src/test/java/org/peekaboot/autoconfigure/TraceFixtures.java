@@ -70,7 +70,6 @@ final class TraceFixtures {
                 tags,
                 List.of(),
                 null,
-                null,
                 NEXT_CREATION_ORDER.incrementAndGet());
     }
 }

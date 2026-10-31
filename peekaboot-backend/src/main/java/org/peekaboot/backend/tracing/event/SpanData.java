@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 public record SpanData(
         String traceId,
@@ -16,14 +17,13 @@ public record SpanData(
         Instant endTime,
         Map<String, String> tags,
         List<Event> events,
-        String errorMessage,
-        String errorClass,
+        @Nullable CapturedExceptionInfo exception,
         long creationOrder) {
 
     public record Event(String name, Instant timestamp) {}
 
     public boolean hasError() {
-        return errorMessage != null || errorClass != null;
+        return exception != null;
     }
 
     /** Null while either end is unknown. */
@@ -40,17 +40,6 @@ public record SpanData(
     /** Returns a copy of this span re-parented to {@code newParentId}. */
     public SpanData withParentId(String newParentId) {
         return new SpanData(
-                traceId,
-                spanId,
-                newParentId,
-                name,
-                kind,
-                startTime,
-                endTime,
-                tags,
-                events,
-                errorMessage,
-                errorClass,
-                creationOrder);
+                traceId, spanId, newParentId, name, kind, startTime, endTime, tags, events, exception, creationOrder);
     }
 }

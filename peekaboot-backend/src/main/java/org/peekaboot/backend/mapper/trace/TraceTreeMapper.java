@@ -260,6 +260,7 @@ public class TraceTreeMapper {
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
+        var exception = spanData.exception();
 
         return new SpanNode(
                 spanData.spanId(),
@@ -272,8 +273,8 @@ public class TraceTreeMapper {
                 maskedTags(spanData),
                 mapEvents(spanData),
                 List.of(), // issues added by IssueDetector
-                maskingEngine.maskValue(spanData.errorMessage()),
-                spanData.errorClass(),
+                maskingEngine.maskValue(exception != null ? exception.message() : null),
+                exception != null ? exception.type() : null,
                 queries.statement(spanData),
                 queries.rowCount(spanData.spanId()),
                 isAsync && !parentIsAsync);
