@@ -1649,6 +1649,7 @@ TraceResource                    # GET /peekaboot/api/traces/{traceId}, and one 
 │   ├── outcome, buckets, reasons
 │   ├── cause: {type, message, applicationFrame, spanId}   # null: no failure, an evicted one, or one naming nothing
 │   ├── issues
+│   ├── hotspots: List<{spanId, name, selfMs}>   # at most three, most self time first
 │   ├── counts: {spans, queries {count, totalDurationMs}, logs {count, errorCount, warnCount},
 │   │            droppedSpans, droppedLogs}
 │   └── subtree: SubtreeView     # null for a whole trace

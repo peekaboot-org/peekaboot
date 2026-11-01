@@ -351,6 +351,7 @@ class PeekabootControllerTest {
                 List.of(),
                 null,
                 List.of(),
+                List.of(),
                 new TraceSummary.Counts(
                         1, new TraceSummary.QueryCounts(0, 0L), new TraceSummary.LogCounts(0, 0, 0), 0, 0),
                 null);

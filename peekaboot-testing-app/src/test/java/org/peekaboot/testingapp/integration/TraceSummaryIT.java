@@ -146,6 +146,28 @@ class TraceSummaryIT extends TestingAppITBase {
         }
     }
 
+    /** The report's 600 ms stage is where its time went, ahead of the two 400 ms stages. */
+    @Test
+    void theReportsHotspotsAreItsStages() {
+        CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-HOTSPOTS");
+        try {
+            String traceId = traces.get("/api/orders/" + order.getId() + "/report");
+
+            JsonNode hotspots = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED)
+                    .path("summary")
+                    .path("hotspots");
+
+            assertThat(hotspots.valueStream()
+                            .map(hotspot -> hotspot.path("name").asString()))
+                    .containsExactlyInAnyOrder(
+                            "order.report.price-lines", "order.report.load-lines", "order.report.apply-discounts");
+            assertThat(hotspots.get(0).path("name").asString()).isEqualTo("order.report.price-lines");
+            assertThat(hotspots.get(0).path("selfMs").asLong()).isGreaterThanOrEqualTo(600);
+        } finally {
+            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+        }
+    }
+
     @Test
     void aClientErrorIsAWarningOnTheRoot() {
         String traceId = traces.get(OutcomeFixtureController.statusPath(409));

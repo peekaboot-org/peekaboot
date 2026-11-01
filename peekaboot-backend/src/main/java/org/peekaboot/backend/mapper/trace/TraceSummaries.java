@@ -35,6 +35,7 @@ final class TraceSummaries {
                 reasons,
                 TraceCauses.of(tree, facts.errorLogs()),
                 issuesOf(tree),
+                Hotspots.of(tree),
                 countsOf(tree, facts),
                 tree.subtree());
     }

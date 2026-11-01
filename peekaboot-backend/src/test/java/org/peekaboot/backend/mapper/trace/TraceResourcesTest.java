@@ -167,6 +167,23 @@ class TraceResourcesTest {
         assertThat(subtree("t1", "clean").outcome()).isEqualTo(TraceOutcome.OK);
     }
 
+    /** The request's own wait is no work of the task's, so an async row's hotspots stay inside its subtree. */
+    @Test
+    void aSubtreeRowsHotspotsAreItsOwnWork() {
+        store.addSpan(span("work").in("t1").parent("task").at(50, 30).order(1).build());
+        store.addSpan(
+                asyncTask("task").in("t1").parent("root").at(40, 100).order(2).build());
+        store.addSpan(
+                span("root").in("t1").kind(Span.Kind.SERVER).at(0, 500).order(3).build());
+
+        assertThat(whole("t1").hotspots())
+                .extracting(TraceSummary.Hotspot::spanId, TraceSummary.Hotspot::selfMs)
+                .containsExactly(tuple("root", 400L), tuple("task", 70L), tuple("work", 30L));
+        assertThat(subtree("t1", "task").hotspots())
+                .extracting(TraceSummary.Hotspot::spanId, TraceSummary.Hotspot::selfMs)
+                .containsExactly(tuple("task", 70L), tuple("work", 30L));
+    }
+
     /** The detail reads its ERROR logs off the list it serves, whatever the level's case. */
     @Test
     void theDetailNamesEachErrorLogAmongItsLogs() {

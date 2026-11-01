@@ -15,6 +15,7 @@ import org.peekaboot.backend.tracing.store.TraceBucket;
  * @param cause the first failure to look at; null where the trace did not fail, where the caps evicted what failed it,
  *     or where its only failure is a span that names nothing
  * @param issues every issue on the trace's spans, in the order the Spans tab draws them
+ * @param hotspots the spans with the most self time, largest first, at most three
  * @param subtree null for a whole trace; on a listing row for an async task, the span it is rooted at
  */
 public record TraceSummary(
@@ -30,6 +31,7 @@ public record TraceSummary(
         List<TraceReason> reasons,
         @Nullable Cause cause,
         List<TraceIssue> issues,
+        List<Hotspot> hotspots,
         Counts counts,
         @Nullable SubtreeView subtree) {
 
@@ -56,6 +58,8 @@ public record TraceSummary(
             @Nullable String message,
             @Nullable String applicationFrame,
             @Nullable String spanId) {}
+
+    public record Hotspot(String spanId, String name, long selfMs) {}
 
     /**
      * What the trace holds and what its caps dropped.
