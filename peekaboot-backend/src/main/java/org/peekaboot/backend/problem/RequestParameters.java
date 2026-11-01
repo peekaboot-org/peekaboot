@@ -1,5 +1,7 @@
 package org.peekaboot.backend.problem;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -34,6 +36,35 @@ public final class RequestParameters {
                     parameter, parameter + " must be an integer from " + min + " to " + max + ", got '" + value + "'.");
         }
         return (int) parsed;
+    }
+
+    /**
+     * {@code value} as an ISO-8601 instant, with {@code Z} or an offset; null where it is absent or blank.
+     * A {@code +} left unencoded in a query string arrives as a space, so the refusal says how to send one.
+     */
+    @Nullable
+    public static Instant instant(String parameter, @Nullable String value) {
+        String present = text(value);
+        if (present == null) {
+            return null;
+        }
+        Instant parsed = parseOrNull(present.strip());
+        if (parsed == null) {
+            throw ApiProblemException.badParameter(
+                    parameter,
+                    parameter + " must be an ISO-8601 instant such as 2026-11-01T10:15:30Z, got '" + value
+                            + "'. Send a + in an offset as %2B.");
+        }
+        return parsed;
+    }
+
+    @Nullable
+    private static Instant parseOrNull(String candidate) {
+        try {
+            return Instant.parse(candidate);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     /** {@code value} as one of {@code type}'s constants, in any case; {@code alsoAccepted} are listed with them in the refusal. */

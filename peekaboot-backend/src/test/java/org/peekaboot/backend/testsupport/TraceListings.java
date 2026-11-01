@@ -17,6 +17,13 @@ public final class TraceListings {
         private String bucket;
         private String rootActionType;
         private String rootOperation;
+        private String route;
+        private String path;
+        private String statusCode;
+        private String outcome;
+        private String minDurationMs;
+        private String since;
+        private String until;
         private String view;
 
         private Builder() {}
@@ -45,13 +52,60 @@ public final class TraceListings {
             return this;
         }
 
+        public Builder route(String route) {
+            this.route = route;
+            return this;
+        }
+
+        public Builder path(String path) {
+            this.path = path;
+            return this;
+        }
+
+        public Builder statusCode(String statusCode) {
+            this.statusCode = statusCode;
+            return this;
+        }
+
+        public Builder outcome(String outcome) {
+            this.outcome = outcome;
+            return this;
+        }
+
+        public Builder minDurationMs(String minDurationMs) {
+            this.minDurationMs = minDurationMs;
+            return this;
+        }
+
+        public Builder since(String since) {
+            this.since = since;
+            return this;
+        }
+
+        public Builder until(String until) {
+            this.until = until;
+            return this;
+        }
+
         public Builder view(String view) {
             this.view = view;
             return this;
         }
 
         public TraceListParameters build() {
-            return new TraceListParameters(limit, bucket, rootActionType, rootOperation, view);
+            return new TraceListParameters(
+                    limit,
+                    bucket,
+                    rootActionType,
+                    rootOperation,
+                    route,
+                    path,
+                    statusCode,
+                    outcome,
+                    minDurationMs,
+                    since,
+                    until,
+                    view);
         }
     }
 }

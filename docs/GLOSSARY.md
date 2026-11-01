@@ -241,8 +241,8 @@ in tree order wins. A subtree row reads only its own subtree's spans.
 
 ### Bucket Counts
 `BucketCounts(all, errors, slow)`. Every listing response carries it twice: `bucketCounts` for
-the whole store and `filteredBucketCounts` for the traces matching this request's
-type/operation filter. The second is null only when the request filtered nothing at all, which
+the whole store and `filteredBucketCounts` for the traces matching every filter this request
+names. The second is null only when the request filtered nothing at all, which
 a request naming no type does not, since it still gets the default view's filter. The pair is
 what lets the bucket chips show `filtered / total`.
 

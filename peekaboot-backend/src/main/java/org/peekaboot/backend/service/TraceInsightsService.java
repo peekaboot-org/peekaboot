@@ -45,13 +45,11 @@ public class TraceInsightsService {
     }
 
     /**
-     * The trace listing for one bucket. Every parameter is read and checked before the store is
-     * consulted, so a bad one is refused even while tracing is off. {@code rootActionType} is a
-     * comma-separated include-list of {@link org.peekaboot.backend.domain.trace.RootActionType}
-     * names; naming none asks for the default view, which leaves out routine maintenance, and
-     * {@code *} asks for every type. {@code rootOperation} matches the root span's name partially
-     * and case-insensitively. {@code view} names a {@link org.peekaboot.backend.domain.trace.TraceView};
-     * naming none asks for the summary alone. {@code limit} is 1 to 10000, and 100 where absent.
+     * One bucket's rows that match every filter the request names, newest first, at most {@code limit}.
+     * Every parameter is read and checked before the store is consulted, so a bad one is refused even
+     * while tracing is off. What each filter matches is on {@link TraceFilter}. {@code view} names a
+     * {@link org.peekaboot.backend.domain.trace.TraceView}, the summary alone where absent;
+     * {@code limit} is 1 to 10000, and 100 where absent.
      */
     public TraceListResponse listTraces(TraceListParameters parameters) {
         TraceListQuery query = TraceListQuery.of(parameters);
@@ -59,17 +57,12 @@ public class TraceInsightsService {
             return EMPTY_RESPONSE;
         }
 
+        RowResources resources = new RowResources(traceStore, traceResources, query.view());
         TraceFilter filter = query.filter();
-        // filtered on each row's root span alone; only the returned page is mapped (and masked)
-        List<RowSource> matches = RowSources.matching(traceStore, query.bucket(), filter);
-        List<TraceResource> traces = matches.stream()
-                .limit(query.limit())
-                .map(row -> traceResources.row(
-                        row.bundle(),
-                        row.subtreeRootSpanId(),
-                        traceStore.bucketsOf(row.bundle().traceId()),
-                        query.view()))
-                .toList();
+        // filtered on each row's listing facts; only the returned page is mapped (and masked), plus
+        // the async rows a verdict filter has to read
+        List<RowSource> matches = RowSources.matching(traceStore, query.bucket(), filter, resources::summaryOf);
+        List<RowSource> page = matches.stream().limit(query.limit()).toList();
 
         BucketCounts bucketCounts = new BucketCounts(
                 traceStore.getTraceCount(TraceBucket.ALL),
@@ -80,22 +73,33 @@ public class TraceInsightsService {
         if (filter.filtersAnything()) {
             // the requested bucket's rows are already in hand; the other two need a pass each
             filteredBucketCounts = new BucketCounts(
-                    countMatchingTraces(TraceBucket.ALL, query.bucket(), matches, filter),
-                    countMatchingTraces(TraceBucket.ERRORS, query.bucket(), matches, filter),
-                    countMatchingTraces(TraceBucket.SLOW, query.bucket(), matches, filter));
+                    countMatchingTraces(TraceBucket.ALL, query.bucket(), matches, filter, resources),
+                    countMatchingTraces(TraceBucket.ERRORS, query.bucket(), matches, filter, resources),
+                    countMatchingTraces(TraceBucket.SLOW, query.bucket(), matches, filter, resources));
         }
 
-        return new TraceListResponse(traces, bucketCounts, filteredBucketCounts);
+        return new TraceListResponse(page.stream().map(resources::of).toList(), bucketCounts, filteredBucketCounts);
     }
 
     /**
      * The bucket's badge count for an active filter: distinct traces, not rows, so it stays
      * comparable to the unfiltered count beside it - a trace with two matching async rows
      * must not outweigh the one trace it is.
+     *
+     * <p>A bucket other than the requested one takes a pass of its own, which reads every bundle's
+     * listing facts again. A trace that completes or fails between the two passes can be counted
+     * under a filter the page did not list it under, or the other way round. An async row's verdict
+     * is the one mapping {@code resources} already holds.
      */
     private int countMatchingTraces(
-            TraceBucket bucket, TraceBucket requested, List<RowSource> requestedMatches, TraceFilter filter) {
-        List<RowSource> rows = bucket == requested ? requestedMatches : RowSources.matching(traceStore, bucket, filter);
+            TraceBucket bucket,
+            TraceBucket requested,
+            List<RowSource> requestedMatches,
+            TraceFilter filter,
+            RowResources resources) {
+        List<RowSource> rows = bucket == requested
+                ? requestedMatches
+                : RowSources.matching(traceStore, bucket, filter, resources::summaryOf);
         return (int) rows.stream().map(row -> row.bundle().traceId()).distinct().count();
     }
 

@@ -63,6 +63,13 @@ class TraceApiClient {
         return traceIdOf(api.headersOf(path));
     }
 
+    /** Requests {@code path} and waits for its trace to complete, for a test that reads the request or the spans. */
+    String getAndAwaitComplete(String path) {
+        String traceId = get(path);
+        awaitTrace(traceId, COMPLETE);
+        return traceId;
+    }
+
     /** The trace carries an ERROR log whose message is exactly {@code message}. */
     static Predicate<JsonNode> errorLogged(String message) {
         return trace -> trace.path("data")

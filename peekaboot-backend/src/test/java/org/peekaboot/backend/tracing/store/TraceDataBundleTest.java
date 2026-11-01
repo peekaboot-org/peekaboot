@@ -414,6 +414,28 @@ class TraceDataBundleTest {
         assertThat(bundle.listingRoots().fragment()).isFalse();
     }
 
+    /** The listing filters read one trace's facts in one go, so they see one moment. */
+    @Test
+    void listingRootsCarryTheFactsTheListingFiltersRead() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", NO_CAP, NO_CAP);
+        bundle.addSpan(span("child").parent("root").at(10, 30).build());
+        ListingRoots inFlight = bundle.listingRoots();
+        bundle.addSpan(span("root")
+                .at(0, 100)
+                .exception("java.lang.IllegalStateException", "boom")
+                .build());
+        ListingRoots done = bundle.listingRoots();
+
+        assertThat(inFlight.complete()).isFalse();
+        assertThat(inFlight.failed()).isFalse();
+        assertThat(inFlight.startTime()).isEqualTo(Instant.EPOCH.plusMillis(10));
+        assertThat(inFlight.durationMs()).isEqualTo(30);
+        assertThat(done.complete()).isTrue();
+        assertThat(done.failed()).isTrue();
+        assertThat(done.startTime()).isEqualTo(Instant.EPOCH);
+        assertThat(done.durationMs()).isEqualTo(100);
+    }
+
     @Test
     void aBundleWithoutAsyncSpansListsNoAsyncEntries() {
         TraceDataBundle bundle = new TraceDataBundle("trace1", 500, NO_CAP);

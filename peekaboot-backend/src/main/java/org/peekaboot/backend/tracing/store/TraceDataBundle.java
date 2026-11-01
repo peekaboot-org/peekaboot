@@ -378,14 +378,22 @@ public class TraceDataBundle {
     }
 
     /**
-     * The root, the fragment flag and the async entry spans, read under one lock so they
-     * describe the same moment. Read without copying, so the listing can classify every bundle
-     * in a bucket without a snapshot per bundle.
+     * The root, the fragment flag, the async entry spans and the facts the listing's filters read,
+     * under one lock so they describe the same moment. Read without copying, so the listing can
+     * classify and filter every bundle in a bucket without a snapshot per bundle.
      */
     public ListingRoots listingRoots() {
         synchronized (spansLock) {
             SpanData root = rootOf(spansById.values());
-            return new ListingRoots(root, !isComplete(root) && !spansById.isEmpty(), asyncEntrySpans());
+            boolean complete = isComplete(root);
+            return new ListingRoots(
+                    root,
+                    !complete && !spansById.isEmpty(),
+                    asyncEntrySpans(),
+                    fullWindow.start(),
+                    synchronousWindow(),
+                    complete,
+                    failed());
         }
     }
 

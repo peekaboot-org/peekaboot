@@ -16,9 +16,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.locks.LockSupport;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.BucketCounts;
@@ -625,6 +627,243 @@ class TraceInsightsServiceTest {
                         e -> assertThat(e.problem().parameter()).isEqualTo("limit"));
     }
 
+    /** A prefix or a substring of the pattern is another route. */
+    @Test
+    void filtersByTheMatchedRouteExactly() {
+        addRequest("a", "/persons/{id}", "/persons/1", 200, 0, 10);
+        addRequest("b", "/persons/{id}/orders", "/persons/1/orders", 200, 0, 10);
+        addRequest("c", "/persons/{id}", "/persons/2", 200, 0, 10);
+        addRequest("d", "/persons", "/persons", 200, 0, 10);
+
+        assertThat(listedIds(listing().route("/persons/{id}"))).containsExactly("c", "a");
+    }
+
+    @Test
+    void filtersByThePathsStart() {
+        addRequest("a", "/api/orders/{id}", "/api/orders/1", 200, 0, 10);
+        addRequest("b", "/x/api/orders", "/x/api/orders", 200, 0, 10);
+        addRequest("c", "/api/orders/{id}", "/api/orders/22", 200, 0, 10);
+        addRequest("d", "/api/order-lines/{id}", "/api/order-lines/3", 200, 0, 10);
+
+        assertThat(listedIds(listing().path("/api/orders"))).containsExactly("c", "a");
+    }
+
+    /** Only 500 matches; 503 does not. */
+    @Test
+    void filtersByTheExactStatusCode() {
+        addRequest("a", 500);
+        addRequest("b", 200);
+        addRequest("c", 503);
+        addRequest("d", 500);
+        addRequest("e", 404);
+
+        assertThat(listedIds(listing().statusCode("500"))).containsExactly("d", "a");
+    }
+
+    /** {@code ERROR} is the store's failure flag, so a request that only logged an error is one, and a 4xx is none. */
+    @Test
+    void filtersByOutcome() {
+        addRequest("ok", 200);
+        addTrace("failed", 10, true);
+        store.addLog(log("inflight").build());
+        addRequest("logged", 200);
+        store.addLog(log("logged")
+                .inSpan("span-logged")
+                .at("ERROR")
+                .saying("gateway down")
+                .build());
+        addRequest("clientError", 404);
+
+        assertThat(listedIds(listing().outcome("error"))).containsExactly("logged", "failed");
+        assertThat(listedIds(listing().outcome("OK"))).containsExactly("clientError", "ok");
+        assertThat(listedIds(listing().outcome("in_progress"))).containsExactly("inflight");
+    }
+
+    @Test
+    void filtersByTheShortestDurationInclusive() {
+        addTrace("a", 99, false);
+        addTrace("b", 100, false);
+        addTrace("c", 101, false);
+        addTrace("d", 2_000, false);
+
+        assertThat(listedIds(listing().minDurationMs("100"))).containsExactly("d", "c", "b");
+    }
+
+    /** {@code since} is in, {@code until} is out, and a trace that has no start yet is in no window. */
+    @Test
+    void filtersByTheStartTimeHalfOpen() {
+        addRequest("a", "/r", "/r", 200, 0, 10);
+        addRequest("b", "/r", "/r", 200, 1_000, 10);
+        addRequest("c", "/r", "/r", 200, 2_000, 10);
+        addRequest("d", "/r", "/r", 200, 3_000, 10);
+        store.addLog(log("e").build());
+
+        assertThat(listedIds(listing().since("1970-01-01T00:00:01Z").until("1970-01-01T00:00:03Z")))
+                .containsExactly("c", "b");
+        assertThat(listedIds(listing().since("1970-01-01T00:00:00Z"))).containsExactly("d", "c", "b", "a");
+        assertThat(listedIds(listing())).contains("e");
+    }
+
+    /** The task failed and ran long under a quick request that did not. Its row is judged on the task. */
+    @Test
+    void anAsyncRowIsFilteredOnItsOwnTask() {
+        store.addSpan(rootSpan("t1", "test-operation", Span.Kind.SERVER, 50)
+                .tag("http.route", "/jobs")
+                .tag("http.response.status_code", "200")
+                .build());
+        store.addSpan(asyncTask("async-t1")
+                .in("t1")
+                .parent("span-t1")
+                .at(40, 3_000)
+                .exception("java.lang.IllegalStateException", "task failed")
+                .build());
+
+        assertThat(rowsOf(listing().rootActionType("*").outcome("error")))
+                .containsExactly(tuple("t1", RootActionType.ASYNC_TASK), tuple("t1", RootActionType.HTTP_REQUEST));
+        assertThat(rowsOf(listing().rootActionType("*").minDurationMs("1000")))
+                .containsExactly(tuple("t1", RootActionType.ASYNC_TASK));
+        assertThat(rowsOf(listing().rootActionType("*").route("/jobs")))
+                .containsExactly(tuple("t1", RootActionType.HTTP_REQUEST));
+    }
+
+    /** The task succeeded under a request that failed, so only its row reads {@code OK}. */
+    @Test
+    void anAsyncRowThatSucceededListsUnderOk() {
+        addFailedRequestWithAsyncWork("t1", 50, 3_000);
+
+        assertThat(rowsOf(listing().rootActionType("*").outcome("ok")))
+                .containsExactly(tuple("t1", RootActionType.ASYNC_TASK));
+    }
+
+    /** The trace starts with its request, and the task it dispatched starts two seconds later. */
+    @Test
+    void anAsyncRowIsWindowedOnItsOwnStart() {
+        store.addSpan(rootSpan("t1", "test-operation", Span.Kind.SERVER, 50).build());
+        store.addSpan(
+                asyncTask("async-t1").in("t1").parent("span-t1").at(2_000, 100).build());
+
+        assertThat(rowsOf(listing().rootActionType("*").since("1970-01-01T00:00:01Z")))
+                .containsExactly(tuple("t1", RootActionType.ASYNC_TASK));
+        assertThat(rowsOf(listing().rootActionType("*").until("1970-01-01T00:00:01Z")))
+                .containsExactly(tuple("t1", RootActionType.HTTP_REQUEST));
+    }
+
+    /** Every type is listed, so the one filter each row names is what makes the counts filtered ones. */
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "route | /fixtures/{id}",
+                "path | /fixtures",
+                "statusCode | 200",
+                "outcome | OK",
+                "minDurationMs | 0",
+                "since | 1970-01-01T00:00:00Z",
+                "until | 2100-01-01T00:00:00Z"
+            })
+    void eachFilterMakesTheCountsFilteredOnes(String parameter, String value) {
+        addRequest("a", 200);
+
+        TraceListResponse response = service.listTraces(
+                listingFilteredBy(parameter, value).rootActionType("*").build());
+
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("a");
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
+    }
+
+    /** A verdict filter maps an async row to judge it, and the page serves that same mapping. */
+    @Test
+    void aVerdictFilterMapsAnAsyncRowOnce() {
+        List<String> formatted = new ArrayList<>();
+        SqlFormatter recording = sql -> {
+            formatted.add(sql);
+            return sql;
+        };
+        TraceInsightsService recordingService = new TraceInsightsService(
+                store,
+                new MaskingEngine(),
+                recording,
+                new PeekabootTracingProperties(),
+                new StackTraceRules(List.of(), List.of()));
+        store.addSpan(rootSpan("t1", "test-operation", Span.Kind.SERVER, 50).build());
+        store.addSpan(span("db-t1")
+                .in("t1")
+                .parent("async-t1")
+                .named("SELECT users")
+                .kind(Span.Kind.CLIENT)
+                .at(60, 20)
+                .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"))
+                .build());
+        store.addSpan(
+                asyncTask("async-t1").in("t1").parent("span-t1").at(40, 100).build());
+
+        List<TraceResource> rows = recordingService
+                .listTraces(listing()
+                        .rootActionType("async_task")
+                        .minDurationMs("0")
+                        .build())
+                .traces();
+
+        assertThat(rows).extracting(row -> row.summary().rootActionType()).containsExactly(RootActionType.ASYNC_TASK);
+        assertThat(formatted).containsExactly("SELECT * FROM users WHERE id = ?");
+    }
+
+    /** Every type is listed, so only {@code statusCode} makes the counts filtered ones. */
+    @Test
+    void theFilteredCountsCountWhatEveryFilterKeeps() {
+        addRequest("a", 500);
+        addRequest("b", 200);
+        addRequest("c", 503);
+
+        TraceListResponse response = service.listTraces(
+                listing().rootActionType("*").statusCode("500").build());
+
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 2, 0));
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 1, 0));
+    }
+
+    /** What a form or a hand-built URL sends for a field left empty. */
+    @Test
+    void aBlankFilterFiltersNothing() {
+        addRequest("a", 200);
+        addRequest("b", 404);
+
+        TraceListResponse response = service.listTraces(listing()
+                .rootActionType("*")
+                .route("")
+                .path(" ")
+                .statusCode("")
+                .outcome(" ")
+                .minDurationMs("")
+                .since("")
+                .until(" ")
+                .build());
+
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("b", "a");
+        assertThat(response.filteredBucketCounts()).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "statusCode | abc",
+                "statusCode | 99",
+                "statusCode | 600",
+                "minDurationMs | -1",
+                "outcome | failed",
+                "since | yesterday",
+                "until | 2026-13-01T00:00:00Z"
+            })
+    void refusesABadFilterNamingItWhileTracingIsOff(String parameter, String value) {
+        TraceListings.Builder listing = listingFilteredBy(parameter, value);
+
+        assertThatThrownBy(() -> newService(null).listTraces(listing.build()))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().parameter()).isEqualTo(parameter));
+    }
+
     /**
      * A fragment is somebody else's trace seen through a hole, not a trace of its own, so
      * no listing carries it - the wildcard, which exists to show the store as it stands,
@@ -1068,6 +1307,43 @@ class TraceInsightsServiceTest {
             root.exception("TestException", "Test error");
         }
         store.addSpan(root.build());
+    }
+
+    /** A complete HTTP request as the OpenTelemetry convention tags its server span. */
+    private void addRequest(String traceId, String route, String path, int status, long startMs, long durationMs) {
+        store.addSpan(span("span-" + traceId)
+                .in(traceId)
+                .named("http get " + route)
+                .kind(Span.Kind.SERVER)
+                .at(startMs, durationMs)
+                .tag("http.request.method", "GET")
+                .tag("http.route", route)
+                .tag("url.path", path)
+                .tag("http.response.status_code", String.valueOf(status))
+                .build());
+    }
+
+    private void addRequest(String traceId, int status) {
+        addRequest(traceId, "/fixtures/{id}", "/fixtures/" + traceId, status, 0, 10);
+    }
+
+    private static TraceListings.Builder listingFilteredBy(String parameter, String value) {
+        return switch (parameter) {
+            case "route" -> listing().route(value);
+            case "path" -> listing().path(value);
+            case "statusCode" -> listing().statusCode(value);
+            case "outcome" -> listing().outcome(value);
+            case "minDurationMs" -> listing().minDurationMs(value);
+            case "since" -> listing().since(value);
+            case "until" -> listing().until(value);
+            default -> throw new IllegalArgumentException("No listing filter named " + parameter);
+        };
+    }
+
+    private List<Tuple> rowsOf(TraceListings.Builder listing) {
+        return service.listTraces(listing.build()).traces().stream()
+                .map(row -> tuple(row.summary().traceId(), row.summary().rootActionType()))
+                .toList();
     }
 
     private void addConsumerTrace(String traceId, long durationMs) {

@@ -27,6 +27,12 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/traces?limit=10001 | limit",
                 "/peekaboot/api/traces?limit=1&limit=2 | limit",
                 "/peekaboot/api/traces?view=sumary | view",
+                "/peekaboot/api/traces?statusCode=abc | statusCode",
+                "/peekaboot/api/traces?statusCode=600 | statusCode",
+                "/peekaboot/api/traces?outcome=FAILED | outcome",
+                "/peekaboot/api/traces?minDurationMs=-1 | minDurationMs",
+                "/peekaboot/api/traces?since=yesterday | since",
+                "/peekaboot/api/traces?since=2026-11-01T10:00:00Z&until=2026-11-01T09:00:00Z | until",
                 "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask",
                 "/peekaboot/api/insights/data?level=abc | level",
                 "/peekaboot/api/insights/data | level",
@@ -66,6 +72,15 @@ class ApiProblemIT extends TestingAppITBase {
     void anOutOfRangeLimitNamesItsRange() {
         assertThat(fetch("/peekaboot/api/traces?limit=0").body().path("detail").asString(""))
                 .isEqualTo("limit must be an integer from 1 to 10000, got '0'.");
+    }
+
+    @Test
+    void anUnencodedPlusInAnOffsetSaysHowToSendIt() {
+        Answer answer = fetch("/peekaboot/api/traces?since=2026-11-01T10:00:00+01:00");
+
+        assertThat(answer.status()).isEqualTo(400);
+        assertThat(answer.body().path("parameter").asString("")).isEqualTo("since");
+        assertThat(answer.body().path("detail").asString("")).endsWith("Send a + in an offset as %2B.");
     }
 
     @Test

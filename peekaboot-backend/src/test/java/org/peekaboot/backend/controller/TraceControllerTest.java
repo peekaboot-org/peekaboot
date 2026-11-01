@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.micrometer.tracing.Span;
 import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -77,7 +78,7 @@ class TraceControllerTest {
 
     /** Spring's record binding falls back to a same-named request header, which would put the listing in a client's or proxy's hands. */
     @ParameterizedTest
-    @CsvSource({"Limit, 0", "View, full", "bucket, eror"})
+    @CsvSource({"Limit, 0", "View, full", "bucket, eror", "statusCode, 500"})
     void ignoresARequestHeaderNamedLikeAParameter(String header, String value) throws Exception {
         store.addSpan(span("failed-root")
                 .in("failed")
@@ -99,6 +100,42 @@ class TraceControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.parameter").value("limit"))
                 .andExpect(jsonPath("$.detail").value("limit was sent 3 times. Send it once."));
+    }
+
+    /** Joined with a comma, a repeated route or path would read as one value that names neither. */
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {"statusCode | 500 | 503", "route | /a | /b", "path | /a | b"})
+    void refusesARepeatedFilter(String parameter, String first, String second) throws Exception {
+        mvc.perform(get("/peekaboot/api/traces").param(parameter, first, second))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.parameter").value(parameter))
+                .andExpect(jsonPath("$.detail").value(parameter + " was sent 2 times. Send it once."));
+    }
+
+    /** A route pattern and a path can each carry a comma of their own. */
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {"path | /a,b", "route | /items/{id:\\d{1,3}}"})
+    void bindsASingleValueWithACommaAsWritten(String parameter, String value) throws Exception {
+        store.addSpan(span("comma-root")
+                .in("comma")
+                .kind(Span.Kind.SERVER)
+                .tag("http.route", "/items/{id:\\d{1,3}}")
+                .tag("url.path", "/a,b/1")
+                .build());
+        store.addSpan(span("plain-root")
+                .in("plain")
+                .kind(Span.Kind.SERVER)
+                .tag("http.route", "/items/{id}")
+                .tag("url.path", "/a/1")
+                .build());
+
+        mvc.perform(get("/peekaboot/api/traces").param(parameter, value))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.traces[*].summary.traceId").value(Matchers.contains("comma")));
     }
 
     @Test

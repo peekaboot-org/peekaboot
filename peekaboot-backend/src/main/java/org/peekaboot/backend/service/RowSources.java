@@ -1,9 +1,13 @@
 package org.peekaboot.backend.service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.ListedTrace;
 import org.peekaboot.backend.tracing.store.ListingRoots;
@@ -27,28 +31,49 @@ final class RowSources {
 
     /**
      * One listing row: the bundle it reads from, the span the row is rooted at, whether that span
-     * roots a subtree of the trace rather than the trace itself, and when the row appeared in the
-     * bucket, in span export order.
+     * roots a subtree of the trace rather than the trace itself, when the row appeared in the
+     * bucket, in span export order, and the bundle's listing facts as the pass read them.
      */
-    record RowSource(TraceDataBundle bundle, SpanData rootSpan, boolean subtree, long listedAt) {
+    record RowSource(
+            TraceDataBundle bundle, @Nullable SpanData rootSpan, boolean subtree, long listedAt, ListingRoots roots) {
 
         /** The span an async row is rooted at; null for a whole-trace row. */
         @Nullable
         String subtreeRootSpanId() {
             return subtree ? rootSpan.spanId() : null;
         }
+
+        /** The root's tags for a whole trace; empty for an async row, which answers no request, and while the root is missing. */
+        Map<String, String> requestTags() {
+            return subtree || rootSpan == null || rootSpan.tags() == null ? Map.of() : rootSpan.tags();
+        }
+
+        /** As the row's summary names it: the trace's earliest span, or an async row's own entry span. */
+        @Nullable
+        Instant startTime() {
+            return subtree ? rootSpan.startTime() : roots.startTime();
+        }
     }
 
     /**
-     * The bucket's rows that pass {@code filter}, newest first - nothing mapped or masked
-     * yet. Newest means the row appeared in the bucket most recently, which for an async row is
-     * when its task ended: the list stays in the order things arrived, and a task that outlived
-     * its request by minutes lists at the top rather than beside a request long scrolled away.
+     * The bucket's rows that pass {@code filter}, newest first. Nothing is mapped or masked yet but
+     * the async rows a verdict filter asks {@code summaryOf} about. Newest means the row appeared in
+     * the bucket most recently, which for an async row is when its task ended: the list stays in the
+     * order things arrived, and a task that outlived its request by minutes lists at the top rather
+     * than beside a request long scrolled away.
+     *
+     * <p>The bucket's entries are read under the bucket's lock, then each bundle's listing facts under
+     * that bundle's lock. A trace that enters, leaves or changes in between is listed as the read of
+     * its own facts found it.
      */
-    static List<RowSource> matching(TraceStore traceStore, TraceBucket bucket, TraceFilter filter) {
+    static List<RowSource> matching(
+            TraceStore traceStore,
+            TraceBucket bucket,
+            TraceFilter filter,
+            Function<RowSource, TraceSummary> summaryOf) {
         return traceStore.getTraces(bucket, Integer.MAX_VALUE).stream()
                 .flatMap(listed -> rowsOf(listed).stream())
-                .filter(filter::admits)
+                .filter(row -> filter.admits(row, summaryOf))
                 .sorted(NEWEST_FIRST)
                 .toList();
     }
@@ -75,7 +100,7 @@ final class RowSources {
         SpanData root = roots.root();
         List<RowSource> rows = new ArrayList<>();
         if (!roots.fragment()) {
-            rows.add(new RowSource(bundle, root, false, listed.listedAt()));
+            rows.add(new RowSource(bundle, root, false, listed.listedAt(), roots));
         }
         for (SpanData entry : roots.asyncEntries()) {
             // a purely async bundle's entry span is its trace's own row, added above as a whole
@@ -85,7 +110,7 @@ final class RowSources {
             if (root != null && entry.spanId().equals(root.spanId())) {
                 continue;
             }
-            rows.add(new RowSource(bundle, entry, true, Math.max(listed.listedAt(), entry.creationOrder())));
+            rows.add(new RowSource(bundle, entry, true, Math.max(listed.listedAt(), entry.creationOrder()), roots));
         }
         return rows;
     }

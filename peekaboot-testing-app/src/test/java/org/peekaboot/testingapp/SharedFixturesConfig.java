@@ -5,6 +5,7 @@ import org.peekaboot.fixtures.HeldRequestController;
 import org.peekaboot.fixtures.LateSpanController;
 import org.peekaboot.fixtures.MaskingFixtureController;
 import org.peekaboot.fixtures.OutcomeFixtureController;
+import org.peekaboot.fixtures.QueryFixtureController;
 import org.peekaboot.fixtures.RequestThreadObservations;
 import org.peekaboot.testingapp.integration.NestedConfigPropertiesFixture;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -39,6 +40,11 @@ public class SharedFixturesConfig {
     @Bean
     OutcomeFixtureController outcomeFixtureController() {
         return new OutcomeFixtureController();
+    }
+
+    @Bean
+    QueryFixtureController queryFixtureController() {
+        return new QueryFixtureController();
     }
 
     @Bean

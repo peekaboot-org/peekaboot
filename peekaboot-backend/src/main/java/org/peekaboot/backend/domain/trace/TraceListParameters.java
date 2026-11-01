@@ -11,4 +11,11 @@ public record TraceListParameters(
         @Nullable String bucket,
         @Nullable String rootActionType,
         @Nullable String rootOperation,
+        @Nullable String route,
+        @Nullable String path,
+        @Nullable String statusCode,
+        @Nullable String outcome,
+        @Nullable String minDurationMs,
+        @Nullable String since,
+        @Nullable String until,
         @Nullable String view) {}
