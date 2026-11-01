@@ -101,6 +101,11 @@ public final class SpanNodes {
             return this;
         }
 
+        public Builder exceptionInfo(SpanExceptionInfo exception) {
+            this.exception = exception;
+            return this;
+        }
+
         public Builder statement(SqlStatement statement) {
             this.statement = statement;
             return this;

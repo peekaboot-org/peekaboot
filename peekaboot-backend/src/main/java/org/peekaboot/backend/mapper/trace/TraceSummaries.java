@@ -33,6 +33,7 @@ final class TraceSummaries {
                 TraceOutcome.of(tree.complete(), failed),
                 facts.buckets().stream().sorted().toList(),
                 reasons,
+                TraceCauses.of(tree, facts.errorLogs()),
                 issuesOf(tree),
                 countsOf(tree, facts),
                 tree.subtree());

@@ -12,6 +12,8 @@ import org.peekaboot.backend.tracing.store.TraceBucket;
  * @param request the root's HTTP request; null where the root is no HTTP request or has not arrived
  * @param buckets the Errors and Slow buckets listing the trace, in that order. All lists every trace and is never named
  * @param reasons why the trace failed or ran slow; see {@link TraceReason}
+ * @param cause the first failure to look at; null where the trace did not fail, where the caps evicted what failed it,
+ *     or where its only failure is a span that names nothing
  * @param issues every issue on the trace's spans, in the order the Spans tab draws them
  * @param subtree null for a whole trace; on a listing row for an async task, the span it is rooted at
  */
@@ -26,6 +28,7 @@ public record TraceSummary(
         TraceOutcome outcome,
         List<TraceBucket> buckets,
         List<TraceReason> reasons,
+        @Nullable Cause cause,
         List<TraceIssue> issues,
         Counts counts,
         @Nullable SubtreeView subtree) {
@@ -40,6 +43,19 @@ public record TraceSummary(
             @Nullable String route,
             @Nullable String path,
             @Nullable Integer statusCode) {}
+
+    /**
+     * Where to start reading a failed trace.
+     *
+     * @param type the exception's class; null for a 5xx or a failure that named none
+     * @param applicationFrame the top frame inside the application packages, without its {@code at} prefix
+     * @param spanId the failing span, or the span the cause was logged on
+     */
+    public record Cause(
+            @Nullable String type,
+            @Nullable String message,
+            @Nullable String applicationFrame,
+            @Nullable String spanId) {}
 
     /**
      * What the trace holds and what its caps dropped.

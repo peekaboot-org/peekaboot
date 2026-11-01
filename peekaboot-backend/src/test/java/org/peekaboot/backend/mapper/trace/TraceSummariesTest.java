@@ -5,6 +5,7 @@ import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
 import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,6 +16,7 @@ import org.peekaboot.backend.domain.trace.IssueUnit;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceIssue;
+import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -69,5 +71,16 @@ class TraceSummariesTest {
         TraceSummary summary = summaries.of(tree(node("root").build()).build(), facts(slowFirst, List.of(), 0, 0));
 
         assertThat(summary.buckets()).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
+    }
+
+    /** The cause reads the ERROR logs the facts hold, which are the ones the data serves. */
+    @Test
+    void namesTheCauseFromTheFactsErrorLogs() {
+        TraceLog errorLog = new TraceLog("root", Instant.EPOCH, "ERROR", "logged", null, List.of(), List.of());
+        TraceFacts facts = new TraceFacts(false, Set.of(), List.of(), List.of(errorLog), 0, 0);
+
+        TraceSummary summary = summaries.of(tree(node("root").build()).build(), facts);
+
+        assertThat(summary.cause()).isEqualTo(new TraceSummary.Cause(null, "logged", null, "root"));
     }
 }

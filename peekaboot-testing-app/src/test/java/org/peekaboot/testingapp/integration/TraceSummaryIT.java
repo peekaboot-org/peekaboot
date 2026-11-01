@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.fixtures.OutcomeFixtureController;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
@@ -38,6 +40,19 @@ class TraceSummaryIT extends TestingAppITBase {
                 .valueStream()
                 .map(JsonNode::asString)
                 .toList();
+    }
+
+    private JsonNode traceAt(String path) {
+        return traces.awaitTrace(traces.get(path), TraceApiClient.ROOT_SPAN_EXPORTED);
+    }
+
+    private static JsonNode errorLogOn(JsonNode trace) {
+        return trace.path("data")
+                .path("logs")
+                .valueStream()
+                .filter(log -> "ERROR".equals(log.path("level").asString()))
+                .findFirst()
+                .orElseThrow();
     }
 
     /** A handler that answers 503 without throwing fails its request all the same. */
@@ -235,5 +250,87 @@ class TraceSummaryIT extends TestingAppITBase {
         } finally {
             orders.forEach(order -> OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order));
         }
+    }
+
+    @Test
+    void aThrowingHandlersCauseIsItsException() {
+        String traceId = traces.get("/boom");
+        JsonNode trace = traces.awaitTrace(
+                traceId,
+                TraceApiClient.ROOT_SPAN_EXPORTED.and(
+                        TraceApiClient.errorLogged("order reconciliation gateway is unreachable")));
+
+        JsonNode cause = trace.path("summary").path("cause");
+
+        assertThat(cause.path("type").asString()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(cause.path("message").asString()).isEqualTo("order reconciliation gateway is unreachable");
+        assertThat(cause.path("applicationFrame").asString())
+                .startsWith("org.peekaboot.testingapp.controller.OrderController.boom(");
+        assertThat(SpanTree.spanWithId(trace, cause.path("spanId").asString())
+                        .path("exception")
+                        .path("type")
+                        .asString())
+                .isEqualTo("java.lang.IllegalStateException");
+    }
+
+    /** The handler logs an IllegalArgumentException and throws an IllegalStateException. */
+    @Test
+    void aFailingSpansExceptionBeatsALoggedOne() {
+        JsonNode trace = traceAt(OutcomeFixtureController.LOGGED_THEN_THROWN_PATH);
+
+        JsonNode cause = trace.path("summary").path("cause");
+
+        assertThat(errorLogOn(trace).path("stackTrace").asString())
+                .as("the logged exception the span's competes with")
+                .startsWith("java.lang.IllegalArgumentException: fixture cause");
+        assertThat(cause.path("type").asString()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(cause.path("message").asString()).isEqualTo("fixture failure");
+    }
+
+    @Test
+    void aLoggedExceptionIsTheCauseWhenNoSpanFailed() {
+        JsonNode trace = traceAt(OutcomeFixtureController.LOGGED_EXCEPTION_PATH);
+
+        JsonNode cause = trace.path("summary").path("cause");
+
+        assertThat(cause.path("type").asString()).isEqualTo("java.lang.IllegalArgumentException");
+        assertThat(cause.path("message").asString()).isEqualTo("fixture cause");
+        assertThat(cause.path("spanId").asString())
+                .isEqualTo(errorLogOn(trace).path("spanId").asString());
+    }
+
+    @Test
+    void anErrorLogWithoutAStackTraceIsTheCauseWhenNothingElseFailed() {
+        JsonNode trace = traceAt(OutcomeFixtureController.ERROR_LOG_PATH);
+
+        JsonNode cause = trace.path("summary").path("cause");
+
+        assertThat(cause.path("type").isNull()).isTrue();
+        assertThat(cause.path("message").asString()).isEqualTo(OutcomeFixtureController.ERROR_LOG_MESSAGE);
+        assertThat(cause.path("applicationFrame").isNull()).isTrue();
+        assertThat(cause.path("spanId").asString())
+                .isEqualTo(errorLogOn(trace).path("spanId").asString());
+    }
+
+    @Test
+    void aServerErrorWithoutAnExceptionIsItsOwnCause() {
+        JsonNode trace = traceAt(OutcomeFixtureController.statusPath(503));
+
+        JsonNode cause = trace.path("summary").path("cause");
+
+        assertThat(cause.path("type").isNull()).isTrue();
+        assertThat(cause.path("message").asString()).isEqualTo("Answered with status 503.");
+        assertThat(cause.path("spanId").asString())
+                .isEqualTo(SpanTree.spanId(trace.path("data").path("rootSpan")));
+    }
+
+    /** A 4xx is the caller's mistake, so it names no cause either. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/fixtures/status/200", "/fixtures/status/404"})
+    void aTraceThatDidNotFailNamesNoCause(String path) {
+        JsonNode summary = traceAt(path).path("summary");
+
+        assertThat(summary.has("cause")).as("cause is null, not absent").isTrue();
+        assertThat(summary.path("cause").isNull()).isTrue();
     }
 }

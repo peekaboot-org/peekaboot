@@ -223,10 +223,16 @@ queries, httpExchange)`, null on a listing row unless the request asked for `vie
 (`TraceView`). `TraceSummary` is what an agent reads first and what the toolbar, the Traces tab's
 rows and the overlay header show: `traceId`, `startTime`, `durationMs`, `complete`,
 `rootActionType`, `rootOperation`, `request(method, route, path, statusCode)`, `outcome`,
-`buckets`, `reasons`, `issues` (every span's, in tree order), `counts` and `subtree`.
+`buckets`, `reasons`, `cause`, `issues` (every span's, in tree order), `counts` and `subtree`.
 `counts` is `spans`, `queries(count, totalDurationMs)`, `logs(count, errorCount, warnCount)`,
 `droppedSpans` and `droppedLogs`. `route` is the matched pattern, null where no handler matched.
 The listing is a `TraceListResponse(traces, bucketCounts, filteredBucketCounts)`.
+
+`cause` is a `TraceSummary.Cause(type, message, applicationFrame, spanId)` from `TraceCauses`.
+The deepest failing span with a stack trace wins, then the first ERROR log with one, then the
+deepest failing span that names its exception's type or message, then the first ERROR log, then
+the first SERVER span answering 5xx. It is null where the trace did not fail, where the caps
+evicted what failed it, or where its only failure is a span that names nothing.
 
 ### Bucket Counts
 `BucketCounts(all, errors, slow)`. Every listing response carries it twice: `bucketCounts` for

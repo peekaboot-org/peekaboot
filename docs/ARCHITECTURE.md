@@ -1344,9 +1344,10 @@ row to `TraceResources.row`, and the single trace's bundle to `TraceResources.tr
    dropped log count (`TraceDataBundle.capturedLogs()`, under one lock), the ERROR logs among
    them mapped for the wire, and the dropped span count. `TraceSummaries` turns the tree and
    the facts into the summary: the reasons `TraceReasons` reads off the spans and the ERROR
-   logs, the outcome `TraceOutcome.of(complete, failed)`, every issue in tree order and the
-   counts. `TraceDetails` builds the data only when the view asks for it: the tree, the flat
-   log list, `QueryExtractor`'s queries and, for a whole trace, the `HttpExchange` from
+   logs, the outcome `TraceOutcome.of(complete, failed)`, the cause `TraceCauses` picks from
+   the same spans and ERROR logs, every issue in tree order and the counts. `TraceDetails`
+   builds the data only when the view asks for it: the tree, the flat log list,
+   `QueryExtractor`'s queries and, for a whole trace, the `HttpExchange` from
    `HttpExchangeMapper`. With the data, `TraceLogMapper` maps every log once and the reasons
    take their ERROR entries by index (`TraceLogMapper.errorsAmong`). A log's span resolves
    through redirects that move while spans arrive, so a row resolves each span id once
@@ -1645,7 +1646,9 @@ TraceResource                    # GET /peekaboot/api/traces/{traceId}, and one 
 ├── summary: TraceSummary
 │   ├── traceId, startTime, durationMs, complete, rootActionType, rootOperation
 │   ├── request: {method, route, path, statusCode}   # null for a root that is no HTTP request
-│   ├── outcome, buckets, reasons, issues
+│   ├── outcome, buckets, reasons
+│   ├── cause: {type, message, applicationFrame, spanId}   # null: no failure, an evicted one, or one naming nothing
+│   ├── issues
 │   ├── counts: {spans, queries {count, totalDurationMs}, logs {count, errorCount, warnCount},
 │   │            droppedSpans, droppedLogs}
 │   └── subtree: SubtreeView     # null for a whole trace
