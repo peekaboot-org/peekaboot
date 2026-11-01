@@ -3,11 +3,7 @@ package org.peekaboot.backend.service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
-import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.mapper.trace.RootActionTypes;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.ListedTrace;
 import org.peekaboot.backend.tracing.store.ListingRoots;
@@ -16,7 +12,7 @@ import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
 
 /**
- * Expands a bucket's bundles into listing rows and applies the root-level filters, so
+ * Expands a bucket's bundles into listing rows and applies the listing's filters, so
  * {@link TraceInsightsService} stays about turning a page of rows into a response rather than
  * also being about what counts as a row in the first place. Stateless: the store comes from the
  * caller, since nothing here outlives one call.
@@ -44,16 +40,15 @@ final class RowSources {
     }
 
     /**
-     * The bucket's rows that pass the root-level filters, newest first - nothing mapped or masked
+     * The bucket's rows that pass {@code filter}, newest first - nothing mapped or masked
      * yet. Newest means the row appeared in the bucket most recently, which for an async row is
      * when its task ended: the list stays in the order things arrived, and a task that outlived
      * its request by minutes lists at the top rather than beside a request long scrolled away.
      */
-    static List<RowSource> matching(
-            TraceStore traceStore, TraceBucket bucket, Set<RootActionType> actionTypes, String rootOperation) {
+    static List<RowSource> matching(TraceStore traceStore, TraceBucket bucket, TraceFilter filter) {
         return traceStore.getTraces(bucket, Integer.MAX_VALUE).stream()
                 .flatMap(listed -> rowsOf(listed).stream())
-                .filter(row -> matchesRootFilters(row.rootSpan(), actionTypes, rootOperation))
+                .filter(filter::admits)
                 .sorted(NEWEST_FIRST)
                 .toList();
     }
@@ -93,35 +88,5 @@ final class RowSources {
             rows.add(new RowSource(bundle, entry, true, Math.max(listed.listedAt(), entry.creationOrder())));
         }
         return rows;
-    }
-
-    /**
-     * The two root-level filters, applied to a row's own root span. The type comes from
-     * {@link RootActionTypes}, as a mapped tree's does, so the verdict matches what mapping the
-     * full tree would say - without copying, building or masking a tree for rows the response
-     * will never carry. An empty type set and a null operation
-     * each filter nothing away, and short-circuit before the classification a wildcard has
-     * no use for.
-     */
-    private static boolean matchesRootFilters(SpanData root, Set<RootActionType> actionTypes, String rootOperation) {
-        return (actionTypes.isEmpty() || actionTypes.contains(RootActionTypes.of(root)))
-                && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null, rootOperation));
-    }
-
-    /** The chip sends a substring of the operation name, so a partial, case-insensitive match is the contract. */
-    private static boolean matchesRootOperation(String rootOperationName, String rootOperation) {
-        if (rootOperationName == null) {
-            return false;
-        }
-        String operation = rootOperationName.toLowerCase(Locale.ROOT);
-        String filter = rootOperation.toLowerCase(Locale.ROOT);
-        if (operation.contains(filter)) {
-            return true;
-        }
-        // Scheduled task targets are fully qualified (package.Class.method) while span
-        // names use the bean name ("task class.method") - also match on the Class.method suffix
-        String[] segments = filter.split("\\.", -1);
-        return segments.length > 2
-                && operation.contains(segments[segments.length - 2] + "." + segments[segments.length - 1]);
     }
 }

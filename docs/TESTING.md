@@ -108,6 +108,8 @@ setters say otherwise. `Logs.log(traceId)` builds a `LogCapturedEvent`,
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`.
+`TraceListings.listing()` builds the listing's `TraceListParameters` the way a request sends
+them, every parameter absent unless a test names it.
 `LifecycleStarts.start(epochMs)` builds the START event the lifecycle tests replay; a stop
 is `LifecycleEvent.stop`.
 `SeriesDefs.value(id, meter)` is the plain value series the collector tests share.

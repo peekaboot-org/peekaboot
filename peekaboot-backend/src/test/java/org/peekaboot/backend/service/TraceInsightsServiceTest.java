@@ -7,6 +7,7 @@ import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.testsupport.TraceListings.listing;
 
 import io.micrometer.tracing.Span;
 import java.time.Duration;
@@ -17,6 +18,8 @@ import java.util.Optional;
 import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
@@ -39,6 +42,7 @@ import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.Spans;
+import org.peekaboot.backend.testsupport.TraceListings;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.SpanData;
@@ -65,7 +69,7 @@ class TraceInsightsServiceTest {
         addTrace("fast", thresholdMs - 1, false);
         addTrace("slow", thresholdMs, false);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse response = service.listTraces(listing().limit(10).build());
 
         assertThat(response.traces())
                 .extracting(
@@ -79,9 +83,8 @@ class TraceInsightsServiceTest {
     void theDetailGivesTheSummaryTheListGives() {
         addTrace("slow", new PeekabootTracingProperties().getSlowTraceThresholdMs(), true);
 
-        TraceResource listed = service.listTraces(10, TraceBucket.ALL, null, null, null)
-                .traces()
-                .getFirst();
+        TraceResource listed =
+                service.listTraces(listing().limit(10).build()).traces().getFirst();
         TraceResource detail = service.getTrace("slow").orElseThrow();
 
         assertThat(detail.summary()).isEqualTo(listed.summary());
@@ -115,7 +118,7 @@ class TraceInsightsServiceTest {
 
     @Test
     void anEmptyStoreYieldsAnEmptyTraceList() {
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse response = service.listTraces(listing().limit(10).build());
 
         assertThat(response.traces()).isEmpty();
     }
@@ -134,8 +137,9 @@ class TraceInsightsServiceTest {
                 .build());
         store.addSpan(span("s2").in("tok").build());
 
-        TraceListResponse errors = service.listTraces(10, TraceBucket.ERRORS, null, null, null);
-        TraceListResponse all = service.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse errors =
+                service.listTraces(listing().limit(10).bucket("errors").build());
+        TraceListResponse all = service.listTraces(listing().limit(10).build());
 
         assertThat(errors.traces()).extracting(row -> row.summary().traceId()).containsExactly("terr");
         assertThat(all.traces()).hasSize(2);
@@ -148,7 +152,7 @@ class TraceInsightsServiceTest {
                 .exception("java.lang.RuntimeException", "boom")
                 .build());
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse response = service.listTraces(listing().limit(10).build());
 
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 1, 0));
     }
@@ -157,7 +161,8 @@ class TraceInsightsServiceTest {
     void nullStoreYieldsEmptyResponseWithZeroCounts() {
         TraceInsightsService serviceWithNullStore = newService(null);
 
-        TraceListResponse response = serviceWithNullStore.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse response =
+                serviceWithNullStore.listTraces(listing().limit(10).build());
 
         assertThat(response.traces()).isEmpty();
         assertThat(response.bucketCounts()).isEqualTo(BucketCounts.empty());
@@ -204,7 +209,7 @@ class TraceInsightsServiceTest {
             store.addLog(log("trace1").inSpan("span-trace1").at(level).build());
         }
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse response = service.listTraces(listing().limit(10).build());
 
         assertThat(response.traces())
                 .extracting(
@@ -315,7 +320,8 @@ class TraceInsightsServiceTest {
     void aFullRowCarriesEmptyLogAndQueryListsRatherThanNulls() {
         addTrace("trace1", 100, false);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, "full");
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).view("full").build());
 
         assertThat(response.traces().getFirst().data().logs()).isEmpty();
         assertThat(response.traces().getFirst().data().queries()).isEmpty();
@@ -358,7 +364,8 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 100, false); // SERVER kind, no tags -> HTTP_REQUEST (default)
         addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "http_request", null, null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(10).rootActionType("http_request").build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
@@ -368,7 +375,8 @@ class TraceInsightsServiceTest {
         addTraceWithOperation("trace1", "GET /api/Users", 100);
         addTraceWithOperation("trace2", "POST /orders", 100);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, "users", null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootOperation("users").build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
@@ -379,8 +387,10 @@ class TraceInsightsServiceTest {
         addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
         addScheduledJobTrace("trace3", 100); // scheduled-task tags -> SCHEDULED_JOB
 
-        TraceListResponse response =
-                service.listTraces(10, TraceBucket.ALL, "http_request,message_consumer", null, null);
+        TraceListResponse response = service.listTraces(listing()
+                .limit(10)
+                .rootActionType("http_request,message_consumer")
+                .build());
 
         assertThat(response.traces())
                 .extracting(row -> row.summary().traceId())
@@ -389,7 +399,8 @@ class TraceInsightsServiceTest {
 
     @Test
     void refusesAnUnknownTypeInTheFilter() {
-        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, "http_request,bogus", null, null))
+        assertThatThrownBy(() -> service.listTraces(
+                        listing().limit(10).rootActionType("http_request,bogus").build()))
                 .isInstanceOfSatisfying(ApiProblemException.class, e -> {
                     assertThat(e.problem().parameter()).isEqualTo("rootActionType");
                     assertThat(e.problem().detail())
@@ -402,7 +413,8 @@ class TraceInsightsServiceTest {
     /** The refusal must not list {@code *} as accepted where it refuses that very token. */
     @Test
     void refusesTheWildcardInAListSayingItStandsAlone() {
-        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, "http_request,*", null, null))
+        assertThatThrownBy(() -> service.listTraces(
+                        listing().limit(10).rootActionType("http_request,*").build()))
                 .isInstanceOfSatisfying(
                         ApiProblemException.class,
                         e -> assertThat(e.problem().detail())
@@ -413,7 +425,8 @@ class TraceInsightsServiceTest {
     /** The refusal is about the request, so it does not wait on there being a store to filter. */
     @Test
     void refusesAnUnknownTypeWithTracingOff() {
-        assertThatThrownBy(() -> newService(null).listTraces(10, TraceBucket.ALL, "bogus", null, null))
+        assertThatThrownBy(() -> newService(null)
+                        .listTraces(listing().limit(10).rootActionType("bogus").build()))
                 .isInstanceOf(ApiProblemException.class);
     }
 
@@ -422,20 +435,21 @@ class TraceInsightsServiceTest {
     void aMissingOrBlankViewMeansSummary() {
         addTrace("trace1", 100, false);
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).build()).traces())
                 .singleElement()
                 .satisfies(row -> assertThat(row.data()).isNull());
-        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, " ").traces())
+        assertThat(service.listTraces(listing().limit(10).view(" ").build()).traces())
                 .singleElement()
                 .satisfies(row -> assertThat(row.data()).isNull());
-        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, "Full").traces())
+        assertThat(service.listTraces(listing().limit(10).view("Full").build()).traces())
                 .singleElement()
                 .satisfies(row -> assertThat(row.data()).isNotNull());
     }
 
     @Test
     void anUnknownViewIsRefusedNamingTheAcceptedValues() {
-        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, null, null, "sumary"))
+        assertThatThrownBy(() ->
+                        service.listTraces(listing().limit(10).view("sumary").build()))
                 .isInstanceOfSatisfying(
                         ApiProblemException.class,
                         problem -> assertThat(problem.problem())
@@ -445,13 +459,15 @@ class TraceInsightsServiceTest {
 
     @Test
     void refusesAnUnknownViewWithTracingOff() {
-        assertThatThrownBy(() -> newService(null).listTraces(10, TraceBucket.ALL, null, null, "sumary"))
+        assertThatThrownBy(() -> newService(null)
+                        .listTraces(listing().limit(10).view("sumary").build()))
                 .isInstanceOf(ApiProblemException.class);
     }
 
     @Test
     void refusesAnEmptyTypeInTheFilter() {
-        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, "http_request,", null, null))
+        assertThatThrownBy(() -> service.listTraces(
+                        listing().limit(10).rootActionType("http_request,").build()))
                 .isInstanceOf(ApiProblemException.class);
     }
 
@@ -465,7 +481,7 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse response = service.listTraces(listing().limit(10).build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("http1");
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(2, 0, 0));
@@ -484,7 +500,11 @@ class TraceInsightsServiceTest {
                 rootSpan("fast-http", "GET /users", Span.Kind.SERVER, 50).build());
         TraceInsightsService slowService = newService(slowStore);
 
-        TraceListResponse response = slowService.listTraces(10, TraceBucket.SLOW, "http_request", null, null);
+        TraceListResponse response = slowService.listTraces(listing()
+                .limit(10)
+                .bucket("slow")
+                .rootActionType("http_request")
+                .build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("slow-http");
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 0, 2));
@@ -496,7 +516,8 @@ class TraceInsightsServiceTest {
     void aBlankRootOperationFilterIsNoFilterAtAll() {
         addTrace("trace1", 100, false);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", "   ", null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(10).rootActionType("*").rootOperation("   ").build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
         assertThat(response.filteredBucketCounts()).isNull();
@@ -507,7 +528,8 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 100, false);
         addConsumerTrace("trace2", 100);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, " Http_Request ", null, null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(10).rootActionType(" Http_Request ").build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
@@ -523,20 +545,84 @@ class TraceInsightsServiceTest {
                 .build());
         addTraceWithOperation("named", "GET /users", 100);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, "users", null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootOperation("users").build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("named");
     }
 
     /** The limit bounds the page only; the counts describe the store either way. */
     @Test
-    void aZeroLimitListsNothingButStillCounts() {
+    void theCountsDescribeTheStoreWhateverTheLimit() {
         addTrace("trace1", 100, false);
+        addTrace("trace2", 100, false);
+        addTrace("trace3", 100, true);
 
-        TraceListResponse response = service.listTraces(0, TraceBucket.ALL, null, null, null);
+        TraceListResponse response = service.listTraces(listing().limit(1).build());
 
-        assertThat(response.traces()).isEmpty();
-        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace3");
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 1, 0));
+    }
+
+    /** A clamp answered a typo with another list than the one asked for. */
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-5", "10001", "2147483648", "abc", "1.5"})
+    void refusesALimitOutsideOneToTenThousand(String limit) {
+        assertThatThrownBy(() -> service.listTraces(listing().limit(limit).build()))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("limit");
+                    assertThat(e.problem().detail())
+                            .isEqualTo("limit must be an integer from 1 to 10000, got '" + limit + "'.");
+                });
+    }
+
+    @Test
+    void takesALimitAtEitherEndOfItsRange() {
+        addTrace("trace1", 100, false);
+        addTrace("trace2", 100, false);
+
+        assertThat(service.listTraces(listing().limit(1).build()).traces()).hasSize(1);
+        assertThat(service.listTraces(listing().limit(10_000).build()).traces()).hasSize(2);
+    }
+
+    @Test
+    void listsAHundredWithoutALimit() {
+        for (int i = 0; i < 101; i++) {
+            addTrace("trace" + i, 10, false);
+        }
+
+        assertThat(service.listTraces(listing().build()).traces()).hasSize(100);
+        assertThat(service.listTraces(listing().limit(" ").build()).traces()).hasSize(100);
+    }
+
+    @Test
+    void readsTheBucketInAnyCaseAndListsAllWithoutOne() {
+        addTrace("ok", 10, false);
+        addTrace("failed", 10, true);
+
+        assertThat(listedIds(listing().bucket("ERRORS"))).containsExactly("failed");
+        assertThat(listedIds(listing().bucket("Errors"))).containsExactly("failed");
+        assertThat(listedIds(listing())).containsExactly("failed", "ok");
+        assertThat(listedIds(listing().bucket("  "))).containsExactly("failed", "ok");
+    }
+
+    /** Read before the store is consulted, so a typo is refused even while tracing is off. */
+    @Test
+    void refusesAnUnknownBucketWhileTracingIsOff() {
+        assertThatThrownBy(() ->
+                        newService(null).listTraces(listing().bucket("eror").build()))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("bucket");
+                    assertThat(e.problem().detail()).isEqualTo("Unknown bucket 'eror'. Accepted: ALL, ERRORS, SLOW.");
+                });
+    }
+
+    @Test
+    void refusesAnOutOfRangeLimitWhileTracingIsOff() {
+        assertThatThrownBy(() -> newService(null).listTraces(listing().limit(0).build()))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().parameter()).isEqualTo("limit"));
     }
 
     /**
@@ -550,10 +636,11 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addExcludedRequestFragment("fragment1");
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).rootActionType("*").build())
+                        .traces())
                 .extracting(row -> row.summary().traceId())
                 .containsExactly("http1");
-        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).build()).traces())
                 .extracting(row -> row.summary().traceId())
                 .containsExactly("http1");
     }
@@ -574,7 +661,8 @@ class TraceInsightsServiceTest {
                 .tags(Map.of("http.method", "GET"))
                 .build());
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).rootActionType("*").build())
+                        .traces())
                 .extracting(row -> row.summary().traceId())
                 .containsExactly("remote1");
     }
@@ -590,12 +678,14 @@ class TraceInsightsServiceTest {
                 .at(5, 20)
                 .build());
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).rootActionType("*").build())
+                        .traces())
                 .isEmpty();
 
         store.addSpan(rootSpan("running1", "GET /orders", Span.Kind.SERVER, 100).build());
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).rootActionType("*").build())
+                        .traces())
                 .extracting(row -> row.summary().traceId())
                 .containsExactly("running1");
     }
@@ -606,7 +696,8 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootActionType("*").build());
 
         assertThat(response.traces())
                 .extracting(row -> row.summary().traceId())
@@ -618,7 +709,8 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "maintenance", null, null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(10).rootActionType("maintenance").build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("pool1");
     }
@@ -629,7 +721,8 @@ class TraceInsightsServiceTest {
         addTrace("trace2", 100, true); // HTTP_REQUEST, error
         addConsumerTrace("trace3", 100); // MESSAGE_CONSUMER, ok
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "http_request", null, null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(10).rootActionType("http_request").build());
 
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 1, 0));
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(2, 1, 0));
@@ -640,7 +733,8 @@ class TraceInsightsServiceTest {
         addTraceWithOperation("trace1", "GET /api/users", 100);
         addTraceWithOperation("trace2", "POST /orders", 100);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, "users", null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootOperation("users").build());
 
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
@@ -653,7 +747,8 @@ class TraceInsightsServiceTest {
         }
         addConsumerTrace("c1", 100); // MESSAGE_CONSUMER
 
-        TraceListResponse response = service.listTraces(2, TraceBucket.ALL, "http_request", null, null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(2).rootActionType("http_request").build());
 
         assertThat(response.traces()).hasSize(2);
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(5, 0, 0));
@@ -664,7 +759,8 @@ class TraceInsightsServiceTest {
     void filteredBucketCountsAreOmittedWhenEveryTypeIsAskedFor() {
         addTrace("trace1", 100, false);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootActionType("*").build());
 
         assertThat(response.filteredBucketCounts()).isNull();
     }
@@ -674,8 +770,10 @@ class TraceInsightsServiceTest {
         addTraceWithOperation("trace1", "task scheduler.fixedDelay", 100);
         addTraceWithOperation("trace2", "task scheduler.fixedRate", 100);
 
-        TraceListResponse response =
-                service.listTraces(10, TraceBucket.ALL, null, "org.peekaboot.example.Scheduler.fixedDelay", null);
+        TraceListResponse response = service.listTraces(listing()
+                .limit(10)
+                .rootOperation("org.peekaboot.example.Scheduler.fixedDelay")
+                .build());
 
         assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
@@ -736,7 +834,8 @@ class TraceInsightsServiceTest {
         cappedStore.addSpan(rootSpanWithoutTags("t1", "s2", "op2"));
         TraceInsightsService cappedService = newService(cappedStore);
 
-        TraceListResponse response = cappedService.listTraces(10, TraceBucket.ALL, null, null, null);
+        TraceListResponse response =
+                cappedService.listTraces(listing().limit(10).build());
 
         assertThat(response.traces())
                 .extracting(row -> row.summary().counts().droppedSpans())
@@ -747,7 +846,8 @@ class TraceInsightsServiceTest {
     void anAsyncEntryIsListedBesideTheTraceThatTriggeredIt() {
         addTraceWithAsyncWork("http1", 50, 240_000);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootActionType("*").build());
 
         assertThat(response.traces())
                 .extracting(
@@ -761,7 +861,8 @@ class TraceInsightsServiceTest {
     void anAsyncRowNamesTheSpanItIsRootedAtAndItsEnclosingTrace() {
         addTraceWithAsyncWork("http1", 50, 1_000);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "async_task", null, null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(10).rootActionType("async_task").build());
 
         assertThat(response.traces()).singleElement().satisfies(row -> {
             assertThat(row.summary().traceId()).isEqualTo("http1");
@@ -779,7 +880,8 @@ class TraceInsightsServiceTest {
                 .build());
         store.addLog(log("http1").inSpan("async-http1").saying("enriching").build());
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootActionType("*").build());
 
         assertThat(response.traces())
                 .extracting(
@@ -794,7 +896,8 @@ class TraceInsightsServiceTest {
     void anAsyncRowEndsOkWhenOnlyTheRequestThatDispatchedItFailed() {
         addFailedRequestWithAsyncWork("http1", 50, 1_000);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootActionType("*").build());
 
         assertThat(response.traces())
                 .extracting(
@@ -809,11 +912,15 @@ class TraceInsightsServiceTest {
     void aTypeFilterSelectsRowsRatherThanTraces() {
         addTraceWithAsyncWork("http1", 50, 1_000);
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "http_request", null, null)
+        assertThat(service.listTraces(listing()
+                                .limit(10)
+                                .rootActionType("http_request")
+                                .build())
                         .traces())
                 .extracting(row -> row.summary().rootActionType())
                 .containsExactly(RootActionType.HTTP_REQUEST);
-        assertThat(service.listTraces(10, TraceBucket.ALL, "async_task", null, null)
+        assertThat(service.listTraces(
+                                listing().limit(10).rootActionType("async_task").build())
                         .traces())
                 .extracting(row -> row.summary().rootActionType())
                 .containsExactly(RootActionType.ASYNC_TASK);
@@ -828,7 +935,8 @@ class TraceInsightsServiceTest {
         addOrphanedAsyncWork("async1", 3_700);
         addExcludedRequestFragment("fragment1");
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).rootActionType("*").build())
+                        .traces())
                 .extracting(row -> row.summary().traceId())
                 .containsExactly("async1");
     }
@@ -837,9 +945,11 @@ class TraceInsightsServiceTest {
     void theLimitCountsRowsNotTraces() {
         addTraceWithAsyncWork("http1", 50, 1_000);
 
-        assertThat(service.listTraces(1, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(1).rootActionType("*").build())
+                        .traces())
                 .hasSize(1);
-        assertThat(service.listTraces(2, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(2).rootActionType("*").build())
+                        .traces())
                 .hasSize(2);
     }
 
@@ -854,7 +964,8 @@ class TraceInsightsServiceTest {
     void filteredBucketCountsCountDistinctTracesNotRows() {
         addTraceWithTwoAsyncTasks("http1", 1_500);
 
-        TraceListResponse response = service.listTraces(10, TraceBucket.SLOW, "async_task", null, null);
+        TraceListResponse response = service.listTraces(
+                listing().limit(10).bucket("slow").rootActionType("async_task").build());
 
         assertThat(response.traces()).hasSize(2);
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 1));
@@ -871,7 +982,8 @@ class TraceInsightsServiceTest {
         addTrace("http3", 20, false);
         store.addSpan(asyncTaskSpan("http1", 50, 240_000));
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+        assertThat(service.listTraces(listing().limit(10).rootActionType("*").build())
+                        .traces())
                 .extracting(row -> row.summary().traceId(), row -> row.summary().rootActionType())
                 .containsExactly(
                         tuple("http1", RootActionType.ASYNC_TASK),
@@ -884,7 +996,12 @@ class TraceInsightsServiceTest {
     void oneTracesAsyncRowsAreListedNewestFirstToo() {
         addTraceWithTwoAsyncTasks("http1", 50);
 
-        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, "full").traces())
+        assertThat(service.listTraces(listing()
+                                .limit(10)
+                                .rootActionType("*")
+                                .view("full")
+                                .build())
+                        .traces())
                 .extracting(row -> row.data().rootSpan().spanId())
                 .containsExactly("async-b-http1", "async-a-http1", "span-http1");
     }
@@ -903,7 +1020,12 @@ class TraceInsightsServiceTest {
                 .saying("failed after the task ended")
                 .build());
 
-        assertThat(service.listTraces(10, TraceBucket.ERRORS, "*", null, null).traces())
+        assertThat(service.listTraces(listing()
+                                .limit(10)
+                                .bucket("errors")
+                                .rootActionType("*")
+                                .build())
+                        .traces())
                 .extracting(row -> row.summary().traceId(), row -> row.summary().rootActionType())
                 .containsExactly(
                         tuple("http1", RootActionType.HTTP_REQUEST),
@@ -913,6 +1035,12 @@ class TraceInsightsServiceTest {
 
     private static SpanData rootSpanWithoutTags(String traceId, String spanId, String name) {
         return span(spanId).in(traceId).named(name).build();
+    }
+
+    private List<String> listedIds(TraceListings.Builder listing) {
+        return service.listTraces(listing.build()).traces().stream()
+                .map(row -> row.summary().traceId())
+                .toList();
     }
 
     private TraceInsightsService newService(TraceStore store) {

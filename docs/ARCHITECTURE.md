@@ -447,9 +447,15 @@ The guard's 401 from `DashboardAuthenticationFilter` carries the same body. An i
 dashboard gets nothing from the guard. An include cannot set the status, so the including
 response keeps its own, and a body would land inside the including page.
 
-Enumerated parameters (`bucket`, `rootActionType`) go through `RequestParameters`, which refuses
-a value it does not know and lists the accepted ones, where a default would answer a typo with
-the wrong list.
+Every listing parameter arrives as written, bound into a record of strings
+(`TraceListParameters`), and the service reads it through `RequestParameters`. An enumerated
+value it does not know is refused with the accepted values, and a number outside its range with
+that range, where a default or a clamp would answer a typo with the wrong list.
+
+A listing parameter sent more than once is refused before any value is read, so `limit=1&limit=2`
+is a 400 naming `limit`. `TraceController` turns off Spring's fallback to a same-named request
+header, so only the query string sets a listing parameter. Both rules live in
+`QueryParameterBinding`.
 
 ### In-Process Actuator Invocation
 

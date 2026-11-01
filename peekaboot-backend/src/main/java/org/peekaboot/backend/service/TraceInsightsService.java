@@ -1,20 +1,15 @@
 package org.peekaboot.backend.service;
 
-import java.util.Collections;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.BucketCounts;
-import org.peekaboot.backend.domain.trace.RootActionType;
+import org.peekaboot.backend.domain.trace.TraceListParameters;
 import org.peekaboot.backend.domain.trace.TraceListResponse;
 import org.peekaboot.backend.domain.trace.TraceResource;
-import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.mapper.trace.TraceResources;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.problem.RequestParameters;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -25,22 +20,6 @@ public class TraceInsightsService {
 
     private static final TraceListResponse EMPTY_RESPONSE =
             new TraceListResponse(List.of(), BucketCounts.empty(), null);
-
-    /**
-     * The types a request that names none asks for. A maintenance trace is upkeep no traced
-     * work caused, such as a HikariCP refill acquiring a connection or a Redis client's
-     * handshake and health check. Enough of
-     * them arrive to drown everything else, so they are kept in the store but out of the
-     * default view.
-     */
-    private static final Set<RootActionType> DEFAULT_VIEW_TYPES =
-            Collections.unmodifiableSet(EnumSet.complementOf(EnumSet.of(RootActionType.MAINTENANCE)));
-
-    /** The one {@code rootActionType} value that asks for every type, the hidden ones included. */
-    private static final String EVERY_TYPE = "*";
-
-    /** How a refusal lists {@link #EVERY_TYPE}, which a list of types refuses as one of its tokens. */
-    private static final String EVERY_TYPE_ALONE = EVERY_TYPE + " on its own";
 
     @Nullable
     private final TraceStore traceStore;
@@ -66,31 +45,30 @@ public class TraceInsightsService {
     }
 
     /**
-     * The trace listing for one bucket. {@code rootActionType} is a comma-separated
-     * include-list of {@link RootActionType} names; naming none asks for
-     * {@link #DEFAULT_VIEW_TYPES} and {@code *} asks for every type. {@code rootOperation}
-     * matches the root span's name partially and case-insensitively. {@code view} names a
-     * {@link TraceView}; naming none asks for the summary alone.
+     * The trace listing for one bucket. Every parameter is read and checked before the store is
+     * consulted, so a bad one is refused even while tracing is off. {@code rootActionType} is a
+     * comma-separated include-list of {@link org.peekaboot.backend.domain.trace.RootActionType}
+     * names; naming none asks for the default view, which leaves out routine maintenance, and
+     * {@code *} asks for every type. {@code rootOperation} matches the root span's name partially
+     * and case-insensitively. {@code view} names a {@link org.peekaboot.backend.domain.trace.TraceView};
+     * naming none asks for the summary alone. {@code limit} is 1 to 10000, and 100 where absent.
      */
-    public TraceListResponse listTraces(
-            int limit, TraceBucket bucket, String rootActionType, String rootOperation, String view) {
-        Set<RootActionType> actionTypeFilter = parseRootActionTypes(rootActionType);
-        TraceView traceView = parseView(view);
+    public TraceListResponse listTraces(TraceListParameters parameters) {
+        TraceListQuery query = TraceListQuery.of(parameters);
         if (traceStore == null) {
             return EMPTY_RESPONSE;
         }
 
-        final String operationFilter = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
-
+        TraceFilter filter = query.filter();
         // filtered on each row's root span alone; only the returned page is mapped (and masked)
-        List<RowSource> matches = RowSources.matching(traceStore, bucket, actionTypeFilter, operationFilter);
+        List<RowSource> matches = RowSources.matching(traceStore, query.bucket(), filter);
         List<TraceResource> traces = matches.stream()
-                .limit(limit)
+                .limit(query.limit())
                 .map(row -> traceResources.row(
                         row.bundle(),
                         row.subtreeRootSpanId(),
                         traceStore.bucketsOf(row.bundle().traceId()),
-                        traceView))
+                        query.view()))
                 .toList();
 
         BucketCounts bucketCounts = new BucketCounts(
@@ -99,41 +77,15 @@ public class TraceInsightsService {
                 traceStore.getTraceCount(TraceBucket.SLOW));
 
         BucketCounts filteredBucketCounts = null;
-        if (!actionTypeFilter.isEmpty() || operationFilter != null) {
+        if (filter.filtersAnything()) {
             // the requested bucket's rows are already in hand; the other two need a pass each
             filteredBucketCounts = new BucketCounts(
-                    countMatchingTraces(TraceBucket.ALL, bucket, matches, actionTypeFilter, operationFilter),
-                    countMatchingTraces(TraceBucket.ERRORS, bucket, matches, actionTypeFilter, operationFilter),
-                    countMatchingTraces(TraceBucket.SLOW, bucket, matches, actionTypeFilter, operationFilter));
+                    countMatchingTraces(TraceBucket.ALL, query.bucket(), matches, filter),
+                    countMatchingTraces(TraceBucket.ERRORS, query.bucket(), matches, filter),
+                    countMatchingTraces(TraceBucket.SLOW, query.bucket(), matches, filter));
         }
 
         return new TraceListResponse(traces, bucketCounts, filteredBucketCounts);
-    }
-
-    private static TraceView parseView(String value) {
-        return value == null || value.isBlank()
-                ? TraceView.SUMMARY
-                : RequestParameters.enumValue("view", TraceView.class, value);
-    }
-
-    /**
-     * Parses a comma-separated list of {@link RootActionType} names, refusing a name it does
-     * not know. A request that names no type asks for {@link #DEFAULT_VIEW_TYPES};
-     * {@link #EVERY_TYPE} asks for every type, which is the empty set here since an empty set
-     * filters nothing away.
-     */
-    private Set<RootActionType> parseRootActionTypes(String rootActionType) {
-        if (rootActionType == null || rootActionType.isBlank()) {
-            return DEFAULT_VIEW_TYPES;
-        }
-        if (EVERY_TYPE.equals(rootActionType.trim())) {
-            return Set.of();
-        }
-        Set<RootActionType> types = EnumSet.noneOf(RootActionType.class);
-        for (String token : rootActionType.split(",", -1)) {
-            types.add(RequestParameters.enumValue("rootActionType", RootActionType.class, token, EVERY_TYPE_ALONE));
-        }
-        return types;
     }
 
     /**
@@ -142,14 +94,8 @@ public class TraceInsightsService {
      * must not outweigh the one trace it is.
      */
     private int countMatchingTraces(
-            TraceBucket bucket,
-            TraceBucket requested,
-            List<RowSource> requestedMatches,
-            Set<RootActionType> actionTypes,
-            String rootOperation) {
-        List<RowSource> rows = bucket == requested
-                ? requestedMatches
-                : RowSources.matching(traceStore, bucket, actionTypes, rootOperation);
+            TraceBucket bucket, TraceBucket requested, List<RowSource> requestedMatches, TraceFilter filter) {
+        List<RowSource> rows = bucket == requested ? requestedMatches : RowSources.matching(traceStore, bucket, filter);
         return (int) rows.stream().map(row -> row.bundle().traceId()).distinct().count();
     }
 

@@ -70,7 +70,7 @@ The first rule that matches wins:
 8. `UNKNOWN`: everything else, and a null root. A non-SERVER root with `http.*` or `rpc.*` tags
    lands here on purpose: it is an outbound call, not a request this application served.
 
-`MAINTENANCE` is the one constant `TraceInsightsService.DEFAULT_VIEW_TYPES` leaves out, so a
+`MAINTENANCE` is the one constant `TraceFilter.DEFAULT_VIEW_TYPES` leaves out, so a
 listing request naming no type gets every other type. The Traces tab lifts that exclusion with its
 Excluded checkbox (`#traces-filter-exclude-maintenance`, `excluded=none` in the URL).
 `rootActionType=*` asks for the store as it stands. Separately, the listing leaves out a
@@ -79,7 +79,7 @@ a different suppression from the default view.
 
 ### Root Operation
 `TraceSummary.rootOperation` is `rootSpanData.name()` verbatim: no reformatting, no case change.
-As a filter it is `RowSources.matchesRootOperation`, a case-insensitive substring
+As a filter it is `TraceFilter.matchesRootOperation`, a case-insensitive substring
 match with a `Class.method` suffix fallback so a fully-qualified scheduled-task target still
 matches a bean-name span name.
 
@@ -206,7 +206,7 @@ Scheduled Tasks tab shows the last two dot-segments and puts the full value in t
 
 A task's `target` does not equal its traces' `rootOperation`. `rootOperation` is the root span's
 own name, typically `task <bean>.<method>` when Spring's scheduler fired it.
-`RowSources.matchesRootOperation` bridges the mismatch with the `Class.method` suffix
+`TraceFilter.matchesRootOperation` bridges the mismatch with the `Class.method` suffix
 fallback, which is what makes the tab's "View traces" link
 (`dashboard/tabs/scheduled-tasks.js`) land on that one task's runs.
 `TraceFiltersIT.schedulerTracesLinkArrivesFiltered` is the end-to-end proof.

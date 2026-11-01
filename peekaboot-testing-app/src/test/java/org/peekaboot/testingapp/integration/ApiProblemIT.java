@@ -23,6 +23,9 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/traces?bucket=eror | bucket",
                 "/peekaboot/api/traces?rootActionType=HTTP_REQUEST,NOPE | rootActionType",
                 "/peekaboot/api/traces?limit=abc | limit",
+                "/peekaboot/api/traces?limit=0 | limit",
+                "/peekaboot/api/traces?limit=10001 | limit",
+                "/peekaboot/api/traces?limit=1&limit=2 | limit",
                 "/peekaboot/api/traces?view=sumary | view",
                 "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask",
                 "/peekaboot/api/insights/data?level=abc | level",
@@ -60,6 +63,12 @@ class ApiProblemIT extends TestingAppITBase {
     }
 
     @Test
+    void anOutOfRangeLimitNamesItsRange() {
+        assertThat(fetch("/peekaboot/api/traces?limit=0").body().path("detail").asString(""))
+                .isEqualTo("limit must be an integer from 1 to 10000, got '0'.");
+    }
+
+    @Test
     void theWildcardInAListOfTypesIsRefusedAsAcceptedOnlyOnItsOwn() {
         assertThat(fetch("/peekaboot/api/traces?rootActionType=HTTP_REQUEST,*")
                         .body()
@@ -67,6 +76,15 @@ class ApiProblemIT extends TestingAppITBase {
                         .asString(""))
                 .startsWith("Unknown rootActionType '*'.")
                 .endsWith(", UNKNOWN, * on its own.");
+    }
+
+    @Test
+    void aRepeatedParameterNamesHowOftenItCame() {
+        assertThat(fetch("/peekaboot/api/traces?limit=1&limit=2")
+                        .body()
+                        .path("detail")
+                        .asString(""))
+                .isEqualTo("limit was sent 2 times. Send it once.");
     }
 
     @Test
@@ -107,7 +125,8 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/traces?rootActionType=scheduled_job,MAINTENANCE",
                 "/peekaboot/api/traces?bucket=",
                 "/peekaboot/api/traces?view=full",
-                "/peekaboot/api/traces?view=Summary"
+                "/peekaboot/api/traces?view=Summary",
+                "/peekaboot/api/traces?limit=50"
             })
     void theDashboardsOwnValuesAreAccepted(String path) {
         assertThat(fetch(path).status()).isEqualTo(200);

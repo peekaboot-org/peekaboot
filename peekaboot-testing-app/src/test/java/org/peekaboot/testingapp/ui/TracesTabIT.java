@@ -227,7 +227,7 @@ class TracesTabIT extends PlaywrightTestBase {
     /**
      * The bucket buttons' counts are counts like any other: grouped, and in the dashboard's
      * locale. A request naming no type still gets the backend's default view (every type but
-     * Maintenance, see TraceInsightsService.parseRootActionTypes), which counts as a
+     * Maintenance, see TraceFilter.actionTypesOf), which counts as a
      * filter of its own - so {@code filteredBucketCounts} is what a bucket button reads even
      * on the very first, unfiltered load; the plain {@code bucketCounts} only ever reaches the
      * UI as the "/ total" denominator once the reader picks an explicit type or operation.

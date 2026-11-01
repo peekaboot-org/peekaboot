@@ -1,157 +1,131 @@
 package org.peekaboot.backend.controller;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
+import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.BucketCounts;
-import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.domain.trace.TraceListResponse;
-import org.peekaboot.backend.domain.trace.TraceOutcome;
-import org.peekaboot.backend.domain.trace.TraceResource;
-import org.peekaboot.backend.domain.trace.TraceSummary;
-import org.peekaboot.backend.problem.ApiProblemException;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.peekaboot.backend.mapper.trace.SqlFormatter;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.ApiProblemHandler;
 import org.peekaboot.backend.service.TraceInsightsService;
-import org.peekaboot.backend.tracing.store.TraceBucket;
+import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.peekaboot.backend.testsupport.TraceStores;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** Real Spring MVC dispatch over a real store, so what is tested is how a request's parameters reach the listing. */
 class TraceControllerTest {
 
-    private TraceInsightsService traceInsightsService;
+    private final InMemoryTraceStore store = TraceStores.withDefaults();
 
-    private TraceController controller;
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new TraceController(new TraceInsightsService(
+                    store,
+                    new MaskingEngine(),
+                    SqlFormatter.NONE,
+                    new PeekabootTracingProperties(),
+                    new StackTraceRules(List.of(), List.of()))))
+            .setControllerAdvice(new ApiProblemHandler())
+            .build();
 
-    @BeforeEach
-    void setUp() {
-        traceInsightsService = mock(TraceInsightsService.class);
-        controller = new TraceController(traceInsightsService);
+    /**
+     * Each parameter binds by its record component's name. The newest trace is a pool connection
+     * outside Errors, the two newest errors are pool connections, and the default view hides
+     * maintenance, so leaving any one parameter unbound lists or counts something else.
+     */
+    @Test
+    void bindsEveryListingParameterByName() throws Exception {
+        store.addSpan(span("failed-root")
+                .in("failed")
+                .exception("java.lang.IllegalStateException", "boom")
+                .build());
+        store.addSpan(jdbcConnection("pool-old-root")
+                .in("pool-old")
+                .exception("java.sql.SQLException", "refused")
+                .build());
+        store.addSpan(jdbcConnection("pool-root")
+                .in("pool")
+                .exception("java.sql.SQLException", "refused")
+                .build());
+        store.addSpan(span("ok-root").in("ok").build());
+        store.addSpan(jdbcConnection("pool-ok-root").in("pool-ok").build());
+
+        mvc.perform(get("/peekaboot/api/traces")
+                        .param("limit", "1")
+                        .param("bucket", "errors")
+                        .param("rootActionType", "*")
+                        .param("rootOperation", "connection")
+                        .param("view", "full"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.traces.length()").value(1))
+                .andExpect(jsonPath("$.traces[0].summary.traceId").value("pool"))
+                .andExpect(jsonPath("$.traces[0].data.rootSpan.spanId").value("pool-root"))
+                .andExpect(jsonPath("$.bucketCounts.errors").value(3))
+                .andExpect(jsonPath("$.filteredBucketCounts.all").value(3))
+                .andExpect(jsonPath("$.filteredBucketCounts.errors").value(2));
     }
 
-    @Nested
-    class ListTraces {
+    /** Spring's record binding falls back to a same-named request header, which would put the listing in a client's or proxy's hands. */
+    @ParameterizedTest
+    @CsvSource({"Limit, 0", "View, full", "bucket, eror"})
+    void ignoresARequestHeaderNamedLikeAParameter(String header, String value) throws Exception {
+        store.addSpan(span("failed-root")
+                .in("failed")
+                .exception("java.lang.IllegalStateException", "boom")
+                .build());
+        store.addSpan(span("ok-root").in("ok").build());
 
-        @Test
-        void shouldPassFiltersToService() {
-            TraceListResponse expectedResponse = emptyListResponse();
-            when(traceInsightsService.listTraces(100, TraceBucket.ALL, "SCHEDULED_JOB", "MyScheduler", "full"))
-                    .thenReturn(expectedResponse);
-
-            TraceListResponse result = controller.listTraces(100, null, "SCHEDULED_JOB", "MyScheduler", "full");
-
-            assertThat(result).isSameAs(expectedResponse);
-        }
-
-        @Test
-        void shouldPassParsedBucketToService() {
-            controller.listTraces(100, "errors", null, null, null);
-
-            verify(traceInsightsService).listTraces(100, TraceBucket.ERRORS, null, null, null);
-        }
-
-        @Test
-        void shouldRefuseAnUnknownBucket() {
-            assertThatThrownBy(() -> controller.listTraces(100, "not-a-bucket", null, null, null))
-                    .isInstanceOfSatisfying(
-                            ApiProblemException.class,
-                            e -> assertThat(e.problem().parameter()).isEqualTo("bucket"));
-        }
-
-        @Test
-        void shouldParseTheBucketRegardlessOfCase() {
-            controller.listTraces(100, "SLOW", null, null, null);
-
-            verify(traceInsightsService).listTraces(100, TraceBucket.SLOW, null, null, null);
-        }
-
-        @Test
-        void shouldTreatAMissingOrBlankBucketAsAll() {
-            controller.listTraces(100, null, null, null, null);
-            controller.listTraces(100, "  ", null, null, null);
-
-            verify(traceInsightsService, times(2)).listTraces(100, TraceBucket.ALL, null, null, null);
-        }
-
-        @Test
-        void shouldClampNegativeLimit() {
-            // a negative limit would throw from Stream.limit and produce a 500
-            controller.listTraces(-5, null, null, null, null);
-
-            verify(traceInsightsService).listTraces(eq(0), any(), any(), any(), any());
-        }
-
-        @Test
-        void shouldClampExcessiveLimit() {
-            // the cap bounds the response size
-            controller.listTraces(Integer.MAX_VALUE, null, null, null, null);
-
-            verify(traceInsightsService).listTraces(eq(10_000), any(), any(), any(), any());
-        }
-
-        /** The service reads the view, as it reads rootActionType. */
-        @Test
-        void passesTheViewThroughAsWritten() {
-            controller.listTraces(100, null, null, null, "Full");
-
-            verify(traceInsightsService).listTraces(100, TraceBucket.ALL, null, null, "Full");
-        }
-
-        private TraceListResponse emptyListResponse() {
-            return new TraceListResponse(List.of(), BucketCounts.empty(), null);
-        }
+        mvc.perform(get("/peekaboot/api/traces").header(header, value))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.traces[*].summary.traceId").value(Matchers.contains("ok", "failed")))
+                .andExpect(jsonPath("$.traces[*].data")
+                        .value(Matchers.contains(Matchers.nullValue(), Matchers.nullValue())));
     }
 
-    @Nested
-    class GetTrace {
-
-        @Test
-        void shouldReturnTheTraceWhenFound() {
-            TraceResource trace = createTrace("trace-456");
-            when(traceInsightsService.getTrace("trace-456")).thenReturn(Optional.of(trace));
-
-            assertThat(controller.getTrace("trace-456")).isSameAs(trace);
-        }
-
-        @Test
-        void shouldRefuseAnUnknownTraceAsNotFound() {
-            when(traceInsightsService.getTrace("trace-789")).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> controller.getTrace("trace-789"))
-                    .isInstanceOfSatisfying(ApiProblemException.class, e -> {
-                        assertThat(e.problem().status()).isEqualTo(404);
-                        assertThat(e.problem().parameter()).isNull();
-                        assertThat(e.problem().detail()).contains("trace-789");
-                    });
-        }
+    /** Three limits name no one page size, so the repeat is refused before any of them is read. */
+    @Test
+    void refusesARepeatedLimit() throws Exception {
+        mvc.perform(get("/peekaboot/api/traces").param("limit", "1", "2", "3"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.parameter").value("limit"))
+                .andExpect(jsonPath("$.detail").value("limit was sent 3 times. Send it once."));
     }
 
-    private TraceResource createTrace(String traceId) {
-        TraceSummary summary = new TraceSummary(
-                traceId,
-                Instant.EPOCH,
-                100L,
-                true,
-                RootActionType.HTTP_REQUEST,
-                "test-operation",
-                null,
-                TraceOutcome.OK,
-                List.of(),
-                List.of(),
-                null,
-                List.of(),
-                List.of(),
-                new TraceSummary.Counts(
-                        1, new TraceSummary.QueryCounts(0, 0L), new TraceSummary.LogCounts(0, 0, 0), 0, 0),
-                null);
-        return new TraceResource(summary, null);
+    @Test
+    void refusesABadLimitWithAProblemNamingIt() throws Exception {
+        mvc.perform(get("/peekaboot/api/traces").param("limit", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.parameter").value("limit"))
+                .andExpect(jsonPath("$.detail").value("limit must be an integer from 1 to 10000, got '0'."));
+    }
+
+    @Test
+    void servesAStoredTrace() throws Exception {
+        store.addSpan(span("ok-root").in("ok").build());
+
+        mvc.perform(get("/peekaboot/api/traces/ok"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.traceId").value("ok"))
+                .andExpect(jsonPath("$.data.rootSpan.spanId").value("ok-root"));
+    }
+
+    @Test
+    void answersAnUnknownTraceWithANotFoundProblem() throws Exception {
+        mvc.perform(get("/peekaboot/api/traces/nope"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value(Matchers.containsString("nope")))
+                .andExpect(jsonPath("$.parameter").value(Matchers.nullValue()));
     }
 }
