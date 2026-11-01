@@ -49,6 +49,7 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
         String stackTrace =
                 throwable == null ? null : CapturedStackTraces.capLines(ThrowableProxyUtil.asString(throwable));
 
-        eventPublisher.publishEvent(new LogCapturedEvent(traceId, spanId, timestamp, level, message, stackTrace));
+        eventPublisher.publishEvent(new LogCapturedEvent(
+                traceId, spanId, timestamp, level, event.getLoggerName(), event.getThreadName(), message, stackTrace));
     }
 }

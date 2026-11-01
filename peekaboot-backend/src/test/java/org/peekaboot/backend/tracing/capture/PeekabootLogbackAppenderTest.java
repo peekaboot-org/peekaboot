@@ -90,6 +90,24 @@ class PeekabootLogbackAppenderTest {
     }
 
     @Test
+    @DisplayName("names the logger the line was written to and the thread that wrote it")
+    void namesTheLoggerAndTheThread() throws InterruptedException {
+        Thread writer = new Thread(
+                () -> {
+                    MDC.put("traceId", TRACE_ID);
+                    logger.info("from a named thread");
+                },
+                "pk-writer");
+        writer.start();
+        writer.join();
+
+        assertThat(captured).singleElement().satisfies(event -> {
+            assertThat(event.logger()).isEqualTo(PeekabootLogbackAppenderTest.class.getName());
+            assertThat(event.thread()).isEqualTo("pk-writer");
+        });
+    }
+
+    @Test
     @DisplayName("drops an uncorrelated event - it belongs to no trace")
     void ignoresEventWithoutTraceId() {
         logger.error("no MDC at all");

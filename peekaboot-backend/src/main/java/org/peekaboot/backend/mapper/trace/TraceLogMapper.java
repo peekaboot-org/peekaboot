@@ -90,9 +90,12 @@ public final class TraceLogMapper {
     private TraceLog toTraceLog(UnaryOperator<String> spanOf, LogCapturedEvent e) {
         WireStackTraces.WireStackTrace trace = stackTraces.of(e.stackTrace());
         return new TraceLog(
+                e.traceId(),
                 spanOf.apply(e.spanId()),
                 e.timestamp(),
                 e.level(),
+                e.logger(),
+                e.thread(),
                 maskingEngine.maskValue(e.message()),
                 trace.text(),
                 trace.hiddenFrames(),

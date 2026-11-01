@@ -275,8 +275,9 @@ Request bodies and uploads are not captured; see *Servlet Filters* in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for what a body-capture pass has to solve first.
 
 ### Trace Log and Query Info
-`TraceLog(spanId, timestamp, level, message, stackTrace, hiddenFrames, applicationFrames)` is one
-captured log event, correlated by the trace and span ids frozen in its MDC. `stackTrace` is the captured throwable, null where there was none; `hiddenFrames` and
+`TraceLog(traceId, spanId, timestamp, level, logger, thread, message, stackTrace, hiddenFrames,
+applicationFrames)` is one captured log event, correlated by the trace and span ids frozen in its
+MDC, and named by its logger and its thread. `stackTrace` is the captured throwable, null where there was none; `hiddenFrames` and
 `applicationFrames` are the line ranges folding marked in it. It appears once on the detail
 response, in `TraceDetail.logs`, its `spanId` resolved to the span that survived deduplication. A log
 with no span id belongs to no span.

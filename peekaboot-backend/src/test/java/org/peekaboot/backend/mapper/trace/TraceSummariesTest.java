@@ -76,7 +76,8 @@ class TraceSummariesTest {
     /** The cause reads the ERROR logs the facts hold, which are the ones the data serves. */
     @Test
     void namesTheCauseFromTheFactsErrorLogs() {
-        TraceLog errorLog = new TraceLog("root", Instant.EPOCH, "ERROR", "logged", null, List.of(), List.of());
+        TraceLog errorLog = new TraceLog(
+                "trace1", "root", Instant.EPOCH, "ERROR", "TestLogger", "main", "logged", null, List.of(), List.of());
         TraceFacts facts = new TraceFacts(false, Set.of(), List.of(), List.of(errorLog), 0, 0);
 
         TraceSummary summary = summaries.of(tree(node("root").build()).build(), facts);

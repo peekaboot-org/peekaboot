@@ -3,8 +3,10 @@ package org.peekaboot.backend.tracing.event;
 import java.time.Instant;
 
 /**
- * One log line captured during a traced request.
+ * One captured log line.
  *
+ * @param logger the name of the logger it was written to
+ * @param thread the name of the thread that wrote it
  * @param stackTrace {@code ThrowableProxyUtil.asString}'s rendering of the logged throwable, or
  *     null where there was none. Close to but not identical to {@code Throwable.printStackTrace}'s
  *     own output: an elided run reads "... N common frames omitted" rather than "... N more".
@@ -14,7 +16,14 @@ import java.time.Instant;
  *     with a trailing marker where it was.
  */
 public record LogCapturedEvent(
-        String traceId, String spanId, Instant timestamp, String level, String message, String stackTrace) {
+        String traceId,
+        String spanId,
+        Instant timestamp,
+        String level,
+        String logger,
+        String thread,
+        String message,
+        String stackTrace) {
 
     public boolean isError() {
         return "ERROR".equalsIgnoreCase(level);

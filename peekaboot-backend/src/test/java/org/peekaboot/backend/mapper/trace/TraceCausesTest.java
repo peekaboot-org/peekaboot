@@ -49,9 +49,12 @@ class TraceCausesTest {
 
     private static TraceLog errorLog(String spanId, String stackTrace) {
         return new TraceLog(
+                "trace1",
                 spanId,
                 Instant.EPOCH,
                 "ERROR",
+                "TestLogger",
+                "main",
                 "logged",
                 stackTrace,
                 List.of(),
@@ -143,8 +146,28 @@ class TraceCausesTest {
 
     @Test
     void ofTwoLoggedStackTracesTheFirstLoggedIsTheCause() {
-        TraceLog first = new TraceLog("first", Instant.EPOCH, "ERROR", "logged", LOGGED_TRACE, List.of(), List.of());
-        TraceLog second = new TraceLog("second", Instant.EPOCH, "ERROR", "logged", TRACE, List.of(), List.of());
+        TraceLog first = new TraceLog(
+                "trace1",
+                "first",
+                Instant.EPOCH,
+                "ERROR",
+                "TestLogger",
+                "main",
+                "logged",
+                LOGGED_TRACE,
+                List.of(),
+                List.of());
+        TraceLog second = new TraceLog(
+                "trace1",
+                "second",
+                Instant.EPOCH,
+                "ERROR",
+                "TestLogger",
+                "main",
+                "logged",
+                TRACE,
+                List.of(),
+                List.of());
 
         assertThat(TraceCauses.of(tree(node("root").build()).build(), List.of(first, second))
                         .spanId())
@@ -220,8 +243,10 @@ class TraceCausesTest {
 
     @Test
     void ofTwoErrorLogsWithoutAStackTraceTheFirstLoggedIsTheCause() {
-        TraceLog first = new TraceLog("first", Instant.EPOCH, "ERROR", "logged", null, List.of(), List.of());
-        TraceLog second = new TraceLog("second", Instant.EPOCH, "ERROR", "logged", null, List.of(), List.of());
+        TraceLog first = new TraceLog(
+                "trace1", "first", Instant.EPOCH, "ERROR", "TestLogger", "main", "logged", null, List.of(), List.of());
+        TraceLog second = new TraceLog(
+                "trace1", "second", Instant.EPOCH, "ERROR", "TestLogger", "main", "logged", null, List.of(), List.of());
 
         assertThat(TraceCauses.of(tree(node("root").build()).build(), List.of(first, second))
                         .spanId())
@@ -256,9 +281,12 @@ class TraceCausesTest {
     @Test
     void aLoggedTraceWithoutAMessageNamesItsClassAlone() {
         TraceLog log = new TraceLog(
+                "trace1",
                 "root",
                 Instant.EPOCH,
                 "ERROR",
+                "TestLogger",
+                "main",
                 "logged",
                 "java.lang.NullPointerException\n\tat x.Y.z(Y.java:1)",
                 List.of(),

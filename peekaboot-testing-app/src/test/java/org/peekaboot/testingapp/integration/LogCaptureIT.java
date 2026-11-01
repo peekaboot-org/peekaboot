@@ -70,6 +70,23 @@ class LogCaptureIT extends TestingAppITBase {
         assertThat(lines[start]).contains("PersonController.persons");
     }
 
+    /** The line names who wrote it: the controller's logger, on the Tomcat thread that served the request. */
+    @Test
+    void aCapturedLogNamesItsTraceLoggerAndThread() {
+        String traceId = traces.get("/?error=true");
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        JsonNode log = trace.path("data")
+                .path("logs")
+                .valueStream()
+                .filter(entry -> "ERROR".equals(entry.path("level").asString("")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no ERROR log on trace " + traceId));
+        assertThat(log.path("traceId").asString()).isEqualTo(traceId);
+        assertThat(log.path("logger").asString()).isEqualTo("org.peekaboot.testingapp.controller.PersonController");
+        assertThat(log.path("thread").asString()).matches("http-nio-.+-exec-\\d+");
+    }
+
     /**
      * A request that logs nothing at ERROR must not report an error count - guards the
      * assertion above against passing on any trace that merely happens to hold an error.

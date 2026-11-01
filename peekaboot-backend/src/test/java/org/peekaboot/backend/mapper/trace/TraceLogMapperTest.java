@@ -50,6 +50,21 @@ class TraceLogMapperTest {
     }
 
     @Test
+    void aLogNamesItsTraceLoggerAndThread() {
+        store.addLog(log("t1")
+                .inSpan("root")
+                .from("org.acme.OrderService")
+                .onThread("http-nio-8080-exec-3")
+                .build());
+
+        TraceLog result = mapped(mapper).getFirst();
+
+        assertThat(result.traceId()).isEqualTo("t1");
+        assertThat(result.logger()).isEqualTo("org.acme.OrderService");
+        assertThat(result.thread()).isEqualTo("http-nio-8080-exec-3");
+    }
+
+    @Test
     void aLogWithoutAThrowableCarriesNoStackTraceOrRanges() {
         store.addLog(log("t1").inSpan("root").saying("no trouble here").build());
 

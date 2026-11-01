@@ -21,7 +21,8 @@ class TraceReasonsTest {
     private static final long THRESHOLD_MS = 1000;
 
     private static TraceLog errorLog(String spanId, String message) {
-        return new TraceLog(spanId, Instant.EPOCH, "ERROR", message, null, List.of(), List.of());
+        return new TraceLog(
+                "trace1", spanId, Instant.EPOCH, "ERROR", "TestLogger", "main", message, null, List.of(), List.of());
     }
 
     @Test

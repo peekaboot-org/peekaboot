@@ -21,6 +21,8 @@ public final class Logs {
         private String spanId = "span1";
         private Instant timestamp = Instant.EPOCH;
         private String level = "INFO";
+        private String logger = "TestLogger";
+        private String thread = "main";
         private String message = "message";
         private String stackTrace;
 
@@ -36,6 +38,16 @@ public final class Logs {
 
         public LogBuilder at(String level) {
             this.level = level;
+            return this;
+        }
+
+        public LogBuilder from(String logger) {
+            this.logger = logger;
+            return this;
+        }
+
+        public LogBuilder onThread(String thread) {
+            this.thread = thread;
             return this;
         }
 
@@ -56,7 +68,7 @@ public final class Logs {
         }
 
         public LogCapturedEvent build() {
-            return new LogCapturedEvent(traceId, spanId, timestamp, level, message, stackTrace);
+            return new LogCapturedEvent(traceId, spanId, timestamp, level, logger, thread, message, stackTrace);
         }
     }
 }

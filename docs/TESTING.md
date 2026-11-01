@@ -105,6 +105,7 @@ takes the mapped `SqlStatement`.
 `SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the
 internal `TraceTree` around one, complete, without orphans and with no request unless its
 setters say otherwise. `Logs.log(traceId)` builds a `LogCapturedEvent`,
+written to `TestLogger` on thread `main` unless `from(...)` or `onThread(...)` says otherwise,
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`.

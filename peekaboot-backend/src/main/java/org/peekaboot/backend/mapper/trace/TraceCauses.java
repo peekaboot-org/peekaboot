@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -75,14 +76,15 @@ final class TraceCauses {
 
     /** A log names no exception class of its own, so the type and the message come from its trace's first line. */
     private static TraceSummary.Cause loggedExceptionCause(TraceLog log) {
-        String firstLine = log.stackTrace().split("\n", 2)[0];
+        String stackTrace = Objects.requireNonNull(log.stackTrace(), "only a log with a stack trace is picked");
+        String firstLine = stackTrace.split("\n", 2)[0];
         int separator = firstLine.indexOf(": ");
         return new TraceSummary.Cause(
                 separator < 0
                         ? firstLine.strip()
                         : firstLine.substring(0, separator).strip(),
                 separator < 0 ? null : firstLine.substring(separator + 2),
-                applicationFrame(log.stackTrace(), log.applicationFrames()),
+                applicationFrame(stackTrace, log.applicationFrames()),
                 log.spanId());
     }
 

@@ -74,8 +74,15 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .at(7, 1)
                 .tag("jdbc.row-count", "8")
                 .build());
-        traceStore.addLog(
-                new LogCapturedEvent(traceId, "query", Instant.EPOCH.plusMillis(6), "INFO", "found 8 orders", null));
+        traceStore.addLog(new LogCapturedEvent(
+                traceId,
+                "query",
+                Instant.EPOCH.plusMillis(6),
+                "INFO",
+                "org.peekaboot.testingapp.order.OrderService",
+                "main",
+                "found 8 orders",
+                null));
         return traceId;
     }
 
