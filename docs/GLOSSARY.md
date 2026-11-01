@@ -108,8 +108,8 @@ bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 ### Issue
 `SpanNode.issues` holds `TraceIssue`s. Each is a `SpanIssue(type, severity, spanId, value,
 threshold, unit, message)` or a `RepeatedQueryIssue`, which adds `statement`, `count`, `totalMs`
-and `spanIds`. `IssueType`'s constants are `SLOW`, `VERY_SLOW`, `SLOW_QUERY` and
-`REPEATED_QUERY`; `IssueSeverity` has two, and it and `IssueUnit` serialise lowercase through
+and `spanIds`. `IssueType`'s constants are `SLOW`, `VERY_SLOW`, `SLOW_QUERY`, `REPEATED_QUERY`
+and `CLIENT_ERROR`; `IssueSeverity` has two, and it and `IssueUnit` serialise lowercase through
 `@JsonValue`. The UI colours a span's duration by `severity` alone (`severity.js`'s
 `issueSeverity`), never by `type`, and only for issues with `unit: ms`.
 
@@ -118,7 +118,9 @@ Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapp
 marks only itself. `selfMs` reads high on a trace whose span cap dropped some children, since
 a dropped child covers nothing. REPEATED_QUERY compares statements after `SqlNormalizer` and
 groups queries by their direct parent span. datasource-micrometer records a JDBC connection
-span beside its query, so an N+1 outside a transaction still shares one parent. Firing conditions:
+span beside its query, so an N+1 outside a transaction still shares one parent. CLIENT_ERROR is a
+warning on a server root that answered 4xx, with the status as `value`, 400 as `threshold` and
+`unit: status`. The outcome and the Errors bucket ignore it. Firing conditions:
 [issues](https://www.peekaboot.org/docs/traces/#issues). Thresholds and property names:
 [peekaboot.tracing](https://www.peekaboot.org/docs/configuration/#issue-thresholds).
 
@@ -145,7 +147,7 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | `TraceTree.truncated` | **TRUNCATED** badge | Set when the per-trace span cap dropped a real span. |
 | `HttpRequest.Controller.className` | `class` on the wire | Renamed by `@JsonProperty("class")`. |
 | `IssueSeverity.WARNING`, `.ERROR` | `warning`, `error` | Lowercased by `@JsonValue`. |
-| `IssueUnit.MS`, `.QUERIES` | `ms`, `queries` | Lowercased by `@JsonValue`. |
+| `IssueUnit.MS`, `.QUERIES`, `.STATUS` | `ms`, `queries`, `status` | Lowercased by `@JsonValue`. |
 | `RootActionType` constant names | Title-case labels and icons | Held only in `shared/root-actions.js`. |
 | tab module id `scheduled-tasks` | payload key `scheduledTasks` | Two spellings of the same tab, one in the hash, one in `ActuatorInsightsResponse`. |
 

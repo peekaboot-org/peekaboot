@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
 import java.util.Map;
+import java.util.OptionalInt;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -118,8 +119,8 @@ class HttpSpanTagsTest {
         "SERVER, http.response.status_code, 500, true",
         "SERVER, status, 503, true",
         "SERVER, http.status_code, 599, true",
-        "SERVER, http.response.status_code, 499, false",
         "SERVER, http.status_code, 600, false",
+        "SERVER, http.response.status_code, 499, false",
         "SERVER, status, CLIENT_ERROR, false",
         "CLIENT, http.response.status_code, 500, false"
     })
@@ -127,9 +128,32 @@ class HttpSpanTagsTest {
         assertThat(HttpSpanTags.isServerError(kind, Map.of(key, value))).isEqualTo(expected);
     }
 
+    /** Only a server span's own answer counts, the same rule as for a 5xx. An empty expectation means no status. */
+    @ParameterizedTest
+    @CsvSource({
+        "SERVER, http.response.status_code, 400, 400",
+        "SERVER, status, 404, 404",
+        "SERVER, http.status_code, 499, 499",
+        "SERVER, http.response.status_code, 399, ",
+        "SERVER, http.response.status_code, 500, ",
+        "SERVER, status, CLIENT_ERROR, ",
+        "CLIENT, http.response.status_code, 404, "
+    })
+    void clientErrorStatusOfAServerSpansFourHundredsOnly(Span.Kind kind, String key, String value, Integer expected) {
+        assertThat(HttpSpanTags.clientErrorStatus(kind, Map.of(key, value)))
+                .isEqualTo(expected == null ? OptionalInt.empty() : OptionalInt.of(expected));
+    }
+
     @Test
     void aSpanWithoutAKindIsNoServerError() {
         assertThat(HttpSpanTags.isServerError(null, Map.of("http.response.status_code", "500")))
                 .isFalse();
+    }
+
+    @Test
+    void aSpanWithoutAKindOrTagsIsNoClientError() {
+        assertThat(HttpSpanTags.clientErrorStatus(null, Map.of("http.response.status_code", "404")))
+                .isEmpty();
+        assertThat(HttpSpanTags.clientErrorStatus(Span.Kind.SERVER, null)).isEmpty();
     }
 }

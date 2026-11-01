@@ -336,7 +336,7 @@ SLOW/VERY_SLOW at `selfMs >= threshold` and SLOW_QUERY at `duration >= threshold
 self time is already SLOW at the default thresholds, a 50 ms query already slow. Where a
 span's own issues are in hand, `issueSeverity(span.issues)` reads the backend's verdict, each
 issue's `severity`, and colours the gantt duration cells. It reads only issues with `unit: ms`,
-so a REPEATED_QUERY, which counts queries, leaves the cell alone. A gantt cell shows the span's whole
+so a REPEATED_QUERY, which counts queries, and a CLIENT_ERROR, which carries a status, leave the cell alone. A gantt cell shows the span's whole
 duration and is coloured by the backend's issues, which judge self time for SLOW/VERY_SLOW and
 the whole duration for SLOW_QUERY, so a parent that only waited stays uncoloured.
 `durationSeverity()` re-derives a severity only for durations no issue describes, meaning a

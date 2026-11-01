@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.tags;
 
 import io.micrometer.tracing.Span;
 import java.util.Map;
+import java.util.OptionalInt;
 
 /**
  * Reads an HTTP span's method, path and status whichever convention named its tags.
@@ -17,6 +18,9 @@ import java.util.Map;
  * names are more specific than Spring's, so they win where a span carries both.
  */
 public final class HttpSpanTags {
+
+    /** The lowest status that reports the caller's mistake. */
+    public static final int CLIENT_ERROR_FLOOR = 400;
 
     private static final String[] METHOD_KEYS = {"http.request.method", "http.method", "method"};
     private static final String[] PATH_KEYS = {"url.path", "http.target", "http.url", "uri"};
@@ -50,11 +54,16 @@ public final class HttpSpanTags {
 
     /** Only a server span's own answer counts. A client span's 5xx is a downstream failure the application may have handled. */
     public static boolean isServerError(Span.Kind kind, Map<String, String> tags) {
-        if (kind != Span.Kind.SERVER || tags == null) {
-            return false;
-        }
-        Integer status = statusCode(tags);
+        Integer status = serverStatus(kind, tags);
         return status != null && status >= SERVER_ERROR_FLOOR && status <= SERVER_ERROR_CEILING;
+    }
+
+    /** A server span's 4xx status, empty for any other span or status, so one read gives both the check and the value. */
+    public static OptionalInt clientErrorStatus(Span.Kind kind, Map<String, String> tags) {
+        Integer status = serverStatus(kind, tags);
+        return status != null && status >= CLIENT_ERROR_FLOOR && status < SERVER_ERROR_FLOOR
+                ? OptionalInt.of(status)
+                : OptionalInt.empty();
     }
 
     /**
@@ -64,6 +73,10 @@ public final class HttpSpanTags {
      */
     public static boolean describesHttpRequest(Map<String, String> tags) {
         return Tags.anyKeyStartsWith(tags, "http.") || (tags.containsKey("method") && tags.containsKey("uri"));
+    }
+
+    private static Integer serverStatus(Span.Kind kind, Map<String, String> tags) {
+        return kind == Span.Kind.SERVER && tags != null ? statusCode(tags) : null;
     }
 
     private static String pathOf(String urlOrPath) {

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
@@ -234,6 +235,57 @@ class IssueDetectorTest {
         TraceTree judged = detector.detectIssues(tree(parent).build());
 
         assertThat(judged.rootSpan().issues()).extracting(TraceIssue::type).containsExactly(IssueType.REPEATED_QUERY);
+    }
+
+    /** The caller's mistake is worth a warning on the request, never a failure of the trace. */
+    @Test
+    void aServerRootAnswering4xxGetsAClientError() {
+        SpanNode root = node("root")
+                .kind(Span.Kind.SERVER)
+                .tags(Map.of("http.response.status_code", "404"))
+                .build();
+
+        TraceTree judged = detector.detectIssues(tree(root).build());
+
+        assertThat(judged.rootSpan().issues())
+                .containsExactly(new SpanIssue(
+                        IssueType.CLIENT_ERROR,
+                        IssueSeverity.WARNING,
+                        "root",
+                        404,
+                        400,
+                        IssueUnit.STATUS,
+                        "The request was answered with status 404."));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"SERVER, 200", "SERVER, 500", "CLIENT, 404"})
+    void noClientErrorForOtherAnswers(Span.Kind kind, String status) {
+        SpanNode root = node("root")
+                .kind(kind)
+                .tags(Map.of("http.response.status_code", status))
+                .build();
+
+        assertThat(detector.detectIssues(tree(root).build()).rootSpan().issues())
+                .isEmpty();
+    }
+
+    /** A server span below the root answered a call this application made to itself; the outer request reports the outcome. */
+    @Test
+    void onlyTheRootCarriesTheClientError() {
+        SpanNode inner = node("inner")
+                .kind(Span.Kind.SERVER)
+                .tags(Map.of("status", "404"))
+                .build();
+        SpanNode root = node("root")
+                .kind(Span.Kind.SERVER)
+                .tags(Map.of("status", "200"))
+                .children(List.of(inner))
+                .build();
+
+        TraceTree judged = detector.detectIssues(tree(root).build());
+
+        assertThat(judged.rootSpan().children().getFirst().issues()).isEmpty();
     }
 
     @Test

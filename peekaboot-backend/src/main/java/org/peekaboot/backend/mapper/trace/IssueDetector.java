@@ -2,6 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.IssueUnit;
@@ -10,6 +11,7 @@ import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 
 public class IssueDetector {
 
@@ -20,7 +22,7 @@ public class IssueDetector {
     }
 
     public TraceTree detectIssues(TraceTree trace) {
-        SpanNode root = trace.rootSpan() == null ? null : processSpan(trace.rootSpan());
+        SpanNode root = trace.rootSpan() == null ? null : withClientError(processSpan(trace.rootSpan()));
         List<SpanNode> orphans = trace.orphans().stream().map(this::processSpan).toList();
         boolean slow = (root != null && hasSlowIssue(root)) || orphans.stream().anyMatch(IssueDetector::hasSlowIssue);
         return trace.withSpans(root, orphans, slow);
@@ -57,6 +59,28 @@ public class IssueDetector {
                 span.children().stream().map(this::processSpan).toList();
 
         return span.withIssues(issues, processedChildren);
+    }
+
+    /**
+     * Judges the root alone, the request the trace answers. An inner server span's 4xx answered a call
+     * this application made to itself.
+     */
+    private static SpanNode withClientError(SpanNode root) {
+        OptionalInt clientError = HttpSpanTags.clientErrorStatus(root.kind(), root.tags());
+        if (clientError.isEmpty()) {
+            return root;
+        }
+        int status = clientError.getAsInt();
+        List<TraceIssue> issues = new ArrayList<>(root.issues());
+        issues.add(new SpanIssue(
+                IssueType.CLIENT_ERROR,
+                IssueSeverity.WARNING,
+                root.spanId(),
+                status,
+                HttpSpanTags.CLIENT_ERROR_FLOOR,
+                IssueUnit.STATUS,
+                "The request was answered with status " + status + "."));
+        return root.withIssues(issues, root.children());
     }
 
     private static SpanIssue selfTimeIssue(
