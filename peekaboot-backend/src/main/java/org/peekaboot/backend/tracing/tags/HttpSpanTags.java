@@ -1,5 +1,6 @@
 package org.peekaboot.backend.tracing.tags;
 
+import io.micrometer.tracing.Span;
 import java.util.Map;
 
 /**
@@ -20,6 +21,8 @@ public final class HttpSpanTags {
     private static final String[] METHOD_KEYS = {"http.request.method", "http.method", "method"};
     private static final String[] PATH_KEYS = {"url.path", "http.target", "http.url", "uri"};
     private static final String[] STATUS_KEYS = {"http.response.status_code", "http.status_code", "status"};
+    private static final int SERVER_ERROR_FLOOR = 500;
+    private static final int SERVER_ERROR_CEILING = 599;
 
     private HttpSpanTags() {}
 
@@ -43,6 +46,15 @@ public final class HttpSpanTags {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** Only a server span's own answer counts. A client span's 5xx is a downstream failure the application may have handled. */
+    public static boolean isServerError(Span.Kind kind, Map<String, String> tags) {
+        if (kind != Span.Kind.SERVER || tags == null) {
+            return false;
+        }
+        Integer status = statusCode(tags);
+        return status != null && status >= SERVER_ERROR_FLOOR && status <= SERVER_ERROR_CEILING;
     }
 
     /**

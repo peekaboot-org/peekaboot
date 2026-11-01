@@ -2,8 +2,11 @@ package org.peekaboot.backend.tracing.tags;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.tracing.Span;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class HttpSpanTagsTest {
 
@@ -107,5 +110,26 @@ class HttpSpanTagsTest {
         assertThat(HttpSpanTags.describesHttpRequest(Map.of("rpc.system", "grpc", "method", "Greet")))
                 .isFalse();
         assertThat(HttpSpanTags.describesHttpRequest(Map.of())).isFalse();
+    }
+
+    /** Only a server span's own answer counts; a client span's 5xx is a downstream failure the application may have handled. */
+    @ParameterizedTest
+    @CsvSource({
+        "SERVER, http.response.status_code, 500, true",
+        "SERVER, status, 503, true",
+        "SERVER, http.status_code, 599, true",
+        "SERVER, http.response.status_code, 499, false",
+        "SERVER, http.status_code, 600, false",
+        "SERVER, status, CLIENT_ERROR, false",
+        "CLIENT, http.response.status_code, 500, false"
+    })
+    void isServerErrorForAServerSpansFiveHundredsOnly(Span.Kind kind, String key, String value, boolean expected) {
+        assertThat(HttpSpanTags.isServerError(kind, Map.of(key, value))).isEqualTo(expected);
+    }
+
+    @Test
+    void aSpanWithoutAKindIsNoServerError() {
+        assertThat(HttpSpanTags.isServerError(null, Map.of("http.response.status_code", "500")))
+                .isFalse();
     }
 }

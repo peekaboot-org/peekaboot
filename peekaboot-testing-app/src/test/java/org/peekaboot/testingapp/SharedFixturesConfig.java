@@ -4,6 +4,7 @@ import io.micrometer.tracing.Tracer;
 import org.peekaboot.fixtures.HeldRequestController;
 import org.peekaboot.fixtures.LateSpanController;
 import org.peekaboot.fixtures.MaskingFixtureController;
+import org.peekaboot.fixtures.OutcomeFixtureController;
 import org.peekaboot.fixtures.RequestThreadObservations;
 import org.peekaboot.testingapp.integration.NestedConfigPropertiesFixture;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -33,6 +34,11 @@ public class SharedFixturesConfig {
     @Bean
     MaskingFixtureController maskingFixtureController() {
         return new MaskingFixtureController();
+    }
+
+    @Bean
+    OutcomeFixtureController outcomeFixtureController() {
+        return new OutcomeFixtureController();
     }
 
     @Bean

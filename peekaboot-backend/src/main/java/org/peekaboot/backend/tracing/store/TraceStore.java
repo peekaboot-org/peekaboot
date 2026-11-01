@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.store;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
@@ -27,4 +28,7 @@ public interface TraceStore {
     List<ListedTrace> getTraces(TraceBucket bucket, int limit);
 
     int getTraceCount(TraceBucket bucket);
+
+    /** The Errors and Slow buckets listing {@code traceId}. All lists every trace, so it is never named. */
+    Set<TraceBucket> bucketsOf(String traceId);
 }

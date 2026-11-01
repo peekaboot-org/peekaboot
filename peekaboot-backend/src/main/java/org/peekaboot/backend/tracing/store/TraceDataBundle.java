@@ -17,6 +17,7 @@ import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
+import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 
 /**
  * Bundle of all data collected for a single trace: spans, logs, and request info.
@@ -53,8 +54,8 @@ public class TraceDataBundle {
     private final Map<String, List<String>> redirectsPointingAt = new HashMap<>();
 
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
-    /** Set once the cap drops a real span, never for a folded duplicate; a trimmed trace stays marked. */
-    private boolean truncated = false;
+    /** Real spans the cap evicted. A folded duplicate was never stored, so it never counts. */
+    private int droppedSpans;
     /** Never cleared: a root the span cap evicts later leaves the trace complete. */
     private boolean parentlessSpanStored;
     // Classification signals, maintained span by span in store() so InMemoryTraceStore's
@@ -62,10 +63,14 @@ public class TraceDataBundle {
     // the trace's start and the all-async fallback. A folded-away duplicate carries its
     // survivor's name and tags and lies inside it, so skipping it changes nothing.
     private boolean hasErrorSpan;
+    private boolean hasServerErrorSpan;
     private Window fullWindow = Window.EMPTY;
     private final AsyncMembership asyncMembership = new AsyncMembership();
     private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
+    /** Guarded by {@code logs}, the lock the trim already takes. */
+    private int droppedLogs;
+
     private volatile RequestCompletedEvent request;
 
     /**
@@ -96,8 +101,9 @@ public class TraceDataBundle {
             }
             asyncMembership.refresh(spansById.values());
             if (spansById.size() > maxSpans) {
-                truncated = true;
-                evictOldest(spansById.size() - maxSpans);
+                int excess = spansById.size() - maxSpans;
+                droppedSpans += excess;
+                evictOldest(excess);
             }
         }
     }
@@ -125,6 +131,9 @@ public class TraceDataBundle {
         spansById.put(span.spanId(), span);
         if (span.hasError()) {
             hasErrorSpan = true;
+        }
+        if (HttpSpanTags.isServerError(span.kind(), span.tags())) {
+            hasServerErrorSpan = true;
         }
         if (span.parentId() == null) {
             parentlessSpanStored = true;
@@ -305,9 +314,18 @@ public class TraceDataBundle {
         if (logs.size() > maxLogs) {
             synchronized (logs) {
                 if (logs.size() > maxLogs) {
-                    logs.subList(0, logs.size() - maxLogs).clear();
+                    int excess = logs.size() - maxLogs;
+                    logs.subList(0, excess).clear();
+                    droppedLogs += excess;
                 }
             }
+        }
+    }
+
+    /** Logs the cap trimmed so far; the list itself keeps only the newest. */
+    public int droppedLogs() {
+        synchronized (logs) {
+            return droppedLogs;
         }
     }
 
@@ -324,7 +342,7 @@ public class TraceDataBundle {
 
     /**
      * Everything a reader needs about the spans, taken under one lock so the list, the root,
-     * the completeness, the window and the truncated flag describe the same moment.
+     * the completeness, the window and the dropped count describe the same moment.
      */
     public TraceData snapshot() {
         synchronized (spansLock) {
@@ -342,7 +360,7 @@ public class TraceDataBundle {
                     isComplete(root),
                     spans,
                     asyncMembership.members(),
-                    truncated);
+                    droppedSpans);
         }
     }
 
@@ -401,10 +419,10 @@ public class TraceDataBundle {
         return current == null || candidate.creationOrder() < current.creationOrder() ? candidate : current;
     }
 
-    /** Whether any span stored or log captured so far was an error; maintained as each arrives, no span copy. */
+    /** Whether any span stored failed or answered 5xx, or any log captured was an ERROR; maintained as each arrives, no span copy. */
     boolean hasError() {
         synchronized (spansLock) {
-            return hasErrorSpan || hasErrorLog;
+            return hasErrorSpan || hasServerErrorSpan || hasErrorLog;
         }
     }
 

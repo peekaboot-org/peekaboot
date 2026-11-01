@@ -26,7 +26,7 @@ import org.peekaboot.backend.tracing.event.SpanData;
  * @param spans         in creation order, never null
  * @param asyncSpanIds  the ids of spans belonging to an async subtree - the marked entry spans
  *                      and their descendants. Empty for the overwhelming majority of traces
- * @param truncated     whether the span cap dropped real spans from this trace
+ * @param droppedSpans  real spans the span cap evicted from this trace; a folded duplicate is never one
  */
 public record TraceData(
         String traceId,
@@ -36,4 +36,10 @@ public record TraceData(
         boolean complete,
         List<SpanData> spans,
         Set<String> asyncSpanIds,
-        boolean truncated) {}
+        int droppedSpans) {
+
+    /** Whether the span cap dropped any real span from this trace. */
+    public boolean truncated() {
+        return droppedSpans > 0;
+    }
+}

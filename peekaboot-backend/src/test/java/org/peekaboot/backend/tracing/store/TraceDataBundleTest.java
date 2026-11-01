@@ -51,6 +51,7 @@ class TraceDataBundleTest {
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
         assertThat(bundle.snapshot().truncated()).isTrue();
+        assertThat(bundle.snapshot().droppedSpans()).isEqualTo(2);
     }
 
     @Test
@@ -160,6 +161,7 @@ class TraceDataBundleTest {
         assertThat(bundle.snapshot().truncated())
                 .as("ten raw arrivals must not truncate a trace with only five real spans")
                 .isFalse();
+        assertThat(bundle.snapshot().droppedSpans()).isZero();
     }
 
     @Test
@@ -182,6 +184,7 @@ class TraceDataBundleTest {
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
         assertThat(bundle.snapshot().truncated()).isTrue();
+        assertThat(bundle.snapshot().droppedSpans()).isEqualTo(pairs - cap);
         assertThat(bundle.parentRedirectCountForTesting())
                 .as("the redirect table must be pruned as spans are evicted, not grow with "
                         + "every duplicate ever folded over the trace's whole life")
@@ -738,6 +741,17 @@ class TraceDataBundleTest {
         }
 
         assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+    }
+
+    /** Every log the cap trims is counted, so a reader can tell a quiet request from a trimmed one. */
+    @Test
+    void countsTheLogsTheCapDropped() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", NO_CAP, 3);
+        for (int i = 1; i <= 5; i++) {
+            bundle.addLog(log("trace1").saying("log" + i).build());
+        }
+
+        assertThat(bundle.droppedLogs()).isEqualTo(2);
     }
 
     /**

@@ -226,7 +226,7 @@ class TraceTreeMapperTest {
                 .order(4)
                 .build();
         var rootEvicted = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), null, true, List.of(lateOne, lateTwo), Set.of(), true);
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), null, true, List.of(lateOne, lateTwo), Set.of(), 1);
 
         TraceTree result = mapper.map(rootEvicted);
 
@@ -838,7 +838,7 @@ class TraceTreeMapperTest {
 
     @Test
     void mapsAnEmptyTraceToARootlessTree() {
-        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), false);
+        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), 0);
 
         TraceTree result = mapper.map(traceData);
 
@@ -870,7 +870,7 @@ class TraceTreeMapperTest {
                 .at(0, 100)
                 .build();
         var traceData = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, true, List.of(listed), Set.of(), false);
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, true, List.of(listed), Set.of(), 0);
 
         TraceTree result = mapper.map(traceData);
 
@@ -919,7 +919,7 @@ class TraceTreeMapperTest {
                 .at(0, 100)
                 .build();
         var truncated = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), singleSpan, true, List.of(singleSpan), Set.of(), true);
+                "trace1", Instant.EPOCH, Duration.ofMillis(100), singleSpan, true, List.of(singleSpan), Set.of(), 1);
 
         TraceTree result = mapper.map(truncated);
 
@@ -928,7 +928,7 @@ class TraceTreeMapperTest {
 
     @Test
     void carriesTheTruncatedFlagEvenForAnEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), true);
+        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), 1);
 
         TraceTree result = mapper.map(traceData);
 

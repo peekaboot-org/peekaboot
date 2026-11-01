@@ -1349,7 +1349,7 @@ output through `TraceTree.withSpans`/`withSummary`/`withDetails` and `SpanNode.w
 so a stage names only the components it adds.
 
 `TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
-creation order, the root span, the `complete` flag, the trace window and the `truncated` flag.
+creation order, the root span, the `complete` flag, the trace window and the dropped span count.
 The root is chosen there and nowhere else: the earliest-created stored span without a parent,
 else the earliest-created stored span continuing a remote caller's trace (`SpanData.remoteParent`,
 its parent not stored), else none. Spans export as they end, children first, so a trace with
@@ -1613,7 +1613,7 @@ TraceData
 ├── rootSpan: SpanData       # chosen once by the bundle; null while in flight
 ├── complete: boolean        # sticky once a parentless span was stored
 ├── spans: List<SpanData>    # creation order
-└── truncated: boolean
+└── droppedSpans: int        # real spans the cap evicted; truncated() derives from it
 
 SpanData
 ├── traceId, spanId, parentId

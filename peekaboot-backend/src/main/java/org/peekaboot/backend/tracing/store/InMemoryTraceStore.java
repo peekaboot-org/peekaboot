@@ -4,11 +4,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -21,6 +23,8 @@ import org.peekaboot.backend.tracing.event.SpanData;
  * span export order, so the listing can place rows that arrive after their trace did.
  */
 public class InMemoryTraceStore implements TraceStore {
+
+    private static final List<TraceBucket> QUALIFYING_BUCKETS = List.of(TraceBucket.ERRORS, TraceBucket.SLOW);
 
     private final int maxSpansPerTrace;
     private final long slowTraceThresholdMs;
@@ -122,6 +126,17 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public int getTraceCount(TraceBucket bucket) {
         return buckets.get(bucket).size();
+    }
+
+    @Override
+    public Set<TraceBucket> bucketsOf(String traceId) {
+        Set<TraceBucket> listing = EnumSet.noneOf(TraceBucket.class);
+        for (TraceBucket bucket : QUALIFYING_BUCKETS) {
+            if (buckets.get(bucket).containsKey(traceId)) {
+                listing.add(bucket);
+            }
+        }
+        return listing;
     }
 
     private List<ListedTrace> newestFirst(Map<String, ListedTrace> bucket, int limit) {

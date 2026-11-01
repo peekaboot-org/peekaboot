@@ -7,11 +7,14 @@ import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
+import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -490,6 +493,66 @@ class InMemoryTraceStoreTest {
         storage.addLog(log("t1").at("error").saying("boom").build());
 
         assertThat(listedTraceIds(storage, TraceBucket.ERRORS, 10)).containsExactly("t1");
+    }
+
+    /** A 5xx answer fails the request whether or not the handler threw. */
+    @Test
+    void aServerSpanAnswering5xxListsItsTraceInErrors() {
+        storage.addSpan(span("root")
+                .in("t1")
+                .kind(Span.Kind.SERVER)
+                .tag("http.response.status_code", "503")
+                .build());
+
+        assertThat(listedTraceIds(storage, TraceBucket.ERRORS, 10)).containsExactly("t1");
+    }
+
+    /** A server span below the root answered this application's own call, and its 5xx fails the trace too. */
+    @ParameterizedTest
+    @CsvSource({"SERVER, true", "CLIENT, false"})
+    void anInnerSpansFiveHundredFailsTheTraceOnlyFromAServerSpan(Span.Kind kind, boolean fails) {
+        storage.addSpan(span("inner")
+                .in("t1")
+                .parent("root")
+                .kind(kind)
+                .tag("http.response.status_code", "503")
+                .build());
+        storage.addSpan(span("root")
+                .in("t1")
+                .kind(Span.Kind.SERVER)
+                .tag("http.response.status_code", "200")
+                .build());
+
+        assertThat(storage.getTraceCount(TraceBucket.ERRORS)).isEqualTo(fails ? 1 : 0);
+    }
+
+    /** A 4xx is the caller's mistake, and a client span's 5xx a failure the application may have handled. */
+    @ParameterizedTest
+    @CsvSource({"SERVER, 404", "CLIENT, 503"})
+    void otherAnswersStayOutOfErrors(Span.Kind kind, String status) {
+        storage.addSpan(span("s")
+                .in("t1")
+                .kind(kind)
+                .tag("http.response.status_code", status)
+                .build());
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).isEmpty();
+    }
+
+    /** All lists every trace, so naming it says nothing about this one. */
+    @Test
+    void bucketsOfNamesErrorsAndSlowOnly() {
+        storage = storeWithSlowThreshold(100);
+        storage.addSpan(span("root")
+                .in("both")
+                .at(0, 150)
+                .exception("java.lang.IllegalStateException", "boom")
+                .build());
+        storage.addSpan(span("root").in("plain").at(0, 10).build());
+
+        assertThat(storage.bucketsOf("both")).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
+        assertThat(storage.bucketsOf("plain")).isEmpty();
+        assertThat(storage.bucketsOf("unknown")).isEmpty();
     }
 
     private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {

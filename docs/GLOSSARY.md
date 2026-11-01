@@ -120,7 +120,9 @@ Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapp
 `TraceBucket {ALL, ERRORS, SLOW}`, the three independent maps inside `InMemoryTraceStore` and
 the `bucket` query parameter of the listing endpoint. Membership is decided on write. Errors is
 add-only; Slow follows the synchronous window both ways, since a late async entry can lower it.
-A trace stays in Errors or Slow after ageing out of All. Definitions and thresholds:
+A trace stays in Errors or Slow after ageing out of All. A trace enters Errors on a failed span,
+a server span's 5xx or an ERROR log. `TraceStore.bucketsOf` names the Errors and Slow buckets
+listing a trace. Definitions and thresholds:
 [the three buckets](https://www.peekaboot.org/docs/traces/#the-three-buckets).
 
 ## Where the code and the UI use different words
