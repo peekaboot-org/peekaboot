@@ -10,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
+import org.peekaboot.backend.controller.TraceController;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SqlStatement;
@@ -173,6 +174,7 @@ class PeekabootAutoConfigurationTest {
             // Proves the explicit registrations actually wire up the whole
             // controller/service/mapper graph, not just the properties beans.
             assertThat(context).hasSingleBean(PeekabootController.class);
+            assertThat(context).hasSingleBean(TraceController.class);
         });
     }
 
@@ -195,11 +197,28 @@ class PeekabootAutoConfigurationTest {
                 });
     }
 
+    /**
+     * Component scanning names a host app's own {@code TraceController} {@code traceController}. A
+     * Peekaboot bean of another type under that name would stop the context from starting.
+     */
+    @Test
+    void startsBesideAHostBeanNamedTraceController() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .withUserConfiguration(HostTraceControllerConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("traceController")).isInstanceOf(HostTraceController.class);
+                    assertThat(context).hasSingleBean(TraceController.class);
+                });
+    }
+
     @Test
     void doesNotRegisterBeansWhenPeekabootDisabled() {
         contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(PeekabootController.class);
+            assertThat(context).doesNotHaveBean(TraceController.class);
             assertThat(context).doesNotHaveBean(PeekabootProperties.class);
         });
     }
@@ -215,6 +234,7 @@ class PeekabootAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
+                    assertThat(context).doesNotHaveBean(TraceController.class);
                     assertThat(context).doesNotHaveBean(PeekabootProperties.class);
                 });
     }
@@ -237,6 +257,7 @@ class PeekabootAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
+                    assertThat(context).doesNotHaveBean(TraceController.class);
                     assertThat(context).doesNotHaveBean(PeekabootProperties.class);
                 });
     }
@@ -249,6 +270,7 @@ class PeekabootAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
+                    assertThat(context).doesNotHaveBean(TraceController.class);
                 });
     }
 
@@ -358,6 +380,17 @@ class PeekabootAutoConfigurationTest {
             return METRICS_SERVICE;
         }
     }
+
+    @Configuration(proxyBeanMethods = false)
+    static class HostTraceControllerConfig {
+
+        @Bean
+        HostTraceController traceController() {
+            return new HostTraceController();
+        }
+    }
+
+    static class HostTraceController {}
 
     private static WebApplicationContextRunner tracingRunner() {
         return new WebApplicationContextRunner()

@@ -188,7 +188,7 @@ Everything runs inside the host application's own process and on its own event b
                                        insertion-ordered maps, the All/Errors/Slow buckets
                                                                    │
                                                                    ▼
-                                       PeekabootController: /peekaboot/api/*
+                                       PeekabootController, TraceController: /peekaboot/api/*
 ```
 
 ## peekaboot-backend
@@ -200,7 +200,7 @@ org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController: /peekaboot/api/* (actuator data, metrics, traces, features)
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
