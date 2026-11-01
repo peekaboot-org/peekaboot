@@ -188,6 +188,18 @@ class OrderTraceCaptureIT extends TestingAppITBase {
                             .valueStream()
                             .map(issue -> issue.path("type").asString()))
                     .contains("VERY_SLOW");
+            JsonNode veryslow = priceLines
+                    .path("issues")
+                    .valueStream()
+                    .filter(issue -> "VERY_SLOW".equals(issue.path("type").asString()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(veryslow.path("spanId").asString()).isEqualTo(SpanTree.spanId(priceLines));
+            assertThat(veryslow.path("value").asLong())
+                    .isEqualTo(priceLines.path("selfMs").asLong());
+            assertThat(veryslow.path("threshold").asLong()).isEqualTo(500);
+            assertThat(veryslow.path("unit").asString()).isEqualTo("ms");
+            assertThat(veryslow.path("message").asString()).endsWith("ms very-slow-span threshold.");
         } finally {
             OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
         }

@@ -16,6 +16,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
+import org.peekaboot.backend.domain.trace.IssueUnit;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
@@ -291,14 +292,68 @@ class IssueDetectorTest {
         return Stream.of(
                 Arguments.of(
                         Named.of(
+                                "a span at the slow threshold",
+                                node("s").durationMs(100).build()),
+                        new SpanIssue(
+                                IssueType.SLOW,
+                                IssueSeverity.WARNING,
+                                "s",
+                                100,
+                                100,
+                                IssueUnit.MS,
+                                "This span spent 100 ms in its own work, at or above the 100 ms slow-span threshold.")),
+                Arguments.of(
+                        Named.of(
+                                "a span at the very-slow threshold",
+                                node("v").durationMs(500).build()),
+                        new SpanIssue(
+                                IssueType.VERY_SLOW,
+                                IssueSeverity.ERROR,
+                                "v",
+                                500,
+                                500,
+                                IssueUnit.MS,
+                                "This span spent 500 ms in its own work, at or above the 500 ms very-slow-span threshold.")),
+                Arguments.of(
+                        Named.of(
+                                "a query at the slow-query threshold",
+                                node("q")
+                                        .kind(Span.Kind.CLIENT)
+                                        .tags(Map.of("db.system", "h2"))
+                                        .durationMs(50)
+                                        .build()),
+                        new SpanIssue(
+                                IssueType.SLOW_QUERY,
+                                IssueSeverity.WARNING,
+                                "q",
+                                50,
+                                50,
+                                IssueUnit.MS,
+                                "This query took 50 ms, at or above the 50 ms slow-query threshold.")),
+                Arguments.of(
+                        Named.of(
                                 "150ms, between the slow and very-slow thresholds",
                                 node("span1").durationMs(150).build()),
-                        new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING)),
+                        new SpanIssue(
+                                IssueType.SLOW,
+                                IssueSeverity.WARNING,
+                                "span1",
+                                150,
+                                100,
+                                IssueUnit.MS,
+                                "This span spent 150 ms in its own work, at or above the 100 ms slow-span threshold.")),
                 Arguments.of(
                         Named.of(
                                 "600ms, past the very-slow threshold",
                                 node("span1").durationMs(600).build()),
-                        new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR)),
+                        new SpanIssue(
+                                IssueType.VERY_SLOW,
+                                IssueSeverity.ERROR,
+                                "span1",
+                                600,
+                                500,
+                                IssueUnit.MS,
+                                "This span spent 600 ms in its own work, at or above the 500 ms very-slow-span threshold.")),
                 Arguments.of(
                         Named.of(
                                 "an 80ms query, past the slow-query threshold",
@@ -307,6 +362,54 @@ class IssueDetectorTest {
                                         .durationMs(80)
                                         .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"))
                                         .build()),
-                        new SpanIssue(IssueType.SLOW_QUERY, IssueSeverity.WARNING)));
+                        new SpanIssue(
+                                IssueType.SLOW_QUERY,
+                                IssueSeverity.WARNING,
+                                "span1",
+                                80,
+                                50,
+                                IssueUnit.MS,
+                                "This query took 80 ms, at or above the 50 ms slow-query threshold.")),
+                Arguments.of(
+                        Named.of(
+                                "a parent with 150ms of its own work in 1080ms",
+                                node("p").durationMs(1080).selfMs(150).build()),
+                        new SpanIssue(
+                                IssueType.SLOW,
+                                IssueSeverity.WARNING,
+                                "p",
+                                150,
+                                100,
+                                IssueUnit.MS,
+                                "This span spent 150 ms in its own work, at or above the 100 ms slow-span threshold.")),
+                Arguments.of(
+                        Named.of(
+                                "a parent with 600ms of its own work in 1080ms",
+                                node("p").durationMs(1080).selfMs(600).build()),
+                        new SpanIssue(
+                                IssueType.VERY_SLOW,
+                                IssueSeverity.ERROR,
+                                "p",
+                                600,
+                                500,
+                                IssueUnit.MS,
+                                "This span spent 600 ms in its own work, at or above the 500 ms very-slow-span threshold.")),
+                Arguments.of(
+                        Named.of(
+                                "an 80ms query with no time of its own",
+                                node("q")
+                                        .kind(Span.Kind.CLIENT)
+                                        .tags(Map.of("db.system", "h2"))
+                                        .durationMs(80)
+                                        .selfMs(0)
+                                        .build()),
+                        new SpanIssue(
+                                IssueType.SLOW_QUERY,
+                                IssueSeverity.WARNING,
+                                "q",
+                                80,
+                                50,
+                                IssueUnit.MS,
+                                "This query took 80 ms, at or above the 50 ms slow-query threshold.")));
     }
 }

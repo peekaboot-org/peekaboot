@@ -33,8 +33,8 @@ class TraceWireFormatTest {
     @Test
     void issueSeveritySerialisesAsTheLowerCaseWord() {
         String json = PeekabootJson.MAPPER.writeValueAsString(List.of(
-                new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING),
-                new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR)));
+                new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING, "s1", 150, 100, IssueUnit.MS, "Slow."),
+                new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR, "s2", 600, 500, IssueUnit.MS, "Very slow.")));
 
         assertThat(json).contains("\"severity\":\"warning\"").contains("\"severity\":\"error\"");
     }

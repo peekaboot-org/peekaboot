@@ -106,9 +106,9 @@ class or message. An error-level log alone does not: it only puts the trace in t
 bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Issue
-`SpanIssue(IssueType type, IssueSeverity severity)`, held in `SpanNode.issues`.
-`IssueType`'s constants are `SLOW`, `VERY_SLOW` and `SLOW_QUERY`; `IssueSeverity`
-has two and serialises lowercase through `@JsonValue`. The UI colours a span's duration by
+`SpanIssue(type, severity, spanId, value, threshold, unit, message)`, held in `SpanNode.issues`.
+`IssueType`'s constants are `SLOW`, `VERY_SLOW` and `SLOW_QUERY`; `IssueSeverity` has two, and
+it and `IssueUnit` serialise lowercase through `@JsonValue`. The UI colours a span's duration by
 `severity` alone (`severity.js`'s `issueSeverity`), never by `type`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
@@ -141,6 +141,7 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | `TraceTree.truncated` | **TRUNCATED** badge | Set when the per-trace span cap dropped a real span. |
 | `HttpRequest.Controller.className` | `class` on the wire | Renamed by `@JsonProperty("class")`. |
 | `IssueSeverity.WARNING`, `.ERROR` | `warning`, `error` | Lowercased by `@JsonValue`. |
+| `IssueUnit.MS` | `ms` | Lowercased by `@JsonValue`. |
 | `RootActionType` constant names | Title-case labels and icons | Held only in `shared/root-actions.js`. |
 | tab module id `scheduled-tasks` | payload key `scheduledTasks` | Two spellings of the same tab, one in the hash, one in `ActuatorInsightsResponse`. |
 
