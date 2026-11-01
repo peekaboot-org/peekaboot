@@ -1504,9 +1504,16 @@ async row from its entry span's export, since that is when the row appears. Plac
 trigger instead would bury a task that outlived its request by minutes under every trace that
 arrived meanwhile, off the first page exactly while the user waits for it. To compare the two,
 each bucket stamps a trace on entry with the newest `creationOrder` the store has received
-(`ListedTrace.listedAt`), and `RowSources` sorts rows by that key, with an async row taking the
-later of its entry's `creationOrder` and its trace's stamp. The sort is stable, so a trace that
-entered a bucket after its task ended still lists above its own async row, as it always did.
+(`ListedTrace.listedAt`) and with a store-wide entry number (`ListedTrace.sequence`). A row's
+`RowPosition` is that stamp, for an async row the later of its entry's `creationOrder` and its
+trace's stamp, then the entry number, then the trace's own row ahead of its async rows in entry
+order. That order is total, and no part of a position changes while the row stays in its bucket,
+so a trace that entered a bucket after its task ended still lists above its own async row, and the
+listing's `cursor` can name a position. A page lists what sorts after the cursor, so no older row
+is listed twice or skipped while rows come and go, and a trace that enters a bucket again moves to
+its top. A request's own row appears when its root ends, at the position its first span or log
+line gave the trace, so it can list below a page already served. A cursor means something only to
+the running app that issued it, since the counters behind it restart with the application context.
 
 Ancestry resolves parents through `resolve(...)`, the redirect table span deduplication leaves
 behind, exactly as `rootOf` does. A span hanging off a deduplicated span names a parent id that is no
@@ -1647,6 +1654,7 @@ What the API serves:
 TraceListResponse                # GET /peekaboot/api/traces
 ├── traces: List<TraceResource>
 ├── bucketCounts, filteredBucketCounts
+├── next                         # the cursor for the following page; null on the last page
 
 TraceResource                    # GET /peekaboot/api/traces/{traceId}, and one listing row
 ├── summary: TraceSummary

@@ -54,6 +54,10 @@ class HostJacksonSettingsIT extends TestingAppITBase {
 
         assertThat(listing.has("bucketCounts")).isTrue();
         assertThat(listing.has("bucket_counts")).isFalse();
+        assertThat(listing.has("next"))
+                .as("next is null, not absent, under the host's non_null")
+                .isTrue();
+        assertThat(listing.path("next").isNull()).isTrue();
         JsonNode row = TraceApiClient.rowOf(listing, traceId);
         assertThat(row.has("data")).as("data is null, not absent").isTrue();
         assertThat(row.path("data").isNull()).isTrue();

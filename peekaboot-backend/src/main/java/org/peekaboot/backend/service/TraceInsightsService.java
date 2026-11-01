@@ -19,7 +19,7 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 public class TraceInsightsService {
 
     private static final TraceListResponse EMPTY_RESPONSE =
-            new TraceListResponse(List.of(), BucketCounts.empty(), null);
+            new TraceListResponse(List.of(), BucketCounts.empty(), null, null);
 
     @Nullable
     private final TraceStore traceStore;
@@ -45,11 +45,16 @@ public class TraceInsightsService {
     }
 
     /**
-     * One bucket's rows that match every filter the request names, newest first, at most {@code limit}.
-     * Every parameter is read and checked before the store is consulted, so a bad one is refused even
-     * while tracing is off. What each filter matches is on {@link TraceFilter}. {@code view} names a
-     * {@link org.peekaboot.backend.domain.trace.TraceView}, the summary alone where absent;
+     * One page of a bucket's rows that match every filter the request names, newest first, at most
+     * {@code limit}. Every parameter is read and checked before the store is consulted, so a bad one is
+     * refused even while tracing is off. What each filter matches is on {@link TraceFilter}. {@code view}
+     * names a {@link org.peekaboot.backend.domain.trace.TraceView}, the summary alone where absent;
      * {@code limit} is 1 to 10000, and 100 where absent.
+     *
+     * <p>{@code next} names the page's last row while older matching rows exist, and is null on the
+     * last page. The page after it lists the rows that sort after that row's {@link RowPosition}, as
+     * they stand then, so no older row is listed twice or skipped. A request whose root ended meanwhile
+     * lists where its trace entered the bucket, which can be below that row.
      */
     public TraceListResponse listTraces(TraceListParameters parameters) {
         TraceListQuery query = TraceListQuery.of(parameters);
@@ -62,7 +67,14 @@ public class TraceInsightsService {
         // filtered on each row's listing facts; only the returned page is mapped (and masked), plus
         // the async rows a verdict filter has to read
         List<RowSource> matches = RowSources.matching(traceStore, query.bucket(), filter, resources::summaryOf);
-        List<RowSource> page = matches.stream().limit(query.limit()).toList();
+        RowPosition after = query.after();
+        List<RowSource> older = after == null
+                ? matches
+                : matches.stream()
+                        .filter(row -> row.position().listsAfter(after))
+                        .toList();
+        List<RowSource> page = older.stream().limit(query.limit()).toList();
+        String next = older.size() > page.size() ? Cursors.ofRow(page.getLast().position()) : null;
 
         BucketCounts bucketCounts = new BucketCounts(
                 traceStore.getTraceCount(TraceBucket.ALL),
@@ -78,7 +90,8 @@ public class TraceInsightsService {
                     countMatchingTraces(TraceBucket.SLOW, query.bucket(), matches, filter, resources));
         }
 
-        return new TraceListResponse(page.stream().map(resources::of).toList(), bucketCounts, filteredBucketCounts);
+        return new TraceListResponse(
+                page.stream().map(resources::of).toList(), bucketCounts, filteredBucketCounts, next);
     }
 
     /**

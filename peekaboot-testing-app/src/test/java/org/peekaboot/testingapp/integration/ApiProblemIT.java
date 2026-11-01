@@ -27,6 +27,8 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/traces?limit=10001 | limit",
                 "/peekaboot/api/traces?limit=1&limit=2 | limit",
                 "/peekaboot/api/traces?view=sumary | view",
+                "/peekaboot/api/traces?cursor=x | cursor",
+                "/peekaboot/api/traces?cursor=bC43 | cursor",
                 "/peekaboot/api/traces?statusCode=abc | statusCode",
                 "/peekaboot/api/traces?statusCode=600 | statusCode",
                 "/peekaboot/api/traces?outcome=FAILED | outcome",

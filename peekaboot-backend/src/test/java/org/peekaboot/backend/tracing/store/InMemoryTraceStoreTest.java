@@ -10,6 +10,7 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -327,6 +328,24 @@ class InMemoryTraceStoreTest {
         assertThat(listedTraceIds(storage, TraceBucket.ALL, 10)).containsExactly("t2", "t1");
     }
 
+    /** Two traces can enter a bucket at one listedAt; their entries never share a number. */
+    @Test
+    void numbersEveryBucketEntryApart() {
+        storage.addLog(log("t1").build());
+        storage.addLog(log("t2").build());
+        storage.addSpan(errorSpan("t3"));
+
+        List<ListedTrace> all = storage.getTraces(TraceBucket.ALL, 10);
+        ListedTrace errorsEntry = storage.getTraces(TraceBucket.ERRORS, 10).getFirst();
+
+        assertThat(all)
+                .extracting(ListedTrace::sequence)
+                .isSortedAccordingTo(Comparator.reverseOrder())
+                .doesNotHaveDuplicates();
+        assertThat(all.get(1).listedAt()).isEqualTo(all.get(2).listedAt());
+        assertThat(errorsEntry.sequence()).isGreaterThan(all.getFirst().sequence());
+    }
+
     @Test
     void getTracesAllBucketRespectsLimit() {
         for (int i = 0; i < 5; i++) {
@@ -415,6 +434,21 @@ class InMemoryTraceStoreTest {
         assertThat(bundle.snapshot().spans()).hasSize(1); // original span still there - no fresh bundle
         assertThat(bundle.capturedLogs().logs()).hasSize(1);
         assertThat(store.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
+    }
+
+    /** All evicted the trace and Errors kept it; its next event lists it in All again, as a new entry. */
+    @Test
+    void aTraceEnteringABucketAgainGetsANewNumber() {
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxTraces(1));
+        store.addSpan(errorSpan("t1"));
+        store.addSpan(spanIn("t2", "s2"));
+        long kept = store.getTraces(TraceBucket.ERRORS, 1).getFirst().sequence();
+
+        store.addLog(log("t1").build());
+
+        ListedTrace again = store.getTraces(TraceBucket.ALL, 1).getFirst();
+        assertThat(again.bundle().traceId()).isEqualTo("t1");
+        assertThat(again.sequence()).isGreaterThan(kept);
     }
 
     @Test

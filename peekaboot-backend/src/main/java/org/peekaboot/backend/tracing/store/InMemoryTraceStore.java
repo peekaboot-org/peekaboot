@@ -31,6 +31,7 @@ public class InMemoryTraceStore implements TraceStore {
     private final int maxLogsPerTrace;
     private final Map<TraceBucket, Map<String, ListedTrace>> buckets = new EnumMap<>(TraceBucket.class);
     private final AtomicLong newestSpanOrder = new AtomicLong();
+    private final AtomicLong listingSequence = new AtomicLong();
 
     public InMemoryTraceStore(PeekabootTracingProperties properties) {
         this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
@@ -102,7 +103,7 @@ public class InMemoryTraceStore implements TraceStore {
     }
 
     private ListedTrace listedNow(TraceDataBundle bundle) {
-        return new ListedTrace(bundle, newestSpanOrder.get());
+        return new ListedTrace(bundle, newestSpanOrder.get(), listingSequence.incrementAndGet());
     }
 
     @Override

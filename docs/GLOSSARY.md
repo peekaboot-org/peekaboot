@@ -227,7 +227,7 @@ rows and the overlay header show: `traceId`, `startTime`, `durationMs`, `complet
 `subtree`.
 `counts` is `spans`, `queries(count, totalDurationMs)`, `logs(count, errorCount, warnCount)`,
 `droppedSpans` and `droppedLogs`. `route` is the matched pattern, null where no handler matched.
-The listing is a `TraceListResponse(traces, bucketCounts, filteredBucketCounts)`.
+The listing is a `TraceListResponse(traces, bucketCounts, filteredBucketCounts, next)`.
 
 `cause` is a `TraceSummary.Cause(type, message, applicationFrame, spanId)` from `TraceCauses`.
 The deepest failing span with a stack trace wins, then the first ERROR log with one, then the
@@ -245,6 +245,15 @@ the whole store and `filteredBucketCounts` for the traces matching every filter 
 names. The second is null only when the request filtered nothing at all, which
 a request naming no type does not, since it still gets the default view's filter. The pair is
 what lets the bucket chips show `filtered / total`.
+
+### Cursor
+The opaque `cursor` a listing endpoint reads and hands out as `next` (`Cursors`, base64url
+text). A trace listing cursor names the last served row's `RowPosition`; the next page lists what
+sorts after it as the store stands then, so no older row repeats or goes missing. A request whose
+root ends while a client pages lists where its trace entered the bucket, which can be below a page
+already served. A cursor carries no filter: sent with other filters, it pages through what those
+match below the same position. It means something only to the running app that issued it, since
+its counters restart with the application context.
 
 ### HTTP Exchange
 `HttpExchange(HttpRequest request, HttpResponse response)`, built from a `RequestCompletedEvent`

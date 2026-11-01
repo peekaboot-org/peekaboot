@@ -23,19 +23,23 @@ import org.peekaboot.backend.tracing.store.TraceStore;
  */
 final class RowSources {
 
-    /** Stable, because an async row clamped to its trace's listedAt ties with it and must list below it. */
+    /** The listing order, which {@link RowPosition#NEWEST_FIRST} defines. */
     private static final Comparator<RowSource> NEWEST_FIRST =
-            Comparator.comparingLong(RowSource::listedAt).reversed();
+            Comparator.comparing(RowSource::position, RowPosition.NEWEST_FIRST);
 
     private RowSources() {}
 
     /**
      * One listing row: the bundle it reads from, the span the row is rooted at, whether that span
-     * roots a subtree of the trace rather than the trace itself, when the row appeared in the
-     * bucket, in span export order, and the bundle's listing facts as the pass read them.
+     * roots a subtree of the trace rather than the trace itself, where the row sits in the
+     * listing, and the bundle's listing facts as the pass read them.
      */
     record RowSource(
-            TraceDataBundle bundle, @Nullable SpanData rootSpan, boolean subtree, long listedAt, ListingRoots roots) {
+            TraceDataBundle bundle,
+            @Nullable SpanData rootSpan,
+            boolean subtree,
+            RowPosition position,
+            ListingRoots roots) {
 
         /** The span an async row is rooted at; null for a whole-trace row. */
         @Nullable
@@ -100,7 +104,7 @@ final class RowSources {
         SpanData root = roots.root();
         List<RowSource> rows = new ArrayList<>();
         if (!roots.fragment()) {
-            rows.add(new RowSource(bundle, root, false, listed.listedAt(), roots));
+            rows.add(new RowSource(bundle, root, false, RowPosition.ofTrace(listed), roots));
         }
         for (SpanData entry : roots.asyncEntries()) {
             // a purely async bundle's entry span is its trace's own row, added above as a whole
@@ -110,7 +114,7 @@ final class RowSources {
             if (root != null && entry.spanId().equals(root.spanId())) {
                 continue;
             }
-            rows.add(new RowSource(bundle, entry, true, Math.max(listed.listedAt(), entry.creationOrder()), roots));
+            rows.add(new RowSource(bundle, entry, true, RowPosition.ofAsyncEntry(listed, entry), roots));
         }
         return rows;
     }

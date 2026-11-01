@@ -78,7 +78,7 @@ class TraceControllerTest {
 
     /** Spring's record binding falls back to a same-named request header, which would put the listing in a client's or proxy's hands. */
     @ParameterizedTest
-    @CsvSource({"Limit, 0", "View, full", "bucket, eror", "statusCode, 500"})
+    @CsvSource({"Limit, 0", "View, full", "bucket, eror", "statusCode, 500", "Cursor, x"})
     void ignoresARequestHeaderNamedLikeAParameter(String header, String value) throws Exception {
         store.addSpan(span("failed-root")
                 .in("failed")
@@ -100,6 +100,15 @@ class TraceControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.parameter").value("limit"))
                 .andExpect(jsonPath("$.detail").value("limit was sent 3 times. Send it once."));
+    }
+
+    /** Two cursors that each name a page still name no one page between them. */
+    @Test
+    void refusesARepeatedCursor() throws Exception {
+        mvc.perform(get("/peekaboot/api/traces").param("cursor", "dC4xLjEuLTE", "dC4yLjIuLTE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.parameter").value("cursor"))
+                .andExpect(jsonPath("$.detail").value("cursor was sent 2 times. Send it once."));
     }
 
     /** Joined with a comma, a repeated route or path would read as one value that names neither. */

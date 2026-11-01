@@ -2,6 +2,7 @@ package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
@@ -625,6 +626,171 @@ class TraceInsightsServiceTest {
                 .isInstanceOfSatisfying(
                         ApiProblemException.class,
                         e -> assertThat(e.problem().parameter()).isEqualTo("limit"));
+    }
+
+    @Test
+    void refusesAnUnknownCursorWhileTracingIsOff() {
+        assertThatThrownBy(
+                        () -> newService(null).listTraces(listing().cursor("x").build()))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().parameter()).isEqualTo("cursor"));
+    }
+
+    @Test
+    void pagesNewestFirstUntilNoNextIsLeft() {
+        for (int i = 1; i <= 5; i++) {
+            addTrace("t" + i, 10, false);
+        }
+
+        TraceListResponse first = service.listTraces(listing().limit(2).build());
+        TraceListResponse second =
+                service.listTraces(listing().limit(2).cursor(first.next()).build());
+        TraceListResponse third =
+                service.listTraces(listing().limit(2).cursor(second.next()).build());
+
+        assertThat(idsOf(first)).containsExactly("t5", "t4");
+        assertThat(idsOf(second)).containsExactly("t3", "t2");
+        assertThat(idsOf(third)).containsExactly("t1");
+        assertThat(third.next()).isNull();
+    }
+
+    /** A page that ends at the last row says so, instead of handing out a cursor to an empty page. */
+    @Test
+    void aFullLastPageHasNoNext() {
+        addTrace("t1", 10, false);
+        addTrace("t2", 10, false);
+
+        assertThat(service.listTraces(listing().limit(2).build()).next()).isNull();
+    }
+
+    @Test
+    void aTraceArrivingBetweenPagesListsAboveTheCursor() {
+        for (int i = 1; i <= 5; i++) {
+            addTrace("t" + i, 10, false);
+        }
+        TraceListResponse first = service.listTraces(listing().limit(2).build());
+
+        addTrace("t6", 10, false);
+        TraceListResponse second =
+                service.listTraces(listing().limit(2).cursor(first.next()).build());
+        TraceListResponse third =
+                service.listTraces(listing().limit(2).cursor(second.next()).build());
+
+        assertThat(idsOf(second)).containsExactly("t3", "t2");
+        assertThat(idsOf(third)).containsExactly("t1");
+        assertThat(idsOf(service.listTraces(listing().limit(2).build()))).containsExactly("t6", "t5");
+    }
+
+    /** The cursor names a position, so the row it was taken from may leave the store meanwhile. */
+    @Test
+    void aCursorOutlivesTheRowItNames() {
+        for (int i = 1; i <= 5; i++) {
+            addTrace("t" + i, 10, false);
+        }
+        TraceListResponse first = service.listTraces(listing().limit(2).build());
+
+        store.discard("t4");
+
+        assertThat(idsOf(service.listTraces(
+                        listing().limit(2).cursor(first.next()).build())))
+                .containsExactly("t3", "t2");
+    }
+
+    /** Log-only traces enter All before any span arrives, so all three share one listedAt. */
+    @Test
+    void tracesListedAtOneMomentPageOneByOne() {
+        store.addLog(log("a").build());
+        store.addLog(log("b").build());
+        store.addLog(log("c").build());
+
+        assertThat(pagedOneByOne(listing()))
+                .extracting(row -> row.summary().traceId())
+                .containsExactly("c", "b", "a");
+    }
+
+    /**
+     * An ERROR log after both tasks ended puts the trace into Errors with a stamp later than either
+     * entry span, so all three rows share it and only the entry order sets them apart.
+     */
+    @Test
+    void aTraceAndItsAsyncRowsPageInTheirOwnOrder() {
+        addTraceWithTwoAsyncTasks("t1", 50);
+        store.addLog(log("t1")
+                .inSpan("span-t1")
+                .at("ERROR")
+                .saying("failed after the tasks ended")
+                .build());
+
+        assertThat(pagedOneByOne(listing().bucket("errors").rootActionType("*")))
+                .extracting(row -> row.summary().subtree() == null
+                        ? "trace"
+                        : row.summary().subtree().rootSpanId())
+                .containsExactly("trace", "async-a-t1", "async-b-t1");
+    }
+
+    /**
+     * A request's row appears when its root ends, at the position its trace took on entering the bucket
+     * with its first span. So it can list below a page already served.
+     */
+    @Test
+    void aRequestWhoseRootEndsLateListsWhereItsTraceEntered() {
+        store.addSpan(span("span-a-child")
+                .in("a")
+                .parent("span-a")
+                .kind(Span.Kind.SERVER)
+                .at(5, 20)
+                .build());
+        addTrace("b", 10, false);
+        addTrace("c", 10, false);
+        TraceListResponse first = service.listTraces(listing().limit(1).build());
+        TraceListResponse second =
+                service.listTraces(listing().limit(1).cursor(first.next()).build());
+
+        store.addSpan(rootSpan("a", "test-operation", Span.Kind.SERVER, 100).build());
+
+        assertThat(idsOf(first)).containsExactly("c");
+        assertThat(idsOf(second)).containsExactly("b");
+        assertThat(second.next()).isNull();
+        assertThat(listedIds(listing())).containsExactly("c", "b", "a");
+        assertThat(idsOf(service.listTraces(listing().cursor(first.next()).build())))
+                .containsExactly("b", "a");
+    }
+
+    /** An older row the filter rejects is no reason for another page. */
+    @Test
+    void aPageHasNoNextWhenOnlyUnmatchedRowsAreOlder() {
+        addRequest("missed", 404);
+        addRequest("m1", 500);
+        addRequest("m2", 500);
+
+        TraceListResponse page =
+                service.listTraces(listing().statusCode("500").limit(2).build());
+
+        assertThat(idsOf(page)).containsExactly("m2", "m1");
+        assertThat(page.next()).isNull();
+    }
+
+    /** All evicted the failed trace and Errors kept it; its next event lists it at the top, above the cursor. */
+    @Test
+    void aTraceEnteringTheBucketAgainListsAboveTheCursor() {
+        InMemoryTraceStore capped = TraceStores.with(p -> p.setMaxTraces(3));
+        TraceInsightsService cappedService = newService(capped);
+        capped.addSpan(rootSpan("t1", "test-operation", Span.Kind.SERVER, 10)
+                .exception("TestException", "Test error")
+                .build());
+        for (int i = 2; i <= 4; i++) {
+            capped.addSpan(
+                    rootSpan("t" + i, "test-operation", Span.Kind.SERVER, 10).build());
+        }
+        TraceListResponse first = cappedService.listTraces(listing().limit(1).build());
+
+        capped.addLog(log("t1").saying("late").build());
+
+        assertThat(idsOf(first)).containsExactly("t4");
+        assertThat(idsOf(cappedService.listTraces(listing().cursor(first.next()).build())))
+                .containsExactly("t3");
+        assertThat(idsOf(cappedService.listTraces(listing().build()))).containsExactly("t1", "t4", "t3");
     }
 
     /** A prefix or a substring of the pattern is another route. */
@@ -1277,9 +1443,27 @@ class TraceInsightsServiceTest {
     }
 
     private List<String> listedIds(TraceListings.Builder listing) {
-        return service.listTraces(listing.build()).traces().stream()
-                .map(row -> row.summary().traceId())
-                .toList();
+        return idsOf(service.listTraces(listing.build()));
+    }
+
+    /** Follows {@code next} one row per page for ten pages at most, so a cursor that never runs out fails instead of hanging. */
+    private List<TraceResource> pagedOneByOne(TraceListings.Builder listing) {
+        List<TraceResource> rows = new ArrayList<>();
+        String cursor = null;
+        for (int page = 0; page < 10; page++) {
+            TraceListResponse response =
+                    service.listTraces(listing.limit(1).cursor(cursor).build());
+            rows.addAll(response.traces());
+            cursor = response.next();
+            if (cursor == null) {
+                return rows;
+            }
+        }
+        return fail("next was still set after ten pages, with " + rows.size() + " rows so far");
+    }
+
+    private static List<String> idsOf(TraceListResponse response) {
+        return response.traces().stream().map(row -> row.summary().traceId()).toList();
     }
 
     private TraceInsightsService newService(TraceStore store) {

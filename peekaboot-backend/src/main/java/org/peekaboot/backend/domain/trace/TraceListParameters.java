@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
  */
 public record TraceListParameters(
         @Nullable String limit,
+        @Nullable String cursor,
         @Nullable String bucket,
         @Nullable String rootActionType,
         @Nullable String rootOperation,

@@ -51,11 +51,11 @@ class TraceQueryIT extends TestingAppITBase {
     }
 
     private List<String> listedIds(String query, Object... values) {
-        return list(query, values)
-                .path("traces")
-                .valueStream()
-                .map(TraceApiClient::traceId)
-                .toList();
+        return idsOf(list(query, values));
+    }
+
+    private static List<String> idsOf(JsonNode listing) {
+        return listing.path("traces").valueStream().map(TraceApiClient::traceId).toList();
     }
 
     @Test
@@ -142,5 +142,25 @@ class TraceQueryIT extends TestingAppITBase {
         assertThat(counts.path("all").asInt()).isEqualTo(2);
         assertThat(counts.path("errors").asInt()).isEqualTo(2);
         assertThat(counts.path("slow").asInt()).isEqualTo(slow.size());
+    }
+
+    /** A trace answered between two pages lists above the cursor, so no page repeats a row or skips one. */
+    @Test
+    void pagesThroughEveryRowOnceWhileNewOnesArrive() {
+        List<String> sent = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            sent.add(request(200));
+        }
+
+        JsonNode first = list("&limit=2");
+        String arrived = request(200);
+        JsonNode second = list("&limit=2&cursor={cursor}", first.path("next").asString());
+        JsonNode third = list("&limit=2&cursor={cursor}", second.path("next").asString());
+
+        assertThat(idsOf(first)).containsExactly(sent.get(4), sent.get(3));
+        assertThat(idsOf(second)).containsExactly(sent.get(2), sent.get(1));
+        assertThat(idsOf(third)).containsExactly(sent.get(0));
+        assertThat(third.path("next").isNull()).as("next is null, not absent").isTrue();
+        assertThat(idsOf(list("&limit=2"))).containsExactly(arrived, sent.get(4));
     }
 }
