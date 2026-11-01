@@ -21,7 +21,7 @@ import {registerBundledFonts} from '../shared/fonts.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
 import {badge, tabStrip} from '../shared/components.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
-import {inProgressBadge, slowBadge, truncatedBadge} from '../shared/trace-stats.js';
+import {inProgressBadge, isSlowTrace, slowBadge, truncatedBadge} from '../shared/trace-stats.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
@@ -261,17 +261,16 @@ function header(trace) {
         el('span', {className: 'pk-overlay__title-path', text: path, title: path}),
         el('span', {className: 'pk-overlay__title-traceid'}, copyableId(trace.traceId, {label: 'traceId'})));
 
-    // trace.slow is the backend's verdict, the same flag the Traces tab's badge reads:
-    // some span carries a SLOW or VERY_SLOW issue. The span thresholds applied to the
-    // trace's total would call a 120 ms request slow here while the list did not.
+    // The trace's own SLOW verdict, the one the Traces tab's badge and the Slow bucket follow.
+    const slow = isSlowTrace(trace);
     const meta = el('div', {className: 'pk-overlay__meta'},
         el('span', {
-            className: 'pk-overlay__duration' + (trace.slow ? ` ${severityClass('slow')}` : ''),
+            className: 'pk-overlay__duration' + (slow ? ` ${severityClass('slow')}` : ''),
             text: formatDurationMs(trace.durationMs)
         }),
         badge(statusLabel(status), statusVariant(status)),
         trace.complete ? null : inProgressBadge(),
-        trace.slow ? slowBadge() : null,
+        slow ? slowBadge() : null,
         trace.truncated ? truncatedBadge() : null);
 
     return el('div', {className: 'pk-overlay__header'},

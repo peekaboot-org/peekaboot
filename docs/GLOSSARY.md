@@ -11,7 +11,7 @@ term twice and letting the two copies drift.
 There is no `Trace` class. A trace is a `traceId` and whatever is filed under it, in three
 shapes: `TraceDataBundle` while the store is writing, `TraceData` when the bundle is read back
 in one go (`TraceDataBundle.snapshot()`: the spans flat and creation-ordered, the root, the
-window, the async membership and the truncated flag), and `TraceTree` once mapped for the UI.
+window, the async membership, the failure flag and the dropped-span count), and `TraceTree` once mapped for the UI.
 Only the third leaves the process. What lands in the store is on the site:
 [what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured).
 
@@ -99,11 +99,19 @@ The span Peekaboot raises around a call of an application's `@EventListener` met
 child span and never a trace root. The mechanism, its ordering and what it skips are in
 *Event Listener Spans* in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-### Trace Status and Span Status
-`TraceStatus {OK, HAS_ERRORS}` on the trace, `SpanStatus {OK, ERROR}` on each span, both
-serialised by constant name. `TraceTreeMapper` sets `HAS_ERRORS` when any span has an error
-class or message. An error-level log alone does not: it only puts the trace in the Errors
-bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
+### Trace Outcome and Span Status
+`TraceOutcome {OK, ERROR, IN_PROGRESS}` on the trace, `SpanStatus {OK, ERROR}` on each span, both
+serialised by constant name. A trace is `IN_PROGRESS` until its root arrives. A complete whole
+trace is `ERROR` when the store's sticky failure flag (`TraceData.failed`) is set or one of its
+reasons is a failure. The flag is the Errors bucket's own rule: a span failed or answered 5xx, or
+an ERROR log arrived. An async row is `ERROR` only when its own subtree's reasons hold a failure. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
+
+### Trace Reason
+`TraceTree.reasons` lists `TraceReason(kind, spanId, detail)`s, built by `TraceReasons`: an
+`EXCEPTION` per failed span, a `SERVER_ERROR` per SERVER span answering 5xx, an `ERROR_LOG` per
+ERROR log, then one `SLOW` once the duration reaches `peekaboot.tracing.slow-trace-threshold-ms`.
+The first three are failures. The span and log caps bound them, so an evicted failure leaves the
+trace `ERROR` without its reason. `TraceTree.buckets` names the Errors and Slow buckets listing it.
 
 ### Issue
 `SpanNode.issues` holds `TraceIssue`s. Each is a `SpanIssue(type, severity, spanId, value,
@@ -142,8 +150,8 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | `metrics` on `/api/features`, `MetricsInfo`, `GET /api/metrics` | **Meters** tab | The tab module is `tabs/meters.js` and its `isAvailable` reads `features.metrics`. |
 | `rootOperation` | **Target** in the Traces tab's filter banner | The banner shortens the value to its last two dot-segments, as the Scheduled Tasks tab does (`shortTarget`). |
 | `rootActionType`, `rootOperation` query parameters | `type`, `op` in the dashboard hash | `traces.js` translates between them; the hash is the shareable form. |
-| `TraceTree.slow` | **SLOW** badge | True when any span carries a SLOW or VERY_SLOW issue. The Slow bucket is a whole-trace threshold. See [the slow badge is not the slow bucket](https://www.peekaboot.org/docs/traces/#slow-badge-vs-slow-bucket). |
-| `TraceStatus.HAS_ERRORS` | **ERROR** badge | Rendered instead of SLOW, never beside it. |
+| a `SLOW` entry in `TraceTree.reasons` | **SLOW** badge | `isSlowTrace` in `shared/trace-stats.js` reads it. On a whole trace the Slow bucket admits by the same rule; an async row is judged on its own window while its buckets are the trace's. |
+| `TraceOutcome.ERROR` | **ERROR** badge | Rendered instead of SLOW, never beside it. |
 | `TraceTree.truncated` | **TRUNCATED** badge | Set when the per-trace span cap dropped a real span. |
 | `HttpRequest.Controller.className` | `class` on the wire | Renamed by `@JsonProperty("class")`. |
 | `IssueSeverity.WARNING`, `.ERROR` | `warning`, `error` | Lowercased by `@JsonValue`. |
@@ -159,7 +167,7 @@ silently. A new mirrored vocabulary belongs there too.
 
 ### Trace Data Bundle
 `TraceDataBundle` is the store's per-trace container: spans keyed by id in arrival order, the
-correlated logs, the request metadata, the `truncated` flag and the parent-redirect table left
+correlated logs, the request metadata, the failure flags, the dropped-span and dropped-log counts and the parent-redirect table left
 behind by span deduplication. It is never serialised. `TraceData` is the flat, creation-ordered
 view of its spans that the mappers consume.
 

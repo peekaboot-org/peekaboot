@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
+import org.peekaboot.fixtures.OutcomeFixtureController;
 import org.peekaboot.testingapp.Scheduler;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.integration.OrderFixtures;
@@ -179,11 +180,9 @@ class TracesTabIT extends PlaywrightTestBase {
      * requested bucket), so every bucket button's own count text is already correct
      * before any click - waiting on it resolves immediately and proves nothing. And
      * "every visible trace has .pk-badge--error" is not a valid predicate against real
-     * data either: the backend's error-bucket membership is driven by any ERROR-level
-     * *log* during the trace, while the frontend's HAS_ERRORS badge is driven only by an
-     * actual span exception - the scheduler's fixedRate() logs an error without throwing
-     * and lands in the errors bucket with an error-log count but no status badge, while a
-     * job that really throws does get one.
+     * data either: a trace still running is listed in Errors the moment it logs an ERROR
+     * but reads IN PROGRESS until its root arrives, and an async row reports its own
+     * subtree's outcome, so a task that succeeded lists there without the badge.
      * <p>
      * What genuinely differs between bucket responses is the item count, so the list is
      * checked against the count carried by the very response that rendered it: the
@@ -576,10 +575,24 @@ class TracesTabIT extends PlaywrightTestBase {
         }
     }
 
+    /** A request that only logged an ERROR failed, so its row says so in the Errors bucket that lists it. */
+    @Test
+    void aTraceThatOnlyLoggedAnErrorShowsTheErrorBadge() {
+        String traceId = traceIdOf(page.navigate(baseUrl + OutcomeFixtureController.ERROR_LOG_PATH));
+        awaitListedTrace("bucket=errors", "trace => trace.traceId === '" + traceId + "'");
+
+        openDashboard("#traces?bucket=errors", "#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
+        dashboard.awaitListedTrace(traceId);
+
+        // the stats line's "1 error" log badge shares the class
+        assertThat(page.textContent(Dashboard.traceItem(traceId) + " .pk-trace-item__main-line .pk-badge--error"))
+                .isEqualTo("ERROR");
+    }
+
     /**
      * The Slow bucket, which no other UI test opens: the report endpoint sleeps its way past
      * the slow-trace threshold, so its own trace has to be there and not in the default view's
-     * company by accident.
+     * company by accident, wearing the SLOW badge the same rule gives it.
      */
     @Test
     void theSlowReportTraceIsListedInTheSlowBucket() {
@@ -596,6 +609,8 @@ class TracesTabIT extends PlaywrightTestBase {
             assertThat(durationMsOf(rendered))
                     .as("a Slow-bucket row shows the duration that put it there: %s", rendered)
                     .isGreaterThanOrEqualTo(slowTraceThresholdMs());
+            assertThat(page.textContent(Dashboard.traceItem(traceId) + " .pk-trace-item__main-line .pk-badge--warn"))
+                    .isEqualTo("SLOW");
         } finally {
             deleteOrder(order);
         }

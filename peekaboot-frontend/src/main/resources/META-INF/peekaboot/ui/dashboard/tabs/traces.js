@@ -14,7 +14,7 @@ import {el, button} from '../../shared/dom.js';
 import {formatDurationMs, formatDateTime, formatNumber, shortTarget} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
-import {slowBadge, traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
+import {isSlowTrace, slowBadge, traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
 import {parseAppHash, buildAppHash} from '../../shared/url-state.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
@@ -343,7 +343,7 @@ function updateFilterIndicator(container) {
 
 function renderTraceItem(trace, context) {
     const actionType = trace.rootActionType || 'UNKNOWN';
-    const hasErrors = trace.status === 'HAS_ERRORS';
+    const hasErrors = trace.outcome === 'ERROR';
     const rootOperation = trace.rootOperation || '';
 
     // A real <button> over the main line alone. The scheduler link and the stats line are
@@ -393,11 +393,10 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
         : el('span', {className: 'pk-trace-item__path', title: actionLabel},
             el('span', {className: 'pk-trace-item__action-label', text: actionLabel}));
 
-    // trace.slow is the backend's verdict: some span carries a SLOW or VERY_SLOW issue.
-    // Not the Slow bucket - that admits a trace by its total duration.
+    // On a whole trace the SLOW reason is the Slow bucket's own rule, so the badge and the bucket agree.
     let verdict = null;
     if (hasErrors) verdict = badge('ERROR', 'error');
-    else if (trace.slow) verdict = slowBadge();
+    else if (isSlowTrace(trace)) verdict = slowBadge();
 
     return el('div', {className: 'pk-trace-item__main-line'},
         // role="img" + aria-label, not title: title on a roleless <span> is not reliably

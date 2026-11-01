@@ -23,6 +23,8 @@ import org.peekaboot.backend.tracing.event.SpanData;
  *                      root the span cap evicted later leaves the trace complete, with
  *                      {@code rootSpan} null and every stored span served under the mapped
  *                      trace's {@code orphans}
+ * @param failed        a span failed or answered 5xx, or an ERROR log arrived; stays set after the
+ *                      span cap evicts that span, as Errors keeps the trace
  * @param spans         in creation order, never null
  * @param asyncSpanIds  the ids of spans belonging to an async subtree - the marked entry spans
  *                      and their descendants. Empty for the overwhelming majority of traces
@@ -34,6 +36,7 @@ public record TraceData(
         Duration duration,
         @Nullable SpanData rootSpan,
         boolean complete,
+        boolean failed,
         List<SpanData> spans,
         Set<String> asyncSpanIds,
         int droppedSpans) {

@@ -5,15 +5,14 @@ import java.util.List;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SubtreeView;
-import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 
 /**
  * Builds already-mapped {@link TraceTree} fixtures for the stages after
- * {@code TraceTreeMapper}: trace {@code trace-1}, ended OK, of UNKNOWN root action, taking
- * as long as its root span and named after it, with a summary counting that one span and
- * nothing else. Complete and without orphans unless told otherwise. The root span may be null.
+ * {@code TraceTreeMapper}: trace {@code trace-1}, not yet judged, of UNKNOWN root action, named
+ * after its root span, with a summary counting that one span and nothing else. Complete, without
+ * orphans and taking as long as its root span unless told otherwise. The root span may be null.
  */
 public final class TraceTrees {
 
@@ -33,6 +32,7 @@ public final class TraceTrees {
         private List<SpanNode> orphans = List.of();
         private boolean truncated;
         private SubtreeView subtree;
+        private Long durationMs;
 
         private Builder(SpanNode rootSpan) {
             this.rootSpan = rootSpan;
@@ -68,12 +68,16 @@ public final class TraceTrees {
             return this;
         }
 
+        public Builder durationMs(long durationMs) {
+            this.durationMs = durationMs;
+            return this;
+        }
+
         public TraceTree build() {
             return new TraceTree(
                     traceId,
                     Instant.EPOCH,
-                    durationMs(),
-                    TraceStatus.OK,
+                    durationMs != null ? durationMs : (rootSpan == null ? 0L : rootSpan.durationMs()),
                     complete,
                     rootActionType,
                     rootSpan == null ? null : rootSpan.name(),
@@ -82,10 +86,6 @@ public final class TraceTrees {
                     summary,
                     subtree,
                     truncated);
-        }
-
-        private long durationMs() {
-            return rootSpan == null ? 0L : rootSpan.durationMs();
         }
     }
 }

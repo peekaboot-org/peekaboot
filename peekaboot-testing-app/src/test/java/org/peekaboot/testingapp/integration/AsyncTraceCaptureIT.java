@@ -167,9 +167,9 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
         assertThat(asyncSpan.path("exception").path("message").asString(""))
                 .isEqualTo("enrichment of PK-2001 was rejected");
         traces.awaitTraceInBucket("errors", traceId);
-        assertThat(asyncRowStatus(traceId))
-                .as("the async row is summarised over its own subtree, which now holds the failed span")
-                .isEqualTo("HAS_ERRORS");
+        assertThat(asyncRowOutcome(traceId))
+                .as("the async row is judged on its own subtree, which now holds the failed span")
+                .isEqualTo("ERROR");
     }
 
     /**
@@ -219,6 +219,7 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
                         .asString(""))
                 .isEqualTo("OK");
         assertThat(traces.listedTraceIds("bucket=errors")).doesNotContain(traceId);
+        assertThat(asyncRowOutcome(traceId)).isEqualTo("OK");
     }
 
     /**
@@ -349,12 +350,12 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
                 .observe(this::fireFixedRateThroughSpringsScheduler);
     }
 
-    private String asyncRowStatus(String traceId) {
+    private String asyncRowOutcome(String traceId) {
         List<JsonNode> rows = asyncRowsOf(traceId);
         if (rows.isEmpty()) {
             throw new AssertionError("no async row listed for trace " + traceId);
         }
-        return rows.getFirst().path("status").asString("");
+        return rows.getFirst().path("outcome").asString("");
     }
 
     private List<JsonNode> asyncRowsOf(String traceId) {

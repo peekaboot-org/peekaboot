@@ -17,7 +17,7 @@
  *
  * The bar never fetches /api/features: the blob's `features` carries the effective
  * thresholds under the same names, for the bar's query total and the overlay it opens. The
- * trace's own duration is coloured by the backend's trace.slow, as the overlay header does. Its
+ * trace's own duration is coloured by its SLOW reason, as the overlay header does. Its
  * counts group in the dashboard's chosen locale, read through storage.js's readLocaleSetting().
  */
 import {createClient} from '../shared/api.js';
@@ -29,7 +29,7 @@ import {readLocaleSetting} from '../shared/storage.js';
 import {shortTarget} from '../shared/format.js';
 import {registerBundledFonts} from '../shared/fonts.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
-import {traceStatParts, durationStat} from '../shared/trace-stats.js';
+import {traceStatParts, durationStat, isSlowTrace} from '../shared/trace-stats.js';
 
 // Four fixed attempts rather than backoff-until-complete: every one runs, so a span that
 // ends after the root - an @Async continuation, a streamed body - still reaches the bar
@@ -111,7 +111,7 @@ function initToolbar(host, data) {
         }
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
-        const duration = durationStat(clock, trace.durationMs, trace.slow ? 'slow' : '');
+        const duration = durationStat(clock, trace.durationMs, isSlowTrace(trace) ? 'slow' : '');
         metricsEl.replaceChildren(duration, ...traceStatParts(trace, {features: data.features, locale: readLocaleSetting()}));
     }
 

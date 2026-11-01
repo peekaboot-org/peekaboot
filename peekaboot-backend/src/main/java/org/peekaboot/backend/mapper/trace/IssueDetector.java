@@ -24,8 +24,7 @@ public class IssueDetector {
     public TraceTree detectIssues(TraceTree trace) {
         SpanNode root = trace.rootSpan() == null ? null : withClientError(processSpan(trace.rootSpan()));
         List<SpanNode> orphans = trace.orphans().stream().map(this::processSpan).toList();
-        boolean slow = (root != null && hasSlowIssue(root)) || orphans.stream().anyMatch(IssueDetector::hasSlowIssue);
-        return trace.withSpans(root, orphans, slow);
+        return trace.withSpans(root, orphans);
     }
 
     private SpanNode processSpan(SpanNode span) {
@@ -99,11 +98,5 @@ public class IssueDetector {
                 IssueUnit.MS,
                 "This span spent " + selfMs + " ms in its own work, at or above the " + thresholdMs + " ms "
                         + thresholdName + " threshold.");
-    }
-
-    private static boolean hasSlowIssue(SpanNode span) {
-        return span.issues().stream()
-                        .anyMatch(issue -> issue.type() == IssueType.SLOW || issue.type() == IssueType.VERY_SLOW)
-                || span.children().stream().anyMatch(IssueDetector::hasSlowIssue);
     }
 }

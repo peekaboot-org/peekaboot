@@ -52,6 +52,11 @@ export function inProgressBadge() {
     });
 }
 
+/** Whether the trace reached the slow-trace threshold, the rule the Slow bucket admits by. */
+export function isSlowTrace(trace) {
+    return (trace.reasons || []).some(reason => reason.kind === 'SLOW');
+}
+
 /** The one wording for a SLOW verdict: the backend's on a trace (the Traces tab, the overlay header) and the query threshold's on a query. */
 export function slowBadge() {
     return badge('SLOW', 'warn');

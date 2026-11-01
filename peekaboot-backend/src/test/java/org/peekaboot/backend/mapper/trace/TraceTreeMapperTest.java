@@ -29,7 +29,6 @@ import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceOutcome;
-import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
@@ -148,7 +147,6 @@ class TraceTreeMapperTest {
                 .orElseThrow();
         assertThat(orphanNode.children()).extracting(SpanNode::spanId).containsExactly("orphan-child");
         assertThat(result.complete()).isTrue();
-        assertThat(result.outcome()).isEqualTo(TraceOutcome.OK);
         assertThat(result.orphans()).isEmpty();
     }
 
@@ -229,7 +227,6 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", failed));
 
-        assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
         assertThat(result.outcome()).isEqualTo(TraceOutcome.IN_PROGRESS);
     }
 
@@ -249,12 +246,19 @@ class TraceTreeMapperTest {
                 .order(4)
                 .build();
         var rootEvicted = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), null, true, List.of(lateOne, lateTwo), Set.of(), 1);
+                "trace1",
+                Instant.EPOCH,
+                Duration.ofMillis(100),
+                null,
+                true,
+                false,
+                List.of(lateOne, lateTwo),
+                Set.of(),
+                1);
 
         TraceTree result = mapper.map(rootEvicted);
 
         assertThat(result.complete()).isTrue();
-        assertThat(result.outcome()).isEqualTo(TraceOutcome.OK);
         assertThat(result.rootSpan()).isNull();
         assertThat(result.orphans()).extracting(SpanNode::spanId).containsExactly("late-1", "late-2");
     }
@@ -406,7 +410,6 @@ class TraceTreeMapperTest {
         assertThat(result.summary().spans().count()).isEqualTo(4);
         assertThat(result.summary().queries().count()).isEqualTo(2);
         assertThat(result.summary().queries().totalDurationMs()).isEqualTo(80L); // 50 + 30
-        assertThat(result.status()).isEqualTo(TraceStatus.OK);
     }
 
     @Test
@@ -571,22 +574,6 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void anErrorInAsyncWorkStillCountsTowardsTheTraceStatus() {
-        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
-        var async = asyncTask("async")
-                .parent("root")
-                .exception("java.lang.RuntimeException", "boom")
-                .at(40, 1_000)
-                .build();
-
-        var traceData = TraceDatas.of("trace1", root, async);
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
-    }
-
-    @Test
     void mapsAnAsyncSubtreeAsATreeOfItsOwn() {
         var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
         var async = asyncTask("async").parent("root").at(40, 240_000).build();
@@ -640,23 +627,6 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.mapSubtree(traceData, "async");
 
         assertThat(result.summary().spans().count()).isEqualTo(2);
-    }
-
-    @Test
-    void aSubtreeFailsOnItsOwnFailedSpanAndNotOnTheEnclosingTrace() {
-        var root = span("root").kind(Span.Kind.SERVER).at(0, 50).build();
-        var failedTask = asyncTask("failed").parent("root").at(40, 1_000).build();
-        var deep = span("deep")
-                .parent("failed")
-                .at(50, 900)
-                .exception("java.lang.RuntimeException", "boom")
-                .build();
-        var cleanTask = asyncTask("clean").parent("root").at(40, 1_000).build();
-
-        var traceData = TraceDatas.of("trace1", root, failedTask, deep, cleanTask);
-
-        assertThat(mapper.mapSubtree(traceData, "failed").status()).isEqualTo(TraceStatus.HAS_ERRORS);
-        assertThat(mapper.mapSubtree(traceData, "clean").status()).isEqualTo(TraceStatus.OK);
     }
 
     /** An orphan has no parent in the trace, so there is no enclosing trace to link back to. */
@@ -744,7 +714,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void aFailedSpanFailsTheTrace() {
+    void aSpanThatThrewIsMarkedError() {
         var root =
                 span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
         var errorSpan = span("error")
@@ -759,8 +729,10 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
-        assertThat(result.outcome()).isEqualTo(TraceOutcome.ERROR);
+        assertThat(result.rootSpan().children()).singleElement().satisfies(failed -> {
+            assertThat(failed.spanId()).isEqualTo("error");
+            assertThat(failed.status()).isEqualTo(SpanStatus.ERROR);
+        });
     }
 
     // exception.message goes through the masker like tags do: a realistic exception
@@ -861,14 +833,13 @@ class TraceTreeMapperTest {
 
     @Test
     void mapsAnEmptyTraceToARootlessTree() {
-        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), 0);
+        var traceData = new TraceData("trace1", null, null, null, false, false, List.of(), Set.of(), 0);
 
         TraceTree result = mapper.map(traceData);
 
         assertThat(result.traceId()).isEqualTo("trace1");
         assertThat(result.rootSpan()).isNull();
         assertThat(result.summary().spans().count()).isEqualTo(0);
-        assertThat(result.status()).isEqualTo(TraceStatus.OK);
         assertThat(result.complete()).isFalse();
         assertThat(result.outcome()).isEqualTo(TraceOutcome.IN_PROGRESS);
         // No root span means nothing to classify from - not a guess at the commonest type.
@@ -893,7 +864,15 @@ class TraceTreeMapperTest {
                 .at(0, 100)
                 .build();
         var traceData = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, true, List.of(listed), Set.of(), 0);
+                "trace1",
+                Instant.EPOCH,
+                Duration.ofMillis(100),
+                detachedRoot,
+                true,
+                false,
+                List.of(listed),
+                Set.of(),
+                0);
 
         TraceTree result = mapper.map(traceData);
 
@@ -942,7 +921,15 @@ class TraceTreeMapperTest {
                 .at(0, 100)
                 .build();
         var truncated = new TraceData(
-                "trace1", Instant.EPOCH, Duration.ofMillis(100), singleSpan, true, List.of(singleSpan), Set.of(), 1);
+                "trace1",
+                Instant.EPOCH,
+                Duration.ofMillis(100),
+                singleSpan,
+                true,
+                false,
+                List.of(singleSpan),
+                Set.of(),
+                1);
 
         TraceTree result = mapper.map(truncated);
 
@@ -951,7 +938,7 @@ class TraceTreeMapperTest {
 
     @Test
     void carriesTheTruncatedFlagEvenForAnEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, false, List.of(), Set.of(), 1);
+        var traceData = new TraceData("trace1", null, null, null, false, false, List.of(), Set.of(), 1);
 
         TraceTree result = mapper.map(traceData);
 

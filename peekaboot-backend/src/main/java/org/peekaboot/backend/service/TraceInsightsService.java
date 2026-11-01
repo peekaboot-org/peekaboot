@@ -84,7 +84,9 @@ public class TraceInsightsService {
         List<TraceTree> traceTrees = matches.stream()
                 .limit(limit)
                 .map(row -> traceResources.row(
-                        row.bundle(), row.subtree() ? row.rootSpan().spanId() : null))
+                        row.bundle(),
+                        row.subtreeRootSpanId(),
+                        traceStore.bucketsOf(row.bundle().traceId())))
                 .toList();
 
         BucketCounts bucketCounts = new BucketCounts(
@@ -146,6 +148,6 @@ public class TraceInsightsService {
             return Optional.empty();
         }
 
-        return traceStore.getTrace(traceId).map(traceResources::trace);
+        return traceStore.getTrace(traceId).map(bundle -> traceResources.trace(bundle, traceStore.bucketsOf(traceId)));
     }
 }

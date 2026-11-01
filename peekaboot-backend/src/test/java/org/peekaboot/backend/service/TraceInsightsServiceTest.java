@@ -27,7 +27,8 @@ import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
-import org.peekaboot.backend.domain.trace.TraceStatus;
+import org.peekaboot.backend.domain.trace.TraceOutcome;
+import org.peekaboot.backend.domain.trace.TraceReason;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
@@ -56,31 +57,32 @@ class TraceInsightsServiceTest {
         service = newService(store);
     }
 
-    /**
-     * The list's SLOW badge means "some span in this trace carries a SLOW or VERY_SLOW
-     * issue" - a per-span judgement at the span thresholds, distinct from the Slow bucket,
-     * which is about the trace's total duration.
-     */
+    /** The SLOW reason is the Slow bucket's rule, so the list's badge and the bucket agree. */
     @Test
-    void aTraceIsFlaggedSlowWhenAnySpanCarriesASlowOrVerySlowIssue() {
-        addTrace("fast", 50, false);
-        addTrace("slow", 150, false);
-        addTrace("very-slow", 500, false);
+    void aTraceIsSlowAtTheSlowTraceThreshold() {
+        long thresholdMs = new PeekabootTracingProperties().getSlowTraceThresholdMs();
+        addTrace("fast", thresholdMs - 1, false);
+        addTrace("slow", thresholdMs, false);
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         assertThat(response.traces())
-                .extracting(TraceTree::traceId, TraceTree::slow)
-                .containsExactlyInAnyOrder(tuple("fast", false), tuple("slow", true), tuple("very-slow", true));
+                .extracting(
+                        TraceTree::traceId,
+                        trace -> trace.reasons().stream().anyMatch(reason -> reason.kind() == TraceReason.Kind.SLOW))
+                .containsExactlyInAnyOrder(tuple("fast", false), tuple("slow", true));
     }
 
     @Test
-    void theDetailFlagsSlowTheSameWayTheListDoes() {
-        addTrace("slow", 150, false);
-        addTrace("fast", 50, false);
+    void theDetailGivesTheReasonsTheListGives() {
+        addTrace("slow", new PeekabootTracingProperties().getSlowTraceThresholdMs(), true);
 
-        assertThat(service.getTraceInsights("slow").orElseThrow().slow()).isTrue();
-        assertThat(service.getTraceInsights("fast").orElseThrow().slow()).isFalse();
+        TraceTree listed =
+                service.getInsights(10, TraceBucket.ALL, null, null).traces().getFirst();
+        TraceTree detail = service.getTraceInsights("slow").orElseThrow();
+
+        assertThat(detail.reasons()).isEqualTo(listed.reasons());
+        assertThat(detail.buckets()).isEqualTo(listed.buckets()).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
     }
 
     /** The span tree carries the one statement per query, formatted and masked once. */
@@ -744,10 +746,10 @@ class TraceInsightsServiceTest {
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
 
         assertThat(response.traces())
-                .extracting(TraceTree::rootActionType, TraceTree::status)
+                .extracting(TraceTree::rootActionType, TraceTree::outcome)
                 .containsExactlyInAnyOrder(
-                        tuple(RootActionType.HTTP_REQUEST, TraceStatus.HAS_ERRORS),
-                        tuple(RootActionType.ASYNC_TASK, TraceStatus.OK));
+                        tuple(RootActionType.HTTP_REQUEST, TraceOutcome.ERROR),
+                        tuple(RootActionType.ASYNC_TASK, TraceOutcome.OK));
     }
 
     @Test

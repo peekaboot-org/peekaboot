@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
@@ -41,6 +42,9 @@ class TraceOverlayIT extends TraceOverlayTestBase {
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
 
+    @Autowired
+    private PeekabootTracingProperties tracingProperties;
+
     private String labelledBy() {
         return (String)
                 overlay.evaluate("root => root.querySelector('#pk-tab-content').getAttribute('aria-labelledby')");
@@ -50,7 +54,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
         return (String) overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"true\"]').id");
     }
 
-    /** The span duration the backend's SLOW verdict starts at, as the running app publishes it. */
+    /** The self time a span's SLOW issue starts at, as the running app publishes it. */
     private long slowSpanThresholdMs() {
         return awaitJson(
                         contextPath() + "/peekaboot/api/features",
@@ -59,10 +63,14 @@ class TraceOverlayIT extends TraceOverlayTestBase {
                 .asLong();
     }
 
+    private long slowTraceThresholdMs() {
+        return tracingProperties.getSlowTraceThresholdMs();
+    }
+
     /**
-     * A trace the backend calls slow whose total is short: the request answers in 10ms and its
-     * {@code @Async} task works for exactly the slow-span threshold, outside the synchronous
-     * window the total reads.
+     * A trace with a slow span and a short total: the request answers in 10ms and its
+     * {@code @Async} task works for the given span threshold, outside the synchronous window the
+     * total reads.
      */
     private String storeSlowTraceWithAShortTotal(long thresholdMs) {
         String traceId = "overlay-slow-async-" + System.nanoTime();
@@ -84,8 +92,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
 
     /**
      * A trace with a long total and no slow span: a 10ms request and a 10ms call under it that
-     * starts a threshold's length later, so the window spans the gap while neither span comes
-     * near the threshold.
+     * starts the given threshold's length later.
      */
     private String storeLongTraceWithoutASlowSpan(long thresholdMs) {
         String traceId = "overlay-long-quick-" + System.nanoTime();
@@ -545,27 +552,24 @@ class TraceOverlayIT extends TraceOverlayTestBase {
     }
 
     /**
-     * The header's SLOW marking is the backend's per-trace verdict ({@code trace.slow}: some
-     * span carries a SLOW or VERY_SLOW issue), the very flag the Traces tab's badge reads.
-     * Applying the span thresholds to the trace's total instead called a 120 ms request slow
-     * in the header while the list beside it did not, and a long trace with no slow span the
-     * other way round. Each stored trace sits on the side of the threshold where the two rules
-     * disagree, which the backend confirms before the header is read.
+     * The header's SLOW marking is the trace's SLOW reason, the Slow bucket's own rule. A trace
+     * whose only slow span ran in the background stays unmarked, and a long request made of quick
+     * spans is marked. The old per-span flag read each of them the other way round.
      */
     @Test
-    void headerSlowMarkingFollowsTheBackendsVerdict() {
-        long thresholdMs = slowSpanThresholdMs();
-        String slowWithAShortTotal = storeSlowTraceWithAShortTotal(thresholdMs);
-        String longWithoutASlowSpan = storeLongTraceWithoutASlowSpan(thresholdMs);
-        awaitTrace(slowWithAShortTotal, "trace => trace.slow && trace.durationMs < " + thresholdMs);
-        awaitTrace(longWithoutASlowSpan, "trace => !trace.slow && trace.durationMs >= " + thresholdMs);
+    void headerSlowMarkingFollowsTheSlowTraceThreshold() {
+        String slowSpanShortTotal = storeSlowTraceWithAShortTotal(slowSpanThresholdMs());
+        String longWithoutASlowSpan = storeLongTraceWithoutASlowSpan(slowTraceThresholdMs());
+        awaitTrace(
+                slowSpanShortTotal, "trace => trace.complete && !trace.reasons.some(reason => reason.kind === 'SLOW')");
+        awaitTrace(longWithoutASlowSpan, "trace => trace.reasons.some(reason => reason.kind === 'SLOW')");
 
-        openOverlayFromTheDashboard(slowWithAShortTotal);
+        openOverlayFromTheDashboard(longWithoutASlowSpan);
         assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn").trim()).isEqualTo("SLOW");
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
                 .contains("slow");
 
-        openOverlayFromTheDashboard(longWithoutASlowSpan);
+        openOverlayFromTheDashboard(slowSpanShortTotal);
         assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('.pk-overlay__meta .pk-badge--warn')"))
                 .isFalse();
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))

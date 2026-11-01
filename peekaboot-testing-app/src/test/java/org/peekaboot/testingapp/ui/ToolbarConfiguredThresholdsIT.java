@@ -20,7 +20,8 @@ import org.springframework.test.context.TestPropertySource;
         properties = {
             "peekaboot.tracing.slow-span-threshold-ms=600000",
             "peekaboot.tracing.very-slow-span-threshold-ms=600000",
-            "peekaboot.tracing.slow-query-threshold-ms=0"
+            "peekaboot.tracing.slow-query-threshold-ms=0",
+            "peekaboot.tracing.slow-trace-threshold-ms=600000"
         })
 class ToolbarConfiguredThresholdsIT extends PlaywrightTestBase {
 
@@ -31,9 +32,9 @@ class ToolbarConfiguredThresholdsIT extends PlaywrightTestBase {
     private OrderLineRepository orderLineRepository;
 
     /**
-     * The list and the overlay header colour a trace by trace.slow; the bar has to agree. The
-     * report sleeps well past the default 500 ms very-slow threshold, and Swagger UI's idle bar
-     * picks up its trace from the fetch.
+     * The list and the overlay header colour a trace by its SLOW reason; the bar has to agree. The
+     * report sleeps past the default one-second slow-trace threshold, which this class raises, and
+     * Swagger UI's idle bar picks up its trace from the fetch.
      */
     @Test
     void theBarColoursTheDurationByTheTracesSlowVerdict() {

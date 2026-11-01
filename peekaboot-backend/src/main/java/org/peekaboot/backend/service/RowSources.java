@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.mapper.trace.RootActionTypes;
 import org.peekaboot.backend.tracing.event.SpanData;
@@ -33,7 +34,14 @@ final class RowSources {
      * roots a subtree of the trace rather than the trace itself, and when the row appeared in the
      * bucket, in span export order.
      */
-    record RowSource(TraceDataBundle bundle, SpanData rootSpan, boolean subtree, long listedAt) {}
+    record RowSource(TraceDataBundle bundle, SpanData rootSpan, boolean subtree, long listedAt) {
+
+        /** The span an async row is rooted at; null for a whole-trace row. */
+        @Nullable
+        String subtreeRootSpanId() {
+            return subtree ? rootSpan.spanId() : null;
+        }
+    }
 
     /**
      * The bucket's rows that pass the root-level filters, newest first - nothing mapped or masked

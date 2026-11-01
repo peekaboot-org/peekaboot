@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.entity.CustomerOrder;
+import org.peekaboot.testingapp.integration.OrderFixtures;
+import org.peekaboot.testingapp.repository.OrderLineRepository;
+import org.peekaboot.testingapp.repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -23,6 +28,12 @@ import tools.jackson.databind.JsonNode;
  * too, formatted with the real Intl of the locale under test rather than a rewritten count.
  */
 class ToolbarIT extends PlaywrightTestBase {
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private OrderLineRepository orderLineRepository;
 
     /** The OS preference is the opposite of what is stored (see emulateOsColorScheme), or the light case proves nothing. */
     @Test
@@ -312,6 +323,30 @@ class ToolbarIT extends PlaywrightTestBase {
                 () -> page.evaluate("() => fetch('/api/person/all')")));
 
         assertThat(toolbar.traceId()).isEqualTo(fetchedTraceId);
+    }
+
+    /**
+     * The bar colours a trace's duration by its SLOW reason, as the list and the overlay header
+     * do. The report sleeps past the default one-second slow-trace threshold, and Swagger UI's
+     * idle bar picks up its trace from the fetch. ToolbarConfiguredThresholdsIT holds the
+     * opposite case.
+     */
+    @Test
+    void theBarColoursASlowTracesDuration() {
+        CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-SLOW-BAR");
+        try {
+            page.navigate(baseUrl + "/swagger-ui/index.html");
+            page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
+            page.evaluate("id => fetch('/api/orders/' + id + '/report')", String.valueOf(order.getId()));
+            toolbar.awaitMetrics("span");
+
+            @SuppressWarnings("unchecked")
+            List<String> classes = (List<String>) toolbar.evaluate(
+                    "root => Array.from(root.querySelector('#pk-metrics .pk-stat__duration').classList)");
+            assertThat(classes).containsExactly("pk-stat__duration", "pk-duration--slow");
+        } finally {
+            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+        }
     }
 
     /**

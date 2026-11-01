@@ -46,7 +46,7 @@ class IssueDetectorTest {
         assertThat(result.rootSpan().issues()).containsExactly(expected);
     }
 
-    /** The spans of a trace still running are judged like any others, and a slow one marks the trace slow. */
+    /** The spans of a trace still running are judged like any others. */
     @Test
     void judgesTheSubtreesOfAnInFlightTrace() {
         SpanNode slowOrphan =
@@ -59,7 +59,6 @@ class IssueDetectorTest {
         assertThat(judged.orphans().getFirst().issues())
                 .extracting(TraceIssue::type)
                 .containsExactly(IssueType.SLOW);
-        assertThat(judged.slow()).isTrue();
     }
 
     /** A failed span is shown by its status and error fields; an issue would only repeat them. */
@@ -147,7 +146,6 @@ class IssueDetectorTest {
         assertThat(raised.rootSpan().issues()).isEmpty();
         assertThat(raised.rootSpan().children())
                 .allSatisfy(query -> assertThat(query.issues()).isEmpty());
-        assertThat(raised.slow()).isFalse();
     }
 
     @Test
@@ -286,27 +284,6 @@ class IssueDetectorTest {
         TraceTree judged = detector.detectIssues(tree(root).build());
 
         assertThat(judged.rootSpan().children().getFirst().issues()).isEmpty();
-    }
-
-    @Test
-    void marksTheTraceSlowWhenAnySpanIsSlowOrVerySlow() {
-        SpanNode slowChild = node("child").durationMs(150).build();
-        SpanNode root = node("root").durationMs(50).children(List.of(slowChild)).build();
-
-        assertThat(detector.detectIssues(tree(root).build()).slow()).isTrue();
-    }
-
-    @Test
-    void leavesTheTraceNotSlowWhenNoSpanReachesTheSlowThreshold() {
-        // a slow query or an error is not what the SLOW badge reports
-        SpanNode child = querySpan("child", 80, Map.of("db.system", "postgresql"));
-        SpanNode root = node("root")
-                .durationMs(50)
-                .status(SpanStatus.ERROR)
-                .children(List.of(child))
-                .build();
-
-        assertThat(detector.detectIssues(tree(root).build()).slow()).isFalse();
     }
 
     @Test

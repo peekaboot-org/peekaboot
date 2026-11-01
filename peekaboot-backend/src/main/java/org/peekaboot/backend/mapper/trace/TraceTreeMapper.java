@@ -12,7 +12,6 @@ import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SubtreeView;
-import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -49,7 +48,6 @@ public class TraceTreeMapper {
                     traceData.traceId(),
                     null,
                     0L,
-                    TraceStatus.OK,
                     traceData.complete(),
                     RootActionType.UNKNOWN,
                     null,
@@ -87,7 +85,6 @@ public class TraceTreeMapper {
                 traceData.traceId(),
                 traceData.startTime(),
                 durationMs,
-                statusOf(spans.stream().anyMatch(SpanData::hasError)),
                 traceData.complete(),
                 rootActionType,
                 rootOperation,
@@ -100,10 +97,10 @@ public class TraceTreeMapper {
 
     /**
      * The same trace seen from one of its spans: the tree built from that span's own
-     * descendants, timed by their window rather than the trace's, classified from that span,
-     * summarised over those spans alone ({@link TraceSummaries#ofSubtree}) and ended OK or in
-     * error by them. What the listing's async rows render. A span no longer stored maps
-     * as the whole trace: the cap can evict an entry between listing and mapping.
+     * descendants, timed by their window rather than the trace's, classified from that span and
+     * summarised over those spans alone ({@link TraceSummaries#ofSubtree}). What the listing's
+     * async rows render. A span no longer stored maps as the whole trace: the cap can evict an
+     * entry between listing and mapping.
      */
     public TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId) {
         List<SpanData> spans = traceData.spans();
@@ -132,10 +129,6 @@ public class TraceTreeMapper {
                 traceData.traceId(),
                 subtreeRoot.startTime(),
                 subtreeWindowMs(subtreeRoot),
-                // the subtree's own errors, not the enclosing trace's: background work that succeeded
-                // must not wear the ERROR badge of the request that dispatched it, which would also
-                // pre-empt the row's own SLOW verdict
-                statusOf(totals.anyFailed),
                 // an async row's own root is stored by construction
                 true,
                 RootActionTypes.of(subtreeRootData),
@@ -154,15 +147,8 @@ public class TraceTreeMapper {
                 .collect(Collectors.groupingBy(SpanData::parentId, Collectors.toCollection(ArrayList::new)));
     }
 
-    private static TraceStatus statusOf(boolean anySpanFailed) {
-        return anySpanFailed ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
-    }
-
     private static void accumulateSubtree(SpanNode node, SubtreeTotals totals) {
         totals.spanCount++;
-        if (node.status() == SpanStatus.ERROR) {
-            totals.anyFailed = true;
-        }
         if (DbSpans.isQuery(node)) {
             totals.queryCount++;
             totals.queryDurationMs += node.durationMs();
@@ -175,7 +161,6 @@ public class TraceTreeMapper {
     /** Mutable running totals for {@link #accumulateSubtree}, folded into a {@link TraceTabSummary} once complete. */
     private static final class SubtreeTotals {
         int spanCount;
-        boolean anyFailed;
         int queryCount;
         long queryDurationMs;
     }

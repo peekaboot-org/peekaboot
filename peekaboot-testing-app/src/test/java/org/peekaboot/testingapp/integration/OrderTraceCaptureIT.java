@@ -240,10 +240,10 @@ class OrderTraceCaptureIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTraceInBucket("errors", traceId);
 
-        assertThat(trace.path("status").asString(""))
-                .as("a trace in the Errors bucket must be classified as having errors, "
-                        + "otherwise the bucket filter and the status badge disagree")
-                .isEqualTo("HAS_ERRORS");
+        assertThat(trace.path("outcome").asString(""))
+                .as("a trace in the Errors bucket must have failed, "
+                        + "otherwise the bucket filter and the ERROR badge disagree")
+                .isEqualTo("ERROR");
     }
 
     /**

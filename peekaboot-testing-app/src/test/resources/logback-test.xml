@@ -33,6 +33,11 @@
             <logger>org.peekaboot.testingapp.order.PartnerFeedImporter</logger>
             <message>partner feed import broke off</message>
         </filter>
+        <!-- OutcomeFixtureController logs on purpose; TraceSummaryIT and TracesTabIT assert the line on its trace. -->
+        <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
+            <logger>org.peekaboot.fixtures.OutcomeFixtureController</logger>
+            <message>fixture logged an error and answered 200</message>
+        </filter>
         <!-- The override page logs what Tomcat would have; ErrorPageContentNegotiationIT asserts it on the request's trace. -->
         <filter class="org.peekaboot.testsupport.IntentionalLogFilter">
             <logger>org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver</logger>

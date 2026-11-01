@@ -342,7 +342,7 @@ public class TraceDataBundle {
 
     /**
      * Everything a reader needs about the spans, taken under one lock so the list, the root,
-     * the completeness, the window and the dropped count describe the same moment.
+     * the completeness, the failure, the window and the dropped count describe the same moment.
      */
     public TraceData snapshot() {
         synchronized (spansLock) {
@@ -358,6 +358,7 @@ public class TraceDataBundle {
                     synchronousWindow(),
                     root,
                     isComplete(root),
+                    failed(),
                     spans,
                     asyncMembership.members(),
                     droppedSpans);
@@ -422,8 +423,13 @@ public class TraceDataBundle {
     /** Whether any span stored failed or answered 5xx, or any log captured was an ERROR; maintained as each arrives, no span copy. */
     boolean hasError() {
         synchronized (spansLock) {
-            return hasErrorSpan || hasServerErrorSpan || hasErrorLog;
+            return failed();
         }
+    }
+
+    /** The Errors rule; must run under {@code spansLock}. */
+    private boolean failed() {
+        return hasErrorSpan || hasServerErrorSpan || hasErrorLog;
     }
 
     /** The window every span stored so far has covered, async ones included; null before a timed span. */

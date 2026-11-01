@@ -7,10 +7,10 @@ public enum TraceOutcome {
     IN_PROGRESS;
 
     /** A trace still running has ended neither way, whatever its stored spans say so far. */
-    public static TraceOutcome of(boolean complete, TraceStatus status) {
+    public static TraceOutcome of(boolean complete, boolean failed) {
         if (!complete) {
             return IN_PROGRESS;
         }
-        return status == TraceStatus.HAS_ERRORS ? ERROR : OK;
+        return failed ? ERROR : OK;
     }
 }

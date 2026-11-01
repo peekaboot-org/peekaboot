@@ -55,6 +55,34 @@ class TraceDataBundleTest {
     }
 
     @Test
+    void anErrorLogAloneFailsTheSnapshot() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
+        bundle.addSpan(span("root").build());
+        bundle.addLog(log("trace1").inSpan("root").at("ERROR").build());
+
+        assertThat(bundle.snapshot().failed()).isTrue();
+    }
+
+    @Test
+    void aServerSpanAnswering5xxAloneFailsTheSnapshot() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
+        bundle.addSpan(span("root")
+                .kind(Span.Kind.SERVER)
+                .tag("http.response.status_code", "502")
+                .build());
+
+        assertThat(bundle.snapshot().failed()).isTrue();
+    }
+
+    @Test
+    void aPlainSpanLeavesTheSnapshotUnfailed() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1", 100, NO_CAP);
+        bundle.addSpan(span("root").kind(Span.Kind.SERVER).build());
+
+        assertThat(bundle.snapshot().failed()).isFalse();
+    }
+
+    @Test
     void collapsesADuplicateChildArrivingBeforeItsRealParent() {
         // The expected OTel BatchSpanProcessor export ordering: a duplicate span is a
         // direct child of the real span it duplicates, and a span cannot end (and so
