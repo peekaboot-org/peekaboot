@@ -13,9 +13,8 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 
 class PeekabootTracingPropertiesTest {
 
-    private static PeekabootTracingProperties bind(String threshold) {
-        Binder binder = new Binder(
-                new MapConfigurationPropertySource(Map.of("peekaboot.tracing.repeated-query-threshold", threshold)));
+    private static PeekabootTracingProperties bind(String property, String value) {
+        Binder binder = new Binder(new MapConfigurationPropertySource(Map.of("peekaboot.tracing." + property, value)));
         return binder.bind("peekaboot.tracing", Bindable.of(PeekabootTracingProperties.class))
                 .get();
     }
@@ -24,7 +23,7 @@ class PeekabootTracingPropertiesTest {
     @ParameterizedTest
     @ValueSource(ints = {1, 0, -3})
     void refusesARepeatedQueryThresholdBelowTwoWhileBinding(int threshold) {
-        assertThatThrownBy(() -> bind(String.valueOf(threshold)))
+        assertThatThrownBy(() -> bind("repeated-query-threshold", String.valueOf(threshold)))
                 .isInstanceOf(BindException.class)
                 .rootCause()
                 .isInstanceOf(IllegalArgumentException.class)
@@ -35,6 +34,25 @@ class PeekabootTracingPropertiesTest {
     @ParameterizedTest
     @ValueSource(ints = {2, 5})
     void bindsARepeatedQueryThresholdFromTwo(int threshold) {
-        assertThat(bind(String.valueOf(threshold)).getRepeatedQueryThreshold()).isEqualTo(threshold);
+        assertThat(bind("repeated-query-threshold", String.valueOf(threshold)).getRepeatedQueryThreshold())
+                .isEqualTo(threshold);
+    }
+
+    /** A negative ring size names nothing, so it fails at binding instead of keeping no line by accident. */
+    @ParameterizedTest
+    @ValueSource(ints = {-1, -1000})
+    void refusesANegativeUntracedLogCapWhileBinding(int cap) {
+        assertThatThrownBy(() -> bind("max-untraced-logs", String.valueOf(cap)))
+                .isInstanceOf(BindException.class)
+                .rootCause()
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("peekaboot.tracing.max-untraced-logs must be at least 0 (" + cap + " configured)");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 5000})
+    void bindsAnUntracedLogCapFromZero(int cap) {
+        assertThat(bind("max-untraced-logs", String.valueOf(cap)).getMaxUntracedLogs())
+                .isEqualTo(cap);
     }
 }

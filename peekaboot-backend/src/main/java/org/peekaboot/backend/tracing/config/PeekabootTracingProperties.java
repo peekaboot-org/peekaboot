@@ -44,6 +44,9 @@ public class PeekabootTracingProperties {
     /** Maximum correlated log entries retained per trace. */
     private int maxLogsPerTrace = 500;
 
+    /** Log lines written outside any trace that are kept for the log search, oldest dropped first; 0 keeps none. */
+    private int maxUntracedLogs = 1000;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -151,5 +154,18 @@ public class PeekabootTracingProperties {
 
     public void setMaxLogsPerTrace(int maxLogsPerTrace) {
         this.maxLogsPerTrace = maxLogsPerTrace;
+    }
+
+    public int getMaxUntracedLogs() {
+        return maxUntracedLogs;
+    }
+
+    /** Rejected below 0 while binding, since a negative ring size names nothing. */
+    public void setMaxUntracedLogs(int maxUntracedLogs) {
+        if (maxUntracedLogs < 0) {
+            throw new IllegalArgumentException(
+                    "peekaboot.tracing.max-untraced-logs must be at least 0 (" + maxUntracedLogs + " configured)");
+        }
+        this.maxUntracedLogs = maxUntracedLogs;
     }
 }

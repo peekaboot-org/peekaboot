@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Logs.log;
+import static org.peekaboot.backend.testsupport.Logs.untraced;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
@@ -589,6 +590,34 @@ class InMemoryTraceStoreTest {
         assertThat(storage.bucketsOf("both")).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
         assertThat(storage.bucketsOf("plain")).isEmpty();
         assertThat(storage.bucketsOf("unknown")).isEmpty();
+    }
+
+    /** An untraced ERROR line fails no trace, since it names none, and fills no bucket. */
+    @Test
+    void aLineWithoutATraceGoesToTheUntracedRingAndNoBucket() {
+        storage.addLog(untraced().at("ERROR").saying("startup failed").build());
+
+        assertThat(storage.untracedLogs()).extracting(LogCapturedEvent::message).containsExactly("startup failed");
+        assertThat(storage.getTraceCount(TraceBucket.ALL)).isZero();
+        assertThat(storage.getTraceCount(TraceBucket.ERRORS)).isZero();
+    }
+
+    @Test
+    void aTracedLineStaysOutOfTheUntracedRing() {
+        storage.addLog(log("t1").build());
+
+        assertThat(storage.untracedLogs()).isEmpty();
+        assertThat(storage.getTraceCount(TraceBucket.ALL)).isEqualTo(1);
+    }
+
+    @Test
+    void theUntracedRingKeepsTheConfiguredNewest() {
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxUntracedLogs(2));
+        store.addLog(untraced().saying("a").build());
+        store.addLog(untraced().saying("b").build());
+        store.addLog(untraced().saying("c").build());
+
+        assertThat(store.untracedLogs()).extracting(LogCapturedEvent::message).containsExactly("b", "c");
     }
 
     private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {

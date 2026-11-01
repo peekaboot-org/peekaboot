@@ -240,7 +240,7 @@ org.peekaboot.backend/
 │   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
 │   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
 │   ├── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
-│   │                       # AsyncMembership, Window, ListingRoots, ListedTrace,
+│   │                       # AsyncMembership, Window, ListingRoots, ListedTrace, UntracedLogRing,
 │   │                       # SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
 │   └── tags/               # The span-tag vocabulary capture, store and mappers share: AsyncTaskMarker,
 │                           # EventListenerMarker, QueryParameterTags (Peekaboot's own keys), HttpSpanTags,
@@ -252,7 +252,7 @@ org.peekaboot.backend/
 
 1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`
 2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), three insertion-ordered bounded maps: the All, Errors and Slow buckets
-3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and drops events without a `traceId`
+3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event. One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request and the page reuses. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)
 6. **Thresholds**: `IssueDetector` raises SLOW and VERY_SLOW on a span's self time (`SpanNode.selfMs`, its duration minus what its children cover, from `SelfTimes`) and SLOW_QUERY on a query's whole duration, at `PeekabootTracingProperties`' thresholds. REPEATED_QUERY sits on the span that ran the same normalised statement at least `repeated-query-threshold` times (default 5) as its direct children (`RepeatedQueries`). CLIENT_ERROR, a warning, sits on a server root that answered 4xx (`HttpSpanTags.clientErrorStatus`) and leaves the outcome and Errors alone. `PeekabootAutoConfiguration` binds the thresholds whether or not tracing is on. Failing raises no issue of its own, since a failed span's `status` and error fields already say so. The threshold issues apply to a failed span as to any other. `TraceReasons` derives a trace's reasons from the store's admission rules; `outcome` is `ERROR` once complete when the store's sticky failure flag (`TraceData.failed`) is set or one of its reasons is a failure, or for a subtree row once its own reasons hold a failure. The SLOW badge follows the `SLOW` reason. `GET /peekaboot/api/features` publishes the time thresholds (`Features`), so the frontend colours by the same numbers instead of keeping a copy
@@ -1313,6 +1313,20 @@ no header-injection code anywhere in the repo.
 `TraceLogMapper` maps them into the trace's flat log list on read (see *Trace Assembly and
 Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which
 `TraceCaptureAutoConfiguration` registers while tracing is on, whatever the toolbar switch says.
+Capture stops at `ContextClosedEvent`, before the context destroys any bean, because a line
+reaching the store's listener after that would make the closing context rebuild it.
+
+A line without a trace id, written at startup, on a thread outside any trace, or by Tomcat after
+a request's trace ended, goes into the `UntracedLogRing`, the newest
+`peekaboot.tracing.max-untraced-logs` (1000) beside the buckets. It belongs to no bucket and fails
+no trace, whatever its level. `TraceStore.addLog` stays the one entry point, so whatever replays
+the store's input replays these lines too.
+
+The ring takes its own lock to add a line and to copy
+itself for `untracedLogs()`, and no bucket read shares it. A line can arrive, or a trace can enter
+a bucket, between a read of the buckets and a read of the ring. With several contexts in one JVM,
+as in a test suite, every context's appender hangs off the one root logger, so each context's
+ring also holds the other contexts' untraced lines.
 
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot does
 that on the first start in a JVM and on the first start after any application closed or failed

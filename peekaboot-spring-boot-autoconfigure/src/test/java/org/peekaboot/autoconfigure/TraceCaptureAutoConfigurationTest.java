@@ -8,16 +8,22 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.util.ContextInitializer;
 import ch.qos.logback.core.Appender;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.tracing.Tracer;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.capture.PeekabootLogbackAppender;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.boot.SpringApplication;
@@ -29,10 +35,13 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.web.context.servlet.AnnotationConfigServletWebApplicationContext;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.support.SpringFactoriesLoader;
@@ -123,6 +132,88 @@ class TraceCaptureAutoConfigurationTest {
     }
 
     /**
+     * A line that reached the store while the closing context destroys its beans would make it
+     * rebuild them, so capture ends at ContextClosedEvent, before the first bean is destroyed.
+     */
+    @Test
+    void stopsCapturingOnceTheContextStartsClosing() {
+        int before = peekabootAppenderCount();
+        AtomicReference<TraceStore> store = new AtomicReference<>();
+        AtomicReference<ShutdownLogger> shutdownLogger = new AtomicReference<>();
+        String whileRunning = "logged while running " + UUID.randomUUID();
+
+        contextRunner
+                .withUserConfiguration(TracerOnlyConfig.class, ShutdownLogger.class)
+                .run(context -> {
+                    store.set(context.getBean(TraceStore.class));
+                    shutdownLogger.set(context.getBean(ShutdownLogger.class));
+                    LoggerFactory.getLogger(TraceCaptureAutoConfigurationTest.class)
+                            .info(whileRunning);
+                });
+
+        assertThat(shutdownLogger.get().appendersWhileDestroyed)
+                .as("the appender is detached before any bean is destroyed")
+                .isEqualTo(before);
+        assertThat(store.get().untracedLogs())
+                .extracting(LogCapturedEvent::message)
+                .as("a line from the running context is captured, the one from its shutdown is not")
+                .contains(whileRunning)
+                .doesNotContain(shutdownLogger.get().message);
+    }
+
+    /**
+     * A refresh that fails publishes no ContextClosedEvent, so the registrar's destroy callback
+     * has to detach. The context logs the failure as a WARN, which this test asserts and keeps off
+     * the console.
+     */
+    @Test
+    void detachesWhenTheRefreshFailsAfterCaptureBegan() {
+        int before = peekabootAppenderCount();
+        Logger contextLogger = ((LoggerContext) LoggerFactory.getILoggerFactory())
+                .getLogger(AnnotationConfigServletWebApplicationContext.class);
+        ListAppender<ILoggingEvent> refreshWarnings = new ListAppender<>();
+        refreshWarnings.start();
+        contextLogger.addAppender(refreshWarnings);
+        contextLogger.setAdditive(false);
+        try {
+            contextRunner
+                    .withUserConfiguration(TracerOnlyConfig.class, FailingAfterCapture.class)
+                    .run(context -> assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .hasMessage(FailingAfterCapture.FAILURE));
+        } finally {
+            contextLogger.setAdditive(true);
+            contextLogger.detachAppender(refreshWarnings);
+        }
+
+        assertThat(refreshWarnings.list)
+                .singleElement()
+                .satisfies(warning -> assertThat(warning.getFormattedMessage())
+                        .contains("cancelling refresh attempt")
+                        .contains("FailingAfterCapture"));
+        assertThat(peekabootAppenderCount())
+                .as("the appender is detached after the failed refresh")
+                .isEqualTo(before);
+    }
+
+    /** A child context's ContextClosedEvent reaches its parent's listeners too. */
+    @Test
+    void keepsCapturingWhenAChildContextCloses() {
+        int before = peekabootAppenderCount();
+
+        contextRunner.withUserConfiguration(TracerOnlyConfig.class).run(context -> {
+            try (AnnotationConfigApplicationContext child = new AnnotationConfigApplicationContext()) {
+                child.setParent(context);
+                child.refresh();
+            }
+
+            assertThat(peekabootAppenderCount())
+                    .as("the parent's appender stays attached")
+                    .isEqualTo(before + 1);
+        });
+    }
+
+    /**
      * Spring Boot re-initialises Logback for every application that starts in the JVM, which
      * detaches and stops every appender registered in code. Appenders declared in
      * {@code logback.xml} come back with the configuration that follows; peekaboot's does not,
@@ -206,7 +297,7 @@ class TraceCaptureAutoConfigurationTest {
                 });
     }
 
-    private int peekabootAppenderCount() {
+    private static int peekabootAppenderCount() {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         Logger root = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
         int count = 0;
@@ -222,6 +313,32 @@ class TraceCaptureAutoConfigurationTest {
     @Configuration
     @EnableConfigurationProperties(PeekabootProperties.class)
     static class MinimalPropertiesConfig {}
+
+    /** Destroyed before the registrar, which it depends on, and logs one line while it is. */
+    @DependsOn("logbackAppenderRegistrar")
+    static class ShutdownLogger {
+
+        final String message = "logged while destroyed " + UUID.randomUUID();
+        int appendersWhileDestroyed = -1;
+
+        @PreDestroy
+        void logWhileDestroyed() {
+            appendersWhileDestroyed = peekabootAppenderCount();
+            LoggerFactory.getLogger(ShutdownLogger.class).info(message);
+        }
+    }
+
+    /** Fails the refresh once the registrar has attached the appender. */
+    @DependsOn("logbackAppenderRegistrar")
+    static class FailingAfterCapture {
+
+        static final String FAILURE = "the refresh fails after capture began";
+
+        @PostConstruct
+        void fail() {
+            throw new IllegalStateException(FAILURE);
+        }
+    }
 
     @Configuration
     static class TracerOnlyConfig {
@@ -253,9 +370,9 @@ class TraceCaptureAutoConfigurationTest {
     }
 
     /**
-     * Only events carrying a traceId in the MDC are captured. The event has to travel up to
-     * the root logger, where the capture appender hangs, so root's other appenders - the
-     * console - are unhooked for the one statement rather than additivity switched off.
+     * Logs {@code message} inside a trace. The event has to travel up to the root logger, where
+     * the capture appender hangs, so root's other appenders - the console - are unhooked for the
+     * one statement rather than additivity switched off.
      */
     private void logWithTraceId(String message) {
         Logger root = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(Logger.ROOT_LOGGER_NAME);

@@ -1,10 +1,13 @@
 package org.peekaboot.backend.tracing.event;
 
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One captured log line.
  *
+ * @param traceId the trace frozen in the event's MDC; null for a line written outside any trace
+ * @param spanId the span frozen in the event's MDC; null outside a span
  * @param logger the name of the logger it was written to
  * @param thread the name of the thread that wrote it
  * @param stackTrace {@code ThrowableProxyUtil.asString}'s rendering of the logged throwable, or
@@ -16,14 +19,14 @@ import java.time.Instant;
  *     with a trailing marker where it was.
  */
 public record LogCapturedEvent(
-        String traceId,
-        String spanId,
+        @Nullable String traceId,
+        @Nullable String spanId,
         Instant timestamp,
         String level,
         String logger,
         String thread,
         String message,
-        String stackTrace) {
+        @Nullable String stackTrace) {
 
     public boolean isError() {
         return "ERROR".equalsIgnoreCase(level);

@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -60,8 +61,8 @@ public class TraceCaptureAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
-            return new LogbackAppenderRegistrar(eventPublisher);
+        LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationContext applicationContext) {
+            return new LogbackAppenderRegistrar(applicationContext);
         }
     }
 }

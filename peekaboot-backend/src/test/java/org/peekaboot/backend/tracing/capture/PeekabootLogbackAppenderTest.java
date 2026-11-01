@@ -108,14 +108,22 @@ class PeekabootLogbackAppenderTest {
     }
 
     @Test
-    @DisplayName("drops an uncorrelated event - it belongs to no trace")
-    void ignoresEventWithoutTraceId() {
+    @DisplayName("captures an event outside any trace, with no trace or span id, for the store's untraced ring")
+    void capturesAnEventOutsideAnyTrace() {
         logger.error("no MDC at all");
 
         MDC.put("traceId", "   ");
+        MDC.put("spanId", SPAN_ID);
         logger.error("blank traceId");
 
-        assertThat(captured).isEmpty();
+        MDC.remove("traceId");
+        logger.error("span id alone");
+
+        assertThat(captured)
+                .extracting(LogCapturedEvent::message)
+                .containsExactly("no MDC at all", "blank traceId", "span id alone");
+        assertThat(captured).extracting(LogCapturedEvent::traceId).containsOnlyNulls();
+        assertThat(captured).extracting(LogCapturedEvent::spanId).containsOnlyNulls();
     }
 
     @Test

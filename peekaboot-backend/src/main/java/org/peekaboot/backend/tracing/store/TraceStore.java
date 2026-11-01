@@ -31,4 +31,10 @@ public interface TraceStore {
 
     /** The Errors and Slow buckets listing {@code traceId}. All lists every trace, so it is never named. */
     Set<TraceBucket> bucketsOf(String traceId);
+
+    /**
+     * The log lines written outside any trace that the untraced ring still holds, oldest first,
+     * copied under the ring's own lock, which no bucket read takes.
+     */
+    List<LogCapturedEvent> untracedLogs();
 }

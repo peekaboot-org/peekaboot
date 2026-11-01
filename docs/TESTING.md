@@ -106,6 +106,7 @@ takes the mapped `SqlStatement`.
 internal `TraceTree` around one, complete, without orphans and with no request unless its
 setters say otherwise. `Logs.log(traceId)` builds a `LogCapturedEvent`,
 written to `TestLogger` on thread `main` unless `from(...)` or `onThread(...)` says otherwise,
+`Logs.untraced()` one written outside any trace,
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`.

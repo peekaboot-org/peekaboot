@@ -142,6 +142,12 @@ a server span's 5xx or an ERROR log. `TraceStore.bucketsOf` names the Errors and
 listing a trace. Definitions and thresholds:
 [the three buckets](https://www.peekaboot.org/docs/traces/#the-three-buckets).
 
+### Untraced Log
+A captured log line whose MDC carried no trace id: written at startup, on a thread outside any
+trace, or after a request's trace ended (Tomcat's own error line). `InMemoryTraceStore` keeps the
+newest `peekaboot.tracing.max-untraced-logs` (1000) in an `UntracedLogRing` beside the buckets.
+They count in no bucket and fail no trace.
+
 ## Where the code and the UI use different words
 
 Each row is a place a grep for the UI's word will not find the code, or the reverse.

@@ -8,14 +8,16 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.peekaboot.backend.tracing.capture.PeekabootLogbackAppender;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextClosedEvent;
 
 /**
- * Attaches the log-capture appender to the root logger for the life of the application
- * context, and keeps the JVM-wide bookkeeping {@link LogbackCaptureReinstaller} needs to
+ * Attaches the log-capture appender to the root logger until the application context starts
+ * closing, and keeps the JVM-wide bookkeeping {@link LogbackCaptureReinstaller} needs to
  * put every live appender back after Boot re-initialises Logback.
  */
-class LogbackAppenderRegistrar {
+class LogbackAppenderRegistrar implements ApplicationListener<ContextClosedEvent> {
 
     /**
      * JVM-wide, like the {@code LoggerContext}: the appender of every running application
@@ -23,11 +25,11 @@ class LogbackAppenderRegistrar {
      */
     private static final Set<PeekabootLogbackAppender> LIVE_APPENDERS = ConcurrentHashMap.newKeySet();
 
-    private final ApplicationEventPublisher eventPublisher;
+    private final ApplicationContext applicationContext;
     private PeekabootLogbackAppender appender;
 
-    LogbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
-        this.eventPublisher = eventPublisher;
+    LogbackAppenderRegistrar(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
     }
 
     @PostConstruct
@@ -36,7 +38,7 @@ class LogbackAppenderRegistrar {
             return;
         }
 
-        appender = new PeekabootLogbackAppender(eventPublisher);
+        appender = new PeekabootLogbackAppender(applicationContext);
         appender.setContext(loggerContext);
         appender.start();
 
@@ -45,6 +47,19 @@ class LogbackAppenderRegistrar {
         LIVE_APPENDERS.add(appender);
     }
 
+    /**
+     * Detaches before the context destroys a bean, since a line reaching the store's listener
+     * after that would make the closing context rebuild it.
+     */
+    @Override
+    public void onApplicationEvent(ContextClosedEvent event) {
+        // a child context's close reaches its parent's listeners too
+        if (applicationContext.equals(event.getApplicationContext())) {
+            detachAppender();
+        }
+    }
+
+    /** The fallback for a context whose refresh failed, which publishes no ContextClosedEvent. */
     @PreDestroy
     void detachAppender() {
         // the LoggerContext outlives the Spring context (devtools restarts);

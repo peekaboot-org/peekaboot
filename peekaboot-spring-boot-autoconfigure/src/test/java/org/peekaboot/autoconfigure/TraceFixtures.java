@@ -12,7 +12,8 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 
 /**
  * The spans and captured logs the auto-configuration tests put in a {@link TraceStore}, all of
- * trace {@code t1}. The backend's own span fixture is out of reach: it publishes no test jar.
+ * trace {@code t1} apart from the untraced log. The backend's own span fixture is out of reach: it
+ * publishes no test jar.
  */
 final class TraceFixtures {
 
@@ -55,6 +56,11 @@ final class TraceFixtures {
                 "main",
                 "boom",
                 "java.lang.IllegalStateException: boom\n\tat com.acme.vendor.Client.call(Client.java:42)\n");
+    }
+
+    /** A line written outside any trace, as the appender publishes one written at startup. */
+    static LogCapturedEvent untracedLog(String message) {
+        return new LogCapturedEvent(null, null, Instant.EPOCH, "INFO", "com.acme.Startup", "main", message, null);
     }
 
     private static SpanData span(

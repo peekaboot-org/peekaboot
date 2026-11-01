@@ -15,6 +15,11 @@ public final class Logs {
         return new LogBuilder(traceId);
     }
 
+    /** A line written outside any trace: no trace id and no span id in its MDC. */
+    public static LogBuilder untraced() {
+        return new LogBuilder(null).inSpan(null);
+    }
+
     public static final class LogBuilder {
 
         private final String traceId;

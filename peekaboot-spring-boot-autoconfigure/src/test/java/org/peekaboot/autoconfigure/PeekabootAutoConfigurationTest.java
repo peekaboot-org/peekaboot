@@ -22,6 +22,7 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -163,6 +164,23 @@ class PeekabootAutoConfigurationTest {
                                     .issues())
                             .extracting(TraceIssue::type)
                             .containsExactly(IssueType.REPEATED_QUERY);
+                });
+    }
+
+    /** The bound cap reaches the store's ring: the oldest line is the one that goes. */
+    @Test
+    void keepsTheUntracedLogCapBoundUnderTracing() {
+        tracingRunner()
+                .withPropertyValues("peekaboot.tracing.max-untraced-logs=2")
+                .run(context -> {
+                    TraceStore store = context.getBean(TraceStore.class);
+                    store.addLog(TraceFixtures.untracedLog("first"));
+                    store.addLog(TraceFixtures.untracedLog("second"));
+                    store.addLog(TraceFixtures.untracedLog("third"));
+
+                    assertThat(store.untracedLogs())
+                            .extracting(LogCapturedEvent::message)
+                            .containsExactly("second", "third");
                 });
     }
 

@@ -20,7 +20,9 @@ import org.peekaboot.backend.tracing.event.SpanData;
 /**
  * In-memory {@link TraceStore}: three insertion-ordered buckets, each capped at its own size
  * and evicting its oldest trace once full. Each bucket remembers when a trace entered it, in
- * span export order, so the listing can place rows that arrive after their trace did.
+ * span export order, so the listing can place rows that arrive after their trace did. A log line
+ * written outside any trace goes to a ring of its own beside them, the newest
+ * {@code max-untraced-logs}.
  */
 public class InMemoryTraceStore implements TraceStore {
 
@@ -29,6 +31,7 @@ public class InMemoryTraceStore implements TraceStore {
     private final int maxSpansPerTrace;
     private final long slowTraceThresholdMs;
     private final int maxLogsPerTrace;
+    private final UntracedLogRing untracedLogs;
     private final Map<TraceBucket, Map<String, ListedTrace>> buckets = new EnumMap<>(TraceBucket.class);
     private final AtomicLong newestSpanOrder = new AtomicLong();
     private final AtomicLong listingSequence = new AtomicLong();
@@ -37,6 +40,7 @@ public class InMemoryTraceStore implements TraceStore {
         this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
         this.slowTraceThresholdMs = properties.getSlowTraceThresholdMs();
         this.maxLogsPerTrace = properties.getMaxLogsPerTrace();
+        this.untracedLogs = new UntracedLogRing(properties.getMaxUntracedLogs());
         buckets.put(TraceBucket.ALL, boundedMap(properties.getMaxTraces()));
         buckets.put(TraceBucket.ERRORS, boundedMap(properties.getMaxErrorTraces()));
         buckets.put(TraceBucket.SLOW, boundedMap(properties.getMaxSlowTraces()));
@@ -59,8 +63,13 @@ public class InMemoryTraceStore implements TraceStore {
         classify(bundle);
     }
 
+    /** A line without a trace id goes to the untraced ring, and into no bucket whatever its level. */
     @Override
     public void addLog(LogCapturedEvent log) {
+        if (log.traceId() == null) {
+            untracedLogs.add(log);
+            return;
+        }
         TraceDataBundle bundle = resolveBundle(log.traceId());
         bundle.addLog(log);
         // logs never affect slow classification and can only ever add a trace to the
@@ -138,6 +147,11 @@ public class InMemoryTraceStore implements TraceStore {
             }
         }
         return listing;
+    }
+
+    @Override
+    public List<LogCapturedEvent> untracedLogs() {
+        return untracedLogs.logs();
     }
 
     private List<ListedTrace> newestFirst(Map<String, ListedTrace> bucket, int limit) {
