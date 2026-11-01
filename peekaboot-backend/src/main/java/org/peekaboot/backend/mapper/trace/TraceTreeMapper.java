@@ -284,6 +284,7 @@ public class TraceTreeMapper {
                 spanData.kind(),
                 spanData.startTime(),
                 spanData.durationMs(),
+                SelfTimes.selfMs(spanData, childSpans),
                 status,
                 children,
                 maskedTags(spanData),

@@ -6,12 +6,18 @@ import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * One mapped span with the children it ran.
+ *
+ * @param selfMs the part of {@code durationMs} no child covered, each child clipped to this span's window
+ */
 public record SpanNode(
         String spanId,
         String name,
         Span.Kind kind,
         Instant startTime,
         long durationMs,
+        long selfMs,
         SpanStatus status,
         List<SpanNode> children,
         Map<String, String> tags,
@@ -38,6 +44,7 @@ public record SpanNode(
                 kind,
                 startTime,
                 durationMs,
+                selfMs,
                 status,
                 newChildren,
                 tags,

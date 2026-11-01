@@ -29,10 +29,10 @@ public class PeekabootTracingProperties {
     /** Duration in milliseconds, background async work excluded, at or above which a trace enters the Slow bucket. */
     private long slowTraceThresholdMs = 1000;
 
-    /** A single span's own duration in milliseconds at or above which it gets the SLOW issue. */
+    /** A span's self time in milliseconds, its duration minus what its child spans cover, at or above which it gets the SLOW issue. */
     private long slowSpanThresholdMs = 100;
 
-    /** A single span's own duration in milliseconds at or above which it gets VERY_SLOW instead of SLOW. */
+    /** A span's self time in milliseconds at or above which it gets VERY_SLOW instead of SLOW. */
     private long verySlowSpanThresholdMs = 500;
 
     /** A database query span's duration in milliseconds at or above which it gets the SLOW_QUERY issue. */

@@ -112,7 +112,9 @@ has two and serialises lowercase through `@JsonValue`. The UI colours a span's d
 `severity` alone (`severity.js`'s `issueSeverity`), never by `type`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
-`issues` empty on every node it builds. Firing conditions:
+`issues` empty on every node it builds. SLOW and VERY_SLOW judge `selfMs`, so a slow child
+marks only itself. `selfMs` reads high on a trace whose span cap dropped some children, since
+a dropped child covers nothing. Firing conditions:
 [issues](https://www.peekaboot.org/docs/traces/#issues). Thresholds and property names:
 [peekaboot.tracing](https://www.peekaboot.org/docs/configuration/#issue-thresholds).
 

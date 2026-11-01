@@ -331,12 +331,15 @@ fetches `/api/features`; its data blob carries the three span and query threshol
 hands them to the overlay it opens. The frontend keeps no copy of either.
 
 Every comparison is at-or-above (`>=`), on both sides of the wire. `IssueDetector` raises
-SLOW/VERY_SLOW/SLOW_QUERY at `duration >= threshold`, and `durationSeverity()`/
-`querySeverity()` colour with the same comparison. A 100 ms span is already SLOW at the
-default thresholds, a 50 ms query already slow. Where a span's own issues are in hand,
-`issueSeverity(span.issues)` reads the backend's verdict, each issue's `severity`, and colours
-the gantt duration cells; `durationSeverity()` re-derives a severity only for durations no
-issue describes, meaning a trace's total query time. The overlay's header and the dev
+SLOW/VERY_SLOW at `selfMs >= threshold` and SLOW_QUERY at `duration >= threshold`, and
+`durationSeverity()`/`querySeverity()` colour with the same comparison. A span with 100 ms of
+self time is already SLOW at the default thresholds, a 50 ms query already slow. Where a
+span's own issues are in hand, `issueSeverity(span.issues)` reads the backend's verdict, each
+issue's `severity`, and colours the gantt duration cells. A gantt cell shows the span's whole
+duration and is coloured by the backend's issues, which judge self time for SLOW/VERY_SLOW and
+the whole duration for SLOW_QUERY, so a parent that only waited stays uncoloured.
+`durationSeverity()` re-derives a severity only for durations no issue describes, meaning a
+trace's total query time. The overlay's header and the dev
 toolbar colour a trace's duration by the backend's per-trace `slow` flag (below), the same
 flag the Traces tab's badge reads. A Flyway migration's execution time is not coloured at all: the span
 thresholds describe request spans, and a migration that takes seconds is doing its job. The

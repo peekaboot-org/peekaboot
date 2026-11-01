@@ -94,6 +94,29 @@ class TraceTreeMapperTest {
                 .containsExactly("span-grandchild");
     }
 
+    /** A parent's self time is what no child covers, so a request waiting on a slow query is not itself slow. */
+    @Test
+    void eachSpanCarriesItsSelfTime() {
+        var root = span("root")
+                .named("http get /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .order(1)
+                .build();
+        var query = span("query")
+                .named("SELECT 1")
+                .kind(Span.Kind.CLIENT)
+                .parent("root")
+                .at(20, 70)
+                .order(2)
+                .build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", root, query));
+
+        assertThat(result.rootSpan().selfMs()).isEqualTo(30);
+        assertThat(result.rootSpan().children().getFirst().selfMs()).isEqualTo(70);
+    }
+
     @Test
     void attachesOrphanSubtreesToRoot() {
         // Spans can arrive before their parent is exported; a subtree whose

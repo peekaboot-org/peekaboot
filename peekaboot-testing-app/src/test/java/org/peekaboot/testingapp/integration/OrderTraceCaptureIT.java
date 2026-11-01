@@ -158,6 +158,41 @@ class OrderTraceCaptureIT extends TestingAppITBase {
                 .contains("order.report.load-lines", "order.report.price-lines", "order.report.apply-discounts");
     }
 
+    /**
+     * The report's three stages sleep 400, 600 and 400 ms under one enclosing span. That span
+     * waited for them, so its self time leaves their 1,400 ms out and it raises no VERY_SLOW for
+     * them, while the 600 ms stage is VERY_SLOW on its own.
+     */
+    @Test
+    void theSpanAroundTheReportStagesIsNotVerySlow() {
+        CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-SELF-TIME");
+        try {
+            String traceId = traces.get("/api/orders/" + order.getId() + "/report");
+            JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
+
+            JsonNode enclosing = SpanTree.parentOf(trace, "order.report.price-lines");
+            assertThat(enclosing.path("selfMs").isIntegralNumber())
+                    .as("the enclosing span %s carries selfMs", SpanTree.spanId(enclosing))
+                    .isTrue();
+            assertThat(enclosing.path("selfMs").asLong())
+                    .isLessThanOrEqualTo(enclosing.path("durationMs").asLong() - 1400);
+            assertThat(enclosing
+                            .path("issues")
+                            .valueStream()
+                            .map(issue -> issue.path("type").asString()))
+                    .doesNotContain("VERY_SLOW");
+            JsonNode priceLines =
+                    SpanTree.spansNamed(trace, "order.report.price-lines").getFirst();
+            assertThat(priceLines
+                            .path("issues")
+                            .valueStream()
+                            .map(issue -> issue.path("type").asString()))
+                    .contains("VERY_SLOW");
+        } finally {
+            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+        }
+    }
+
     @Test
     void failingEndpointLandsInTheErrorsBucket() {
         String traceId = traces.get("/boom");

@@ -93,6 +93,22 @@ final class SpanTree {
         return spans;
     }
 
+    /** The span whose direct child is the first span called {@code childName}, or an error when none is. */
+    static JsonNode parentOf(JsonNode trace, String childName) {
+        List<JsonNode> found = new ArrayList<>();
+        walk(trace.path("rootSpan"), span -> {
+            for (JsonNode child : span.path("children")) {
+                if (childName.equals(child.path("name").asString(""))) {
+                    found.add(span);
+                }
+            }
+        });
+        if (found.isEmpty()) {
+            throw new AssertionError("no span has a child named '" + childName + "'");
+        }
+        return found.getFirst();
+    }
+
     /** Every exception a span of the trace carries, in walk order. */
     static List<JsonNode> exceptions(JsonNode trace) {
         List<JsonNode> exceptions = new ArrayList<>();

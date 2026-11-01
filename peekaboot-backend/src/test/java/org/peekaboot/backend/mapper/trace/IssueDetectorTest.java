@@ -128,9 +128,9 @@ class IssueDetectorTest {
     }
 
     /**
-     * One tree that trips every rule at the defaults: a 600ms root with six 80ms direct
-     * queries. Raising all three thresholds above it must silence each rule, so a threshold
-     * the detector stopped reading would show up here.
+     * One tree that trips every rule at the defaults: a root with 600ms of its own time and
+     * six 80ms direct queries. Raising all three thresholds above it must silence each rule,
+     * so a threshold the detector stopped reading would show up here.
      */
     @Test
     void everyThresholdIsRead() {
@@ -138,8 +138,11 @@ class IssueDetectorTest {
         for (int i = 0; i < 6; i++) {
             queries.add(querySpan("q" + i, 80, Map.of("db.system", "postgresql")));
         }
-        SpanNode root =
-                node("root").durationMs(600).children(List.copyOf(queries)).build();
+        SpanNode root = node("root")
+                .durationMs(1080)
+                .selfMs(600)
+                .children(List.copyOf(queries))
+                .build();
         TraceTree trace = tree(root).build();
 
         TraceTree atDefaults = detector.detectIssues(trace);
@@ -193,6 +196,41 @@ class IssueDetectorTest {
                         .get(0)
                         .type())
                 .isEqualTo(IssueType.SLOW);
+    }
+
+    /** A slow child is the child's issue; its ancestors only waited for it. */
+    @Test
+    void aSlowChildDoesNotMarkItsParent() {
+        long slowMs = properties.getSlowSpanThresholdMs();
+        SpanNode child = node("child").durationMs(slowMs).build();
+        SpanNode parent = node("parent")
+                .durationMs(slowMs + 5)
+                .selfMs(5)
+                .children(List.of(child))
+                .build();
+
+        TraceTree judged = detector.detectIssues(tree(parent).build());
+
+        assertThat(judged.rootSpan().issues()).isEmpty();
+        assertThat(judged.rootSpan().children().getFirst().issues())
+                .extracting(SpanIssue::type)
+                .containsExactly(IssueType.SLOW);
+    }
+
+    /** A query's own wait is the database's, so SLOW_QUERY keeps judging the whole query. */
+    @Test
+    void slowQueryJudgesTheWholeQuery() {
+        long slowQueryMs = properties.getSlowQueryThresholdMs();
+        SpanNode query = node("q")
+                .kind(Span.Kind.CLIENT)
+                .tags(Map.of("db.system", "h2"))
+                .durationMs(slowQueryMs)
+                .selfMs(0)
+                .build();
+
+        TraceTree judged = detector.detectIssues(tree(query).build());
+
+        assertThat(judged.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY);
     }
 
     @Test

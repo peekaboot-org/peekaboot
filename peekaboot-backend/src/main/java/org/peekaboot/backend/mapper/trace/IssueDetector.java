@@ -26,18 +26,18 @@ public class IssueDetector {
 
     private SpanNode processSpan(SpanNode span) {
         List<SpanIssue> issues = new ArrayList<>();
-        long durationMs = span.durationMs();
+        long selfMs = span.selfMs();
         long verySlowMs = properties.getVerySlowSpanThresholdMs();
         long slowMs = properties.getSlowSpanThresholdMs();
         long slowQueryMs = properties.getSlowQueryThresholdMs();
 
-        if (durationMs >= verySlowMs) {
+        if (selfMs >= verySlowMs) {
             issues.add(new SpanIssue(IssueType.VERY_SLOW, IssueSeverity.ERROR));
-        } else if (durationMs >= slowMs) {
+        } else if (selfMs >= slowMs) {
             issues.add(new SpanIssue(IssueType.SLOW, IssueSeverity.WARNING));
         }
 
-        if (DbSpans.isQuery(span) && durationMs >= slowQueryMs) {
+        if (DbSpans.isQuery(span) && span.durationMs() >= slowQueryMs) {
             issues.add(new SpanIssue(IssueType.SLOW_QUERY, IssueSeverity.WARNING));
         }
 

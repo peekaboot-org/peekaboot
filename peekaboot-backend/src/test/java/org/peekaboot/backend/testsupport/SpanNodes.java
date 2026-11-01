@@ -31,6 +31,7 @@ public final class SpanNodes {
         private Span.Kind kind = Span.Kind.SERVER;
         private Instant startTime;
         private long durationMs;
+        private Long selfMs;
         private SpanStatus status = SpanStatus.OK;
         private List<SpanNode> children = List.of();
         private Map<String, String> tags = Map.of();
@@ -62,6 +63,11 @@ public final class SpanNodes {
 
         public Builder durationMs(long durationMs) {
             this.durationMs = durationMs;
+            return this;
+        }
+
+        public Builder selfMs(long selfMs) {
+            this.selfMs = selfMs;
             return this;
         }
 
@@ -112,6 +118,7 @@ public final class SpanNodes {
                     kind,
                     startTime,
                     durationMs,
+                    selfMs != null ? selfMs : durationMs,
                     status,
                     children,
                     tags,
