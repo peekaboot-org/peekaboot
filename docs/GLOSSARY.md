@@ -113,7 +113,7 @@ and `CLIENT_ERROR`; `IssueSeverity` has two, and it and `IssueUnit` serialise lo
 `@JsonValue`. The UI colours a span's duration by `severity` alone (`severity.js`'s
 `issueSeverity`), never by `type`, and only for issues with `unit: ms`.
 
-Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
+Detection is `IssueDetector`, called from `TraceResources`. `TraceTreeMapper` leaves
 `issues` empty on every node it builds. SLOW and VERY_SLOW judge `selfMs`, so a slow child
 marks only itself. `selfMs` reads high on a trace whose span cap dropped some children, since
 a dropped child covers nothing. REPEATED_QUERY compares statements after `SqlNormalizer` and

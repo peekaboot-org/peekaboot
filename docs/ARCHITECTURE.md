@@ -254,7 +254,7 @@ org.peekaboot.backend/
 2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), three insertion-ordered bounded maps: the All, Errors and Slow buckets
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and drops events without a `traceId`
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
-5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW), then assembles and enriches the tree (see *Trace Assembly and Enrichment*)
+5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW), then has `TraceResources` assemble and enrich the tree (see *Trace Assembly and Enrichment*)
 6. **Thresholds**: `IssueDetector` raises SLOW and VERY_SLOW on a span's self time (`SpanNode.selfMs`, its duration minus what its children cover, from `SelfTimes`) and SLOW_QUERY on a query's whole duration, at `PeekabootTracingProperties`' thresholds. REPEATED_QUERY sits on the span that ran the same normalised statement at least `repeated-query-threshold` times (default 5) as its direct children (`RepeatedQueries`). CLIENT_ERROR, a warning, sits on a server root that answered 4xx (`HttpSpanTags.isClientError`) and leaves the outcome and Errors alone. `PeekabootAutoConfiguration` binds the thresholds whether or not tracing is on. A failed span raises none; its `status` and error fields already say so. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes the time thresholds (`Features`), so the frontend colours by the same numbers instead of keeping a copy
 
 ### Servlet Filters
@@ -768,9 +768,9 @@ The ten actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
 `MaskingEngine`, so the one override point for that pipeline is the service itself. They
 are stateless and need at most the engine, and ten `@ConditionalOnMissingBean` methods
 nobody overrode bought nothing but wiring. The trace mappers follow the same rule:
-`TraceInsightsService` builds `TraceTreeMapper`, `IssueDetector`, `QueryExtractor` and
-`TraceLogMapper` from the `MaskingEngine`, the `SqlFormatter`, `PeekabootTracingProperties`
-and `StackTraceRules`.
+`TraceResources`, which `TraceInsightsService` builds, holds `TraceTreeMapper`, `IssueDetector`,
+`QueryExtractor` and `TraceLogMapper`, built from the `MaskingEngine`, the `SqlFormatter`,
+`PeekabootTracingProperties` and `StackTraceRules`.
 
 ### Conditional Loading
 
@@ -1322,7 +1322,10 @@ logger context before resetting it, which drops even reset-resistant listeners.
 ### Trace Assembly and Enrichment
 
 Three collaborators turn a stored bundle into what the API returns, and the split is easy to
-get wrong: `TraceTreeMapper` builds the tree and nothing else.
+get wrong: `TraceTreeMapper` builds the tree and nothing else. `TraceResources` runs the first
+two and does the third.
+`TraceInsightsService` lists the rows and hands each to `TraceResources.row`, and the detail
+endpoint's bundle to `TraceResources.trace`.
 
 1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
    It re-parents orphans under the root the snapshot names, or serves the stored subtrees as
@@ -1331,18 +1334,17 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    `TraceTree.slow` false and every `SpanNode.issues` list empty.
    **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in and decides `TraceTree.slow`.
-   `TraceInsightsService` calls it on both trace endpoints.
-3. `TraceInsightsService.enrichWithDetails` adds what only the stored bundle knows: the flat log
-   list, each entry's `spanId` resolved through the bundle's duplicate redirects, the
-   `HttpExchange` (from `HttpExchangeMapper`) and `QueryExtractor`'s queries. The log list and
-   its count come from `TraceLogMapper`, to which it delegates and which masks each log's
-   message and stack trace by value shape, the trace through `WireStackTraces`. A failed span's
-   `exception` goes through the same `WireStackTraces`, so its stack trace is masked whole and
-   then folded exactly as a log's is. It runs on `GET /peekaboot/api/traces/{traceId}/insights`
-   only. The listing endpoint gets step 1, a log *count* for the row badges, and step 2, so its
-   trees carry issues but no log list and no queries. An async row takes
-   `TraceTreeMapper.mapSubtree` for step 1 and counts only the logs `TraceLogMapper.logsWithin`
-   finds in its own subtree.
+   `TraceResources` calls it for both trace endpoints.
+3. `TraceResources.trace` adds what only the stored bundle knows: the flat log list, each
+   entry's `spanId` resolved through the bundle's duplicate redirects, the `HttpExchange` (from
+   `HttpExchangeMapper`) and `QueryExtractor`'s queries. The log list and its count come from
+   `TraceLogMapper`, to which it delegates and which masks each log's message and stack trace
+   by value shape, the trace through `WireStackTraces`. A failed span's `exception` goes
+   through the same `WireStackTraces`, so its stack trace is masked whole and then folded
+   exactly as a log's is. It runs on `GET /peekaboot/api/traces/{traceId}/insights` only. The
+   listing endpoint gets step 1, a log *count* for the row badges, and step 2, so its trees
+   carry issues but no log list and no queries. An async row takes `TraceTreeMapper.mapSubtree`
+   for step 1 and counts only the logs `TraceLogMapper.logsWithin` finds in its own subtree.
 
 Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
 output through `TraceTree.withSpans`/`withSummary`/`withDetails` and `SpanNode.withIssues`,

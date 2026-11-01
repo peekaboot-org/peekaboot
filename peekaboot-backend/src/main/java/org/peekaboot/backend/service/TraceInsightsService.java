@@ -7,27 +7,17 @@ import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.BucketCounts;
-import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.peekaboot.backend.mapper.trace.HttpExchangeMapper;
-import org.peekaboot.backend.mapper.trace.IssueDetector;
-import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
-import org.peekaboot.backend.mapper.trace.TraceLogMapper;
-import org.peekaboot.backend.mapper.trace.TraceQueries;
-import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.mapper.trace.TraceResources;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.problem.RequestParameters;
 import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
-import org.peekaboot.backend.tracing.store.TraceData;
-import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
 
 public class TraceInsightsService {
@@ -54,15 +44,8 @@ public class TraceInsightsService {
     @Nullable
     private final TraceStore traceStore;
 
-    private final TraceTreeMapper traceTreeMapper;
-    private final IssueDetector issueDetector;
-    private final QueryExtractor queryExtractor;
-    private final TraceLogMapper traceLogMapper;
+    private final TraceResources traceResources;
 
-    /**
-     * The mappers are built here rather than injected, as in {@link ActuatorInsightsService}:
-     * the service is the one place the masking policy enters the trace pipeline.
-     */
     public TraceInsightsService(
             @Nullable TraceStore traceStore,
             MaskingEngine maskingEngine,
@@ -70,10 +53,7 @@ public class TraceInsightsService {
             PeekabootTracingProperties tracingProperties,
             StackTraceRules stackTraceRules) {
         this.traceStore = traceStore;
-        this.traceTreeMapper = new TraceTreeMapper(maskingEngine, sqlFormatter, stackTraceRules);
-        this.issueDetector = new IssueDetector(tracingProperties);
-        this.queryExtractor = new QueryExtractor();
-        this.traceLogMapper = new TraceLogMapper(maskingEngine, stackTraceRules);
+        this.traceResources = new TraceResources(maskingEngine, sqlFormatter, tracingProperties, stackTraceRules);
     }
 
     /**
@@ -103,8 +83,8 @@ public class TraceInsightsService {
         List<RowSource> matches = RowSources.matching(traceStore, bucket, actionTypeFilter, operationFilter);
         List<TraceTree> traceTrees = matches.stream()
                 .limit(limit)
-                .map(this::mapRow)
-                .map(issueDetector::detectIssues)
+                .map(row -> traceResources.row(
+                        row.bundle(), row.subtree() ? row.rootSpan().spanId() : null))
                 .toList();
 
         BucketCounts bucketCounts = new BucketCounts(
@@ -144,16 +124,6 @@ public class TraceInsightsService {
         return types;
     }
 
-    private TraceTree mapRow(RowSource row) {
-        TraceData traceData = row.bundle().snapshot();
-        if (!row.subtree()) {
-            return traceLogMapper.withLogsSummary(
-                    traceTreeMapper.map(traceData), row.bundle().logs());
-        }
-        TraceTree subtree = traceTreeMapper.mapSubtree(traceData, row.rootSpan().spanId());
-        return traceLogMapper.withLogsSummary(subtree, traceLogMapper.logsWithin(subtree.rootSpan(), row.bundle()));
-    }
-
     /**
      * The bucket's badge count for an active filter: distinct traces, not rows, so it stays
      * comparable to the unfiltered count beside it - a trace with two matching async rows
@@ -176,26 +146,6 @@ public class TraceInsightsService {
             return Optional.empty();
         }
 
-        return traceStore.getTrace(traceId).map(bundle -> {
-            TraceData traceData = bundle.snapshot();
-            TraceQueries traceQueries = traceTreeMapper.queriesOf(traceData);
-            List<QueryInfo> queries = queryExtractor.extract(traceData, traceQueries);
-            TraceTree tree = traceTreeMapper.map(traceData, traceQueries);
-            tree = issueDetector.detectIssues(tree);
-            return enrichWithDetails(tree, bundle, queries);
-        });
-    }
-
-    private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
-        RequestCompletedEvent reqEvent = bundle.request();
-        // an @Async task may log meanwhile, so the badges and the list count one read
-        List<LogCapturedEvent> logs = bundle.logs();
-
-        return traceLogMapper
-                .withLogsSummary(tree, logs)
-                .withDetails(
-                        reqEvent != null ? HttpExchangeMapper.map(reqEvent) : null,
-                        traceLogMapper.map(bundle, logs),
-                        queries);
+        return traceStore.getTrace(traceId).map(traceResources::trace);
     }
 }
