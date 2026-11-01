@@ -53,7 +53,7 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
 
     @Test
     void collapsedBarPicksUpASpanThatEndsAfterTheResponse() throws InterruptedException {
-        ParkedRequest firstRead = parkFirst("**/api/traces/*/insights");
+        ParkedRequest firstRead = parkFirst("**/api/traces/*");
         page.navigate(baseUrl + "/late-span");
         String barTraceId = toolbar.traceId();
 
@@ -81,15 +81,15 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
      */
     @Test
     void collapsedBarRendersACompleteTraceWhoseRootLateSpansEvicted() {
-        ParkedRequest firstRead = parkFirst("**/api/traces/*/insights");
+        ParkedRequest firstRead = parkFirst("**/api/traces/*");
         openPersonsPage();
         String barTraceId = toolbar.traceId();
 
         firstRead.awaitParked();
         JsonNode stored = awaitTrace(barTraceId, ROOT_SPAN_EXPORTED);
-        String rootSpanId = stored.path("rootSpan").path("spanId").asString();
-        Instant rootStart =
-                Instant.parse(stored.path("rootSpan").path("startTime").asString());
+        String rootSpanId = stored.path("data").path("rootSpan").path("spanId").asString();
+        Instant rootStart = Instant.parse(
+                stored.path("data").path("rootSpan").path("startTime").asString());
         int cap = tracingProperties.getMaxSpansPerTrace();
         for (int i = 0; i < cap; i++) {
             traceStore.addSpan(TestSpans.span(barTraceId, String.format("late%012x", i))
@@ -98,7 +98,7 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
                     .at(rootStart.toEpochMilli() + 1, 1)
                     .build());
         }
-        awaitTrace(barTraceId, "trace => trace.complete && trace.rootSpan === null");
+        awaitTrace(barTraceId, "trace => trace.summary.complete && trace.data.rootSpan === null");
         firstRead.resume();
 
         // a rendered stat line or the pending one, whichever the bar settles on first

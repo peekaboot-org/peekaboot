@@ -125,10 +125,10 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object rows = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 30, startTime: '1970-01-01T00:00:00Z', rootSpan: null, orphans: [
+                m.render(container, {summary: {durationMs: 30, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: null, orphans: [
                     {spanId: 'a', name: 'earlier', startTime: '1970-01-01T00:00:00.010Z', durationMs: 5},
                     {spanId: 'b', name: 'later', startTime: '1970-01-01T00:00:00.020Z', durationMs: 10,
-                        children: [{spanId: 'c', name: 'child', startTime: '1970-01-01T00:00:00.021Z', durationMs: 5}]}]});
+                        children: [{spanId: 'c', name: 'child', startTime: '1970-01-01T00:00:00.021Z', durationMs: 5}]}]}});
                 return Array.from(container.querySelectorAll('.pk-gantt-span'))
                     .map(entry => entry.querySelector('.pk-gantt-row').dataset.spanId + ':' + entry.dataset.depth);
             })()
@@ -147,7 +147,7 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object states = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]}});
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]}}});
                 const all = container.querySelector('.pk-gantt-all-details');
                 const names = container.querySelectorAll('.pk-gantt-name__toggle');
                 const snapshot = () => [all.textContent,
@@ -191,10 +191,9 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z',
-                    rootSpan: {spanId: 'a', name: 'a', tags: {'db.system.name': 'h2'},
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a', tags: {'db.system.name': 'h2'},
                         statement: {text: 'select 1', formatted: null, parameters: []}},
-                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
+                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]}});
                 const entry = container.querySelector('.pk-gantt-span');
                 const panels = () => [...entry.querySelectorAll('.pk-span-panel')].map(panel => panel.id).join(',');
                 const before = panels();
@@ -275,7 +274,7 @@ class SpansTabIT extends TraceOverlayTestBase {
     @Test
     void anOpenSpanListsExactlyItsOwnLogsWithTheirFoldedTraces() {
         String traceId = openOverlayForTheMultiSpanLogTrace();
-        JsonNode logs = awaitTrace(traceId, ROOT_SPAN_EXPORTED).path("logs");
+        JsonNode logs = awaitTrace(traceId, ROOT_SPAN_EXPORTED).path("data").path("logs");
         JsonNode errorLog = logs.valueStream()
                 .filter(log -> !log.path("stackTrace").isNull())
                 .findFirst()
@@ -327,9 +326,8 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object sections = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z',
-                    rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]},
-                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]});
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]},
+                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]}});
                 container.querySelector('.pk-gantt-all-details').click();
                 const row = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`);
                 const panel = id => container.querySelector(`#pk-span-logs-${id}`);
@@ -353,8 +351,8 @@ class SpansTabIT extends TraceOverlayTestBase {
             (() => {
                 const container = document.createElement('div');
                 const log = message => ({spanId: 'a', level: 'INFO', message, timestamp: '2026-01-01T00:00:00Z'});
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'a'},
-                    logs: [log('first'), log('second')]});
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a'},
+                    logs: [log('first'), log('second')]}});
                 return container.querySelector('.pk-span-logs-toggle')?.textContent ?? null;
             })()
             """);
@@ -412,9 +410,9 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'root', name: 'root', children: [
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
                     {spanId: 'mid', name: 'mid', children: [{spanId: 'leaf', name: 'leaf'}]},
-                    {spanId: 'sibling', name: 'sibling', children: [{spanId: 'cousin', name: 'cousin'}]}]}});
+                    {spanId: 'sibling', name: 'sibling', children: [{spanId: 'cousin', name: 'cousin'}]}]}}});
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const toggle = id => entry(id).querySelector('.pk-gantt-toggle');
                 toggle('mid').click();
@@ -659,8 +657,7 @@ class SpansTabIT extends TraceOverlayTestBase {
             (() => {
                 const statement = {text: 'insert 1', formatted: null, parameters: [['1']], omittedParameterSets: 1234};
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z',
-                    rootSpan: {spanId: 'a', name: 'INSERT t', statement}}, {locale: 'de-DE'});
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'INSERT t', statement}}}, {locale: 'de-DE'});
                 container.querySelector('.pk-gantt-all-details').click();
                 return container.querySelector('.pk-span-panel--query .pk-sql__params-omitted').textContent;
             })()
@@ -686,7 +683,7 @@ class SpansTabIT extends TraceOverlayTestBase {
             (() => {
                 const rendered = (span, locale) => {
                     const container = document.createElement('div');
-                    m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: span}, {locale});
+                    m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: span}}, {locale});
                     container.querySelector('.pk-gantt-all-details').click();
                     return container;
                 };
@@ -737,8 +734,8 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object keys = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'SELECT person',
-                    tags: {'jdbc.datasource.name': 'sample_app_db', 'db.system.name': 'postgresql', 'db.operation.name': 'SELECT'}}});
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'SELECT person',
+                    tags: {'jdbc.datasource.name': 'sample_app_db', 'db.system.name': 'postgresql', 'db.operation.name': 'SELECT'}}}});
                 container.querySelector('.pk-gantt-all-details').click();
                 return Array.from(container.querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
             })()
@@ -759,8 +756,8 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object keys = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'a',
-                    tags: {'a.token': '1', 'B.cache': '2', '_internal': '3'}}});
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a',
+                    tags: {'a.token': '1', 'B.cache': '2', '_internal': '3'}}}});
                 container.querySelector('.pk-gantt-all-details').click();
                 return Array.from(container.querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
             })()
@@ -810,9 +807,9 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'a',
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a',
                     statement: {text: 'select 1', formatted: null, parameters: []},
-                    children: [{spanId: 'b', name: 'b'}]}});
+                    children: [{spanId: 'b', name: 'b'}]}}});
                 const subtree = container.querySelector('.pk-gantt-toggle');
                 const query = container.querySelector('.pk-span-query-toggle');
                 const state = control => `${control.getAttribute('aria-label')}|${control.getAttribute('aria-expanded')}`;
@@ -841,9 +838,9 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object states = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'root', name: 'root', children: [
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
                     {spanId: 'mid', name: 'mid', children: [{spanId: 'leaf', name: 'leaf', tags: {'db.system.name': 'h2'}}]},
-                    {spanId: 'sibling', name: 'sibling'}]}});
+                    {spanId: 'sibling', name: 'sibling'}]}}});
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const toggle = id => entry(id).querySelector('.pk-gantt-toggle');
                 const state = id => entry(id).style.display === 'none' ? 'hidden'
@@ -879,8 +876,8 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object states = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'a',
-                    events: [{name: 'exception', timestamp: '1970-01-01T00:00:00.005Z'}]}});
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a',
+                    events: [{name: 'exception', timestamp: '1970-01-01T00:00:00.005Z'}]}}});
                 const entry = container.querySelector('.pk-gantt-span');
                 const open = () => entry.classList.contains('pk-gantt-span--open')
                     && entry.querySelector('.pk-gantt-name__toggle').getAttribute('aria-expanded') === 'true';
@@ -911,10 +908,10 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'http get /orders', kind: 'SERVER', children: [
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'http get /orders', kind: 'SERVER', children: [
                     {spanId: 'b', name: 'SELECT person', kind: 'CLIENT'},
                     {spanId: 'c', name: 'spring.handler', kind: null},
-                    {spanId: 'd', name: 'odd', kind: 'SOMETHING_NEW'}]}});
+                    {spanId: 'd', name: 'odd', kind: 'SOMETHING_NEW'}]}}});
                 container.querySelector('.pk-gantt-all-details').click();
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 return [
@@ -948,7 +945,7 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'root', children: [
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'root', children: [
                     {spanId: 'b', name: 'http get', status: 'ERROR', exception: {
                         type: 'org.springframework.web.client.ResourceAccessException', message: 'Connection refused',
                         stackTrace: 'org.springframework.web.client.ResourceAccessException: Connection refused\\n'
@@ -956,7 +953,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                             + '\\tat org.springframework.web.client.RestClient.get(RestClient.java:2)\\n'
                             + '\\tat org.springframework.web.client.RestClient.exchange(RestClient.java:3)',
                         hiddenFrames: [{start: 2, endExclusive: 4}], applicationFrames: [{start: 1, endExclusive: 2}]}},
-                    {spanId: 'c', name: 'ok', status: 'OK'}]}});
+                    {spanId: 'c', name: 'ok', status: 'OK'}]}}});
                 container.querySelector('.pk-gantt-all-details').click();
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const nameToggle = id => entry(id).querySelector('.pk-gantt-name__toggle');
@@ -1013,10 +1010,10 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 10, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'a', name: 'root', children: [
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'root', children: [
                     {spanId: 'b', name: 'task', status: 'ERROR', exception: {type: null, message: null,
                         stackTrace: 'org.peekaboot.app.Jobs$1\\n\\tat org.peekaboot.app.Jobs.run(Jobs.java:1)',
-                        hiddenFrames: [], applicationFrames: [{start: 1, endExclusive: 2}]}}]}});
+                        hiddenFrames: [], applicationFrames: [{start: 1, endExclusive: 2}]}}]}}});
                 container.querySelector('.pk-gantt-all-details').click();
                 const entry = container.querySelector('.pk-gantt-row[data-span-id="b"]').closest('.pk-gantt-span');
                 return [
@@ -1040,7 +1037,7 @@ class SpansTabIT extends TraceOverlayTestBase {
     @Test
     void aSpanNameOpensTheAttributesPanelUnderItsRow() {
         openPersonsPage();
-        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        awaitTrace(toolbar.traceId(), "trace => (trace.data.queries || []).length > 0");
         toolbar.openOverlay();
         overlay.waitFor(".pk-span-query-toggle");
         String spanId = (String) overlay.evaluate(
@@ -1091,7 +1088,7 @@ class SpansTabIT extends TraceOverlayTestBase {
     @Test
     void aSpanQueryToggleOpensTheQueryPanelWithItsStatementAndRowCount() {
         openPersonsPage();
-        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        awaitTrace(toolbar.traceId(), "trace => (trace.data.queries || []).length > 0");
         toolbar.openOverlay();
         overlay.waitFor(".pk-span-query-toggle");
         String spanId = (String) overlay.evaluate(
@@ -1199,10 +1196,10 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 1000, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'root', name: 'root', children: [
+                m.render(container, {summary: {durationMs: 1000, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
                     {spanId: 'a', name: 'async task', asyncEntry: true, startTime: '1970-01-01T00:00:00.100Z', durationMs: 50, children: [
                         {spanId: 'g', name: 'grandchild', startTime: '1970-01-01T00:00:00.120Z', durationMs: 200}]},
-                    {spanId: 's', name: 'sibling', startTime: '1970-01-01T00:00:00.600Z', durationMs: 50}]}});
+                    {spanId: 's', name: 'sibling', startTime: '1970-01-01T00:00:00.600Z', durationMs: 50}]}}});
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const hidden = id => entry(id).style.display === 'none';
                 const bar = id => entry(id).querySelector('.pk-gantt-bar');
@@ -1246,9 +1243,9 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {durationMs: 1000, startTime: '2026-10-23T10:00:00.000123456Z', rootSpan: {
+                m.render(container, {summary: {durationMs: 1000, startTime: '2026-10-23T10:00:00.000123456Z'}, data: {rootSpan: {
                     spanId: 'root', name: 'root', startTime: '2026-10-23T10:00:00.000123456Z', durationMs: 1000, children: [
-                        {spanId: 'a', name: 'a', startTime: '2026-10-23T10:00:00.250999999Z', durationMs: 500}]}});
+                        {spanId: 'a', name: 'a', startTime: '2026-10-23T10:00:00.250999999Z', durationMs: 500}]}}});
                 const bar = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`)
                     .closest('.pk-gantt-span').querySelector('.pk-gantt-bar');
                 return [bar('root').style.left, bar('a').style.left, bar('a').style.width];
@@ -1269,10 +1266,10 @@ class SpansTabIT extends TraceOverlayTestBase {
     void scopingToAnAsyncEntryRendersOnlyThatSubtreeExpanded() {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
-                const trace = {durationMs: 1000, startTime: '1970-01-01T00:00:00Z', rootSpan: {spanId: 'root', name: 'root', children: [
+                const trace = {summary: {durationMs: 1000, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
                     {spanId: 'a', name: 'async task', asyncEntry: true, startTime: '1970-01-01T00:00:00.100Z', durationMs: 50, children: [
                         {spanId: 'g', name: 'grandchild', startTime: '1970-01-01T00:00:00.120Z', durationMs: 200}]},
-                    {spanId: 's', name: 'sibling', startTime: '1970-01-01T00:00:00.600Z', durationMs: 50}]}};
+                    {spanId: 's', name: 'sibling', startTime: '1970-01-01T00:00:00.600Z', durationMs: 50}]}}};
                 const container = document.createElement('div');
                 m.render(container, trace, {filters: {root: 'a'}});
                 const rows = [...container.querySelectorAll('.pk-gantt-row')].map(row => row.dataset.spanId);

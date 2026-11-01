@@ -11,14 +11,13 @@ import {badge} from './components.js';
 import {formatCount, formatDurationMs} from './format.js';
 import {durationSeverity, logLevelVariant, severityClass} from './severity.js';
 
-export function traceStatParts(trace, {features, locale} = {}) {
-    const summary = trace.summary || {};
-    const spans = summary.spans || {};
-    const queries = summary.queries || {};
-    const logs = summary.logs || {};
+export function traceStatParts(summary, {features, locale} = {}) {
+    const counts = summary.counts || {};
+    const queries = counts.queries || {};
+    const logs = counts.logs || {};
     const parts = [];
-    if (spans.count > 0) {
-        parts.push(el('span', {className: 'pk-stat', text: formatCount(spans.count, 'span', {locale})}));
+    if (counts.spans > 0) {
+        parts.push(el('span', {className: 'pk-stat', text: formatCount(counts.spans, 'span', {locale})}));
     }
     if (queries.count > 0) {
         parts.push(durationStat(
@@ -52,9 +51,9 @@ export function inProgressBadge() {
     });
 }
 
-/** Whether the trace reached the slow-trace threshold, the rule the Slow bucket admits by. */
-export function isSlowTrace(trace) {
-    return (trace.reasons || []).some(reason => reason.kind === 'SLOW');
+/** Whether the trace's summary says it reached the slow-trace threshold, the rule the Slow bucket admits by. */
+export function isSlowTrace(summary) {
+    return (summary.reasons || []).some(reason => reason.kind === 'SLOW');
 }
 
 /** The one wording for a SLOW verdict: the backend's on a trace (the Traces tab, the overlay header) and the query threshold's on a query. */

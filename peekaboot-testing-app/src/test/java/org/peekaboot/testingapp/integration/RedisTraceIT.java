@@ -93,10 +93,14 @@ class RedisTraceIT {
                 .noneMatch(sql -> sql.toLowerCase(Locale.ROOT).contains("from product"));
 
         log.info(
-                "Lettuce spans on a cached order: summary.queries.count={}, queries={}, rootActionType={}",
-                trace.path("summary").path("queries").path("count").asInt(),
-                trace.path("queries"),
-                trace.path("rootActionType").asString(""));
+                "Lettuce spans on a cached order: summary.counts.queries.count={}, queries={}, rootActionType={}",
+                trace.path("summary")
+                        .path("counts")
+                        .path("queries")
+                        .path("count")
+                        .asInt(),
+                trace.path("data").path("queries"),
+                trace.path("summary").path("rootActionType").asString(""));
     }
 
     @Test
@@ -121,7 +125,7 @@ class RedisTraceIT {
     void aDashboardHealthPollLeavesItsRedisInfoOutOfTheDefaultView() {
         Set<String> infoTracesBeforePoll = traces.listedTraces(EVERY_TYPE).stream()
                 .filter(listed -> isRedisRootOf(listed, "INFO"))
-                .map(listed -> listed.path("traceId").asString(""))
+                .map(listed -> listed.path("summary").path("traceId").asString(""))
                 .collect(Collectors.toSet());
 
         traces.api()
@@ -134,10 +138,11 @@ class RedisTraceIT {
         JsonNode trace = traces.awaitTraceOfType(
                 RootActionType.MAINTENANCE,
                 listed -> isRedisRootOf(listed, "INFO")
-                        && !infoTracesBeforePoll.contains(listed.path("traceId").asString("")),
+                        && !infoTracesBeforePoll.contains(
+                                listed.path("summary").path("traceId").asString("")),
                 TraceApiClient::rootOperation);
 
-        String traceId = trace.path("traceId").asString("");
+        String traceId = trace.path("summary").path("traceId").asString("");
         assertThat(traces.listedTraceIds(EVERY_TYPE)).contains(traceId);
         assertThat(traces.listedTraces(NO_TYPE_NAMED)).noneMatch(listed -> isRedisRootOf(listed, "INFO"));
     }
@@ -168,7 +173,7 @@ class RedisTraceIT {
     }
 
     private static boolean isRedisRootOf(JsonNode listed, String command) {
-        JsonNode tags = listed.path("rootSpan").path("tags");
+        JsonNode tags = listed.path("data").path("rootSpan").path("tags");
         return "redis".equals(tags.path("db.system").asString(""))
                 && command.equals(tags.path("db.operation").asString(""));
     }

@@ -24,7 +24,8 @@ class LogsTabIT extends TraceOverlayTestBase {
     /** The trace's own {@code stackTrace} field, joined back the way the server sent it. */
     private String capturedStackTrace(String traceId) {
         JsonNode trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
-        return trace.path("logs")
+        return trace.path("data")
+                .path("logs")
                 .valueStream()
                 .filter(log -> !log.path("stackTrace").isNull())
                 .findFirst()
@@ -42,7 +43,8 @@ class LogsTabIT extends TraceOverlayTestBase {
 
     private static Map<String, JsonNode> thrownLogsByMessage(JsonNode trace) {
         Map<String, JsonNode> thrown = new LinkedHashMap<>();
-        trace.path("logs")
+        trace.path("data")
+                .path("logs")
                 .valueStream()
                 .filter(entry -> !entry.path("stackTrace").isNull())
                 .forEach(entry -> thrown.put(entry.path("message").asString(), entry));
@@ -285,9 +287,8 @@ class LogsTabIT extends TraceOverlayTestBase {
     @Test
     void everyThrowableInATraceTravelsOnceAndFoldsByItsOwnRanges() {
         String traceId = importPartnerFeed();
-        String payload = page.request()
-                .get(baseUrl + "/peekaboot/api/traces/" + traceId + "/insights")
-                .text();
+        String payload =
+                page.request().get(baseUrl + "/peekaboot/api/traces/" + traceId).text();
         Map<String, JsonNode> thrownLogs = thrownLogsByMessage(readJson(payload));
         assertThat(thrownLogs).containsOnlyKeys(REJECTED_ROW_LOG, BROKEN_FEED_LOG);
         assertThat(thrownLogs.get(REJECTED_ROW_LOG).path("stackTrace").asString())

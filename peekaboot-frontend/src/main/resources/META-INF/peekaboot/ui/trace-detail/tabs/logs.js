@@ -55,7 +55,7 @@ function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
  */
 export function render(container, trace, view = {}) {
     const spanNames = buildSpanNames(trace);
-    const logs = trace.logs || [];
+    const logs = trace.data.logs || [];
 
     if (logs.length === 0) {
         container.replaceChildren(emptyState('No logs recorded for this trace'));

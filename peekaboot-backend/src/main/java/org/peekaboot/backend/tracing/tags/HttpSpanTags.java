@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.OptionalInt;
 
 /**
- * Reads an HTTP span's method, path and status whichever convention named its tags.
+ * Reads an HTTP span's method, route, path and status whichever convention named its tags.
  *
  * <p>Three naming schemes reach the store. Spring Boot's default server-request observation
  * ({@code DefaultServerRequestObservationConvention}) tags {@code method}, {@code status},
@@ -25,6 +25,7 @@ public final class HttpSpanTags {
     private static final String[] METHOD_KEYS = {"http.request.method", "http.method", "method"};
     private static final String[] PATH_KEYS = {"url.path", "http.target", "http.url", "uri"};
     private static final String[] STATUS_KEYS = {"http.response.status_code", "http.status_code", "status"};
+    private static final String[] ROUTE_KEYS = {"http.route", "uri"};
     private static final int SERVER_ERROR_FLOOR = 500;
     private static final int SERVER_ERROR_CEILING = 599;
 
@@ -32,6 +33,15 @@ public final class HttpSpanTags {
 
     public static String method(Map<String, String> tags) {
         return Tags.first(tags, METHOD_KEYS);
+    }
+
+    /**
+     * The matched route pattern, such as {@code /persons/{id}}. Spring's convention writes a placeholder
+     * word ({@code UNKNOWN}, {@code NOT_FOUND}, {@code REDIRECTION}, {@code root}) where no pattern matched.
+     */
+    public static String route(Map<String, String> tags) {
+        String value = Tags.first(tags, ROUTE_KEYS);
+        return value != null && value.startsWith("/") ? value : null;
     }
 
     /** The request path, without scheme, authority or query string whichever tag supplied it. */

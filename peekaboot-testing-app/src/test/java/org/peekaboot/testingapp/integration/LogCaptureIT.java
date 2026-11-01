@@ -32,11 +32,15 @@ class LogCaptureIT extends TestingAppITBase {
     void errorLoggedInsideRequestIsCapturedAgainstThatRequestsTrace() {
         JsonNode trace = traces.awaitTrace(traces.get("/?error=true"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(trace.path("summary").path("logs").path("errorCount").asInt())
+        assertThat(trace.path("summary")
+                        .path("counts")
+                        .path("logs")
+                        .path("errorCount")
+                        .asInt())
                 .as(
                         "the ERROR PersonController logs for /?error=true must be captured against "
                                 + "trace %s; a count of 0 means the log event carried no MDC traceId",
-                        trace.path("traceId").asString())
+                        trace.path("summary").path("traceId").asString())
                 .isEqualTo(1);
     }
 
@@ -49,7 +53,8 @@ class LogCaptureIT extends TestingAppITBase {
     void theCapturedErrorCarriesItsStackTrace() {
         JsonNode trace = traces.awaitTrace(traces.get("/?error=true"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode withTrace = trace.path("logs")
+        JsonNode withTrace = trace.path("data")
+                .path("logs")
                 .valueStream()
                 .filter(log -> !log.path("stackTrace").isNull())
                 .findFirst()
@@ -75,6 +80,7 @@ class LogCaptureIT extends TestingAppITBase {
 
         JsonNode logs = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED)
                 .path("summary")
+                .path("counts")
                 .path("logs");
 
         assertThat(logs.path("errorCount").asInt())

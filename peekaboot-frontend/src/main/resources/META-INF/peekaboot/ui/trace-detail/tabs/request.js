@@ -25,7 +25,7 @@ function section(title, body) {
 
 export function render(container, trace, view = {}) {
     const maskLiteral = view.features?.maskLiteral;
-    const httpExchange = trace.httpExchange;
+    const httpExchange = trace.data.httpExchange;
     const req = httpExchange?.request;
     const res = httpExchange?.response;
 
@@ -50,7 +50,7 @@ function renderRequestDetails(req, res, trace) {
         tableRow('Path', req?.path || '-'),
         ...(req?.query ? [tableRow('Query String', req.query)] : []),
         tableRow('Status', badge(statusLabel(res?.status), statusVariant(res?.status))),
-        tableRow('Duration', formatDurationMs(trace.durationMs))
+        tableRow('Duration', formatDurationMs(trace.summary.durationMs))
     ];
     return section('Request', kvTable(rows));
 }

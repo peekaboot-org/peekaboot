@@ -46,24 +46,26 @@ class PoolMaintenanceTraceCaptureIT extends TestingAppITBase {
         }
 
         // The inventory pool and the Liquibase endpoint's reads start such traces too; only orders-db's is ours.
-        Function<JsonNode, String> poolName = listed -> listed.path("rootSpan")
+        Function<JsonNode, String> poolName = listed -> listed.path("data")
+                .path("rootSpan")
                 .path("tags")
                 .path("jdbc.datasource.pool")
                 .asString("");
         JsonNode trace = traces.awaitTraceOfType(
                 RootActionType.MAINTENANCE,
-                listed ->
-                        !listedBeforeAcquisition.contains(listed.path("traceId").asString(""))
-                                && "orders-db".equals(poolName.apply(listed)),
+                listed -> !listedBeforeAcquisition.contains(
+                                listed.path("summary").path("traceId").asString(""))
+                        && "orders-db".equals(poolName.apply(listed)),
                 poolName);
 
-        assertThat(trace.path("rootOperation").asString("")).isEqualTo("connection");
-        assertThat(trace.path("rootSpan").path("kind").asString("")).isEqualTo("CLIENT");
+        assertThat(trace.path("summary").path("rootOperation").asString("")).isEqualTo("connection");
+        assertThat(trace.path("data").path("rootSpan").path("kind").asString(""))
+                .isEqualTo("CLIENT");
 
         // The three, on the trace this test caused: a request naming the type lists it and so
         // does the wildcard, while the default request does not. Asserting only the last would
         // hold just as well for a listing that came back empty.
-        String traceId = trace.path("traceId").asString("");
+        String traceId = trace.path("summary").path("traceId").asString("");
         assertThat(traces.listedTraceIds(MAINTENANCE_NAMED)).contains(traceId);
         assertThat(traces.listedTraceIds(EVERY_TYPE)).contains(traceId);
         assertThat(traces.listedTraceIds(NO_TYPE_NAMED)).doesNotContain(traceId);

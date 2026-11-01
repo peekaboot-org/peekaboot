@@ -12,7 +12,7 @@ import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SubtreeView;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
+import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
@@ -27,22 +27,18 @@ public class TraceTreeMapper {
     private final SpanExceptions spanExceptions;
 
     /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
-    public TraceTreeMapper(MaskingEngine maskingEngine, SqlFormatter sqlFormatter, StackTraceRules stackTraceRules) {
+    TraceTreeMapper(MaskingEngine maskingEngine, SqlFormatter sqlFormatter, StackTraceRules stackTraceRules) {
         this.tagMasker = new TagMasker(maskingEngine);
         this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
         this.spanExceptions = new SpanExceptions(maskingEngine, stackTraceRules);
     }
 
-    public TraceTree map(TraceData traceData) {
-        return map(traceData, queriesOf(traceData));
-    }
-
     /** The statements and row counts of {@code traceData}'s query spans, to share with {@link QueryExtractor}. */
-    public TraceQueries queriesOf(TraceData traceData) {
+    TraceQueries queriesOf(TraceData traceData) {
         return new TraceQueries(traceData, sqlStatements);
     }
 
-    public TraceTree map(TraceData traceData, TraceQueries queries) {
+    TraceTree map(TraceData traceData, TraceQueries queries) {
         if (traceData.spans().isEmpty()) {
             return new TraceTree(
                     traceData.traceId(),
@@ -52,10 +48,11 @@ public class TraceTreeMapper {
                     RootActionType.UNKNOWN,
                     null,
                     null,
-                    List.of(),
-                    TraceTabSummary.empty(),
                     null,
-                    traceData.truncated());
+                    List.of(),
+                    0,
+                    new TraceSummary.QueryCounts(0, 0L),
+                    null);
         }
 
         List<SpanData> spans = traceData.spans();
@@ -75,8 +72,6 @@ public class TraceTreeMapper {
             orphans = mapOrphans(spans, spanById, childrenByParentId, queries, traceData.asyncSpanIds());
         }
 
-        TraceTabSummary summary = TraceSummaries.ofTrace(spans, rootSpanData);
-
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
         String rootOperation = rootSpanData != null ? rootSpanData.name() : null;
         RootActionType rootActionType = RootActionTypes.of(rootSpanData);
@@ -88,28 +83,41 @@ public class TraceTreeMapper {
                 traceData.complete(),
                 rootActionType,
                 rootOperation,
+                TraceRequests.of(rootSpanData),
                 rootSpan,
                 orphans,
-                summary,
-                null,
-                traceData.truncated());
+                spans.size(),
+                queryCountsOf(spans),
+                null);
+    }
+
+    private static TraceSummary.QueryCounts queryCountsOf(List<SpanData> spans) {
+        int count = 0;
+        long totalDurationMs = 0L;
+        for (SpanData span : spans) {
+            if (DbSpans.isQuery(span)) {
+                count++;
+                totalDurationMs += span.durationMs();
+            }
+        }
+        return new TraceSummary.QueryCounts(count, totalDurationMs);
     }
 
     /**
      * The same trace seen from one of its spans: the tree built from that span's own
      * descendants, timed by their window rather than the trace's, classified from that span and
-     * summarised over those spans alone ({@link TraceSummaries#ofSubtree}). What the listing's
-     * async rows render. A span no longer stored maps as the whole trace: the cap can evict an
-     * entry between listing and mapping.
+     * counted over those spans alone. What the listing's async rows render. A span no longer
+     * stored maps as the whole trace: the cap can evict an entry between listing and mapping.
+     * {@code queries} comes from {@link #queriesOf} for the same {@code traceData}.
      */
-    public TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId) {
+    TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId, TraceQueries queries) {
         List<SpanData> spans = traceData.spans();
         SpanData subtreeRootData = spans.stream()
                 .filter(span -> subtreeRootSpanId.equals(span.spanId()))
                 .findFirst()
                 .orElse(null);
         if (subtreeRootData == null) {
-            return map(traceData);
+            return map(traceData, queries);
         }
         Map<String, List<SpanData>> childrenByParentId = childrenByParentId(spans);
         String parentId = subtreeRootData.parentId();
@@ -121,8 +129,7 @@ public class TraceTreeMapper {
         }
         Set<String> asyncSpanIds = traceData.asyncSpanIds();
         boolean parentIsAsync = parentId != null && asyncSpanIds.contains(parentId);
-        SpanNode subtreeRoot =
-                buildSpanTree(subtreeRootData, childrenByParentId, queriesOf(traceData), asyncSpanIds, parentIsAsync);
+        SpanNode subtreeRoot = buildSpanTree(subtreeRootData, childrenByParentId, queries, asyncSpanIds, parentIsAsync);
         SubtreeTotals totals = new SubtreeTotals();
         accumulateSubtree(subtreeRoot, totals);
         return new TraceTree(
@@ -133,11 +140,12 @@ public class TraceTreeMapper {
                 true,
                 RootActionTypes.of(subtreeRootData),
                 subtreeRoot.name(),
+                null,
                 subtreeRoot,
                 List.of(),
-                TraceSummaries.ofSubtree(totals.spanCount, totals.queryCount, totals.queryDurationMs),
-                new SubtreeView(subtreeRootSpanId, enclosed),
-                traceData.truncated());
+                totals.spanCount,
+                new TraceSummary.QueryCounts(totals.queryCount, totals.queryDurationMs),
+                new SubtreeView(subtreeRootSpanId, enclosed));
     }
 
     /** Mutable lists: the orphan and cycle handling re-parents spans by editing them. */
@@ -158,7 +166,7 @@ public class TraceTreeMapper {
         }
     }
 
-    /** Mutable running totals for {@link #accumulateSubtree}, folded into a {@link TraceTabSummary} once complete. */
+    /** Mutable running totals for {@link #accumulateSubtree}, folded into the subtree's counts once complete. */
     private static final class SubtreeTotals {
         int spanCount;
         int queryCount;
@@ -194,7 +202,7 @@ public class TraceTreeMapper {
             Map<String, List<SpanData>> childrenByParentId,
             SpanData rootSpanData) {
         // in a cycle the root has a stored parent; cutting that edge is what ends the walk.
-        // map(TraceData) is public, so the root need not be one of `spans` and the group can be absent
+        // TraceData holds its root apart from `spans`, so the root need not be one of them and the group can be absent
         List<SpanData> rootSiblings =
                 rootSpanData.parentId() == null ? null : childrenByParentId.get(rootSpanData.parentId());
         if (rootSiblings != null) {

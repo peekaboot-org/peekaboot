@@ -69,7 +69,11 @@ class OrderTraceCaptureIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(trace.path("summary").path("queries").path("count").asInt())
+        assertThat(trace.path("summary")
+                        .path("counts")
+                        .path("queries")
+                        .path("count")
+                        .asInt())
                 .as(
                         "the deliberate N+1 runs one query for the list plus %d per order, so the "
                                 + "%d seeded orders must be counted, or the Traces tab's query stat "
@@ -108,7 +112,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
     }
 
     /**
-     * The other assertions against {@code /orders} check {@code summary.queries.count},
+     * The other assertions against {@code /orders} check {@code summary.counts.queries.count},
      * which passes whether {@code QueryExtractor.findSql} reads {@code db.query.text} or
      * merely falls back to a SQL-shaped span name - both produce a non-zero count. This
      * test is the one that actually exercises the fix: it runs against
@@ -173,7 +177,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTraceInBucket("slow", traceId);
 
-        assertThat(trace.path("durationMs").asLong())
+        assertThat(trace.path("summary").path("durationMs").asLong())
                 .as("the report endpoint must exceed the default "
                         + "peekaboot.tracing.slow-trace-threshold-ms of 1000, or the Slow bucket "
                         + "has nothing to show")
@@ -237,10 +241,12 @@ class OrderTraceCaptureIT extends TestingAppITBase {
     @Test
     void failingEndpointLandsInTheErrorsBucket() {
         String traceId = traces.get("/boom");
+        // /boom logs an ERROR before its spans export, which lists a span-less row in Errors
+        traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         JsonNode trace = traces.awaitTraceInBucket("errors", traceId);
 
-        assertThat(trace.path("outcome").asString(""))
+        assertThat(trace.path("summary").path("outcome").asString(""))
                 .as("a trace in the Errors bucket must have failed, "
                         + "otherwise the bucket filter and the ERROR badge disagree")
                 .isEqualTo("ERROR");
@@ -295,7 +301,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(trace.path("rootActionType").asString(""))
+        assertThat(trace.path("summary").path("rootActionType").asString(""))
                 .as("a POST handled by a controller must be classified as an HTTP request")
                 .isEqualTo("HTTP_REQUEST");
         assertThat(SpanTree.names(trace))
@@ -335,7 +341,7 @@ class OrderTraceCaptureIT extends TestingAppITBase {
     void directReconciliationCallDoesNotClassifyAsScheduledJob() {
         JsonNode trace = traces.awaitTraceAppearing("order.reconcile.job", reconciler::reconcileOrders);
 
-        assertThat(trace.path("rootActionType").asString(""))
+        assertThat(trace.path("summary").path("rootActionType").asString(""))
                 .as("a direct call carries none of Spring's scheduled-task tags, so its "
                         + "root span must not be misclassified as SCHEDULED_JOB just because "
                         + "its name contains \"job\"")
@@ -352,9 +358,9 @@ class OrderTraceCaptureIT extends TestingAppITBase {
     void reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace() {
         String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
 
-        JsonNode trace = traces.awaitTraceInBucket("all", traceId);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
 
-        assertThat(trace.path("rootActionType").asString(""))
+        assertThat(trace.path("summary").path("rootActionType").asString(""))
                 .as("Spring's scheduled-task observation wraps the call and becomes the "
                         + "trace root when the scheduler fires it; that root span's "
                         + "code.function/code.namespace tags must still classify SCHEDULED_JOB")

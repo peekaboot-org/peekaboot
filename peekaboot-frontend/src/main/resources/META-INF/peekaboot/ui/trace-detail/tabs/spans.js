@@ -37,8 +37,8 @@ export function render(container, trace, context = {}) {
     const scopedRoot = context.filters?.root ? findSpan(trace, context.filters.root) : null;
     const tops = scopedRoot ? [scopedRoot] : topLevelSpans(trace);
     // the 1 keeps a zero-length trace from dividing by zero in every position below
-    const totalDuration = (scopedRoot ? subtreeWindowMs(scopedRoot) : trace.durationMs) || 1;
-    const traceStart = startMs(scopedRoot || trace);
+    const totalDuration = (scopedRoot ? subtreeWindowMs(scopedRoot) : trace.summary.durationMs) || 1;
+    const traceStart = startMs(scopedRoot || trace.summary);
     const ticks = formatTimelineTicks(totalDuration);
 
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
@@ -50,7 +50,7 @@ export function render(container, trace, context = {}) {
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick})))),
         entries));
 
-    const display = {locale: context.locale, timeZone: context.timeZone, logsBySpan: logsBySpan(trace.logs)};
+    const display = {locale: context.locale, timeZone: context.timeZone, logsBySpan: logsBySpan(trace.data.logs)};
     tops.forEach(top => renderSpanEntries(entries, top, 0, traceStart, totalDuration, display));
 
     // Collapsed by default: the subtree's work is not what the caller waited for, so it
@@ -169,7 +169,7 @@ export function revealRow(row) {
 
 /** The trees the tab draws: the span tree, or for a trace whose root has not arrived, each subtree that has. */
 function topLevelSpans(trace) {
-    return trace.rootSpan ? [trace.rootSpan] : (trace.orphans || []);
+    return trace.data.rootSpan ? [trace.data.rootSpan] : (trace.data.orphans || []);
 }
 
 /** Every span of the trace, depth first: the root's tree, or each arrived subtree in turn. */

@@ -44,12 +44,20 @@ class HostJacksonSettingsIT extends TestingAppITBase {
                 .isTrue();
     }
 
+    /** A summary row's {@code data} is null, and the host's non_null must not drop the key. */
     @Test
-    void traceInsightsKeepTheirCamelCaseNames() {
-        JsonNode insights = api.getJson("/peekaboot/api/traces/insights");
+    void theTraceListingKeepsItsCamelCaseNamesAndANullData() {
+        String traceId = traces.get("/persons");
+        traces.awaitTraceInBucket("all", traceId);
 
-        assertThat(insights.has("bucketCounts")).isTrue();
-        assertThat(insights.has("bucket_counts")).isFalse();
+        JsonNode listing = api.getJson("/peekaboot/api/traces?limit=10000");
+
+        assertThat(listing.has("bucketCounts")).isTrue();
+        assertThat(listing.has("bucket_counts")).isFalse();
+        JsonNode row = TraceApiClient.rowOf(listing, traceId);
+        assertThat(row.has("data")).as("data is null, not absent").isTrue();
+        assertThat(row.path("data").isNull()).isTrue();
+        assertThat(row.path("summary").has("rootActionType")).isTrue();
     }
 
     @Test
@@ -85,7 +93,7 @@ class HostJacksonSettingsIT extends TestingAppITBase {
     void aProblemKeepsItsNullParameter() {
         JsonNode problem = api.restClient()
                 .get()
-                .uri("/peekaboot/api/traces/00000000000000000000000000000000/insights")
+                .uri("/peekaboot/api/traces/00000000000000000000000000000000")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange((request, response) ->
                         PeekabootApi.readJson(new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8)));

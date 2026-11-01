@@ -133,7 +133,7 @@ class ToolbarIT extends PlaywrightTestBase {
 
     /**
      * /persons runs a real JPA query and dispatches to a real controller method, so the trace's
-     * insights (once the fetch ladder picks them up) carry a real query count and a real
+     * summary (once the fetch ladder picks it up) carries a real query count and a real
      * controller name - no fetch stubbing needed. This also exercises the ladder's happy path
      * end to end: the query spans have not reached the store when the first attempt fires, so
      * this wait only succeeds if the later attempts run and re-render with what they find. The
@@ -190,7 +190,7 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.awaitMetrics("span");
 
         String expectedSpans = localeFormatted(
-                trace.path("summary").path("spans").path("count").asInt(), "ar-EG-u-nu-arab");
+                trace.path("summary").path("counts").path("spans").asInt(), "ar-EG-u-nu-arab");
         assertThat(toolbar.text("#pk-metrics")).containsPattern(Pattern.quote(expectedSpans) + " spans?");
 
         toolbar.openOverlay();
@@ -215,12 +215,12 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.awaitMetrics("span");
 
         String expectedSpans = localeFormatted(
-                trace.path("summary").path("spans").path("count").asInt(), "en-US");
+                trace.path("summary").path("counts").path("spans").asInt(), "en-US");
         assertThat(toolbar.text("#pk-metrics")).containsPattern(Pattern.quote(expectedSpans) + " spans?");
     }
 
     /**
-     * Aborting the specific trace-insights request is a real network failure (Chromium's real
+     * Aborting the specific trace request is a real network failure (Chromium's real
      * net stack refusing the request), not a fabricated response - the bar must still render the
      * pending state instead of leaving "loading" up forever. Pending is deliberately withheld
      * until the last of the four attempts has failed, which lands at 4.75s, so the wait is given
@@ -228,7 +228,7 @@ class ToolbarIT extends PlaywrightTestBase {
      */
     @Test
     void toolbarShowsPendingWhenTheTraceRequestFails() {
-        page.route("**/api/traces/*/insights", route -> route.abort());
+        page.route("**/api/traces/*", route -> route.abort());
 
         openPersonsPage();
 

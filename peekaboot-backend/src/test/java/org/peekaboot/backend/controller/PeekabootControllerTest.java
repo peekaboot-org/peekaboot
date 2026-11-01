@@ -9,9 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.peekaboot.backend.testsupport.SpanNodes.node;
-import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -24,9 +23,10 @@ import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.domain.trace.SpanNode;
-import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.domain.trace.TraceListResponse;
+import org.peekaboot.backend.domain.trace.TraceOutcome;
+import org.peekaboot.backend.domain.trace.TraceResource;
+import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.problem.ApiProblemException;
@@ -60,29 +60,29 @@ class PeekabootControllerTest {
     }
 
     @Nested
-    class GetTracesInsights {
+    class ListTraces {
 
         @Test
         void shouldPassFiltersToService() {
-            TraceInsightsResponse expectedResponse = emptyInsightsResponse();
-            when(traceInsightsService.getInsights(100, TraceBucket.ALL, "SCHEDULED_JOB", "MyScheduler"))
+            TraceListResponse expectedResponse = emptyListResponse();
+            when(traceInsightsService.listTraces(100, TraceBucket.ALL, "SCHEDULED_JOB", "MyScheduler", "full"))
                     .thenReturn(expectedResponse);
 
-            TraceInsightsResponse result = controller.getTracesInsights(100, null, "SCHEDULED_JOB", "MyScheduler");
+            TraceListResponse result = controller.listTraces(100, null, "SCHEDULED_JOB", "MyScheduler", "full");
 
             assertThat(result).isSameAs(expectedResponse);
         }
 
         @Test
         void shouldPassParsedBucketToService() {
-            controller.getTracesInsights(100, "errors", null, null);
+            controller.listTraces(100, "errors", null, null, null);
 
-            verify(traceInsightsService).getInsights(100, TraceBucket.ERRORS, null, null);
+            verify(traceInsightsService).listTraces(100, TraceBucket.ERRORS, null, null, null);
         }
 
         @Test
         void shouldRefuseAnUnknownBucket() {
-            assertThatThrownBy(() -> controller.getTracesInsights(100, "not-a-bucket", null, null))
+            assertThatThrownBy(() -> controller.listTraces(100, "not-a-bucket", null, null, null))
                     .isInstanceOfSatisfying(
                             ApiProblemException.class,
                             e -> assertThat(e.problem().parameter()).isEqualTo("bucket"));
@@ -90,56 +90,64 @@ class PeekabootControllerTest {
 
         @Test
         void shouldParseTheBucketRegardlessOfCase() {
-            controller.getTracesInsights(100, "SLOW", null, null);
+            controller.listTraces(100, "SLOW", null, null, null);
 
-            verify(traceInsightsService).getInsights(100, TraceBucket.SLOW, null, null);
+            verify(traceInsightsService).listTraces(100, TraceBucket.SLOW, null, null, null);
         }
 
         @Test
         void shouldTreatAMissingOrBlankBucketAsAll() {
-            controller.getTracesInsights(100, null, null, null);
-            controller.getTracesInsights(100, "  ", null, null);
+            controller.listTraces(100, null, null, null, null);
+            controller.listTraces(100, "  ", null, null, null);
 
-            verify(traceInsightsService, times(2)).getInsights(100, TraceBucket.ALL, null, null);
+            verify(traceInsightsService, times(2)).listTraces(100, TraceBucket.ALL, null, null, null);
         }
 
         @Test
         void shouldClampNegativeLimit() {
             // a negative limit would throw from Stream.limit and produce a 500
-            controller.getTracesInsights(-5, null, null, null);
+            controller.listTraces(-5, null, null, null, null);
 
-            verify(traceInsightsService).getInsights(eq(0), any(), any(), any());
+            verify(traceInsightsService).listTraces(eq(0), any(), any(), any(), any());
         }
 
         @Test
         void shouldClampExcessiveLimit() {
             // the cap bounds the response size
-            controller.getTracesInsights(Integer.MAX_VALUE, null, null, null);
+            controller.listTraces(Integer.MAX_VALUE, null, null, null, null);
 
-            verify(traceInsightsService).getInsights(eq(10_000), any(), any(), any());
+            verify(traceInsightsService).listTraces(eq(10_000), any(), any(), any(), any());
         }
 
-        private TraceInsightsResponse emptyInsightsResponse() {
-            return new TraceInsightsResponse(List.of(), BucketCounts.empty(), null);
+        /** The service reads the view, as it reads rootActionType. */
+        @Test
+        void passesTheViewThroughAsWritten() {
+            controller.listTraces(100, null, null, null, "Full");
+
+            verify(traceInsightsService).listTraces(100, TraceBucket.ALL, null, null, "Full");
+        }
+
+        private TraceListResponse emptyListResponse() {
+            return new TraceListResponse(List.of(), BucketCounts.empty(), null);
         }
     }
 
     @Nested
-    class GetTraceInsights {
+    class GetTrace {
 
         @Test
-        void shouldReturnTraceTreeWhenFound() {
-            TraceTree traceTree = createTraceTree("trace-456");
-            when(traceInsightsService.getTraceInsights("trace-456")).thenReturn(Optional.of(traceTree));
+        void shouldReturnTheTraceWhenFound() {
+            TraceResource trace = createTrace("trace-456");
+            when(traceInsightsService.getTrace("trace-456")).thenReturn(Optional.of(trace));
 
-            assertThat(controller.getTraceInsights("trace-456")).isSameAs(traceTree);
+            assertThat(controller.getTrace("trace-456")).isSameAs(trace);
         }
 
         @Test
         void shouldRefuseAnUnknownTraceAsNotFound() {
-            when(traceInsightsService.getTraceInsights("trace-789")).thenReturn(Optional.empty());
+            when(traceInsightsService.getTrace("trace-789")).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> controller.getTraceInsights("trace-789"))
+            assertThatThrownBy(() -> controller.getTrace("trace-789"))
                     .isInstanceOfSatisfying(ApiProblemException.class, e -> {
                         assertThat(e.problem().status()).isEqualTo(404);
                         assertThat(e.problem().parameter()).isNull();
@@ -329,13 +337,23 @@ class PeekabootControllerTest {
         }
     }
 
-    private TraceTree createTraceTree(String traceId) {
-        SpanNode rootSpan =
-                node("span-" + traceId).named("test-operation").durationMs(100L).build();
-        return tree(rootSpan)
-                .traceId(traceId)
-                .rootActionType(RootActionType.HTTP_REQUEST)
-                .build();
+    private TraceResource createTrace(String traceId) {
+        TraceSummary summary = new TraceSummary(
+                traceId,
+                Instant.EPOCH,
+                100L,
+                true,
+                RootActionType.HTTP_REQUEST,
+                "test-operation",
+                null,
+                TraceOutcome.OK,
+                List.of(),
+                List.of(),
+                List.of(),
+                new TraceSummary.Counts(
+                        1, new TraceSummary.QueryCounts(0, 0L), new TraceSummary.LogCounts(0, 0, 0), 0, 0),
+                null);
+        return new TraceResource(summary, null);
     }
 
     /** The controller over the test's fields, with the three constructor arguments the feature tests vary. */

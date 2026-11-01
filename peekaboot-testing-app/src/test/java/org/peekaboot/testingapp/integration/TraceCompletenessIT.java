@@ -35,9 +35,10 @@ class TraceCompletenessIT extends TestingAppITBase {
             JsonNode inFlight = traces.awaitTrace(
                     traceId, trace -> SpanTree.orphanNames(trace).contains(HeldRequestController.CHILD_SPAN));
 
-            assertThat(inFlight.path("complete").asBoolean(true)).isFalse();
-            assertThat(inFlight.path("outcome").asString("")).isEqualTo("IN_PROGRESS");
-            assertThat(inFlight.path("rootSpan").isNull())
+            assertThat(inFlight.path("summary").path("complete").asBoolean(true))
+                    .isFalse();
+            assertThat(inFlight.path("summary").path("outcome").asString("")).isEqualTo("IN_PROGRESS");
+            assertThat(inFlight.path("data").path("rootSpan").isNull())
                     .as("rootSpan is null, not absent")
                     .isTrue();
 
@@ -45,11 +46,11 @@ class TraceCompletenessIT extends TestingAppITBase {
             assertThat(response.get(15, TimeUnit.SECONDS).statusCode()).isEqualTo(200);
 
             JsonNode complete = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
-            assertThat(complete.path("outcome").asString("")).isEqualTo("OK");
-            assertThat(complete.path("orphans").isArray())
+            assertThat(complete.path("summary").path("outcome").asString("")).isEqualTo("OK");
+            assertThat(complete.path("data").path("orphans").isArray())
                     .as("orphans is an array, not absent")
                     .isTrue();
-            assertThat(complete.path("orphans")).isEmpty();
+            assertThat(complete.path("data").path("orphans")).isEmpty();
             assertThat(SpanTree.names(complete)).contains(HeldRequestController.CHILD_SPAN);
         }
     }
@@ -68,8 +69,9 @@ class TraceCompletenessIT extends TestingAppITBase {
                 .toBodilessEntity();
 
         JsonNode trace = traces.awaitTrace(callerTraceId, TraceApiClient.ROOT_SPAN_EXPORTED);
-        assertThat(trace.path("complete").asBoolean(false)).isTrue();
-        assertThat(trace.path("rootSpan").path("kind").asString("")).isEqualTo("SERVER");
+        assertThat(trace.path("summary").path("complete").asBoolean(false)).isTrue();
+        assertThat(trace.path("data").path("rootSpan").path("kind").asString(""))
+                .isEqualTo("SERVER");
     }
 
     private static byte[] randomBytes(int length) {

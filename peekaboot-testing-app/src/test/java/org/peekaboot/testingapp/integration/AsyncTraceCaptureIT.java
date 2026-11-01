@@ -111,7 +111,7 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traceId, ASYNC_SPAN_CAPTURED);
 
-        assertThat(trace.path("rootActionType").asString(""))
+        assertThat(trace.path("summary").path("rootActionType").asString(""))
                 .as("the propagated context keeps the task inside the request's trace, so the "
                         + "request stays the root and the trace stays an HTTP request")
                 .isEqualTo(RootActionType.HTTP_REQUEST.name());
@@ -131,14 +131,15 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
         // duration is that span's duration" is the same claim as "the background work is
         // excluded" - and unlike a fixed bound in milliseconds it stays true however long a
         // loaded machine takes to serve the request.
-        assertThat(trace.path("durationMs").asLong())
+        assertThat(trace.path("summary").path("durationMs").asLong())
                 .as(
                         "the feature's headline claim, against real instrumentation: the request "
                                 + "answered while the task was still running, so the trace reports "
                                 + "the request's own span rather than the window that also holds "
                                 + "the %dms the background work went on for",
                         asyncSpan.path("durationMs").asLong())
-                .isEqualTo(trace.path("rootSpan").path("durationMs").asLong());
+                .isEqualTo(
+                        trace.path("data").path("rootSpan").path("durationMs").asLong());
     }
 
     /**
@@ -195,13 +196,14 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
                         + "the parent span's own duration would be the same number")
                 .isGreaterThan(endMs(enrichment));
 
-        assertThat(trace.path("durationMs").asLong())
+        assertThat(trace.path("summary").path("durationMs").asLong())
                 .as("neither task lengthens the request that dispatched the first")
-                .isEqualTo(trace.path("rootSpan").path("durationMs").asLong());
+                .isEqualTo(
+                        trace.path("data").path("rootSpan").path("durationMs").asLong());
 
         assertThat(asyncRowsOf(traceId)).singleElement().satisfies(row -> {
-            assertThat(SpanTree.spanId(row.path("rootSpan"))).isEqualTo(SpanTree.spanId(enrichment));
-            assertThat(row.path("durationMs").asLong())
+            assertThat(SpanTree.spanId(row.path("data").path("rootSpan"))).isEqualTo(SpanTree.spanId(enrichment));
+            assertThat(row.path("summary").path("durationMs").asLong())
                     .as("the row spans its subtree's window, from the enrichment's start to the "
                             + "nested notification's end")
                     .isEqualTo(endMs(notification) - startMs(enrichment));
@@ -238,9 +240,9 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
     void aScheduledTaskIsObservedExactlyOnceAndStaysAScheduledJob() {
         String traceId = fireFixedRateThroughSpringsScheduler();
 
-        JsonNode trace = traces.awaitTraceInBucket("all", traceId);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
 
-        assertThat(trace.path("rootActionType").asString(""))
+        assertThat(trace.path("summary").path("rootActionType").asString(""))
                 .as("Spring's scheduled-task observation is the root of a job's trace and must "
                         + "stay what the trace is classified by")
                 .isEqualTo(RootActionType.SCHEDULED_JOB.name());
@@ -272,7 +274,7 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
     void aJobScheduledFromObservedWorkIsStillHandedToSpringUnwrapped() {
         String traceId = fireFixedRateFromWithinAnObservation();
 
-        JsonNode trace = traces.awaitTraceInBucket("all", traceId);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
 
         assertThat(SpanTree.names(trace))
                 .as(
@@ -355,12 +357,13 @@ class AsyncTraceCaptureIT extends TestingAppITBase {
         if (rows.isEmpty()) {
             throw new AssertionError("no async row listed for trace " + traceId);
         }
-        return rows.getFirst().path("outcome").asString("");
+        return rows.getFirst().path("summary").path("outcome").asString("");
     }
 
     private List<JsonNode> asyncRowsOf(String traceId) {
         return traces.listedTraces("rootActionType=" + RootActionType.ASYNC_TASK).stream()
-                .filter(listed -> traceId.equals(listed.path("traceId").asString("")))
+                .filter(listed ->
+                        traceId.equals(listed.path("summary").path("traceId").asString("")))
                 .toList();
     }
 

@@ -659,12 +659,12 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void traceStatPartsFollowTheOverlayTabOrder() {
         Object full = evalModule("trace-stats.js", """
-                m.traceStatParts({summary: {spans: {count: 84}, queries: {count: 26, totalDurationMs: 31},
+                m.traceStatParts({counts: {spans: 84, queries: {count: 26, totalDurationMs: 31},
                     logs: {count: 27, errorCount: 1, warnCount: 2}}})
                     .map(part => part.textContent)
                 """);
         Object quiet = evalModule("trace-stats.js", """
-                m.traceStatParts({summary: {spans: {count: 1}, queries: {count: 0, totalDurationMs: 0},
+                m.traceStatParts({counts: {spans: 1, queries: {count: 0, totalDurationMs: 0},
                     logs: {count: 0, errorCount: 0, warnCount: 0}}})
                     .map(part => part.textContent)
                 """);
@@ -681,7 +681,7 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void traceStatPartsGroupCountsInTheGivenLocale() {
         Object text = evalModule("trace-stats.js", """
-                m.traceStatParts({summary: {queries: {count: 1234, totalDurationMs: 5},
+                m.traceStatParts({counts: {queries: {count: 1234, totalDurationMs: 5},
                     logs: {count: 0, errorCount: 2345, warnCount: 0}}}, {locale: 'de-DE'})
                     .map(part => part.textContent).join(' | ')
                 """);

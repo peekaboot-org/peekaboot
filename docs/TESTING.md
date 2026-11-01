@@ -103,7 +103,7 @@ takes the mapped `SqlStatement`.
 `TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
 `snapshot()`, so a mapper test gets the root and ordering the store would hand it.
 `SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the
-mapped `TraceTree` around one, complete and without orphans unless its `complete` and `orphans`
+internal `TraceTree` around one, complete, without orphans and with no request unless its
 setters say otherwise. `Logs.log(traceId)` builds a `LogCapturedEvent`,
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
@@ -267,7 +267,7 @@ tests, and Peekaboot keeps none: a test that passes on a re-run is a defect to r
 ## Teardown and the toolbar's fetch ladder
 `PlaywrightTestBase.closePage()` navigates to `about:blank` before `context().close()`, and
 catches `TargetClosedError` around the close as insurance. The collapsed toolbar's fetch ladder
-(`toolbar.js`) polls `/api/traces/{id}/insights` for up to 4.75s after page load, independent of
+(`toolbar.js`) polls `/api/traces/{id}` for up to 4.75s after page load, independent of
 any one test's lifetime. The tests that route that traffic never unroute it:
 `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`;
 `ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails`, which deliberately waits out all four
@@ -386,8 +386,8 @@ a test waits for the fact it is about to assert on, never for a delay.
 poll from the browser; `TraceApiClient.awaitTrace(traceId, predicate)` and its listing waits
 poll over HTTP with Awaitility. `ROOT_SPAN_EXPORTED` on both is the completeness proof: only a
 SERVER root classifies HTTP_REQUEST, that root is the last span of a request to end, and the
-exporter hands spans over in the order they ended. The listing endpoint leaves a trace out
-until its root has arrived, so a listed match already carries its spans.
+exporter hands spans over in the order they ended. The listing shows a trace once its request
+or a log is stored, before any span, so a test asserting on spans waits for them first.
 
 Two shared things have no lock and need care instead. The JVM-wide Logback context is one. Boot
 assumes one application per JVM. Closing a context marks Logback uninitialised, and the next

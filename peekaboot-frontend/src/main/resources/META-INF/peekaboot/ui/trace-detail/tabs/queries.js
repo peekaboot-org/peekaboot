@@ -2,8 +2,8 @@
  * Trace-detail overlay - Queries tab: the list of captured database queries. Each entry
  * carries its span's id (the backend's QueryInfo.spanId) as a stable anchor, so the
  * Spans tab's query link can land on it - and links back to that span in the span tree
- * via view.goToSpan (see trace-detail.js's jumpToElement). Its statement is that span's
- * own `statement`, the one copy the backend serves.
+ * via view.goToSpan (see trace-detail.js's jumpToElement). Its statement is the query's own
+ * `statement`, the same one its span carries.
  */
 import {emptyState} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
@@ -12,21 +12,19 @@ import {querySeverity, severityClass} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {slowBadge} from '../../shared/trace-stats.js';
 import {spanTreeLink} from '../span-tree-link.js';
-import {traceSpans} from './spans.js';
 
 export function render(container, trace, view = {}) {
-    const queries = trace.queries || [];
+    const queries = trace.data.queries || [];
 
     if (queries.length === 0) {
         container.replaceChildren(emptyState('No database queries recorded'));
         return;
     }
 
-    const statements = new Map(Array.from(traceSpans(trace), span => [span.spanId, span.statement]));
-    container.replaceChildren(...queries.map((query, index) => queryItem(query, statements.get(query.spanId), index, view)));
+    container.replaceChildren(...queries.map((query, index) => queryItem(query, index, view)));
 }
 
-function queryItem(query, statement, index, view) {
+function queryItem(query, index, view) {
     const duration = query.durationMs || 0;
     const durationClass = querySeverity(duration, view.features);
     const spanId = query.spanId || '';
@@ -51,7 +49,7 @@ function queryItem(query, statement, index, view) {
         el('div', {className: 'pk-query-header'},
             el('span', {className: 'pk-query-system', text: `${index + 1}. ${queryLabel(query)}`}),
             meta),
-        statement ? sqlView(statement, {locale: view.locale}) : el('div', {className: 'pk-code-block', text: 'Unknown query'}));
+        query.statement ? sqlView(query.statement, {locale: view.locale}) : el('div', {className: 'pk-code-block', text: 'Unknown query'}));
 }
 
 /** A query named by its DataSource alone already shows that name as its system, so it is not repeated. */

@@ -9,7 +9,12 @@ public class QueryExtractor {
 
     /** {@code queries} comes from {@link TraceTreeMapper#queriesOf} for the same {@code traceData}. */
     public List<QueryInfo> extract(TraceData traceData, TraceQueries queries) {
-        return traceData.spans().stream()
+        return extract(traceData.spans(), queries);
+    }
+
+    /** The queries among {@code spans}, which are some or all of the spans {@code queries} was built from. */
+    List<QueryInfo> extract(List<SpanData> spans, TraceQueries queries) {
+        return spans.stream()
                 .filter(DbSpans::isQuery)
                 .map(span -> extractQuery(span, queries))
                 .toList();
@@ -20,6 +25,11 @@ public class QueryExtractor {
         String dataSourceName = DbSpans.dataSourceName(span.tags());
 
         return new QueryInfo(
-                span.spanId(), dbSystem, dataSourceName, span.durationMs(), queries.rowCount(span.spanId()));
+                span.spanId(),
+                dbSystem,
+                dataSourceName,
+                span.durationMs(),
+                queries.rowCount(span.spanId()),
+                queries.statement(span));
     }
 }

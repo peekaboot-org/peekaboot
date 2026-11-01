@@ -5,13 +5,13 @@ import java.util.List;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SubtreeView;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
+import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 
 /**
  * Builds already-mapped {@link TraceTree} fixtures for the stages after
  * {@code TraceTreeMapper}: trace {@code trace-1}, not yet judged, of UNKNOWN root action, named
- * after its root span, with a summary counting that one span and nothing else. Complete, without
+ * after its root span, with no request and counting that one span and no query. Complete, without
  * orphans and taking as long as its root span unless told otherwise. The root span may be null.
  */
 public final class TraceTrees {
@@ -27,20 +27,13 @@ public final class TraceTrees {
         private final SpanNode rootSpan;
         private String traceId = "trace-1";
         private RootActionType rootActionType = RootActionType.UNKNOWN;
-        private final TraceTabSummary summary;
         private boolean complete = true;
         private List<SpanNode> orphans = List.of();
-        private boolean truncated;
         private SubtreeView subtree;
         private Long durationMs;
 
         private Builder(SpanNode rootSpan) {
             this.rootSpan = rootSpan;
-            this.summary = new TraceTabSummary(
-                    null,
-                    new TraceTabSummary.SpansSummary(rootSpan == null ? 0 : 1),
-                    new TraceTabSummary.QueriesSummary(0, 0L),
-                    new TraceTabSummary.LogsSummary(0, 0, 0));
         }
 
         public Builder traceId(String traceId) {
@@ -63,11 +56,6 @@ public final class TraceTrees {
             return this;
         }
 
-        public Builder truncated(boolean truncated) {
-            this.truncated = truncated;
-            return this;
-        }
-
         public Builder durationMs(long durationMs) {
             this.durationMs = durationMs;
             return this;
@@ -81,11 +69,12 @@ public final class TraceTrees {
                     complete,
                     rootActionType,
                     rootSpan == null ? null : rootSpan.name(),
+                    null,
                     rootSpan,
                     orphans,
-                    summary,
-                    subtree,
-                    truncated);
+                    rootSpan == null ? 0 : 1,
+                    new TraceSummary.QueryCounts(0, 0L),
+                    subtree);
         }
     }
 }

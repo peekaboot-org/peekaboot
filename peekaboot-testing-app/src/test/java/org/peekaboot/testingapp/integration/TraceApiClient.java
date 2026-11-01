@@ -34,10 +34,11 @@ class TraceApiClient {
      */
     static final Predicate<JsonNode> ROOT_SPAN_EXPORTED = trace -> RootActionType.HTTP_REQUEST
             .name()
-            .equals(trace.path("rootActionType").asString(""));
+            .equals(trace.path("summary").path("rootActionType").asString(""));
 
     /** The trace's root has arrived: {@code complete} is the API's own word for it, so nothing is inferred from the tree. */
-    static final Predicate<JsonNode> COMPLETE = trace -> trace.path("complete").asBoolean(false);
+    static final Predicate<JsonNode> COMPLETE =
+            trace -> trace.path("summary").path("complete").asBoolean(false);
 
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
@@ -64,7 +65,8 @@ class TraceApiClient {
 
     /** The trace carries an ERROR log whose message is exactly {@code message}. */
     static Predicate<JsonNode> errorLogged(String message) {
-        return trace -> trace.path("logs")
+        return trace -> trace.path("data")
+                .path("logs")
                 .valueStream()
                 .anyMatch(log -> "ERROR".equals(log.path("level").asString(""))
                         && message.equals(log.path("message").asString("")));
@@ -76,14 +78,14 @@ class TraceApiClient {
     }
 
     /**
-     * Polls the trace's own insights endpoint until {@code ready} holds and returns the trace
-     * as served at that moment. A 404 counts as "not yet": the endpoint answers nothing until
-     * the first span is exported. The predicate is the assertion's precondition
+     * Polls the trace's own endpoint until {@code ready} holds and returns the trace
+     * as served at that moment. A 404 counts as "not yet": the endpoint knows a trace only once
+     * its first span, log or request is stored. The predicate is the assertion's precondition
      * ({@link #ROOT_SPAN_EXPORTED} for most), so a test asserts on what it waited for rather
      * than on whatever had arrived.
      */
     JsonNode awaitTrace(String traceId, Predicate<JsonNode> ready) {
-        String uri = "/peekaboot/api/traces/" + traceId + "/insights";
+        String uri = "/peekaboot/api/traces/" + traceId;
         AtomicReference<JsonNode> lastSeen = new AtomicReference<>();
         try {
             return await().atMost(TIMEOUT)
@@ -110,7 +112,7 @@ class TraceApiClient {
     JsonNode awaitTraceInBucket(String bucket, String traceId) {
         return awaitListedTrace(
                 "bucket=" + bucket,
-                trace -> traceId.equals(trace.path("traceId").asString("")),
+                trace -> traceId.equals(traceId(trace)),
                 TraceApiClient::rootOperation,
                 "trace " + traceId + " in the " + bucket + " bucket");
     }
@@ -121,20 +123,18 @@ class TraceApiClient {
      * observation, so nothing hands the caller an id: a direct method call.
      */
     JsonNode awaitTraceAppearing(String rootOperation, Runnable trigger) {
-        Predicate<JsonNode> named =
-                trace -> rootOperation.equals(trace.path("rootOperation").asString(""));
+        Predicate<JsonNode> named = trace -> rootOperation.equals(rootOperation(trace));
         Set<String> listedBefore = new HashSet<>();
         for (JsonNode trace :
-                api.getJson("/peekaboot/api/traces/insights?bucket=all").path("traces")) {
+                api.getJson("/peekaboot/api/traces?view=full&bucket=all").path("traces")) {
             if (named.test(trace)) {
-                listedBefore.add(trace.path("traceId").asString(""));
+                listedBefore.add(traceId(trace));
             }
         }
         trigger.run();
         return awaitListedTrace(
                 "bucket=all",
-                trace -> named.test(trace)
-                        && !listedBefore.contains(trace.path("traceId").asString("")),
+                trace -> named.test(trace) && !listedBefore.contains(traceId(trace)),
                 TraceApiClient::rootOperation,
                 "a new '" + rootOperation + "' trace");
     }
@@ -155,26 +155,26 @@ class TraceApiClient {
      * {@code bucket=errors}), every one of them; an empty query is the dashboard's default listing.
      */
     List<JsonNode> listedTraces(String query) {
-        String uri = "/peekaboot/api/traces/insights?limit=10000" + (query.isEmpty() ? "" : "&" + query);
+        String uri = "/peekaboot/api/traces?view=full&limit=10000" + (query.isEmpty() ? "" : "&" + query);
         List<JsonNode> listed = new ArrayList<>();
         api.getJson(uri).path("traces").forEach(listed::add);
         return listed;
     }
 
     List<String> listedTraceIds(String query) {
-        return listedTraces(query).stream()
-                .map(trace -> trace.path("traceId").asString(""))
-                .toList();
+        return listedTraces(query).stream().map(TraceApiClient::traceId).toList();
     }
 
     /**
      * Polls the listing endpoint with {@code query} until a listed trace satisfies
-     * {@code match}. The listing leaves out a trace whose root span has not arrived, so a
-     * listed match already carries its spans.
+     * {@code match}. A trace lists once its request or a log is stored, before any span, with
+     * {@code complete} false. Spans that arrived without their root hold back only the trace's own
+     * row; its async tasks' rows list sooner. A caller that asserts on spans waits for them with
+     * {@link #awaitTrace} first.
      */
     private JsonNode awaitListedTrace(
             String query, Predicate<JsonNode> match, Function<JsonNode, String> label, String description) {
-        String uri = "/peekaboot/api/traces/insights?" + query;
+        String uri = "/peekaboot/api/traces?view=full&" + query;
         // written on Awaitility's poll thread, read on the test thread once the wait gave up
         AtomicReference<List<String>> lastListing = new AtomicReference<>(List.of());
         try {
@@ -200,14 +200,27 @@ class TraceApiClient {
     }
 
     static String rootOperation(JsonNode trace) {
-        return trace.path("rootOperation").asString("");
+        return trace.path("summary").path("rootOperation").asString("");
+    }
+
+    static String traceId(JsonNode trace) {
+        return trace.path("summary").path("traceId").asString("");
+    }
+
+    /** The row of {@code listing} for {@code traceId}; fails naming the listing when there is none. */
+    static JsonNode rowOf(JsonNode listing, String traceId) {
+        return listing.path("traces")
+                .valueStream()
+                .filter(row -> traceId.equals(traceId(row)))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("trace " + traceId + " is not listed in " + listing));
     }
 
     private JsonNode fetchOrNull(String uri) {
         try {
             return api.getJson(uri);
         } catch (HttpClientErrorException.NotFound notYetAvailable) {
-            // single-trace endpoint returns 404 until the first span for the trace is exported
+            // single-trace endpoint returns 404 until anything for the trace is stored
             return null;
         }
     }

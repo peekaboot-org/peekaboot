@@ -14,7 +14,7 @@ import org.peekaboot.backend.tracing.tags.Tags;
 
 /**
  * The one definition of "database query span", shared by the summary count
- * ({@link TraceSummaries}, and {@link TraceTreeMapper} for a subtree), the SLOW_QUERY issue
+ * ({@link TraceTreeMapper}, for a trace and for a subtree), the SLOW_QUERY issue
  * ({@link IssueDetector}) and the Queries tab ({@link QueryExtractor}), so the three numbers a
  * trace reports about its queries agree.
  *

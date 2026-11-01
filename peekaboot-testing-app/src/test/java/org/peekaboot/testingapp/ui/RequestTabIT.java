@@ -36,21 +36,21 @@ class RequestTabIT extends PlaywrightTestBase {
 
     private void renderWithStatus(int status) {
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "GET", "path": "/api/users", "headers": {}},
                     "response": {"status": %d, "headers": {}}
-                }}
+                }}}
                 """.formatted(status));
     }
 
     @Test
     void requestHeadersHighlightAValueMatchingTheCurrentMaskLiteral() {
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "GET", "path": "/api/users",
                         "headers": {"authorization": "******", "accept": "application/json"}},
                     "response": {"status": 200, "headers": {}}
-                }}
+                }}}
                 """);
 
         assertThat(page.locator("#pk-request-test-container td.pk-request-masked")
@@ -68,11 +68,11 @@ class RequestTabIT extends PlaywrightTestBase {
         // highlight keyed on '********' would also silently never fire for a real masked
         // header.
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "GET", "path": "/api/users",
                         "headers": {"x-legacy": "********"}},
                     "response": {"status": 200, "headers": {}}
-                }}
+                }}}
                 """);
 
         assertThat(page.locator("#pk-request-test-container td.pk-request-masked")
@@ -84,11 +84,11 @@ class RequestTabIT extends PlaywrightTestBase {
     @Test
     void requestHeadersHighlightByThePublishedMaskLiteralWhenFeaturesAreInHand() {
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "GET", "path": "/api/users",
                         "headers": {"authorization": "###", "x-old": "******"}},
                     "response": {"status": 200, "headers": {}}
-                }}
+                }}}
                 """, """
                 {"features": {"maskLiteral": "###"}}
                 """);
@@ -104,11 +104,11 @@ class RequestTabIT extends PlaywrightTestBase {
     @Test
     void requestHeadersDoNotHighlightOrdinaryValues() {
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "GET", "path": "/api/users",
                         "headers": {"accept": "application/json", "host": "example.com"}},
                     "response": {"status": 200, "headers": {}}
-                }}
+                }}}
                 """);
 
         assertThat(page.locator("#pk-request-test-container td.pk-request-masked")
@@ -123,11 +123,11 @@ class RequestTabIT extends PlaywrightTestBase {
     @Test
     void everySectionRendersOnOnePageWithoutNavigation() {
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "GET", "path": "/api/users",
                         "headers": {"accept": "application/json"}},
                     "response": {"status": 200, "headers": {"content-type": "application/json"}}
-                }}
+                }}}
                 """);
 
         String text = page.locator("#pk-request-test-container").textContent();
@@ -168,11 +168,11 @@ class RequestTabIT extends PlaywrightTestBase {
     @Test
     void requestHeadersSortByCodePointRatherThanTheReadersCollation() {
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "GET", "path": "/api/users",
                         "headers": {"a-token": "1", "B-cache": "2"}},
                     "response": {"status": 200, "headers": {}}
-                }}
+                }}}
                 """);
 
         Object keys = page.evaluate("() => [...document.querySelectorAll('#pk-request-test-container tr')]"
@@ -215,11 +215,11 @@ class RequestTabIT extends PlaywrightTestBase {
     @Test
     void theRequestSectionLeavesContentTypeToTheHeadersTable() {
         renderWithTrace("""
-                {"durationMs": 12, "httpExchange": {
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
                     "request": {"method": "POST", "path": "/api/users",
                         "headers": {"content-type": "application/json"}},
                     "response": {"status": 201, "headers": {}}
-                }}
+                }}}
                 """);
 
         String requestSection = page.locator("#pk-request-test-container .pk-request-section")

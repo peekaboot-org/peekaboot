@@ -32,7 +32,8 @@ abstract class TraceOverlayTestBase extends PlaywrightTestBase {
      */
     private String waitForMultiSpanLogTraceId() {
         String traceId = toolbar.traceId();
-        awaitTrace(traceId, "trace => new Set((trace.logs || []).map(log => log.spanId).filter(Boolean)).size > 1");
+        awaitTrace(
+                traceId, "trace => new Set((trace.data.logs || []).map(log => log.spanId).filter(Boolean)).size > 1");
         return traceId;
     }
 

@@ -149,8 +149,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
 
         openDashboard();
         Response defaultResponse = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"),
-                () -> page.click(Dashboard.tabButton("traces")));
+                response -> response.url().contains("/api/traces?"), () -> page.click(Dashboard.tabButton("traces")));
         assertThat(rootActionTypeOf(defaultResponse)).isNull();
         dashboard.awaitListedTrace(httpTraceId);
         assertThat(page.locator(MAINTENANCE_ROW_ICON).count()).isZero();
@@ -159,7 +158,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
                 .isZero();
 
         Response revealedResponse = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"), () -> page.uncheck(MAINTENANCE_EXCLUSION));
+                response -> response.url().contains("/api/traces?"), () -> page.uncheck(MAINTENANCE_EXCLUSION));
 
         assertThat(rootActionTypeOf(revealedResponse)).isEqualTo("*");
         assertThat(page.url()).endsWith("#traces?excluded=none");
@@ -174,14 +173,13 @@ class TraceFiltersIT extends PlaywrightTestBase {
     void untickingTheMaintenanceExclusionAddsItToTheChosenTypes() {
         openDashboard();
         page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"),
-                () -> page.click(Dashboard.tabButton("traces")));
+                response -> response.url().contains("/api/traces?"), () -> page.click(Dashboard.tabButton("traces")));
         page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"),
+                response -> response.url().contains("/api/traces?"),
                 () -> page.check(TRACE_TYPE_CHIP + "[value='HTTP_REQUEST']"));
 
         Response combinedResponse = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"), () -> page.uncheck(MAINTENANCE_EXCLUSION));
+                response -> response.url().contains("/api/traces?"), () -> page.uncheck(MAINTENANCE_EXCLUSION));
 
         assertThat(rootActionTypeOf(combinedResponse)).isEqualTo("HTTP_REQUEST,MAINTENANCE");
         assertThat(page.url()).endsWith("#traces?type=HTTP_REQUEST&excluded=none");
@@ -193,7 +191,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
                 .contains("Maintenance included");
 
         Response clearedResponse = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"), () -> page.click("#traces-filter-clear"));
+                response -> response.url().contains("/api/traces?"), () -> page.click("#traces-filter-clear"));
 
         assertThat(rootActionTypeOf(clearedResponse)).isNull();
         assertThat(page.isChecked(MAINTENANCE_EXCLUSION)).isTrue();
@@ -205,7 +203,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
     @Test
     void deepLinkRestoresTheLiftedMaintenanceExclusion() {
         Response listing = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"),
+                response -> response.url().contains("/api/traces?"),
                 () -> page.navigate(dashboardUrl("#traces?excluded=none")));
 
         assertThat(rootActionTypeOf(listing)).isEqualTo("*");
@@ -246,7 +244,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
         openDashboard();
         dashboard.openTab("traces");
         page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"),
+                response -> response.url().contains("/api/traces?"),
                 () -> page.check(TRACE_TYPE_CHIP + "[value='HTTP_REQUEST']"));
         page.waitForSelector("#traces-active-filter:not(.hidden) #traces-filter-clear");
 

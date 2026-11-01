@@ -82,8 +82,8 @@ class QueriesTabIT extends TraceOverlayTestBase {
         Object queryLink = importModule("trace-detail/tabs/queries.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {rootSpan: {spanId: 's1', statement: {text: 'SELECT 1', formatted: null, parameters: []}},
-                    queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {goToSpan: () => {}});
+                m.render(container, {data: {queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1',
+                    statement: {text: 'SELECT 1', formatted: null, parameters: []}}]}}, {goToSpan: () => {}});
                 const link = container.querySelector('.pk-query-meta button');
                 return [link.className, link.textContent, link.dataset.spanId, link.getAttribute('aria-label')].join('|');
             })()
@@ -91,8 +91,8 @@ class QueriesTabIT extends TraceOverlayTestBase {
         Object logLink = importModule("trace-detail/tabs/logs.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {rootSpan: {spanId: 's1', name: 'a'},
-                    logs: [{spanId: 's1', level: 'INFO', message: 'x', timestamp: '2026-01-01T00:00:00Z'}]}, {goToSpan: () => {}});
+                m.render(container, {data: {rootSpan: {spanId: 's1', name: 'a'},
+                    logs: [{spanId: 's1', level: 'INFO', message: 'x', timestamp: '2026-01-01T00:00:00Z'}]}}, {goToSpan: () => {}});
                 const link = container.querySelector('.pk-log__span-row button:not(.pk-log__span)');
                 return [link.className, link.textContent, link.dataset.spanId, link.getAttribute('aria-label')].join('|');
             })()
@@ -103,28 +103,18 @@ class QueriesTabIT extends TraceOverlayTestBase {
         assertThat(logLink).isEqualTo("pk-unbutton pk-icon-btn pk-span-tree-link|⤶|s1|Show span s1 in the span tree");
     }
 
-    /** While the root is missing, the Queries and Logs tabs still find their spans, in the arrived subtrees. */
+    /** While the root is missing, the Logs tab still finds its spans, in the arrived subtrees. */
     @Test
-    void theQueriesAndLogsTabsFindTheirSpansInAnInFlightTrace() {
-        Object statement = importModule("trace-detail/tabs/queries.js", """
-            (() => {
-                const container = document.createElement('div');
-                m.render(container, {rootSpan: null, orphans: [{spanId: 's1', name: 'SELECT 1',
-                        statement: {text: 'SELECT 1', formatted: null, parameters: []}}],
-                    queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {goToSpan: () => {}});
-                return container.textContent.includes('SELECT 1');
-            })()
-            """);
+    void theLogsTabFindsItsSpansInAnInFlightTrace() {
         Object spanName = importModule("trace-detail/tabs/logs.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {rootSpan: null, orphans: [{spanId: 's1', name: 'PersonService.find'}],
-                    logs: [{spanId: 's1', level: 'INFO', message: 'x', timestamp: '2026-01-01T00:00:00Z'}]}, {goToSpan: () => {}});
+                m.render(container, {data: {rootSpan: null, orphans: [{spanId: 's1', name: 'PersonService.find'}],
+                    logs: [{spanId: 's1', level: 'INFO', message: 'x', timestamp: '2026-01-01T00:00:00Z'}]}}, {goToSpan: () => {}});
                 return container.querySelector('.pk-log__span')?.textContent ?? null;
             })()
             """);
 
-        assertThat(statement).isEqualTo(true);
         assertThat(spanName).isEqualTo("PersonService.find");
     }
 
@@ -155,7 +145,7 @@ class QueriesTabIT extends TraceOverlayTestBase {
     @Test
     void queriesTabListsTheJdbcQueryFromThePersonsPage() {
         openPersonsPage();
-        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        awaitTrace(toolbar.traceId(), "trace => (trace.data.queries || []).length > 0");
         toolbar.openOverlay();
         overlay.openTab("queries");
         overlay.waitFor(".pk-code-block");
@@ -183,9 +173,9 @@ class QueriesTabIT extends TraceOverlayTestBase {
                     {durationMs: 50, dbSystem: 'h2', rowCount: 1}
                 ];
                 const atDefault = document.createElement('div');
-                m.render(atDefault, {queries}, {features: {slowQueryThresholdMs: 50}});
+                m.render(atDefault, {data: {queries}}, {features: {slowQueryThresholdMs: 50}});
                 const published = document.createElement('div');
-                m.render(published, {queries}, {features: {slowQueryThresholdMs: 51}});
+                m.render(published, {data: {queries}}, {features: {slowQueryThresholdMs: 51}});
                 const labelsIn = el => Array.from(el.querySelectorAll('.pk-query-meta')).map(meta =>
                     meta.querySelector('.pk-query__duration').textContent + '|'
                         + Array.from(meta.querySelectorAll('.pk-badge.pk-badge--warn'), pill => pill.textContent).join());
@@ -205,8 +195,8 @@ class QueriesTabIT extends TraceOverlayTestBase {
             (() => {
                 const statement = {text: 'INSERT 1', formatted: null, parameters: [['1']], omittedParameterSets: 1234};
                 const container = document.createElement('div');
-                m.render(container, {rootSpan: {spanId: 's1', statement},
-                    queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1'}]}, {locale: 'de-DE'});
+                m.render(container, {data: {queries: [{durationMs: 1, dbSystem: 'h2', spanId: 's1', statement}]}},
+                    {locale: 'de-DE'});
                 return container.querySelector('.pk-sql__params-omitted').textContent;
             })()
             """);
@@ -221,12 +211,12 @@ class QueriesTabIT extends TraceOverlayTestBase {
             (() => {
                 const statement = {text: 'SELECT 1', formatted: null, parameters: []};
                 const container = document.createElement('div');
-                m.render(container, {queries: [
+                m.render(container, {data: {queries: [
                     {statement, durationMs: 1, dbSystem: 'postgresql', dataSourceName: 'orders-db'},
                     {statement, durationMs: 1, dbSystem: 'h2'},
                     {statement, durationMs: 1, dbSystem: 'inventory-db', dataSourceName: 'inventory-db'},
                     {statement, durationMs: 1, dbSystem: 'h2', dataSourceName: 'H2'}
-                ]});
+                ]}});
                 return Array.from(container.querySelectorAll('.pk-query-system')).map(label => label.textContent);
             })()
             """);

@@ -139,7 +139,7 @@ class ContextPathToolbarIT extends ContextPathTestBase {
         assertThat(pageErrors).isEmpty();
     }
 
-    /** A query count can only come from /app/peekaboot/api/traces/{id}/insights, and only once the trace is stored. */
+    /** A query count can only come from /app/peekaboot/api/traces/{id}, and only once the trace is stored. */
     private void awaitQueryCountOnTheBar() {
         toolbar.awaitMetrics("quer");
     }

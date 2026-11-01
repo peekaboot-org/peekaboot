@@ -209,7 +209,7 @@ org.peekaboot.backend/
 │   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
 │   ├── property/           # PropertyGroup, Property: the one shape the Environment and Config sections share
-│   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
+│   └── trace/              # TraceResource, TraceSummary, TraceDetail, TraceListResponse, TraceTree, SpanNode, HttpExchange, IssueType, ...
 ├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
 │                           # (peekaboot.error-page.override), StackTraceHtml
 ├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, LevelDataResponse): InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
@@ -220,7 +220,7 @@ org.peekaboot.backend/
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate), RootActionTypes,
-│                           # TraceSummaries, TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
+│                           # TraceResources, TraceSummaries, TraceDetails, TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
 ├── masking/                # MaskingEngine (one bean, from MaskingConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
@@ -769,8 +769,8 @@ The ten actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
 are stateless and need at most the engine, and ten `@ConditionalOnMissingBean` methods
 nobody overrode bought nothing but wiring. The trace mappers follow the same rule:
 `TraceResources`, which `TraceInsightsService` builds, holds `TraceTreeMapper`, `IssueDetector`,
-`QueryExtractor` and `TraceLogMapper`, built from the `MaskingEngine`, the `SqlFormatter`,
-`PeekabootTracingProperties` and `StackTraceRules`.
+`TraceLogMapper`, `TraceSummaries` and `TraceDetails`, built from the `MaskingEngine`, the
+`SqlFormatter`, `PeekabootTracingProperties` and `StackTraceRules`.
 
 ### Conditional Loading
 
@@ -1321,42 +1321,58 @@ logger context before resetting it, which drops even reset-resistant listeners.
 
 ### Trace Assembly and Enrichment
 
-Three collaborators turn a stored bundle into what the API returns, and the split is easy to
-get wrong: `TraceTreeMapper` builds the tree and nothing else. `TraceResources` runs the first
-two and does the third.
-`TraceInsightsService` lists the rows and hands each to `TraceResources.row`, and the detail
-endpoint's bundle to `TraceResources.trace`.
+The API serves a trace as a `TraceResource`, a `TraceSummary` and a `TraceDetail` (`summary`
+and `data` on the wire). `GET /peekaboot/api/traces/{traceId}` answers one.
+`GET /peekaboot/api/traces` answers a `TraceListResponse` whose rows carry `data: null` unless
+the request says `view=full`. `TraceInsightsService` lists the rows, parses `view` and hands each
+row to `TraceResources.row`, and the single trace's bundle to `TraceResources.trace`.
 
-1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
-   It re-parents orphans under the root the snapshot names, or serves the stored subtrees as
-   `TraceTree.orphans` when it names none, masks tags, exceptions and query text, classifies
-   the root action type and computes the tab summary through `TraceSummaries`. It leaves the
-   tree unjudged, with a placeholder outcome and no buckets or reasons, and every
-   `SpanNode.issues` list empty.
+`TraceResources` builds both in three steps, and the split is easy to get wrong.
+`TraceTreeMapper` builds the tree and nothing else.
+
+1. `TraceTreeMapper.map(traceData, queries)` builds the `TraceTree` from a
+   `TraceDataBundle.snapshot()`. It re-parents orphans under the root the snapshot names, or
+   serves the stored subtrees as `TraceTree.orphans` when it names none, masks tags,
+   exceptions and query text, classifies the root action type, reads the request off the root
+   (`TraceRequests`) and counts the spans and the queries. An async row takes
+   `TraceTreeMapper.mapSubtree` instead, which counts its own subtree's spans and queries and
+   names no request. Every `SpanNode.issues` list is empty.
    **It attaches no issues and correlates no logs.**
-2. `IssueDetector.detectIssues(tree)` fills those issues in. `TraceResources` calls it for
-   both trace endpoints.
-3. `TraceResources.trace` adds what only the stored bundle knows: the flat log list, each
-   entry's `spanId` resolved through the bundle's duplicate redirects, the `HttpExchange` (from
-   `HttpExchangeMapper`) and `QueryExtractor`'s queries. The log list and its count come from
-   `TraceLogMapper`, to which it delegates and which masks each log's message and stack trace
-   by value shape, the trace through `WireStackTraces`. A failed span's `exception` goes
-   through the same `WireStackTraces`, so its stack trace is masked whole and then folded
-   exactly as a log's is. It runs on `GET /peekaboot/api/traces/{traceId}/insights` only. The
-   listing endpoint gets step 1, a log *count* for the row badges, and step 2, so its trees
-   carry issues but no log list and no queries. An async row takes `TraceTreeMapper.mapSubtree`
-   for step 1 and counts only the logs `TraceLogMapper.logsWithin` finds in its own subtree.
+2. `IssueDetector.detectIssues(tree)` fills those issues in.
+3. `TraceResources` reads what only the stored bundle knows into `TraceFacts`: the buckets
+   `TraceStore.bucketsOf` names, the store's failure flag, one read of the logs with the
+   dropped log count (`TraceDataBundle.capturedLogs()`, under one lock), the ERROR logs among
+   them mapped for the wire, and the dropped span count. `TraceSummaries` turns the tree and
+   the facts into the summary: the reasons `TraceReasons` reads off the spans and the ERROR
+   logs, the outcome `TraceOutcome.of(complete, failed)`, every issue in tree order and the
+   counts. `TraceDetails` builds the data only when the view asks for it: the tree, the flat
+   log list, `QueryExtractor`'s queries and, for a whole trace, the `HttpExchange` from
+   `HttpExchangeMapper`. With the data, `TraceLogMapper` maps every log once and the reasons
+   take their ERROR entries by index (`TraceLogMapper.errorsAmong`). A log's span resolves
+   through redirects that move while spans arrive, so a row resolves each span id once
+   (`TraceLogMapper.resolvingOnce`) and its subtree, its reasons and its list agree on it.
 
-Both endpoints then judge the tree through `TraceTree.withVerdict`. `TraceResources` passes
-the buckets `TraceStore.bucketsOf` names, the reasons `TraceReasons` reads off the spans and the
-counted ERROR logs, and the outcome `TraceOutcome.of(complete, failed)`. A complete whole
-trace is `ERROR` when the store's sticky failure flag (`TraceData.failed`) is set or one of its
-reasons is a failure. An async row ignores the store's
-flag, which covers the request that dispatched it, and fails on its own reasons alone.
+`TraceTree` is internal. It is what steps 1 and 2 hand on and is never served as it is. Step 2
+copies the mapper's output through `TraceTree.withSpans` and `SpanNode.withIssues`, so it names
+only what it adds.
 
-Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
-output through `TraceTree.withSpans`/`withSummary`/`withVerdict`/`withDetails` and `SpanNode.withIssues`,
-so a stage names only the components it adds.
+`TraceLogMapper` masks each log's message and stack trace by value shape, the trace through
+`WireStackTraces`, and resolves each log's `spanId` through the bundle's duplicate redirects. A
+failed span's `exception` goes through the same `WireStackTraces`, so its stack trace is masked
+whole and then folded exactly as a log's is. An async row counts and lists only the logs
+`TraceLogMapper.logsWithin` finds in its own subtree, and its data lists only the queries inside
+it, filtered before extraction so a statement outside it is never formatted.
+
+A complete whole trace is `ERROR` when the store's sticky failure flag (`TraceData.failed`) is
+set or one of its reasons is a failure. An async row ignores the store's flag, which covers the
+request that dispatched it, and fails on its own reasons alone. Its buckets and dropped counts
+are its trace's.
+
+The buckets are read before the snapshot and the logs. A span or ERROR log that fails the trace
+in between shows in the outcome but not yet in `buckets`, so one response can briefly read
+`outcome: ERROR` with `buckets: []`. A span arriving in between can also move the window across
+the slow threshold, so `buckets` can name `SLOW` without a `SLOW` reason, or the reverse. The
+next poll agrees.
 
 `TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
 creation order, the root span, the `complete` and `failed` flags, the trace window and the dropped span count.
@@ -1387,18 +1403,18 @@ stored as the head of one `TraceTree.orphans` subtree, earliest start first. A t
 nothing but a cycle has no such span, so its earliest-created span heads the one subtree, its
 parent edge cut to end the walk. A complete trace whose root the cap evicted is served the same
 way: `complete: true`, `rootSpan: null`, every stored span under `orphans`. With a root,
-`orphans` is `[]`. `TraceTree.outcome` is `IN_PROGRESS` while the trace is not complete, else
+`orphans` is `[]`. `TraceSummary.outcome` is `IN_PROGRESS` while the trace is not complete, else
 `ERROR` or `OK` by the verdict above. What moves the window is in *Async Subtree Timing*. The
 dropped span count travels on the snapshot rather than being derived from the span list: the
 list is already deduplicated and already capped, so nothing in it can say whether real spans
-were dropped. `truncated` derives from the count.
+were dropped. The summary serves the count as `counts.droppedSpans`.
 
 `InMemoryTraceStore` opens a bundle on the first span, log line or `RequestCompletedEvent` it
 sees for a trace id. The request usually comes first: `RequestCaptureFilter` publishes it as the
 response finishes, while spans wait for the exporter's batch. So
-`GET /peekaboot/api/traces/{traceId}/insights` for a request just served can answer `200` with
-`rootSpan: null`, `orphans: []`, `complete: false`, `outcome: IN_PROGRESS` and an empty
-summary. A `404` means the store has never seen the id. The toolbar's fetch schedule treats a
+`GET /peekaboot/api/traces/{traceId}` for a request just served can answer `200` with
+`complete: false`, `outcome: IN_PROGRESS`, every count zero, and `rootSpan: null` and
+`orphans: []` in its data. A `404` means the store has never seen the id. The toolbar's fetch schedule treats a
 trace that is not complete like a `404` and tries again (see *The collapsed bar's trace fetch
 schedule* in [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md)).
 
@@ -1413,10 +1429,10 @@ children are re-parented onto the nearest surviving ancestor so the tree stays c
 
 `peekaboot.tracing.max-spans-per-trace` (default 500) then caps the already-deduplicated span
 count, so the cap counts real, distinct work rather than a double-instrumented call as two
-spans against it. A trace still over the cap drops its oldest spans to make room and is flagged
-`truncated: true`. That flag is exposed on both `GET /peekaboot/api/traces/insights` and
-`GET /peekaboot/api/traces/{traceId}/insights`, and shown as a `TRUNCATED` badge in the trace
-list and the detail overlay.
+spans against it. A trace still over the cap drops its oldest spans to make room and counts
+them in `summary.counts.droppedSpans`, on both `GET /peekaboot/api/traces` and
+`GET /peekaboot/api/traces/{traceId}`. A count above zero shows as a `TRUNCATED` badge in the
+trace list and the detail overlay.
 
 The fold checks both arrival directions on every insertion (see `TraceDataBundle`'s class
 Javadoc for why it has to), but `addSpan` returns as soon as the arriving span duplicates its
@@ -1454,7 +1470,7 @@ counted were background work. The first synchronous span of a bundle that held o
 ends the fallback to the full window, so an orphaned task's minutes give way to the request that
 dispatched it.
 
-`TraceTabSummary.SpansSummary`'s `count`, the query figures and the whole trace's outcome deliberately
+`TraceSummary.Counts`' `spans`, the query figures and the whole trace's outcome deliberately
 cover every span, async ones included: Errors-bucket admission reads the bundle's own error signal, which any span
 sets, so a trace whose only failure was a background task would read OK while sitting in the
 Errors bucket.
@@ -1496,7 +1512,7 @@ if its async entry arrives later and would have taken it out. So a truncated tra
 Slow on background work, but never drops out on lost spans. A member stays one after the entry
 above it is evicted, and lists as an entry point of its own. A child arriving after its entry was
 evicted folds into the synchronous window instead: nothing stored says the entry existed, and
-remembering evicted ids would grow without bound. The `truncated` flag already says the data is
+remembering evicted ids would grow without bound. The dropped span count already says the data is
 partial, and 500 spans ahead of the async entry point is well outside the case this serves.
 
 ### Query Extraction
@@ -1512,14 +1528,14 @@ the starter carries the instrumentation rather than leaving both cases reading a
 the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag. `jdbc.*` alone is
 not enough, since datasource-proxy's connection and result-set spans carry
 `jdbc.datasource.name`/`jdbc.row-count` and are not queries. The predicate is shared by
-`TraceSummaries` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY) and
+`TraceTreeMapper` (`summary.counts.queries.count`), `IssueDetector` (SLOW_QUERY) and
 `QueryExtractor` (the `queries` list), so the three numbers a trace reports about its queries
 are one number; `TraceTreeMapperTest` pins the equality.
 
 `QueryExtractor` builds each trace's `queries` list from those spans, independently of the span
-tree's own names, one entry per query span. An entry carries no statement: the Queries tab reads
-its span's `statement` by `spanId`. A span whose instrumentation recorded no statement is listed all
-the same. `DbSpans.sql` checks tags in priority order. The site states the
+tree's own names, one entry per query span. Each entry carries the `statement` its span carries,
+so an agent reads a query's SQL without joining on `spanId`. A span whose instrumentation recorded
+no statement is listed all the same, with a null `statement`. `DbSpans.sql` checks tags in priority order. The site states the
 outcome under [the trace view](https://www.peekaboot.org/docs/traces/#the-trace-view);
 the order and the reasons are here:
 
@@ -1530,8 +1546,9 @@ the order and the reasons are here:
 3. `jdbc.query[N]` (datasource-proxy/Micrometer)
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
-`SqlStatements` builds one `SqlStatement` per query span for `TraceTreeMapper` (`SpanNode.statement`),
-the one copy both tabs show, so each statement is formatted and masked once. `text` is the
+`SqlStatements` builds one `SqlStatement` per query span. `TraceQueries` keeps it the first time
+it is read, so `SpanNode.statement` and `QueryInfo.statement` are one object and each statement is
+formatted and masked once per response. `text` is the
 masked SQL. `formatted` is the raw SQL laid out by `HibernateSqlFormatter` (Hibernate's `format_sql`
 style, `FormatStyle.BASIC`, each statement of a batch on its own) and then masked.
 
@@ -1603,7 +1620,7 @@ and ride along on any OTLP export.
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) names each row by `span.name`, OpenTelemetry's own span-name
 summary such as `SELECT customer_order`, and shows the statement in the span's query panel.
-The Queries tab (`trace-detail/tabs/queries.js`) lists each query with its span's `statement`. Both show the SQL
+The Queries tab (`trace-detail/tabs/queries.js`) lists each query with its own `statement`, the one its span carries. Both show the SQL
 `DbSpans.sql` picks from the tags listed above, with the bind parameters from
 `peekaboot.query.parameters`, and render it through `shared/sql-view.js`. That view highlights
 the SQL with `shared/sql.js`'s own tokenizer and shows it raw by default. On request it shows
@@ -1617,6 +1634,30 @@ photographs both, so `trace-detail-queries-*` is the shipped image demonstrating
 
 ### Trace Domain
 
+What the API serves:
+
+```
+TraceListResponse                # GET /peekaboot/api/traces
+├── traces: List<TraceResource>
+├── bucketCounts, filteredBucketCounts
+
+TraceResource                    # GET /peekaboot/api/traces/{traceId}, and one listing row
+├── summary: TraceSummary
+│   ├── traceId, startTime, durationMs, complete, rootActionType, rootOperation
+│   ├── request: {method, route, path, statusCode}   # null for a root that is no HTTP request
+│   ├── outcome, buckets, reasons, issues
+│   ├── counts: {spans, queries {count, totalDurationMs}, logs {count, errorCount, warnCount},
+│   │            droppedSpans, droppedLogs}
+│   └── subtree: SubtreeView     # null for a whole trace
+└── data: TraceDetail            # null on a listing row unless view=full
+    ├── rootSpan: SpanNode, orphans: List<SpanNode>
+    ├── logs: List<TraceLog>
+    ├── queries: List<QueryInfo> # each with its statement
+    └── httpExchange: HttpExchange   # null on a subtree row
+```
+
+What the store holds:
+
 ```
 TraceData
 ├── traceId: String
@@ -1625,7 +1666,7 @@ TraceData
 ├── complete: boolean        # sticky once a parentless span was stored
 ├── failed: boolean          # sticky; a span failed or answered 5xx, or an ERROR log arrived
 ├── spans: List<SpanData>    # creation order
-└── droppedSpans: int        # real spans the cap evicted; truncated() derives from it
+└── droppedSpans: int        # real spans the cap evicted
 
 SpanData
 ├── traceId, spanId, parentId

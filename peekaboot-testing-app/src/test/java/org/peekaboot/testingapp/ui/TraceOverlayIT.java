@@ -180,7 +180,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      * between the two the reader is looking at a loading dialog with the whole page behind
      * it inert, which is exactly when they reach for Escape.
      *
-     * <p>Every insights request is parked - held, not stubbed - rather than only the
+     * <p>Every trace request is parked - held, not stubbed - rather than only the
      * overlay's: the toolbar's own fetch ladder reads the same URL, and holding them all is
      * what keeps the overlay on its loading placeholder for the length of the press.
      */
@@ -190,7 +190,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
         toolbar.traceId();
         toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         List<Route> parkedTraceRequests = new CopyOnWriteArrayList<>();
-        page.route("**/api/traces/*/insights", parkedTraceRequests::add);
+        page.route("**/api/traces/*", parkedTraceRequests::add);
 
         page.keyboard().press("Enter");
         overlay.awaitOpened();
@@ -257,7 +257,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      */
     @Test
     void closeButtonDismissesTheOverlayOnTheErrorPath() {
-        page.route("**/api/traces/*/insights", route -> route.abort());
+        page.route("**/api/traces/*", route -> route.abort());
         openOverlayFromToolbar();
 
         overlay.waitFor(".pk-overlay__error");
@@ -339,7 +339,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      * would render an identical "Queries 1", so this snapshot alone does not prove the
      * shared path is load-bearing - only render() carrying no duplicate template text
      * does. Also pins the spans tab's own count badge, computed from the same
-     * endpoint TABS.count(trace) reads (trace.summary.spans.count) rather than a
+     * endpoint TABS.count(trace) reads (trace.summary.counts.spans) rather than a
      * hardcoded literal, so a real change to the trace's span count still passes.
      */
     @Test
@@ -351,12 +351,12 @@ class TraceOverlayIT extends TraceOverlayTestBase {
         // store wins; on slower ones (observed on macOS) the overlay fetch can read
         // the trace before its query landed and render "Queries 0". Wait for the
         // backend to actually serve the query before opening the overlay - the same
-        // endpoint and field the overlay's TABS.count reads (trace.queries).
+        // endpoint the overlay reads, until its data lists the query.
         openPersonsPage();
         // The count is read from the very response that proved the query span landed, so a
         // second fetch cannot race the trace's eviction from the bounded store.
-        JsonNode trace = awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
-        int spanCount = trace.path("summary").path("spans").path("count").asInt();
+        JsonNode trace = awaitTrace(toolbar.traceId(), "trace => (trace.data.queries || []).length > 0");
+        int spanCount = trace.path("summary").path("counts").path("spans").asInt();
         // Not openOverlayFromToolbar(): that helper re-navigates, which would mint a
         // fresh trace and reopen the very race waited out above. Open the overlay for
         // the already-verified trace directly.
@@ -485,7 +485,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      *
      * <p>Drives a real {@link OrderReconciler#reconcileOrders()} run through Spring's own
      * scheduled-task observation (see {@link ScheduledJobs}) rather than stubbing
-     * the insights endpoint with a canned response - the fix is about what real
+     * the trace endpoint with a canned response - the fix is about what real
      * classification data the header renders, so a hand-built trace object would only
      * prove the header can read JSON, not that the classification it depends on ever
      * happens. Also covers that the header leaves the span/query/log counts to the tabs:
@@ -500,7 +500,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
         String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
         // The run's own trace, and the wait is on its root span: the exporter hands spans over
         // in the order they ended, so the query span the header counts is there with it.
-        awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
+        awaitTrace(traceId, "trace => trace.summary.rootActionType === 'SCHEDULED_JOB'");
 
         openTraceDeepLink(traceId);
         overlay.waitFor(".pk-overlay__title-method");
@@ -534,7 +534,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
     void overlayTabCountsAreGroupedInTheDashboardsLocale() {
         openPersonsPage();
         String traceId = toolbar.traceId();
-        JsonNode trace = awaitTrace(traceId, "trace => (trace.queries || []).length > 0");
+        JsonNode trace = awaitTrace(traceId, "trace => (trace.data.queries || []).length > 0");
         page.addInitScript("localStorage.setItem('peekaboot-locale', 'ar-EG-u-nu-arab')");
 
         openTraceDeepLink(traceId);
@@ -542,13 +542,23 @@ class TraceOverlayIT extends TraceOverlayTestBase {
 
         assertThat(overlay.text(".pk-tab[data-tab=\"spans\"] .pk-tab__count"))
                 .isEqualTo(localeFormatted(
-                        trace.path("summary").path("spans").path("count").asInt(), "ar-EG-u-nu-arab"));
+                        trace.path("summary").path("counts").path("spans").asInt(), "ar-EG-u-nu-arab"));
         assertThat(overlay.text(".pk-tab[data-tab=\"queries\"] .pk-tab__count"))
                 .isEqualTo(localeFormatted(
-                        trace.path("summary").path("queries").path("count").asInt(), "ar-EG-u-nu-arab"));
+                        trace.path("summary")
+                                .path("counts")
+                                .path("queries")
+                                .path("count")
+                                .asInt(),
+                        "ar-EG-u-nu-arab"));
         assertThat(overlay.text(".pk-tab[data-tab=\"logs\"] .pk-tab__count"))
                 .isEqualTo(localeFormatted(
-                        trace.path("summary").path("logs").path("count").asInt(), "ar-EG-u-nu-arab"));
+                        trace.path("summary")
+                                .path("counts")
+                                .path("logs")
+                                .path("count")
+                                .asInt(),
+                        "ar-EG-u-nu-arab"));
     }
 
     /**
@@ -561,8 +571,9 @@ class TraceOverlayIT extends TraceOverlayTestBase {
         String slowSpanShortTotal = storeSlowTraceWithAShortTotal(slowSpanThresholdMs());
         String longWithoutASlowSpan = storeLongTraceWithoutASlowSpan(slowTraceThresholdMs());
         awaitTrace(
-                slowSpanShortTotal, "trace => trace.complete && !trace.reasons.some(reason => reason.kind === 'SLOW')");
-        awaitTrace(longWithoutASlowSpan, "trace => trace.reasons.some(reason => reason.kind === 'SLOW')");
+                slowSpanShortTotal,
+                "trace => trace.summary.complete && !trace.summary.reasons.some(reason => reason.kind === 'SLOW')");
+        awaitTrace(longWithoutASlowSpan, "trace => trace.summary.reasons.some(reason => reason.kind === 'SLOW')");
 
         openOverlayFromTheDashboard(longWithoutASlowSpan);
         assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn").trim()).isEqualTo("SLOW");

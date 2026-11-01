@@ -11,7 +11,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.TraceLog;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
@@ -19,6 +18,7 @@ import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 
 class TraceLogMapperTest {
@@ -184,29 +184,17 @@ class TraceLogMapperTest {
         store.addLog(log("t1").inSpan("async-child").saying("inside").build());
         store.addLog(log("t1").inSpan(null).saying("nowhere").build());
         TraceDataBundle bundle = bundle();
-        TraceTree subtree = new TraceTreeMapper(
-                        new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()))
-                .mapSubtree(bundle.snapshot(), "async");
+        TraceTreeMapper treeMapper =
+                new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()));
+        TraceData snapshot = bundle.snapshot();
+        TraceTree subtree = treeMapper.mapSubtree(snapshot, "async", treeMapper.queriesOf(snapshot));
 
-        assertThat(mapper.logsWithin(subtree.rootSpan(), bundle))
+        assertThat(TraceLogMapper.logsWithin(
+                        subtree.rootSpan(),
+                        TraceLogMapper.resolvingOnce(bundle),
+                        bundle.capturedLogs().logs()))
                 .extracting(LogCapturedEvent::message)
                 .containsExactly("inside");
-    }
-
-    @Test
-    void theLogsSummaryCountsLogsByLevel() {
-        for (String level : List.of("ERROR", "WARN", "WARN", "INFO", "DEBUG")) {
-            store.addLog(log("t1").inSpan("root").at(level).build());
-        }
-        TraceDataBundle bundle = bundle();
-        TraceTree tree = new TraceTreeMapper(
-                        new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()))
-                .map(bundle.snapshot());
-
-        TraceTree result = mapper.withLogsSummary(tree, bundle.logs());
-
-        assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(5, 1, 2));
-        assertThat(result.summary().spans()).isEqualTo(tree.summary().spans());
     }
 
     private static TraceLogMapper folding() {
@@ -220,6 +208,7 @@ class TraceLogMapperTest {
 
     private List<TraceLog> mapped(TraceLogMapper logMapper) {
         TraceDataBundle bundle = bundle();
-        return logMapper.map(bundle, bundle.logs());
+        return logMapper.map(
+                TraceLogMapper.resolvingOnce(bundle), bundle.capturedLogs().logs());
     }
 }

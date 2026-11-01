@@ -99,6 +99,23 @@ class HttpSpanTagsTest {
     void absentTagsReadAsNull() {
         assertThat(HttpSpanTags.method(Map.of("db.system", "postgresql"))).isNull();
         assertThat(HttpSpanTags.path(Map.of("db.system", "postgresql"))).isNull();
+        assertThat(HttpSpanTags.route(Map.of("db.system", "postgresql"))).isNull();
+    }
+
+    /** Spring's convention writes a placeholder word where no pattern matched, and a placeholder names no route. */
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "http.route | /persons/{id} | /persons/{id}",
+                "uri        | /orders/{id}  | /orders/{id}",
+                "uri        | UNKNOWN       | ",
+                "uri        | NOT_FOUND     | ",
+                "uri        | REDIRECTION   | ",
+                "uri        | root          | "
+            })
+    void routeIsTheMatchedPattern(String key, String value, String route) {
+        assertThat(HttpSpanTags.route(Map.of(key, value))).isEqualTo(route);
     }
 
     @Test

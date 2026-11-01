@@ -29,10 +29,13 @@ class CaptureWithoutToolbarIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traces.get("/?error=true"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode request = trace.path("httpExchange").path("request");
+        JsonNode request = trace.path("data").path("httpExchange").path("request");
         assertThat(request.path("method").asString()).isEqualTo("GET");
         assertThat(request.path("path").asString()).isEqualTo("/");
-        assertThat(trace.path("logs").valueStream().map(log -> log.path("level").asString()))
+        assertThat(trace.path("data")
+                        .path("logs")
+                        .valueStream()
+                        .map(log -> log.path("level").asString()))
                 .contains("ERROR");
     }
 }

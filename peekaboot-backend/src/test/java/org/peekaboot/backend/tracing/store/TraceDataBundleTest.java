@@ -44,13 +44,12 @@ class TraceDataBundleTest {
         for (int i = 1; i <= 3; i++) {
             bundle.addSpan(span("span" + i).order(i).build());
         }
-        assertThat(bundle.snapshot().truncated()).isFalse();
+        assertThat(bundle.snapshot().droppedSpans()).isZero();
 
         bundle.addSpan(span("span4").order(4).build());
         bundle.addSpan(span("span5").order(5).build());
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
-        assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.snapshot().droppedSpans()).isEqualTo(2);
     }
 
@@ -186,10 +185,9 @@ class TraceDataBundleTest {
         assertThat(bundle.snapshot().spans())
                 .as("ten raw arrivals must not truncate a trace with only five real spans")
                 .hasSize(5);
-        assertThat(bundle.snapshot().truncated())
+        assertThat(bundle.snapshot().droppedSpans())
                 .as("ten raw arrivals must not truncate a trace with only five real spans")
-                .isFalse();
-        assertThat(bundle.snapshot().droppedSpans()).isZero();
+                .isZero();
     }
 
     @Test
@@ -211,7 +209,6 @@ class TraceDataBundleTest {
         }
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
-        assertThat(bundle.snapshot().truncated()).isTrue();
         assertThat(bundle.snapshot().droppedSpans()).isEqualTo(pairs - cap);
         assertThat(bundle.parentRedirectCountForTesting())
                 .as("the redirect table must be pruned as spans are evicted, not grow with "
@@ -442,7 +439,7 @@ class TraceDataBundleTest {
         assertThat(snapshot.spans()).extracting(SpanData::spanId).containsExactly("span2", "span3");
         assertThat(snapshot.startTime()).isEqualTo(Instant.EPOCH.plusMillis(100));
         assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(250));
-        assertThat(snapshot.truncated()).isTrue();
+        assertThat(snapshot.droppedSpans()).isPositive();
     }
 
     @Test
@@ -466,7 +463,7 @@ class TraceDataBundleTest {
 
         assertThat(snapshot.traceId()).isEqualTo("trace1");
         assertThat(snapshot.rootSpan().spanId()).isEqualTo("parent");
-        assertThat(snapshot.truncated()).isFalse();
+        assertThat(snapshot.droppedSpans()).isZero();
     }
 
     /**
@@ -585,7 +582,7 @@ class TraceDataBundleTest {
         bundle.addSpan(asyncSpan("async", "root", 40, 1_000));
         bundle.addSpan(plainSpan("later", "root", 20, 10));
 
-        assertThat(bundle.snapshot().truncated()).isTrue();
+        assertThat(bundle.snapshot().droppedSpans()).isPositive();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -605,7 +602,7 @@ class TraceDataBundleTest {
         // evicts "quick", and moves "background" out of the synchronous window
         bundle.addSpan(asyncSpan("async", "root", 90, 3_010));
 
-        assertThat(bundle.snapshot().truncated()).isTrue();
+        assertThat(bundle.snapshot().droppedSpans()).isPositive();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
     }
 
@@ -625,7 +622,7 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("later", "root", 30, 10));
         bundle.addSpan(asyncSpan("async", "root", 0, 900));
 
-        assertThat(bundle.snapshot().truncated()).isTrue();
+        assertThat(bundle.snapshot().droppedSpans()).isPositive();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
         assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
     }
@@ -744,7 +741,7 @@ class TraceDataBundleTest {
         // evicts "late"
         bundle.addSpan(asyncSpan("second", "root", 30, 10));
 
-        assertThat(bundle.snapshot().truncated()).isTrue();
+        assertThat(bundle.snapshot().droppedSpans()).isPositive();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -768,7 +765,9 @@ class TraceDataBundleTest {
             bundle.addLog(log("trace1").saying("log" + i).build());
         }
 
-        assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+        assertThat(bundle.capturedLogs().logs())
+                .extracting(LogCapturedEvent::message)
+                .containsExactly("log3", "log4", "log5");
     }
 
     /** Every log the cap trims is counted, so a reader can tell a quiet request from a trimmed one. */
@@ -779,7 +778,10 @@ class TraceDataBundleTest {
             bundle.addLog(log("trace1").saying("log" + i).build());
         }
 
-        assertThat(bundle.droppedLogs()).isEqualTo(2);
+        CapturedLogs captured = bundle.capturedLogs();
+
+        assertThat(captured.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+        assertThat(captured.droppedLogs()).isEqualTo(2);
     }
 
     /**

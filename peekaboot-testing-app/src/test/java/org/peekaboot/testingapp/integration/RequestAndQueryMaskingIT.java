@@ -16,7 +16,7 @@ import tools.jackson.databind.JsonNode;
  * real Spring context - a unit test on the mapper/filter alone does not cover it:
  * RequestCaptureFilter's header masking and QueryExtractor's own unit tests can be green
  * while parameters and the query string leak, because neither exercises those parts.
- * The assertions run against {@code /api/traces/{traceId}/insights}, the only trace
+ * The assertions run against {@code /api/traces/{traceId}}, the only trace
  * endpoint, so it is the only path this masking has to hold on.
  *
  * <p>The secret-bearing endpoints it drives come from {@code MaskingFixtureController}, a bean
@@ -29,21 +29,28 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
     private TraceStore traceStore;
 
     @Test
-    void aSecretBearingQueryParameterComesBackMaskedFromTheTraceInsightsApi() {
+    void aSecretBearingQueryParameterComesBackMaskedFromTheTraceApi() {
         String traceId = traces.get("/masking-test/search?api_key=AKIAABCDEFGHIJKLMNOP&q=widgets");
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode queryParams =
-                trace.path("httpExchange").path("request").path("params").path("query");
+        JsonNode queryParams = trace.path("data")
+                .path("httpExchange")
+                .path("request")
+                .path("params")
+                .path("query");
         assertThat(queryParams.path("api_key").get(0).asString()).isEqualTo("******");
         assertThat(queryParams.path("q").get(0).asString()).isEqualTo("widgets");
-        assertThat(trace.path("httpExchange").path("request").path("query").asString())
+        assertThat(trace.path("data")
+                        .path("httpExchange")
+                        .path("request")
+                        .path("query")
+                        .asString())
                 .isEqualTo("api_key=******&q=widgets");
     }
 
     @Test
-    void aSecretBearingFormFieldComesBackMaskedFromTheTraceInsightsApi() {
+    void aSecretBearingFormFieldComesBackMaskedFromTheTraceApi() {
         ResponseEntity<Void> response = api.restClient()
                 .post()
                 .uri("/masking-test/login")
@@ -55,8 +62,11 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
         JsonNode trace =
                 traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode formParams =
-                trace.path("httpExchange").path("request").path("params").path("form");
+        JsonNode formParams = trace.path("data")
+                .path("httpExchange")
+                .path("request")
+                .path("params")
+                .path("form");
         assertThat(formParams.path("password").get(0).asString()).isEqualTo("******");
         assertThat(formParams.path("username").get(0).asString()).isEqualTo("alice");
     }
@@ -64,7 +74,7 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
     /**
      * The captured span is written straight to the real TraceStore bean rather than
      * triggered through an actual JDBC call, so this test can isolate what it's actually
-     * proving - that the trace insights endpoint's real HTTP-facing response masks the SQL
+     * proving - that the trace endpoint's real HTTP-facing response masks the SQL
      * it serves, not just the QueryExtractor unit in isolation - from the separate question
      * of which tag a real driver populates. Using a directly-added SpanData with a
      * "db.statement" tag (the shape QueryExtractorTest already covers in isolation, and the
@@ -73,7 +83,7 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
      * ("db.query.text", "db.statement" or "jdbc.query[...]") produced the SQL.
      */
     @Test
-    void sqlCarryingACredentialShapedValueComesBackMaskedFromTheTraceInsightsApi() {
+    void sqlCarryingACredentialShapedValueComesBackMaskedFromTheTraceApi() {
         String traceId = "masking-test-sql-" + System.nanoTime();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("GET /masking-test/sql-fixture")
@@ -94,8 +104,11 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(trace.path("queries")).hasSize(1);
-        String sql = TraceQueries.statementOf(trace, trace.path("queries").get(0))
+        assertThat(trace.path("data").path("queries")).hasSize(1);
+        String sql = trace.path("data")
+                .path("queries")
+                .get(0)
+                .path("statement")
                 .path("text")
                 .asString();
         assertThat(sql)
@@ -105,7 +118,7 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
 
     /** A bind value is masked by the same value rules as the SQL around it. */
     @Test
-    void aCredentialShapedBindParameterComesBackMaskedFromTheTraceInsightsApi() {
+    void aCredentialShapedBindParameterComesBackMaskedFromTheTraceApi() {
         String traceId = "masking-test-params-" + System.nanoTime();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("GET /masking-test/params-fixture")
@@ -124,7 +137,10 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(TraceQueries.statementOf(trace, trace.path("queries").get(0))
+        assertThat(trace.path("data")
+                        .path("queries")
+                        .get(0)
+                        .path("statement")
                         .path("parameters")
                         .toString())
                 .isEqualTo("[[\"'******'\"]]");

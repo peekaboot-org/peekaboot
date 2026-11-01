@@ -24,15 +24,16 @@ import org.peekaboot.backend.domain.trace.HttpRequest;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SubtreeView;
-import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceIssue;
+import org.peekaboot.backend.domain.trace.TraceListResponse;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceOutcome;
 import org.peekaboot.backend.domain.trace.TraceReason;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
-import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.domain.trace.TraceResource;
+import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.ApiProblem;
 import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.stacktrace.StackTraceFolding;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
@@ -64,28 +65,30 @@ class TraceInsightsServiceTest {
         addTrace("fast", thresholdMs - 1, false);
         addTrace("slow", thresholdMs, false);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
 
         assertThat(response.traces())
                 .extracting(
-                        TraceTree::traceId,
-                        trace -> trace.reasons().stream().anyMatch(reason -> reason.kind() == TraceReason.Kind.SLOW))
+                        row -> row.summary().traceId(),
+                        trace -> trace.summary().reasons().stream()
+                                .anyMatch(reason -> reason.kind() == TraceReason.Kind.SLOW))
                 .containsExactlyInAnyOrder(tuple("fast", false), tuple("slow", true));
     }
 
     @Test
-    void theDetailGivesTheReasonsTheListGives() {
+    void theDetailGivesTheSummaryTheListGives() {
         addTrace("slow", new PeekabootTracingProperties().getSlowTraceThresholdMs(), true);
 
-        TraceTree listed =
-                service.getInsights(10, TraceBucket.ALL, null, null).traces().getFirst();
-        TraceTree detail = service.getTraceInsights("slow").orElseThrow();
+        TraceResource listed = service.listTraces(10, TraceBucket.ALL, null, null, null)
+                .traces()
+                .getFirst();
+        TraceResource detail = service.getTrace("slow").orElseThrow();
 
-        assertThat(detail.reasons()).isEqualTo(listed.reasons());
-        assertThat(detail.buckets()).isEqualTo(listed.buckets()).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
+        assertThat(detail.summary()).isEqualTo(listed.summary());
+        assertThat(detail.summary().buckets()).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
     }
 
-    /** The span tree carries the one statement per query, formatted and masked once. */
+    /** The span tree and the query list serve one statement per query, formatted and masked once. */
     @Test
     void theDetailFormatsEachQueryOnce() {
         List<String> formatted = new ArrayList<>();
@@ -101,16 +104,18 @@ class TraceInsightsServiceTest {
                 new StackTraceRules(List.of(), List.of()));
         addTraceWithDbSpan("t1", 100);
 
-        TraceTree detail = recordingService.getTraceInsights("t1").orElseThrow();
+        TraceResource detail = recordingService.getTrace("t1").orElseThrow();
 
         assertThat(formatted).containsExactly("SELECT * FROM users WHERE id = ?");
-        assertThat(detail.rootSpan().children().getFirst().statement().formatted())
+        assertThat(detail.data().rootSpan().children().getFirst().statement().formatted())
                 .isEqualTo("SELECT * FROM users WHERE id = ?");
+        assertThat(detail.data().queries().getFirst().statement())
+                .isSameAs(detail.data().rootSpan().children().getFirst().statement());
     }
 
     @Test
     void anEmptyStoreYieldsAnEmptyTraceList() {
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
 
         assertThat(response.traces()).isEmpty();
     }
@@ -122,17 +127,17 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsightsQueriesRequestedBucket() {
+    void theListingReadsTheRequestedBucket() {
         store.addSpan(span("s1")
                 .in("terr")
                 .exception("java.lang.RuntimeException", "boom")
                 .build());
         store.addSpan(span("s2").in("tok").build());
 
-        TraceInsightsResponse errors = service.getInsights(10, TraceBucket.ERRORS, null, null);
-        TraceInsightsResponse all = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse errors = service.listTraces(10, TraceBucket.ERRORS, null, null, null);
+        TraceListResponse all = service.listTraces(10, TraceBucket.ALL, null, null, null);
 
-        assertThat(errors.traces()).extracting(TraceTree::traceId).containsExactly("terr");
+        assertThat(errors.traces()).extracting(row -> row.summary().traceId()).containsExactly("terr");
         assertThat(all.traces()).hasSize(2);
     }
 
@@ -143,7 +148,7 @@ class TraceInsightsServiceTest {
                 .exception("java.lang.RuntimeException", "boom")
                 .build());
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
 
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 1, 0));
     }
@@ -152,7 +157,7 @@ class TraceInsightsServiceTest {
     void nullStoreYieldsEmptyResponseWithZeroCounts() {
         TraceInsightsService serviceWithNullStore = newService(null);
 
-        TraceInsightsResponse response = serviceWithNullStore.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = serviceWithNullStore.listTraces(10, TraceBucket.ALL, null, null, null);
 
         assertThat(response.traces()).isEmpty();
         assertThat(response.bucketCounts()).isEqualTo(BucketCounts.empty());
@@ -161,30 +166,32 @@ class TraceInsightsServiceTest {
     @Test
     void theDetailReturnsTheTransformedTrace() {
         addTrace("trace1", 100, false);
-        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
-        assertThat(result.traceId()).isEqualTo("trace1");
-        assertThat(result.durationMs()).isEqualTo(100L);
+        TraceResource result = service.getTrace("trace1").orElseThrow();
+        assertThat(result.summary().traceId()).isEqualTo("trace1");
+        assertThat(result.summary().durationMs()).isEqualTo(100L);
     }
 
     @Test
     void theDetailDetectsIssues() {
         // A trace with a slow span (200ms > 100ms threshold)
         addTrace("trace1", 200, false);
-        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
-        assertThat(result.rootSpan().issues()).isNotEmpty();
-        assertThat(result.rootSpan().issues()).extracting(TraceIssue::type).contains(IssueType.SLOW);
+        TraceResource result = service.getTrace("trace1").orElseThrow();
+        assertThat(result.data().rootSpan().issues()).isNotEmpty();
+        assertThat(result.data().rootSpan().issues())
+                .extracting(TraceIssue::type)
+                .contains(IssueType.SLOW);
     }
 
     @Test
     void anUnknownTraceIdYieldsAnEmptyDetail() {
-        Optional<TraceTree> result = service.getTraceInsights("unknown");
+        Optional<TraceResource> result = service.getTrace("unknown");
         assertThat(result).isEmpty();
     }
 
     @Test
     void theDetailIsEmptyWithoutATraceStore() {
         TraceInsightsService serviceWithNullStore = newService(null);
-        Optional<TraceTree> result = serviceWithNullStore.getTraceInsights("trace1");
+        Optional<TraceResource> result = serviceWithNullStore.getTrace("trace1");
         assertThat(result).isEmpty();
     }
 
@@ -197,13 +204,15 @@ class TraceInsightsServiceTest {
             store.addLog(log("trace1").inSpan("span-trace1").at(level).build());
         }
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
 
         assertThat(response.traces())
-                .extracting(TraceTree::traceId, tree -> tree.summary().logs())
+                .extracting(
+                        row -> row.summary().traceId(),
+                        row -> row.summary().counts().logs())
                 .containsExactlyInAnyOrder(
-                        tuple("trace1", new TraceTabSummary.LogsSummary(3, 1, 1)),
-                        tuple("trace2", new TraceTabSummary.LogsSummary(0, 0, 0)));
+                        tuple("trace1", new TraceSummary.LogCounts(3, 1, 1)),
+                        tuple("trace2", new TraceSummary.LogCounts(0, 0, 0)));
     }
 
     @Test
@@ -214,10 +223,10 @@ class TraceInsightsServiceTest {
                 .inSpan("span-trace1")
                 .saying("Test log message from trace")
                 .build());
-        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
-        assertThat(result.logs()).hasSize(1);
-        assertThat(result.logs().get(0).message()).isEqualTo("Test log message from trace");
-        assertThat(result.logs().get(0).level()).isEqualTo("INFO");
+        TraceResource result = service.getTrace("trace1").orElseThrow();
+        assertThat(result.data().logs()).hasSize(1);
+        assertThat(result.data().logs().get(0).message()).isEqualTo("Test log message from trace");
+        assertThat(result.data().logs().get(0).level()).isEqualTo("INFO");
     }
 
     /** The service folds with the rules it was built with; {@link TraceLogMapperTest} pins the folding itself. */
@@ -232,8 +241,7 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 100, false);
         store.addLog(log("trace1").inSpan("span-trace1").withStackTrace(trace).build());
 
-        TraceLog result =
-                folding.getTraceInsights("trace1").orElseThrow().logs().getFirst();
+        TraceLog result = folding.getTrace("trace1").orElseThrow().data().logs().getFirst();
 
         assertThat(result.applicationFrames()).containsExactly(new StackTraceFolding.Range(1, 2));
         assertThat(result.hiddenFrames()).containsExactly(new StackTraceFolding.Range(2, 3));
@@ -245,11 +253,11 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 100, false);
         store.addLog(log("trace1").inSpan("span-trace1").saying("once").build());
 
-        JsonNode json = PeekabootJson.MAPPER.valueToTree(
-                service.getTraceInsights("trace1").orElseThrow());
+        JsonNode json =
+                PeekabootJson.MAPPER.valueToTree(service.getTrace("trace1").orElseThrow());
 
-        assertThat(json.path("logs").size()).isEqualTo(1);
-        assertThat(json.path("rootSpan").has("logs")).isFalse();
+        assertThat(json.path("data").path("logs").size()).isEqualTo(1);
+        assertThat(json.path("data").path("rootSpan").has("logs")).isFalse();
     }
 
     /**
@@ -265,7 +273,7 @@ class TraceInsightsServiceTest {
         loggingStore.addSpan(
                 rootSpan("trace1", "test-operation", Span.Kind.SERVER, 100).build());
         TraceInsightsService loggingService = newService(loggingStore);
-        loggingService.getTraceInsights("trace1");
+        loggingService.getTrace("trace1");
         Thread task = new Thread(
                 () -> {
                     for (int i = 0; i < 5_000; i++) {
@@ -278,8 +286,8 @@ class TraceInsightsServiceTest {
         int disagreeing = 0;
         task.start();
         while (task.isAlive()) {
-            TraceTree detail = loggingService.getTraceInsights("trace1").orElseThrow();
-            if (detail.summary().logs().count() != detail.logs().size()) {
+            TraceResource detail = loggingService.getTrace("trace1").orElseThrow();
+            if (detail.summary().counts().logs().count() != detail.data().logs().size()) {
                 disagreeing++;
             }
             if (task.isAlive()) {
@@ -298,19 +306,19 @@ class TraceInsightsServiceTest {
     void theDetailCarriesEmptyLogsWhenNoneAreStored() {
         // no logs stored for this trace
         addTrace("trace1", 100, false);
-        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
-        assertThat(result.logs()).isEmpty();
+        TraceResource result = service.getTrace("trace1").orElseThrow();
+        assertThat(result.data().logs()).isEmpty();
     }
 
-    /** The list has no detail to carry, but its trees still say "none" as a list, never as null. */
+    /** A full row with nothing to list still says "none" as a list, never as null. */
     @Test
-    void theListCarriesEmptyLogAndQueryListsRatherThanNulls() {
+    void aFullRowCarriesEmptyLogAndQueryListsRatherThanNulls() {
         addTrace("trace1", 100, false);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, "full");
 
-        assertThat(response.traces().getFirst().logs()).isEmpty();
-        assertThat(response.traces().getFirst().queries()).isEmpty();
+        assertThat(response.traces().getFirst().data().logs()).isEmpty();
+        assertThat(response.traces().getFirst().data().queries()).isEmpty();
     }
 
     /** A log captured outside any span (no spanId in the MDC) is listed but attached to no span. */
@@ -319,30 +327,30 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 100, false);
         store.addLog(log("trace1").inSpan(null).saying("spanless").build());
 
-        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+        TraceResource result = service.getTrace("trace1").orElseThrow();
 
-        assertThat(result.logs()).extracting(TraceLog::message).containsExactly("spanless");
-        assertThat(result.logs().getFirst().spanId()).isNull();
-        assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(1, 0, 0));
+        assertThat(result.data().logs()).extracting(TraceLog::message).containsExactly("spanless");
+        assertThat(result.data().logs().getFirst().spanId()).isNull();
+        assertThat(result.summary().counts().logs()).isEqualTo(new TraceSummary.LogCounts(1, 0, 0));
     }
 
     @Test
     void theDetailExtractsQueries() {
         // A trace with a DB span
         addTraceWithDbSpan("trace1", 100);
-        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
-        assertThat(result.queries()).hasSize(1);
-        assertThat(result.queries().get(0).spanId()).isEqualTo("span-db-trace1");
-        assertThat(result.queries().get(0).dbSystem()).isEqualTo("postgresql");
-        assertThat(result.queries().get(0).durationMs()).isEqualTo(50L);
+        TraceResource result = service.getTrace("trace1").orElseThrow();
+        assertThat(result.data().queries()).hasSize(1);
+        assertThat(result.data().queries().get(0).spanId()).isEqualTo("span-db-trace1");
+        assertThat(result.data().queries().get(0).dbSystem()).isEqualTo("postgresql");
+        assertThat(result.data().queries().get(0).durationMs()).isEqualTo(50L);
     }
 
     @Test
     void theDetailCarriesEmptyQueriesWhenThereAreNoDbSpans() {
         // A trace without DB spans
         addTrace("trace1", 100, false);
-        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
-        assertThat(result.queries()).isEmpty();
+        TraceResource result = service.getTrace("trace1").orElseThrow();
+        assertThat(result.data().queries()).isEmpty();
     }
 
     @Test
@@ -350,9 +358,9 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 100, false); // SERVER kind, no tags -> HTTP_REQUEST (default)
         addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "http_request", null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
 
     @Test
@@ -360,9 +368,9 @@ class TraceInsightsServiceTest {
         addTraceWithOperation("trace1", "GET /api/Users", 100);
         addTraceWithOperation("trace2", "POST /orders", 100);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "users");
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, "users", null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
 
     @Test
@@ -371,15 +379,17 @@ class TraceInsightsServiceTest {
         addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
         addScheduledJobTrace("trace3", 100); // scheduled-task tags -> SCHEDULED_JOB
 
-        TraceInsightsResponse response =
-                service.getInsights(10, TraceBucket.ALL, "http_request,message_consumer", null);
+        TraceListResponse response =
+                service.listTraces(10, TraceBucket.ALL, "http_request,message_consumer", null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactlyInAnyOrder("trace1", "trace2");
+        assertThat(response.traces())
+                .extracting(row -> row.summary().traceId())
+                .containsExactlyInAnyOrder("trace1", "trace2");
     }
 
     @Test
     void refusesAnUnknownTypeInTheFilter() {
-        assertThatThrownBy(() -> service.getInsights(10, TraceBucket.ALL, "http_request,bogus", null))
+        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, "http_request,bogus", null, null))
                 .isInstanceOfSatisfying(ApiProblemException.class, e -> {
                     assertThat(e.problem().parameter()).isEqualTo("rootActionType");
                     assertThat(e.problem().detail())
@@ -392,7 +402,7 @@ class TraceInsightsServiceTest {
     /** The refusal must not list {@code *} as accepted where it refuses that very token. */
     @Test
     void refusesTheWildcardInAListSayingItStandsAlone() {
-        assertThatThrownBy(() -> service.getInsights(10, TraceBucket.ALL, "http_request,*", null))
+        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, "http_request,*", null, null))
                 .isInstanceOfSatisfying(
                         ApiProblemException.class,
                         e -> assertThat(e.problem().detail())
@@ -403,13 +413,45 @@ class TraceInsightsServiceTest {
     /** The refusal is about the request, so it does not wait on there being a store to filter. */
     @Test
     void refusesAnUnknownTypeWithTracingOff() {
-        assertThatThrownBy(() -> newService(null).getInsights(10, TraceBucket.ALL, "bogus", null))
+        assertThatThrownBy(() -> newService(null).listTraces(10, TraceBucket.ALL, "bogus", null, null))
+                .isInstanceOf(ApiProblemException.class);
+    }
+
+    /** The summary alone keeps the dashboard's poll small, so a request has to ask for the data. */
+    @Test
+    void aMissingOrBlankViewMeansSummary() {
+        addTrace("trace1", 100, false);
+
+        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, null).traces())
+                .singleElement()
+                .satisfies(row -> assertThat(row.data()).isNull());
+        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, " ").traces())
+                .singleElement()
+                .satisfies(row -> assertThat(row.data()).isNull());
+        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, "Full").traces())
+                .singleElement()
+                .satisfies(row -> assertThat(row.data()).isNotNull());
+    }
+
+    @Test
+    void anUnknownViewIsRefusedNamingTheAcceptedValues() {
+        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, null, null, "sumary"))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        problem -> assertThat(problem.problem())
+                                .extracting(ApiProblem::parameter, ApiProblem::detail)
+                                .containsExactly("view", "Unknown view 'sumary'. Accepted: SUMMARY, FULL."));
+    }
+
+    @Test
+    void refusesAnUnknownViewWithTracingOff() {
+        assertThatThrownBy(() -> newService(null).listTraces(10, TraceBucket.ALL, null, null, "sumary"))
                 .isInstanceOf(ApiProblemException.class);
     }
 
     @Test
     void refusesAnEmptyTypeInTheFilter() {
-        assertThatThrownBy(() -> service.getInsights(10, TraceBucket.ALL, "http_request,", null))
+        assertThatThrownBy(() -> service.listTraces(10, TraceBucket.ALL, "http_request,", null, null))
                 .isInstanceOf(ApiProblemException.class);
     }
 
@@ -423,9 +465,9 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("http1");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("http1");
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(2, 0, 0));
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
@@ -442,9 +484,9 @@ class TraceInsightsServiceTest {
                 rootSpan("fast-http", "GET /users", Span.Kind.SERVER, 50).build());
         TraceInsightsService slowService = newService(slowStore);
 
-        TraceInsightsResponse response = slowService.getInsights(10, TraceBucket.SLOW, "http_request", null);
+        TraceListResponse response = slowService.listTraces(10, TraceBucket.SLOW, "http_request", null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("slow-http");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("slow-http");
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 0, 2));
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(2, 0, 1));
     }
@@ -454,9 +496,9 @@ class TraceInsightsServiceTest {
     void aBlankRootOperationFilterIsNoFilterAtAll() {
         addTrace("trace1", 100, false);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", "   ");
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", "   ", null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
         assertThat(response.filteredBucketCounts()).isNull();
     }
 
@@ -465,9 +507,9 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 100, false);
         addConsumerTrace("trace2", 100);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, " Http_Request ", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, " Http_Request ", null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
 
     /** A root span without a name cannot match an operation filter, and must not throw trying. */
@@ -481,9 +523,9 @@ class TraceInsightsServiceTest {
                 .build());
         addTraceWithOperation("named", "GET /users", 100);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "users");
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, "users", null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("named");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("named");
     }
 
     /** The limit bounds the page only; the counts describe the store either way. */
@@ -491,7 +533,7 @@ class TraceInsightsServiceTest {
     void aZeroLimitListsNothingButStillCounts() {
         addTrace("trace1", 100, false);
 
-        TraceInsightsResponse response = service.getInsights(0, TraceBucket.ALL, null, null);
+        TraceListResponse response = service.listTraces(0, TraceBucket.ALL, null, null, null);
 
         assertThat(response.traces()).isEmpty();
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
@@ -508,11 +550,11 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addExcludedRequestFragment("fragment1");
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
-                .extracting(TraceTree::traceId)
+        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+                .extracting(row -> row.summary().traceId())
                 .containsExactly("http1");
-        assertThat(service.getInsights(10, TraceBucket.ALL, null, null).traces())
-                .extracting(TraceTree::traceId)
+        assertThat(service.listTraces(10, TraceBucket.ALL, null, null, null).traces())
+                .extracting(row -> row.summary().traceId())
                 .containsExactly("http1");
     }
 
@@ -532,8 +574,8 @@ class TraceInsightsServiceTest {
                 .tags(Map.of("http.method", "GET"))
                 .build());
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
-                .extracting(TraceTree::traceId)
+        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+                .extracting(row -> row.summary().traceId())
                 .containsExactly("remote1");
     }
 
@@ -548,12 +590,13 @@ class TraceInsightsServiceTest {
                 .at(5, 20)
                 .build());
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces()).isEmpty();
+        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+                .isEmpty();
 
         store.addSpan(rootSpan("running1", "GET /orders", Span.Kind.SERVER, 100).build());
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
-                .extracting(TraceTree::traceId)
+        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+                .extracting(row -> row.summary().traceId())
                 .containsExactly("running1");
     }
 
@@ -563,9 +606,11 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactlyInAnyOrder("http1", "pool1");
+        assertThat(response.traces())
+                .extracting(row -> row.summary().traceId())
+                .containsExactlyInAnyOrder("http1", "pool1");
     }
 
     @Test
@@ -573,9 +618,9 @@ class TraceInsightsServiceTest {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "maintenance", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "maintenance", null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("pool1");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("pool1");
     }
 
     @Test
@@ -584,7 +629,7 @@ class TraceInsightsServiceTest {
         addTrace("trace2", 100, true); // HTTP_REQUEST, error
         addConsumerTrace("trace3", 100); // MESSAGE_CONSUMER, ok
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "http_request", null, null);
 
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 1, 0));
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(2, 1, 0));
@@ -595,7 +640,7 @@ class TraceInsightsServiceTest {
         addTraceWithOperation("trace1", "GET /api/users", 100);
         addTraceWithOperation("trace2", "POST /orders", 100);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "users");
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, null, "users", null);
 
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
@@ -608,7 +653,7 @@ class TraceInsightsServiceTest {
         }
         addConsumerTrace("c1", 100); // MESSAGE_CONSUMER
 
-        TraceInsightsResponse response = service.getInsights(2, TraceBucket.ALL, "http_request", null);
+        TraceListResponse response = service.listTraces(2, TraceBucket.ALL, "http_request", null, null);
 
         assertThat(response.traces()).hasSize(2);
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(5, 0, 0));
@@ -619,7 +664,7 @@ class TraceInsightsServiceTest {
     void filteredBucketCountsAreOmittedWhenEveryTypeIsAskedFor() {
         addTrace("trace1", 100, false);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
 
         assertThat(response.filteredBucketCounts()).isNull();
     }
@@ -629,10 +674,10 @@ class TraceInsightsServiceTest {
         addTraceWithOperation("trace1", "task scheduler.fixedDelay", 100);
         addTraceWithOperation("trace2", "task scheduler.fixedRate", 100);
 
-        TraceInsightsResponse response =
-                service.getInsights(10, TraceBucket.ALL, null, "org.peekaboot.example.Scheduler.fixedDelay");
+        TraceListResponse response =
+                service.listTraces(10, TraceBucket.ALL, null, "org.peekaboot.example.Scheduler.fixedDelay", null);
 
-        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
     }
 
     @Test
@@ -643,9 +688,9 @@ class TraceInsightsServiceTest {
                 .controller("UserController", "list")
                 .build());
 
-        Optional<TraceTree> result = service.getTraceInsights("trace1");
+        Optional<TraceResource> result = service.getTrace("trace1");
 
-        HttpExchange exchange = result.orElseThrow().httpExchange();
+        HttpExchange exchange = result.orElseThrow().data().httpExchange();
         assertThat(exchange.request().path()).isEqualTo("/users");
         assertThat(exchange.request().controller()).isEqualTo(new HttpRequest.Controller("UserController", "list"));
         assertThat(exchange.response().status()).isEqualTo(200);
@@ -657,53 +702,57 @@ class TraceInsightsServiceTest {
         // an equivalent trace whose DB call was only ever captured once
         addTraceWithDuplicatedDbSpan("withDup", 100);
         addTraceWithDbSpan("withoutDup", 100);
-        TraceTree withDup = service.getTraceInsights("withDup").orElseThrow();
-        TraceTree withoutDup = service.getTraceInsights("withoutDup").orElseThrow();
+        TraceResource withDup = service.getTrace("withDup").orElseThrow();
+        TraceResource withoutDup = service.getTrace("withoutDup").orElseThrow();
 
         // folding the duplicate away on write must produce the exact tree the
         // never-duplicated trace produces
-        assertThat(withDup.summary().spans().count())
-                .isEqualTo(withoutDup.summary().spans().count());
-        assertThat(withDup.rootSpan().children()).hasSize(1);
-        assertThat(withDup.queries()).hasSize(1);
-        assertThat(withDup.rootSpan().children().get(0).statement())
+        assertThat(withDup.summary().counts().spans())
+                .isEqualTo(withoutDup.summary().counts().spans());
+        assertThat(withDup.data().rootSpan().children()).hasSize(1);
+        assertThat(withDup.data().queries()).hasSize(1);
+        assertThat(withDup.data().rootSpan().children().get(0).statement())
                 .isNotNull()
-                .isEqualTo(withoutDup.rootSpan().children().get(0).statement());
+                .isEqualTo(withoutDup.data().rootSpan().children().get(0).statement());
     }
 
     @Test
-    void theDetailSurfacesTheTruncatedFlagFromTheBundle() {
+    void theDetailCountsTheSpansTheCapDropped() {
         InMemoryTraceStore cappedStore = TraceStores.with(p -> p.setMaxSpansPerTrace(2));
         for (int i = 1; i <= 3; i++) {
             cappedStore.addSpan(rootSpanWithoutTags("t1", "s" + i, "op" + i));
         }
         TraceInsightsService cappedService = newService(cappedStore);
 
-        TraceTree result = cappedService.getTraceInsights("t1").orElseThrow();
+        TraceResource result = cappedService.getTrace("t1").orElseThrow();
 
-        assertThat(result.truncated()).isTrue();
+        assertThat(result.summary().counts().droppedSpans()).isEqualTo(1);
     }
 
     @Test
-    void theListSurfacesTheTruncatedFlagToo() {
+    void theListCountsTheSpansTheCapDroppedToo() {
         InMemoryTraceStore cappedStore = TraceStores.with(p -> p.setMaxSpansPerTrace(1));
         cappedStore.addSpan(rootSpanWithoutTags("t1", "s1", "op1"));
         cappedStore.addSpan(rootSpanWithoutTags("t1", "s2", "op2"));
         TraceInsightsService cappedService = newService(cappedStore);
 
-        TraceInsightsResponse response = cappedService.getInsights(10, TraceBucket.ALL, null, null);
+        TraceListResponse response = cappedService.listTraces(10, TraceBucket.ALL, null, null, null);
 
-        assertThat(response.traces()).extracting(TraceTree::truncated).containsExactly(true);
+        assertThat(response.traces())
+                .extracting(row -> row.summary().counts().droppedSpans())
+                .containsExactly(1);
     }
 
     @Test
     void anAsyncEntryIsListedBesideTheTraceThatTriggeredIt() {
         addTraceWithAsyncWork("http1", 50, 240_000);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
 
         assertThat(response.traces())
-                .extracting(TraceTree::rootActionType, TraceTree::durationMs)
+                .extracting(
+                        row -> row.summary().rootActionType(),
+                        row -> row.summary().durationMs())
                 .containsExactlyInAnyOrder(
                         tuple(RootActionType.HTTP_REQUEST, 50L), tuple(RootActionType.ASYNC_TASK, 240_000L));
     }
@@ -712,11 +761,11 @@ class TraceInsightsServiceTest {
     void anAsyncRowNamesTheSpanItIsRootedAtAndItsEnclosingTrace() {
         addTraceWithAsyncWork("http1", 50, 1_000);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "async_task", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "async_task", null, null);
 
         assertThat(response.traces()).singleElement().satisfies(row -> {
-            assertThat(row.traceId()).isEqualTo("http1");
-            assertThat(row.subtree()).isEqualTo(new SubtreeView("async-http1", true));
+            assertThat(row.summary().traceId()).isEqualTo("http1");
+            assertThat(row.summary().subtree()).isEqualTo(new SubtreeView("async-http1", true));
         });
     }
 
@@ -730,23 +779,27 @@ class TraceInsightsServiceTest {
                 .build());
         store.addLog(log("http1").inSpan("async-http1").saying("enriching").build());
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
 
         assertThat(response.traces())
-                .extracting(TraceTree::rootActionType, tree -> tree.summary().logs())
+                .extracting(
+                        row -> row.summary().rootActionType(),
+                        row -> row.summary().counts().logs())
                 .containsExactlyInAnyOrder(
-                        tuple(RootActionType.HTTP_REQUEST, new TraceTabSummary.LogsSummary(2, 1, 0)),
-                        tuple(RootActionType.ASYNC_TASK, new TraceTabSummary.LogsSummary(1, 0, 0)));
+                        tuple(RootActionType.HTTP_REQUEST, new TraceSummary.LogCounts(2, 1, 0)),
+                        tuple(RootActionType.ASYNC_TASK, new TraceSummary.LogCounts(1, 0, 0)));
     }
 
     @Test
     void anAsyncRowEndsOkWhenOnlyTheRequestThatDispatchedItFailed() {
         addFailedRequestWithAsyncWork("http1", 50, 1_000);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.ALL, "*", null, null);
 
         assertThat(response.traces())
-                .extracting(TraceTree::rootActionType, TraceTree::outcome)
+                .extracting(
+                        row -> row.summary().rootActionType(),
+                        row -> row.summary().outcome())
                 .containsExactlyInAnyOrder(
                         tuple(RootActionType.HTTP_REQUEST, TraceOutcome.ERROR),
                         tuple(RootActionType.ASYNC_TASK, TraceOutcome.OK));
@@ -756,12 +809,13 @@ class TraceInsightsServiceTest {
     void aTypeFilterSelectsRowsRatherThanTraces() {
         addTraceWithAsyncWork("http1", 50, 1_000);
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "http_request", null)
+        assertThat(service.listTraces(10, TraceBucket.ALL, "http_request", null, null)
                         .traces())
-                .extracting(TraceTree::rootActionType)
+                .extracting(row -> row.summary().rootActionType())
                 .containsExactly(RootActionType.HTTP_REQUEST);
-        assertThat(service.getInsights(10, TraceBucket.ALL, "async_task", null).traces())
-                .extracting(TraceTree::rootActionType)
+        assertThat(service.listTraces(10, TraceBucket.ALL, "async_task", null, null)
+                        .traces())
+                .extracting(row -> row.summary().rootActionType())
                 .containsExactly(RootActionType.ASYNC_TASK);
     }
 
@@ -774,8 +828,8 @@ class TraceInsightsServiceTest {
         addOrphanedAsyncWork("async1", 3_700);
         addExcludedRequestFragment("fragment1");
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
-                .extracting(TraceTree::traceId)
+        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+                .extracting(row -> row.summary().traceId())
                 .containsExactly("async1");
     }
 
@@ -783,8 +837,10 @@ class TraceInsightsServiceTest {
     void theLimitCountsRowsNotTraces() {
         addTraceWithAsyncWork("http1", 50, 1_000);
 
-        assertThat(service.getInsights(1, TraceBucket.ALL, "*", null).traces()).hasSize(1);
-        assertThat(service.getInsights(2, TraceBucket.ALL, "*", null).traces()).hasSize(2);
+        assertThat(service.listTraces(1, TraceBucket.ALL, "*", null, null).traces())
+                .hasSize(1);
+        assertThat(service.listTraces(2, TraceBucket.ALL, "*", null, null).traces())
+                .hasSize(2);
     }
 
     /**
@@ -798,7 +854,7 @@ class TraceInsightsServiceTest {
     void filteredBucketCountsCountDistinctTracesNotRows() {
         addTraceWithTwoAsyncTasks("http1", 1_500);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.SLOW, "async_task", null);
+        TraceListResponse response = service.listTraces(10, TraceBucket.SLOW, "async_task", null, null);
 
         assertThat(response.traces()).hasSize(2);
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 1));
@@ -815,8 +871,8 @@ class TraceInsightsServiceTest {
         addTrace("http3", 20, false);
         store.addSpan(asyncTaskSpan("http1", 50, 240_000));
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
-                .extracting(TraceTree::traceId, TraceTree::rootActionType)
+        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, null).traces())
+                .extracting(row -> row.summary().traceId(), row -> row.summary().rootActionType())
                 .containsExactly(
                         tuple("http1", RootActionType.ASYNC_TASK),
                         tuple("http3", RootActionType.HTTP_REQUEST),
@@ -828,8 +884,8 @@ class TraceInsightsServiceTest {
     void oneTracesAsyncRowsAreListedNewestFirstToo() {
         addTraceWithTwoAsyncTasks("http1", 50);
 
-        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
-                .extracting(row -> row.rootSpan().spanId())
+        assertThat(service.listTraces(10, TraceBucket.ALL, "*", null, "full").traces())
+                .extracting(row -> row.data().rootSpan().spanId())
                 .containsExactly("async-b-http1", "async-a-http1", "span-http1");
     }
 
@@ -847,8 +903,8 @@ class TraceInsightsServiceTest {
                 .saying("failed after the task ended")
                 .build());
 
-        assertThat(service.getInsights(10, TraceBucket.ERRORS, "*", null).traces())
-                .extracting(TraceTree::traceId, TraceTree::rootActionType)
+        assertThat(service.listTraces(10, TraceBucket.ERRORS, "*", null, null).traces())
+                .extracting(row -> row.summary().traceId(), row -> row.summary().rootActionType())
                 .containsExactly(
                         tuple("http1", RootActionType.HTTP_REQUEST),
                         tuple("http1", RootActionType.ASYNC_TASK),

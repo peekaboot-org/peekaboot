@@ -43,16 +43,16 @@ abstract class PlaywrightTestBase {
      * JS twin of {@code TraceApiClient.ROOT_SPAN_EXPORTED}, whose Javadoc says why that proves
      * the whole trace has.
      */
-    protected static final String ROOT_SPAN_EXPORTED = "trace => trace.rootActionType === 'HTTP_REQUEST'";
+    protected static final String ROOT_SPAN_EXPORTED = "trace => trace.summary.rootActionType === 'HTTP_REQUEST'";
 
     /** A JS predicate on the trace JSON: some span in the tree is the async entry span the decorator raises. */
     protected static final String ASYNC_SPAN_CAPTURED =
             "trace => { const hasAsyncSpan = span => !span ? false : span.name === '"
                     + AsyncTaskMarker.CONTEXTUAL_NAME
-                    + "' || (span.children || []).some(hasAsyncSpan); return hasAsyncSpan(trace.rootSpan); }";
+                    + "' || (span.children || []).some(hasAsyncSpan); return hasAsyncSpan(trace.data.rootSpan); }";
 
     /** A JS predicate on the trace JSON: the trace carries an ERROR log. */
-    protected static final String ERROR_LOGGED = "trace => (trace.logs || []).some(log => log.level === 'ERROR')";
+    protected static final String ERROR_LOGGED = "trace => (trace.data.logs || []).some(log => log.level === 'ERROR')";
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final int API_TIMEOUT_MS = 15_000;
@@ -211,7 +211,7 @@ abstract class PlaywrightTestBase {
         if (page != null) {
             try {
                 // Ends everything the page still has in flight - the toolbar's fetch ladder
-                // (it polls /api/traces/{id}/insights for up to 4.75s after load), the
+                // (it polls /api/traces/{id} for up to 4.75s after load), the
                 // Insights tab's EventSource, half-finished fetches - deterministically and
                 // in milliseconds, where waiting for the network to go idle cost up to its
                 // full 2s timeout on any page with a poller.
@@ -396,7 +396,7 @@ abstract class PlaywrightTestBase {
     }
 
     /**
-     * Polls the trace's own insights endpoint, the one the overlay and the toolbar read, until
+     * Polls the trace's own endpoint, the one the overlay and the toolbar read, until
      * {@code jsPredicate} (a JS function of the trace JSON) holds, and returns the trace as
      * served at that moment. A 404 counts as "not yet": the endpoint answers nothing until the
      * first span is exported. The predicate is the assertion's precondition, so a test asserts
@@ -404,21 +404,21 @@ abstract class PlaywrightTestBase {
      */
     protected JsonNode awaitTrace(String traceId, String jsPredicate) {
         return awaitJson(
-                contextPath() + "/peekaboot/api/traces/" + traceId + "/insights",
+                contextPath() + "/peekaboot/api/traces/" + traceId,
                 "trace => (" + jsPredicate + ")(trace) ? trace : null",
                 "trace " + traceId + " never satisfied " + jsPredicate);
     }
 
     /**
-     * Polls the listing endpoint with {@code query} until a listed trace satisfies
+     * Polls the listing endpoint with {@code query} until a listed trace's summary satisfies
      * {@code jsPredicate}, and returns that trace's id. The listing is shared with every class
      * running against this application, so the predicate names the caller's own trace (its
      * {@code rootOperation}, say) rather than accepting whichever is listed first.
      */
     protected String awaitListedTrace(String query, String jsPredicate) {
         return awaitJson(
-                        contextPath() + "/peekaboot/api/traces/insights?" + query,
-                        "listing => (listing.traces || []).find(" + jsPredicate + ")",
+                        contextPath() + "/peekaboot/api/traces?" + query,
+                        "listing => (listing.traces || []).map(row => row.summary).find(" + jsPredicate + ")",
                         "no listed trace for '" + query + "' satisfied " + jsPredicate)
                 .path("traceId")
                 .asString();

@@ -20,9 +20,10 @@ class ApiProblemIT extends TestingAppITBase {
     @CsvSource(
             delimiter = '|',
             value = {
-                "/peekaboot/api/traces/insights?bucket=eror | bucket",
-                "/peekaboot/api/traces/insights?rootActionType=HTTP_REQUEST,NOPE | rootActionType",
-                "/peekaboot/api/traces/insights?limit=abc | limit",
+                "/peekaboot/api/traces?bucket=eror | bucket",
+                "/peekaboot/api/traces?rootActionType=HTTP_REQUEST,NOPE | rootActionType",
+                "/peekaboot/api/traces?limit=abc | limit",
+                "/peekaboot/api/traces?view=sumary | view",
                 "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask",
                 "/peekaboot/api/insights/data?level=abc | level",
                 "/peekaboot/api/insights/data | level",
@@ -42,7 +43,7 @@ class ApiProblemIT extends TestingAppITBase {
 
     @Test
     void anUnknownBucketNamesTheAcceptedValues() {
-        assertThat(fetch("/peekaboot/api/traces/insights?bucket=eror")
+        assertThat(fetch("/peekaboot/api/traces?bucket=eror")
                         .body()
                         .path("detail")
                         .asString(""))
@@ -50,8 +51,17 @@ class ApiProblemIT extends TestingAppITBase {
     }
 
     @Test
+    void anUnknownViewNamesTheAcceptedValues() {
+        assertThat(fetch("/peekaboot/api/traces?view=sumary")
+                        .body()
+                        .path("detail")
+                        .asString(""))
+                .isEqualTo("Unknown view 'sumary'. Accepted: SUMMARY, FULL.");
+    }
+
+    @Test
     void theWildcardInAListOfTypesIsRefusedAsAcceptedOnlyOnItsOwn() {
-        assertThat(fetch("/peekaboot/api/traces/insights?rootActionType=HTTP_REQUEST,*")
+        assertThat(fetch("/peekaboot/api/traces?rootActionType=HTTP_REQUEST,*")
                         .body()
                         .path("detail")
                         .asString(""))
@@ -61,7 +71,7 @@ class ApiProblemIT extends TestingAppITBase {
 
     @Test
     void anUnknownTraceIsNotFoundWithAProblem() {
-        Answer answer = fetch("/peekaboot/api/traces/00000000000000000000000000000000/insights");
+        Answer answer = fetch("/peekaboot/api/traces/00000000000000000000000000000000");
 
         assertThat(answer.status()).isEqualTo(404);
         assertThat(answer.contentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
@@ -81,7 +91,7 @@ class ApiProblemIT extends TestingAppITBase {
     /** The API's security headers are set before the handler runs, so its refusals carry them too. */
     @Test
     void aProblemIsNeitherStoredNorSniffed() {
-        Answer answer = fetch("/peekaboot/api/traces/insights?limit=abc");
+        Answer answer = fetch("/peekaboot/api/traces?limit=abc");
 
         assertThat(answer.status()).isEqualTo(400);
         assertThat(answer.headers().getCacheControl()).contains("no-store");
@@ -92,10 +102,12 @@ class ApiProblemIT extends TestingAppITBase {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "/peekaboot/api/traces/insights?bucket=errors",
-                "/peekaboot/api/traces/insights?rootActionType=*",
-                "/peekaboot/api/traces/insights?rootActionType=scheduled_job,MAINTENANCE",
-                "/peekaboot/api/traces/insights?bucket="
+                "/peekaboot/api/traces?bucket=errors",
+                "/peekaboot/api/traces?rootActionType=*",
+                "/peekaboot/api/traces?rootActionType=scheduled_job,MAINTENANCE",
+                "/peekaboot/api/traces?bucket=",
+                "/peekaboot/api/traces?view=full",
+                "/peekaboot/api/traces?view=Summary"
             })
     void theDashboardsOwnValuesAreAccepted(String path) {
         assertThat(fetch(path).status()).isEqualTo(200);

@@ -188,7 +188,7 @@ class ComponentBuilderIT extends PlaywrightTestBase {
         Object message = importModule("shared/api.js", """
             (async () => {
                 const client = m.createClient({basePath: '/peekaboot'});
-                try { await client.get('/api/traces/does-not-exist/insights'); return 'resolved'; }
+                try { await client.get('/api/traces/does-not-exist'); return 'resolved'; }
                 catch (e) { return e.message; }
             })()
             """);

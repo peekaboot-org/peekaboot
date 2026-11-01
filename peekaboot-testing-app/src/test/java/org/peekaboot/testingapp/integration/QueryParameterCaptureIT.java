@@ -19,7 +19,7 @@ class QueryParameterCaptureIT extends TestingAppITBase {
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode statement = TraceQueries.statementOf(trace, TraceQueries.queryContaining(trace, "from person"));
+        JsonNode statement = TraceQueries.queryContaining(trace, "from person").path("statement");
         assertThat(statement.path("parameters").toString()).isEqualTo("[[\"424242\"]]");
         assertThat(statement.path("formatted").asString())
                 .as("Hibernate is on this app's classpath")

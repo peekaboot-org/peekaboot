@@ -58,8 +58,9 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
     void handlerAndViewSpansAreNamedAfterWhatTheyRan() {
         JsonNode trace = traces.awaitTrace(traces.get("/people"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        List<JsonNode> described =
-                collect(trace.path("rootSpan"), span -> !describedName(span).isEmpty());
+        List<JsonNode> described = collect(
+                trace.path("data").path("rootSpan"),
+                span -> !describedName(span).isEmpty());
         assertThat(described).hasSize(4);
         assertThat(described)
                 .allSatisfy(span -> assertThat(span.path("name").asString("")).isEqualTo(describedName(span)));
@@ -69,7 +70,7 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
     void forwardingRequestKeepsTheForwardedWorkUnderTheForward() {
         JsonNode trace = traces.awaitTrace(traces.get("/people"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        JsonNode forwardSpan = findSpan(trace.path("rootSpan"), "view.name", "forward:/persons");
+        JsonNode forwardSpan = findSpan(trace.path("data").path("rootSpan"), "view.name", "forward:/persons");
         assertThat(forwardSpan)
                 .as("the forward's view span must be in the tree, not dropped")
                 .isNotNull();
@@ -107,7 +108,7 @@ class NestedDispatchTraceCaptureIT extends TestingAppITBase {
     /** The inbound requests the trace holds - more than one means two requests were glued together. */
     private static List<String> serverSpanNames(JsonNode trace) {
         return collect(
-                        trace.path("rootSpan"),
+                        trace.path("data").path("rootSpan"),
                         span -> "SERVER".equals(span.path("kind").asString("")))
                 .stream()
                 .map(span -> span.path("name").asString(""))

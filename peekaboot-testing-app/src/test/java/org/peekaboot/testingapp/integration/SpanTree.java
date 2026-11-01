@@ -7,9 +7,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.MissingNode;
 
 /**
- * Reads the span tree a trace of the insights API carries. The API serves the tree already
- * nested under {@code rootSpan}, so every read here walks {@code children} rather than
- * filtering a flat list by parent id.
+ * Reads the span tree a trace's data carries. The API serves the tree already nested under
+ * {@code data.rootSpan}, so every read here walks {@code children} rather than filtering a flat
+ * list by parent id.
  */
 final class SpanTree {
 
@@ -18,14 +18,14 @@ final class SpanTree {
     /** Every span name in the trace, the root's included, in walk order. */
     static List<String> names(JsonNode trace) {
         List<String> names = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> names.add(span.path("name").asString("")));
+        walk(data(trace).path("rootSpan"), span -> names.add(span.path("name").asString("")));
         return names;
     }
 
     /** Every span name under the trace's {@code orphans}, the subtrees served while its root is null, in walk order. */
     static List<String> orphanNames(JsonNode trace) {
         List<String> names = new ArrayList<>();
-        for (JsonNode orphan : trace.path("orphans")) {
+        for (JsonNode orphan : data(trace).path("orphans")) {
             walk(orphan, span -> names.add(span.path("name").asString("")));
         }
         return names;
@@ -34,14 +34,16 @@ final class SpanTree {
     /** Every tag key set on any span of the trace, so an assertion can name one that must be absent. */
     static List<String> tagKeys(JsonNode trace) {
         List<String> keys = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> span.path("tags").propertyNames().forEach(keys::add));
+        walk(
+                data(trace).path("rootSpan"),
+                span -> span.path("tags").propertyNames().forEach(keys::add));
         return keys;
     }
 
     /** Every value {@code key} carries on any span of the trace, in walk order. */
     static List<String> tagValues(JsonNode trace, String key) {
         List<String> values = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             JsonNode value = span.path("tags").path(key);
             if (value.isString()) {
                 values.add(value.asString());
@@ -53,7 +55,7 @@ final class SpanTree {
     /** The value {@code key} carries on every span called {@code name}, in walk order. */
     static List<String> tagValuesOfSpansNamed(JsonNode trace, String name, String key) {
         List<String> values = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             if (name.equals(span.path("name").asString(""))) {
                 values.add(span.path("tags").path(key).asString(""));
             }
@@ -69,7 +71,7 @@ final class SpanTree {
      */
     static JsonNode descendantNamed(JsonNode trace, String name) {
         List<JsonNode> found = new ArrayList<>();
-        for (JsonNode child : trace.path("rootSpan").path("children")) {
+        for (JsonNode child : data(trace).path("rootSpan").path("children")) {
             walk(child, span -> {
                 if (name.equals(span.path("name").asString(""))) {
                     found.add(span);
@@ -85,7 +87,7 @@ final class SpanTree {
     /** Every span called {@code name}, the root included, in walk order: an ancestor before its descendants. */
     static List<JsonNode> spansNamed(JsonNode trace, String name) {
         List<JsonNode> spans = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             if (name.equals(span.path("name").asString(""))) {
                 spans.add(span);
             }
@@ -96,7 +98,7 @@ final class SpanTree {
     /** The span whose direct child is the first span called {@code childName}, or an error when none is. */
     static JsonNode parentOf(JsonNode trace, String childName) {
         List<JsonNode> found = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             for (JsonNode child : span.path("children")) {
                 if (childName.equals(child.path("name").asString(""))) {
                     found.add(span);
@@ -112,7 +114,7 @@ final class SpanTree {
     /** Every exception a span of the trace carries, in walk order. */
     static List<JsonNode> exceptions(JsonNode trace) {
         List<JsonNode> exceptions = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             if (span.path("exception").isObject()) {
                 exceptions.add(span.path("exception"));
             }
@@ -124,7 +126,7 @@ final class SpanTree {
     static List<JsonNode> issuesOfType(JsonNode trace, String type) {
         List<JsonNode> found = new ArrayList<>();
         walk(
-                trace.path("rootSpan"),
+                data(trace).path("rootSpan"),
                 span -> span.path("issues").forEach(issue -> {
                     if (type.equals(issue.path("type").asString(""))) {
                         found.add(issue);
@@ -140,7 +142,7 @@ final class SpanTree {
     /** The span whose id is {@code spanId}, or a missing node when the tree holds none. */
     static JsonNode spanWithId(JsonNode trace, String spanId) {
         List<JsonNode> found = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             if (spanId.equals(spanId(span))) {
                 found.add(span);
             }
@@ -151,7 +153,7 @@ final class SpanTree {
     /** The span names from the root to the first span called {@code name}, or an error when none is. */
     static List<String> pathTo(JsonNode trace, String name) {
         List<String> path = new ArrayList<>();
-        if (!collectPath(trace.path("rootSpan"), name, path)) {
+        if (!collectPath(data(trace).path("rootSpan"), name, path)) {
             throw new AssertionError("no span named '" + name + "' in the trace, among " + names(trace));
         }
         return path;
@@ -175,14 +177,14 @@ final class SpanTree {
      */
     static JsonNode spanWithStatementContaining(JsonNode trace, String fragment) {
         List<JsonNode> found = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             if (span.path("statement").path("text").asString("").contains(fragment)) {
                 found.add(span);
             }
         });
         if (found.isEmpty()) {
-            throw new AssertionError(
-                    "no statement containing '" + fragment + "', among " + statementsUnder(trace.path("rootSpan")));
+            throw new AssertionError("no statement containing '" + fragment + "', among "
+                    + statementsUnder(data(trace).path("rootSpan")));
         }
         return found.getFirst();
     }
@@ -204,12 +206,16 @@ final class SpanTree {
     /** Every span of {@code kind} ({@code CLIENT}, {@code SERVER}, ...), the root included, in walk order. */
     static List<JsonNode> spansOfKind(JsonNode trace, String kind) {
         List<JsonNode> spans = new ArrayList<>();
-        walk(trace.path("rootSpan"), span -> {
+        walk(data(trace).path("rootSpan"), span -> {
             if (kind.equals(span.path("kind").asString(""))) {
                 spans.add(span);
             }
         });
         return spans;
+    }
+
+    private static JsonNode data(JsonNode trace) {
+        return trace.path("data");
     }
 
     private static void walk(JsonNode span, Consumer<JsonNode> visitor) {

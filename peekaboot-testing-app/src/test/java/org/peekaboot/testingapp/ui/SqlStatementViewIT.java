@@ -61,10 +61,10 @@ class SqlStatementViewIT extends SeededPersonTestBase {
     @Test
     void aQueryWithoutParametersOffersNeitherTheListNorSubstitution() {
         openPersonsPage();
-        JsonNode trace = awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        JsonNode trace = awaitTrace(toolbar.traceId(), "trace => (trace.data.queries || []).length > 0");
         toolbar.openOverlay();
         overlay.openTab("queries");
-        String scope = queryItem(trace.path("queries").get(0));
+        String scope = queryItem(trace.path("data").path("queries").get(0));
         overlay.waitFor(scope + " .pk-sql__code");
 
         assertThat(count(scope + " .pk-sql__params")).isZero();
@@ -81,11 +81,12 @@ class SqlStatementViewIT extends SeededPersonTestBase {
                 trace => {
                     const parameterised = span => span.statement?.parameters.length === 1
                         || (span.children || []).some(parameterised);
-                    return trace.rootSpan != null && parameterised(trace.rootSpan);
+                    return trace.data.rootSpan != null && parameterised(trace.data.rootSpan);
                 }""");
-        JsonNode lookup = parameterisedQuerySpan(trace.path("rootSpan"));
+        JsonNode lookup = parameterisedQuerySpan(trace.path("data").path("rootSpan"));
         if (lookup == null) {
-            throw new AssertionError("no parameterised query in " + trace.path("rootSpan"));
+            throw new AssertionError(
+                    "no parameterised query in " + trace.path("data").path("rootSpan"));
         }
         return lookup;
     }

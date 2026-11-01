@@ -101,7 +101,7 @@ class TracesTabIT extends PlaywrightTestBase {
 
     /** A JS predicate on the trace JSON: a reconciler run's own trace, carrying its WARN about {@code order}. */
     private static String warnedAbout(CustomerOrder order) {
-        return "trace => trace.rootActionType === 'SCHEDULED_JOB' && (trace.logs || []).some(log => "
+        return "trace => trace.summary.rootActionType === 'SCHEDULED_JOB' && (trace.data.logs || []).some(log => "
                 + "log.level === 'WARN' && log.message === 'order " + order.getReference()
                 + " is still PLACED and has not been acknowledged')";
     }
@@ -148,8 +148,7 @@ class TracesTabIT extends PlaywrightTestBase {
                 }
                 """);
 
-        page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"), () -> page.click("#refresh-btn"));
+        page.waitForResponse(response -> response.url().contains("/api/traces?"), () -> page.click("#refresh-btn"));
         page.waitForFunction("() => document.getElementById('traces-loading').classList.contains('hidden')");
 
         assertThat(page.evaluate("() => window.pkLoadingShown")).isEqualTo(false);
@@ -204,7 +203,7 @@ class TracesTabIT extends PlaywrightTestBase {
                 .contains("All (");
 
         Response errorsResponse = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights")
+                response -> response.url().contains("/api/traces?")
                         && response.url().contains("bucket=errors"),
                 () -> page.click("#traces-bucket .pk-btn[data-bucket='errors']"));
         JsonNode errorsBucket = readJson(errorsResponse.text());
@@ -246,8 +245,8 @@ class TracesTabIT extends PlaywrightTestBase {
         page.addInitScript("localStorage.setItem('peekaboot-locale', 'ar-EG-u-nu-arab')");
         openDashboard();
 
-        Response listing = page.waitForResponse(
-                response -> response.url().contains("/api/traces/insights"), dashboard::openTracesTab);
+        Response listing =
+                page.waitForResponse(response -> response.url().contains("/api/traces?"), dashboard::openTracesTab);
         int all = readJson(listing.text())
                 .path("filteredBucketCounts")
                 .path("all")

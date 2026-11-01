@@ -105,14 +105,14 @@ function initToolbar(host, data) {
     }
 
     function renderTrace(trace) {
-        const controller = trace.httpExchange?.request?.controller || {};
+        const controller = trace.data.httpExchange?.request?.controller || {};
         if (controller.class && controller.method) {
             shadow.getElementById('pk-controller').textContent = '→ ' + shortTarget(`${controller.class}.${controller.method}`);
         }
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
-        const duration = durationStat(clock, trace.durationMs, isSlowTrace(trace) ? 'slow' : '');
-        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {features: data.features, locale: readLocaleSetting()}));
+        const duration = durationStat(clock, trace.summary.durationMs, isSlowTrace(trace.summary) ? 'slow' : '');
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace.summary, {features: data.features, locale: readLocaleSetting()}));
     }
 
     // Nothing ever arrived: replace "loading" with the stat line's own words, its counts
@@ -152,7 +152,7 @@ function initToolbar(host, data) {
 }
 
 /**
- * Fetches the trace's insights on the fixed schedule above, calling onTrace for every
+ * Fetches the trace on the fixed schedule above, calling onTrace for every
  * attempt that brings a complete trace (one whose root span arrived, even if the span cap
  * evicted it since). A 404 or a trace still in progress leaves the previous render standing,
  * and onNothingArrived runs once if no attempt brought a complete trace. Stops
@@ -168,10 +168,10 @@ function pollTrace(client, traceId, {stillCurrent, onTrace, onNothingArrived}) {
             if (!stillCurrent()) return;
             // A 404 rejects here (api.js), which the catch below reads the same way as an
             // empty result: the trace has not arrived yet.
-            client.get('/api/traces/' + traceId + '/insights')
+            client.get('/api/traces/' + traceId)
                 .then(trace => {
                     if (!stillCurrent()) return;
-                    if (trace && trace.complete) {
+                    if (trace && trace.summary.complete) {
                         onTrace(trace);
                         rendered = true;
                     } else if (last && !rendered) {

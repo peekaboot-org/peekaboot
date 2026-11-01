@@ -261,7 +261,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)`. Links the shared sheets (plus the surface's own) into a shadow root; see below. `SHARED_SHEETS`, that list, which `InlinedStylesheets.SHARED_SHEETS` mirrors for the toolbar and the error page (`SharedModuleIT` pins the two). |
 | `storage.js` | `readSetting`, `writeSetting`. Guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. `readLocaleSetting()`, the stored `LOCALE_STORAGE_KEY` tag kept only if `Intl.NumberFormat.supportedLocalesOf` accepts it, else `undefined`, which `Intl` reads as the browser's own locale. The one place the dashboard's locale setting is validated; the toolbar and the overlay it opens read it too. |
 | `theme.js` | `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`, `bindTheme(target, onChange)` (resolve, apply and watch in one call, the way every surface starts; returns the unsubscribe). |
-| `trace-stats.js` | `traceStatParts(trace, {features, locale})`. A trace's stat line (span count, query count with total query time, log count, then error and warning badges) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording, order or colouring. `durationStat(lead, ms, severity)`, the `.pk-stat` element behind it, is also the toolbar's own trace-duration stat. `truncatedBadge()`, the one wording for a trace that hit the max-spans cap, shown by the Traces tab and the overlay header. `slowBadge()`, the SLOW pill beside it, which the Queries tab shows for a slow query too. `isSlowTrace(trace)`, whether the trace carries a `SLOW` reason, which the Traces tab, the overlay header and the toolbar all read. |
+| `trace-stats.js` | `traceStatParts(summary, {features, locale})`. A trace's stat line, read off the summary's `counts` (span count, query count with total query time, log count, then error and warning badges) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording, order or colouring. `durationStat(lead, ms, severity)`, the `.pk-stat` element behind it, is also the toolbar's own trace-duration stat. `truncatedBadge()`, the one wording for a trace that hit the max-spans cap, shown by the Traces tab and the overlay header. `slowBadge()`, the SLOW pill beside it, which the Queries tab shows for a slow query too. `isSlowTrace(summary)`, whether the summary's `reasons` carry a `SLOW` reason, which the Traces tab, the overlay header and the toolbar all read. |
 | `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash`. The `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview and params replace it. |
 | `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})`, the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation. `reconcileTextFilter`/`writeTextFilter(input, context)`, the single-text-input case built on it (`filteredGroupTab`'s default, so `config.js`, `environment.js` and `meters.js`; `loggers.js` composes the lower-level helper directly for its q+checkbox pair, `traces.js` for bucket/type/op, `insights.js` for its level/percentiles/restarts/panels params and `lifecycle.js` for its page). |
 
@@ -336,12 +336,13 @@ SLOW/VERY_SLOW at `selfMs >= threshold` and SLOW_QUERY at `duration >= threshold
 self time is already SLOW at the default thresholds, a 50 ms query already slow. Where a
 span's own issues are in hand, `issueSeverity(span.issues)` reads the backend's verdict, each
 issue's `severity`, and colours the gantt duration cells. It reads only issues with `unit: ms`,
-so a REPEATED_QUERY, which counts queries, and a CLIENT_ERROR, which carries a status, leave the cell alone. A gantt cell shows the span's whole
-duration and is coloured by the backend's issues, which judge self time for SLOW/VERY_SLOW and
-the whole duration for SLOW_QUERY, so a parent that only waited stays uncoloured.
+so a REPEATED_QUERY, which counts queries, and a CLIENT_ERROR, which carries a status, leave the
+cell alone. A gantt cell shows the span's whole duration and is coloured by the backend's issues,
+which judge self time for SLOW/VERY_SLOW and the whole duration for SLOW_QUERY, so a parent that
+only waited stays uncoloured.
 `durationSeverity()` re-derives a severity only for durations no issue describes, meaning a
 trace's total query time. The overlay header, the dev toolbar and the Traces tab read the
-trace's `SLOW` reason, which follows `peekaboot.tracing.slow-trace-threshold-ms` (1 s by
+`SLOW` reason in `summary.reasons`, which follows `peekaboot.tracing.slow-trace-threshold-ms` (1 s by
 default) with background work left out. On a whole trace that is the rule the Slow bucket
 admits by; an async row is judged on its own subtree's window, while its buckets are the
 trace's. A slow
@@ -621,7 +622,7 @@ breaks them silently. Grep `peekaboot-testing-app/src/test` before you do.
 ## The collapsed bar's trace fetch schedule
 
 `toolbar.js` does not poll until the trace looks complete. It makes four fixed attempts, at
-250ms, 500ms, 1s and 3s after the previous one, fetching `/api/traces/{traceId}/insights`
+250ms, 500ms, 1s and 3s after the previous one, fetching `/api/traces/{traceId}`
 each time. All four always run, rather than stopping the first time a trace looks finished,
 so a span that ends after the root still reaches the bar: an `@Async` continuation, or a
 streamed body. The last attempt lands 4.75s after the response finished. With

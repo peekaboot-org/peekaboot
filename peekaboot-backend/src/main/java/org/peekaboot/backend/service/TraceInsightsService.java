@@ -8,8 +8,9 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.domain.trace.TraceListResponse;
+import org.peekaboot.backend.domain.trace.TraceResource;
+import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.mapper.trace.TraceResources;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -22,8 +23,8 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 
 public class TraceInsightsService {
 
-    private static final TraceInsightsResponse EMPTY_RESPONSE =
-            new TraceInsightsResponse(List.of(), BucketCounts.empty(), null);
+    private static final TraceListResponse EMPTY_RESPONSE =
+            new TraceListResponse(List.of(), BucketCounts.empty(), null);
 
     /**
      * The types a request that names none asks for. A maintenance trace is upkeep no traced
@@ -68,11 +69,13 @@ public class TraceInsightsService {
      * The trace listing for one bucket. {@code rootActionType} is a comma-separated
      * include-list of {@link RootActionType} names; naming none asks for
      * {@link #DEFAULT_VIEW_TYPES} and {@code *} asks for every type. {@code rootOperation}
-     * matches the root span's name partially and case-insensitively.
+     * matches the root span's name partially and case-insensitively. {@code view} names a
+     * {@link TraceView}; naming none asks for the summary alone.
      */
-    public TraceInsightsResponse getInsights(
-            int limit, TraceBucket bucket, String rootActionType, String rootOperation) {
+    public TraceListResponse listTraces(
+            int limit, TraceBucket bucket, String rootActionType, String rootOperation, String view) {
         Set<RootActionType> actionTypeFilter = parseRootActionTypes(rootActionType);
+        TraceView traceView = parseView(view);
         if (traceStore == null) {
             return EMPTY_RESPONSE;
         }
@@ -81,12 +84,13 @@ public class TraceInsightsService {
 
         // filtered on each row's root span alone; only the returned page is mapped (and masked)
         List<RowSource> matches = RowSources.matching(traceStore, bucket, actionTypeFilter, operationFilter);
-        List<TraceTree> traceTrees = matches.stream()
+        List<TraceResource> traces = matches.stream()
                 .limit(limit)
                 .map(row -> traceResources.row(
                         row.bundle(),
                         row.subtreeRootSpanId(),
-                        traceStore.bucketsOf(row.bundle().traceId())))
+                        traceStore.bucketsOf(row.bundle().traceId()),
+                        traceView))
                 .toList();
 
         BucketCounts bucketCounts = new BucketCounts(
@@ -103,7 +107,13 @@ public class TraceInsightsService {
                     countMatchingTraces(TraceBucket.SLOW, bucket, matches, actionTypeFilter, operationFilter));
         }
 
-        return new TraceInsightsResponse(traceTrees, bucketCounts, filteredBucketCounts);
+        return new TraceListResponse(traces, bucketCounts, filteredBucketCounts);
+    }
+
+    private static TraceView parseView(String value) {
+        return value == null || value.isBlank()
+                ? TraceView.SUMMARY
+                : RequestParameters.enumValue("view", TraceView.class, value);
     }
 
     /**
@@ -143,7 +153,7 @@ public class TraceInsightsService {
         return (int) rows.stream().map(row -> row.bundle().traceId()).distinct().count();
     }
 
-    public Optional<TraceTree> getTraceInsights(String traceId) {
+    public Optional<TraceResource> getTrace(String traceId) {
         if (traceStore == null) {
             return Optional.empty();
         }

@@ -134,8 +134,9 @@ class PeekabootAutoConfigurationTest {
                     context.getBean(TraceStore.class).addSpan(TraceFixtures.rootSpanLasting(200));
 
                     assertThat(context.getBean(TraceInsightsService.class)
-                                    .getTraceInsights(TraceFixtures.TRACE_ID)
+                                    .getTrace(TraceFixtures.TRACE_ID)
                                     .orElseThrow()
+                                    .data()
                                     .rootSpan()
                                     .issues())
                             .isEmpty();
@@ -154,8 +155,9 @@ class PeekabootAutoConfigurationTest {
                     store.addSpan(TraceFixtures.query("q2", "select * from t where id = 2"));
 
                     assertThat(context.getBean(TraceInsightsService.class)
-                                    .getTraceInsights(TraceFixtures.TRACE_ID)
+                                    .getTrace(TraceFixtures.TRACE_ID)
                                     .orElseThrow()
+                                    .data()
                                     .rootSpan()
                                     .issues())
                             .extracting(TraceIssue::type)
@@ -270,8 +272,9 @@ class PeekabootAutoConfigurationTest {
                     traceStore.addLog(TraceFixtures.vendorFrameLog());
 
                     TraceLog log = context.getBean(TraceInsightsService.class)
-                            .getTraceInsights(TraceFixtures.TRACE_ID)
+                            .getTrace(TraceFixtures.TRACE_ID)
                             .orElseThrow()
+                            .data()
                             .logs()
                             .getFirst();
 
@@ -368,8 +371,9 @@ class PeekabootAutoConfigurationTest {
         TraceFixtures.addRootSpan(traceStore);
         traceStore.addSpan(TraceFixtures.query("select 1"));
         return context.getBean(TraceInsightsService.class)
-                .getTraceInsights(TraceFixtures.TRACE_ID)
+                .getTrace(TraceFixtures.TRACE_ID)
                 .orElseThrow()
+                .data()
                 .rootSpan()
                 .children()
                 .getFirst()

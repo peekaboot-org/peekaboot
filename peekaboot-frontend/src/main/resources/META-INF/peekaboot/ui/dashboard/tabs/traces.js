@@ -45,7 +45,7 @@ const BUCKET_EMPTY_MESSAGES = {
 };
 
 const tab = selfFetchingTab({
-    fetch: context => context.client.get('/api/traces/insights', {params: requestParams()}),
+    fetch: context => context.client.get('/api/traces', {params: requestParams()}),
     reconcile: reconcileWithUrl,
     // Only before the first list arrives: the block sits above the controls, so showing it
     // for a refresh would push them and the list down for the round trip.
@@ -314,7 +314,7 @@ function renderList(container, result, context) {
     }
 
     noTracesEl.classList.add('hidden');
-    traces.forEach(trace => listEl.appendChild(renderTraceItem(trace, context)));
+    traces.forEach(row => listEl.appendChild(renderTraceItem(row.summary, context)));
 }
 
 function updateFilterIndicator(container) {
@@ -410,7 +410,7 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
         path,
         el('span', {className: 'pk-trace-item__duration', text: formatDurationMs(trace.durationMs)}),
         verdict,
-        trace.truncated ? truncatedBadge() : null);
+        trace.counts.droppedSpans > 0 ? truncatedBadge() : null);
 }
 
 /** Plain "jump to Scheduled Tasks" link, deliberately unfiltered. A sibling of the open button, not a descendant, so its click never reaches that button's listener. */

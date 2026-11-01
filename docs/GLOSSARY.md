@@ -11,8 +11,9 @@ term twice and letting the two copies drift.
 There is no `Trace` class. A trace is a `traceId` and whatever is filed under it, in three
 shapes: `TraceDataBundle` while the store is writing, `TraceData` when the bundle is read back
 in one go (`TraceDataBundle.snapshot()`: the spans flat and creation-ordered, the root, the
-window, the async membership, the failure flag and the dropped-span count), and `TraceTree` once mapped for the UI.
-Only the third leaves the process. What lands in the store is on the site:
+window, the async membership, the failure flag and the dropped-span count), and `TraceResource`
+once mapped for the API, its `TraceSummary` and `TraceDetail`. Only the third leaves the process.
+`TraceTree` is the mapper's internal step towards it and is never served. What lands in the store is on the site:
 [what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured).
 
 ### Span
@@ -21,7 +22,7 @@ Two records, one concept. `SpanData` is the store's copy of an exported OpenTele
 `INTERNAL` has no Micrometer constant and maps to null), and a `creationOrder` minted in export
 order. `SpanNode` is the mapped tree node the API serves: the same `Span.Kind` and tag map,
 plus `children`, `issues` and a masked `statement`. Issues hang off the node and `SpanData` carries
-none. A span's logs are the entries of `TraceTree.logs` naming its `spanId`.
+none. A span's logs are the entries of `TraceDetail.logs` naming its `spanId`.
 
 ### Root Span
 `TraceDataBundle` chooses it, once: the earliest-created stored span without a parent, else the
@@ -31,7 +32,7 @@ running, and once the span cap evicted its root (see `TraceData.complete`).
 `snapshot()` carries that choice to `TraceTreeMapper` as `TraceData.rootSpan`, beside
 `TraceData.complete`, and `listingRoots()` answers the same rule without a copy so the list
 filters can classify a bundle without building a tree.
-`TraceTree.rootSpan` is the mapped `SpanNode` at the top. While it is null, `TraceTree.orphans`
+`TraceDetail.rootSpan` is the mapped `SpanNode` at the top. While it is null, `TraceDetail.orphans`
 holds the stored subtrees instead.
 
 ### Root Action Type
@@ -77,7 +78,7 @@ trace's own row while `ListingRoots.fragment` is set (spans stored, trace not co
 a different suppression from the default view.
 
 ### Root Operation
-`TraceTree.rootOperation` is `rootSpanData.name()` verbatim: no reformatting, no case change.
+`TraceSummary.rootOperation` is `rootSpanData.name()` verbatim: no reformatting, no case change.
 As a filter it is `RowSources.matchesRootOperation`, a case-insensitive substring
 match with a `Class.method` suffix fallback so a fully-qualified scheduled-task target still
 matches a bean-name span name.
@@ -87,7 +88,7 @@ A span carrying the marker tag `AsyncTaskMarker.TAG_KEY` (`peekaboot.async`), pl
 descendant of it. `AsyncMembership` holds that membership for each `TraceDataBundle`;
 `listingRoots()` returns the entry points alone, a member whose resolved parent is not a
 member, together with the root under the same lock. An entry point classifies as `RootActionType.ASYNC_TASK`, gets a listing row of
-its own carrying `TraceTree.subtree` as a `SubtreeView(rootSpanId, enclosedByStoredTrace)`, and
+its own carrying `TraceSummary.subtree` as a `SubtreeView(rootSpanId, enclosedByStoredTrace)`, and
 is flagged on the tree as `SpanNode.asyncEntry`, which is what the Spans tab collapses and
 re-bases by. What a reader sees:
 [background work](https://www.peekaboot.org/docs/traces/#background-work).
@@ -107,11 +108,11 @@ reasons is a failure. The flag is the Errors bucket's own rule: a span failed or
 an ERROR log arrived. An async row is `ERROR` only when its own subtree's reasons hold a failure. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Trace Reason
-`TraceTree.reasons` lists `TraceReason(kind, spanId, detail)`s, built by `TraceReasons`: an
+`TraceSummary.reasons` lists `TraceReason(kind, spanId, detail)`s, built by `TraceReasons`: an
 `EXCEPTION` per failed span, a `SERVER_ERROR` per SERVER span answering 5xx, an `ERROR_LOG` per
 ERROR log, then one `SLOW` once the duration reaches `peekaboot.tracing.slow-trace-threshold-ms`.
 The first three are failures. The span and log caps bound them, so an evicted failure leaves the
-trace `ERROR` without its reason. `TraceTree.buckets` names the Errors and Slow buckets listing it.
+trace `ERROR` without its reason. `TraceSummary.buckets` names the Errors and Slow buckets listing it.
 
 ### Issue
 `SpanNode.issues` holds `TraceIssue`s. Each is a `SpanIssue(type, severity, spanId, value,
@@ -150,9 +151,9 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | `metrics` on `/api/features`, `MetricsInfo`, `GET /api/metrics` | **Meters** tab | The tab module is `tabs/meters.js` and its `isAvailable` reads `features.metrics`. |
 | `rootOperation` | **Target** in the Traces tab's filter banner | The banner shortens the value to its last two dot-segments, as the Scheduled Tasks tab does (`shortTarget`). |
 | `rootActionType`, `rootOperation` query parameters | `type`, `op` in the dashboard hash | `traces.js` translates between them; the hash is the shareable form. |
-| a `SLOW` entry in `TraceTree.reasons` | **SLOW** badge | `isSlowTrace` in `shared/trace-stats.js` reads it. On a whole trace the Slow bucket admits by the same rule; an async row is judged on its own window while its buckets are the trace's. |
+| a `SLOW` entry in `TraceSummary.reasons` | **SLOW** badge | `isSlowTrace` in `shared/trace-stats.js` reads it. On a whole trace the Slow bucket admits by the same rule; an async row is judged on its own window while its buckets are the trace's. |
 | `TraceOutcome.ERROR` | **ERROR** badge | Rendered instead of SLOW, never beside it. |
-| `TraceTree.truncated` | **TRUNCATED** badge | Set when the per-trace span cap dropped a real span. |
+| `TraceSummary.counts.droppedSpans` above zero | **TRUNCATED** badge | The per-trace span cap dropped a real span. |
 | `HttpRequest.Controller.className` | `class` on the wire | Renamed by `@JsonProperty("class")`. |
 | `IssueSeverity.WARNING`, `.ERROR` | `warning`, `error` | Lowercased by `@JsonValue`. |
 | `IssueUnit.MS`, `.QUERIES`, `.STATUS` | `ms`, `queries`, `status` | Lowercased by `@JsonValue`. |
@@ -215,11 +216,17 @@ which is the span name, not this field.
 
 ## Wire shapes
 
-### Trace Tab Summary
-`TraceTabSummary` carries the counts the toolbar badges and the Traces tab rows show, one
-sub-record per tab of the trace-detail overlay: `RequestSummary(method, path, statusCode)`,
-`SpansSummary(count)`, `QueriesSummary(count, totalDurationMs)` and
-`LogsSummary(count, errorCount, warnCount)`.
+### Trace Resource and Trace Summary
+`TraceResource(summary, data)` is one trace on the wire, from `GET /peekaboot/api/traces/{traceId}`
+and as each row of `GET /peekaboot/api/traces`. `data` is a `TraceDetail(rootSpan, orphans, logs,
+queries, httpExchange)`, null on a listing row unless the request asked for `view=full`
+(`TraceView`). `TraceSummary` is what an agent reads first and what the toolbar, the Traces tab's
+rows and the overlay header show: `traceId`, `startTime`, `durationMs`, `complete`,
+`rootActionType`, `rootOperation`, `request(method, route, path, statusCode)`, `outcome`,
+`buckets`, `reasons`, `issues` (every span's, in tree order), `counts` and `subtree`.
+`counts` is `spans`, `queries(count, totalDurationMs)`, `logs(count, errorCount, warnCount)`,
+`droppedSpans` and `droppedLogs`. `route` is the matched pattern, null where no handler matched.
+The listing is a `TraceListResponse(traces, bucketCounts, filteredBucketCounts)`.
 
 ### Bucket Counts
 `BucketCounts(all, errors, slow)`. Every listing response carries it twice: `bucketCounts` for
@@ -230,7 +237,7 @@ what lets the bucket chips show `filtered / total`.
 
 ### HTTP Exchange
 `HttpExchange(HttpRequest request, HttpResponse response)`, built from a `RequestCompletedEvent`
-by `HttpExchangeMapper` and carried on `TraceTree.httpExchange`. `HttpResponse` is `status` and
+by `HttpExchangeMapper` and carried on `TraceDetail.httpExchange`. `HttpResponse` is `status` and
 `headers`. `HttpRequest` holds four flat fields and two nested records:
 
 | Field on the wire | Contents |
@@ -251,20 +258,20 @@ Request bodies and uploads are not captured; see *Servlet Filters* in
 `TraceLog(spanId, timestamp, level, message, stackTrace, hiddenFrames, applicationFrames)` is one
 captured log event, correlated by the trace and span ids frozen in its MDC. `stackTrace` is the captured throwable, null where there was none; `hiddenFrames` and
 `applicationFrames` are the line ranges folding marked in it. It appears once on the detail
-response, in `TraceTree.logs`, its `spanId` resolved to the span that survived deduplication. A log
+response, in `TraceDetail.logs`, its `spanId` resolved to the span that survived deduplication. A log
 with no span id belongs to no span.
 
-`QueryInfo(spanId, dbSystem, dataSourceName, durationMs, rowCount)` is one query span. Its
-statement is the span's own `SpanNode.statement`, null when the instrumentation recorded none;
-the query is still listed. `dataSourceName` is
+`QueryInfo(spanId, dbSystem, dataSourceName, durationMs, rowCount, statement)` is one query span.
+Its `statement` is the one its span carries as `SpanNode.statement`, null when the instrumentation
+recorded none; the query is still listed. `dataSourceName` is
 the Hikari pool name (`jdbc.datasource.pool`) unless Hikari generated it (`HikariPool-1`), else
 datasource-proxy's `jdbc.datasource.name`, null when neither is tagged.
-`TraceTree.queries` is populated on the single-trace endpoint only, never on
-the listing.
+`TraceDetail.queries` is served on the single-trace endpoint and on listing rows asked for with
+`view=full`.
 
 ### SQL Statement
 `SqlStatement(text, formatted, parameters, omittedParameterSets)` is the statement a query span
-carries, served as `SpanNode.statement` and null on every other span. Every part is masked.
+carries, served as `SpanNode.statement` and `QueryInfo.statement` and null on every other span. Every part is masked.
 `text` is the SQL as captured, `formatted` the same SQL laid out by `SqlFormatter` (null when
 none is available or it could not lay the SQL out), and `parameters` the bind values as SQL
 literals, one list per parameter set. `omittedParameterSets` counts the sets a capped batch
@@ -277,17 +284,17 @@ The word carries two unrelated features in the URL space, plus a prose shorthand
 - **The Insights tab** is the aggregated-metric charts: `dashboard/tabs/insights.js`, gated on
   the `insights` feature flag and backed by `InsightsController` under the **prefix**
   `/peekaboot/api/insights/{config,data,stream}`.
-- **The insights suffix** marks the enriched read models: `/peekaboot/api/actuator/all/insights`,
-  `/peekaboot/api/traces/insights` and `/peekaboot/api/traces/{traceId}/insights`. Nothing to do
-  with the tab. `PeekabootController` serves them; `ActuatorInsightsResponse` and
-  `TraceInsightsResponse` are their payloads. An `InsightsSource` bean is one actuator reading,
-  keyed by endpoint id, that `ActuatorInsightsResponse` is built from, so its name follows the
-  suffix too.
-- **Insights Data** in prose means the enriched shape itself: `TraceTree` and `SpanNode` rather
-  than `TraceData` and `SpanData`.
+- **The insights suffix** marks one enriched read model, `/peekaboot/api/actuator/all/insights`.
+  Nothing to do with the tab. `PeekabootController` serves it as `ActuatorInsightsResponse`. An
+  `InsightsSource` bean is one actuator reading, keyed by endpoint id, that
+  `ActuatorInsightsResponse` is built from, so its name follows the suffix too. The traces
+  endpoints are `/peekaboot/api/traces` and `/peekaboot/api/traces/{traceId}`, served as
+  `TraceListResponse` and `TraceResource`. `TraceInsightsService` keeps the old word.
+- **Insights Data** in prose means the enriched shape itself: `TraceResource` and `SpanNode`
+  rather than `TraceData` and `SpanData`.
 
-So `/api/insights/**` and `/api/*/insights` are two different features that happen to share a
-word. A path with `insights` in the middle is the tab's; a path ending in `insights` is a read
+So `/api/insights/**` and a path ending in `insights` are two different features that happen to
+share a word. A path with `insights` in the middle is the tab's; one ending in it is a read
 model. Neither is a version of the other, and they disappear under different conditions: the
 prefix form goes away without a `MeterRegistry` bean, the suffix form does not.
 
@@ -320,8 +327,9 @@ holds CPU count and model, total memory, max heap (`memory.heapMax`, the heap me
 detected container runtime, and the machine's non-local addresses with reverse-resolved
 hostnames. Distinct from the Insights tab.
 
-### Trace Detail
-The overlay over a single trace, `trace-detail/trace-detail.js`. It runs in a shadow root and is
+### Trace Detail (the overlay)
+The overlay over a single trace, `trace-detail/trace-detail.js`, not the `TraceDetail` record it
+renders. It runs in a shadow root and is
 loaded two ways: lazily by `toolbar.js` through a dynamic import, eagerly by the dashboard's
-static import. Its four tabs are `request`, `spans`, `queries` and `logs`, the same four names
-`TraceTabSummary` uses.
+static import. Its four tabs are `request`, `spans`, `queries` and `logs`. The last three show
+badges from `TraceSummary.counts`.

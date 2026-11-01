@@ -7,8 +7,8 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.domain.actuator.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
-import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.domain.trace.TraceListResponse;
+import org.peekaboot.backend.domain.trace.TraceResource;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.problem.ApiProblem;
@@ -107,19 +107,20 @@ public class PeekabootController {
     }
 
     /**
-     * The trace listing. {@code rootActionType} takes a comma-separated include-list of
-     * root action types; a request that names none gets the default view, which leaves
-     * out the types that are routine maintenance, and {@code *} gets every type. See
-     * {@link TraceInsightsService#getInsights}.
+     * The trace listing. {@code rootActionType} takes a comma-separated include-list of root action
+     * types; a request that names none gets the default view, which leaves out routine maintenance,
+     * and {@code *} gets every type. {@code view=full} adds each row's data. See
+     * {@link TraceInsightsService#listTraces}.
      */
-    @GetMapping(value = "/api/traces/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public TraceInsightsResponse getTracesInsights(
+    @GetMapping(value = "/api/traces", produces = MediaType.APPLICATION_JSON_VALUE)
+    public TraceListResponse listTraces(
             @RequestParam(name = "limit", defaultValue = "100") int limit,
             @RequestParam(name = "bucket", required = false) String bucket,
             @RequestParam(name = "rootActionType", required = false) String rootActionType,
-            @RequestParam(name = "rootOperation", required = false) String rootOperation) {
-        return traceInsightsService.getInsights(
-                sanitizeLimit(limit), parseBucket(bucket), rootActionType, rootOperation);
+            @RequestParam(name = "rootOperation", required = false) String rootOperation,
+            @RequestParam(name = "view", required = false) String view) {
+        return traceInsightsService.listTraces(
+                sanitizeLimit(limit), parseBucket(bucket), rootActionType, rootOperation, view);
     }
 
     private static TraceBucket parseBucket(String value) {
@@ -133,10 +134,10 @@ public class PeekabootController {
         return Math.clamp(limit, 0, 10_000);
     }
 
-    @GetMapping(value = "/api/traces/{traceId}/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public TraceTree getTraceInsights(@PathVariable(name = "traceId") String traceId) {
+    @GetMapping(value = "/api/traces/{traceId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public TraceResource getTrace(@PathVariable(name = "traceId") String traceId) {
         return traceInsightsService
-                .getTraceInsights(traceId)
+                .getTrace(traceId)
                 .orElseThrow(() -> new ApiProblemException(ApiProblem.notFound(
                         "No trace " + traceId + " in the store. The id is unknown or evicted, or tracing is off.")));
     }

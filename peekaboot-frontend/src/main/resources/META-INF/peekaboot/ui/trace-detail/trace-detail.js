@@ -29,12 +29,12 @@ import * as logs from './tabs/logs.js';
 
 // label/count feed the tab strip built in wireTabs() below - label becomes each
 // button's text, count (when present) the small badge next to it. The counts are the
-// backend's TraceTabSummary, the same numbers the Traces tab and the toolbar show.
+// summary's, the same numbers the Traces tab and the toolbar show.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
-    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary.spans.count},
-    {id: 'queries', label: 'Queries', render: queries.render, count: t => t.summary.queries.count},
-    {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => t.summary.logs.count}
+    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary.counts.spans},
+    {id: 'queries', label: 'Queries', render: queries.render, count: t => t.summary.counts.queries.count},
+    {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => t.summary.counts.logs.count}
 ];
 
 // How long a cross-link jump's highlight stays on its target (see jumpToElement).
@@ -198,7 +198,7 @@ export function closeTraceDetail() {
 async function fetchAndRender(content, traceId, {basePath, session, styleReady, urlState, display}) {
     const client = createClient({basePath});
     try {
-        const [trace] = await Promise.all([client.get(`/api/traces/${traceId}/insights`), styleReady]);
+        const [trace] = await Promise.all([client.get(`/api/traces/${traceId}`), styleReady]);
         // A newer open() superseded this one while the request was in flight.
         if (session !== currentSession) return;
         render(content, trace, urlState, display);
@@ -242,36 +242,37 @@ function render(content, trace, urlState, display) {
 }
 
 function header(trace) {
-    const rootSpan = trace.rootSpan || {};
-    const httpExchange = trace.httpExchange || {};
+    const {summary, data} = trace;
+    const rootSpan = data.rootSpan || {};
+    const httpExchange = data.httpExchange || {};
     const req = httpExchange.request || {};
     const res = httpExchange.response || {};
     // Prefer httpExchange data (toolbar-only), then the summary the server read off the
     // root span's tags - it knows every convention's names, this module does not; null
     // (not a placeholder string) for a trace with no HTTP request at all, so the title
     // falls back to the root-action label.
-    const summaryRequest = trace.summary?.request || {};
+    const summaryRequest = summary.request || {};
     const method = req.method || summaryRequest.method || null;
     const path = req.path || summaryRequest.path || rootSpan.name || '-';
     const status = res.status || summaryRequest.statusCode;
 
     const title = el('h2', {className: 'pk-overlay__title', attrs: {id: 'pk-overlay-title'}},
-        el('span', {className: 'pk-overlay__title-icon', text: rootActionIcon(trace.rootActionType), attrs: {'aria-hidden': 'true'}}),
-        el('span', {className: 'pk-overlay__title-method', text: method ?? rootActionLabel(trace.rootActionType)}),
+        el('span', {className: 'pk-overlay__title-icon', text: rootActionIcon(summary.rootActionType), attrs: {'aria-hidden': 'true'}}),
+        el('span', {className: 'pk-overlay__title-method', text: method ?? rootActionLabel(summary.rootActionType)}),
         el('span', {className: 'pk-overlay__title-path', text: path, title: path}),
-        el('span', {className: 'pk-overlay__title-traceid'}, copyableId(trace.traceId, {label: 'traceId'})));
+        el('span', {className: 'pk-overlay__title-traceid'}, copyableId(summary.traceId, {label: 'traceId'})));
 
     // The trace's own SLOW verdict, the one the Traces tab's badge and the Slow bucket follow.
-    const slow = isSlowTrace(trace);
+    const slow = isSlowTrace(summary);
     const meta = el('div', {className: 'pk-overlay__meta'},
         el('span', {
             className: 'pk-overlay__duration' + (slow ? ` ${severityClass('slow')}` : ''),
-            text: formatDurationMs(trace.durationMs)
+            text: formatDurationMs(summary.durationMs)
         }),
         badge(statusLabel(status), statusVariant(status)),
-        trace.complete ? null : inProgressBadge(),
+        summary.complete ? null : inProgressBadge(),
         slow ? slowBadge() : null,
-        trace.truncated ? truncatedBadge() : null);
+        summary.counts.droppedSpans > 0 ? truncatedBadge() : null);
 
     return el('div', {className: 'pk-overlay__header'},
         el('div', {className: 'pk-overlay__header-main'}, title, meta),

@@ -45,8 +45,8 @@ class InMemoryTraceStoreTest {
         storage.addLog(log("trace1").saying("test message").build());
 
         var bundle = storage.getTrace("trace1").orElseThrow();
-        assertThat(bundle.logs()).hasSize(1);
-        assertThat(bundle.logs().getFirst().message()).isEqualTo("test message");
+        assertThat(bundle.capturedLogs().logs()).hasSize(1);
+        assertThat(bundle.capturedLogs().logs().getFirst().message()).isEqualTo("test message");
     }
 
     @Test
@@ -71,7 +71,7 @@ class InMemoryTraceStoreTest {
 
         var bundle = storage.getTrace("trace1").orElseThrow();
         assertThat(bundle.snapshot().spans()).hasSize(2);
-        assertThat(bundle.logs()).hasSize(1);
+        assertThat(bundle.capturedLogs().logs()).hasSize(1);
         assertThat(bundle.request()).isNotNull();
     }
 
@@ -92,7 +92,7 @@ class InMemoryTraceStoreTest {
 
         var bundle = capped.getTrace("t1").orElseThrow();
         assertThat(bundle.snapshot().spans()).hasSize(2);
-        assertThat(bundle.snapshot().truncated()).isFalse();
+        assertThat(bundle.snapshot().droppedSpans()).isZero();
     }
 
     @Test
@@ -104,7 +104,7 @@ class InMemoryTraceStoreTest {
 
         var bundle = capped.getTrace("t1").orElseThrow();
         assertThat(bundle.snapshot().spans()).hasSize(2);
-        assertThat(bundle.snapshot().truncated()).isTrue();
+        assertThat(bundle.snapshot().droppedSpans()).isPositive();
     }
 
     @Test
@@ -303,7 +303,7 @@ class InMemoryTraceStoreTest {
 
         assertThat(listedTraceIds(store, TraceBucket.SLOW, 10)).containsExactly("t1");
         TraceData snapshot = store.getTrace("t1").orElseThrow().snapshot();
-        assertThat(snapshot.truncated()).isTrue();
+        assertThat(snapshot.droppedSpans()).isPositive();
         assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(1_500));
     }
 
@@ -413,7 +413,7 @@ class InMemoryTraceStoreTest {
 
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
         assertThat(bundle.snapshot().spans()).hasSize(1); // original span still there - no fresh bundle
-        assertThat(bundle.logs()).hasSize(1);
+        assertThat(bundle.capturedLogs().logs()).hasSize(1);
         assertThat(store.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
     }
 
@@ -445,7 +445,7 @@ class InMemoryTraceStoreTest {
 
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
         assertThat(bundle.snapshot().spans()).hasSize(1);
-        assertThat(bundle.logs()).hasSize(1);
+        assertThat(bundle.capturedLogs().logs()).hasSize(1);
         assertThat(listedTraceIds(store, TraceBucket.ALL, 10)).containsExactly("t1");
     }
 
@@ -484,7 +484,9 @@ class InMemoryTraceStoreTest {
         }
 
         var bundle = store.getTrace("t1").orElseThrow();
-        assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+        assertThat(bundle.capturedLogs().logs())
+                .extracting(LogCapturedEvent::message)
+                .containsExactly("log3", "log4", "log5");
     }
 
     @Test

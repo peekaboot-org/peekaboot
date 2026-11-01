@@ -270,7 +270,7 @@ class PeekabootPathsTest {
     @CsvSource({
         "/peekaboot, true",
         "/peekaboot/, true",
-        "/peekaboot/api/traces/insights, true",
+        "/peekaboot/api/traces, true",
         "/peekabootx, false",
         "/actuator/health, false",
         "/static/app.css, false",

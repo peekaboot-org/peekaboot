@@ -39,10 +39,4 @@ public record TraceData(
         boolean failed,
         List<SpanData> spans,
         Set<String> asyncSpanIds,
-        int droppedSpans) {
-
-    /** Whether the span cap dropped any real span from this trace. */
-    public boolean truncated() {
-        return droppedSpans > 0;
-    }
-}
+        int droppedSpans) {}

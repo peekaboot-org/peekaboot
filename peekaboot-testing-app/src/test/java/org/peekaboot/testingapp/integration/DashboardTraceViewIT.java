@@ -42,14 +42,27 @@ class DashboardTraceViewIT extends TestingAppITBase {
                 .tag("db.statement", "SELECT * FROM person")
                 .build());
 
-        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", traceId);
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}", traceId);
 
-        assertThat(trace.path("rootSpan").path("spanId").asString()).isEqualTo(rootSpanId);
-        assertThat(trace.path("rootSpan").path("tags").path("http.method").asString())
+        assertThat(trace.path("data").path("rootSpan").path("spanId").asString())
+                .isEqualTo(rootSpanId);
+        assertThat(trace.path("data")
+                        .path("rootSpan")
+                        .path("tags")
+                        .path("http.method")
+                        .asString())
                 .isEqualTo("GET");
-        assertThat(trace.path("rootSpan").path("tags").path("url.path").asString())
+        assertThat(trace.path("data")
+                        .path("rootSpan")
+                        .path("tags")
+                        .path("url.path")
+                        .asString())
                 .isEqualTo("/persons");
-        assertThat(trace.path("summary").path("queries").path("count").asInt(-1))
+        assertThat(trace.path("summary")
+                        .path("counts")
+                        .path("queries")
+                        .path("count")
+                        .asInt(-1))
                 .as("the one injected DB span is counted as exactly one query")
                 .isEqualTo(1);
     }

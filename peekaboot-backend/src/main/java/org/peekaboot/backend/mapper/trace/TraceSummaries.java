@@ -1,61 +1,58 @@
 package org.peekaboot.backend.mapper.trace;
 
 import java.util.List;
-import java.util.Map;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
-import org.peekaboot.backend.tracing.event.SpanData;
-import org.peekaboot.backend.tracing.tags.HttpSpanTags;
+import org.peekaboot.backend.domain.trace.TraceIssue;
+import org.peekaboot.backend.domain.trace.TraceOutcome;
+import org.peekaboot.backend.domain.trace.TraceReason;
+import org.peekaboot.backend.domain.trace.TraceSummary;
+import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
-/** The tab summary {@link TraceTreeMapper} puts on a tree: over a whole trace, or over one subtree's own spans. */
+/** A trace's summary, built from the judged tree and the facts the store holds beside it. */
 final class TraceSummaries {
 
-    /** The logs live on the bundle, not the snapshot; {@code TraceLogMapper.withLogsSummary} counts them. */
-    private static final TraceTabSummary.LogsSummary LOGS_COUNTED_LATER = new TraceTabSummary.LogsSummary(0, 0, 0);
+    private final long slowTraceThresholdMs;
 
-    private TraceSummaries() {}
-
-    static TraceTabSummary ofTrace(List<SpanData> spans, SpanData rootSpanData) {
-        int dbQueryCount = 0;
-        long dbTotalDurationMs = 0L;
-
-        for (SpanData span : spans) {
-            if (DbSpans.isQuery(span)) {
-                dbQueryCount++;
-                dbTotalDurationMs += span.durationMs();
-            }
-        }
-
-        return new TraceTabSummary(
-                requestSummary(rootSpanData),
-                new TraceTabSummary.SpansSummary(spans.size()),
-                new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
-                LOGS_COUNTED_LATER);
+    TraceSummaries(PeekabootTracingProperties properties) {
+        this.slowTraceThresholdMs = properties.getSlowTraceThresholdMs();
     }
 
-    /**
-     * The subtree's own span and query figures, so a row rooted at an async entry reports what
-     * that entry point's own work did and leaves the enclosing trace's out. No request part:
-     * a subtree is not a request.
-     */
-    static TraceTabSummary ofSubtree(int spanCount, int queryCount, long queryDurationMs) {
-        return new TraceTabSummary(
-                null,
-                new TraceTabSummary.SpansSummary(spanCount),
-                new TraceTabSummary.QueriesSummary(queryCount, queryDurationMs),
-                LOGS_COUNTED_LATER);
+    TraceSummary of(TraceTree tree, TraceFacts facts) {
+        List<TraceReason> reasons = TraceReasons.of(tree, facts.errorLogs(), slowTraceThresholdMs);
+        boolean failed = facts.storeFailed()
+                || reasons.stream().anyMatch(reason -> reason.kind().failure());
+        return new TraceSummary(
+                tree.traceId(),
+                tree.startTime(),
+                tree.durationMs(),
+                tree.complete(),
+                tree.rootActionType(),
+                tree.rootOperation(),
+                tree.request(),
+                TraceOutcome.of(tree.complete(), failed),
+                facts.buckets().stream().sorted().toList(),
+                reasons,
+                issuesOf(tree),
+                countsOf(tree, facts),
+                tree.subtree());
     }
 
-    private static TraceTabSummary.RequestSummary requestSummary(SpanData rootSpanData) {
-        if (rootSpanData == null || rootSpanData.tags() == null) {
-            return null;
-        }
-        Map<String, String> tags = rootSpanData.tags();
-        String method = HttpSpanTags.method(tags);
-        String path = HttpSpanTags.path(tags);
-        Integer statusCode = HttpSpanTags.statusCode(tags);
-        if (method == null && path == null && statusCode == null) {
-            return null;
-        }
-        return new TraceTabSummary.RequestSummary(method, path, statusCode);
+    private static List<TraceIssue> issuesOf(TraceTree tree) {
+        return SpanWalk.depthFirst(tree.rootSpan(), tree.orphans())
+                .flatMap(span -> span.issues().stream())
+                .toList();
+    }
+
+    private static TraceSummary.Counts countsOf(TraceTree tree, TraceFacts facts) {
+        List<LogCapturedEvent> logs = facts.logs();
+        int errors = (int) logs.stream().filter(LogCapturedEvent::isError).count();
+        int warnings = (int) logs.stream().filter(LogCapturedEvent::isWarn).count();
+        return new TraceSummary.Counts(
+                tree.spanCount(),
+                tree.queries(),
+                new TraceSummary.LogCounts(logs.size(), errors, warnings),
+                facts.droppedSpans(),
+                facts.droppedLogs());
     }
 }

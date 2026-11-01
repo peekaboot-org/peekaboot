@@ -322,10 +322,10 @@ public class TraceDataBundle {
         }
     }
 
-    /** Logs the cap trimmed so far; the list itself keeps only the newest. */
-    public int droppedLogs() {
+    /** The logs kept and the count the cap trimmed, read under the trim's lock so the two describe the same moment. */
+    public CapturedLogs capturedLogs() {
         synchronized (logs) {
-            return droppedLogs;
+            return new CapturedLogs(new ArrayList<>(logs), droppedLogs);
         }
     }
 
@@ -470,10 +470,6 @@ public class TraceDataBundle {
             }
         }
         return entries;
-    }
-
-    public List<LogCapturedEvent> logs() {
-        return new ArrayList<>(logs);
     }
 
     public RequestCompletedEvent request() {
