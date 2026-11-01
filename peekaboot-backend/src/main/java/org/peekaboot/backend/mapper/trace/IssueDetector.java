@@ -7,6 +7,7 @@ import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.IssueUnit;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
@@ -26,7 +27,7 @@ public class IssueDetector {
     }
 
     private SpanNode processSpan(SpanNode span) {
-        List<SpanIssue> issues = new ArrayList<>();
+        List<TraceIssue> issues = new ArrayList<>();
         long selfMs = span.selfMs();
         long verySlowMs = properties.getVerySlowSpanThresholdMs();
         long slowMs = properties.getSlowSpanThresholdMs();
@@ -50,6 +51,7 @@ public class IssueDetector {
                     "This query took " + queryMs + " ms, at or above the " + slowQueryMs
                             + " ms slow-query threshold."));
         }
+        issues.addAll(RepeatedQueries.under(span, properties.getRepeatedQueryThreshold()));
 
         List<SpanNode> processedChildren =
                 span.children().stream().map(this::processSpan).toList();

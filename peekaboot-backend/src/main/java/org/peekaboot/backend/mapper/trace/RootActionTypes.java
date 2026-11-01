@@ -82,10 +82,7 @@ public final class RootActionTypes {
         // The parent check keeps this rule to a connection acquired outside any trace. The
         // store never roots a trace at a span with a local parent, but this method classifies
         // whatever span it is handed.
-        if (kind == Span.Kind.CLIENT
-                && parentId == null
-                && "connection".equals(name)
-                && Tags.anyKeyStartsWith(tags, "jdbc.datasource.")) {
+        if (kind == Span.Kind.CLIENT && parentId == null && DbSpans.isConnection(name, tags)) {
             return RootActionType.MAINTENANCE;
         }
         return RootActionType.UNKNOWN;

@@ -120,6 +120,19 @@ final class SpanTree {
         return exceptions;
     }
 
+    /** Every issue of {@code type} on any span of the tree, in walk order. */
+    static List<JsonNode> issuesOfType(JsonNode trace, String type) {
+        List<JsonNode> found = new ArrayList<>();
+        walk(
+                trace.path("rootSpan"),
+                span -> span.path("issues").forEach(issue -> {
+                    if (type.equals(issue.path("type").asString(""))) {
+                        found.add(issue);
+                    }
+                }));
+        return found;
+    }
+
     static String spanId(JsonNode span) {
         return span.path("spanId").asString("");
     }

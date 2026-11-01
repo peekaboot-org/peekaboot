@@ -11,7 +11,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.domain.features.Features;
+import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SqlStatement;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
@@ -137,6 +139,27 @@ class PeekabootAutoConfigurationTest {
                                     .rootSpan()
                                     .issues())
                             .isEmpty();
+                });
+    }
+
+    /** The lowest threshold that can mean a repeat; the configured value has to reach the detector. */
+    @Test
+    void raisesRepeatedQueryAtTheThresholdBoundUnderTracing() {
+        tracingRunner()
+                .withPropertyValues("peekaboot.tracing.repeated-query-threshold=2")
+                .run(context -> {
+                    TraceStore store = context.getBean(TraceStore.class);
+                    TraceFixtures.addRootSpan(store);
+                    store.addSpan(TraceFixtures.query("q1", "select * from t where id = 1"));
+                    store.addSpan(TraceFixtures.query("q2", "select * from t where id = 2"));
+
+                    assertThat(context.getBean(TraceInsightsService.class)
+                                    .getTraceInsights(TraceFixtures.TRACE_ID)
+                                    .orElseThrow()
+                                    .rootSpan()
+                                    .issues())
+                            .extracting(TraceIssue::type)
+                            .containsExactly(IssueType.REPEATED_QUERY);
                 });
     }
 

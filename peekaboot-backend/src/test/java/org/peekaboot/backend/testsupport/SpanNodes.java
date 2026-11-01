@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
-import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SqlStatement;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 
 /**
  * Builds already-mapped {@link SpanNode} fixtures for the stages after
@@ -36,7 +36,7 @@ public final class SpanNodes {
         private List<SpanNode> children = List.of();
         private Map<String, String> tags = Map.of();
         private List<SpanEvent> events = List.of();
-        private List<SpanIssue> issues = List.of();
+        private List<TraceIssue> issues = List.of();
         private SpanExceptionInfo exception;
         private SqlStatement statement;
         private Long rowCount;
@@ -91,8 +91,8 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder issues(List<SpanIssue> issues) {
-            this.issues = issues;
+        public Builder issues(List<? extends TraceIssue> issues) {
+            this.issues = List.copyOf(issues);
             return this;
         }
 

@@ -15,4 +15,5 @@ public record SpanIssue(
         long value,
         long threshold,
         IssueUnit unit,
-        String message) {}
+        String message)
+        implements TraceIssue {}

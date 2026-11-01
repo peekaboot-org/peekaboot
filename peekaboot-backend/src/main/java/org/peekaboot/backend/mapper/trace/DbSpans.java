@@ -84,6 +84,11 @@ final class DbSpans {
         }
     }
 
+    /** datasource-micrometer's connection observation, named by {@code JdbcObservationDocumentation.CONNECTION}. */
+    static boolean isConnection(String name, Map<String, String> tags) {
+        return "connection".equals(name) && tags != null && Tags.anyKeyStartsWith(tags, "jdbc.datasource.");
+    }
+
     private static boolean isQuery(Span.Kind kind, Map<String, String> tags) {
         return kind == Span.Kind.CLIENT && tags != null && Tags.anyKeyStartsWith(tags, "db.", "jdbc.query");
     }

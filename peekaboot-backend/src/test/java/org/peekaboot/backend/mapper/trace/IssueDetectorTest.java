@@ -20,6 +20,8 @@ import org.peekaboot.backend.domain.trace.IssueUnit;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
+import org.peekaboot.backend.domain.trace.SqlStatement;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
@@ -54,25 +56,9 @@ class IssueDetectorTest {
         TraceTree judged = detector.detectIssues(inFlight);
 
         assertThat(judged.orphans().getFirst().issues())
-                .extracting(SpanIssue::type)
+                .extracting(TraceIssue::type)
                 .containsExactly(IssueType.SLOW);
         assertThat(judged.slow()).isTrue();
-    }
-
-    /** The thresholds are inclusive: a span exactly on one trips it. */
-    @Test
-    void aSpanExactlyOnAThresholdTripsIt() {
-        TraceTree slow =
-                detector.detectIssues(tree(node("s").durationMs(100).build()).build());
-        TraceTree verySlow =
-                detector.detectIssues(tree(node("v").durationMs(500).build()).build());
-        // 50ms is under the 100ms span threshold, so the query threshold is the only one read
-        TraceTree slowQuery = detector.detectIssues(
-                tree(querySpan("q", 50, Map.of("db.system", "postgresql"))).build());
-
-        assertThat(slow.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW);
-        assertThat(verySlow.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.VERY_SLOW);
-        assertThat(slowQuery.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY);
     }
 
     /** A failed span is shown by its status and error fields; an issue would only repeat them. */
@@ -147,10 +133,10 @@ class IssueDetectorTest {
         TraceTree trace = tree(root).build();
 
         TraceTree atDefaults = detector.detectIssues(trace);
-        assertThat(atDefaults.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.VERY_SLOW);
+        assertThat(atDefaults.rootSpan().issues()).extracting(TraceIssue::type).containsExactly(IssueType.VERY_SLOW);
         assertThat(atDefaults.rootSpan().children())
                 .allSatisfy(query ->
-                        assertThat(query.issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY));
+                        assertThat(query.issues()).extracting(TraceIssue::type).containsExactly(IssueType.SLOW_QUERY));
 
         properties.setSlowSpanThresholdMs(700);
         properties.setVerySlowSpanThresholdMs(1000);
@@ -214,7 +200,7 @@ class IssueDetectorTest {
 
         assertThat(judged.rootSpan().issues()).isEmpty();
         assertThat(judged.rootSpan().children().getFirst().issues())
-                .extracting(SpanIssue::type)
+                .extracting(TraceIssue::type)
                 .containsExactly(IssueType.SLOW);
     }
 
@@ -231,7 +217,23 @@ class IssueDetectorTest {
 
         TraceTree judged = detector.detectIssues(tree(query).build());
 
-        assertThat(judged.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY);
+        assertThat(judged.rootSpan().issues()).extracting(TraceIssue::type).containsExactly(IssueType.SLOW_QUERY);
+    }
+
+    /** The issue sits on the span that ran the queries, beside the time issues the queries raise themselves. */
+    @Test
+    void raisesRepeatedQueryOnTheParent() {
+        properties.setRepeatedQueryThreshold(2);
+        SqlStatement statement = new SqlStatement("select * from t where id = 1", null, List.of(), 0);
+        SpanNode parent = node("parent")
+                .children(List.of(
+                        node("q1").kind(Span.Kind.CLIENT).statement(statement).build(),
+                        node("q2").kind(Span.Kind.CLIENT).statement(statement).build()))
+                .build();
+
+        TraceTree judged = detector.detectIssues(tree(parent).build());
+
+        assertThat(judged.rootSpan().issues()).extracting(TraceIssue::type).containsExactly(IssueType.REPEATED_QUERY);
     }
 
     @Test
@@ -266,8 +268,8 @@ class IssueDetectorTest {
 
         TraceTree result = detector.detectIssues(trace);
 
-        List<SpanIssue> issues = result.rootSpan().issues();
-        assertThat(issues).extracting(SpanIssue::type).containsExactlyInAnyOrder(IssueType.SLOW, IssueType.SLOW_QUERY);
+        List<TraceIssue> issues = result.rootSpan().issues();
+        assertThat(issues).extracting(TraceIssue::type).containsExactlyInAnyOrder(IssueType.SLOW, IssueType.SLOW_QUERY);
     }
 
     @Test

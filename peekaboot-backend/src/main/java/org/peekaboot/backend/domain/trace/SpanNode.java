@@ -22,7 +22,7 @@ public record SpanNode(
         List<SpanNode> children,
         Map<String, String> tags,
         List<SpanEvent> events,
-        List<SpanIssue> issues,
+        List<TraceIssue> issues,
         @Nullable SpanExceptionInfo exception,
         SqlStatement statement,
         Long rowCount,
@@ -37,7 +37,7 @@ public record SpanNode(
     }
 
     /** The issues judged for this span, with the children the same judgement already ran over. */
-    public SpanNode withIssues(List<SpanIssue> newIssues, List<SpanNode> newChildren) {
+    public SpanNode withIssues(List<TraceIssue> newIssues, List<SpanNode> newChildren) {
         return new SpanNode(
                 spanId,
                 name,

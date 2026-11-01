@@ -31,7 +31,12 @@ final class TraceFixtures {
 
     /** A JDBC query below the root span, running {@code statement}. */
     static SpanData query(String statement) {
-        return span("q1", ROOT_SPAN_ID, "SELECT", Span.Kind.CLIENT, 10, 10, Map.of("db.query.text", statement));
+        return query("q1", statement);
+    }
+
+    /** A JDBC query below the root span with its own {@code spanId}, running {@code statement}. */
+    static SpanData query(String spanId, String statement) {
+        return span(spanId, ROOT_SPAN_ID, "SELECT", Span.Kind.CLIENT, 10, 10, Map.of("db.query.text", statement));
     }
 
     /** A root span of no particular kind, lasting {@code durationMs}. */

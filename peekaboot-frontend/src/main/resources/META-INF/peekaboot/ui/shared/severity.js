@@ -44,9 +44,15 @@ const ISSUE_SEVERITY_SUFFIXES = Object.freeze({
 
 export const ISSUE_SEVERITIES = Object.keys(ISSUE_SEVERITY_SUFFIXES);
 
-/** The worst latency severity among a span's issues - the backend's own verdict on that span, read off each issue's severity. */
+/**
+ * The worst latency severity among a span's issues, read off each issue's severity. Only an issue
+ * measured in milliseconds colours a duration; a repeated query's count says nothing about how
+ * long the span took.
+ */
 export function issueSeverity(issues) {
-    const severities = (issues || []).map(issue => ISSUE_SEVERITY_SUFFIXES[issue.severity] || '');
+    const severities = (issues || [])
+        .filter(issue => issue.unit === 'ms')
+        .map(issue => ISSUE_SEVERITY_SUFFIXES[issue.severity] || '');
     if (severities.includes('very-slow')) return 'very-slow';
     if (severities.includes('slow')) return 'slow';
     return '';

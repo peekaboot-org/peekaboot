@@ -79,6 +79,35 @@ class OrderTraceCaptureIT extends TestingAppITBase {
     }
 
     /**
+     * The orders page loads each order's lines one query at a time, outside a transaction. Each query
+     * opens a connection of its own, and datasource-micrometer records the connection span beside the
+     * query, both under the handler span the loop ran in. The issue lands on that span, once per
+     * repeated statement.
+     */
+    @Test
+    void theOrdersPagesNPlusOneIsARepeatedQuery() {
+        String traceId = traces.get("/orders");
+
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        List<JsonNode> repeated = SpanTree.issuesOfType(trace, "REPEATED_QUERY");
+        assertThat(repeated)
+                .as("findByOrderId, countByOrderId and existsById each run once per seeded order")
+                .hasSizeGreaterThanOrEqualTo(QUERIES_PER_ORDER);
+        JsonNode lines = repeated.stream()
+                .filter(issue -> issue.path("statement").asString("").contains("order_line"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no repeated order_line statement among " + repeated));
+        assertThat(lines.path("count").asInt()).isGreaterThanOrEqualTo(SEEDED_ORDERS);
+        assertThat(lines.path("spanIds")).hasSize(lines.path("count").asInt());
+        assertThat(lines.path("statement").asString()).doesNotContainPattern("= \\d");
+        assertThat(SpanTree.spanWithId(trace, lines.path("spanId").asString())
+                        .path("name")
+                        .asString())
+                .isNotEqualTo("connection");
+    }
+
+    /**
      * The other assertions against {@code /orders} check {@code summary.queries.count},
      * which passes whether {@code QueryExtractor.findSql} reads {@code db.query.text} or
      * merely falls back to a SQL-shaped span name - both produce a non-zero count. This

@@ -306,18 +306,28 @@ class SharedModuleIT extends PlaywrightTestBase {
                         "slowQueryThresholdMs");
     }
 
-    /** The tier is read off the backend's own severity word, so an issue type the frontend has never heard of still colours. */
+    /**
+     * The tier is read off the backend's own severity word, so an issue type the frontend has never
+     * heard of still colours, as long as it is measured in milliseconds. A count or a status says
+     * nothing about how long the span took.
+     */
     @Test
-    void issueSeverityReportsTheWorstOfASpansIssues() {
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW_QUERY', severity: 'warning'}])"))
+    void issueSeverityReportsTheWorstOfASpansLatencyIssues() {
+        assertThat(evalModule(
+                        "severity.js", "m.issueSeverity([{type: 'SLOW_QUERY', severity: 'warning', unit: 'ms'}])"))
                 .isEqualTo("slow");
         assertThat(
                         evalModule(
                                 "severity.js",
-                                "m.issueSeverity([{type: 'SLOW', severity: 'warning'}, {type: 'VERY_SLOW', severity: 'error'}])"))
+                                "m.issueSeverity([{type: 'SLOW', severity: 'warning', unit: 'ms'}, {type: 'VERY_SLOW', severity: 'error', unit: 'ms'}])"))
                 .isEqualTo("very-slow");
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'NOT_YET_INVENTED', severity: 'error'}])"))
+        assertThat(evalModule(
+                        "severity.js", "m.issueSeverity([{type: 'NOT_YET_INVENTED', severity: 'error', unit: 'ms'}])"))
                 .isEqualTo("very-slow");
+        assertThat(evalModule(
+                        "severity.js",
+                        "m.issueSeverity([{type: 'REPEATED_QUERY', severity: 'warning', unit: 'queries'}])"))
+                .isEqualTo("");
         assertThat(evalModule("severity.js", "m.issueSeverity([])")).isEqualTo("");
         assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
     }

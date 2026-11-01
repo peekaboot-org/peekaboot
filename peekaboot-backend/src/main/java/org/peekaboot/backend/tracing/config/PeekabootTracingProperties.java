@@ -38,6 +38,9 @@ public class PeekabootTracingProperties {
     /** A database query span's duration in milliseconds at or above which it gets the SLOW_QUERY issue. */
     private long slowQueryThresholdMs = 50;
 
+    /** Identical statements, literals ignored, among a span's direct children that give the span the REPEATED_QUERY issue; at least 2. */
+    private int repeatedQueryThreshold = 5;
+
     /** Maximum correlated log entries retained per trace. */
     private int maxLogsPerTrace = 500;
 
@@ -127,6 +130,19 @@ public class PeekabootTracingProperties {
 
     public void setSlowQueryThresholdMs(long slowQueryThresholdMs) {
         this.slowQueryThresholdMs = slowQueryThresholdMs;
+    }
+
+    public int getRepeatedQueryThreshold() {
+        return repeatedQueryThreshold;
+    }
+
+    /** Rejected below 2 while binding, because at 1 every span that ran a query would report it as repeated. */
+    public void setRepeatedQueryThreshold(int repeatedQueryThreshold) {
+        if (repeatedQueryThreshold < 2) {
+            throw new IllegalArgumentException("peekaboot.tracing.repeated-query-threshold must be at least 2 ("
+                    + repeatedQueryThreshold + " configured)");
+        }
+        this.repeatedQueryThreshold = repeatedQueryThreshold;
     }
 
     public int getMaxLogsPerTrace() {

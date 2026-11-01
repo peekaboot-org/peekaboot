@@ -217,6 +217,16 @@ class DbSpansTest {
                 .isTrue();
     }
 
+    /** datasource-micrometer's other spans carry jdbc.datasource.* too, so the name is what singles a connection out. */
+    @Test
+    void aConnectionIsTheNamedSpanWithDatasourceTags() {
+        assertThat(DbSpans.isConnection("connection", Map.of("jdbc.datasource.name", "ds")))
+                .isTrue();
+        assertThat(DbSpans.isConnection("query", Map.of("jdbc.datasource.name", "ds")))
+                .isFalse();
+        assertThat(DbSpans.isConnection("connection", Map.of())).isFalse();
+    }
+
     private static org.peekaboot.backend.tracing.event.SpanData clientSpan(Map<String, String> tags) {
         return span("s1").kind(Span.Kind.CLIENT).tags(tags).build();
     }

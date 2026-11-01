@@ -106,15 +106,19 @@ class or message. An error-level log alone does not: it only puts the trace in t
 bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Issue
-`SpanIssue(type, severity, spanId, value, threshold, unit, message)`, held in `SpanNode.issues`.
-`IssueType`'s constants are `SLOW`, `VERY_SLOW` and `SLOW_QUERY`; `IssueSeverity` has two, and
-it and `IssueUnit` serialise lowercase through `@JsonValue`. The UI colours a span's duration by
-`severity` alone (`severity.js`'s `issueSeverity`), never by `type`.
+`SpanNode.issues` holds `TraceIssue`s. Each is a `SpanIssue(type, severity, spanId, value,
+threshold, unit, message)` or a `RepeatedQueryIssue`, which adds `statement`, `count`, `totalMs`
+and `spanIds`. `IssueType`'s constants are `SLOW`, `VERY_SLOW`, `SLOW_QUERY` and
+`REPEATED_QUERY`; `IssueSeverity` has two, and it and `IssueUnit` serialise lowercase through
+`@JsonValue`. The UI colours a span's duration by `severity` alone (`severity.js`'s
+`issueSeverity`), never by `type`, and only for issues with `unit: ms`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
 `issues` empty on every node it builds. SLOW and VERY_SLOW judge `selfMs`, so a slow child
 marks only itself. `selfMs` reads high on a trace whose span cap dropped some children, since
-a dropped child covers nothing. Firing conditions:
+a dropped child covers nothing. REPEATED_QUERY compares statements after `SqlNormalizer` and
+groups queries by their direct parent span. datasource-micrometer records a JDBC connection
+span beside its query, so an N+1 outside a transaction still shares one parent. Firing conditions:
 [issues](https://www.peekaboot.org/docs/traces/#issues). Thresholds and property names:
 [peekaboot.tracing](https://www.peekaboot.org/docs/configuration/#issue-thresholds).
 
@@ -141,7 +145,7 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | `TraceTree.truncated` | **TRUNCATED** badge | Set when the per-trace span cap dropped a real span. |
 | `HttpRequest.Controller.className` | `class` on the wire | Renamed by `@JsonProperty("class")`. |
 | `IssueSeverity.WARNING`, `.ERROR` | `warning`, `error` | Lowercased by `@JsonValue`. |
-| `IssueUnit.MS` | `ms` | Lowercased by `@JsonValue`. |
+| `IssueUnit.MS`, `.QUERIES` | `ms`, `queries` | Lowercased by `@JsonValue`. |
 | `RootActionType` constant names | Title-case labels and icons | Held only in `shared/root-actions.js`. |
 | tab module id `scheduled-tasks` | payload key `scheduledTasks` | Two spellings of the same tab, one in the hash, one in `ActuatorInsightsResponse`. |
 

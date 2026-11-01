@@ -23,9 +23,9 @@ import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.HttpRequest;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
@@ -170,7 +170,7 @@ class TraceInsightsServiceTest {
         addTrace("trace1", 200, false);
         TraceTree result = service.getTraceInsights("trace1").orElseThrow();
         assertThat(result.rootSpan().issues()).isNotEmpty();
-        assertThat(result.rootSpan().issues()).extracting(SpanIssue::type).contains(IssueType.SLOW);
+        assertThat(result.rootSpan().issues()).extracting(TraceIssue::type).contains(IssueType.SLOW);
     }
 
     @Test
