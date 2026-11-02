@@ -35,6 +35,7 @@ public class InMemoryTraceStore implements TraceStore {
     private final Map<TraceBucket, Map<String, ListedTrace>> buckets = new EnumMap<>(TraceBucket.class);
     private final AtomicLong newestSpanOrder = new AtomicLong();
     private final AtomicLong listingSequence = new AtomicLong();
+    private final AtomicLong logSequence = new AtomicLong();
 
     public InMemoryTraceStore(PeekabootTracingProperties properties) {
         this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
@@ -66,15 +67,16 @@ public class InMemoryTraceStore implements TraceStore {
     /** A line without a trace id goes to the untraced ring, and into no bucket whatever its level. */
     @Override
     public void addLog(LogCapturedEvent log) {
-        if (log.traceId() == null) {
-            untracedLogs.add(log);
+        LogCapturedEvent stored = log.withSequence(logSequence.incrementAndGet());
+        if (stored.traceId() == null) {
+            untracedLogs.add(stored);
             return;
         }
-        TraceDataBundle bundle = resolveBundle(log.traceId());
-        bundle.addLog(log);
+        TraceDataBundle bundle = resolveBundle(stored.traceId());
+        bundle.addLog(stored);
         // logs never affect slow classification and can only ever add a trace to the
         // Errors bucket, never remove it, so a full classify() pass is unnecessary here.
-        if (log.isError()) {
+        if (stored.isError()) {
             listIn(TraceBucket.ERRORS, bundle);
         }
     }
@@ -152,6 +154,18 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public List<LogCapturedEvent> untracedLogs() {
         return untracedLogs.logs();
+    }
+
+    /** Each bucket is read under its own lock, so a trace moving between buckets meanwhile is named once or not at all. */
+    @Override
+    public List<TraceDataBundle> storedTraces() {
+        Map<String, TraceDataBundle> distinct = new LinkedHashMap<>();
+        for (Map<String, ListedTrace> bucket : buckets.values()) {
+            for (ListedTrace listed : newestFirst(bucket, Integer.MAX_VALUE)) {
+                distinct.putIfAbsent(listed.bundle().traceId(), listed.bundle());
+            }
+        }
+        return List.copyOf(distinct.values());
     }
 
     private List<ListedTrace> newestFirst(Map<String, ListedTrace> bucket, int limit) {

@@ -3,6 +3,7 @@ package org.peekaboot.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -48,7 +49,7 @@ class CursorsTest {
                 "dC4xMjM0NTY3ODkwMTIzNDU2Nzg5LjEuMQ"
             })
     void refusesWhatTheListingNeverHandedOut(String cursor) {
-        assertRefused(cursor);
+        assertRefused(cursor, () -> Cursors.row(cursor));
     }
 
     /**
@@ -59,11 +60,33 @@ class CursorsTest {
     @ParameterizedTest
     @ValueSource(strings = {"dC4tNS4tNS4tNQ", "dC4wMS4tMC4tNw", "dC4wMS4xLi0x", " dC4xLjEuLTE", "dC4xLjEuLTF"})
     void refusesAPositionTheListingNeverWrites(String cursor) {
-        assertRefused(cursor);
+        assertRefused(cursor, () -> Cursors.row(cursor));
     }
 
-    private static void assertRefused(String cursor) {
-        assertThatThrownBy(() -> Cursors.row(cursor)).isInstanceOfSatisfying(ApiProblemException.class, e -> {
+    @Test
+    void aLogCursorReadsBackAsTheSequenceItNamed() {
+        assertThat(Cursors.ofLog(7)).isEqualTo("bC43");
+        assertThat(Cursors.log(Cursors.ofLog(7))).isEqualTo(7L);
+        assertThat(Cursors.log(" ")).isNull();
+    }
+
+    @Test
+    void eachEndpointRefusesTheOthersCursor() {
+        String rowCursor = Cursors.ofRow(new RowPosition(1, 1, RowPosition.WHOLE_TRACE));
+
+        assertThatThrownBy(() -> Cursors.log(rowCursor)).isInstanceOf(ApiProblemException.class);
+        assertThatThrownBy(() -> Cursors.row(Cursors.ofLog(7))).isInstanceOf(ApiProblemException.class);
+    }
+
+    /** A negative sequence, a padded number, a negative zero, two numbers, none, a letter, and a 19-digit number, past the cap. */
+    @ParameterizedTest
+    @ValueSource(strings = {"bC4tMQ", "bC4wNw", "bC4tMA", "bC43LjE", "bC4", "bC5h", "bC4xMjM0NTY3ODkwMTIzNDU2Nzg5"})
+    void refusesASequenceTheSearchNeverWrites(String cursor) {
+        assertRefused(cursor, () -> Cursors.log(cursor));
+    }
+
+    private static void assertRefused(String cursor, ThrowingCallable read) {
+        assertThatThrownBy(read).isInstanceOfSatisfying(ApiProblemException.class, e -> {
             assertThat(e.problem().parameter()).isEqualTo("cursor");
             assertThat(e.problem().detail())
                     .isEqualTo("Unknown cursor '" + cursor

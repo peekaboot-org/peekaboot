@@ -6,6 +6,7 @@ import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.PeekabootWebConfig;
+import org.peekaboot.backend.controller.LogController;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.controller.TraceController;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
@@ -17,6 +18,7 @@ import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.problem.ApiProblemHandler;
 import org.peekaboot.backend.service.ActuatorInsightsService;
+import org.peekaboot.backend.service.LogSearchService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
@@ -137,6 +139,20 @@ public class PeekabootAutoConfiguration {
     @ConditionalOnMissingBean
     public TraceController peekabootTraceController(TraceInsightsService traceInsightsService) {
         return new TraceController(traceInsightsService);
+    }
+
+    /** The trace store is absent while {@code peekaboot.tracing.enabled} is false; the search then finds nothing. */
+    @Bean
+    @ConditionalOnMissingBean
+    public LogSearchService peekabootLogSearchService(
+            ObjectProvider<TraceStore> traceStore, MaskingEngine maskingEngine, StackTraceRules stackTraceRules) {
+        return new LogSearchService(traceStore.getIfAvailable(), maskingEngine, stackTraceRules);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LogController peekabootLogController(LogSearchService logSearchService) {
+        return new LogController(logSearchService);
     }
 
     @Bean

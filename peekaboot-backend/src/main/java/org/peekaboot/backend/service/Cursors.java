@@ -7,13 +7,16 @@ import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.problem.ApiProblemException;
 
 /**
- * The {@code next} values the trace listing hands out and reads back as {@code cursor}. A cursor
+ * The {@code next} values the listing endpoints hand out and read back as {@code cursor}. A cursor
  * names the last row a page served by its position in the listing, so rows that arrive or leave
- * between two pages shift no other row. Opaque on the wire: base64url of a kind letter and numbers.
+ * between two pages shift no other row. A log search cursor names the last line a page served by
+ * the store's {@code sequence} for it. On the wire it is base64url of a kind letter and numbers,
+ * opaque to clients.
  */
 final class Cursors {
 
     private static final String ROW = "t";
+    private static final String LOG = "l";
     private static final String SEPARATOR = ".";
     private static final Pattern BASE64URL = Pattern.compile("[A-Za-z0-9_-]+");
     private static final Pattern NUMBER = Pattern.compile("-?\\d{1,18}");
@@ -35,6 +38,23 @@ final class Cursors {
             throw refused(cursor);
         }
         return new RowPosition(values[0], values[1], values[2]);
+    }
+
+    static String ofLog(long sequence) {
+        return encode(LOG, sequence);
+    }
+
+    /** Null where the request sent none; refuses a value the log search did not issue. */
+    @Nullable
+    static Long log(@Nullable String cursor) {
+        if (cursor == null || cursor.isBlank()) {
+            return null;
+        }
+        long sequence = decode(cursor, LOG, 1)[0];
+        if (sequence < 0) {
+            throw refused(cursor);
+        }
+        return sequence;
     }
 
     private static String encode(String kind, long... values) {

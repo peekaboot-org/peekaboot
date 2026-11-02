@@ -188,7 +188,7 @@ Everything runs inside the host application's own process and on its own event b
                                        insertion-ordered maps, the All/Errors/Slow buckets
                                                                    │
                                                                    ▼
-                                       PeekabootController, TraceController: /peekaboot/api/*
+                                       PeekabootController, TraceController, LogController: /peekaboot/api/*
 ```
 
 ## peekaboot-backend
@@ -200,7 +200,7 @@ org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces)
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces), LogController (log search)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
@@ -208,6 +208,7 @@ org.peekaboot.backend/
 │   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
 │   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
+│   ├── log/                # LogSearchParameters, LogSearchResponse: the log search's request and page
 │   ├── property/           # PropertyGroup, Property: the one shape the Environment and Config sections share
 │   └── trace/              # TraceResource, TraceSummary, TraceDetail, TraceListResponse, TraceTree, SpanNode, HttpExchange, IssueType, ...
 ├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
@@ -225,7 +226,7 @@ org.peekaboot.backend/
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
 │                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
-├── service/                # ActuatorInsightsService, TraceInsightsService, ...
+├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, ...
 ├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page, the Logs tab and a span's details panel fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
 ├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
@@ -448,13 +449,14 @@ dashboard gets nothing from the guard. An include cannot set the status, so the 
 response keeps its own, and a body would land inside the including page.
 
 Every listing parameter arrives as written, bound into a record of strings
-(`TraceListParameters`), and the service reads it through `RequestParameters`. An enumerated
-value it does not know is refused with the accepted values, and a number outside its range with
-that range, where a default or a clamp would answer a typo with the wrong list.
+(`TraceListParameters`, `LogSearchParameters`), and the service reads it through
+`RequestParameters`. An enumerated value it does not know is refused with the accepted values,
+and a number outside its range with that range, where a default or a clamp would answer a typo
+with the wrong list.
 
 A listing parameter sent more than once is refused before any value is read, so `limit=1&limit=2`
-is a 400 naming `limit`. `TraceController` turns off Spring's fallback to a same-named request
-header, so only the query string sets a listing parameter. Both rules live in
+is a 400 naming `limit`. `TraceController` and `LogController` turn off Spring's fallback to a
+same-named request header, so only the query string sets a listing parameter. Both rules live in
 `QueryParameterBinding`.
 
 ### In-Process Actuator Invocation
@@ -1328,6 +1330,14 @@ a bucket, between a read of the buckets and a read of the ring. With several con
 as in a test suite, every context's appender hangs off the one root logger, so each context's
 ring also holds the other contexts' untraced lines.
 
+`GET /peekaboot/api/logs` searches every line the store holds (`LogSearchService`). Its
+candidates are each bundle any bucket lists (`TraceStore.storedTraces()`, every bucket read under
+its own lock), one `capturedLogs()` read per bundle with one span resolver, and one read of the
+untraced ring. The store numbers each line it keeps (`LogCapturedEvent.sequence`, one count
+across traces and the ring), and that number orders the search newest first and is what its
+cursor names. Each candidate is mapped and masked once, by the same `TraceLogMapper.map` a
+trace's logs go through, and only until the page is full, since `q` reads the masked text.
+
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot does
 that on the first start in a JVM and on the first start after any application closed or failed
 to start. From `ApplicationStartingEvent` it denies every log event JVM-wide, then resets the
@@ -1686,6 +1696,10 @@ TraceResource                    # GET /peekaboot/api/traces/{traceId}, and one 
     ├── logs: List<TraceLog>
     ├── queries: List<QueryInfo> # each with its statement
     └── httpExchange: HttpExchange   # null on a subtree row
+
+LogSearchResponse                # GET /peekaboot/api/logs
+├── logs: List<TraceLog>         # newest first, in the store's sequence; traceId and spanId null on an untraced line
+└── next                         # the cursor for the following page; null on the last page
 ```
 
 What the store holds:

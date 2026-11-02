@@ -2,7 +2,7 @@ package org.peekaboot.backend.text;
 
 import java.util.Locale;
 
-/** Lenient lookup of an enum constant by its name, for values read from an actuator response. */
+/** Lenient lookup of an enum constant by its name, for values read from an actuator response or a captured log line. */
 public final class EnumNames {
 
     private EnumNames() {}

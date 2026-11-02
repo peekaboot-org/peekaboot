@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.backend.controller.LogController;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.controller.TraceController;
 import org.peekaboot.backend.domain.features.Features;
@@ -19,6 +20,7 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.service.LogSearchService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -193,6 +195,7 @@ class PeekabootAutoConfigurationTest {
             // controller/service/mapper graph, not just the properties beans.
             assertThat(context).hasSingleBean(PeekabootController.class);
             assertThat(context).hasSingleBean(TraceController.class);
+            assertThat(context).hasSingleBean(LogController.class);
         });
     }
 
@@ -231,12 +234,31 @@ class PeekabootAutoConfigurationTest {
                 });
     }
 
+    /**
+     * Component scanning names a host app's own {@code LogController} {@code logController} and its
+     * {@code LogSearchService} {@code logSearchService}, so Peekaboot's beans take other names.
+     */
+    @Test
+    void startsBesideHostBeansNamedLogControllerAndLogSearchService() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .withUserConfiguration(HostLogSearchConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("logController")).isInstanceOf(HostLogController.class);
+                    assertThat(context.getBean("logSearchService")).isInstanceOf(HostLogSearchService.class);
+                    assertThat(context).hasSingleBean(LogController.class);
+                    assertThat(context).hasSingleBean(LogSearchService.class);
+                });
+    }
+
     @Test
     void doesNotRegisterBeansWhenPeekabootDisabled() {
         contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(PeekabootController.class);
             assertThat(context).doesNotHaveBean(TraceController.class);
+            assertThat(context).doesNotHaveBean(LogController.class);
             assertThat(context).doesNotHaveBean(PeekabootProperties.class);
         });
     }
@@ -253,6 +275,7 @@ class PeekabootAutoConfigurationTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
                     assertThat(context).doesNotHaveBean(TraceController.class);
+                    assertThat(context).doesNotHaveBean(LogController.class);
                     assertThat(context).doesNotHaveBean(PeekabootProperties.class);
                 });
     }
@@ -276,6 +299,7 @@ class PeekabootAutoConfigurationTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
                     assertThat(context).doesNotHaveBean(TraceController.class);
+                    assertThat(context).doesNotHaveBean(LogController.class);
                     assertThat(context).doesNotHaveBean(PeekabootProperties.class);
                 });
     }
@@ -289,6 +313,7 @@ class PeekabootAutoConfigurationTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
                     assertThat(context).doesNotHaveBean(TraceController.class);
+                    assertThat(context).doesNotHaveBean(LogController.class);
                 });
     }
 
@@ -409,6 +434,24 @@ class PeekabootAutoConfigurationTest {
     }
 
     static class HostTraceController {}
+
+    @Configuration(proxyBeanMethods = false)
+    static class HostLogSearchConfig {
+
+        @Bean
+        HostLogController logController() {
+            return new HostLogController();
+        }
+
+        @Bean
+        HostLogSearchService logSearchService() {
+            return new HostLogSearchService();
+        }
+    }
+
+    static class HostLogController {}
+
+    static class HostLogSearchService {}
 
     private static WebApplicationContextRunner tracingRunner() {
         return new WebApplicationContextRunner()

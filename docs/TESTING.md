@@ -112,6 +112,7 @@ written to `TestLogger` on thread `main` unless `from(...)` or `onThread(...)` s
 auto-configuration builds it, from `PeekabootTracingProperties`.
 `TraceListings.listing()` builds the listing's `TraceListParameters` the way a request sends
 them, every parameter absent unless a test names it.
+`LogSearches.search()` builds the log search's `LogSearchParameters` the same way.
 `LifecycleStarts.start(epochMs)` builds the START event the lifecycle tests replay; a stop
 is `LifecycleEvent.stop`.
 `SeriesDefs.value(id, meter)` is the plain value series the collector tests share.

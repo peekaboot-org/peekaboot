@@ -13,17 +13,11 @@ import org.peekaboot.backend.tracing.store.TraceBucket;
  */
 record TraceListQuery(int limit, @Nullable RowPosition after, TraceBucket bucket, TraceFilter filter, TraceView view) {
 
-    static final int DEFAULT_LIMIT = 100;
-
-    /** Bounds one response's size; a client pages past it with the cursor. */
-    static final int MAX_LIMIT = 10_000;
-
     static TraceListQuery of(TraceListParameters parameters) {
-        Integer limit = RequestParameters.integer("limit", parameters.limit(), 1, MAX_LIMIT);
         String bucket = RequestParameters.text(parameters.bucket());
         String view = RequestParameters.text(parameters.view());
         return new TraceListQuery(
-                limit != null ? limit : DEFAULT_LIMIT,
+                PageLimit.of(parameters.limit()),
                 Cursors.row(parameters.cursor()),
                 bucket == null ? TraceBucket.ALL : RequestParameters.enumValue("bucket", TraceBucket.class, bucket),
                 TraceFilter.of(parameters),

@@ -146,7 +146,8 @@ listing a trace. Definitions and thresholds:
 A captured log line whose MDC carried no trace id: written at startup, on a thread outside any
 trace, or after a request's trace ended (Tomcat's own error line). `InMemoryTraceStore` keeps the
 newest `peekaboot.tracing.max-untraced-logs` (1000) in an `UntracedLogRing` beside the buckets.
-They count in no bucket and fail no trace.
+They count in no bucket and fail no trace. The log search serves them with `traceId` and
+`spanId` null.
 
 ## Where the code and the UI use different words
 
@@ -254,7 +255,8 @@ what lets the bucket chips show `filtered / total`.
 
 ### Cursor
 The opaque `cursor` a listing endpoint reads and hands out as `next` (`Cursors`, base64url
-text). A trace listing cursor names the last served row's `RowPosition`; the next page lists what
+text). A log search cursor names the last served line's store `sequence`. A trace listing cursor
+names the last served row's `RowPosition`; the next page lists what
 sorts after it as the store stands then, so no older row repeats or goes missing. A request whose
 root ends while a client pages lists where its trace entered the bucket, which can be below a page
 already served. A cursor carries no filter: sent with other filters, it pages through what those
@@ -286,7 +288,8 @@ applicationFrames)` is one captured log event, correlated by the trace and span 
 MDC, and named by its logger and its thread. `stackTrace` is the captured throwable, null where there was none; `hiddenFrames` and
 `applicationFrames` are the line ranges folding marked in it. It appears once on the detail
 response, in `TraceDetail.logs`, its `spanId` resolved to the span that survived deduplication. A log
-with no span id belongs to no span.
+with no span id belongs to no span. The log search serves the same record in
+`LogSearchResponse.logs`, where an untraced line has `traceId` and `spanId` null.
 
 `QueryInfo(spanId, dbSystem, dataSourceName, durationMs, rowCount, statement)` is one query span.
 Its `statement` is the one its span carries as `SpanNode.statement`, null when the instrumentation

@@ -17,6 +17,8 @@ import org.jspecify.annotations.Nullable;
  *     frame, inside the substring an exclusion pattern matches against, so a jar path containing
  *     an excluded token can hide a frame. Capped at {@code PeekabootLogbackAppender}'s line limit,
  *     with a trailing marker where it was.
+ * @param sequence the order the store received it in, one count across every trace and the
+ *     untraced logs; 0 until the store keeps it
  */
 public record LogCapturedEvent(
         @Nullable String traceId,
@@ -26,7 +28,21 @@ public record LogCapturedEvent(
         String logger,
         String thread,
         String message,
-        @Nullable String stackTrace) {
+        @Nullable String stackTrace,
+        long sequence) {
+
+    /** A line as captured, before the store numbers it. */
+    public LogCapturedEvent(
+            @Nullable String traceId,
+            @Nullable String spanId,
+            Instant timestamp,
+            String level,
+            String logger,
+            String thread,
+            String message,
+            @Nullable String stackTrace) {
+        this(traceId, spanId, timestamp, level, logger, thread, message, stackTrace, 0);
+    }
 
     public boolean isError() {
         return "ERROR".equalsIgnoreCase(level);
@@ -34,5 +50,9 @@ public record LogCapturedEvent(
 
     public boolean isWarn() {
         return "WARN".equalsIgnoreCase(level);
+    }
+
+    public LogCapturedEvent withSequence(long storedAs) {
+        return new LogCapturedEvent(traceId, spanId, timestamp, level, logger, thread, message, stackTrace, storedAs);
     }
 }

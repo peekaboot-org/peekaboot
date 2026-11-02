@@ -24,7 +24,7 @@ public final class TraceLogMapper {
 
     private final WireStackTraces stackTraces;
 
-    TraceLogMapper(MaskingEngine maskingEngine, StackTraceRules stackTraceRules) {
+    public TraceLogMapper(MaskingEngine maskingEngine, StackTraceRules stackTraceRules) {
         this.maskingEngine = maskingEngine;
         this.stackTraces = new WireStackTraces(maskingEngine, stackTraceRules);
     }
@@ -33,7 +33,7 @@ public final class TraceLogMapper {
      * Resolves a log's MDC span id through {@code bundle}, each id once. A redirect can move while spans
      * arrive, so one row reads every log's span through one of these and its parts agree on it.
      */
-    static UnaryOperator<String> resolvingOnce(TraceDataBundle bundle) {
+    public static UnaryOperator<String> resolvingOnce(TraceDataBundle bundle) {
         Map<String, String> resolved = new HashMap<>();
         return spanId -> resolved.computeIfAbsent(spanId, bundle::resolveSpanId);
     }
@@ -43,7 +43,7 @@ public final class TraceLogMapper {
      * list it maps. {@code spanOf} is the row's {@link #resolvingOnce}.
      */
     List<TraceLog> map(UnaryOperator<String> spanOf, List<LogCapturedEvent> logs) {
-        return logs.stream().map(e -> toTraceLog(spanOf, e)).toList();
+        return logs.stream().map(e -> map(spanOf, e)).toList();
     }
 
     /**
@@ -85,9 +85,10 @@ public final class TraceLogMapper {
      * Folding happens here rather than at capture: the full trace stays on the event, and these
      * ranges are only the rendering hint the browser needs so it classifies nothing itself. The
      * message and trace are masked like a failed span's exception: either can echo the failing
-     * request's URL.
+     * request's URL. The log search maps each line it serves through here, so a line reads the
+     * same in its trace and in the search.
      */
-    private TraceLog toTraceLog(UnaryOperator<String> spanOf, LogCapturedEvent e) {
+    public TraceLog map(UnaryOperator<String> spanOf, LogCapturedEvent e) {
         WireStackTraces.WireStackTrace trace = stackTraces.of(e.stackTrace());
         return new TraceLog(
                 e.traceId(),

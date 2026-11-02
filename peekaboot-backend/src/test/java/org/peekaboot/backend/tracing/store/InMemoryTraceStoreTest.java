@@ -620,6 +620,37 @@ class InMemoryTraceStoreTest {
         assertThat(store.untracedLogs()).extracting(LogCapturedEvent::message).containsExactly("b", "c");
     }
 
+    /** One count across every trace and the untraced ring, in the order the store received the lines. */
+    @Test
+    void numbersEveryLineItKeepsInArrivalOrder() {
+        storage.addLog(log("t1").saying("a").build());
+        storage.addLog(untraced().saying("b").build());
+        storage.addLog(log("t2").saying("c").build());
+        storage.addLog(log("t1").saying("d").build());
+
+        assertThat(storage.getTrace("t1").orElseThrow().capturedLogs().logs())
+                .extracting(LogCapturedEvent::sequence)
+                .containsExactly(1L, 4L);
+        assertThat(storage.untracedLogs())
+                .extracting(LogCapturedEvent::sequence)
+                .containsExactly(2L);
+        assertThat(storage.getTrace("t2").orElseThrow().capturedLogs().logs())
+                .extracting(LogCapturedEvent::sequence)
+                .containsExactly(3L);
+    }
+
+    /** t3 sits in All and Errors and is named once. t1 and t0 left All; only Errors keeps t1 and only Slow keeps t0. */
+    @Test
+    void storedTracesNameEveryListedTraceOnce() {
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxTraces(2));
+        store.addSpan(span("t0-s").in("t0").at(START, Duration.ofMillis(1_500)).build());
+        store.addSpan(errorSpan("t1"));
+        store.addSpan(spanIn("t2", "s2"));
+        store.addSpan(errorSpan("t3"));
+
+        assertThat(store.storedTraces()).extracting(TraceDataBundle::traceId).containsExactly("t3", "t2", "t1", "t0");
+    }
+
     private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {
         return TraceStores.with(p -> p.setSlowTraceThresholdMs(slowTraceThresholdMs));
     }

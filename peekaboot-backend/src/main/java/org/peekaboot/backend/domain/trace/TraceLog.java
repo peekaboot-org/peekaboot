@@ -9,7 +9,7 @@ import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
  * One captured log line, with its throwable folded for rendering. A trace's logs and the log search
  * serve the same shape.
  *
- * @param traceId the trace it was written in
+ * @param traceId the trace it was written in; null for a line written outside any trace
  * @param spanId the span that survived folding; null outside a span
  * @param logger the name of the logger it was written to
  * @param thread the name of the thread that wrote it

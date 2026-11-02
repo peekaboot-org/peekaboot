@@ -43,7 +43,8 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
         String spanId = traceId != null ? mdc.get(SPAN_ID_KEY) : null;
         Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
         String level = event.getLevel().toString();
-        String message = event.getFormattedMessage();
+        // Logback formats a null pattern as a null message; every captured line carries one.
+        String message = Objects.requireNonNullElse(event.getFormattedMessage(), "");
         IThrowableProxy throwable = event.getThrowableProxy();
         String stackTrace =
                 throwable == null ? null : CapturedStackTraces.capLines(ThrowableProxyUtil.asString(throwable));

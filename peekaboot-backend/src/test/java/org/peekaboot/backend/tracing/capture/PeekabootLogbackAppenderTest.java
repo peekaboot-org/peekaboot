@@ -171,6 +171,16 @@ class PeekabootLogbackAppenderTest {
         assertThat(captured.getFirst().stackTrace()).isNull();
     }
 
+    /** Logback hands the appender a null message for a null pattern, with or without arguments. */
+    @Test
+    @DisplayName("captures a null message as an empty one")
+    void capturesANullMessageAsAnEmptyOne() {
+        logger.info((String) null);
+        logger.info((String) null, "x");
+
+        assertThat(captured).extracting(LogCapturedEvent::message).containsExactly("", "");
+    }
+
     @Test
     @DisplayName("passes an ordinary trace through untouched")
     void anOrdinaryTraceIsNotTruncated() {

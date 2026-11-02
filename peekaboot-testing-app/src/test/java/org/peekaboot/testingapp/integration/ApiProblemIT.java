@@ -35,6 +35,11 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/traces?minDurationMs=-1 | minDurationMs",
                 "/peekaboot/api/traces?since=yesterday | since",
                 "/peekaboot/api/traces?since=2026-11-01T10:00:00Z&until=2026-11-01T09:00:00Z | until",
+                "/peekaboot/api/logs?level=loud | level",
+                "/peekaboot/api/logs?limit=0 | limit",
+                "/peekaboot/api/logs?since=yesterday | since",
+                "/peekaboot/api/logs?cursor=dC4xLjEuLTE | cursor",
+                "/peekaboot/api/logs?q=a&q=b | q",
                 "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask",
                 "/peekaboot/api/insights/data?level=abc | level",
                 "/peekaboot/api/insights/data | level",
@@ -146,6 +151,13 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/traces?limit=50"
             })
     void theDashboardsOwnValuesAreAccepted(String path) {
+        assertThat(fetch(path).status()).isEqualTo(200);
+    }
+
+    /** The log search runs with no parameter at all, and reads a level in any case. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/peekaboot/api/logs", "/peekaboot/api/logs?level=Warn"})
+    void theLogSearchAcceptsItsOwnValues(String path) {
         assertThat(fetch(path).status()).isEqualTo(200);
     }
 
