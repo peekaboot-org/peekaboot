@@ -147,6 +147,23 @@ absorbed (`JournalFiles`), so a crash between writing the snapshot and starting 
 never replays that journal twice. A last line without a line break is what a crash mid-write
 leaves; it is skipped without a log line.
 
+At startup `TraceReplay` replays the snapshot and then the journal into the store through its own
+methods (`addSpan`, `addLog`, `setRequest`, `discard`), so buckets, eviction, the caps, the
+untraced ring and every number the store assigns come out as they did live. They come out in the
+order the writer received them, which for two inputs from two threads at once can differ from the
+order the store took them. Summaries and issues are computed by the code running now. Each run
+line begins a run (`TraceStore.beginRun`); one naming the run in progress continues it. The live
+run begins last, which ends the last restored run: its incomplete traces read `INTERRUPTED`, and
+every live span sorts after every restored one. The replay runs before the writer starts, on its
+thread. `RestoreGate` holds live inputs back meanwhile and applies them in arrival order once it
+is done. The gate holds writers only, so for the first moments after startup a reader sees the
+store partly restored. A trace from before the restart can answer 404, and a listing or a log
+search can miss it, until the replay reaches it.
+
+The files are a cache, so a restore says what was wrong with them once, at INFO: files of another
+schema version or with a damaged header (both deleted), the count of lines it could not read, or a
+file it could not read at all.
+
 ### API and dashboard
 
 `GET /peekaboot/api/lifecycle/events`, gated by `peekaboot.lifecycle.enabled`, serves the log
