@@ -242,7 +242,9 @@ org.peekaboot.backend/
 │   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
 │   ├── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
 │   │                       # TraceRun, AsyncMembership, Window, ListingRoots, ListedTrace, UntracedLogRing,
-│   │                       # SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
+│   │                       # SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener, TraceInput, TraceInputs
+│   ├── journal/            # The trace journal: JournalLine and JournalCodec (the line format), JournalFiles,
+│   │                       # JournalWriter, TraceReplay, RestoreGate, Checkpoint, TraceJournal (the bean)
 │   └── tags/               # The span-tag vocabulary capture, store and mappers share: AsyncTaskMarker,
 │                           # EventListenerMarker, QueryParameterTags (Peekaboot's own keys), HttpSpanTags,
 │                           # Tags (reading foreign conventions)
