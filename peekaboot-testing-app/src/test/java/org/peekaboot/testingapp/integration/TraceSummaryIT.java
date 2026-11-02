@@ -1,9 +1,11 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -79,6 +81,25 @@ class TraceSummaryIT extends TestingAppITBase {
                 .filter(log -> "ERROR".equals(log.path("level").asString()))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    /** The run a trace names is the one /api/lifecycle/runs lists as running: both read the same ready event. */
+    @Test
+    void aTraceNamesTheRunThatProducedIt() {
+        String traceId = traces.getAndAwaitComplete("/persons");
+        String running = await().until(
+                        () -> api.getJson("/peekaboot/api/lifecycle/runs")
+                                .path("runs")
+                                .valueStream()
+                                .filter(run -> run.path("running").asBoolean(false))
+                                .map(run -> run.path("startedAt").asString(""))
+                                .findFirst()
+                                .orElse(null),
+                        Objects::nonNull);
+
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
+
+        assertThat(trace.path("summary").path("run").asString("")).isEqualTo(running);
     }
 
     /** A handler that answers 503 without throwing fails its request all the same. */

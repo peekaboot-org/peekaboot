@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
+import java.time.Duration;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
@@ -11,16 +13,21 @@ import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.support.StaticApplicationContext;
 
 class TraceStoreEventListenerTest {
 
     private InMemoryTraceStore store;
     private TraceStoreEventListener listener;
+    private StaticApplicationContext ownContext;
 
     @BeforeEach
     void setUp() {
         store = TraceStores.withDefaults();
-        listener = new TraceStoreEventListener(store);
+        ownContext = new StaticApplicationContext();
+        listener = new TraceStoreEventListener(store, ownContext);
     }
 
     @Test
@@ -53,5 +60,29 @@ class TraceStoreEventListenerTest {
         listener.onTraceDiscarded(new TraceDiscardedEvent("trace1"));
 
         assertThat(store.getTrace("trace1")).isEmpty();
+    }
+
+    /** The run starts at the ready event's own timestamp, the instant the lifecycle log stamps it with. */
+    @Test
+    void theReadyEventOfItsOwnContextStartsTheRun() {
+        listener.onSpanData(new SpanDataEvent(span("span1").build()));
+        ApplicationReadyEvent ready =
+                new ApplicationReadyEvent(new SpringApplication(), new String[0], ownContext, Duration.ZERO);
+
+        listener.onApplicationReady(ready);
+
+        assertThat(store.getTrace("trace1").orElseThrow().snapshot().run())
+                .isEqualTo(Instant.ofEpochMilli(ready.getTimestamp()));
+    }
+
+    /** A child context's ready event reaches its parent's listeners too, and names another start. */
+    @Test
+    void anotherContextsReadyEventStartsNothing() {
+        listener.onSpanData(new SpanDataEvent(span("span1").build()));
+
+        listener.onApplicationReady(new ApplicationReadyEvent(
+                new SpringApplication(), new String[0], new StaticApplicationContext(), Duration.ZERO));
+
+        assertThat(store.getTrace("trace1").orElseThrow().snapshot().run()).isNull();
     }
 }

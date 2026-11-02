@@ -9,6 +9,8 @@ import org.peekaboot.backend.tracing.store.TraceBucket;
  * What an agent reads first about a trace, and what the Traces tab's row and the overlay header show.
  *
  * @param startTime null while no timed span has arrived
+ * @param run the start of the run that produced the trace, as {@code /api/lifecycle/runs} names it; null while that run has not
+ *     reported ready
  * @param request the root's HTTP request; null where the root is no HTTP request or has not arrived
  * @param buckets the Errors and Slow buckets listing the trace, in that order. All lists every trace and is never named
  * @param reasons why the trace failed or ran slow; see {@link TraceReason}
@@ -23,6 +25,7 @@ public record TraceSummary(
         @Nullable Instant startTime,
         long durationMs,
         boolean complete,
+        @Nullable Instant run,
         RootActionType rootActionType,
         @Nullable String rootOperation,
         @Nullable Request request,
@@ -42,6 +45,7 @@ public record TraceSummary(
                 startTime,
                 durationMs,
                 complete,
+                run,
                 rootActionType,
                 rootOperation,
                 request,

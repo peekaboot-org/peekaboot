@@ -7,6 +7,7 @@ import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 
 /** Servlet-only because everything that reads the store - the trace service, controller and filters - is. */
@@ -23,7 +24,8 @@ public class PeekabootTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TraceStoreEventListener traceStoreEventListener(TraceStore traceStore) {
-        return new TraceStoreEventListener(traceStore);
+    public TraceStoreEventListener traceStoreEventListener(
+            TraceStore traceStore, ApplicationContext applicationContext) {
+        return new TraceStoreEventListener(traceStore, applicationContext);
     }
 }

@@ -64,9 +64,11 @@ public final class TraceTrees {
         public TraceTree build() {
             return new TraceTree(
                     traceId,
+                    null,
                     Instant.EPOCH,
                     durationMs != null ? durationMs : (rootSpan == null ? 0L : rootSpan.durationMs()),
                     complete,
+                    false,
                     rootActionType,
                     rootSpan == null ? null : rootSpan.name(),
                     null,

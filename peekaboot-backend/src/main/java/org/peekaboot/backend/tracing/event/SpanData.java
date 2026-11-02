@@ -60,4 +60,27 @@ public record SpanData(
                 exception,
                 creationOrder);
     }
+
+    /**
+     * This span with its creation order raised by {@code base}, so it sorts after every span numbered up
+     * to {@code base}; itself where {@code base} is 0.
+     */
+    public SpanData numberedAfter(long base) {
+        if (base == 0) {
+            return this;
+        }
+        return new SpanData(
+                traceId,
+                spanId,
+                parentId,
+                remoteParent,
+                name,
+                kind,
+                startTime,
+                endTime,
+                tags,
+                events,
+                exception,
+                creationOrder + base);
+    }
 }

@@ -101,11 +101,13 @@ child span and never a trace root. The mechanism, its ordering and what it skips
 *Event Listener Spans* in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ### Trace Outcome and Span Status
-`TraceOutcome {OK, ERROR, IN_PROGRESS}` on the trace, `SpanStatus {OK, ERROR}` on each span, both
-serialised by constant name. A trace is `IN_PROGRESS` until its root arrives. A complete whole
-trace is `ERROR` when the store's sticky failure flag (`TraceData.failed`) is set or one of its
-reasons is a failure. The flag is the Errors bucket's own rule: a span failed or answered 5xx, or
-an ERROR log arrived. An async row is `ERROR` only when its own subtree's reasons hold a failure. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
+`TraceOutcome {OK, ERROR, IN_PROGRESS, INTERRUPTED}` on the trace, `SpanStatus {OK, ERROR}` on each
+span, both serialised by constant name. A trace is `IN_PROGRESS` until its root arrives, and
+`INTERRUPTED` instead once its run has ended: a trace restored from an earlier run of the
+application, whose root will never arrive. A complete whole trace is `ERROR` when the store's sticky
+failure flag (`TraceData.failed`) is set or one of its reasons is a failure. The flag is the Errors
+bucket's own rule: a span failed or answered 5xx, or an ERROR log arrived. An async row is `ERROR`
+only when its own subtree's reasons hold a failure. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Trace Reason
 `TraceSummary.reasons` lists `TraceReason(kind, spanId, detail)`s, built by `TraceReasons`: an
@@ -141,6 +143,13 @@ A trace stays in Errors or Slow after ageing out of All. A trace enters Errors o
 a server span's 5xx or an ERROR log. `TraceStore.bucketsOf` names the Errors and Slow buckets
 listing a trace. Definitions and thresholds:
 [the three buckets](https://www.peekaboot.org/docs/traces/#the-three-buckets).
+
+### Trace Run
+One start of the application, named by its `startedAt`: the `ApplicationReadyEvent`'s timestamp,
+the instant the lifecycle log stamps the run with, so `summary.run` matches a row of
+`/api/lifecycle/runs`. `InMemoryTraceStore` keeps the run in progress as a `TraceRun`; each bundle
+keeps the run it was first stored in. A trace captured before the run reported ready learns the
+start once it does. Only the trace journal's restore begins a run (`TraceStore.beginRun`).
 
 ### Untraced Log
 A captured log line whose MDC carried no trace id: written at startup, on a thread outside any

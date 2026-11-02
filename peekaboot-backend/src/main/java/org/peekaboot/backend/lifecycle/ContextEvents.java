@@ -9,19 +9,19 @@ import org.springframework.context.event.ApplicationContextEvent;
  * separate port) and its ready event (a {@code SpringApplicationBuilder} hierarchy). A
  * listener that reports on the application acts on its own context's event alone.
  */
-final class ContextEvents {
+public final class ContextEvents {
 
     private ContextEvents() {}
 
     // Identity is the point - the very context the listener belongs to, not one that
     // happens to compare equal.
     @SuppressWarnings({"PMD.CompareObjectsWithEquals", "ReferenceEquality"})
-    static boolean fromOwnContext(ApplicationContextEvent event, ApplicationContext ownContext) {
+    public static boolean fromOwnContext(ApplicationContextEvent event, ApplicationContext ownContext) {
         return event.getApplicationContext() == ownContext;
     }
 
     @SuppressWarnings({"PMD.CompareObjectsWithEquals", "ReferenceEquality"})
-    static boolean fromOwnContext(ApplicationReadyEvent event, ApplicationContext ownContext) {
+    public static boolean fromOwnContext(ApplicationReadyEvent event, ApplicationContext ownContext) {
         return event.getApplicationContext() == ownContext;
     }
 }

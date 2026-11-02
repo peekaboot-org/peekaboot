@@ -4,12 +4,14 @@ package org.peekaboot.backend.domain.trace;
 public enum TraceOutcome {
     OK,
     ERROR,
-    IN_PROGRESS;
+    IN_PROGRESS,
+    /** Stored by an earlier run of the application, which stopped before the trace's root arrived. */
+    INTERRUPTED;
 
-    /** A trace still running has ended neither way, whatever its stored spans say so far. */
-    public static TraceOutcome of(boolean complete, boolean failed) {
+    /** A trace still running has ended neither way, whatever its stored spans say so far; one whose run ended never will. */
+    public static TraceOutcome of(boolean complete, boolean interrupted, boolean failed) {
         if (!complete) {
-            return IN_PROGRESS;
+            return interrupted ? INTERRUPTED : IN_PROGRESS;
         }
         return failed ? ERROR : OK;
     }

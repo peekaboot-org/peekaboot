@@ -7,11 +7,13 @@ import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 import static org.peekaboot.backend.tracing.store.UnstoredBundles.UNFILED;
+import static org.peekaboot.backend.tracing.store.UnstoredBundles.resolvingSpanIds;
 
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.TraceDetail;
@@ -209,14 +211,9 @@ class TraceResourcesTest {
      */
     @Test
     void anErrorLogsReasonNamesTheSpanItsLogEntryNames() {
-        TraceDataBundle movingRedirects = new TraceDataBundle("t1", 500, 500) {
-            private int reads;
-
-            @Override
-            public String resolveSpanId(String spanId) {
-                return spanId + "#" + reads++;
-            }
-        };
+        AtomicInteger reads = new AtomicInteger();
+        TraceDataBundle movingRedirects =
+                resolvingSpanIds("t1", 500, 500, spanId -> spanId + "#" + reads.getAndIncrement());
         movingRedirects.addSpan(
                 span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build(), UNFILED);
         movingRedirects.addLog(
@@ -236,14 +233,9 @@ class TraceResourcesTest {
      */
     @Test
     void aSubtreeRowsLogNamesTheSpanThatPutItThere() {
-        TraceDataBundle movingRedirects = new TraceDataBundle("t1", 500, 500) {
-            private int reads;
-
-            @Override
-            public String resolveSpanId(String spanId) {
-                return reads++ == 0 ? spanId : "root";
-            }
-        };
+        AtomicInteger reads = new AtomicInteger();
+        TraceDataBundle movingRedirects =
+                resolvingSpanIds("t1", 500, 500, spanId -> reads.getAndIncrement() == 0 ? spanId : "root");
         movingRedirects.addSpan(
                 span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build(), UNFILED);
         movingRedirects.addSpan(

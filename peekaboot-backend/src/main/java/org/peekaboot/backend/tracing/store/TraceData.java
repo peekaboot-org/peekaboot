@@ -10,6 +10,8 @@ import org.peekaboot.backend.tracing.event.SpanData;
 /**
  * A trace as the store holds it, read out in one go by {@link TraceDataBundle#snapshot()}.
  *
+ * @param run           the start of the run the trace was first stored in, as that run reported it
+ *                      ready; null before it did, and for a run that never did
  * @param startTime     the earliest span start the bundle ever saw, or null while no timed span
  *                      has arrived
  * @param duration      the window the bundle's non-async spans have covered, or every span's
@@ -23,6 +25,8 @@ import org.peekaboot.backend.tracing.event.SpanData;
  *                      root the span cap evicted later leaves the trace complete, with
  *                      {@code rootSpan} null and every stored span served under the mapped
  *                      trace's {@code orphans}
+ * @param interrupted   the trace is not complete and its run has ended, so its root will never
+ *                      arrive
  * @param failed        a span failed or answered 5xx, or an ERROR log arrived; stays set after the
  *                      span cap evicts that span, as Errors keeps the trace
  * @param spans         in creation order, never null
@@ -32,10 +36,12 @@ import org.peekaboot.backend.tracing.event.SpanData;
  */
 public record TraceData(
         String traceId,
+        @Nullable Instant run,
         Instant startTime,
         Duration duration,
         @Nullable SpanData rootSpan,
         boolean complete,
+        boolean interrupted,
         boolean failed,
         List<SpanData> spans,
         Set<String> asyncSpanIds,

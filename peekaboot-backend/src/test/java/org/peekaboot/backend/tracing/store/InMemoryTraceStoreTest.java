@@ -29,6 +29,8 @@ import org.peekaboot.backend.tracing.event.SpanData;
 class InMemoryTraceStoreTest {
 
     private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
+    private static final Instant EARLIER_RUN = Instant.parse("2026-10-30T08:00:00Z");
+    private static final Instant LIVE_RUN = Instant.parse("2026-10-31T08:00:00Z");
 
     private InMemoryTraceStore storage;
 
@@ -765,6 +767,94 @@ class InMemoryTraceStoreTest {
 
     private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {
         return TraceStores.with(p -> p.setSlowTraceThresholdMs(slowTraceThresholdMs));
+    }
+
+    /** The run reports ready after its first traces exist; they learn its start all the same. */
+    @Test
+    void aTraceNamesTheStartItsRunReportsLater() {
+        storage.addSpan(spanIn("startup", "s1"));
+        storage.markRunStarted(LIVE_RUN);
+        storage.addSpan(spanIn("request", "s2"));
+
+        assertThat(storage.getTrace("startup").orElseThrow().snapshot().run()).isEqualTo(LIVE_RUN);
+        assertThat(storage.getTrace("request").orElseThrow().snapshot().run()).isEqualTo(LIVE_RUN);
+    }
+
+    @Test
+    void aRunKeepsTheFirstStartItReports() {
+        storage.markRunStarted(LIVE_RUN);
+        storage.markRunStarted(LIVE_RUN.plusSeconds(5));
+        storage.addSpan(spanIn("t1", "s1"));
+
+        assertThat(storage.getTrace("t1").orElseThrow().snapshot().run()).isEqualTo(LIVE_RUN);
+    }
+
+    /** Ending a run interrupts what of it never completed, and leaves the rest as it was. */
+    @Test
+    void anIncompleteTraceOfAnEndedRunIsInterrupted() {
+        storage.beginRun(EARLIER_RUN);
+        storage.addSpan(span("query")
+                .in("cut-off")
+                .parent("handler")
+                .at(START, Duration.ofMillis(5))
+                .build());
+        storage.addSpan(spanIn("finished", "root"));
+        storage.beginRun(null);
+
+        TraceData cutOff = storage.getTrace("cut-off").orElseThrow().snapshot();
+        TraceData finished = storage.getTrace("finished").orElseThrow().snapshot();
+        assertThat(cutOff.interrupted()).isTrue();
+        assertThat(storage.getTrace("cut-off").orElseThrow().listingRoots().interrupted())
+                .isTrue();
+        assertThat(cutOff.run()).isEqualTo(EARLIER_RUN);
+        assertThat(finished.interrupted()).isFalse();
+        assertThat(finished.run()).isEqualTo(EARLIER_RUN);
+    }
+
+    @Test
+    void anIncompleteTraceOfTheRunInProgressIsNotInterrupted() {
+        storage.addSpan(span("query")
+                .in("running")
+                .parent("handler")
+                .at(START, Duration.ofMillis(5))
+                .build());
+
+        assertThat(storage.getTrace("running").orElseThrow().snapshot().interrupted())
+                .isFalse();
+    }
+
+    /** The exporter numbers every run from 1; the store lifts each run's numbers past every earlier one's. */
+    @Test
+    void everyRunsSpansSortAfterTheEarlierRunsSpans() {
+        storage.beginRun(EARLIER_RUN);
+        storage.addSpan(span("a")
+                .in("earlier")
+                .at(START, Duration.ofMillis(5))
+                .order(50)
+                .build());
+        storage.addSpan(span("b")
+                .in("earlier-too")
+                .at(START, Duration.ofMillis(5))
+                .order(7)
+                .build());
+        storage.beginRun(null);
+        storage.addSpan(
+                span("c").in("live").at(START, Duration.ofMillis(5)).order(1).build());
+
+        long earlier = storage.getTrace("earlier")
+                .orElseThrow()
+                .snapshot()
+                .spans()
+                .getFirst()
+                .creationOrder();
+        long live = storage.getTrace("live")
+                .orElseThrow()
+                .snapshot()
+                .spans()
+                .getFirst()
+                .creationOrder();
+        assertThat(earlier).isEqualTo(50);
+        assertThat(live).isEqualTo(51);
     }
 
     /** The ids {@code store} lists in {@code bucket}, in listing order. */

@@ -1,6 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -12,6 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -43,6 +45,9 @@ public class InMemoryTraceStore implements TraceStore {
     private final AtomicLong newestSpanOrder = new AtomicLong();
     private final AtomicLong listingSequence = new AtomicLong();
     private final AtomicLong logSequence = new AtomicLong();
+    private volatile TraceRun run = new TraceRun(null);
+    /** Added to each span's creation order, so every run's spans sort after every earlier run's. */
+    private volatile long spanOrderBase;
 
     public InMemoryTraceStore(PeekabootTracingProperties properties) {
         this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
@@ -65,9 +70,10 @@ public class InMemoryTraceStore implements TraceStore {
 
     @Override
     public void addSpan(SpanData span) {
-        newestSpanOrder.accumulateAndGet(span.creationOrder(), Math::max);
-        TraceDataBundle bundle = resolveBundle(span.traceId());
-        bundle.addSpan(span, this::classify);
+        SpanData numbered = span.numberedAfter(spanOrderBase);
+        newestSpanOrder.accumulateAndGet(numbered.creationOrder(), Math::max);
+        TraceDataBundle bundle = resolveBundle(numbered.traceId());
+        bundle.addSpan(numbered, this::classify);
     }
 
     /** A line without a trace id goes to the untraced ring, and into no bucket whatever its level. */
@@ -96,6 +102,20 @@ public class InMemoryTraceStore implements TraceStore {
         buckets.values().forEach(bucket -> bucket.remove(traceId));
     }
 
+    /** Called before live input reaches the store, so nothing else writes meanwhile (see {@link TraceStore#beginRun}). */
+    @Override
+    public void beginRun(@Nullable Instant startedAt) {
+        TraceRun ending = run;
+        spanOrderBase = newestSpanOrder.get();
+        run = new TraceRun(startedAt);
+        ending.end();
+    }
+
+    @Override
+    public void markRunStarted(Instant startedAt) {
+        run.markStarted(startedAt);
+    }
+
     /**
      * Resolves the bundle for a trace id, reusing one retained by a bucket if the All
      * bucket has already evicted it - avoids creating a diverging copy for late-arriving
@@ -107,7 +127,7 @@ public class InMemoryTraceStore implements TraceStore {
                         traceId,
                         id -> listedNow(listedAnywhere(id)
                                 .map(ListedTrace::bundle)
-                                .orElseGet(() -> new TraceDataBundle(id, maxSpansPerTrace, maxLogsPerTrace))))
+                                .orElseGet(() -> new TraceDataBundle(id, maxSpansPerTrace, maxLogsPerTrace, run))))
                 .bundle();
     }
 

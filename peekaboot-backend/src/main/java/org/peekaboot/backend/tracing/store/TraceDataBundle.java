@@ -48,6 +48,7 @@ public class TraceDataBundle {
     private final String traceId;
     private final int maxSpans;
     private final int maxLogs;
+    private final TraceRun run;
     private final Object spansLock = new Object();
     private final Map<String, SpanData> spansById = new LinkedHashMap<>();
     private final Map<String, String> parentRedirects = new HashMap<>();
@@ -79,11 +80,13 @@ public class TraceDataBundle {
     /**
      * @param maxSpans the most deduplicated spans kept, oldest evicted first
      * @param maxLogs  the most logs kept, oldest trimmed first
+     * @param run      the run the store was in when it first received anything for the trace
      */
-    public TraceDataBundle(String traceId, int maxSpans, int maxLogs) {
+    TraceDataBundle(String traceId, int maxSpans, int maxLogs, TraceRun run) {
         this.traceId = traceId;
         this.maxSpans = maxSpans;
         this.maxLogs = maxLogs;
+        this.run = run;
     }
 
     public String traceId() {
@@ -368,12 +371,15 @@ public class TraceDataBundle {
                     .toList();
             // the root is one of the resolved copies, so the mapper's equality skip finds it in the list
             SpanData root = rootOf(spans);
+            boolean complete = isComplete(root);
             return new TraceData(
                     traceId,
+                    run.startedAt(),
                     fullWindow.start(),
                     synchronousWindow(),
                     root,
-                    isComplete(root),
+                    complete,
+                    isInterrupted(complete),
                     failed(),
                     spans,
                     asyncMembership.members(),
@@ -409,12 +415,18 @@ public class TraceDataBundle {
                     fullWindow.start(),
                     synchronousWindow(),
                     complete,
+                    isInterrupted(complete),
                     failed());
         }
     }
 
     private boolean isComplete(@Nullable SpanData root) {
         return parentlessSpanStored || root != null;
+    }
+
+    /** An incomplete trace of an ended run: the process its root belonged to has stopped. */
+    private boolean isInterrupted(boolean complete) {
+        return !complete && run.ended();
     }
 
     /**

@@ -12,6 +12,7 @@ import static org.peekaboot.backend.testsupport.TraceListings.listing;
 
 import io.micrometer.tracing.Span;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -1479,6 +1480,76 @@ class TraceInsightsServiceTest {
 
         assertThat(summary.outcome()).isEqualTo(TraceOutcome.OK);
         assertThat(summary.buckets()).isEmpty();
+    }
+
+    @Test
+    void anInterruptedTraceSaysSoAndNamesItsRun() {
+        Instant earlierRun = Instant.parse("2026-10-30T08:00:00Z");
+        store.beginRun(earlierRun);
+        store.addSpan(span("query").in("cut-off").parent("handler").at(0, 5).build());
+        store.beginRun(null);
+
+        TraceSummary summary = service.getTrace("cut-off").orElseThrow().summary();
+
+        assertThat(summary.outcome()).isEqualTo(TraceOutcome.INTERRUPTED);
+        assertThat(summary.complete()).isFalse();
+        assertThat(summary.run()).isEqualTo(earlierRun);
+    }
+
+    /**
+     * The outcome filter reads the listing facts, which know the run ended. A trace with spans but no
+     * root never lists, so these two hold a log each, as an in-progress trace that lists does.
+     */
+    @Test
+    void theOutcomeFilterTellsAnInterruptedTraceFromOneInProgress() {
+        store.beginRun(Instant.parse("2026-10-30T08:00:00Z"));
+        store.addLog(log("cut-off").build());
+        store.beginRun(null);
+        store.addLog(log("running").build());
+
+        assertThat(idsOf(service.listTraces(listing().outcome("interrupted").build())))
+                .containsExactly("cut-off");
+        assertThat(idsOf(service.listTraces(listing().outcome("in_progress").build())))
+                .containsExactly("running");
+    }
+
+    /**
+     * An async task that ends after a restart lists above the request that entered the bucket before it
+     * ended. Without the run's raised orders every live stamp would sit at the restored maximum, and the
+     * task's row would fall below that request.
+     */
+    @Test
+    void anAsyncTaskThatEndsAfterARestartListsAboveTheRequestBeforeIt() {
+        store.beginRun(Instant.parse("2026-10-30T08:00:00Z"));
+        store.addSpan(
+                span("a-root").in("a").kind(Span.Kind.SERVER).at(0, 5).order(9).build());
+        store.beginRun(null);
+        store.addSpan(span("c-root")
+                .in("c")
+                .kind(Span.Kind.SERVER)
+                .at(100, 5)
+                .order(1)
+                .build());
+        store.addSpan(span("d-root")
+                .in("d")
+                .kind(Span.Kind.SERVER)
+                .at(110, 5)
+                .order(2)
+                .build());
+        store.addSpan(asyncTask("c-task")
+                .in("c")
+                .parent("c-root")
+                .at(102, 30)
+                .order(3)
+                .build());
+
+        assertThat(service.listTraces(listing().limit(10).build()).traces())
+                .extracting(
+                        row -> row.summary().traceId(),
+                        row -> row.summary().subtree() == null
+                                ? null
+                                : row.summary().subtree().rootSpanId())
+                .containsExactly(tuple("c", "c-task"), tuple("d", null), tuple("c", null), tuple("a", null));
     }
 
     private static SpanData rootSpanWithoutTags(String traceId, String spanId, String name) {

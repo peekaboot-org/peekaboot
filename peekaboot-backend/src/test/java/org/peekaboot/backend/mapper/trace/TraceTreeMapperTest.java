@@ -240,10 +240,12 @@ class TraceTreeMapperTest {
                 .build();
         var rootEvicted = new TraceData(
                 "trace1",
+                null,
                 Instant.EPOCH,
                 Duration.ofMillis(100),
                 null,
                 true,
+                false,
                 false,
                 List.of(lateOne, lateTwo),
                 Set.of(),
@@ -828,7 +830,7 @@ class TraceTreeMapperTest {
 
     @Test
     void mapsAnEmptyTraceToARootlessTree() {
-        var traceData = new TraceData("trace1", null, null, null, false, false, List.of(), Set.of(), 0);
+        var traceData = new TraceData("trace1", null, null, null, null, false, false, false, List.of(), Set.of(), 0);
 
         TraceTree result = map(mapper, traceData);
 
@@ -859,10 +861,12 @@ class TraceTreeMapperTest {
                 .build();
         var traceData = new TraceData(
                 "trace1",
+                null,
                 Instant.EPOCH,
                 Duration.ofMillis(100),
                 detachedRoot,
                 true,
+                false,
                 false,
                 List.of(listed),
                 Set.of(),

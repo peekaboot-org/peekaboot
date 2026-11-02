@@ -102,6 +102,9 @@ span Peekaboot's async decorator exports. A query fixture's bind parameters are 
 takes the mapped `SqlStatement`.
 `TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
 `snapshot()`, so a mapper test gets the root and ordering the store would hand it.
+`UnstoredBundles` (backend test support, in `tracing.store`) builds a `TraceDataBundle` no store
+keeps, in a run of its own, and `UNFILED` is the filing step such a bundle passes, so a bundle test
+calls the store's own two-argument methods.
 `SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the
 internal `TraceTree` around one, complete, without orphans and with no request unless its
 setters say otherwise. `Logs.log(traceId)` builds a `LogCapturedEvent`,

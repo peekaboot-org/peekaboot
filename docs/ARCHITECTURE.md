@@ -241,7 +241,7 @@ org.peekaboot.backend/
 │   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
 │   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
 │   ├── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
-│   │                       # AsyncMembership, Window, ListingRoots, ListedTrace, UntracedLogRing,
+│   │                       # TraceRun, AsyncMembership, Window, ListingRoots, ListedTrace, UntracedLogRing,
 │   │                       # SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
 │   └── tags/               # The span-tag vocabulary capture, store and mappers share: AsyncTaskMarker,
 │                           # EventListenerMarker, QueryParameterTags (Peekaboot's own keys), HttpSpanTags,
@@ -252,7 +252,7 @@ org.peekaboot.backend/
 ### Tracing Flow
 
 1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`
-2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), three insertion-ordered bounded maps: the All, Errors and Slow buckets
+2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event. One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request and the page reuses. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)
@@ -1400,6 +1400,13 @@ set or one of its reasons is a failure. An async row ignores the store's flag, w
 request that dispatched it, and fails on its own reasons alone. Its buckets and dropped counts
 are its trace's.
 
+A trace that is not complete reads `IN_PROGRESS` while its run is in progress and `INTERRUPTED`
+once a later run began (`TraceData.interrupted`), since the process its root belonged to has
+stopped. Only a restore begins runs (`TraceStore.beginRun`), so only a restored trace can be
+interrupted. `beginRun` also raises the creation order of every span of the new run past every
+order stored before it (`SpanData.numberedAfter`): the exporter numbers spans from 1 in every
+application context, and without the raise every live position would sort below the restored ones.
+
 The store files a trace in its buckets in the same step that stores the span or the ERROR line
 that files it, under the bundle's span lock (`TraceDataBundle.addSpan(span, fileInBuckets)`).
 Every reader maps the trace first and reads its buckets afterwards (`TraceReads`), so a response
@@ -1440,8 +1447,8 @@ stored as the head of one `TraceTree.orphans` subtree, earliest start first. A t
 nothing but a cycle has no such span, so its earliest-created span heads the one subtree, its
 parent edge cut to end the walk. A complete trace whose root the cap evicted is served the same
 way: `complete: true`, `rootSpan: null`, every stored span under `orphans`. With a root,
-`orphans` is `[]`. `TraceSummary.outcome` is `IN_PROGRESS` while the trace is not complete, else
-`ERROR` or `OK` by the verdict above. What moves the window is in *Async Subtree Timing*. The
+`orphans` is `[]`. `TraceSummary.outcome` is `IN_PROGRESS` while the trace is not complete (`INTERRUPTED` once its
+run ended, see above), else `ERROR` or `OK` by the verdict above. What moves the window is in *Async Subtree Timing*. The
 dropped span count travels on the snapshot rather than being derived from the span list: the
 list is already deduplicated and already capped, so nothing in it can say whether real spans
 were dropped. The summary serves the count as `counts.droppedSpans`.

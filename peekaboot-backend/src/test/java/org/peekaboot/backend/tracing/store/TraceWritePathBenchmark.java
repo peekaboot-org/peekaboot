@@ -5,6 +5,7 @@ import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 import static org.peekaboot.backend.tracing.store.UnstoredBundles.UNFILED;
+import static org.peekaboot.backend.tracing.store.UnstoredBundles.bundle;
 
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
@@ -62,7 +63,7 @@ class TraceWritePathBenchmark {
         // duplicate, leaving exactly the real spans (TraceDataBundleTest and
         // InMemoryTraceStoreTest cover this in depth; this is a cheap guard against the
         // benchmark silently drifting from what the fold logic actually does).
-        TraceDataBundle sanityBundle = new TraceDataBundle("bench-sanity", CAP, Integer.MAX_VALUE);
+        TraceDataBundle sanityBundle = bundle("bench-sanity", CAP, Integer.MAX_VALUE);
         rawSpans.forEach(span -> sanityBundle.addSpan(span, UNFILED));
         assertThat(sanityBundle.snapshot().spans()).hasSize(REAL_QUERY_COUNT + 1);
         assertThat(sanityBundle.snapshot().droppedSpans()).isZero();
@@ -115,7 +116,7 @@ class TraceWritePathBenchmark {
     }
 
     private static long timeFoldOnInsertion(List<SpanData> spans, int cap) {
-        TraceDataBundle bundle = new TraceDataBundle(TRACE_ID, cap, Integer.MAX_VALUE);
+        TraceDataBundle bundle = bundle(TRACE_ID, cap, Integer.MAX_VALUE);
         long start = System.nanoTime();
         for (SpanData span : spans) {
             bundle.addSpan(span, UNFILED);

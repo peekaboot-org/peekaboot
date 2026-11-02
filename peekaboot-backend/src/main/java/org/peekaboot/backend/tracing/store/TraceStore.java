@@ -1,8 +1,10 @@
 package org.peekaboot.backend.tracing.store;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
@@ -21,6 +23,19 @@ public interface TraceStore {
      * span turned out to be one of Peekaboot's own requests.
      */
     void discard(String traceId);
+
+    /**
+     * Ends the run in progress and begins the next: traces first stored from here on belong to it, and an
+     * incomplete trace of an ended run is interrupted. Every span of the new run sorts after every span
+     * stored before it. Only the trace journal's restore calls this, for each run it replays and once more
+     * for the live run, before any live input reaches the store.
+     *
+     * @param startedAt when the run reported ready; null for a run that has not, or never did
+     */
+    void beginRun(@Nullable Instant startedAt);
+
+    /** The run in progress reported ready at {@code startedAt}; a run that knows its start keeps it. */
+    void markRunStarted(Instant startedAt);
 
     Optional<TraceDataBundle> getTrace(String traceId);
 

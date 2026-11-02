@@ -20,6 +20,7 @@ import org.peekaboot.backend.tracing.event.SpanData;
  * @param startTime     {@link TraceData#startTime()} at the same moment
  * @param duration      {@link TraceData#duration()} at the same moment
  * @param complete      {@link TraceData#complete()} at the same moment
+ * @param interrupted   {@link TraceData#interrupted()} at the same moment
  * @param failed        {@link TraceData#failed()} at the same moment
  */
 public record ListingRoots(
@@ -29,6 +30,7 @@ public record ListingRoots(
         @Nullable Instant startTime,
         @Nullable Duration duration,
         boolean complete,
+        boolean interrupted,
         boolean failed) {
 
     /** As the trace's summary counts it. Zero while the window is open. */

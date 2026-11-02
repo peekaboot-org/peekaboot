@@ -42,9 +42,11 @@ public class TraceTreeMapper {
         if (traceData.spans().isEmpty()) {
             return new TraceTree(
                     traceData.traceId(),
+                    traceData.run(),
                     null,
                     0L,
                     traceData.complete(),
+                    traceData.interrupted(),
                     RootActionType.UNKNOWN,
                     null,
                     null,
@@ -78,9 +80,11 @@ public class TraceTreeMapper {
 
         return new TraceTree(
                 traceData.traceId(),
+                traceData.run(),
                 traceData.startTime(),
                 durationMs,
                 traceData.complete(),
+                traceData.interrupted(),
                 rootActionType,
                 rootOperation,
                 TraceRequests.of(rootSpanData),
@@ -134,10 +138,12 @@ public class TraceTreeMapper {
         accumulateSubtree(subtreeRoot, totals);
         return new TraceTree(
                 traceData.traceId(),
+                traceData.run(),
                 subtreeRoot.startTime(),
                 subtreeWindowMs(subtreeRoot),
                 // an async row's own root is stored by construction
                 true,
+                false,
                 RootActionTypes.of(subtreeRootData),
                 subtreeRoot.name(),
                 null,

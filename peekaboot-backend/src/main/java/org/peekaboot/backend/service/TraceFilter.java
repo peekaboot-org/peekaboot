@@ -176,7 +176,8 @@ record TraceFilter(
             return matchesVerdict(summary.outcome(), summary.durationMs());
         }
         ListingRoots roots = row.roots();
-        return matchesVerdict(TraceOutcome.of(roots.complete(), roots.failed()), roots.durationMs());
+        return matchesVerdict(
+                TraceOutcome.of(roots.complete(), roots.interrupted(), roots.failed()), roots.durationMs());
     }
 
     private boolean filtersVerdict() {
