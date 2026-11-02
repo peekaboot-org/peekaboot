@@ -10,8 +10,9 @@ import org.peekaboot.backend.problem.ApiProblemException;
  * The {@code next} values the listing endpoints hand out and read back as {@code cursor}. A cursor
  * names the last row a page served by its position in the listing, so rows that arrive or leave
  * between two pages shift no other row. A log search cursor names the last line a page served by
- * the store's {@code sequence} for it. On the wire it is base64url of a kind letter and numbers,
- * opaque to clients.
+ * the store's {@code sequence} for it. Both carry the store's numbering first: a restart numbers
+ * every row and line anew, so a cursor from before it is refused. On the wire it is base64url of a
+ * kind letter and numbers, opaque to clients.
  */
 final class Cursors {
 
@@ -23,38 +24,38 @@ final class Cursors {
 
     private Cursors() {}
 
-    static String ofRow(RowPosition position) {
-        return encode(ROW, position.listedAt(), position.listing(), position.entry());
+    static String ofRow(long numbering, RowPosition position) {
+        return encode(ROW, numbering, position.listedAt(), position.listing(), position.entry());
     }
 
     /** Null where the request sent none; refuses a value the trace listing did not issue. */
     @Nullable
-    static RowPosition row(@Nullable String cursor) {
+    static Issued<RowPosition> row(@Nullable String cursor) {
         if (cursor == null || cursor.isBlank()) {
             return null;
         }
-        long[] values = decode(cursor, ROW, 3);
-        if (values[0] < 0 || values[1] < 0 || values[2] < RowPosition.WHOLE_TRACE) {
+        long[] values = decode(cursor, ROW, 4);
+        if (values[0] < 1 || values[1] < 0 || values[2] < 0 || values[3] < RowPosition.WHOLE_TRACE) {
             throw refused(cursor);
         }
-        return new RowPosition(values[0], values[1], values[2]);
+        return new Issued<>(values[0], new RowPosition(values[1], values[2], values[3]), cursor);
     }
 
-    static String ofLog(long sequence) {
-        return encode(LOG, sequence);
+    static String ofLog(long numbering, long sequence) {
+        return encode(LOG, numbering, sequence);
     }
 
     /** Null where the request sent none; refuses a value the log search did not issue. */
     @Nullable
-    static Long log(@Nullable String cursor) {
+    static Issued<Long> log(@Nullable String cursor) {
         if (cursor == null || cursor.isBlank()) {
             return null;
         }
-        long sequence = decode(cursor, LOG, 1)[0];
-        if (sequence < 0) {
+        long[] values = decode(cursor, LOG, 2);
+        if (values[0] < 1 || values[1] < 0) {
             throw refused(cursor);
         }
-        return sequence;
+        return new Issued<>(values[0], values[1], cursor);
     }
 
     private static String encode(String kind, long... values) {
@@ -99,5 +100,23 @@ final class Cursors {
                 "cursor",
                 "Unknown cursor '" + cursor
                         + "'. Pass the next value of an earlier response from this endpoint as it was.");
+    }
+
+    /**
+     * A cursor as read back: the numbering of the store that handed it out and the position it names
+     * there.
+     */
+    record Issued<T>(long numbering, T position, String cursor) {
+
+        /** The position, refused where another store numbered it, as a restart does. */
+        T under(long current) {
+            if (numbering != current) {
+                throw ApiProblemException.badParameter(
+                        "cursor",
+                        "Cursor '" + cursor + "' was handed out before the application restarted,"
+                                + " which numbered every row and line anew. Read the first page again without a cursor.");
+            }
+            return position;
+        }
     }
 }

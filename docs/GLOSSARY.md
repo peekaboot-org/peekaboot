@@ -266,13 +266,14 @@ what lets the bucket chips show `filtered / total`.
 
 ### Cursor
 The opaque `cursor` a listing endpoint reads and hands out as `next` (`Cursors`, base64url
-text). A log search cursor names the last served line's store `sequence`. A trace listing cursor
-names the last served row's `RowPosition`; the next page lists what
-sorts after it as the store stands then, so no older row repeats or goes missing. A request whose
-root ends while a client pages lists where its trace entered the bucket, which can be below a page
-already served. A cursor carries no filter: sent with other filters, it pages through what those
-match below the same position. It means something only to the running app that issued it, since
-its counters restart with the application context.
+text). It carries the store's `numbering` first. A log search cursor names the last served line's
+store `sequence`. A trace listing cursor names the last served row's `RowPosition`; the next page
+lists what sorts after it as the store stands then, so no older row repeats or goes missing. A
+request whose root ends while a client pages lists where its trace entered the bucket, which can
+be below a page already served. A cursor carries no filter: sent with other filters, it pages
+through what those match below the same position. A restart creates a new store under a new
+numbering and renumbers every row and line, restored or not, so a cursor from before it is
+refused with a 400 on `cursor`.
 
 ### Route Stats
 `RouteStats(method, route, count, errorCount, p50Ms, p95Ms, maxMs, latestErrorTraceId,

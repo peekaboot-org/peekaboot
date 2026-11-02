@@ -51,6 +51,7 @@ public class LogSearchService {
         if (traceStore == null) {
             return EMPTY;
         }
+        query.checkCursorIn(traceStore.numbering());
         List<TraceLog> page = new ArrayList<>();
         long lastSequence = 0;
         for (CandidateLog candidate : candidates(traceStore, query)) {
@@ -59,7 +60,7 @@ public class LogSearchService {
                 continue;
             }
             if (page.size() == query.limit()) {
-                return new LogSearchResponse(page, Cursors.ofLog(lastSequence));
+                return new LogSearchResponse(page, Cursors.ofLog(traceStore.numbering(), lastSequence));
             }
             page.add(mapped);
             lastSequence = candidate.log().sequence();

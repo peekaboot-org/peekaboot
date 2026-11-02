@@ -698,6 +698,35 @@ class TraceInsightsServiceTest {
                 .containsExactly("t3", "t2");
     }
 
+    /** The next page of a store started again is refused, never read as a position it now names. */
+    @Test
+    void aCursorFromAnotherNumberingIsRefused() {
+        addTrace("t1", 10, false);
+        addTrace("t2", 10, false);
+        String next = service.listTraces(listing().limit(1).build()).next();
+        InMemoryTraceStore restarted = TraceStores.withDefaults();
+        restarted.addSpan(rootSpan("t1", "test-operation", Span.Kind.SERVER, 10).build());
+        restarted.addSpan(rootSpan("t2", "test-operation", Span.Kind.SERVER, 10).build());
+
+        assertThatThrownBy(() -> newService(restarted)
+                        .listTraces(listing().limit(1).cursor(next).build()))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("cursor");
+                    assertThat(e.problem().detail()).contains("before the application restarted");
+                });
+    }
+
+    /** With tracing off there is no numbering to compare, so a cursor of the right shape asks for an empty page. */
+    @Test
+    void aWellFormedCursorWithTracingOffListsNothing() {
+        addTrace("t1", 10, false);
+        addTrace("t2", 10, false);
+        String next = service.listTraces(listing().limit(1).build()).next();
+
+        assertThat(newService(null).listTraces(listing().cursor(next).build()).traces())
+                .isEmpty();
+    }
+
     /** Log-only traces enter All before any span arrives, so all three share one listedAt. */
     @Test
     void tracesListedAtOneMomentPageOneByOne() {

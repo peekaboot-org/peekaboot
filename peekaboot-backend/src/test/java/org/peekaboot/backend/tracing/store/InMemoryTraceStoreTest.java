@@ -39,6 +39,14 @@ class InMemoryTraceStoreTest {
         storage = TraceStores.withDefaults();
     }
 
+    /** Two stores, as two runs of one application are, number under two numberings. */
+    @Test
+    void eachStoreNumbersUnderANumberingOfItsOwn() {
+        InMemoryTraceStore restarted = TraceStores.withDefaults();
+
+        assertThat(storage.numbering()).isPositive().isNotEqualTo(restarted.numbering());
+    }
+
     @Test
     void anAddedSpanIsStored() {
         storage.addSpan(spanIn("trace1", "span1"));

@@ -105,7 +105,7 @@ class TraceControllerTest {
     /** Two cursors that each name a page still name no one page between them. */
     @Test
     void refusesARepeatedCursor() throws Exception {
-        mvc.perform(get("/peekaboot/api/traces").param("cursor", "dC4xLjEuLTE", "dC4yLjIuLTE"))
+        mvc.perform(get("/peekaboot/api/traces").param("cursor", "dC43LjEuMS4tMQ", "dC43LjIuMi4tMQ"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.parameter").value("cursor"))
                 .andExpect(jsonPath("$.detail").value("cursor was sent 2 times. Send it once."));

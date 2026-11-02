@@ -1,6 +1,7 @@
 package org.peekaboot.backend.service;
 
 import java.util.Locale;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.log.LogSearchParameters;
 import org.peekaboot.backend.domain.trace.TraceLog;
@@ -14,7 +15,7 @@ import org.peekaboot.backend.tracing.event.LogCapturedEvent;
  * @param text {@code q} in lower case; null matches every line
  * @param loggerPrefix kept where the logger's name starts with it, as written
  * @param traceId the one trace searched; null searches every trace and the untraced logs
- * @param before the sequence of the last line the previous page served; null for the first page
+ * @param cursor the cursor of the last line the previous page served; null for the first page
  */
 record LogQuery(
         @Nullable LogLevel level,
@@ -23,7 +24,7 @@ record LogQuery(
         @Nullable String traceId,
         TimeWindow window,
         int limit,
-        @Nullable Long before) {
+        Cursors.@Nullable Issued<Long> cursor) {
 
     static LogQuery of(LogSearchParameters parameters) {
         String level = RequestParameters.text(parameters.level());
@@ -36,6 +37,12 @@ record LogQuery(
                 TimeWindow.of(parameters.since(), parameters.until()),
                 PageLimit.of(parameters.limit()),
                 Cursors.log(parameters.cursor()));
+    }
+
+    /** Refuses a cursor another numbering handed out; the search reads the position through {@link #admits}. */
+    void checkCursorIn(long numbering) {
+        // PMD 7.28's NonThreadSafeSingleton throws on an if that null-checks a record component
+        Optional.ofNullable(cursor).ifPresent(issued -> issued.under(numbering));
     }
 
     /** The filters that read a captured line as it is stored, before anything is mapped or masked. */
@@ -61,7 +68,7 @@ record LogQuery(
     }
 
     private boolean isBeforeCursor(LogCapturedEvent log) {
-        return before == null || log.sequence() < before;
+        return cursor == null || log.sequence() < cursor.position();
     }
 
     /** A literal substring in any case: {@code q} is no pattern, so {@code (} and {@code *} match themselves. */

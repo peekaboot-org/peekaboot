@@ -68,14 +68,16 @@ public class TraceInsightsService {
         // filtered on each row's listing facts; only the returned page is mapped (and masked), plus
         // the async rows a verdict filter has to read
         List<RowSource> matches = RowSources.matching(traceStore, query.bucket(), filter, resources::summaryOf);
-        RowPosition after = query.after();
+        RowPosition after = query.afterIn(traceStore.numbering());
         List<RowSource> older = after == null
                 ? matches
                 : matches.stream()
                         .filter(row -> row.position().listsAfter(after))
                         .toList();
         List<RowSource> page = older.stream().limit(query.limit()).toList();
-        String next = older.size() > page.size() ? Cursors.ofRow(page.getLast().position()) : null;
+        String next = older.size() > page.size()
+                ? Cursors.ofRow(traceStore.numbering(), page.getLast().position())
+                : null;
 
         BucketCounts bucketCounts = new BucketCounts(
                 traceStore.getTraceCount(TraceBucket.ALL),

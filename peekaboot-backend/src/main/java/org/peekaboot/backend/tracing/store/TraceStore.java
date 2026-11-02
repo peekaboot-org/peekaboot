@@ -37,6 +37,12 @@ public interface TraceStore {
     /** The run in progress reported ready at {@code startedAt}; a run that knows its start keeps it. */
     void markRunStarted(Instant startedAt);
 
+    /**
+     * Names this store's numbering of listing rows and log lines. A store created again, as a restart
+     * creates one, restored or not, numbers under another, so a cursor can tell which store issued it.
+     */
+    long numbering();
+
     Optional<TraceDataBundle> getTrace(String traceId);
 
     /** The bucket's traces, newest first by when each entered the bucket. */

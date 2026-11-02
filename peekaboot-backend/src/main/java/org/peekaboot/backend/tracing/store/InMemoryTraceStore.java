@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -36,6 +37,9 @@ import org.peekaboot.backend.tracing.event.SpanData;
 public class InMemoryTraceStore implements TraceStore {
 
     private static final List<TraceBucket> QUALIFYING_BUCKETS = List.of(TraceBucket.ERRORS, TraceBucket.SLOW);
+    /** Drawn once per JVM, so the next run numbers apart from this one. */
+    private static final AtomicLong NEXT_NUMBERING =
+            new AtomicLong(ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE));
 
     private final int maxSpansPerTrace;
     private final long slowTraceThresholdMs;
@@ -48,6 +52,8 @@ public class InMemoryTraceStore implements TraceStore {
     private volatile TraceRun run = new TraceRun(null);
     /** Added to each span's creation order, so every run's spans sort after every earlier run's. */
     private volatile long spanOrderBase;
+    /** One up per store, so no two stores in one JVM share a numbering. */
+    private final long numbering = NEXT_NUMBERING.getAndIncrement();
 
     public InMemoryTraceStore(PeekabootTracingProperties properties) {
         this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
@@ -138,6 +144,11 @@ public class InMemoryTraceStore implements TraceStore {
 
     private ListedTrace listedNow(TraceDataBundle bundle) {
         return new ListedTrace(bundle, newestSpanOrder.get(), listingSequence.incrementAndGet());
+    }
+
+    @Override
+    public long numbering() {
+        return numbering;
     }
 
     @Override

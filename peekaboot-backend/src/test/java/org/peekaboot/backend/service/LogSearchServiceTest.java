@@ -225,7 +225,34 @@ class LogSearchServiceTest {
                 });
     }
 
-    /** {@code dC4xLjEuLTE} is a trace listing cursor. */
+    @Test
+    void aCursorFromAnotherNumberingIsRefused() {
+        store.addLog(log("t1").saying("one").build());
+        store.addLog(log("t1").saying("two").build());
+        String next = service.search(search().limit(1).build()).next();
+        InMemoryTraceStore restarted = TraceStores.withDefaults();
+        restarted.addLog(log("t1").saying("one").build());
+        restarted.addLog(log("t1").saying("two").build());
+
+        assertThatThrownBy(() -> newService(restarted)
+                        .search(search().limit(1).cursor(next).build()))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("cursor");
+                    assertThat(e.problem().detail()).contains("before the application restarted");
+                });
+    }
+
+    /** With tracing off there is no numbering to compare, so a cursor of the right shape asks for an empty page. */
+    @Test
+    void aWellFormedCursorWithTracingOffFindsNothing() {
+        LogSearchResponse response =
+                newService(null).search(search().cursor("bC43LjU").build());
+
+        assertThat(response.logs()).isEmpty();
+        assertThat(response.next()).isNull();
+    }
+
+    /** {@code dC43LjEuMS4tMQ} is a trace listing cursor. */
     @ParameterizedTest
     @CsvSource(
             delimiter = '|',
@@ -234,7 +261,7 @@ class LogSearchServiceTest {
                 "limit | 10001",
                 "since | yesterday",
                 "until | 1970-13-01T00:00:00Z",
-                "cursor | dC4xLjEuLTE",
+                "cursor | dC43LjEuMS4tMQ",
                 "cursor | nope!"
             })
     void refusesABadParameterNamingIt(String parameter, String value) {

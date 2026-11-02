@@ -1570,8 +1570,10 @@ so a trace that entered a bucket after its task ended still lists above its own 
 listing's `cursor` can name a position. A page lists what sorts after the cursor, so no older row
 is listed twice or skipped while rows come and go, and a trace that enters a bucket again moves to
 its top. A request's own row appears when its root ends, at the position its first span or log
-line gave the trace, so it can list below a page already served. A cursor means something only to
-the running app that issued it, since the counters behind it restart with the application context.
+line gave the trace, so it can list below a page already served. Every cursor also carries the
+store's `numbering`. Each JVM draws a random first numbering and counts up from it for every store
+it creates. A restart creates a new store and renumbers every row, so a cursor from before it is
+refused with a 400 on `cursor`.
 
 Ancestry resolves parents through `resolve(...)`, the redirect table span deduplication leaves
 behind, exactly as `rootOf` does. A span hanging off a deduplicated span names a parent id that is no
