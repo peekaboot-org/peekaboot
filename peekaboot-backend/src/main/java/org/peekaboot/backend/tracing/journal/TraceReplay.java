@@ -9,8 +9,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Replays the snapshot and then the journal into the store through its own methods, so buckets,
- * eviction and caps come out as they did live and every summary and issue is computed by the code
- * running now. Once the files are read the live run begins, which ends the last restored run.
+ * eviction and caps come out as they did live, in the order the journal wrote the inputs. Two traces
+ * that arrived at the same moment may come back swapped, and a full bucket may keep the other one of the
+ * two. Every summary and issue is computed by the code running now. A snapshot ends with a line for each
+ * bucket, which lists its traces exactly; until then All evicts nothing. Once the files are read the live
+ * run begins, which ends the last restored run.
  *
  * <p>The files are a cache: whatever is wrong with them costs only what they held, so a restore says
  * so once, at INFO. Files of another schema version, or with a damaged header, are deleted. A last line
@@ -23,9 +26,8 @@ final class TraceReplay {
     private TraceReplay() {}
 
     static void restore(JournalFiles files, TraceStore store) {
-        Runs runs = new Runs(store);
         try {
-            JournalFiles.Contents contents = files.read((text, line) -> replay(line, store, runs));
+            JournalFiles.Contents contents = replay(files, store, (text, line) -> {});
             if (contents.foreign()) {
                 log.info(
                         "Peekaboot traces: the files in {} come from another Peekaboot version or start with a"
@@ -48,13 +50,36 @@ final class TraceReplay {
         }
     }
 
-    private static void replay(JournalLine line, TraceStore store, Runs runs) {
+    /**
+     * Replays the files into {@code store}, handing each line to {@code alongside} just before the store
+     * takes it. Logs nothing and begins no live run; a fold replays this way into a store of its own.
+     */
+    static JournalFiles.Contents replay(JournalFiles files, TraceStore store, JournalFiles.LineVisitor alongside)
+            throws IOException {
+        Runs runs = new Runs(store);
+        // fewer lines evict in another order; the snapshot's bucket lines, not All's cap, decide its traces
+        store.holdAll(true);
+        try {
+            return files.read(
+                    (text, line) -> {
+                        alongside.visit(text, line);
+                        apply(line, store, runs);
+                    },
+                    () -> store.holdAll(false));
+        } finally {
+            store.holdAll(false);
+        }
+    }
+
+    private static void apply(JournalLine line, TraceStore store, Runs runs) {
         switch (line) {
             case JournalLine.RunLine run -> runs.begin(run.startedAt());
             case JournalLine.SpanLine span -> store.addSpan(span.span());
             case JournalLine.LogLine logged -> store.addLog(logged.toEvent());
             case JournalLine.RequestLine request -> store.setRequest(request.request());
             case JournalLine.DiscardLine discard -> store.discard(discard.traceId());
+            case JournalLine.RemnantLine remnant -> store.restoreRemnant(remnant.traceId(), remnant.remnant());
+            case JournalLine.BucketLine listing -> store.restoreBucket(listing.bucket(), listing.traceIds());
             case JournalLine.SnapshotHeader _, JournalLine.JournalHeader _ -> {
                 // a header names nothing to replay; JournalFiles checks the one each file starts with
             }

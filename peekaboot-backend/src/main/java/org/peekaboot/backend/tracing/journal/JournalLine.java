@@ -5,10 +5,13 @@ import static java.util.Objects.requireNonNull;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.time.Instant;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
+import org.peekaboot.backend.tracing.store.TraceBucket;
+import org.peekaboot.backend.tracing.store.TraceRemnant;
 
 /**
  * One line of the trace journal or of its snapshot. Each file begins with its header, which carries
@@ -24,7 +27,9 @@ import org.peekaboot.backend.tracing.event.SpanData;
     @JsonSubTypes.Type(value = JournalLine.SpanLine.class, name = "span"),
     @JsonSubTypes.Type(value = JournalLine.LogLine.class, name = "log"),
     @JsonSubTypes.Type(value = JournalLine.RequestLine.class, name = "request"),
-    @JsonSubTypes.Type(value = JournalLine.DiscardLine.class, name = "discard")
+    @JsonSubTypes.Type(value = JournalLine.DiscardLine.class, name = "discard"),
+    @JsonSubTypes.Type(value = JournalLine.RemnantLine.class, name = "remnant"),
+    @JsonSubTypes.Type(value = JournalLine.BucketLine.class, name = "bucket")
 })
 sealed interface JournalLine {
 
@@ -113,6 +118,25 @@ sealed interface JournalLine {
     record DiscardLine(String traceId) implements JournalLine {
         public DiscardLine {
             requireNonNull(traceId, "traceId");
+        }
+    }
+
+    /** What a trace's caps dropped, written by a fold where the trace's bundle began (see {@code Checkpoint}). */
+    record RemnantLine(String traceId, TraceRemnant remnant) implements JournalLine {
+        public RemnantLine {
+            requireNonNull(traceId, "traceId");
+            requireNonNull(remnant, "remnant");
+        }
+    }
+
+    /**
+     * A bucket's traces, oldest first, as the store a fold replayed listed them; a snapshot ends with one
+     * for each bucket, and a restore lists exactly these (see {@code Checkpoint}).
+     */
+    record BucketLine(TraceBucket bucket, List<String> traceIds) implements JournalLine {
+        public BucketLine {
+            requireNonNull(bucket, "bucket");
+            traceIds = List.copyOf(requireNonNull(traceIds, "traceIds"));
         }
     }
 }

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -41,6 +43,7 @@ public class InMemoryTraceStore implements TraceStore {
     private static final AtomicLong NEXT_NUMBERING =
             new AtomicLong(ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE));
 
+    private final int maxTraces;
     private final int maxSpansPerTrace;
     private final long slowTraceThresholdMs;
     private final int maxLogsPerTrace;
@@ -54,22 +57,25 @@ public class InMemoryTraceStore implements TraceStore {
     private volatile long spanOrderBase;
     /** One up per store, so no two stores in one JVM share a numbering. */
     private final long numbering = NEXT_NUMBERING.getAndIncrement();
+    /** Set while a snapshot replays (see {@link TraceStore#holdAll}). */
+    private volatile boolean allHeld;
 
     public InMemoryTraceStore(PeekabootTracingProperties properties) {
+        this.maxTraces = properties.getMaxTraces();
         this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
         this.slowTraceThresholdMs = properties.getSlowTraceThresholdMs();
         this.maxLogsPerTrace = properties.getMaxLogsPerTrace();
         this.untracedLogs = new UntracedLogRing(properties.getMaxUntracedLogs());
-        buckets.put(TraceBucket.ALL, boundedMap(properties.getMaxTraces()));
-        buckets.put(TraceBucket.ERRORS, boundedMap(properties.getMaxErrorTraces()));
-        buckets.put(TraceBucket.SLOW, boundedMap(properties.getMaxSlowTraces()));
+        buckets.put(TraceBucket.ALL, boundedMap(maxTraces, () -> allHeld));
+        buckets.put(TraceBucket.ERRORS, boundedMap(properties.getMaxErrorTraces(), () -> false));
+        buckets.put(TraceBucket.SLOW, boundedMap(properties.getMaxSlowTraces(), () -> false));
     }
 
-    private static Map<String, ListedTrace> boundedMap(int maxEntries) {
+    private static Map<String, ListedTrace> boundedMap(int maxEntries, BooleanSupplier held) {
         return Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, false) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, ListedTrace> eldest) {
-                return size() > maxEntries;
+                return size() > maxEntries && !held.getAsBoolean();
             }
         });
     }
@@ -120,6 +126,39 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public void markRunStarted(Instant startedAt) {
         run.markStarted(startedAt);
+    }
+
+    @Override
+    public void restoreRemnant(String traceId, TraceRemnant remnant) {
+        resolveBundle(traceId).restore(remnant);
+    }
+
+    @Override
+    public void holdAll(boolean held) {
+        allHeld = held;
+        if (held) {
+            return;
+        }
+        Map<String, ListedTrace> all = buckets.get(TraceBucket.ALL);
+        synchronized (all) {
+            Iterator<String> oldestFirst = all.keySet().iterator();
+            while (all.size() > maxTraces) {
+                oldestFirst.next();
+                oldestFirst.remove();
+            }
+        }
+    }
+
+    /** The traces are looked up before the bucket's monitor is taken, which nests in no other. */
+    @Override
+    public void restoreBucket(TraceBucket bucket, List<String> traceIds) {
+        List<TraceDataBundle> listing =
+                traceIds.stream().map(this::getTrace).flatMap(Optional::stream).toList();
+        Map<String, ListedTrace> listed = buckets.get(bucket);
+        synchronized (listed) {
+            listed.clear();
+            listing.forEach(bundle -> listed.put(bundle.traceId(), listedNow(bundle)));
+        }
     }
 
     /**

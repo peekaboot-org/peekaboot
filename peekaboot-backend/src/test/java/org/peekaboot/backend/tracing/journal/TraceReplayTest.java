@@ -3,12 +3,15 @@ package org.peekaboot.backend.tracing.journal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Logs.log;
-import static org.peekaboot.backend.testsupport.Logs.untraced;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.tracing.journal.JournalTexts.bucketLine;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.journalHeader;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.line;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.runLine;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.snapshotHeader;
+import static org.peekaboot.backend.tracing.journal.JournalTexts.untracedLine;
+import static org.peekaboot.backend.tracing.journal.JournalTexts.writeJournal;
+import static org.peekaboot.backend.tracing.journal.RestoredStores.contentOf;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -17,9 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -78,10 +79,6 @@ class TraceReplayTest {
         return new TraceInput.LogCaptured(log(traceId).at(level).saying(message).build());
     }
 
-    private static TraceInput untracedLine(String message) {
-        return new TraceInput.LogCaptured(untraced().saying(message).build());
-    }
-
     /** Uneven on purpose: five traces for three places, three spans for two, three logs for two, three untraced lines for two. */
     private static List<TraceInput> busyRun() {
         return List.of(
@@ -106,18 +103,18 @@ class TraceReplayTest {
                 spanned("f", "f0", 8));
     }
 
-    /** The replay builds the store the live run built: the same buckets in the same order, the same caps, the same numbers. */
+    /**
+     * The replay builds the store the live run built, up to a restart: the same buckets in the same order, the
+     * same caps, the same numbers.
+     */
     @Test
     void aReplayBuildsTheStoreALiveRunBuilt() {
         InMemoryTraceStore live = TraceStores.with(TraceReplayTest::small);
+        live.markRunStarted(T2);
         busyRun().forEach(TraceInputs.into(live)::accept);
+        live.beginRun(null);
         JournalFiles files = new JournalFiles(dir);
-        JournalTexts.write(
-                files.journal(),
-                Stream.concat(
-                                Stream.of(journalHeader("j1"), runLine(T2)),
-                                busyRun().stream().map(JournalTexts::line))
-                        .toArray(String[]::new));
+        writeJournal(files, "j1", T2, busyRun());
         InMemoryTraceStore restored = TraceStores.with(TraceReplayTest::small);
 
         TraceReplay.restore(files, restored);
@@ -126,9 +123,9 @@ class TraceReplayTest {
             assertThat(listing(restored, bucket)).as("%s", bucket).isEqualTo(listing(live, bucket));
         }
         for (TraceDataBundle bundle : live.storedTraces()) {
-            assertThat(contentOf(restored.getTrace(bundle.traceId()).orElseThrow()))
-                    .as(bundle.traceId())
-                    .isEqualTo(contentOf(bundle));
+            TraceDataBundle replayed = restored.getTrace(bundle.traceId()).orElseThrow();
+            assertThat(contentOf(replayed)).as(bundle.traceId()).isEqualTo(contentOf(bundle));
+            assertThat(replayed.capturedLogs()).as(bundle.traceId()).isEqualTo(bundle.capturedLogs());
         }
         assertThat(restored.untracedLogs()).isEqualTo(live.untracedLogs());
         assertThat(live.getTrace("b").orElseThrow().snapshot().droppedSpans())
@@ -136,22 +133,55 @@ class TraceReplayTest {
                 .isEqualTo(1);
     }
 
+    /**
+     * A snapshot's bucket lines set each bucket to exactly the traces they name, in their order, and skip
+     * an id the store holds no trace for; the journal's lines after them apply as usual.
+     */
+    @Test
+    void aSnapshotsBucketLinesSetEachBucketAndSkipAnUnknownTrace() {
+        JournalFiles files = new JournalFiles(dir);
+        JournalTexts.write(
+                files.snapshot(),
+                snapshotHeader(null),
+                runLine(T2),
+                line(spanned("a", "a1", 1)),
+                line(spanned("b", "b1", 2)),
+                line(spanned("c", "c1", 3)),
+                bucketLine(TraceBucket.ERRORS),
+                bucketLine(TraceBucket.SLOW),
+                bucketLine(TraceBucket.ALL, "c", "ghost", "a"));
+        JournalTexts.write(files.journal(), journalHeader("j1"), runLine(T2), line(spanned("d", "d1", 4)));
+        InMemoryTraceStore store = TraceStores.withDefaults();
+
+        TraceReplay.restore(files, store);
+
+        assertThat(RestoredStores.idsIn(store, TraceBucket.ALL)).containsExactly("d", "a", "c");
+        assertThat(store.getTrace("b")).isEmpty();
+        assertThat(store.getTrace("ghost")).isEmpty();
+    }
+
+    /** A snapshot cut short before its bucket lines leaves All at its cap, its newest traces kept. */
+    @Test
+    void aSnapshotWithoutBucketLinesLeavesAllAtItsCap() {
+        JournalFiles files = new JournalFiles(dir);
+        JournalTexts.write(
+                files.snapshot(),
+                snapshotHeader(null),
+                runLine(T2),
+                line(spanned("a", "a1", 1)),
+                line(spanned("b", "b1", 2)),
+                line(spanned("c", "c1", 3)));
+        InMemoryTraceStore store = TraceStores.with(properties -> properties.setMaxTraces(2));
+
+        TraceReplay.restore(files, store);
+
+        assertThat(RestoredStores.idsIn(store, TraceBucket.ALL)).containsExactly("c", "b");
+    }
+
     private static List<String> listing(InMemoryTraceStore store, TraceBucket bucket) {
         return store.getTraces(bucket, Integer.MAX_VALUE).stream()
                 .map(listed -> listed.bundle().traceId() + "@" + listed.listedAt() + "/" + listed.sequence())
                 .toList();
-    }
-
-    private static List<Object> contentOf(TraceDataBundle bundle) {
-        TraceData data = bundle.snapshot();
-        List<Object> content = new ArrayList<>();
-        content.add(data.spans());
-        content.add(data.complete());
-        content.add(data.failed());
-        content.add(data.droppedSpans());
-        content.add(bundle.capturedLogs());
-        content.add(bundle.request());
-        return content;
     }
 
     /** A crash in the middle of a write leaves the last line without its line break; that is expected and says nothing. */

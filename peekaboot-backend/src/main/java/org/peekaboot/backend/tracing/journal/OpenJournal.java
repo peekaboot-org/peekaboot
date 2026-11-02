@@ -5,23 +5,17 @@ import java.io.IOException;
 import java.io.Writer;
 
 /**
- * The journal being written: its id and how long it has grown. The size is counted in characters,
+ * The journal being written, and how long it has grown. The size is counted in characters,
  * which is bytes for the ASCII nearly every line is; it only decides when the journal is folded.
  * Writer thread only.
  */
 final class OpenJournal implements Closeable {
 
-    private final String id;
     private final Writer out;
     private long chars;
 
-    OpenJournal(String id, Writer out) {
-        this.id = id;
+    OpenJournal(Writer out) {
         this.out = out;
-    }
-
-    String id() {
-        return id;
     }
 
     long chars() {

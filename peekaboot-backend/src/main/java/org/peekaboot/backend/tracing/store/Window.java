@@ -16,14 +16,21 @@ record Window(@Nullable Instant start, @Nullable Instant end) {
 
     /** This window stretched to cover {@code span}; this same instance where it already does. */
     Window including(SpanData span) {
-        boolean earlierStart =
-                span.startTime() != null && (start == null || span.startTime().isBefore(start));
-        boolean laterEnd =
-                span.endTime() != null && (end == null || span.endTime().isAfter(end));
+        return including(span.startTime(), span.endTime());
+    }
+
+    /** This window stretched to cover {@code other}; this same instance where it already does. */
+    Window including(Window other) {
+        return including(other.start, other.end);
+    }
+
+    private Window including(@Nullable Instant otherStart, @Nullable Instant otherEnd) {
+        boolean earlierStart = otherStart != null && (start == null || otherStart.isBefore(start));
+        boolean laterEnd = otherEnd != null && (end == null || otherEnd.isAfter(end));
         if (!earlierStart && !laterEnd) {
             return this;
         }
-        return new Window(earlierStart ? span.startTime() : start, laterEnd ? span.endTime() : end);
+        return new Window(earlierStart ? otherStart : start, laterEnd ? otherEnd : end);
     }
 
     /** Whether {@code span} sits on either edge: the only spans whose removal can shrink this window. */

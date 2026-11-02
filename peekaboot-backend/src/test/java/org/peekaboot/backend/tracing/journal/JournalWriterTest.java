@@ -265,7 +265,7 @@ class JournalWriterTest {
                 new JournalFiles(dir),
                 () -> {
                     folds.incrementAndGet();
-                    return new OpenJournal("j" + folds.get(), new StringWriter() {
+                    return new OpenJournal(new StringWriter() {
                         @Override
                         public void close() throws IOException {
                             throw new IOException("disk full");
@@ -420,7 +420,7 @@ class JournalWriterTest {
     void anUncheckedWriteFailureClosesTheJournal() {
         FailingWriter out = new FailingWriter();
         JournalWriter writer = new JournalWriter(
-                new JournalFiles(dir), () -> new OpenJournal("j1", out), FAST, Long.MAX_VALUE, Clock.systemUTC());
+                new JournalFiles(dir), () -> new OpenJournal(out), FAST, Long.MAX_VALUE, Clock.systemUTC());
         writer.offer(new TraceInput.RunStarted(STARTED));
         writer.stop();
 

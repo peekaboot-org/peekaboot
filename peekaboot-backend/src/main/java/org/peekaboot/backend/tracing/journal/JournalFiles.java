@@ -51,12 +51,18 @@ final class JournalFiles {
      * skipped without counting.
      */
     Contents read(LineVisitor visitor) throws IOException {
+        return read(visitor, () -> {});
+    }
+
+    /** As {@link #read(LineVisitor)}, running {@code afterSnapshot} once the snapshot's lines are visited. */
+    Contents read(LineVisitor visitor, Runnable afterSnapshot) throws IOException {
         Header snapshotHeader = header(snapshot(), true);
         Header journalHeader = header(journal(), false);
         if (snapshotHeader.foreign() || journalHeader.foreign()) {
             return new Contents(true, 0);
         }
         int unreadable = visitBody(snapshot(), visitor);
+        afterSnapshot.run();
         String journalId = journalHeader.id();
         if (journalId != null && !journalId.equals(snapshotHeader.absorbed())) {
             unreadable += visitBody(journal(), visitor);
@@ -68,10 +74,8 @@ final class JournalFiles {
     OpenJournal startJournal() throws IOException {
         OwnerOnlyFiles.createDirectories(directory);
         String id = UUID.randomUUID().toString();
-        OpenJournal journal = new OpenJournal(
-                id,
-                new BufferedWriter(
-                        new OutputStreamWriter(OwnerOnlyFiles.newOutputStream(journal()), StandardCharsets.UTF_8)));
+        OpenJournal journal = new OpenJournal(new BufferedWriter(
+                new OutputStreamWriter(OwnerOnlyFiles.newOutputStream(journal()), StandardCharsets.UTF_8)));
         try {
             journal.write(new JournalLine.JournalHeader(JournalCodec.VERSION, id));
             journal.flush();
@@ -84,6 +88,12 @@ final class JournalFiles {
             throw e;
         }
         return journal;
+    }
+
+    /** The id the journal on disk was started under; null where there is none, or none readable. */
+    @Nullable
+    String journalId() throws IOException {
+        return header(journal(), false).id();
     }
 
     /** Replaces the snapshot in one step, through the same mechanism as every file a store replaces whole. */

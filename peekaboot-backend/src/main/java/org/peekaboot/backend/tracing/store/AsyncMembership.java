@@ -80,6 +80,21 @@ final class AsyncMembership {
         }
     }
 
+    Window evictedSyncWindow() {
+        return evictedSyncWindow;
+    }
+
+    /** Spans a fold carried as async; each enters its subtree as it arrives. */
+    void restoreMembers(Collection<String> spanIds) {
+        members.addAll(spanIds);
+    }
+
+    /** Synchronous spans a fold dropped, counted as {@link #evict} counted them while they were stored. */
+    void restoreEvicted(Window evicted) {
+        evictedSyncWindow = evictedSyncWindow.including(evicted);
+        syncWindow = syncWindow.including(evicted);
+    }
+
     /** A min/max pair cannot drop one span, so the window is refolded once a span on its edge joined. */
     void refresh(Collection<SpanData> stored) {
         if (!syncWindowStale) {

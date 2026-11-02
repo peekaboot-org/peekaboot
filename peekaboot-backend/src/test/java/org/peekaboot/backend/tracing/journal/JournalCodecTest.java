@@ -16,7 +16,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
+import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceInput;
+import org.peekaboot.backend.tracing.store.TraceRemnant;
 
 class JournalCodecTest {
 
@@ -121,6 +123,25 @@ class JournalCodecTest {
         assertThat(untracedLine.toEvent()).isEqualTo(((TraceInput.LogCaptured) inputs[4]).log());
     }
 
+    /** A fold's remnant and bucket lines, pinned like the input lines. */
+    @Test
+    void writesTheFoldsLinesInTheFormatOnDisk() {
+        TraceRemnant remnant =
+                new TraceRemnant(2, 3, true, true, AT, AT.plusMillis(31), AT, AT.plusMillis(10), List.of("s1", "s2"));
+        JournalLine remnantLine = new JournalLine.RemnantLine("t1", remnant);
+        JournalLine bucketLine = new JournalLine.BucketLine(TraceBucket.SLOW, List.of("t2", "t1"));
+
+        assertThat(JournalCodec.encode(remnantLine))
+                .isEqualTo("{\"type\":\"remnant\",\"traceId\":\"t1\",\"remnant\":{\"droppedSpans\":2,\"droppedLogs\":3,"
+                        + "\"parentlessSpanStored\":true,\"failed\":true,\"start\":\"2026-10-31T08:00:00Z\","
+                        + "\"end\":\"2026-10-31T08:00:00.031Z\",\"evictedSyncStart\":\"2026-10-31T08:00:00Z\","
+                        + "\"evictedSyncEnd\":\"2026-10-31T08:00:00.010Z\",\"asyncSpanIds\":[\"s1\",\"s2\"]}}");
+        assertThat(JournalCodec.encode(bucketLine))
+                .isEqualTo("{\"type\":\"bucket\",\"bucket\":\"SLOW\",\"traceIds\":[\"t2\",\"t1\"]}");
+        assertThat(JournalCodec.decode(JournalCodec.encode(remnantLine))).isEqualTo(remnantLine);
+        assertThat(JournalCodec.decode(JournalCodec.encode(bucketLine))).isEqualTo(bucketLine);
+    }
+
     /** A line written outside any trace is an ordinary log line whose trace id is null. */
     @Test
     void anUntracedLineIsALogLineWithoutATrace() {
@@ -151,6 +172,15 @@ class JournalCodecTest {
                         + "\"thread\":\"main\"}",
                 "{\"type\":\"request\",\"request\":{\"method\":\"GET\",\"status\":200}}",
                 "{\"type\":\"discard\"}",
+                "{\"type\":\"remnant\",\"traceId\":\"t1\"}",
+                "{\"type\":\"remnant\",\"remnant\":{\"droppedSpans\":2,\"droppedLogs\":3,\"parentlessSpanStored\":true,"
+                        + "\"failed\":true,\"start\":null,\"end\":null,\"evictedSyncStart\":null,\"evictedSyncEnd\":null,"
+                        + "\"asyncSpanIds\":[]}}",
+                "{\"type\":\"remnant\",\"traceId\":\"t1\",\"remnant\":{\"droppedSpans\":2,\"droppedLogs\":3,"
+                        + "\"parentlessSpanStored\":true,\"failed\":true,\"start\":null,\"end\":null,"
+                        + "\"evictedSyncStart\":null,\"evictedSyncEnd\":null}}",
+                "{\"type\":\"bucket\",\"traceIds\":[\"t1\"]}",
+                "{\"type\":\"bucket\",\"bucket\":\"SLOW\"}",
                 "{\"type\":\"journal\",\"version\":1}"
             })
     void readsNothingFromALineItCannotUse(String text) {

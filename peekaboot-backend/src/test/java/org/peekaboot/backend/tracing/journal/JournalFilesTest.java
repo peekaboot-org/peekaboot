@@ -126,14 +126,10 @@ class JournalFilesTest {
     void aNewJournalStartsWithAHeaderUnderAFreshId() throws IOException {
         JournalTexts.write(files.journal(), journalHeader("old"), DISCARD_A);
 
-        String first;
-        try (OpenJournal journal = files.startJournal()) {
-            first = journal.id();
-        }
-        String second;
-        try (OpenJournal journal = files.startJournal()) {
-            second = journal.id();
-        }
+        files.startJournal().close();
+        String first = files.journalId();
+        files.startJournal().close();
+        String second = files.journalId();
 
         assertThat(JournalTexts.lines(files.journal())).containsExactly(journalHeader(second));
         assertThat(first).isNotEqualTo(second).isNotEqualTo("old");

@@ -67,9 +67,12 @@ public class TraceDataBundle {
     private boolean hasErrorSpan;
     private boolean hasServerErrorSpan;
     private Window fullWindow = Window.EMPTY;
+
     private final AsyncMembership asyncMembership = new AsyncMembership();
     /** Guarded by {@code spansLock}, so the snapshot reads it with the Errors bucket it filed the trace in. */
     private boolean hasErrorLog;
+    /** A failure only a dropped input showed, carried across a fold; guarded by {@code spansLock}. */
+    private boolean droppedInputFailed;
 
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     /** Guarded by {@code logs}, the lock the trim already takes. */
@@ -165,7 +168,10 @@ public class TraceDataBundle {
      * the redirect.
      */
     private void placeInAsyncSubtrees(SpanData span, List<SpanData> absorbedDuplicates) {
-        if (AsyncTaskMarker.isMarked(span.tags()) || asyncMembership.contains(resolve(span.parentId()))) {
+        // a span a fold carried as async enters as it did live, though its entry span was not kept
+        if (AsyncTaskMarker.isMarked(span.tags())
+                || asyncMembership.contains(resolve(span.parentId()))
+                || asyncMembership.contains(span.spanId())) {
             asyncMembership.enter(span.spanId(), absorbedDuplicates);
             joinDescendants(span.spanId());
             return;
@@ -348,6 +354,52 @@ public class TraceDataBundle {
         }
     }
 
+    /**
+     * What this bundle's dropped inputs left behind. A fold reads it from a store no other thread
+     * writes, so the log trim's lock and the span lock are taken one after the other.
+     */
+    public TraceRemnant remnant() {
+        int logsDropped = capturedLogs().droppedLogs();
+        synchronized (spansLock) {
+            Window evictedSync = asyncMembership.evictedSyncWindow();
+            return new TraceRemnant(
+                    droppedSpans,
+                    logsDropped,
+                    parentlessSpanStored,
+                    failed(),
+                    fullWindow.start(),
+                    fullWindow.end(),
+                    evictedSync.start(),
+                    evictedSync.end(),
+                    asyncMembership.members().stream().sorted().toList());
+        }
+    }
+
+    /** Whether the bundle keeps {@code spanId}, stored or folded into a span it stores. */
+    public boolean keepsSpan(String spanId) {
+        synchronized (spansLock) {
+            return spansById.containsKey(spanId) || parentRedirects.containsKey(spanId);
+        }
+    }
+
+    /**
+     * Seeds what a fold carried for the inputs it did not write; the replay calls it before the trace's
+     * kept inputs. It files the trace in no bucket: the snapshot's bucket lines set them all.
+     */
+    void restore(TraceRemnant remnant) {
+        synchronized (logs) {
+            droppedLogs += remnant.droppedLogs();
+        }
+        synchronized (spansLock) {
+            droppedSpans += remnant.droppedSpans();
+            parentlessSpanStored |= remnant.parentlessSpanStored();
+            droppedInputFailed |= remnant.failed();
+            fullWindow = fullWindow.including(new Window(remnant.start(), remnant.end()));
+            asyncMembership.restoreEvicted(new Window(remnant.evictedSyncStart(), remnant.evictedSyncEnd()));
+            asyncMembership.restoreMembers(remnant.asyncSpanIds());
+        }
+    }
+
     public void setRequest(RequestCompletedEvent request) {
         this.request = request;
     }
@@ -465,7 +517,7 @@ public class TraceDataBundle {
 
     /** The Errors rule; must run under {@code spansLock}. */
     private boolean failed() {
-        return hasErrorSpan || hasServerErrorSpan || hasErrorLog;
+        return hasErrorSpan || hasServerErrorSpan || hasErrorLog || droppedInputFailed;
     }
 
     /** The window every span stored so far has covered, async ones included; null before a timed span. */

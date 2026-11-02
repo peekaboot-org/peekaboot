@@ -160,6 +160,31 @@ is done. The gate holds writers only, so for the first moments after startup a r
 store partly restored. A trace from before the restart can answer 404, and a listing or a log
 search can miss it, until the replay reaches it.
 
+A fold (`Checkpoint`) runs after the restore, at shutdown, and when the journal passes its size
+limit. It replays the files into an empty store with the live store's caps and copies, in arrival
+order and as written, the lines of what that store keeps: the spans and logs each trace's caps
+kept, its last request, and the newest `max-untraced-logs` lines written outside any trace. A
+discard, or an eviction from every bucket, ends a trace's bundle, and the trace's next line begins
+another, so the lines before that are not copied. A trace whose caps dropped anything, or whose
+bundle began with a line the fold does not copy, gets one remnant line (`TraceRemnant`) where its
+bundle began. It carries the dropped counts, whether the trace is complete and failed, the windows
+its spans covered, and which kept spans are async, since a span whose async entry span was evicted
+would otherwise arrive synchronous. A restore seeds the trace with it before the kept lines arrive,
+so the snapshot stays within the caps and the restored trace reads as the store held it, in the run
+it began in. The fold reads nothing from the live store, which runs ahead of the files by the
+writer's queue. A run line stays where a line of its run stays after it.
+
+The replay of fewer lines evicts in another order, so buckets are not left to the caps. The
+snapshot ends with one bucket line (`JournalLine.BucketLine`) for each bucket, Errors and Slow
+first, then All, listing its traces in the order the replayed store holds them. A restore holds
+All's cap while the snapshot replays, so no trace it names is lost, then lists exactly the traces
+each bucket line names, in that order, skipping an id it holds no trace for, and lets All evict
+again. Each bucket comes back exactly as the fold saw it. The journal's lines after the snapshot
+apply in the order the journal wrote them, so two traces that arrived at the same moment may come
+back swapped, and a full bucket may keep the other one of the two. A fold does not keep listing or
+log numbers: a replay of fewer lines numbers them anew, which is one reason a cursor from before a
+restart is refused.
+
 The files are a cache, so a restore says what was wrong with them once, at INFO: files of another
 schema version or with a damaged header (both deleted), the count of lines it could not read, or a
 file it could not read at all.
