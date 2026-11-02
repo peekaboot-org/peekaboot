@@ -233,7 +233,9 @@ rows and the overlay header show: `traceId`, `startTime`, `durationMs`, `complet
 `buckets`, `reasons`, `cause`, `issues` (every span's, in tree order), `hotspots`, `counts` and
 `subtree`.
 `counts` is `spans`, `queries(count, totalDurationMs)`, `logs(count, errorCount, warnCount)`,
-`droppedSpans` and `droppedLogs`. `route` is the matched pattern, null where no handler matched.
+`droppedSpans` and `droppedLogs`. `route` is the route tag as recorded; null when the request
+recorded none, or only a placeholder such as `NOT_FOUND`. Under Boot's default static-resource
+mapping (`spring.web.resources.add-mappings`), a request no controller matched carries `/**`.
 The listing is a `TraceListResponse(traces, bucketCounts, filteredBucketCounts, next)`.
 
 `cause` is a `TraceSummary.Cause(type, message, applicationFrame, spanId)` from `TraceCauses`.
@@ -262,6 +264,15 @@ root ends while a client pages lists where its trace entered the bucket, which c
 already served. A cursor carries no filter: sent with other filters, it pages through what those
 match below the same position. It means something only to the running app that issued it, since
 its counters restart with the application context.
+
+### Route Stats
+`RouteStats(method, route, count, errorCount, p50Ms, p95Ms, maxMs, latestErrorTraceId,
+latestSlowTraceId, issueCounts)` is one row of `GET /peekaboot/api/routes`. It covers the complete
+HTTP requests the All bucket holds for one method and route pattern. `route` is null for requests
+recorded without a route tag, or with only a placeholder such as `NOT_FOUND`. Under Boot's
+default static-resource mapping (`spring.web.resources.add-mappings`), a request no controller
+matched carries `/**`, a GET and a POST alike. `RouteListResponse.Window(from, to, traceCount)`
+bounds the requests counted by their earliest and latest start and counts them.
 
 ### HTTP Exchange
 `HttpExchange(HttpRequest request, HttpResponse response)`, built from a `RequestCompletedEvent`

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.BucketCounts;
+import org.peekaboot.backend.domain.trace.RouteListResponse;
 import org.peekaboot.backend.domain.trace.TraceListParameters;
 import org.peekaboot.backend.domain.trace.TraceListResponse;
 import org.peekaboot.backend.domain.trace.TraceResource;
@@ -122,5 +123,10 @@ public class TraceInsightsService {
         }
 
         return traceStore.getTrace(traceId).map(bundle -> traceResources.trace(bundle, traceStore.bucketsOf(traceId)));
+    }
+
+    /** The All bucket's complete HTTP requests per method and route; see {@link RouteAggregation}. */
+    public RouteListResponse listRoutes() {
+        return RouteAggregation.over(traceStore, traceResources);
     }
 }

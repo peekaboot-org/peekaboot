@@ -1,6 +1,7 @@
 package org.peekaboot.backend.controller;
 
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.domain.trace.RouteListResponse;
 import org.peekaboot.backend.domain.trace.TraceListParameters;
 import org.peekaboot.backend.domain.trace.TraceListResponse;
 import org.peekaboot.backend.domain.trace.TraceResource;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.WebRequest;
 
-/** The trace listing and one trace by its id. */
+/** The trace listing, one trace by its id, and the traces per route. */
 @RestController
 @RequestMapping(PeekabootPaths.BASE_PATH)
 public class TraceController {
@@ -50,5 +51,10 @@ public class TraceController {
                 .getTrace(traceId)
                 .orElseThrow(() -> new ApiProblemException(ApiProblem.notFound(
                         "No trace " + traceId + " in the store. The id is unknown or evicted, or tracing is off.")));
+    }
+
+    @GetMapping(value = "/api/routes", produces = MediaType.APPLICATION_JSON_VALUE)
+    public RouteListResponse listRoutes() {
+        return traceInsightsService.listRoutes();
     }
 }

@@ -35,6 +35,10 @@ public class QueryFixtureController {
         return path(tag, status) + "?pauseMs=" + pauseMs;
     }
 
+    public static String routePath(int status, long pauseMs) {
+        return "/fixtures/routes/" + status + "?pauseMs=" + pauseMs;
+    }
+
     @GetMapping(value = "/fixtures/query/{tag}/{status}", produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> answer(
             @PathVariable("tag") String tag,
@@ -44,6 +48,15 @@ public class QueryFixtureController {
         pause(pauseMs);
         log.info("query fixture {} answered {}", tag, status);
         return ResponseEntity.status(status).body(tag);
+    }
+
+    /** RouteStatsIT alone requests this route, so its row counts exactly the requests that test sends. */
+    @GetMapping(value = "/fixtures/routes/{status}", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> route(
+            @PathVariable("status") int status, @RequestParam(name = "pauseMs", defaultValue = "0") long pauseMs)
+            throws InterruptedException {
+        pause(pauseMs);
+        return ResponseEntity.status(status).body("route " + status);
     }
 
     private static void pause(long pauseMs) throws InterruptedException {

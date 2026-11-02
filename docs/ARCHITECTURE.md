@@ -200,7 +200,7 @@ org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces), LogController (log search)
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
@@ -1449,6 +1449,27 @@ response finishes, while spans wait for the exporter's batch. So
 trace that is not complete like a `404` and tries again (see *The collapsed bar's trace fetch
 schedule* in [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md)).
 
+### Route Statistics
+
+`GET /peekaboot/api/routes` folds the All bucket's complete HTTP requests into one row per method
+and route pattern (`RouteAggregation`). It reads each bundle's listing facts first and maps a
+summary only for a complete trace whose root is an HTTP request. A server root without any HTTP
+tag names no request, so no row counts it.
+
+Every row keeps the route tag as recorded. Under Boot's default static-resource mapping
+(`spring.web.resources.add-mappings`), the static-resource handler maps `/**`, so a GET no
+controller matched lands in the `GET /**` row, and an unmapped POST lands in `POST /**` with a 404.
+The `route: null` row holds the requests recorded without a route tag, or with only a placeholder
+such as `NOT_FOUND`.
+
+Every number on a row comes from the summaries the listing serves. `errorCount` counts the `ERROR`
+outcome, `latestSlowTraceId` names the newest request with a `SLOW` reason, and `issueCounts`
+counts the requests carrying each issue type. The percentiles are nearest rank over every request,
+as `AggregateStats` computes the Insights ones.
+
+The window covers the complete HTTP requests All holds at the moment of the call. Nothing is kept
+between calls.
+
 ### Span Deduplication
 
 Deduplication runs primarily on write, in `TraceDataBundle.addSpan`. As each span arrives,
@@ -1700,6 +1721,10 @@ TraceResource                    # GET /peekaboot/api/traces/{traceId}, and one 
 LogSearchResponse                # GET /peekaboot/api/logs
 ├── logs: List<TraceLog>         # newest first, in the store's sequence; traceId and spanId null on an untraced line
 └── next                         # the cursor for the following page; null on the last page
+
+RouteListResponse                # GET /peekaboot/api/routes
+├── window: {from, to, traceCount}   # the earliest and latest start of the requests counted, and their number
+└── routes: List<RouteStats>     # busiest first; see Route Statistics
 ```
 
 What the store holds:

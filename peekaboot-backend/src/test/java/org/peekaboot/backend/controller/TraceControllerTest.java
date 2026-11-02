@@ -174,4 +174,22 @@ class TraceControllerTest {
                 .andExpect(jsonPath("$.detail").value(Matchers.containsString("nope")))
                 .andExpect(jsonPath("$.parameter").value(Matchers.nullValue()));
     }
+
+    @Test
+    void servesTheRoutes() throws Exception {
+        store.addSpan(span("ok-root")
+                .in("ok")
+                .kind(Span.Kind.SERVER)
+                .tag("http.request.method", "GET")
+                .tag("http.route", "/r")
+                .tag("http.response.status_code", "200")
+                .build());
+
+        mvc.perform(get("/peekaboot/api/routes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.window.traceCount").value(1))
+                .andExpect(jsonPath("$.routes[0].route").value("/r"))
+                .andExpect(jsonPath("$.routes[0].latestErrorTraceId").value(Matchers.nullValue()))
+                .andExpect(jsonPath("$.routes[0].issueCounts.CLIENT_ERROR").value(0));
+    }
 }
