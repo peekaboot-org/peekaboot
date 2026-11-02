@@ -35,10 +35,12 @@ rule and the guard username's artifact-first one, each falling back to the appli
 
 `StorageDirectory` only resolves this path; it never touches the disk. While
 `peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and neither
-store ever writes. Every write goes through `OwnerOnlyFiles.replaceAtomically`, the single
-implementation of the mechanism: it creates the parent directory, writes to a sibling `*.tmp`,
-moves that over the target with `ATOMIC_MOVE` (a plain replace where the file system offers
-none), and deletes the temporary if the write fails. On a POSIX file system the directory is
+store ever writes. Every file a store replaces whole goes through
+`OwnerOnlyFiles.replaceAtomically`, the single implementation of the mechanism: it creates the
+parent directory, writes to a sibling `*.tmp`, moves that over the target with `ATOMIC_MOVE` (a
+plain replace where the file system offers none), and deletes the temporary if the write fails.
+The trace journal appends, so it opens its file through `OwnerOnlyFiles.newOutputStream`, the
+call `replaceAtomically` creates its temporary with. On a POSIX file system the directory is
 created `rwx------` and every file `rw-------` regardless of the process umask, though an
 existing directory keeps its permissions. The temporary is always created fresh with
 `CREATE_NEW` after removing whatever sat at its path, so a symlink planted there is deleted,
@@ -120,6 +122,30 @@ The log's in-memory half runs independently of `peekaboot.storage.enabled`. With
 `LifecycleEventLog` still records the current run's start and stop in memory and serves them
 from there; `LifecycleEventFile` is never consulted. That is why a dashboard with persistence
 switched off still shows one start marker for the run in progress.
+
+### `traces.journal.jsonl` and `traces.snapshot.jsonl`
+
+The trace store's inputs (`TraceInput`): every span, log line, completed request and discarded
+trace the store takes, and each run's start, one JSON object per line (`JournalLine`,
+`JournalCodec`), as the store holds them. Request and response headers, the query string and
+parameters arrive masked from capture (`RequestCaptureFilter`). Span attributes, SQL with its bind
+parameters, log messages and stack traces are written raw and masked when read, as on the live
+store.
+
+`JournalWriter` appends them on one writer thread behind a bounded queue (10,000 inputs). A full
+queue drops the input, so neither the exporter nor a logging thread waits, and the writer logs
+one WARN a minute at most with the count. It flushes every `flushInterval`, so a crash loses at
+most that much. A run line starts each run's lines. It carries the run's `startedAt`, the
+lifecycle run's instant, which is known only once the application is ready, so the writer holds
+a run's inputs back until then and writes them after the run line. A run that stops before it is
+ready gets a run line with `startedAt: null`. A write that fails logs one WARN, the last the
+writer logs that run, and ends writing for the run; the store keeps going in memory.
+
+Each file starts with a header line carrying the schema version (`JournalCodec.VERSION`). Every
+fold starts a fresh journal under a new id, and the snapshot's header names the journal it
+absorbed (`JournalFiles`), so a crash between writing the snapshot and starting the next journal
+never replays that journal twice. A last line without a line break is what a crash mid-write
+leaves; it is skipped without a log line.
 
 ### API and dashboard
 
