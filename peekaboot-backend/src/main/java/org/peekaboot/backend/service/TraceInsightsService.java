@@ -122,7 +122,7 @@ public class TraceInsightsService {
             return Optional.empty();
         }
 
-        return traceStore.getTrace(traceId).map(bundle -> traceResources.trace(bundle, traceStore.bucketsOf(traceId)));
+        return traceStore.getTrace(traceId).map(bundle -> TraceReads.whole(traceStore, traceResources, bundle));
     }
 
     /** The All bucket's complete HTTP requests per method and route; see {@link RouteAggregation}. */

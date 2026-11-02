@@ -31,8 +31,7 @@ final class RowResources {
     TraceResource of(RowSource row) {
         return mapped.computeIfAbsent(
                 new RowKey(row.bundle().traceId(), row.subtreeRootSpanId()),
-                key -> traceResources.row(
-                        row.bundle(), key.subtreeRootSpanId(), traceStore.bucketsOf(key.traceId()), view));
+                key -> TraceReads.row(traceStore, traceResources, row.bundle(), key.subtreeRootSpanId(), view));
     }
 
     TraceSummary summaryOf(RowSource row) {

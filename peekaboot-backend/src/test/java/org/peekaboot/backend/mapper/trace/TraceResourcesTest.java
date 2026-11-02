@@ -6,6 +6,7 @@ import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.tracing.store.UnstoredBundles.UNFILED;
 
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
@@ -217,9 +218,9 @@ class TraceResourcesTest {
             }
         };
         movingRedirects.addSpan(
-                span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
+                span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build(), UNFILED);
         movingRedirects.addLog(
-                log("t1").inSpan("root").at("ERROR").saying("payment declined").build());
+                log("t1").inSpan("root").at("ERROR").saying("payment declined").build(), UNFILED);
 
         TraceResource trace = resources.trace(movingRedirects, Set.of());
 
@@ -244,10 +245,10 @@ class TraceResourcesTest {
             }
         };
         movingRedirects.addSpan(
-                span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
+                span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build(), UNFILED);
         movingRedirects.addSpan(
-                asyncTask("task").in("t1").parent("root").at(2, 50).build());
-        movingRedirects.addLog(log("t1").inSpan("task").saying("inside").build());
+                asyncTask("task").in("t1").parent("root").at(2, 50).build(), UNFILED);
+        movingRedirects.addLog(log("t1").inSpan("task").saying("inside").build(), UNFILED);
 
         TraceResource row = resources.row(movingRedirects, "task", Set.of(), TraceView.FULL);
 

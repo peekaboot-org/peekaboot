@@ -110,6 +110,9 @@ written to `TestLogger` on thread `main` unless `from(...)` or `onThread(...)` s
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`.
+`TraceStores.landingAfterTheFirstBucketRead(span)` is such a store that adds `span` right after
+its first `bucketsOf` read, so a reader test can tell whether the trace was mapped before its
+buckets were read.
 `TraceListings.listing()` builds the listing's `TraceListParameters` the way a request sends
 them, every parameter absent unless a test names it.
 `LogSearches.search()` builds the log search's `LogSearchParameters` the same way.
@@ -138,6 +141,11 @@ reach `Spans` (the backend publishes no test jar), so its `integration/TestSpans
 builder shape for the ITs that write spans straight to the store. `peekaboot-spring-boot-autoconfigure`
 needs only a few fixed shapes, so its `TraceFixtures` names them (`addRootSpan`, `query`,
 `rootSpanLasting`, `vendorFrameLog`) instead.
+
+`Monitors` (backend test support) reads from the JVM which thread holds the monitor another
+thread waits for. A concurrency test holds a lock itself, starts the threads it interleaves, and
+waits on `Monitors.isWaitingFor(waiter, owner)` before it asserts, so the interleaving is pinned
+without a delay. Platform threads only: the thread MXBean does not report virtual threads.
 
 `MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123..."`) on purpose.
 The file is full of strings shaped exactly like the credentials the engine detects, and

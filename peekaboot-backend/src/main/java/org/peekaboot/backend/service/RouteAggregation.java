@@ -52,8 +52,8 @@ final class RouteAggregation {
 
     /**
      * Reads the All bucket's entries under its lock, then per bundle its listing facts under one
-     * lock, then its summary through {@link TraceResources#row}, which reads the bundle's spans and
-     * its logs one lock each, with the bucket membership read one bucket at a time. The facts skip
+     * lock, then its summary through {@link TraceReads#row}, which reads the bundle's spans and
+     * its logs one lock each and the bucket membership after them, one bucket at a time. The facts skip
      * what no route counts before anything is mapped. A trace still in flight at the facts read has
      * no root yet, so it waits for the next call. What changes once a trace is complete, such as a
      * late ERROR log or a failing async task, counts as the summary reads it.
@@ -66,9 +66,7 @@ final class RouteAggregation {
         for (ListedTrace listed : traceStore.getTraces(TraceBucket.ALL, Integer.MAX_VALUE)) {
             ListingRoots roots = listed.bundle().listingRoots();
             if (RootActionTypes.of(roots.root()) == RootActionType.HTTP_REQUEST) {
-                String traceId = listed.bundle().traceId();
-                aggregation.add(traceResources
-                        .row(listed.bundle(), null, traceStore.bucketsOf(traceId), TraceView.SUMMARY)
+                aggregation.add(TraceReads.row(traceStore, traceResources, listed.bundle(), null, TraceView.SUMMARY)
                         .summary());
             }
         }

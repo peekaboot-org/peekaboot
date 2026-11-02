@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -66,7 +67,9 @@ public class TraceDataBundle {
     private boolean hasServerErrorSpan;
     private Window fullWindow = Window.EMPTY;
     private final AsyncMembership asyncMembership = new AsyncMembership();
-    private volatile boolean hasErrorLog;
+    /** Guarded by {@code spansLock}, so the snapshot reads it with the Errors bucket it filed the trace in. */
+    private boolean hasErrorLog;
+
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     /** Guarded by {@code logs}, the lock the trim already takes. */
     private int droppedLogs;
@@ -92,8 +95,12 @@ public class TraceDataBundle {
      * versa) before the {@code maxSpans} cap is checked, so the cap counts real spans rather
      * than double-instrumented duplicates. See the class Javadoc for why this has to check
      * both directions.
+     *
+     * <p>{@code fileInBuckets} runs before the span lock is released, so no reader sees the span
+     * without the buckets it files the trace in. It may take a bucket's monitor; nothing that holds
+     * one waits for this lock (see {@link InMemoryTraceStore}).
      */
-    public void addSpan(SpanData span) {
+    public void addSpan(SpanData span, Consumer<TraceDataBundle> fileInBuckets) {
         synchronized (spansLock) {
             if (!isDuplicateOfStoredParent(span)) {
                 store(span);
@@ -105,6 +112,7 @@ public class TraceDataBundle {
                 droppedSpans += excess;
                 evictOldest(excess);
             }
+            fileInBuckets.accept(this);
         }
     }
 
@@ -305,9 +313,17 @@ public class TraceDataBundle {
         }
     }
 
-    public void addLog(LogCapturedEvent log) {
+    /**
+     * An ERROR line raises the failure flag and runs {@code fileInErrors} under the span lock, the
+     * one {@link #snapshot()} reads the flag under. Any other line takes no span lock, so a logging
+     * thread pays for it only when it logs an error.
+     */
+    public void addLog(LogCapturedEvent log, Consumer<TraceDataBundle> fileInErrors) {
         if (log.isError()) {
-            hasErrorLog = true;
+            synchronized (spansLock) {
+                hasErrorLog = true;
+                fileInErrors.accept(this);
+            }
         }
         logs.add(log);
         // cheap fast path; the trim re-checks under the lock

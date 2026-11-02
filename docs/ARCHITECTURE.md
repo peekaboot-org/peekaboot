@@ -226,7 +226,7 @@ org.peekaboot.backend/
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
 │                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
-├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, ...
+├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, TraceReads, ...
 ├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page, the Logs tab and a span's details panel fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
 ├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
@@ -1369,8 +1369,9 @@ row to `TraceResources.row`, and the single trace's bundle to `TraceResources.tr
    names no request. Every `SpanNode.issues` list is empty.
    **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in.
-3. `TraceResources` reads what only the stored bundle knows into `TraceFacts`: the buckets
-   `TraceStore.bucketsOf` names, the store's failure flag, one read of the logs with the
+3. `TraceResources` reads what only the stored bundle knows into `TraceFacts`: the buckets it
+   is handed (`TraceReads` hands it none and sets the ones `TraceStore.bucketsOf` names after the
+   mapping), the store's failure flag, one read of the logs with the
    dropped log count (`TraceDataBundle.capturedLogs()`, under one lock), the ERROR logs among
    them mapped for the wire, and the dropped span count. `TraceSummaries` turns the tree and
    the facts into the summary: the reasons `TraceReasons` reads off the spans and the ERROR
@@ -1399,11 +1400,16 @@ set or one of its reasons is a failure. An async row ignores the store's flag, w
 request that dispatched it, and fails on its own reasons alone. Its buckets and dropped counts
 are its trace's.
 
-The buckets are read before the snapshot and the logs. A span or ERROR log that fails the trace
-in between shows in the outcome but not yet in `buckets`, so one response can briefly read
-`outcome: ERROR` with `buckets: []`. A span arriving in between can also move the window across
-the slow threshold, so `buckets` can name `SLOW` without a `SLOW` reason, or the reverse. The
-next poll agrees.
+The store files a trace in its buckets in the same step that stores the span or the ERROR line
+that files it, under the bundle's span lock (`TraceDataBundle.addSpan(span, fileInBuckets)`).
+Every reader maps the trace first and reads its buckets afterwards (`TraceReads`), so a response
+never names fewer buckets than its data puts the trace in. The locks nest in one order: a
+bundle's span lock, then All's monitor, then Errors' or Slow's. Nothing holds a bucket's monitor
+while it waits for a bundle, and nothing holds Errors' or Slow's while it waits for All's, so the
+nesting cannot deadlock (`InMemoryTraceStoreTest.nothingWaitsForABundleWhileHoldingABucket`).
+A span arriving between the mapping and the bucket read can still name a bucket the mapped data
+does not explain yet, an async entry can take the trace out of Slow, and a full bucket can evict
+it. The next poll agrees.
 
 `TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
 creation order, the root span, the `complete` and `failed` flags, the trace window and the dropped span count.

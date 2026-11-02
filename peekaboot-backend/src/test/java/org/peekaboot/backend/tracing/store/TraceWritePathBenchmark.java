@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.tracing.store.UnstoredBundles.UNFILED;
 
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
@@ -62,7 +63,7 @@ class TraceWritePathBenchmark {
         // InMemoryTraceStoreTest cover this in depth; this is a cheap guard against the
         // benchmark silently drifting from what the fold logic actually does).
         TraceDataBundle sanityBundle = new TraceDataBundle("bench-sanity", CAP, Integer.MAX_VALUE);
-        rawSpans.forEach(span -> sanityBundle.addSpan(span));
+        rawSpans.forEach(span -> sanityBundle.addSpan(span, UNFILED));
         assertThat(sanityBundle.snapshot().spans()).hasSize(REAL_QUERY_COUNT + 1);
         assertThat(sanityBundle.snapshot().droppedSpans()).isZero();
 
@@ -117,7 +118,7 @@ class TraceWritePathBenchmark {
         TraceDataBundle bundle = new TraceDataBundle(TRACE_ID, cap, Integer.MAX_VALUE);
         long start = System.nanoTime();
         for (SpanData span : spans) {
-            bundle.addSpan(span);
+            bundle.addSpan(span, UNFILED);
         }
         long elapsed = System.nanoTime() - start;
         if (bundle.snapshot().spans().isEmpty()) {

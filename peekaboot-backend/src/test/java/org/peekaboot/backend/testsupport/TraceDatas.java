@@ -1,5 +1,7 @@
 package org.peekaboot.backend.testsupport;
 
+import static org.peekaboot.backend.tracing.store.UnstoredBundles.UNFILED;
+
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
@@ -16,7 +18,7 @@ public final class TraceDatas {
     public static TraceData of(String traceId, SpanData... spans) {
         TraceDataBundle bundle = new TraceDataBundle(traceId, Integer.MAX_VALUE, Integer.MAX_VALUE);
         for (SpanData span : spans) {
-            bundle.addSpan(span);
+            bundle.addSpan(span, UNFILED);
         }
         return bundle.snapshot();
     }

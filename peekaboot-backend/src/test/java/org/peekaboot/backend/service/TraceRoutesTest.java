@@ -138,6 +138,27 @@ class TraceRoutesTest {
         assertThat(route.latestErrorTraceId()).isEqualTo("logged");
     }
 
+    /**
+     * A request's summary is mapped before its buckets are read, so a failing span that lands right
+     * after the bucket read does not count yet. The store below lands one there.
+     */
+    @Test
+    void aRequestIsMappedBeforeItsBucketsAreRead() {
+        InMemoryTraceStore landing = TraceStores.landingAfterTheFirstBucketRead(span("late")
+                .in("t1")
+                .parent("root-t1")
+                .named("charge")
+                .at(5, 5)
+                .exception("IllegalStateException", "boom")
+                .build());
+        landing.addSpan(request("t1", "GET", "/r", 200, 0, 20).build());
+
+        RouteStats route = newService(landing).listRoutes().routes().getFirst();
+
+        assertThat(route.count()).isEqualTo(1);
+        assertThat(route.errorCount()).isZero();
+    }
+
     /** The newest request at or above the slow threshold, the Slow bucket's rule. */
     @Test
     void namesTheNewestSlowRequest() {

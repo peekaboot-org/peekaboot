@@ -35,6 +35,26 @@ public record TraceSummary(
         Counts counts,
         @Nullable SubtreeView subtree) {
 
+    /** This summary with {@code newBuckets}, read after the rest of it (see {@code TraceReads}). */
+    public TraceSummary withBuckets(List<TraceBucket> newBuckets) {
+        return new TraceSummary(
+                traceId,
+                startTime,
+                durationMs,
+                complete,
+                rootActionType,
+                rootOperation,
+                request,
+                outcome,
+                newBuckets,
+                reasons,
+                cause,
+                issues,
+                hotspots,
+                counts,
+                subtree);
+    }
+
     /**
      * The root span's HTTP request.
      *

@@ -1438,6 +1438,49 @@ class TraceInsightsServiceTest {
                         tuple("http2", RootActionType.HTTP_REQUEST));
     }
 
+    /**
+     * A failing root that lands right after the bucket read must not make the trace say more than its
+     * buckets do. The store below lands it there, inside {@code bucketsOf}, so the order of the two reads
+     * decides what the response says.
+     */
+    @Test
+    void aTraceIsMappedBeforeItsBucketsAreRead() {
+        InMemoryTraceStore landing = TraceStores.landingAfterTheFirstBucketRead(span("root")
+                .in("t1")
+                .kind(Span.Kind.SERVER)
+                .at(0, 20)
+                .exception("IllegalStateException", "boom")
+                .build());
+        landing.addSpan(span("child").in("t1").parent("root").at(10, 5).build());
+
+        TraceSummary summary = newService(landing).getTrace("t1").orElseThrow().summary();
+
+        assertThat(summary.outcome()).isEqualTo(TraceOutcome.IN_PROGRESS);
+        assertThat(summary.buckets()).isEmpty();
+    }
+
+    /** The listing leaves a fragment out, so here a failing span lands in a trace already complete. */
+    @Test
+    void aListedRowIsMappedBeforeItsBucketsAreRead() {
+        InMemoryTraceStore landing = TraceStores.landingAfterTheFirstBucketRead(span("late")
+                .in("t1")
+                .parent("root")
+                .named("charge")
+                .at(5, 5)
+                .exception("IllegalStateException", "boom")
+                .build());
+        landing.addSpan(span("root").in("t1").kind(Span.Kind.SERVER).at(0, 20).build());
+
+        TraceSummary summary = newService(landing)
+                .listTraces(listing().build())
+                .traces()
+                .getFirst()
+                .summary();
+
+        assertThat(summary.outcome()).isEqualTo(TraceOutcome.OK);
+        assertThat(summary.buckets()).isEmpty();
+    }
+
     private static SpanData rootSpanWithoutTags(String traceId, String spanId, String name) {
         return span(spanId).in(traceId).named(name).build();
     }

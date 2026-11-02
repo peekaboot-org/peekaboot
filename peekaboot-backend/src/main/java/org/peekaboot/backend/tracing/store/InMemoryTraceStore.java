@@ -23,6 +23,13 @@ import org.peekaboot.backend.tracing.event.SpanData;
  * span export order, so the listing can place rows that arrive after their trace did. A log line
  * written outside any trace goes to a ring of its own beside them, the newest
  * {@code max-untraced-logs}.
+ *
+ * <p>A trace is filed in its buckets under its bundle's span lock, in the same step that stores the
+ * span or the ERROR line that files it, so a reader that maps a trace and then reads its buckets
+ * finds every bucket the mapped spans put it in. The locks nest in one order: a bundle's span lock,
+ * then All's monitor, then Errors' or Slow's. Nothing holds a bucket's monitor while it waits for a
+ * bundle, and nothing holds Errors' or Slow's while it waits for All's, so the nesting cannot
+ * deadlock.
  */
 public class InMemoryTraceStore implements TraceStore {
 
@@ -60,8 +67,7 @@ public class InMemoryTraceStore implements TraceStore {
     public void addSpan(SpanData span) {
         newestSpanOrder.accumulateAndGet(span.creationOrder(), Math::max);
         TraceDataBundle bundle = resolveBundle(span.traceId());
-        bundle.addSpan(span);
-        classify(bundle);
+        bundle.addSpan(span, this::classify);
     }
 
     /** A line without a trace id goes to the untraced ring, and into no bucket whatever its level. */
@@ -73,12 +79,9 @@ public class InMemoryTraceStore implements TraceStore {
             return;
         }
         TraceDataBundle bundle = resolveBundle(stored.traceId());
-        bundle.addLog(stored);
         // logs never affect slow classification and can only ever add a trace to the
         // Errors bucket, never remove it, so a full classify() pass is unnecessary here.
-        if (stored.isError()) {
-            listIn(TraceBucket.ERRORS, bundle);
-        }
+        bundle.addLog(stored, filed -> listIn(TraceBucket.ERRORS, filed));
     }
 
     @Override
@@ -184,7 +187,8 @@ public class InMemoryTraceStore implements TraceStore {
      * window past the threshold on background work alone; the entry's arrival takes the child
      * into its subtree and the window returns to what the caller waited for. Without the removal
      * below the Slow bucket would keep listing that trace beside a duration disagreeing with
-     * the one it was admitted by.
+     * the one it was admitted by. Runs under the bundle's span lock (see
+     * {@link TraceDataBundle#addSpan(SpanData, java.util.function.Consumer)}).
      */
     private void classify(TraceDataBundle bundle) {
         if (bundle.hasError()) {
@@ -200,5 +204,10 @@ public class InMemoryTraceStore implements TraceStore {
     private boolean isSlow(TraceDataBundle bundle) {
         Duration window = bundle.synchronousWindow();
         return window != null && window.toMillis() >= slowTraceThresholdMs;
+    }
+
+    /** Test-only: the monitor a bucket's reads and writes synchronize on, so a test can hold a writer at its bucket step. */
+    Object bucketLockForTesting(TraceBucket bucket) {
+        return buckets.get(bucket);
     }
 }
