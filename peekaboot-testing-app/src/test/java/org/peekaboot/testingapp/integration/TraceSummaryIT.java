@@ -2,11 +2,13 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.fixtures.OutcomeFixtureController;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
@@ -26,12 +28,36 @@ class TraceSummaryIT extends TestingAppITBase {
     @Autowired
     private OrderLineRepository orderLineRepository;
 
+    @Autowired
+    private PeekabootTracingProperties tracingProperties;
+
     private static List<String> reasonKinds(JsonNode trace) {
         return trace.path("summary")
                 .path("reasons")
                 .valueStream()
                 .map(reason -> reason.path("kind").asString())
                 .toList();
+    }
+
+    private static List<JsonNode> reasonsOfKind(JsonNode trace, String kind) {
+        return trace.path("summary")
+                .path("reasons")
+                .valueStream()
+                .filter(reason -> kind.equals(reason.path("kind").asString()))
+                .toList();
+    }
+
+    private boolean ranSlow(JsonNode trace) {
+        return trace.path("summary").path("durationMs").asLong() >= tracingProperties.getSlowTraceThresholdMs();
+    }
+
+    /** Load can hold any request past the slow-trace threshold, and SLOW then follows every other reason and bucket. */
+    private List<String> plusSlowIfItRanSlow(JsonNode trace, String... kinds) {
+        List<String> expected = new ArrayList<>(List.of(kinds));
+        if (ranSlow(trace)) {
+            expected.add("SLOW");
+        }
+        return expected;
     }
 
     private static List<String> buckets(JsonNode trace) {
@@ -76,7 +102,7 @@ class TraceSummaryIT extends TestingAppITBase {
 
         assertThat(trace.path("summary").path("outcome").asString()).isEqualTo("OK");
         assertThat(trace.path("summary").path("reasons").isArray()).isTrue();
-        assertThat(trace.path("summary").path("reasons").isEmpty()).isTrue();
+        assertThat(reasonKinds(trace)).isEqualTo(plusSlowIfItRanSlow(trace));
     }
 
     /** A request that logged an ERROR failed, though every span ended OK. */
@@ -85,13 +111,19 @@ class TraceSummaryIT extends TestingAppITBase {
         String traceId = traces.get(OutcomeFixtureController.ERROR_LOG_PATH);
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
+        if (ranSlow(trace)) {
+            // the store files Slow a moment after the root is stored
+            traces.awaitTraceInBucket("slow", traceId);
+            trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
+        }
 
         assertThat(trace.path("summary").path("outcome").asString()).isEqualTo("ERROR");
-        assertThat(buckets(trace)).containsExactly("ERRORS");
-        assertThat(trace.path("summary").path("reasons")).singleElement().satisfies(reason -> {
-            assertThat(reason.path("kind").asString()).isEqualTo("ERROR_LOG");
-            assertThat(reason.path("detail").asString()).isEqualTo(OutcomeFixtureController.ERROR_LOG_MESSAGE);
-        });
+        assertThat(buckets(trace)).isEqualTo(plusSlowIfItRanSlow(trace, "ERRORS"));
+        assertThat(reasonKinds(trace)).isEqualTo(plusSlowIfItRanSlow(trace, "ERROR_LOG"));
+        assertThat(reasonsOfKind(trace, "ERROR_LOG"))
+                .singleElement()
+                .satisfies(reason -> assertThat(reason.path("detail").asString())
+                        .isEqualTo(OutcomeFixtureController.ERROR_LOG_MESSAGE));
     }
 
     @Test
@@ -101,8 +133,8 @@ class TraceSummaryIT extends TestingAppITBase {
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("summary").path("outcome").asString()).isEqualTo("ERROR");
-        assertThat(trace.path("summary").path("reasons")).singleElement().satisfies(reason -> {
-            assertThat(reason.path("kind").asString()).isEqualTo("SERVER_ERROR");
+        assertThat(reasonKinds(trace)).isEqualTo(plusSlowIfItRanSlow(trace, "SERVER_ERROR"));
+        assertThat(reasonsOfKind(trace, "SERVER_ERROR")).singleElement().satisfies(reason -> {
             assertThat(reason.path("spanId").asString())
                     .isEqualTo(SpanTree.spanId(trace.path("data").path("rootSpan")));
             assertThat(reason.path("detail").asString()).isEqualTo("Answered with status 503.");
@@ -120,9 +152,10 @@ class TraceSummaryIT extends TestingAppITBase {
                         TraceApiClient.errorLogged("order reconciliation gateway is unreachable")));
 
         assertThat(trace.path("summary").path("outcome").asString()).isEqualTo("ERROR");
-        assertThat(reasonKinds(trace))
-                .contains("EXCEPTION", "SERVER_ERROR", "ERROR_LOG")
-                .doesNotContain("SLOW");
+        assertThat(reasonKinds(trace)).contains("EXCEPTION", "SERVER_ERROR", "ERROR_LOG");
+        assertThat(reasonKinds(trace).contains("SLOW"))
+                .as("SLOW exactly when the request ran slow")
+                .isEqualTo(ranSlow(trace));
     }
 
     /**
