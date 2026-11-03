@@ -45,7 +45,7 @@
         <!-- surefire and failsafe ship as one release. -->
         <surefire.version>3.6.1</surefire.version>
 
-        <jacoco.version>0.8.15</jacoco.version>
+        <jacoco.version>0.8.16</jacoco.version>
         <!-- The one switch that turns the coverage gate off, data guard included. -->
         <jacoco.skip>false</jacoco.skip>
         <!-- Empty default so @{jacocoArgLine} still resolves when JaCoCo is skipped. -->
