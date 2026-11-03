@@ -23,7 +23,7 @@
              archives - spring-boot-starter-parent does not set this -->
         <project.build.outputTimestamp>2026-10-17T22:03:59Z</project.build.outputTimestamp>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
-        <jacoco.version>0.8.15</jacoco.version>
+        <jacoco.version>0.8.16</jacoco.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <pmd.version>7.28.0</pmd.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
