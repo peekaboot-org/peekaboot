@@ -33,7 +33,7 @@
 
         <maven.compiler.release>${peekaboot.java.version}</maven.compiler.release>
 
-        <spring-boot.version>4.1.1</spring-boot.version>
+        <spring-boot.version>4.1.2</spring-boot.version>
 
         <!-- The starter's query instrumentation and the autoconfigure module's compile-only
              view of it; one version, so the two cannot drift. -->
