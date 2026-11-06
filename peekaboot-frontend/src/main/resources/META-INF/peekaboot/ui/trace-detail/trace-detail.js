@@ -21,7 +21,7 @@ import {registerBundledFonts} from '../shared/fonts.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
 import {badge, tabStrip} from '../shared/components.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
-import {inProgressBadge, isSlowTrace, slowBadge, truncatedBadge} from '../shared/trace-stats.js';
+import {inProgressBadge, interruptedBadge, isSlowTrace, slowBadge, truncatedBadge} from '../shared/trace-stats.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
@@ -270,13 +270,19 @@ function header(trace) {
             text: formatDurationMs(summary.durationMs)
         }),
         badge(statusLabel(status), statusVariant(status)),
-        summary.complete ? null : inProgressBadge(),
+        completionBadge(summary),
         slow ? slowBadge() : null,
         summary.counts.droppedSpans > 0 ? truncatedBadge() : null);
 
     return el('div', {className: 'pk-overlay__header'},
         el('div', {className: 'pk-overlay__header-main'}, title, meta),
         button({className: 'pk-unbutton pk-overlay__close', text: '×', title: 'Close', attrs: {'aria-label': 'Close trace details'}}));
+}
+
+/** A trace still waiting for its root says so; one whose application stopped first says that instead. */
+function completionBadge(summary) {
+    if (summary.outcome === 'INTERRUPTED') return interruptedBadge();
+    return summary.complete ? null : inProgressBadge();
 }
 
 /**

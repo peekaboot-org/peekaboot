@@ -391,7 +391,9 @@ have to take `@ResourceLock(..., mode = READ_WRITE)` over it while every class p
 data there took the `READ` side. That lock would serialize half the suite for one class's exact
 counts. Pinning is the cheaper answer and the one every class here takes: assert on your own
 trace, never on what the store holds. A class on its own context configuration is isolated
-anyway.
+anyway. An IT that needs persisted traces boots a context of its own on a `@TempDir` it seeds
+before the context starts (`TraceJournalFixture`, `LifecycleHistoryFixture`) and closes it with
+the class.
 
 Pinning to a traceId does not mean searching the store for it. Every captured request answers
 with `Server-Timing: trace;desc="00-<traceId>-..."`, whatever its content type or status.

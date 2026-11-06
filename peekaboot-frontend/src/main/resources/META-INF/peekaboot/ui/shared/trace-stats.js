@@ -51,6 +51,13 @@ export function inProgressBadge() {
     });
 }
 
+/** The one wording for a trace whose application stopped before its root span arrived, wherever the trace is shown. */
+export function interruptedBadge() {
+    return badge('INTERRUPTED', 'muted', {
+        title: 'The application stopped before the root span arrived, so this trace will never complete. This shows the spans that did arrive.'
+    });
+}
+
 /** Whether the trace's summary says it reached the slow-trace threshold, the rule the Slow bucket admits by. */
 export function isSlowTrace(summary) {
     return (summary.reasons || []).some(reason => reason.kind === 'SLOW');
