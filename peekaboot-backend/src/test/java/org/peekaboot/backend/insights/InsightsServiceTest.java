@@ -83,12 +83,21 @@ class InsightsServiceTest {
         assertThat(tiles).extracting(InsightsConfigResponse.Tile::value).containsOnlyNulls();
     }
 
+    /** The cpu panel is charted in percent and names no unit per series; its ratio meters serve 0 to 100 all the same. */
+    @Test
+    void theCpuPanelServesItsRatioMetersAsPercentages() {
+        service.collector().tick(10_000);
+
+        assertThat(service.collector().levelData(0).tickValues().get("cpu.process"))
+                .containsExactly(100.0);
+    }
+
     @Test
     void levelDataMapsNaNToNull() {
         service.collector().tick(10_000); // most default meters unresolved in SimpleMeterRegistry
         LevelDataResponse data = service.data(0);
         assertThat(data.count()).isEqualTo(1);
-        assertThat(data.series().get("cpu.process").values()).containsExactly(1.0);
+        assertThat(data.series().get("cpu.process").values()).containsExactly(100.0);
         assertThat(data.series().get("heap.used").values()).containsExactly((Double) null);
     }
 

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.ToDoubleFunction;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.insights.config.Unit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -23,6 +24,10 @@ import org.slf4j.event.Level;
  * re-resolved on every call: Micrometer registers meters lazily and new tag
  * combinations (e.g. new URIs) can appear at any time. Rates divide by the time that
  * really elapsed since the previous sample, not by the nominal tick interval.
+ *
+ * <p>Every value is served in the unit its series declares. A time gauge reads in
+ * milliseconds. A percent series reads a ratio from 0 to 1, as Micrometer's CPU and GC
+ * meters report one, and serves it from 0 to 100.
  */
 final class SeriesSampler {
 
@@ -54,6 +59,8 @@ final class SeriesSampler {
      */
     private static final int UNRESOLVED_METER_REPORT_TICKS = 3;
 
+    private static final double PERCENT_PER_RATIO = 100.0;
+
     private final SeriesDef def;
     private final MeterRegistry registry;
     private double previousCount = Double.NaN;
@@ -83,12 +90,14 @@ final class SeriesSampler {
     double sample(long elapsedMillis) {
         List<Meter> meters = matching(def.meter());
         meterOutage.track(meters.isEmpty());
-        return switch (def.stat()) {
-            case VALUE -> sampleValue(meters);
-            case RATE -> sampleRate(meters, elapsedMillis);
-            case AVG -> sampleAvg(meters);
-            case MAX -> sampleMax(meters);
-        };
+        double value =
+                switch (def.stat()) {
+                    case VALUE -> sampleValue(meters);
+                    case RATE -> sampleRate(meters, elapsedMillis);
+                    case AVG -> sampleAvg(meters);
+                    case MAX -> sampleMax(meters);
+                };
+        return def.unit() == Unit.PERCENT ? value * PERCENT_PER_RATIO : value;
     }
 
     private List<Meter> matching(String name) {
@@ -150,7 +159,7 @@ final class SeriesSampler {
 
     private static double currentValue(List<Meter> meters) {
         return sum(meters, meter -> switch (meter) {
-            case TimeGauge tg -> tg.value(TimeUnit.SECONDS);
+            case TimeGauge tg -> tg.value(TimeUnit.MILLISECONDS);
             case Gauge gauge -> gauge.value();
             case LongTaskTimer ltt -> ltt.activeTasks();
             case Counter counter -> counter.count();

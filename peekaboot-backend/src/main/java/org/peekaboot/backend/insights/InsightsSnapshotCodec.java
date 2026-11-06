@@ -30,7 +30,8 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
 final class InsightsSnapshotCodec {
 
     static final int MAGIC = 0x504B494E; // "PKIN"
-    static final int SCHEMA_VERSION = 1;
+    /** 2 since percent series hold 0 to 100 and time gauges milliseconds; a version 1 file holds ratios and seconds. */
+    static final int SCHEMA_VERSION = 2;
 
     private static final int MAX_SERIES = 10_000;
 

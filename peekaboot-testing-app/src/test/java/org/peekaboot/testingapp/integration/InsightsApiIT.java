@@ -43,6 +43,21 @@ class InsightsApiIT extends TestingAppITBase {
         assertThat(config.get("tiles")).isNotEmpty();
     }
 
+    /** A time gauge serves milliseconds, so started-at is an epoch instant past 2001 and not after now. */
+    @Test
+    void theStartedAtTileServesEpochMilliseconds() {
+        JsonNode tiles = api.getJson("/peekaboot/api/insights/config").get("tiles");
+        JsonNode startedAt = null;
+        for (JsonNode tile : tiles) {
+            if ("started-at".equals(tile.get("id").asString())) {
+                startedAt = tile;
+            }
+        }
+
+        assertThat(startedAt).isNotNull();
+        assertThat(startedAt.get("value").asDouble()).isBetween(1e12, (double) System.currentTimeMillis());
+    }
+
     @Test
     void dataReturnsGrowingTickSeries() {
         // level 0 ticks every 250ms in the test profile, so two samples are a moment away

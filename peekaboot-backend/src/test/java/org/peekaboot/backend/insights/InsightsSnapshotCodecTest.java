@@ -110,6 +110,20 @@ class InsightsSnapshotCodecTest {
         assertThatThrownBy(() -> decoded(bytes)).isInstanceOf(IOException.class).hasMessageContaining("schema");
     }
 
+    /** A version 1 file holds the CPU series as ratios and time gauges in seconds; it is refused, never read as percent. */
+    @Test
+    void aVersionOneFileIsRefused() throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bytes)) {
+            out.writeInt(InsightsSnapshotCodec.MAGIC);
+            out.writeInt(1);
+        }
+
+        assertThatThrownBy(() -> decoded(bytes.toByteArray()))
+                .isInstanceOf(IOException.class)
+                .hasMessage("unsupported insights snapshot schema 1");
+    }
+
     @Test
     void aTruncatedFileIsRejected() throws IOException {
         byte[] bytes = encoded(snapshot());

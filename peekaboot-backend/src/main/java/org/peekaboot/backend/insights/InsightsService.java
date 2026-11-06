@@ -68,7 +68,7 @@ public final class InsightsService implements SmartLifecycle {
         this.tiles = file.tiles();
 
         List<SeriesDef> namespacedSeries = panels.stream()
-                .flatMap(panel -> panel.series().stream().map(series -> namespaced(panel.id(), series)))
+                .flatMap(panel -> panel.series().stream().map(series -> namespaced(panel, series)))
                 .toList();
         this.seriesCount = namespacedSeries.size();
 
@@ -130,15 +130,16 @@ public final class InsightsService implements SmartLifecycle {
         return shipped;
     }
 
-    private static SeriesDef namespaced(String panelId, SeriesDef series) {
+    /** The sampler scales by the unit the series is charted in, so the series carries the panel's where it names none. */
+    private static SeriesDef namespaced(PanelDef panel, SeriesDef series) {
         return new SeriesDef(
-                namespacedId(panelId, series.id()),
+                namespacedId(panel.id(), series.id()),
                 series.label(),
                 series.meter(),
                 series.tags(),
                 series.stat(),
                 series.subtractMeter(),
-                series.unit());
+                series.unit() != null ? series.unit() : panel.unit());
     }
 
     /** Series ids are unique within a panel; the panel id makes them unique across the collector. */

@@ -183,7 +183,7 @@ export const TILE_FORMATS = Object.freeze(['duration', 'datetime', 'bytes', 'cou
 /**
  * Formats one insights series/measurement value per its configured unit (see
  * InsightsConfigResponse.Series/Panel.unit): bytes/millis reuse the existing
- * byte/duration formatters, percent is raw 0..1 and scaled for display, persec/
+ * byte/duration formatters, percent arrives as 0..100 and gains its sign, persec/
  * bytes-persec append a rate suffix, count falls back to formatMetricCount(), grouped in
  * `locale`.
  */
@@ -192,7 +192,7 @@ export function formatMetricValue(value, unit, {locale} = {}) {
 
     switch (unit) {
         case 'bytes': return formatBytes(value);
-        case 'percent': return (value * 100).toFixed(1) + '%';
+        case 'percent': return value.toFixed(1) + '%';
         case 'millis': return formatDurationMs(value);
         case 'persec': return toSignificant(value, 2) + '/s';
         case 'bytes-persec': return formatBytes(value) + '/s';
@@ -203,16 +203,16 @@ export function formatMetricValue(value, unit, {locale} = {}) {
 
 /**
  * Formats one insights tile value per its configured format (see
- * InsightsConfigResponse.Tile.format). duration/datetime tile values are seconds
- * server-side (see InsightsService), hence the *1000 before handing off to the
- * millisecond-based formatters; bytes and count are formatMetricValue's own.
+ * InsightsConfigResponse.Tile.format). duration and datetime tile values are milliseconds,
+ * a duration and an epoch instant, as the millisecond-based formatters take them; bytes and
+ * count are formatMetricValue's own.
  */
 export function formatTileValue(value, format, display = {}) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
     switch (format) {
-        case 'duration': return formatMetricValue(value * 1000, 'millis', display);
-        case 'datetime': return formatDateTime(value * 1000, display);
+        case 'duration': return formatMetricValue(value, 'millis', display);
+        case 'datetime': return formatDateTime(value, display);
         default: return formatMetricValue(value, format, display);
     }
 }

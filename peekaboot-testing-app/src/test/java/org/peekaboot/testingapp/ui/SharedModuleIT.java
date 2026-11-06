@@ -938,14 +938,14 @@ class SharedModuleIT extends PlaywrightTestBase {
 
     /**
      * Every unit a series or tile can carry, so a chart's axis and a tile's readout cannot
-     * silently render a raw number. percent is the one that scales (the backend ships 0..1),
+     * silently render a raw number. percent arrives as 0..100 and only gains its sign,
      * and the two rate units are the only ones with a suffix.
      */
     @Test
     void formatMetricValueRendersEveryUnitItsOwnWay() {
         assertThat(evalModule("format.js", "m.formatMetricValue(1536, 'bytes')"))
                 .isEqualTo("1.50 KB");
-        assertThat(evalModule("format.js", "m.formatMetricValue(0.42, 'percent')"))
+        assertThat(evalModule("format.js", "m.formatMetricValue(42, 'percent')"))
                 .isEqualTo("42.0%");
         assertThat(evalModule("format.js", "m.formatMetricValue(1500, 'millis')"))
                 .isEqualTo("1.50s");
@@ -960,5 +960,19 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("format.js", "m.formatMetricValue(null, 'bytes')"))
                 .isEqualTo("-");
         assertThat(evalModule("format.js", "m.formatMetricValue(NaN, 'bytes')")).isEqualTo("-");
+    }
+
+    /** The backend serves a time tile in milliseconds, a duration or an epoch instant, which the formatters take as they are. */
+    @Test
+    void formatTileValueTakesMilliseconds() {
+        assertThat(evalModule("format.js", "m.formatTileValue(1500, 'duration')"))
+                .isEqualTo("1.50s");
+        assertThat(evalModule(
+                        "format.js",
+                        "m.formatTileValue(1762400000000, 'datetime', {locale: 'en-US', timeZone: 'UTC'})"))
+                .isEqualTo(
+                        evalModule("format.js", "m.formatDateTime(1762400000000, {locale: 'en-US', timeZone: 'UTC'})"))
+                .asString()
+                .contains("2025");
     }
 }

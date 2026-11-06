@@ -161,6 +161,22 @@ class OverviewTabIT extends PlaywrightTestBase {
                 .isNotEqualTo("-");
     }
 
+    /** started-at is an epoch instant in milliseconds; read as seconds it would land tens of thousands of years ahead. */
+    @Test
+    void theStartedAtTileShowsTheYearTheJvmStarted() {
+        openDashboard();
+        page.waitForSelector(tile("started-at") + " .pk-insight-tile__value");
+        double startedAt = awaitJson(
+                        "/peekaboot/api/insights/config",
+                        "config => config.tiles.find(tile => tile.id === 'started-at').value",
+                        "the started-at tile never resolved")
+                .asDouble();
+        Object year = page.evaluate("value => new Date(value).getFullYear()", startedAt);
+
+        assertThat(page.textContent(tile("started-at") + " .pk-insight-tile__value"))
+                .contains(String.valueOf(year));
+    }
+
     /**
      * Beside two card columns the four stat tiles share one row, each pair spanning one card
      * column edge to edge.

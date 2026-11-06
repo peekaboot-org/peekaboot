@@ -62,6 +62,8 @@ column; every coarser level has eight aggregate columns (`min`, `max`, `avg`, `m
 `p95`, `p99`, `samples`). `samples` is carried alongside the seven the API exposes because the
 next roll-up weights its average by it. `InsightsSnapshotCodec` reads and writes that as a
 small versioned binary format: magic `"PKIN"`, a schema version, then the header and body.
+Version 2 holds percent series from 0 to 100 and time gauges in milliseconds, as the sampler
+serves them; a version 1 file holds ratios and seconds and is dropped like any unknown version.
 
 `InsightsSnapshotStore` owns the file. It writes through `OwnerOnlyFiles.replaceAtomically` on
 each boundary of `peekaboot.insights.persistence.interval` (default: the coarsest level's own

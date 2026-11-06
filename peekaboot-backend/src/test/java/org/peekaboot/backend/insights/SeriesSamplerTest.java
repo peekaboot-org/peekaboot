@@ -8,10 +8,12 @@ import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.LongTaskTimer;
+import io.micrometer.core.instrument.TimeGauge;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,6 +21,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.peekaboot.backend.insights.SeriesSampler.UnresolvedMeterReport;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
+import org.peekaboot.backend.insights.config.Unit;
 import org.peekaboot.testsupport.LogCapture;
 
 class SeriesSamplerTest {
@@ -58,6 +61,40 @@ class SeriesSamplerTest {
         SeriesSampler sampler =
                 new SeriesSampler(def("mem", Map.of("area", "heap"), Stat.VALUE), registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isEqualTo(300.0);
+    }
+
+    /** Micrometer's CPU and GC meters report a ratio; a series charted in percent serves it from 0 to 100. */
+    @Test
+    void aPercentSeriesServesItsRatioMeterAsAPercentage() {
+        Gauge.builder("process.cpu.usage", () -> 0.42).register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                new SeriesDef("s", "S", "process.cpu.usage", Map.of(), Stat.VALUE, null, Unit.PERCENT),
+                registry,
+                UnresolvedMeterReport.WARN);
+
+        assertThat(sampler.sample(10_000)).isCloseTo(42.0, within(1e-9));
+    }
+
+    @Test
+    void aSeriesInAnyOtherUnitServesItsMeterAsRead() {
+        Gauge.builder("ratio", () -> 0.42).register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                new SeriesDef("s", "S", "ratio", Map.of(), Stat.VALUE, null, Unit.COUNT),
+                registry,
+                UnresolvedMeterReport.WARN);
+
+        assertThat(sampler.sample(10_000)).isEqualTo(0.42);
+    }
+
+    /** The started-at and startup tiles read time gauges; their values are epoch and duration milliseconds. */
+    @Test
+    void aTimeGaugeReadsInMilliseconds() {
+        TimeGauge.builder("process.start.time", () -> 1_762_400_000_000L, TimeUnit.MILLISECONDS)
+                .register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                def("process.start.time", Map.of(), Stat.VALUE), registry, UnresolvedMeterReport.WARN);
+
+        assertThat(sampler.sample(10_000)).isEqualTo(1_762_400_000_000.0);
     }
 
     @Test
