@@ -1,16 +1,31 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.observation.ObservationRegistry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.SpanProcessor;
+import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
+import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
+import org.peekaboot.backend.tracing.journal.TraceJournal;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -22,6 +37,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.handler.MappedInterceptor;
 
 class PeekabootTracingAutoConfigurationTest {
+
+    /** A batch that never exports on its own schedule within a test. */
+    private static final Duration NO_SCHEDULED_EXPORT = Duration.ofHours(1);
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -38,6 +56,12 @@ class PeekabootTracingAutoConfigurationTest {
                     DispatcherServletAutoConfiguration.class,
                     PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
+
+    private final WebApplicationContextRunner storageRunner =
+            contextRunner.withConfiguration(AutoConfigurations.of(PeekabootStorageAutoConfiguration.class));
+
+    @TempDir
+    Path storageDir;
 
     @Test
     void createsCoreBeans() {
@@ -98,6 +122,152 @@ class PeekabootTracingAutoConfigurationTest {
                     store.addSpan(TraceFixtures.rootSpanLasting(5));
                     assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
+    }
+
+    @Test
+    void startsTheTraceJournalWhileStorageIsOn() {
+        storageRunner
+                .withPropertyValues("peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir)
+                .run(context ->
+                        assertThat(context).hasSingleBean(TraceJournal.class).hasBean("peekabootTraceJournal"));
+    }
+
+    @Test
+    void startsNoTraceJournalWhileStorageIsOff() {
+        storageRunner.withPropertyValues("peekaboot.storage.dir=" + storageDir).run(context -> {
+            assertThat(context).hasSingleBean(TraceStoreEventListener.class);
+            assertThat(context).doesNotHaveBean(TraceJournal.class);
+        });
+    }
+
+    @Test
+    void startsNoTraceJournalWhenTracesAreSwitchedOff() {
+        storageRunner
+                .withPropertyValues(
+                        "peekaboot.storage.enabled=true",
+                        "peekaboot.storage.dir=" + storageDir,
+                        "peekaboot.storage.traces.enabled=false")
+                .run(context -> assertThat(context).doesNotHaveBean(TraceJournal.class));
+    }
+
+    /** The switch alone starts nothing where no storage auto-configuration resolved a directory. */
+    @Test
+    void startsNoTraceJournalWithoutAStorageDirectory() {
+        contextRunner.withPropertyValues("peekaboot.storage.enabled=true").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).doesNotHaveBean(TraceJournal.class);
+        });
+    }
+
+    /**
+     * One context's traces are the next one's, in the buckets they were in: the listener hands its events
+     * to the journal, which the next context replays. A live line seen in the store means the restore is
+     * done, since the restore gate holds every live input until then.
+     */
+    @Test
+    void theNextContextShowsTheTracesThisOneCaptured() {
+        WebApplicationContextRunner persisted = storageRunner.withPropertyValues(
+                "peekaboot.storage.enabled=true",
+                "peekaboot.storage.dir=" + storageDir,
+                "peekaboot.tracing.slow-trace-threshold-ms=1");
+
+        persisted.run(context -> context.publishEvent(new SpanDataEvent(TraceFixtures.rootSpanLasting(5))));
+
+        persisted.run(context -> {
+            TraceStore store = context.getBean(TraceStore.class);
+            context.publishEvent(TraceFixtures.untracedLog("live"));
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
+
+            assertThat(store.getTrace(TraceFixtures.TRACE_ID)).isPresent();
+            assertThat(store.bucketsOf(TraceFixtures.TRACE_ID)).containsExactly(TraceBucket.SLOW);
+        });
+    }
+
+    /** Closing folds the journal and says nothing: no line from the journal reaches Logback. */
+    @Test
+    void closingAContextWithTheJournalLogsNothing() {
+        LoggerContext logback = (LoggerContext) LoggerFactory.getILoggerFactory();
+        ListAppender<ILoggingEvent> journalLines = new ListAppender<>();
+        journalLines.start();
+        ch.qos.logback.classic.Logger journalLogger = logback.getLogger("org.peekaboot.backend.tracing.journal");
+        journalLogger.addAppender(journalLines);
+        try {
+            storageRunner
+                    .withPropertyValues("peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir)
+                    .run(context -> context.publishEvent(new SpanDataEvent(TraceFixtures.rootSpanLasting(5))));
+        } finally {
+            journalLogger.detachAppender(journalLines);
+        }
+
+        assertThat(journalLines.list).isEmpty();
+    }
+
+    /**
+     * A host's own tracer provider flushes its batch when the context destroys it. It is destroyed before
+     * the journal closes, so the span ended last reaches the next context.
+     */
+    @Test
+    void theSpansAHostTracerProviderFlushesAtCloseReachTheNextContext() {
+        WebApplicationContextRunner persisted = storageRunner.withPropertyValues(
+                "peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir);
+        AtomicReference<String> traceId = new AtomicReference<>();
+
+        persisted
+                .withUserConfiguration(HostTracerProviderConfig.class)
+                .run(context -> traceId.set(endSpan(context.getBean(SdkTracerProvider.class))));
+
+        assertTheNextContextHolds(persisted, traceId.get());
+    }
+
+    /** As with a provider: a host's span processor bean flushes when destroyed, before the journal closes. */
+    @Test
+    void theSpansAHostSpanProcessorFlushesAtCloseReachTheNextContext() {
+        WebApplicationContextRunner persisted = storageRunner.withPropertyValues(
+                "peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir);
+        AtomicReference<String> traceId = new AtomicReference<>();
+
+        persisted.withUserConfiguration(HostSpanProcessorConfig.class).run(context -> {
+            SdkTracerProvider unmanaged = SdkTracerProvider.builder()
+                    .addSpanProcessor(context.getBean(SpanProcessor.class))
+                    .build();
+            traceId.set(endSpan(unmanaged));
+        });
+
+        assertTheNextContextHolds(persisted, traceId.get());
+    }
+
+    /** With no journal running, a host's provider depends on nothing it would miss. */
+    @Test
+    void aHostTracerProviderStartsWhileNoJournalRuns() {
+        storageRunner
+                .withPropertyValues("peekaboot.storage.dir=" + storageDir)
+                .withUserConfiguration(HostTracerProviderConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed().doesNotHaveBean(TraceJournal.class);
+                    assertThat(context).hasSingleBean(SdkTracerProvider.class);
+                });
+    }
+
+    /** The span waits in its batch, which flushes only when its provider or processor shuts down. */
+    private static String endSpan(SdkTracerProvider provider) {
+        Span span = provider.get("peekaboot-test")
+                .spanBuilder("ended before the close")
+                .startSpan();
+        span.end();
+        return span.getSpanContext().getTraceId();
+    }
+
+    /** A live line seen in the store means the restore is done, since the gate holds live inputs until then. */
+    private static void assertTheNextContextHolds(WebApplicationContextRunner persisted, String traceId) {
+        persisted.run(context -> {
+            TraceStore store = context.getBean(TraceStore.class);
+            context.publishEvent(TraceFixtures.untracedLog("live"));
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
+
+            assertThat(store.getTrace(traceId)).isPresent();
+        });
     }
 
     // --- TracingInterceptorAutoConfiguration ---
@@ -264,6 +434,28 @@ class PeekabootTracingAutoConfigurationTest {
     private static final class RecordingInterceptorRegistry extends InterceptorRegistry {
         List<Object> registered() {
             return getInterceptors();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class HostTracerProviderConfig {
+        @Bean
+        SdkTracerProvider hostTracerProvider(OtelSpanExporter exporter) {
+            return SdkTracerProvider.builder()
+                    .addSpanProcessor(BatchSpanProcessor.builder(exporter)
+                            .setScheduleDelay(NO_SCHEDULED_EXPORT)
+                            .build())
+                    .build();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class HostSpanProcessorConfig {
+        @Bean
+        SpanProcessor hostSpanProcessor(OtelSpanExporter exporter) {
+            return BatchSpanProcessor.builder(exporter)
+                    .setScheduleDelay(NO_SCHEDULED_EXPORT)
+                    .build();
         }
     }
 

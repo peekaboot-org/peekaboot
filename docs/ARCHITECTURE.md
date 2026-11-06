@@ -11,12 +11,13 @@ published. The sections below follow the same split: backend, frontend, auto-con
 
 ## Persisted state
 
-Two stores opt into the filesystem behind one switch, `peekaboot.storage.enabled`, and share
-one directory, `peekaboot.storage.dir`. Both properties, their defaults, the per-application
-subdirectory and its fallbacks live on the site under
-[`peekaboot.storage`](https://www.peekaboot.org/docs/configuration/#peekabootstorage).
+Three stores opt into the filesystem behind `peekaboot.storage.enabled` and share one directory,
+`peekaboot.storage.dir`. Both properties, their defaults, the per-application subdirectory and
+its fallbacks live on the site under
+[`peekaboot.storage`](https://www.peekaboot.org/docs/configuration/#peekabootstorage). The trace
+journal also needs `peekaboot.storage.traces.enabled`, which is on unless set to false.
 
-Like `peekaboot.dev-toolbar.enabled`, the switch follows the launch context rather than
+Like `peekaboot.dev-toolbar.enabled`, the storage switch follows the launch context rather than
 `peekaboot.enabled`'s resolved value: on for an IDE or `spring-boot:run` launch, off everywhere
 else, and an explicit setting wins in either direction. Switching Peekaboot on deliberately in
 a shared environment therefore writes nothing to that host's `$HOME`.
@@ -34,7 +35,7 @@ history apart. `ApplicationIdentity`, built once by `ApplicationIdentityConfigur
 rule and the guard username's artifact-first one, each falling back to the application name.
 
 `StorageDirectory` only resolves this path; it never touches the disk. While
-`peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and neither
+`peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and no
 store ever writes. Every file a store replaces whole goes through
 `OwnerOnlyFiles.replaceAtomically`, the single implementation of the mechanism: it creates the
 parent directory, writes to a sibling `*.tmp`, moves that over the target with `ATOMIC_MOVE` (a
@@ -47,7 +48,7 @@ existing directory keeps its permissions. The temporary is always created fresh 
 never followed. Failure handling stays with the stores: on `IOException` each logs and
 continues in memory rather than taking the host application down over an unwritable `$HOME`.
 
-Both stores assume one application instance per directory. Two instances pointed at the same
+Every store assumes one application instance per directory. Two instances pointed at the same
 `peekaboot.storage.dir` overwrite each other's files, and a half-written file is discarded on
 the next read, so the cost is lost history rather than corruption. Peekaboot is a development
 tool and coordinating instances is out of its scope: give each instance its own
@@ -125,6 +126,21 @@ switched off still shows one start marker for the run in progress.
 
 ### `traces.journal.jsonl` and `traces.snapshot.jsonl`
 
+`TraceJournal`, the `peekabootTraceJournal` bean, runs while `peekaboot.storage.enabled` is on and
+`peekaboot.storage.traces.enabled` is not false. `TraceStoreEventListener` hands it every input as
+a `TraceInput`; each passes the `RestoreGate` into the store first and is then offered to the
+writer. Its one virtual thread restores the files, then runs the writer, which flushes every
+`peekaboot.storage.traces.flush-interval` (1 s by default) and folds past
+`peekaboot.storage.traces.max-journal-size` (64 MB by default). At shutdown `ContextClosedEvent`
+detaches the log capture. OpenTelemetry exports the spans still in its batch only when the context
+destroys an `SdkTracerProvider` or `SpanProcessor` bean, so `OtelTracingAutoConfiguration` makes
+every such bean, the host's own too, depend on the journal; Spring destroys them first.
+OpenTelemetry waits at most 10 s for that last export (`SdkTracerProvider.close`,
+`SpanProcessor.close`), and Boot hands every `SpanExporter` bean the same batch, so a host
+exporter slower than that can hold Peekaboot's last spans past the journal's close; they miss the
+journal. The journal's destroy method then stops the writer and waits up to 10 s for its last
+fold. That path logs nothing unless a write fails, so nothing goes through the closing context.
+
 The trace store's inputs (`TraceInput`): every span, log line, completed request and discarded
 trace the store takes, and each run's start, one JSON object per line (`JournalLine`,
 `JournalCodec`), as the store holds them. Request and response headers, the query string and
@@ -133,13 +149,15 @@ parameters, log messages and stack traces are written raw and masked when read, 
 store.
 
 `JournalWriter` appends them on one writer thread behind a bounded queue (10,000 inputs). A full
-queue drops the input, so neither the exporter nor a logging thread waits, and the writer logs
-one WARN a minute at most with the count. It flushes every `flushInterval`, so a crash loses at
-most that much. A run line starts each run's lines. It carries the run's `startedAt`, the
-lifecycle run's instant, which is known only once the application is ready, so the writer holds
-a run's inputs back until then and writes them after the run line. A run that stops before it is
-ready gets a run line with `startedAt: null`. A write that fails logs one WARN, the last the
-writer logs that run, and ends writing for the run; the store keeps going in memory.
+queue drops the input, the run's start aside, so neither the exporter nor a logging thread waits,
+and the writer logs one WARN a minute at most with the count. A flush hands the lines to the
+operating system without an fsync, so a crash usually loses the last flush interval. Inputs also
+wait in memory until the application is ready, and during the restore, and a crash loses those
+too. A run line starts each run's lines. It carries the run's `startedAt`, the lifecycle run's
+instant, which is known only once the application is ready, so the writer holds a run's inputs
+back until then and writes them after the run line. A run that stops before it is ready gets a run
+line with `startedAt: null`. A write that fails logs one WARN, the last the writer logs that run,
+and ends writing for the run; the store keeps going in memory.
 
 Each file starts with a header line carrying the schema version (`JournalCodec.VERSION`). Every
 fold starts a fresh journal under a new id, and the snapshot's header names the journal it
@@ -156,9 +174,11 @@ line begins a run (`TraceStore.beginRun`); one naming the run in progress contin
 run begins last, which ends the last restored run: its incomplete traces read `INTERRUPTED`, and
 every live span sorts after every restored one. The replay runs before the writer starts, on its
 thread. `RestoreGate` holds live inputs back meanwhile and applies them in arrival order once it
-is done. The gate holds writers only, so for the first moments after startup a reader sees the
-store partly restored. A trace from before the restart can answer 404, and a listing or a log
-search can miss it, until the replay reaches it.
+is done. Past 10,000 it drops an input, the run's start aside. A held input that throws is
+skipped; the writer took it when it was held, so the throw can repeat in the fold and in the next
+restore. The restore's end logs one WARN with each count. The gate holds writers only, so for the
+first moments after startup a reader sees the store partly restored. A trace from before the
+restart can answer 404, and a listing or a log search can miss it, until the replay reaches it.
 
 A fold (`Checkpoint`) runs after the restore, at shutdown, and when the journal passes its size
 limit. It replays the files into an empty store with the live store's caps and copies, in arrival
@@ -322,7 +342,7 @@ org.peekaboot.backend/
 ### Tracing Flow
 
 1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`
-2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
+2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and hands each event on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else the store itself (`InMemoryTraceStore`), three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event. One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request and the page reuses. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)
@@ -1381,12 +1401,13 @@ no header-injection code anywhere in the repo.
 ### Log Capture
 
 `PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event;
-`TraceStoreEventListener` forwards it to `TraceStore`, which stores by traceId, and
-`TraceLogMapper` maps them into the trace's flat log list on read (see *Trace Assembly and
-Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which
-`TraceCaptureAutoConfiguration` registers while tracing is on, whatever the toolbar switch says.
-Capture stops at `ContextClosedEvent`, before the context destroys any bean, because a line
-reaching the store's listener after that would make the closing context rebuild it.
+`TraceStoreEventListener` hands it on, through the trace journal while storage is on, to
+`TraceStore`, which stores by traceId, and `TraceLogMapper` maps them into the trace's flat log
+list on read (see *Trace Assembly and Enrichment*). The appender is attached by the
+`LogbackAppenderRegistrar` bean, which `TraceCaptureAutoConfiguration` registers while tracing
+is on, whatever the toolbar switch says. Capture stops at `ContextClosedEvent`, before the
+context destroys any bean, because a line reaching the store's listener after that would make
+the closing context rebuild it.
 
 A line without a trace id, written at startup, on a thread outside any trace, or by Tomcat after
 a request's trace ended, goes into the `UntracedLogRing`, the newest
@@ -1929,6 +1950,9 @@ Test categories, each module's suite and how to test an auto-configuration are i
 9. **One token sheet for four surfaces**: the dashboard, the toolbar, the trace overlay and the error page all load the same `tokens.css`, so every colour is defined once and no component hardcodes one. This keeps the CSS honest; it is not a supported theming API, and nothing outside the project is expected to replace the file. See [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md) for the fill/text pairing rule that constrains any change to it
 
 ## Auto-Configuration Ordering
+
+`PeekabootTracingAutoConfiguration` runs after `PeekabootStorageAutoConfiguration`, whose
+`StorageDirectory` its nested `TraceJournalConfiguration` needs (`@ConditionalOnBean`).
 
 `DevToolbarAutoConfiguration` and `TraceCaptureAutoConfiguration` require specific ordering to
 ensure the `Tracer` bean exists, whichever of Boot's tracing bridges registers it:

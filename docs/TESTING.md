@@ -145,6 +145,12 @@ builder shape for the ITs that write spans straight to the store. `peekaboot-spr
 needs only a few fixed shapes, so its `TraceFixtures` names them (`addRootSpan`, `query`,
 `rootSpanLasting`, `vendorFrameLog`) instead.
 
+The trace journal's tests write journal and snapshot files the way a crash, an older version or a
+hand edit leaves them (`JournalTexts`, in the journal's test package), and encode every event line
+with the production `JournalCodec`, whose format `JournalCodecTest` pins line by line. A test that
+restarts a journal waits for the restored trace to appear, since the restore runs on the journal's
+own thread.
+
 `Monitors` (backend test support) reads from the JVM which thread holds the monitor another
 thread waits for. A concurrency test holds a lock itself, starts the threads it interleaves, and
 waits on `Monitors.isWaitingFor(waiter, owner)` before it asserts, so the interleaving is pinned

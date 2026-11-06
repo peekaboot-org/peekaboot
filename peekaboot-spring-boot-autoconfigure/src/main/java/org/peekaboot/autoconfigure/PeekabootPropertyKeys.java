@@ -15,6 +15,9 @@ final class PeekabootPropertyKeys {
     /** The persistence switch; defaulted from the launch context like {@link #ENABLED}. */
     static final String STORAGE_ENABLED = "peekaboot.storage.enabled";
 
+    /** The trace-persistence switch; on unless set to false, and only while storage is on. */
+    static final String STORAGE_TRACES_ENABLED = "peekaboot.storage.traces.enabled";
+
     /** The lifecycle-feature switch; on unless set to false. */
     static final String LIFECYCLE_ENABLED = "peekaboot.lifecycle.enabled";
 
@@ -55,6 +58,8 @@ final class PeekabootPropertyKeys {
     static final List<String> BOOLEAN_SWITCHES = List.of(
             ENABLED,
             DEV_TOOLBAR_ENABLED,
+            STORAGE_ENABLED,
+            STORAGE_TRACES_ENABLED,
             LIFECYCLE_ENABLED,
             TRACING_ENABLED,
             TRACING_ASYNC,
@@ -77,6 +82,7 @@ final class PeekabootPropertyKeys {
      * back to its detected value instead, which is always in the environment.
      */
     static final Map<String, String> UNSET_SWITCH_DEFAULTS = Map.of(
+            STORAGE_TRACES_ENABLED, "true",
             LIFECYCLE_ENABLED, "true",
             TRACING_ENABLED, "true",
             TRACING_ASYNC, "true",

@@ -1,7 +1,9 @@
 package org.peekaboot.backend.config;
 
+import java.time.Duration;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
 
 @ConfigurationProperties(prefix = "peekaboot")
 public class PeekabootProperties {
@@ -142,6 +144,8 @@ public class PeekabootProperties {
          */
         private String dir;
 
+        private Traces traces = new Traces();
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -156,6 +160,69 @@ public class PeekabootProperties {
 
         public void setDir(String dir) {
             this.dir = dir;
+        }
+
+        public Traces getTraces() {
+            return traces;
+        }
+
+        public void setTraces(Traces traces) {
+            this.traces = traces;
+        }
+
+        /**
+         * The trace journal, which keeps traces and their logs across restarts while storage is on.
+         * PeekabootTracingAutoConfiguration reads {@code enabled} through its condition; it is bound
+         * here as well so it carries configuration metadata and appears on the Config tab.
+         */
+        public static class Traces {
+
+            /** Whether traces and their logs survive a restart while storage is on. */
+            private boolean enabled = true;
+
+            /**
+             * How often the trace journal is handed to the operating system, without an fsync. A crash usually
+             * loses the last interval, and everything since the start while the application is still starting
+             * or restoring its traces.
+             */
+            private Duration flushInterval = Duration.ofSeconds(1);
+
+            /** The journal size past which it is folded into the snapshot. */
+            private DataSize maxJournalSize = DataSize.ofMegabytes(64);
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public Duration getFlushInterval() {
+                return flushInterval;
+            }
+
+            /** Rejected unless positive while binding, since a zero cadence would spin the writer. */
+            public void setFlushInterval(Duration flushInterval) {
+                if (flushInterval == null || flushInterval.isZero() || flushInterval.isNegative()) {
+                    throw new IllegalArgumentException("peekaboot.storage.traces.flush-interval must be positive ("
+                            + flushInterval + " configured)");
+                }
+                this.flushInterval = flushInterval;
+            }
+
+            public DataSize getMaxJournalSize() {
+                return maxJournalSize;
+            }
+
+            /** Rejected unless positive while binding, since an empty limit would fold on every line. */
+            public void setMaxJournalSize(DataSize maxJournalSize) {
+                if (maxJournalSize == null || maxJournalSize.toBytes() <= 0) {
+                    throw new IllegalArgumentException("peekaboot.storage.traces.max-journal-size must be positive ("
+                            + maxJournalSize + " configured)");
+                }
+                this.maxJournalSize = maxJournalSize;
+            }
         }
     }
 

@@ -6,11 +6,15 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.springframework.boot.SpringApplication;
@@ -27,7 +31,33 @@ class TraceStoreEventListenerTest {
     void setUp() {
         store = TraceStores.withDefaults();
         ownContext = new StaticApplicationContext();
-        listener = new TraceStoreEventListener(store, ownContext);
+        listener = new TraceStoreEventListener(TraceInputs.into(store), ownContext);
+    }
+
+    /** The ready event goes the same way, so the trace journal's restore gate holds it back like any input. */
+    @Test
+    void handsEveryEventOnAsAnInput() {
+        List<TraceInput> handedOn = new ArrayList<>();
+        TraceStoreEventListener recording = new TraceStoreEventListener(handedOn::add, ownContext);
+        SpanData spanData = span("span1").build();
+        LogCapturedEvent logged = log("trace1").build();
+        RequestCompletedEvent request = RequestCompletedEvents.minimal("trace1");
+        ApplicationReadyEvent ready =
+                new ApplicationReadyEvent(new SpringApplication(), new String[0], ownContext, Duration.ZERO);
+
+        recording.onSpanData(new SpanDataEvent(spanData));
+        recording.onLogCaptured(logged);
+        recording.onRequestCompleted(request);
+        recording.onTraceDiscarded(new TraceDiscardedEvent("trace1"));
+        recording.onApplicationReady(ready);
+
+        assertThat(handedOn)
+                .containsExactly(
+                        new TraceInput.SpanArrived(spanData),
+                        new TraceInput.LogCaptured(logged),
+                        new TraceInput.RequestCompleted(request),
+                        new TraceInput.TraceDiscarded("trace1"),
+                        new TraceInput.RunStarted(Instant.ofEpochMilli(ready.getTimestamp())));
     }
 
     @Test
