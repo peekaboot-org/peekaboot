@@ -124,6 +124,10 @@ is `LifecycleEvent.stop`.
 `SeriesDefs.value(id, meter)` is the plain value series the collector tests share.
 `FailedSummaries.failed(traceId)` (in the digest's test package) builds the summary of a failed
 request, cause, route, start and run named only where a test asserts on them.
+`FailedTraces` (backend test support) is a failed request's spans, a handler that threw from
+`org.acme.Shop.buy` below a SERVER root, and `FailedTraces.recorder(store, digest)` the digest
+recorder as the auto-configuration builds it; the autoconfigure module's
+`TraceFixtures.failedRootSpan()` is the one failed span it needs.
 `Credentials.generated(password)`, and `loaded`, `configured` and `unpersisted` beside it,
 build the guard's `DashboardCredentials` in each origin, for one user at one fixed instant.
 `InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings

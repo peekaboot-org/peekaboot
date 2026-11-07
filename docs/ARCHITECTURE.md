@@ -130,18 +130,19 @@ switched off still shows one start marker for the run in progress.
 
 `TraceJournal`, the `peekabootTraceJournal` bean, runs while `peekaboot.storage.enabled` is on and
 `peekaboot.storage.traces.enabled` is not false. `TraceStoreEventListener` hands it every input as
-a `TraceInput`; each passes the `RestoreGate` into the store first and is then offered to the
-writer. Its one virtual thread restores the files, then runs the writer, which flushes every
-`peekaboot.storage.traces.flush-interval` (1 s by default) and folds past
-`peekaboot.storage.traces.max-journal-size` (64 MB by default). At shutdown `ContextClosedEvent`
-detaches the log capture. OpenTelemetry exports the spans still in its batch only when the context
-destroys an `SdkTracerProvider` or `SpanProcessor` bean, so `OtelTracingAutoConfiguration` makes
-every such bean, the host's own too, depend on the journal; Spring destroys them first.
-OpenTelemetry waits at most 10 s for that last export (`SdkTracerProvider.close`,
-`SpanProcessor.close`), and Boot hands every `SpanExporter` bean the same batch, so a host
-exporter slower than that can hold Peekaboot's last spans past the journal's close; they miss the
-journal. The journal's destroy method then stops the writer and waits up to 10 s for its last
-fold. That path logs nothing unless a write fails, so nothing goes through the closing context.
+a `TraceInput`; each passes the `RestoreGate` to `ErrorDigestRecorder.liveInputs()`, the store and
+then the error digest, and is then offered to the writer. Its one virtual thread restores the
+files, then runs the writer, which flushes every `peekaboot.storage.traces.flush-interval` (1 s by
+default) and folds past `peekaboot.storage.traces.max-journal-size` (64 MB by default). At shutdown
+`ContextClosedEvent` detaches the log capture. OpenTelemetry exports the spans still in its batch
+only when the context destroys an `SdkTracerProvider` or `SpanProcessor` bean, so
+`OtelTracingAutoConfiguration` makes every such bean, the host's own too, depend on the journal;
+Spring destroys them first. OpenTelemetry waits at most 10 s for that last export
+(`SdkTracerProvider.close`, `SpanProcessor.close`), and Boot hands every `SpanExporter` bean the
+same batch, so a host exporter slower than that can hold Peekaboot's last spans past the journal's
+close; they miss the journal. The journal's destroy method then stops the writer and waits up to
+10 s for its last fold. That path logs nothing unless a write fails, so nothing goes through the
+closing context.
 
 The trace store's inputs (`TraceInput`): every span, log line, completed request and discarded
 trace the store takes, and each run's start, one JSON object per line (`JournalLine`,
@@ -175,12 +176,13 @@ order the store took them. Summaries and issues are computed by the code running
 line begins a run (`TraceStore.beginRun`); one naming the run in progress continues it. The live
 run begins last, which ends the last restored run: its incomplete traces read `INTERRUPTED`, and
 every live span sorts after every restored one. The replay runs before the writer starts, on its
-thread. `RestoreGate` holds live inputs back meanwhile and applies them in arrival order once it
-is done. Past 10,000 it drops an input, the run's start aside. A held input that throws is
-skipped; the writer took it when it was held, so the throw can repeat in the fold and in the next
-restore. The restore's end logs one WARN with each count. The gate holds writers only, so for the
-first moments after startup a reader sees the store partly restored. A trace from before the
-restart can answer 404, and a listing or a log search can miss it, until the replay reaches it.
+thread. `RestoreGate` holds live inputs back meanwhile and hands them to the live inputs in
+arrival order once it is done. Past 10,000 it drops an input, the run's start aside. A held input
+that throws is skipped; the writer took it when it was held, so the throw can repeat in the fold
+and in the next restore. The restore's end logs one WARN with each count. The gate holds writers
+only, so for the first moments after startup a reader sees the store partly restored. A trace from
+before the restart can answer 404, and a listing or a log search can miss it, until the replay
+reaches it.
 
 A fold (`Checkpoint`) runs after the restore, at shutdown, and when the journal passes its size
 limit. It replays the files into an empty store with the live store's caps and copies, in arrival
@@ -319,7 +321,7 @@ org.peekaboot.backend/
 │   ├── bridge/otel/        # OtelSpanExporter
 │   ├── capture/            # RequestCaptureFilter, PeekabootLogbackAppender: the request and log sources beside the span bridge
 │   ├── config/             # PeekabootTracingProperties
-│   ├── digest/             # The error digest: ErrorDigest, DigestedError
+│   ├── digest/             # The error digest: ErrorDigest, DigestedError, ErrorDigestRecorder (records live failures)
 │   ├── event/              # What capture hands the store, and the store keeps: SpanData (+ SpanDataEvent), LogCapturedEvent,
 │   │                       # RequestCompletedEvent, TraceDiscardedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
@@ -339,7 +341,7 @@ org.peekaboot.backend/
 ### Tracing Flow
 
 1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`
-2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and hands each event on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else the store itself (`InMemoryTraceStore`), three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
+2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and hands each event on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else `ErrorDigestRecorder.liveInputs()`, which applies it to the store and then records the trace in the error digest where the input made it complete and failed. The journal hands its live inputs to the same recorder, and replays its files into the store directly, so a restored trace never counts again. The store (`InMemoryTraceStore`) is three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event. One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request and the page reuses. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -43,6 +44,27 @@ final class TraceFixtures {
     /** A root span of no particular kind, lasting {@code durationMs}. */
     static SpanData rootSpanLasting(long durationMs) {
         return span(ROOT_SPAN_ID, null, "op", null, 0, durationMs, Map.of());
+    }
+
+    /** A SERVER root that answered 500 after {@code com.acme.Shop.buy} threw. */
+    static SpanData failedRootSpan() {
+        Instant start = Instant.EPOCH;
+        return new SpanData(
+                TRACE_ID,
+                ROOT_SPAN_ID,
+                null,
+                false,
+                "GET /x",
+                Span.Kind.SERVER,
+                start,
+                start.plusMillis(10),
+                Map.of("http.route", "/x", "http.response.status_code", "500"),
+                List.of(),
+                new CapturedExceptionInfo(
+                        "java.lang.IllegalStateException",
+                        "boom",
+                        "java.lang.IllegalStateException: boom\n\tat com.acme.Shop.buy(Shop.java:7)"),
+                NEXT_CREATION_ORDER.incrementAndGet());
     }
 
     /** An ERROR log on the root span whose one frame sits in {@code com.acme.vendor}. */

@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
+import org.peekaboot.backend.tracing.digest.ErrorDigest;
+import org.peekaboot.backend.tracing.digest.ErrorDigestRecorder;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.backend.tracing.journal.TraceJournal;
@@ -68,7 +70,39 @@ class PeekabootTracingAutoConfigurationTest {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(TraceStore.class);
             assertThat(context).hasSingleBean(TraceStoreEventListener.class);
+            assertThat(context).hasSingleBean(ErrorDigest.class).hasBean("peekabootErrorDigest");
+            assertThat(context).hasSingleBean(ErrorDigestRecorder.class).hasBean("peekabootErrorDigestRecorder");
         });
+    }
+
+    /** Without a journal the listener hands a live input to the store and then to the error digest. */
+    @Test
+    void aFailedRequestReachesTheErrorDigest() {
+        contextRunner.run(context -> {
+            context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+
+            assertThat(context.getBean(ErrorDigest.class).entries())
+                    .singleElement()
+                    .satisfies(entry -> {
+                        assertThat(entry.lastTraceId()).isEqualTo(TraceFixtures.TRACE_ID);
+                        assertThat(entry.route()).isEqualTo("/x");
+                    });
+        });
+    }
+
+    /** With the journal, a live failure passes its restore gate to the digest as well as to the store. */
+    @Test
+    void theJournalHandsALiveFailureToTheErrorDigest() {
+        storageRunner
+                .withPropertyValues("peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir)
+                .run(context -> {
+                    context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+
+                    ErrorDigest digest = context.getBean(ErrorDigest.class);
+                    await().atMost(Duration.ofSeconds(5))
+                            .until(() -> !digest.entries().isEmpty());
+                    assertThat(digest.entries().getFirst().lastTraceId()).isEqualTo(TraceFixtures.TRACE_ID);
+                });
     }
 
     @Test

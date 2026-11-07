@@ -22,7 +22,10 @@ public final class ErrorDigest {
     static final int MAX_ENTRIES = 500;
     static final int MAX_RUNS = 10;
 
-    /** Trace ids recorded lately, so a late input on a trace already recorded counts nothing; references only. */
+    /**
+     * Trace ids claimed lately, held as references only; enough for the inputs that race to fail one
+     * trace and for a request that calls its own application to reach its outer root.
+     */
     static final int REMEMBERED_TRACES = 1_000;
 
     private static final Comparator<DigestedError> LATEST_FIRST =
@@ -30,7 +33,7 @@ public final class ErrorDigest {
 
     private final Clock clock;
     private final Map<DigestedError.Key, DigestedError> entries = new LinkedHashMap<>();
-    private final Set<String> recorded = new LinkedHashSet<>();
+    private final Set<String> claimed = new LinkedHashSet<>();
     private long changes;
 
     public ErrorDigest() {
@@ -43,16 +46,18 @@ public final class ErrorDigest {
     }
 
     /**
-     * True the first time it is asked for {@code traceId}, false after: a trace counts once, whatever
-     * arrives for it after it failed. Remembers the latest {@link #REMEMBERED_TRACES} ids, so a trace
-     * that sees a new input after that many others were recorded counts again.
+     * True the first time it is asked for {@code traceId}, false after. Of two inputs that both saw a
+     * trace become complete and failed, only one records it. A request that calls its own application
+     * becomes complete twice, once with the inner request and again with the outer root, and only the
+     * first counts. Remembers the latest {@link #REMEMBERED_TRACES} ids; a trace forgotten before its
+     * outer root arrives counts again.
      */
     public synchronized boolean claim(String traceId) {
-        if (!recorded.add(traceId)) {
+        if (!claimed.add(traceId)) {
             return false;
         }
-        if (recorded.size() > REMEMBERED_TRACES) {
-            Iterator<String> oldest = recorded.iterator();
+        if (claimed.size() > REMEMBERED_TRACES) {
+            Iterator<String> oldest = claimed.iterator();
             oldest.next();
             oldest.remove();
         }

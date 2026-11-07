@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.store.TraceInput;
-import org.peekaboot.backend.tracing.store.TraceStore;
+import org.peekaboot.backend.tracing.store.TraceInputs;
 
 /**
  * Holds live inputs back while the store is restored and applies them in arrival order once the
@@ -31,8 +31,8 @@ final class RestoreGate {
         this.capacity = capacity;
     }
 
-    /** Applies {@code input}, or holds it while the restore runs; false where it was dropped. */
-    boolean pass(TraceInput input, TraceStore store) {
+    /** Hands {@code input} to {@code live}, or holds it while the restore runs; false where it was dropped. */
+    boolean pass(TraceInput input, TraceInputs live) {
         if (!open) {
             synchronized (lock) {
                 if (!open) {
@@ -45,7 +45,7 @@ final class RestoreGate {
                 }
             }
         }
-        input.applyTo(store);
+        live.accept(input);
         return true;
     }
 
@@ -54,7 +54,7 @@ final class RestoreGate {
      * that throws is counted and skipped. The writer took it when it was held, so the throw can repeat in the
      * fold and in the next restore.
      */
-    void open(TraceStore store) {
+    void open(TraceInputs live) {
         while (true) {
             List<TraceInput> batch;
             synchronized (lock) {
@@ -65,13 +65,13 @@ final class RestoreGate {
                 batch = held;
                 held = new ArrayList<>();
             }
-            batch.forEach(input -> applyHeld(input, store));
+            batch.forEach(input -> applyHeld(input, live));
         }
     }
 
-    private void applyHeld(TraceInput input, TraceStore store) {
+    private void applyHeld(TraceInput input, TraceInputs live) {
         try {
-            input.applyTo(store);
+            live.accept(input);
         } catch (RuntimeException e) {
             failed++;
             if (firstFailure == null) {

@@ -30,24 +30,32 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
     private static final Duration CLOSE_WAIT = Duration.ofSeconds(10);
 
     private final TraceStore store;
+    private final TraceInputs live;
     private final RestoreGate gate = new RestoreGate(JournalWriter.CAPACITY);
     private final JournalWriter writer;
     private final Thread thread;
 
-    private TraceJournal(TraceStore store, JournalFiles files, JournalWriter writer) {
+    private TraceJournal(TraceStore store, TraceInputs live, JournalFiles files, JournalWriter writer) {
         this.store = store;
+        this.live = live;
         this.writer = writer;
         this.thread = Thread.ofVirtual().name("peekaboot-trace-journal").unstarted(() -> run(files));
     }
 
-    /** Starts the writer thread and returns at once, so no startup waits for the files. */
+    /**
+     * Starts the writer thread and returns at once, so no startup waits for the files. The restore
+     * replays into {@code store}; every live input reaches {@code live}, which applies it to that store
+     * and hands it to whatever else takes live inputs.
+     */
     public static TraceJournal start(
             TraceStore store,
+            TraceInputs live,
             Path directory,
             PeekabootProperties.Storage.Traces settings,
             PeekabootTracingProperties tracing) {
         return start(
                 store,
+                live,
                 directory,
                 settings.getFlushInterval(),
                 settings.getMaxJournalSize().toBytes(),
@@ -61,6 +69,7 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
      */
     static TraceJournal start(
             TraceStore store,
+            TraceInputs live,
             Path directory,
             Duration flushInterval,
             long maxJournalChars,
@@ -69,7 +78,7 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
         JournalFiles files = new JournalFiles(directory);
         JournalWriter writer =
                 new JournalWriter(files, new Checkpoint(files, emptyStore), flushInterval, maxJournalChars, clock);
-        TraceJournal journal = new TraceJournal(store, files, writer);
+        TraceJournal journal = new TraceJournal(store, live, files, writer);
         journal.thread.start();
         return journal;
     }
@@ -79,7 +88,7 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
         try {
             TraceReplay.restore(files, store);
         } finally {
-            gate.open(store);
+            gate.open(live);
         }
         if (gate.dropped() > 0) {
             log.warn(
@@ -100,12 +109,15 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
     /** An input the gate drops reaches neither the store nor the writer; the restore's end reports the count. */
     @Override
     public void accept(TraceInput input) {
-        if (gate.pass(input, store)) {
+        if (gate.pass(input, live)) {
             writer.offer(input);
         }
     }
 
-    /** Stops the writer and waits for its last fold. An input after this reaches the store alone. */
+    /**
+     * Stops the writer and waits for its last fold. An input after this reaches the live inputs alone,
+     * never the journal.
+     */
     @Override
     public void close() {
         writer.stop();

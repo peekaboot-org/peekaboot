@@ -19,13 +19,16 @@ import java.util.concurrent.CountDownLatch;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.FailedTraces;
 import org.peekaboot.backend.testsupport.Latches;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.digest.ErrorDigest;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceInput;
+import org.peekaboot.backend.tracing.store.TraceInputs;
 import org.peekaboot.testsupport.LogCapture;
 
 class TraceJournalTest {
@@ -38,7 +41,47 @@ class TraceJournalTest {
 
     private static TraceJournal start(InMemoryTraceStore store, Path directory, long maxJournalChars) {
         return TraceJournal.start(
-                store, directory, FAST, maxJournalChars, TraceStores::withDefaults, Clock.systemUTC());
+                store,
+                TraceInputs.into(store),
+                directory,
+                FAST,
+                maxJournalChars,
+                TraceStores::withDefaults,
+                Clock.systemUTC());
+    }
+
+    /** A journal whose live inputs reach {@code digest} as well as the store, as the auto-configuration wires it. */
+    private static TraceJournal startRecording(InMemoryTraceStore store, ErrorDigest digest, Path directory) {
+        return TraceJournal.start(
+                store,
+                FailedTraces.recorder(store, digest).liveInputs(),
+                directory,
+                FAST,
+                Long.MAX_VALUE,
+                TraceStores::withDefaults,
+                Clock.systemUTC());
+    }
+
+    /** A live line seen in the store means the restore is done, since the gate holds live inputs until then. */
+    private static void awaitRestored(TraceJournal journal, InMemoryTraceStore store) {
+        journal.accept(new TraceInput.LogCaptured(untraced().saying("live").build()));
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
+    }
+
+    /** A store whose restore counts {@code replaying} down at a run line and waits there for {@code release}. */
+    private static InMemoryTraceStore storeHoldingTheRestoreAtItsRunLine(
+            CountDownLatch replaying, CountDownLatch release) {
+        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            public void beginRun(@Nullable Instant startedAt) {
+                if (startedAt != null) {
+                    replaying.countDown();
+                    Latches.awaitQuietly(release);
+                }
+                super.beginRun(startedAt);
+            }
+        };
     }
 
     private static TraceInput logged(String traceId, String message) {
@@ -97,16 +140,7 @@ class TraceJournalTest {
         }
         CountDownLatch replaying = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        InMemoryTraceStore second = new InMemoryTraceStore(new PeekabootTracingProperties()) {
-            @Override
-            public void beginRun(@Nullable Instant startedAt) {
-                if (startedAt != null) {
-                    replaying.countDown();
-                    Latches.awaitQuietly(release);
-                }
-                super.beginRun(startedAt);
-            }
-        };
+        InMemoryTraceStore second = storeHoldingTheRestoreAtItsRunLine(replaying, release);
 
         try (TraceJournal journal = start(second, dir, Long.MAX_VALUE)) {
             Latches.awaitQuietly(replaying);
@@ -270,5 +304,72 @@ class TraceJournalTest {
 
         assertThat(store.getTrace("t1")).isPresent();
         assertThat(JournalTexts.lines(new JournalFiles(dir).journal())).hasSize(1);
+    }
+
+    /** A live failure passes the open restore gate to the digest as it does to the store. */
+    @Test
+    void aLiveFailureReachesTheDigest() {
+        InMemoryTraceStore store = TraceStores.withDefaults();
+        ErrorDigest digest = new ErrorDigest();
+        try (TraceJournal journal = startRecording(store, digest, dir)) {
+            awaitRestored(journal, store);
+            journal.accept(new TraceInput.SpanArrived(FailedTraces.handler("failed", STARTED, "out of stock", 42)));
+            journal.accept(new TraceInput.SpanArrived(FailedTraces.root("failed", STARTED, 500)));
+
+            await().atMost(Duration.ofSeconds(5)).until(() -> !digest.entries().isEmpty());
+            assertThat(digest.entries().getFirst().lastTraceId()).isEqualTo("failed");
+        }
+    }
+
+    /**
+     * A root held while the restore runs completes a trace restored failed but incomplete, and counts it
+     * once. The root answers 200, so only the restored handler can have failed the trace. The store below
+     * holds the restore at its first run line until the root has been handed in, so the root is one the
+     * gate held.
+     */
+    @Test
+    void aHeldRootCompletingARestoredFailureCountsItOnce() {
+        try (TraceJournal journal = start(TraceStores.withDefaults(), dir, Long.MAX_VALUE)) {
+            journal.accept(new TraceInput.RunStarted(STARTED));
+            journal.accept(new TraceInput.SpanArrived(FailedTraces.handler("failed", STARTED, "out of stock", 42)));
+        }
+        CountDownLatch replaying = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        InMemoryTraceStore second = storeHoldingTheRestoreAtItsRunLine(replaying, release);
+        ErrorDigest digest = new ErrorDigest();
+
+        try (TraceJournal journal = startRecording(second, digest, dir)) {
+            Latches.awaitQuietly(replaying);
+            journal.accept(new TraceInput.SpanArrived(FailedTraces.root("failed", STARTED, 200)));
+            release.countDown();
+            awaitRestored(journal, second);
+
+            assertThat(digest.entries()).singleElement().satisfies(entry -> {
+                assertThat(entry.lastTraceId()).isEqualTo("failed");
+                assertThat(entry.count()).isEqualTo(1);
+            });
+        }
+    }
+
+    /** The replay applies the restored inputs to the store alone; the run that captured a failure counted it. */
+    @Test
+    void aReplayedFailureIsNotRecordedAgain() {
+        InMemoryTraceStore first = TraceStores.withDefaults();
+        ErrorDigest firstDigest = new ErrorDigest();
+        try (TraceJournal journal = startRecording(first, firstDigest, dir)) {
+            journal.accept(new TraceInput.SpanArrived(FailedTraces.handler("failed", STARTED, "out of stock", 42)));
+            journal.accept(new TraceInput.SpanArrived(FailedTraces.root("failed", STARTED, 500)));
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> !firstDigest.entries().isEmpty());
+        }
+
+        InMemoryTraceStore second = TraceStores.withDefaults();
+        ErrorDigest secondDigest = new ErrorDigest();
+        try (TraceJournal journal = startRecording(second, secondDigest, dir)) {
+            awaitRestored(journal, second);
+
+            assertThat(second.getTrace("failed")).isPresent();
+            assertThat(secondDigest.entries()).isEmpty();
+        }
     }
 }

@@ -10,6 +10,7 @@ import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceInput;
+import org.peekaboot.backend.tracing.store.TraceInputs;
 
 class RestoreGateTest {
 
@@ -30,12 +31,12 @@ class RestoreGateTest {
         InMemoryTraceStore store = TraceStores.withDefaults();
         RestoreGate gate = new RestoreGate(10);
 
-        gate.pass(logged("a"), store);
-        gate.pass(logged("b"), store);
+        gate.pass(logged("a"), TraceInputs.into(store));
+        gate.pass(logged("b"), TraceInputs.into(store));
         assertThat(store.getTrace("t1")).isEmpty();
 
-        gate.open(store);
-        gate.pass(logged("c"), store);
+        gate.open(TraceInputs.into(store));
+        gate.pass(logged("c"), TraceInputs.into(store));
 
         assertThat(messages(store)).containsExactly("a", "b", "c");
     }
@@ -49,14 +50,14 @@ class RestoreGateTest {
             public void addLog(LogCapturedEvent log) {
                 super.addLog(log);
                 if ("a".equals(log.message())) {
-                    gate.pass(logged("late"), this);
+                    gate.pass(logged("late"), TraceInputs.into(this));
                 }
             }
         };
-        gate.pass(logged("a"), store);
-        gate.pass(logged("b"), store);
+        gate.pass(logged("a"), TraceInputs.into(store));
+        gate.pass(logged("b"), TraceInputs.into(store));
 
-        gate.open(store);
+        gate.open(TraceInputs.into(store));
 
         assertThat(messages(store)).containsExactly("a", "b", "late");
     }
@@ -66,10 +67,10 @@ class RestoreGateTest {
         InMemoryTraceStore store = TraceStores.withDefaults();
         RestoreGate gate = new RestoreGate(2);
 
-        assertThat(gate.pass(logged("a"), store)).isTrue();
-        assertThat(gate.pass(logged("b"), store)).isTrue();
-        assertThat(gate.pass(logged("c"), store)).isFalse();
-        gate.open(store);
+        assertThat(gate.pass(logged("a"), TraceInputs.into(store))).isTrue();
+        assertThat(gate.pass(logged("b"), TraceInputs.into(store))).isTrue();
+        assertThat(gate.pass(logged("c"), TraceInputs.into(store))).isFalse();
+        gate.open(TraceInputs.into(store));
 
         assertThat(messages(store)).containsExactly("a", "b");
         assertThat(gate.dropped()).isEqualTo(1);
@@ -80,11 +81,12 @@ class RestoreGateTest {
     void holdsTheRunStartWhenFull() {
         InMemoryTraceStore store = TraceStores.withDefaults();
         RestoreGate gate = new RestoreGate(1);
-        gate.pass(logged("a"), store);
+        gate.pass(logged("a"), TraceInputs.into(store));
 
-        assertThat(gate.pass(new TraceInput.RunStarted(STARTED), store)).isTrue();
-        assertThat(gate.pass(logged("b"), store)).isFalse();
-        gate.open(store);
+        assertThat(gate.pass(new TraceInput.RunStarted(STARTED), TraceInputs.into(store)))
+                .isTrue();
+        assertThat(gate.pass(logged("b"), TraceInputs.into(store))).isFalse();
+        gate.open(TraceInputs.into(store));
 
         assertThat(store.getTrace("t1").orElseThrow().snapshot().run()).isEqualTo(STARTED);
         assertThat(messages(store)).containsExactly("a");
@@ -104,12 +106,12 @@ class RestoreGateTest {
             }
         };
         RestoreGate gate = new RestoreGate(10);
-        gate.pass(logged("a"), store);
-        gate.pass(logged("bad"), store);
-        gate.pass(logged("b"), store);
+        gate.pass(logged("a"), TraceInputs.into(store));
+        gate.pass(logged("bad"), TraceInputs.into(store));
+        gate.pass(logged("b"), TraceInputs.into(store));
 
-        gate.open(store);
-        gate.pass(logged("c"), store);
+        gate.open(TraceInputs.into(store));
+        gate.pass(logged("c"), TraceInputs.into(store));
 
         assertThat(messages(store)).containsExactly("a", "b", "c");
         assertThat(gate.failed()).isEqualTo(1);
