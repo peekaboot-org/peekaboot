@@ -436,10 +436,11 @@ class SpansTabIT extends TraceOverlayTestBase {
 
     /**
      * Each span's duration cell shows the duration the way every other surface formats
-     * one (formatDurationMs - "250ms", "1.50s") plus its share of the whole trace's
-     * duration, and the gantt header's tick marks line up with the row tracks below
-     * them - both track and header timeline carry the same side margin, so the 0%/100%
-     * ticks sit right above the start/end of the bars they describe rather than further out.
+     * one (formatDurationMs: "250ms", "1.50s") plus its share of the whole trace's
+     * duration, and a parent's cell adds its self time. The gantt header's tick marks line
+     * up with the row tracks below them. Both track and header timeline carry the same side
+     * margin, so the 0%/100% ticks sit right above the start/end of the bars they describe
+     * rather than further out.
      *
      * <p>The leftmost tick is the axis origin, the trace's own start: it reads "0ms"
      * rather than the "&lt;1ms" formatDurationMs() gives any sub-millisecond duration,
@@ -451,9 +452,9 @@ class SpansTabIT extends TraceOverlayTestBase {
 
         Object allDurationsMatchPattern = overlay.evaluate(
                 "root => Array.from(root.querySelectorAll('.pk-gantt-duration'))"
-                        + ".every(el => /^(<1ms|\\d+ms|\\d+\\.\\d{2}[sm]) \\u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
+                        + ".every(el => /^(<1ms|\\d+ms|\\d+\\.\\d{2}[sm]) \\u00B7 \\d{1,3}%( \\u00B7 self (<1ms|\\d+ms|\\d+\\.\\d{2}[sm]))?$/.test(el.textContent.trim()))");
         assertThat((Boolean) allDurationsMatchPattern)
-                .as("every duration cell reads '<duration> \u00B7 <pct>%'")
+                .as("every duration cell reads '<duration> · <pct>%', a parent's adds '· self <duration>'")
                 .isTrue();
 
         String originTick =
@@ -603,6 +604,34 @@ class SpansTabIT extends TraceOverlayTestBase {
                         + ".filter(name => name.scrollWidth > name.clientWidth).map(name => name.textContent)"))
                 .as("span names cut short by an ellipsis")
                 .isEqualTo(List.of());
+    }
+
+    /**
+     * Badges never shrink, so a row carrying more of them than its name cell holds would zero
+     * the name. The name's floor keeps it painted however many the row carries.
+     */
+    @Test
+    void aRowFullOfBadgesStillPaintsItsName() {
+        page.setViewportSize(1280, 800);
+        String traceId = storeDeepQueryTrace();
+        String row = ".pk-gantt-row[data-span-id='query']";
+        openTraceDeepLinkToMeasure(traceId, row + " .pk-span-logs-toggle");
+
+        double nameWidth = ((Number) overlay.evaluate("""
+                        (root, row) => {
+                            const name = root.querySelector(row + ' .pk-gantt-name__text');
+                            const cell = name.closest('.pk-gantt-name');
+                            for (let i = 0; i < 12; i++) {
+                                const badge = document.createElement('span');
+                                badge.className = 'pk-badge pk-badge--warn';
+                                badge.textContent = 'REPEATED QUERY';
+                                cell.append(badge);
+                            }
+                            return name.getBoundingClientRect().width;
+                        }
+                        """, row)).doubleValue();
+
+        assertThat(nameWidth).as("the span name's painted width").isPositive();
     }
 
     /**
@@ -1361,5 +1390,53 @@ class SpansTabIT extends TraceOverlayTestBase {
             """);
 
         assertThat(facts).isEqualTo(Map.of("empty", true, "absent", true, "text", "a7ms", "jumps", List.of("a")));
+    }
+
+    /** SLOW and VERY_SLOW judge a span's self time, so a span whose children covered part of its time shows it. */
+    @Test
+    void theDurationNamesTheSelfTimeOfASpanItsChildrenCovered() {
+        assertThat(importModule("trace-detail/tabs/spans.js", """
+                    [m.durationText({durationMs: 300, selfMs: 300}, 600),
+                     m.durationText({durationMs: 300, selfMs: 120}, 600),
+                     m.durationText({durationMs: 300}, 600)]
+                    """))
+                .isEqualTo(List.of("300ms · 50%", "300ms · 50% · self 120ms", "300ms · 50%"));
+    }
+
+    /**
+     * A duration colour carries only issues in milliseconds, so every other issue gets a badge on
+     * its row, a type the frontend has never heard of included. A type gets one badge, titled with
+     * each of its issues and coloured by the worst of them. The details list every issue.
+     */
+    @Test
+    void issueBadgesMarkWhatNoDurationColourCarries() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {
+                    spanId: 'a', name: 'a', durationMs: 10, selfMs: 10, issues: [
+                        {type: 'SLOW', severity: 'warning', unit: 'ms', message: 'slow'},
+                        {type: 'REPEATED_QUERY', severity: 'warning', unit: 'queries', message: 'repeated'},
+                        {type: 'NOT_YET_INVENTED', severity: 'warning', unit: 'rows', message: 'invented'},
+                        {type: 'REPEATED_QUERY', severity: 'warning', unit: 'queries', message: 'repeated again'},
+                        {type: 'NOT_YET_INVENTED', severity: 'error', unit: 'rows', message: 'invented worse'},
+                        {type: 'NOT_YET_INVENTED', severity: 'warning', unit: 'rows', message: 'invented again'}]}}});
+                container.querySelector('.pk-gantt-name__toggle').click();
+                return {
+                    badges: [...container.querySelectorAll('.pk-gantt-name .pk-badge')]
+                        .map(badge => badge.textContent + '|' + badge.className + '|' + badge.title),
+                    messages: [...container.querySelectorAll('.pk-span-issues__message')].map(message => message.textContent)
+                };
+            })()
+            """);
+
+        assertThat(facts)
+                .isEqualTo(Map.of(
+                        "badges",
+                        List.of(
+                                "REPEATED QUERY|pk-badge pk-badge--warn|repeated\nrepeated again",
+                                "NOT YET INVENTED|pk-badge pk-badge--error|invented\ninvented worse\ninvented again"),
+                        "messages",
+                        List.of("slow", "repeated", "invented", "repeated again", "invented worse", "invented again")));
     }
 }

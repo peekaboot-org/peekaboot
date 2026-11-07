@@ -406,4 +406,6 @@ loaded two ways: lazily by `toolbar.js` through a dynamic import, eagerly by the
 static import. Its four tabs are `request`, `spans`, `queries` and `logs`. The last three show
 badges from `TraceSummary.counts`. Its header names `TraceSummary.cause` with a link to the
 cause's span, and the Spans tab lists `TraceSummary.hotspots` above the tree, each linking to its
-row.
+row. A span whose children covered part of its time shows its self time after its duration. A span's
+issues measured in anything but milliseconds show as one badge per type on its row, and a span's
+details list each of its issues with its sentence.

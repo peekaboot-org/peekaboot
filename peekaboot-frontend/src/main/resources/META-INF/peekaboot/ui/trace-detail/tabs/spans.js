@@ -1,8 +1,8 @@
 /**
  * Trace-detail overlay - Spans tab: the gantt chart, its expand/collapse behaviour and each
- * span's three independent panels: attributes (kind, span id, error, tags - opened by the
- * span name or track), a query panel (the statement plus its row count) and a logs panel
- * (that span's own log entries) - each of the latter two opened by its own small button in
+ * span's three independent panels: attributes (kind, span id, issues, error, tags; opened by
+ * the span name or track), a query panel (the statement plus its row count) and a logs panel
+ * (that span's own log entries), each of the latter two opened by its own small button in
  * the row ("N query"/"N logs"), closed until asked for. Above the tree, the summary's hotspots,
  * each jumping to its row.
  *
@@ -21,7 +21,8 @@
  */
 import {el, button} from '../../shared/dom.js';
 import {byKey, formatCount, formatDurationMs, formatTimelineTicks, instantMs} from '../../shared/format.js';
-import {issueSeverity, severityClass} from '../../shared/severity.js';
+import {ISSUE_SEVERITIES, issueBadgeVariant, issueSeverity, severityClass} from '../../shared/severity.js';
+import {badge} from '../../shared/components.js';
 import {copyableId} from '../../shared/copyable.js';
 import {sqlView} from '../../shared/sql-view.js';
 import {logEntry, stackTraceParts} from '../log-entry.js';
@@ -309,6 +310,7 @@ function nameCell(span, kind, attrsId, queryId, logsId, hasError, display) {
             attrs: {'aria-hidden': 'true'}
         }));
     }
+    cell.append(...issueBadges(span.issues));
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
     // span.statement - a batch is still one query, same as the Queries tab's own count - and the
     // row count of the result-set span it paired to this one (RowCounts) as span.rowCount.
@@ -366,24 +368,67 @@ function eventMarker(event, traceStart, totalDuration) {
 }
 
 function durationCell(span, totalDuration) {
-    const pct = Math.min(100, Math.round(((span.durationMs || 0) / totalDuration) * 100));
     // the backend's own verdict on this span's latency, where it raised an issue
     const severity = issueSeverity(span.issues);
 
     return el('span', {
         className: 'pk-gantt-duration' + (severity ? ` ${severityClass(severity)}` : ''),
-        text: `${formatDurationMs(span.durationMs)} · ${pct}%`
+        text: durationText(span, totalDuration)
     });
 }
 
-/** A span's kind, copyable id, error and tags - opened by its name or track. The backend already keeps the statement tags out (they arrive as span.statement, shown in queryPanel instead), and events sit on the track. */
+/**
+ * A span's duration, its share of the chart and, where its children covered part of it, its self
+ * time. SLOW and VERY_SLOW judge the self time, so the colour follows it.
+ */
+export function durationText(span, totalDuration) {
+    const pct = Math.min(100, Math.round(((span.durationMs || 0) / totalDuration) * 100));
+    const text = `${formatDurationMs(span.durationMs)} · ${pct}%`;
+    return span.selfMs != null && span.selfMs < (span.durationMs || 0)
+        ? `${text} · self ${formatDurationMs(span.selfMs)}`
+        : text;
+}
+
+/**
+ * A count or a status says nothing about how long the span took, so those issues get a badge here;
+ * the rest colour the duration. A span repeating several statements raises one issue per statement,
+ * so each type gets one badge whose title lists its issues, and the name keeps its room.
+ */
+function issueBadges(issues) {
+    const byType = Map.groupBy((issues || []).filter(issue => issue.unit !== 'ms'), issue => issue.type);
+    return [...byType.values()].map(sameType => badge(issueLabel(sameType[0]), issueBadgeVariant(worstSeverity(sameType)),
+        {title: sameType.map(issue => issue.message).join('\n')}));
+}
+
+/** ISSUE_SEVERITIES runs in the enum's order, mildest first; a word it does not know ranks below all. */
+function worstSeverity(issues) {
+    return issues.map(issue => issue.severity)
+        .reduce((worst, severity) => (ISSUE_SEVERITIES.indexOf(severity) > ISSUE_SEVERITIES.indexOf(worst) ? severity : worst));
+}
+
+/** REPEATED_QUERY reads REPEATED QUERY, the way the overlay's other badges spell a verdict. */
+function issueLabel(issue) {
+    return issue.type.replaceAll('_', ' ');
+}
+
+/** A span's kind, copyable id, issues, error and tags, opened by its name or track. The backend already keeps the statement tags out (they arrive as span.statement, shown in queryPanel instead), and events sit on the track. */
 function attrsPanel(span, kind, attrsId) {
     return el('div', {className: 'pk-span-panel pk-span-panel--attrs', attrs: {id: attrsId}},
         el('div', {className: 'pk-span-details__head'},
             el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`}),
             copyableId(span.spanId, {label: 'spanId'})),
+        issueList(span.issues),
         errorSection(span),
         tagList(span.tags));
+}
+
+/** Every issue on the span with its sentence, which names the value the badge or the duration colour stands for. */
+function issueList(issues) {
+    if (!issues?.length) return null;
+    return el('ul', {className: 'pk-span-issues', attrs: {'aria-label': 'Issues'}},
+        ...issues.map(issue => el('li', {className: 'pk-span-issues__item'},
+            badge(issueLabel(issue), issueBadgeVariant(issue.severity)),
+            el('span', {className: 'pk-span-issues__message', text: issue.message}))));
 }
 
 /**

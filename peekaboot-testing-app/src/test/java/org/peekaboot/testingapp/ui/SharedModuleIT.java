@@ -336,6 +336,13 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
     }
 
+    /** An issue with no duration to colour shows as a badge in its severity's tier; an unknown word stays muted. */
+    @Test
+    void issueBadgeVariantFollowsTheSeverityWord() {
+        assertThat(evalModule("severity.js", "['warning', 'error', 'unheard-of'].map(m.issueBadgeVariant)"))
+                .isEqualTo(List.of("warn", "error", "muted"));
+    }
+
     @Test
     void issueSeveritiesMirrorTheBackendEnum() {
         assertThat(evalModule("severity.js", "m.ISSUE_SEVERITIES"))

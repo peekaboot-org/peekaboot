@@ -36,13 +36,13 @@ export function querySeverity(ms, features) {
     return ms >= features?.slowQueryThresholdMs ? 'slow' : '';
 }
 
-/** Every IssueSeverity word the backend sends with an issue, in the enum's order, and the severity suffix each one paints a duration with. */
-const ISSUE_SEVERITY_SUFFIXES = Object.freeze({
-    warning: 'slow',
-    error: 'very-slow'
+/** Every IssueSeverity word the backend sends with an issue, in the enum's order: the suffix it colours a duration with, and the badge tier (components.css) it takes where it has no duration to colour. */
+const ISSUE_SEVERITY_STYLES = Object.freeze({
+    warning: Object.freeze({duration: 'slow', badge: 'warn'}),
+    error: Object.freeze({duration: 'very-slow', badge: 'error'})
 });
 
-export const ISSUE_SEVERITIES = Object.keys(ISSUE_SEVERITY_SUFFIXES);
+export const ISSUE_SEVERITIES = Object.keys(ISSUE_SEVERITY_STYLES);
 
 /**
  * The worst latency severity among a span's issues, read off each issue's severity. Only an issue
@@ -52,10 +52,15 @@ export const ISSUE_SEVERITIES = Object.keys(ISSUE_SEVERITY_SUFFIXES);
 export function issueSeverity(issues) {
     const severities = (issues || [])
         .filter(issue => issue.unit === 'ms')
-        .map(issue => ISSUE_SEVERITY_SUFFIXES[issue.severity] || '');
+        .map(issue => ISSUE_SEVERITY_STYLES[issue.severity]?.duration || '');
     if (severities.includes('very-slow')) return 'very-slow';
     if (severities.includes('slow')) return 'slow';
     return '';
+}
+
+/** The badge variant an issue's severity word takes; an unknown word stays muted. */
+export function issueBadgeVariant(severity) {
+    return ISSUE_SEVERITY_STYLES[severity]?.badge || 'muted';
 }
 
 /** The levels a captured log line can carry, most severe first - Logback's, minus OFF and ALL, which never label an event. */
