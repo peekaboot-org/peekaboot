@@ -14,7 +14,7 @@ import {el, button} from '../../shared/dom.js';
 import {formatDurationMs, formatDateTime, formatNumber, shortTarget} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
-import {isSlowTrace, slowBadge, traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
+import {interruptedBadge, isSlowTrace, slowBadge, traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
 import {parseAppHash, buildAppHash} from '../../shared/url-state.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
@@ -410,6 +410,8 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
         path,
         el('span', {className: 'pk-trace-item__duration', text: formatDurationMs(trace.durationMs)}),
         verdict,
+        // the overlay header's wording, so the row and the detail agree
+        trace.outcome === 'INTERRUPTED' ? interruptedBadge() : null,
         trace.counts.droppedSpans > 0 ? truncatedBadge() : null);
 }
 

@@ -13,8 +13,8 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * A trace an earlier run left without its root. {@link TraceJournalFixture} writes it into a storage
- * directory of this class's own before the context boots; the context's trace journal restores it,
- * and the overlay header calls it interrupted, never in progress.
+ * directory of this class's own before the context boots; the context's trace journal restores it.
+ * The overlay header calls it interrupted, never in progress, and so does its row on the Traces tab.
  *
  * <p>Closed with the class: storage is on, so the journal and the insights snapshot keep writing into
  * {@code storageDir} until the context closes, and a cached context would outlive the directory (see
@@ -25,6 +25,7 @@ class InterruptedTraceIT extends TraceOverlayTestBase {
 
     private static final String TRACE_ID = "1d1e5e1f00000000000000000000beef";
     private static final String UNLISTED_TRACE_ID = "1d1e5e1f00000000000000000000dead";
+    private static final String LOGGED_TRACE_ID = "1d1e5e1f00000000000000000000f00d";
     private static final String INTERRUPTED = "trace => trace.summary.outcome === 'INTERRUPTED'";
 
     @TempDir
@@ -32,7 +33,7 @@ class InterruptedTraceIT extends TraceOverlayTestBase {
 
     @DynamicPropertySource
     static void seededJournal(DynamicPropertyRegistry registry) {
-        TraceJournalFixture.writeInterruptedTrace(storageDir, TRACE_ID, UNLISTED_TRACE_ID);
+        TraceJournalFixture.writeInterruptedTrace(storageDir, TRACE_ID, UNLISTED_TRACE_ID, LOGGED_TRACE_ID);
         registry.add("peekaboot.storage.enabled", () -> "true");
         registry.add("peekaboot.storage.dir", storageDir::toString);
     }
@@ -63,6 +64,23 @@ class InterruptedTraceIT extends TraceOverlayTestBase {
                                 "title",
                                 "The application stopped before the root span arrived, so this trace will never"
                                         + " complete. This shows the spans that did arrive."));
+    }
+
+    /**
+     * The row says so too, so a reader need not open the trace to see it will never complete. The
+     * type filter keeps the row on the first page whatever else this context traced.
+     */
+    @Test
+    void theTracesTabRowOfAnInterruptedTraceSaysSo() {
+        awaitTrace(LOGGED_TRACE_ID, INTERRUPTED);
+
+        openDashboard("#traces?type=UNKNOWN", Dashboard.traceItem(LOGGED_TRACE_ID));
+
+        String badge = Dashboard.traceItem(LOGGED_TRACE_ID) + " .pk-trace-item__main-line .pk-badge--muted";
+        assertThat(page.textContent(badge)).isEqualTo("INTERRUPTED");
+        assertThat(page.getAttribute(badge, "title"))
+                .isEqualTo("The application stopped before the root span arrived, so this trace will never"
+                        + " complete. This shows the spans that did arrive.");
     }
 
     @Test
