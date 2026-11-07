@@ -286,13 +286,14 @@ org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search)
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── actuator/           # ActuatorInsightsResponse: the dashboard's aggregate DTO, one field per section below
 │   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
 │   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
+│   ├── errors/             # ErrorDigestParameters, ErrorDigestResponse, ErrorDigestEntry: the error digest's request and entries
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
 │   ├── log/                # LogSearchParameters, LogSearchResponse: the log search's request and page
 │   ├── property/           # PropertyGroup, Property: the one shape the Environment and Config sections share
@@ -312,7 +313,7 @@ org.peekaboot.backend/
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
 │                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
-├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, TraceReads, ...
+├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, ErrorDigestService, TraceReads, ...
 ├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page, the Logs tab and a span's details panel fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
 ├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
@@ -1830,6 +1831,11 @@ LogSearchResponse                # GET /peekaboot/api/logs
 RouteListResponse                # GET /peekaboot/api/routes
 ├── window: {from, to, traceCount}   # the earliest and latest start of the requests counted, and their number
 └── routes: List<RouteStats>     # busiest first; see Route Statistics
+
+ErrorDigestResponse              # GET /peekaboot/api/errors
+└── errors: List<ErrorDigestEntry>   # seen latest first, at most 500; see Error digest in GLOSSARY.md
+    └── type, route, applicationFrame, count, firstSeen, lastSeen, lastMessage, lastTraceId,
+        traceAvailable, runs     # traceAvailable: the store still holds lastTraceId
 ```
 
 What the store holds:

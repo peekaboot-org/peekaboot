@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.backend.controller.ErrorDigestController;
 import org.peekaboot.backend.controller.LogController;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.controller.TraceController;
@@ -196,6 +197,8 @@ class PeekabootAutoConfigurationTest {
             assertThat(context).hasSingleBean(PeekabootController.class);
             assertThat(context).hasSingleBean(TraceController.class);
             assertThat(context).hasSingleBean(LogController.class);
+            assertThat(context).hasSingleBean(ErrorDigestController.class).hasBean("peekabootErrorDigestController");
+            assertThat(context).hasBean("peekabootErrorDigestService");
         });
     }
 

@@ -164,7 +164,7 @@ cause class, route and top application frame, the frame without its line number,
 failure stays one entry when an edit moves its line. Each entry keeps the count, the first and
 last trace's start times, the last message and trace id, and the starts of the last ten runs it
 occurred in. It outlives the traces: one noisy failure can fill the Errors bucket and evict the
-rest, while the digest keeps up to 500 entries.
+rest, while the digest keeps up to 500 entries. `GET /peekaboot/api/errors` serves it.
 
 ## Where the code and the UI use different words
 

@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp;
 
 import io.micrometer.tracing.Tracer;
+import org.peekaboot.fixtures.DigestFixtureController;
 import org.peekaboot.fixtures.HeldRequestController;
 import org.peekaboot.fixtures.LateSpanController;
 import org.peekaboot.fixtures.MaskingFixtureController;
@@ -35,6 +36,11 @@ public class SharedFixturesConfig {
     @Bean
     MaskingFixtureController maskingFixtureController() {
         return new MaskingFixtureController();
+    }
+
+    @Bean
+    DigestFixtureController digestFixtureController() {
+        return new DigestFixtureController();
     }
 
     @Bean

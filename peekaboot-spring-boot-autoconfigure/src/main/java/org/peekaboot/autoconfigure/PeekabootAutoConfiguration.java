@@ -6,6 +6,7 @@ import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.PeekabootWebConfig;
+import org.peekaboot.backend.controller.ErrorDigestController;
 import org.peekaboot.backend.controller.LogController;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.controller.TraceController;
@@ -18,12 +19,14 @@ import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.problem.ApiProblemHandler;
 import org.peekaboot.backend.service.ActuatorInsightsService;
+import org.peekaboot.backend.service.ErrorDigestService;
 import org.peekaboot.backend.service.LogSearchService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.digest.ErrorDigest;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -153,6 +156,20 @@ public class PeekabootAutoConfiguration {
     @ConditionalOnMissingBean
     public LogController peekabootLogController(LogSearchService logSearchService) {
         return new LogController(logSearchService);
+    }
+
+    /** The digest and the store are absent while {@code peekaboot.tracing.enabled} is false; the digest then lists nothing. */
+    @Bean
+    @ConditionalOnMissingBean
+    public ErrorDigestService peekabootErrorDigestService(
+            ObjectProvider<ErrorDigest> errorDigest, ObjectProvider<TraceStore> traceStore) {
+        return new ErrorDigestService(errorDigest.getIfAvailable(), traceStore.getIfAvailable());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ErrorDigestController peekabootErrorDigestController(ErrorDigestService errorDigestService) {
+        return new ErrorDigestController(errorDigestService);
     }
 
     @Bean
