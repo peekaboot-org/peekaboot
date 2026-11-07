@@ -7,6 +7,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.method.HandlerTypePredicate;
+import org.springframework.web.method.annotation.ExceptionHandlerMethodResolver;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -17,8 +20,27 @@ import org.springframework.web.server.ResponseStatusException;
  * application-wide handler must not reshape Peekaboot's errors, and the package scope keeps
  * this one away from the application's.
  */
-@RestControllerAdvice(basePackages = "org.peekaboot.backend")
+@RestControllerAdvice(basePackages = ApiProblemHandler.ADVISED_PACKAGE)
 public class ApiProblemHandler implements Ordered {
+
+    static final String ADVISED_PACKAGE = "org.peekaboot.backend";
+
+    private static final HandlerTypePredicate ADVISED = HandlerTypePredicate.forBasePackage(ADVISED_PACKAGE);
+
+    private static final ExceptionHandlerMethodResolver HANDLERS =
+            new ExceptionHandlerMethodResolver(ApiProblemHandler.class);
+
+    /**
+     * Whether this advice answers {@code ex} thrown for {@code handler}, decided the way Spring's
+     * {@code ExceptionHandlerExceptionResolver} picks an advice, so a resolver ranked ahead of that
+     * one can leave the answer to it. Like Spring's lookup, it follows {@code ex}'s causes without
+     * a cycle check.
+     */
+    public static boolean answers(@Nullable Object handler, Exception ex) {
+        return handler instanceof HandlerMethod handlerMethod
+                && ADVISED.test(handlerMethod.getBeanType())
+                && HANDLERS.resolveMethod(ex) != null;
+    }
 
     @ExceptionHandler(ApiProblemException.class)
     ResponseEntity<ApiProblem> refused(ApiProblemException e) {

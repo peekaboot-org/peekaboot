@@ -703,8 +703,12 @@ own resolvers, so it intercepts the exception first. It returns null, falling th
 application's own handling, unless the `Accept` header names `text/html` with a quality above
 zero. A bare `*/*` or a missing header does not count, so Swagger UI, curl and `fetch()` keep
 getting the application's own error response, as does an XHR asking for JSON. It also returns
-null for a response already committed, as Spring's own resolvers do. The status is Spring's own,
-asked in Spring's order: a private `ResponseStatusExceptionResolver`, then a private
+null for a response already committed, as Spring's own resolvers do. It returns null as well for
+an exception Peekaboot's own API answers, which `ApiProblemHandler.answers` decides from the
+handler's package and the advice's exception methods. A browser asking an API URL therefore keeps
+the problem body, which goes out for any `Accept` that admits JSON. That check follows causes the way
+Spring's advice lookup does, so it is asked only after the cycle check below. The status is
+Spring's own, asked in Spring's order: a private `ResponseStatusExceptionResolver`, then a private
 `DefaultHandlerExceptionResolver`, both answering against a response wrapper that records
 `sendError` instead of sending it. A `ResponseStatusException` keeps its status and headers, an
 `@ResponseStatus` its reason, a `TypeMismatchException` or an unreadable body its 400, and the

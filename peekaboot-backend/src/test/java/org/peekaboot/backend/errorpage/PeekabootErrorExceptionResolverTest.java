@@ -12,7 +12,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.peekaboot.problemfixture.ApplicationEndpoint;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
@@ -26,6 +28,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolver;
@@ -146,6 +149,57 @@ class PeekabootErrorExceptionResolverTest {
 
         ModelAndView modelAndView =
                 resolver.resolveException(request, response, null, new IllegalStateException("boom"));
+
+        assertThat(modelAndView).isNotNull();
+    }
+
+    /** The page stands back for a request Peekaboot's own API refuses, even one that names text/html. */
+    @Test
+    void leavesARefusalToPeekabootsApi() throws Exception {
+        request.addHeader("Accept", "text/html");
+
+        ModelAndView modelAndView = resolver.resolveException(
+                request, response, peekabootHandler(), ApiProblemException.badParameter("x", "Unknown parameter 'x'."));
+
+        assertThat(modelAndView).isNull();
+        assertThat(logs.appender().list).isEmpty();
+    }
+
+    /** What Peekaboot's API does not answer itself still renders the page. */
+    @Test
+    void rendersAnExceptionPeekabootsApiDoesNotAnswer() throws Exception {
+        request.addHeader("Accept", "text/html");
+
+        ModelAndView modelAndView =
+                resolver.resolveException(request, response, peekabootHandler(), new IllegalStateException("boom"));
+
+        assertThat(modelAndView).isNotNull();
+    }
+
+    /** Spring's own advice lookup would follow a cyclic chain forever, so it is never asked about one. */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void rendersACyclicCauseChainUnderPeekabootsHandler() throws Exception {
+        request.addHeader("Accept", "text/html");
+
+        ModelAndView modelAndView = resolver.resolveException(request, response, peekabootHandler(), cycle());
+
+        assertThat(modelAndView).isNotNull();
+        assertThat(logs.appender().list)
+                .singleElement()
+                .satisfies(event -> assertThat(event.getFormattedMessage())
+                        .isEqualTo("Request processing failed: java.lang.RuntimeException: first"));
+    }
+
+    /** Thrown for the application's handler, a refusal is the application's error like any other. */
+    @Test
+    void rendersARefusalThrownForAnApplicationHandler() throws Exception {
+        request.addHeader("Accept", "text/html");
+        HandlerMethod applicationHandler = new HandlerMethod(
+                new ApplicationEndpoint(), ApplicationEndpoint.class.getDeclaredMethod("get", int.class));
+
+        ModelAndView modelAndView = resolver.resolveException(
+                request, response, applicationHandler, ApiProblemException.badParameter("x", "Unknown parameter 'x'."));
 
         assertThat(modelAndView).isNotNull();
     }
@@ -485,6 +539,13 @@ class PeekabootErrorExceptionResolverTest {
         assertThat(modelAndView).isNull();
     }
 
+    /** A handler of Peekaboot's own, inside the package its API advice answers for. */
+    static class PeekabootEndpoint {
+        String answer() {
+            return "ok";
+        }
+    }
+
     @ResponseStatus(HttpStatus.CONFLICT)
     static class AnnotatedException extends RuntimeException {}
 
@@ -503,6 +564,10 @@ class PeekabootErrorExceptionResolverTest {
                 return headers;
             }
         };
+    }
+
+    private static HandlerMethod peekabootHandler() throws NoSuchMethodException {
+        return new HandlerMethod(new PeekabootEndpoint(), PeekabootEndpoint.class.getDeclaredMethod("answer"));
     }
 
     /** Two exceptions, each other's cause: Throwable.initCause refuses only self-causation. */

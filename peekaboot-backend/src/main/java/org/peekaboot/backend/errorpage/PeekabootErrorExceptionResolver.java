@@ -10,6 +10,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.problem.ApiProblemHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
@@ -32,7 +33,9 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
  * dispatch and so never reaches {@code BasicErrorController}. {@link PeekabootErrorView}'s other
  * two paths, the fallback {@code error} view and {@link PeekabootErrorViewResolver}, both go
  * through it. Registered only where {@code peekaboot.error-page.override} is set, alongside
- * {@link PeekabootErrorViewResolver}; the fallback view stands back then.
+ * {@link PeekabootErrorViewResolver}; the fallback view stands back then. It stands back for
+ * whatever Peekaboot's own API answers ({@link ApiProblemHandler}), whose problem body goes out
+ * for any Accept that admits JSON.
  *
  * <p>The status, headers and reason are the ones Spring's own resolvers would send, asked in their
  * order: {@link ResponseStatusExceptionResolver}, then {@link DefaultHandlerExceptionResolver},
@@ -86,6 +89,12 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
             HttpStatusCode annotated = annotatedStatusOf(chain.links());
             return annotated != null ? page(request, annotated) : unmappedPage(request, ex);
         }
+        return ApiProblemHandler.answers(handler, ex) ? null : springMappedPage(request, response, handler, ex);
+    }
+
+    /** The page with the status Spring's own resolvers would send, or their empty answer where they write nothing. */
+    private ModelAndView springMappedPage(
+            HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
         SendErrorRecorder recorder = new SendErrorRecorder(response);
         ModelAndView springAnswer = responseStatusMapping.resolveException(request, recorder, handler, ex);
         if (springAnswer == null) {
