@@ -306,7 +306,7 @@ org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest)
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on /peekaboot/api/**), QueryParameterBinding
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
@@ -565,10 +565,16 @@ Every listing parameter arrives as written, bound into a record of strings
 and a number outside its range with that range, where a default or a clamp would answer a typo
 with the wrong list.
 
-A listing parameter sent more than once is refused before any value is read, so `limit=1&limit=2`
-is a 400 naming `limit`. `TraceController` and `LogController` turn off Spring's fallback to a
-same-named request header, so only the query string sets a listing parameter. Both rules live in
-`QueryParameterBinding`.
+A parameter an endpoint does not take is refused before its handler runs, so a misspelled
+`buckett` is a 400 naming it with the names the endpoint takes, and so is any parameter sent more
+than once, such as `limit=1&limit=2`. `QueryParameterGuard`, an interceptor on `/peekaboot/api/**`
+registered after the security headers, reads what an endpoint takes off its handler method: a
+named `@RequestParam`, the components of a `@ModelAttribute` record. Spring Security's `continue`,
+which its request cache adds to the URL a login sends a browser back to, is let through on every
+endpoint. A handler argument of any other kind fails the request, since the guard cannot tell what
+it reads, and `ApiProblemIT` sends an unknown parameter to every endpoint the application maps.
+The controllers that bind a record also turn off Spring's fallback to a same-named request header
+(`QueryParameterBinding`), so only the query string sets a parameter.
 
 ### In-Process Actuator Invocation
 

@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.WebRequest;
 
 /** Every failure the application's traces showed, kept past the traces themselves. */
 @RestController
@@ -25,13 +24,12 @@ public class ErrorDigestController {
     }
 
     /**
-     * Binds the digest's parameters from the query string alone, each sent once (see
-     * {@link QueryParameterBinding}). The name is the one Spring derives for the
-     * {@code @ModelAttribute} below.
+     * Binds the digest's parameters from the query string alone (see {@link QueryParameterBinding}).
+     * The name is the one Spring derives for the {@code @ModelAttribute} below.
      */
     @InitBinder("errorDigestParameters")
-    public void bindQueryParametersOnce(WebDataBinder binder, WebRequest request) {
-        QueryParameterBinding.bindQueryParametersOnce(binder, request, ErrorDigestParameters.class);
+    public void bindFromQueryStringOnly(WebDataBinder binder) {
+        QueryParameterBinding.bindFromQueryStringOnly(binder);
     }
 
     /** See {@link ErrorDigestService#list}. Every parameter arrives as written; the service reads them. */

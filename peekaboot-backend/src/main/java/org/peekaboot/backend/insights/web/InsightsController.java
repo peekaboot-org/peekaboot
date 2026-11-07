@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
@@ -32,13 +31,12 @@ public class InsightsController {
     }
 
     /**
-     * Binds the data request's parameters from the query string alone, each sent once (see
-     * {@link QueryParameterBinding}). The name is the one Spring derives for the
-     * {@code @ModelAttribute} below.
+     * Binds the data request's parameters from the query string alone (see {@link QueryParameterBinding}).
+     * The name is the one Spring derives for the {@code @ModelAttribute} below.
      */
     @InitBinder("insightsDataParameters")
-    public void bindQueryParametersOnce(WebDataBinder binder, WebRequest request) {
-        QueryParameterBinding.bindQueryParametersOnce(binder, request, InsightsDataParameters.class);
+    public void bindFromQueryStringOnly(WebDataBinder binder) {
+        QueryParameterBinding.bindFromQueryStringOnly(binder);
     }
 
     @GetMapping(value = "/config", produces = MediaType.APPLICATION_JSON_VALUE)

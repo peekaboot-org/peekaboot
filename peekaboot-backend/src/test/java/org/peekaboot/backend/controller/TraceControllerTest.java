@@ -36,6 +36,7 @@ class TraceControllerTest {
                     SqlFormatter.NONE,
                     new PeekabootTracingProperties(),
                     new StackTraceRules(List.of(), List.of()))))
+            .addInterceptors(new QueryParameterGuard())
             .setControllerAdvice(new ApiProblemHandler())
             .build();
 
@@ -145,6 +146,19 @@ class TraceControllerTest {
         mvc.perform(get("/peekaboot/api/traces").param(parameter, value))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.traces[*].summary.traceId").value(Matchers.contains("comma")));
+    }
+
+    /** The refusal lists what the listing takes, in its record's order. */
+    @Test
+    void refusesAMisspelledParameterNamingWhatItTakes() throws Exception {
+        mvc.perform(get("/peekaboot/api/traces").param("buckett", "errors"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.parameter").value("buckett"))
+                .andExpect(
+                        jsonPath("$.detail")
+                                .value(
+                                        "Unknown parameter 'buckett'. Accepted: limit, cursor, bucket, rootActionType,"
+                                                + " rootOperation, route, path, statusCode, outcome, minDurationMs, since, until, view."));
     }
 
     @Test

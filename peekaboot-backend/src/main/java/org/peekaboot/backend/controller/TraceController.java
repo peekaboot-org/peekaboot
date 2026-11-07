@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.WebRequest;
 
 /** The trace listing, one trace by its id, and the traces per route. */
 @RestController
@@ -30,13 +29,12 @@ public class TraceController {
     }
 
     /**
-     * Binds the listing's parameters from the query string alone, each sent once (see
-     * {@link QueryParameterBinding}). The name is the one Spring derives for the
-     * {@code @ModelAttribute} below.
+     * Binds the listing's parameters from the query string alone (see {@link QueryParameterBinding}).
+     * The name is the one Spring derives for the {@code @ModelAttribute} below.
      */
     @InitBinder("traceListParameters")
-    public void bindQueryParametersOnce(WebDataBinder binder, WebRequest request) {
-        QueryParameterBinding.bindQueryParametersOnce(binder, request, TraceListParameters.class);
+    public void bindFromQueryStringOnly(WebDataBinder binder) {
+        QueryParameterBinding.bindFromQueryStringOnly(binder);
     }
 
     /** See {@link TraceInsightsService#listTraces}. Every parameter arrives as written; the service reads them. */

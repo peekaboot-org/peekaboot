@@ -24,7 +24,8 @@ import tools.jackson.databind.node.BooleanNode;
                 + "${servlet-security-exclusions}")
 class TracesTabWithoutSpanSourceIT extends PlaywrightTestBase {
 
-    private static final String MARKER_REQUEST = "/peekaboot/api/features?after-traces-tab";
+    /** A request the dashboard never makes, so its arrival orders every request the tab made before it. */
+    private static final String MARKER_REQUEST = "/peekaboot/api/logs?q=after-traces-tab";
 
     @Test
     void theTracesTabExplainsWhatToAddInsteadOfListing() {

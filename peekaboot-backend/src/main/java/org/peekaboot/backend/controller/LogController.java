@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.WebRequest;
 
 /** The log search over every captured line, traced or not. */
 @RestController
@@ -25,13 +24,12 @@ public class LogController {
     }
 
     /**
-     * Binds the search's parameters from the query string alone, each sent once (see
-     * {@link QueryParameterBinding}). The name is the one Spring derives for the
-     * {@code @ModelAttribute} below.
+     * Binds the search's parameters from the query string alone (see {@link QueryParameterBinding}).
+     * The name is the one Spring derives for the {@code @ModelAttribute} below.
      */
     @InitBinder("logSearchParameters")
-    public void bindQueryParametersOnce(WebDataBinder binder, WebRequest request) {
-        QueryParameterBinding.bindQueryParametersOnce(binder, request, LogSearchParameters.class);
+    public void bindFromQueryStringOnly(WebDataBinder binder) {
+        QueryParameterBinding.bindFromQueryStringOnly(binder);
     }
 
     /** See {@link LogSearchService#search}. Every parameter arrives as written; the service reads them. */

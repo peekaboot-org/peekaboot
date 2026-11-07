@@ -1,6 +1,7 @@
 package org.peekaboot.backend.config;
 
 import java.time.Duration;
+import org.peekaboot.backend.controller.QueryParameterGuard;
 import org.springframework.http.CacheControl;
 import org.springframework.http.converter.HttpMessageConverters;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -26,6 +27,9 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
 
     /** The dashboard's page, relative to {@link PeekabootPaths#BASE_PATH}. */
     private static final String DASHBOARD_INDEX = "ui/dashboard/index.html";
+
+    /** Peekaboot's API, the one place its interceptors apply. */
+    private static final String API_PATTERN = PeekabootPaths.BASE_PATH + "/api/**";
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -63,9 +67,10 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
         registry.addRedirectViewController(PeekabootPaths.BASE_PATH + "/", DASHBOARD_INDEX);
     }
 
+    /** The headers go on first, so a refusal from the guard carries them too. */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new ApiSecurityHeadersInterceptor())
-                .addPathPatterns(PeekabootPaths.BASE_PATH + "/api/**");
+        registry.addInterceptor(new ApiSecurityHeadersInterceptor()).addPathPatterns(API_PATTERN);
+        registry.addInterceptor(new QueryParameterGuard()).addPathPatterns(API_PATTERN);
     }
 }

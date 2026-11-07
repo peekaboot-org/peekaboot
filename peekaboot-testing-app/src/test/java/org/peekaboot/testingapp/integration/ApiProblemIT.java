@@ -3,18 +3,28 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Comparator;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import tools.jackson.databind.JsonNode;
 
 /** Every error the API answers is a problem body an agent can read without guessing, over real HTTP. */
 class ApiProblemIT extends TestingAppITBase {
 
     record Answer(int status, MediaType contentType, JsonNode body, HttpHeaders headers) {}
+
+    /** The running application's own mappings, so an endpoint added later is held to the same rule. */
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    private RequestMappingHandlerMapping mappings;
 
     @ParameterizedTest
     @CsvSource(
@@ -50,7 +60,11 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/insights/data?level=0&series=cpu.process,,heap.used | series",
                 "/peekaboot/api/insights/data?level=0&since=yesterday | since",
                 "/peekaboot/api/errors?since=yesterday | since",
-                "/peekaboot/api/errors?route=/a&route=/b | route"
+                "/peekaboot/api/errors?route=/a&route=/b | route",
+                "/peekaboot/api/traces?buckett=errors | buckett",
+                "/peekaboot/api/features?x=1 | x",
+                "/peekaboot/api/traces/00000000000000000000000000000000?view=full | view",
+                "/peekaboot/api/actuator/all/insights?locale=en&locale=de | locale"
             })
     void aBadParameterIsRefusedWithAProblemNamingIt(String path, String parameter) {
         Answer answer = fetch(path);
@@ -117,6 +131,52 @@ class ApiProblemIT extends TestingAppITBase {
     }
 
     @Test
+    void aMisspelledParameterNamesWhatTheEndpointTakes() {
+        assertThat(fetch("/peekaboot/api/errors?rout=/a").body().path("detail").asString(""))
+                .isEqualTo("Unknown parameter 'rout'. Accepted: since, route.");
+    }
+
+    /**
+     * Every endpoint under /peekaboot/api refuses a parameter it does not take. The paths come
+     * from the application's mappings, so a new endpoint needs no row here. The event stream goes
+     * last: an endpoint that ignored the parameter would answer with a stream that never ends.
+     */
+    @Test
+    void everyEndpointRefusesAParameterItDoesNotTake() {
+        List<String> paths = mappings.getHandlerMethods().keySet().stream()
+                .flatMap(info -> info.getPatternValues().stream())
+                .filter(pattern -> pattern.startsWith("/peekaboot/api/"))
+                .sorted(Comparator.comparing((String pattern) -> pattern.endsWith("/stream"))
+                        .thenComparing(Comparator.naturalOrder()))
+                .toList();
+        assertThat(paths)
+                .as("the API's mappings")
+                .contains(
+                        "/peekaboot/api/features",
+                        "/peekaboot/api/traces/{traceId}",
+                        "/peekaboot/api/lifecycle/runs",
+                        "/peekaboot/api/insights/stream");
+
+        for (String path : paths) {
+            Answer answer = fetch(path.replaceAll("\\{[^}]+}", "x") + "?peekabootTypo=1");
+
+            assertThat(answer.status()).as(path).isEqualTo(400);
+            assertThat(answer.contentType()).as(path).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(answer.body().path("parameter").asString("")).as(path).isEqualTo("peekabootTypo");
+            assertThat(answer.body().path("detail").asString(""))
+                    .as(path)
+                    .startsWith("Unknown parameter 'peekabootTypo'. Accepted: ");
+        }
+    }
+
+    /** Spring Security's login sends a browser back to an API URL with this marker; refusing it would break the login. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/peekaboot/api/features?continue", "/peekaboot/api/traces?limit=50&continue"})
+    void springSecuritysLoginReturnMarkerIsAccepted(String path) {
+        assertThat(fetch(path).status()).isEqualTo(200);
+    }
+
+    @Test
     void anUnknownTraceIsNotFoundWithAProblem() {
         Answer answer = fetch("/peekaboot/api/traces/00000000000000000000000000000000");
 
@@ -136,16 +196,17 @@ class ApiProblemIT extends TestingAppITBase {
     }
 
     /** The API's security headers are set before the handler runs, so its refusals carry them too. */
-    @Test
-    void aProblemIsNeitherStoredNorSniffed() {
-        Answer answer = fetch("/peekaboot/api/traces?limit=abc");
+    @ParameterizedTest
+    @ValueSource(strings = {"/peekaboot/api/traces?limit=abc", "/peekaboot/api/traces?limitt=1"})
+    void aProblemIsNeitherStoredNorSniffed(String path) {
+        Answer answer = fetch(path);
 
         assertThat(answer.status()).isEqualTo(400);
         assertThat(answer.headers().getCacheControl()).contains("no-store");
         assertThat(answer.headers().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
     }
 
-    /** What the dashboard itself sends stays accepted: its own values, any case, the wildcard. */
+    /** What the dashboard itself sends stays accepted: every parameter it sends, its own values, any case, the wildcard. */
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -155,7 +216,10 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/traces?bucket=",
                 "/peekaboot/api/traces?view=full",
                 "/peekaboot/api/traces?view=Summary",
-                "/peekaboot/api/traces?limit=50"
+                "/peekaboot/api/traces?limit=50",
+                "/peekaboot/api/traces?limit=50&bucket=errors&rootActionType=SCHEDULED_JOB,MAINTENANCE&rootOperation=fixedRate",
+                "/peekaboot/api/actuator/all/insights?locale=en-US&unmask=true",
+                "/peekaboot/api/insights/data?level=0&view=full"
             })
     void theDashboardsOwnValuesAreAccepted(String path) {
         assertThat(fetch(path).status()).isEqualTo(200);

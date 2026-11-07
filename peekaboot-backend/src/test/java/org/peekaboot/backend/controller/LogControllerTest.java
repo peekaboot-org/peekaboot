@@ -26,6 +26,7 @@ class LogControllerTest {
 
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new LogController(
                     new LogSearchService(store, new MaskingEngine(), new StackTraceRules(List.of(), List.of()))))
+            .addInterceptors(new QueryParameterGuard())
             .setControllerAdvice(new ApiProblemHandler())
             .build();
 
