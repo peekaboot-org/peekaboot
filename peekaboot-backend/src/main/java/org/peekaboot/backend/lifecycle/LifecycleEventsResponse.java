@@ -6,10 +6,9 @@ import java.util.List;
 /**
  * The application's start/stop history for the dashboard, oldest first.
  *
- * <p>A start's build fields are populated only where they differ from the previous
- * start - the diff belongs here rather than in the browser, so "what changed about
- * this deployment" has one definition and one set of tests. The first start in the log
- * carries all of them: there is nothing behind it to differ from.
+ * <p>A start carries every build field it recorded, whatever the start before it ran, so one
+ * event reads on its own. Which fields changed between runs is {@link LifecycleRunsResponse}'s
+ * {@code changed}.
  */
 public record LifecycleEventsResponse(List<Event> events) {
 

@@ -12,11 +12,9 @@ import java.util.Objects;
  * ran, how long the application was down before it, and whether it was a deployment.
  *
  * <p>This is the second projection over {@link LifecycleEventLog}, alongside
- * {@link LifecycleEvents}. Where that one nulls out a field the moment it repeats a
- * previous start - the right shape for a chart marker that only wants to say what's new -
- * a run has to stand on its own: it carries the last known value forward so every row
- * reports what was actually running, and reports separately, via {@code changed}, whether
- * this run was a deployment.
+ * {@link LifecycleEvents}. Where that one serves each start as it recorded itself, a run
+ * carries the last known value forward so every row reports what was actually running, and
+ * reports separately, via {@code changed}, whether this run was a deployment.
  */
 public class LifecycleRuns {
 

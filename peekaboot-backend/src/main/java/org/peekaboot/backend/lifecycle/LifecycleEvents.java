@@ -3,9 +3,8 @@ package org.peekaboot.backend.lifecycle;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
-/** Turns the raw log into what the dashboard draws: a time, and only what changed with it. */
+/** Turns the raw log into what the dashboard draws: every start with the build it ran, and every stop. */
 public class LifecycleEvents {
 
     private final LifecycleEventLog eventLog;
@@ -16,41 +15,24 @@ public class LifecycleEvents {
 
     public LifecycleEventsResponse events() {
         List<LifecycleEventsResponse.Event> served = new ArrayList<>();
-        BuildFacts previous = BuildFacts.NONE;
         LifecycleEvent.Type previousType = null;
         for (LifecycleEvent event : eventLog.events()) {
+            Instant timestamp = Instant.ofEpochMilli(event.epochMs());
             if (event.type() == LifecycleEvent.Type.STOP) {
-                served.add(new LifecycleEventsResponse.Event(
-                        "stop", Instant.ofEpochMilli(event.epochMs()), null, null, null, null, null));
+                served.add(new LifecycleEventsResponse.Event("stop", timestamp, null, null, null, null, null));
             } else {
                 BuildFacts build = BuildFacts.of(event);
-                served.add(changedSince(
-                        build,
-                        previous,
-                        Instant.ofEpochMilli(event.epochMs()),
+                served.add(new LifecycleEventsResponse.Event(
+                        "start",
+                        timestamp,
+                        build.version(),
+                        build.branch(),
+                        build.shortCommitId(),
+                        build.buildTime(),
                         previousType == LifecycleEvent.Type.START));
-                previous = build;
             }
             previousType = event.type();
         }
         return new LifecycleEventsResponse(served);
-    }
-
-    /** A marker says only what is new: a field equal to the previous start's is left null. */
-    private static LifecycleEventsResponse.Event changedSince(
-            BuildFacts current, BuildFacts previous, Instant timestamp, boolean uncleanPrevious) {
-        boolean commitChanged = !Objects.equals(current.commitId(), previous.commitId());
-        return new LifecycleEventsResponse.Event(
-                "start",
-                timestamp,
-                changed(current.version(), previous.version()),
-                changed(current.branch(), previous.branch()),
-                commitChanged ? current.shortCommitId() : null,
-                changed(current.buildTime(), previous.buildTime()),
-                uncleanPrevious);
-    }
-
-    private static <T> T changed(T current, T previous) {
-        return Objects.equals(current, previous) ? null : current;
     }
 }

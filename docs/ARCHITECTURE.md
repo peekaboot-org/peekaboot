@@ -213,24 +213,18 @@ file it could not read at all.
 
 ### API and dashboard
 
-`GET /peekaboot/api/lifecycle/events`, gated by `peekaboot.lifecycle.enabled`, serves the log
-as start/stop markers. For each start, `LifecycleEvents` compares it against the previous start
-already in the log: `version`, `branch`, `shortCommitId` and `buildTime` are included only
-when they differ, and all four are present on the log's first entry. The commit is compared by
-its full id. A start
-whose predecessor is itself a start, with no stop between, is flagged `uncleanPrevious`.
-Computing the diff server-side gives the browser one definition of "what changed" instead of
-reimplementing it wherever a marker is drawn. The dashboard fetches these alongside the ring
-data from `/peekaboot/api/insights/*` and draws them as restart markers over the same charts.
+`GET /peekaboot/api/lifecycle/events`, gated by `peekaboot.lifecycle.enabled`, serves the log as
+start/stop markers. Each start carries the `version`, `branch`, `shortCommitId` and `buildTime` it
+recorded, so one event reads on its own. A start whose predecessor is itself a start, with no stop
+between, is flagged `uncleanPrevious`. The dashboard fetches these alongside the ring data from
+`/peekaboot/api/insights/*` and draws them as restart markers over the same charts.
 
-`GET /peekaboot/api/lifecycle/runs`, gated by the same property, is the second projection over
-the same log. A chart marker only wants to say what's new, so `LifecycleEvents` nulls a field
-the moment it repeats the previous start. A table row has no previous cell to inherit from, so
-`LifecycleRuns` makes every run stand on its own. `version`, `branch`, `shortCommitId` and
-`buildTime` are carried forward from the last start that reported them. `changed` is the
-separate, explicit answer to whether this run was a deployment: which of `version`, `branch`
-and `commit` differ from the run before. The oldest run has no predecessor, so it is never a
-deployment.
+`GET /peekaboot/api/lifecycle/runs`, gated by the same property, is the second projection over the
+same log. Unlike the events, `LifecycleRuns` carries `version`, `branch`, `shortCommitId` and
+`buildTime` forward from the last start that reported them, so a run whose start recorded none still
+names what ran. `changed` is the separate, explicit answer to whether this run was a deployment:
+which of `version`, `branch` and `commit` differ from the run before. The oldest run has no
+predecessor, so it is never a deployment.
 
 A run's `stoppedAt` and `ranForMs` are null, not a guess, when its start has no matching
 stop: a `kill -9` writes nothing, so when that run ended is genuinely unknown. `downForMs`, the

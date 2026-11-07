@@ -1,7 +1,7 @@
 /**
  * Restart markers for the Insights charts: a vertical line per application start and
- * stop, a tint over the time in between, and one tooltip listing whatever the server
- * says changed with that start.
+ * stop, a tint over the time in between, and one tooltip listing the build each start
+ * ran.
  *
  * Drawn on the canvas rather than as DOM nodes: a 30-day chart can hold more restarts
  * than it has pixels, and a per-event element would cost one node each while the hover

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A freshly booted application has exactly one run - its own - so a test against it
@@ -182,6 +183,25 @@ class LifecycleTabIT extends PlaywrightTestBase {
                 "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 3 of 3'");
 
         page.waitForFunction("() => window.location.hash.includes('page=3')");
+    }
+
+    /**
+     * Seeded runs 0 and 1 ran the same build. The second start serves that build's version, branch
+     * and commit in full, the same as the first.
+     */
+    @Test
+    void everySeededStartServesTheWholeBuildItRan() {
+        JsonNode events = awaitJson(
+                "/peekaboot/api/lifecycle/events",
+                "body => body.events.length > 1 ? body.events : null",
+                "the seeded history never reached the events endpoint");
+
+        List<JsonNode> starts = events.valueStream()
+                .filter(event -> "start".equals(event.path("type").asString()))
+                .toList();
+        assertThat(starts.get(1).path("version").asString()).isEqualTo("1.0.0");
+        assertThat(starts.get(1).path("branch").asString()).isEqualTo("main");
+        assertThat(starts.get(1).path("shortCommitId").asString()).isEqualTo("aaaaaaa");
     }
 
     @Test

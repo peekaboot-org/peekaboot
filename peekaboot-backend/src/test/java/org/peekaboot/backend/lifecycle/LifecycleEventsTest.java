@@ -32,7 +32,7 @@ class LifecycleEventsTest {
     }
 
     @Test
-    void theFirstStartCarriesEverythingBecauseThereIsNothingToCompareItWith() {
+    void theFirstStartCarriesItsWholeBuild() {
         LifecycleEventsResponse response =
                 served(List.of(start(1_000).buildTime("1756000000000").build()));
 
@@ -46,8 +46,9 @@ class LifecycleEventsTest {
         assertThat(event.uncleanPrevious()).isFalse();
     }
 
+    /** One event reads on its own, so a restart of the same build names that build again. */
     @Test
-    void arestartOfTheSameBuildSaysNothingButItsTime() {
+    void aRestartOfTheSameBuildNamesItsWholeBuildAgain() {
         LifecycleEventsResponse response = served(List.of(
                 start(1_000).buildTime("1756000000000").build(),
                 LifecycleEvent.stop(2_000, 1),
@@ -55,22 +56,22 @@ class LifecycleEventsTest {
 
         LifecycleEventsResponse.Event second = response.events().get(2);
         assertThat(second.timestamp()).isEqualTo(Instant.ofEpochMilli(3_000));
-        assertThat(second.version()).isNull();
-        assertThat(second.branch()).isNull();
-        assertThat(second.shortCommitId()).isNull();
-        assertThat(second.buildTime()).isNull();
+        assertThat(second.version()).isEqualTo("1.0.0");
+        assertThat(second.branch()).isEqualTo("dev");
+        assertThat(second.shortCommitId()).isEqualTo("abc1234");
+        assertThat(second.buildTime()).isEqualTo(Instant.ofEpochMilli(1_756_000_000_000L));
     }
 
     @Test
-    void onlyWhatChangedIsReported() {
+    void aStartThatChangedOneFieldStillCarriesTheOthers() {
         LifecycleEventsResponse response = served(List.of(
                 start(1_000).buildTime("1756000000000").build(),
                 start(3_000).branch("feat/x").buildTime("1756000000000").build()));
 
         LifecycleEventsResponse.Event second = response.events().get(1);
         assertThat(second.branch()).isEqualTo("feat/x");
-        assertThat(second.version()).isNull();
-        assertThat(second.shortCommitId()).isNull();
+        assertThat(second.version()).isEqualTo("1.0.0");
+        assertThat(second.shortCommitId()).isEqualTo("abc1234");
     }
 
     @Test
