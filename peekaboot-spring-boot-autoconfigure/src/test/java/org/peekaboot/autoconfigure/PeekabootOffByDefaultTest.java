@@ -1,12 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.micrometer.observation.ObservationRegistry;
-import io.micrometer.tracing.Tracer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,9 +11,7 @@ import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
-import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -36,15 +29,7 @@ import org.springframework.util.ClassUtils;
  */
 class PeekabootOffByDefaultTest {
 
-    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(
-                    AutoConfigurations.of(RegisteredAutoConfigurations.classes().toArray(Class<?>[]::new)))
-            // the DispatcherServlet a servlet application brings, which tells Peekaboot where its dashboard sits
-            .withConfiguration(AutoConfigurations.of(DispatcherServletAutoConfiguration.class))
-            // the beans the conditional halves look for, so nothing is off for lack of them
-            .withBean(Tracer.class, () -> mock(Tracer.class))
-            .withBean(ObservationRegistry.class, ObservationRegistry::create)
-            .withBean(MeterRegistry.class, SimpleMeterRegistry::new);
+    private final WebApplicationContextRunner contextRunner = RegisteredAutoConfigurations.servletRunner();
 
     @Test
     void registersNoPeekabootBeanWithoutAPeekabootProperty() {

@@ -70,7 +70,7 @@ public class InsightsAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public InsightsController insightsController(
+    public InsightsController peekabootInsightsController(
             InsightsService insightsService,
             InsightsSsePublisher insightsSsePublisher,
             InsightsDataReader peekabootInsightsDataReader) {
