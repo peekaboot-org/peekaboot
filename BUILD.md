@@ -341,6 +341,15 @@ sets `<proc>full</proc>` and lists the processor in `annotationProcessorPaths`; 
 either and the jar ships without metadata, silently. `requireFilesExist` at
 `process-classes` fails the build instead, early enough that `./mvnw test` catches it.
 
+`ConfigurationMetadataTest` in the backend reads that file off the module's own classes and
+fails when a property carries no description. It also samples one default,
+`peekaboot.tracing.slow-span-threshold-ms`, and fails when its field initializer did not reach
+the file. Both builds run it, so a property added without Javadoc fails either one. The processor registers
+with Gradle as an aggregating processor. An incremental Gradle compile hands it every
+`@ConfigurationProperties` class as a class file, which holds neither Javadoc nor field
+initializers, and the metadata loses every description and default. The conventions plugin
+therefore compiles `main` whole, as Maven's compiler plugin does whenever a source changed.
+
 ### The coverage gate
 
 `peekaboot-coverage` holds it: line >= 90%, branch >= 75% over every published class,

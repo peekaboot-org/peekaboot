@@ -48,6 +48,12 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Werror")
 }
 
+// An incremental compile hands the aggregating configuration processor class files, and
+// metadata read from those has no descriptions or defaults.
+tasks.named<JavaCompile>("compileJava") {
+    options.isIncremental = false
+}
+
 // Maven <optional>true</optional> deps are visible to the module's own tests; Gradle's
 // compileOnly is not. This restores that visibility without making anything transitive.
 configurations.testImplementation.get().extendsFrom(configurations.compileOnly.get())
