@@ -262,6 +262,14 @@ evicted what failed it, or where its only failure is a span that names nothing.
 spans with the most self time above zero, largest first. Of equal self times the span earlier
 in tree order wins. A subtree row reads only its own subtree's spans.
 
+### Insights problem
+`InsightsDataResponse.problems` holds `InsightsProblem(rule, severity, series, value, threshold,
+unit, message)`s, in the shape of a trace issue: `severity` is the issues' `IssueSeverity`, `unit`
+the panels' `Unit`. `ProblemRule` names the eight checks and the series each reads. A rule whose
+series is absent or holds no sample in the window is skipped, so the list holds only what
+reached a threshold; an empty list does not say a skipped rule is healthy. Thresholds and their
+defaults: [peekaboot.insights](https://www.peekaboot.org/docs/configuration/#peekabootinsights).
+
 ### Bucket Counts
 `BucketCounts(all, errors, slow)`. Every listing response carries it twice: `bucketCounts` for
 the whole store and `filteredBucketCounts` for the traces matching every filter this request

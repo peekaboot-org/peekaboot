@@ -212,4 +212,53 @@ class InsightsPropertiesTest {
                 .hasMessage("peekaboot.insights.persistence.interval must be a positive whole number of milliseconds"
                         + " (null configured)");
     }
+
+    @Test
+    void problemThresholdsDefaultToTheirFirstGuesses() {
+        InsightsProperties.Problems problems = new InsightsProperties().getProblems();
+
+        assertThat(problems.getCpuHighPercent()).isEqualTo(80);
+        assertThat(problems.getGcOverheadPercent()).isEqualTo(10);
+        assertThat(problems.getHeapNearMaxPercent()).isEqualTo(90);
+        assertThat(problems.getThreadGrowth()).isEqualTo(50);
+        assertThat(problems.getPoolWaiting()).isEqualTo(1);
+        assertThat(problems.getServerErrorsPercent()).isEqualTo(5);
+        assertThat(problems.getErrorLogs()).isEqualTo(1);
+    }
+
+    /** At 0 a rule would name every window, and no share passes 100. */
+    @Test
+    void rejectsAPercentThresholdOutsideZeroToAHundred() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getProblems().setCpuHighPercent(0);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage(
+                        "peekaboot.insights.problems.cpu-high-percent must be above 0 and at most 100 (0.0 configured)");
+
+        properties.getProblems().setCpuHighPercent(80);
+        properties.getProblems().setServerErrorsPercent(101);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("server-errors-percent");
+    }
+
+    @Test
+    void rejectsACountThresholdBelowOne() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getProblems().setThreadGrowth(0);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("peekaboot.insights.problems.thread-growth must be at least 1 (0 configured)");
+    }
+
+    /** A YAML null binds through the setter, so the block has to say so rather than fail on a dereference. */
+    @Test
+    void rejectsAProblemsBlockBoundToNothing() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setProblems(null);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("peekaboot.insights.problems must not be null");
+    }
 }

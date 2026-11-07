@@ -34,6 +34,8 @@ public class InsightsProperties {
 
     private Persistence persistence = new Persistence();
 
+    private Problems problems = new Problems();
+
     private static List<Level> defaultLevels() {
         List<Level> defaults = new ArrayList<>();
         defaults.add(Level.of(Duration.ofSeconds(10), 90));
@@ -45,6 +47,7 @@ public class InsightsProperties {
     public void validate() {
         validateLevels();
         validatePersistence();
+        validateProblems();
     }
 
     private void validateLevels() {
@@ -106,6 +109,34 @@ public class InsightsProperties {
         }
     }
 
+    private void validateProblems() {
+        if (problems == null) {
+            throw new IllegalStateException("peekaboot.insights.problems must not be null");
+        }
+        requirePercent("cpu-high-percent", problems.cpuHighPercent);
+        requirePercent("gc-overhead-percent", problems.gcOverheadPercent);
+        requirePercent("heap-near-max-percent", problems.heapNearMaxPercent);
+        requirePercent("server-errors-percent", problems.serverErrorsPercent);
+        requireAtLeastOne("thread-growth", problems.threadGrowth);
+        requireAtLeastOne("pool-waiting", problems.poolWaiting);
+        requireAtLeastOne("error-logs", problems.errorLogs);
+    }
+
+    /** At 0 a rule would name every window, and no share passes 100. */
+    private static void requirePercent(String name, double value) {
+        if (!(value > 0 && value <= 100)) {
+            throw new IllegalStateException("peekaboot.insights.problems." + name + " must be above 0 and at most 100 ("
+                    + value + " configured)");
+        }
+    }
+
+    private static void requireAtLeastOne(String name, int value) {
+        if (value < 1) {
+            throw new IllegalStateException(
+                    "peekaboot.insights.problems." + name + " must be at least 1 (" + value + " configured)");
+        }
+    }
+
     /** Rings, roll-ups and the boundary schedule all count in milliseconds, so a finer interval cannot be honoured. */
     private static boolean isWholePositiveMillis(Duration interval) {
         return interval != null && interval.toMillis() >= 1 && interval.equals(Duration.ofMillis(interval.toMillis()));
@@ -143,6 +174,14 @@ public class InsightsProperties {
         this.persistence = persistence;
     }
 
+    public Problems getProblems() {
+        return problems;
+    }
+
+    public void setProblems(Problems problems) {
+        this.problems = problems;
+    }
+
     /** The configured value, else the coarsest level's span. */
     public Duration resolvePersistenceMaxAge() {
         if (persistence.getMaxAge() != null) {
@@ -174,6 +213,87 @@ public class InsightsProperties {
 
         public void setMaxAge(Duration maxAge) {
             this.maxAge = maxAge;
+        }
+    }
+
+    /** The thresholds of the problems {@code /api/insights/data} names; first guesses for an application in development. */
+    public static class Problems {
+
+        /** The median process CPU, in percent, at or above which CPU_HIGH is named. */
+        private double cpuHighPercent = 80;
+
+        /** The median share of CPU time spent collecting garbage, in percent, at or above which GC_OVERHEAD is named. */
+        private double gcOverheadPercent = 10;
+
+        /** The median heap in use as a share of its maximum, in percent, at or above which HEAP_NEAR_MAX is named. */
+        private double heapNearMaxPercent = 90;
+
+        /** How far the fewest live threads of a window's last quarter may rise above its first quarter's before THREAD_GROWTH is named. */
+        private int threadGrowth = 50;
+
+        /** The most connections waiting for the pool at once at or above which POOL_WAITING is named. */
+        private int poolWaiting = 1;
+
+        /** The share of HTTP requests answered with a 5xx, in percent, at or above which SERVER_ERRORS is named. */
+        private double serverErrorsPercent = 5;
+
+        /** The lines logged at ERROR in a window at or above which ERROR_LOGS is named. */
+        private int errorLogs = 1;
+
+        public double getCpuHighPercent() {
+            return cpuHighPercent;
+        }
+
+        public void setCpuHighPercent(double cpuHighPercent) {
+            this.cpuHighPercent = cpuHighPercent;
+        }
+
+        public double getGcOverheadPercent() {
+            return gcOverheadPercent;
+        }
+
+        public void setGcOverheadPercent(double gcOverheadPercent) {
+            this.gcOverheadPercent = gcOverheadPercent;
+        }
+
+        public double getHeapNearMaxPercent() {
+            return heapNearMaxPercent;
+        }
+
+        public void setHeapNearMaxPercent(double heapNearMaxPercent) {
+            this.heapNearMaxPercent = heapNearMaxPercent;
+        }
+
+        public int getThreadGrowth() {
+            return threadGrowth;
+        }
+
+        public void setThreadGrowth(int threadGrowth) {
+            this.threadGrowth = threadGrowth;
+        }
+
+        public int getPoolWaiting() {
+            return poolWaiting;
+        }
+
+        public void setPoolWaiting(int poolWaiting) {
+            this.poolWaiting = poolWaiting;
+        }
+
+        public double getServerErrorsPercent() {
+            return serverErrorsPercent;
+        }
+
+        public void setServerErrorsPercent(double serverErrorsPercent) {
+            this.serverErrorsPercent = serverErrorsPercent;
+        }
+
+        public int getErrorLogs() {
+            return errorLogs;
+        }
+
+        public void setErrorLogs(int errorLogs) {
+            this.errorLogs = errorLogs;
         }
     }
 

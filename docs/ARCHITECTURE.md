@@ -1863,6 +1863,10 @@ gets a `SeriesSummary` over that window: `AggregateStats.of` over level 0's samp
 `AggregateStats.ofAggregates` over the windows above it, so the median and the p95 come from the
 windows' averages while the extremes stay exact. The full view adds the samples and a
 `timestamps` array; the Insights tab asks for it, since it charts every sample.
+`InsightsProblems` checks the window against the eight `ProblemRule`s over every series, whatever
+`series` narrows, and both views list what it found. A rule reads the bundled panels' series ids
+and is skipped where one of them is absent or holds no sample; `SLOW_HTTP` shares the slow-trace
+threshold with the Slow bucket.
 
 ### The insights SSE stream
 

@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
  * @param count the samples in the window
  * @param timestamps when each sample was taken, oldest first, in epoch milliseconds and shared by every series; null
  *     in the summary view
+ * @param problems what the window reached, over every series whatever {@code series} the request named
  */
 public record InsightsDataResponse(
         int level,
@@ -20,7 +21,8 @@ public record InsightsDataResponse(
         long endEpochMs,
         int count,
         @Nullable List<Long> timestamps,
-        Map<String, SeriesData> series) {
+        Map<String, SeriesData> series,
+        List<InsightsProblem> problems) {
 
     /**
      * One series. {@code values} carries level 0's samples and {@code stats} a higher level's

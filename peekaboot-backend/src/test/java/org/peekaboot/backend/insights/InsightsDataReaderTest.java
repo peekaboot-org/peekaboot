@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -29,7 +30,7 @@ class InsightsDataReaderTest {
         InsightsProperties properties = new InsightsProperties();
         service = new InsightsService(
                 registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
-        reader = new InsightsDataReader(service, properties);
+        reader = new InsightsDataReader(service, properties, 1000);
     }
 
     /** Ticks at 10 s, 20 s, 30 s and so on, the heap at {@code values}. */
@@ -113,6 +114,20 @@ class InsightsDataReaderTest {
         assertThat(heap.values()).containsExactly((Double) null);
         assertThat(heap.summary().samples()).isZero();
         assertThat(heap.summary().latest()).isNull();
+    }
+
+    /** The problems read every series, so a request that narrows the series still learns what the window shows. */
+    @Test
+    void theProblemsCoverEverySeriesWhateverTheRequestNarrows() {
+        cpu.set(0.9);
+        tickHeap(10);
+
+        InsightsDataResponse data = read("0", null, "heap.used", null);
+
+        assertThat(data.problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.rule()).isEqualTo(ProblemRule.CPU_HIGH);
+            assertThat(problem.value()).isCloseTo(90.0, within(1e-9));
+        });
     }
 
     @Test

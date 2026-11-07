@@ -88,7 +88,7 @@ class InsightsServicePersistenceTest {
     }
 
     private static List<Double> heapUsedValues(InsightsService service) {
-        return new InsightsDataReader(service, properties())
+        return new InsightsDataReader(service, properties(), 1000)
                 .read(new InsightsDataParameters("0", "full", null, null))
                 .series()
                 .get("heap.used")

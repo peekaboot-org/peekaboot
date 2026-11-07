@@ -21,7 +21,9 @@ import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,6 +47,25 @@ class InsightsAutoConfigurationTest {
                 assertThat(context).hasSingleBean(InsightsController.class);
                 assertThat(context).hasSingleBean(InsightsDataReader.class).hasBean("peekabootInsightsDataReader");
             });
+            assertStartupInfo(startupLog);
+        }
+    }
+
+    /**
+     * Without the health endpoint PeekabootAutoConfiguration backs off, so the reader's tracing
+     * properties are bound here.
+     */
+    @Test
+    void servesTheDataWhereTheMainAutoConfigurationBacksOff() {
+        try (LogCapture startupLog = startupInfoCapture()) {
+            contextRunner
+                    .withUserConfiguration(MeterRegistryConfig.class)
+                    .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
+                    .run(context -> {
+                        assertThat(context).hasNotFailed();
+                        assertThat(context).doesNotHaveBean(PeekabootAutoConfiguration.class);
+                        assertThat(context).hasSingleBean(InsightsDataReader.class);
+                    });
             assertStartupInfo(startupLog);
         }
     }

@@ -22,7 +22,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.fixtures.OutcomeFixtureController;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.MissingNode;
 
 /**
  * Contract tests for the insights REST/SSE API against the real, auto-configured
@@ -106,6 +108,7 @@ class InsightsApiIT extends TestingAppITBase {
         assertThat(cpu.get("summary").get("max").asDouble())
                 .as("a CPU statistic lies from 0 to 100")
                 .isBetween(0.0, 100.0);
+        assertThat(data.get("problems").isArray()).isTrue();
     }
 
     @Test
@@ -123,6 +126,27 @@ class InsightsApiIT extends TestingAppITBase {
                         .get("samples")
                         .asInt())
                 .isZero();
+    }
+
+    /**
+     * A problem over real HTTP: rule, severity, series, threshold and unit as words a client reads.
+     * The fixture's ERROR line makes sure the window holds one; {@code InsightsProblemsTest} pins the
+     * counting, which other classes' lines would blur here.
+     */
+    @Test
+    void aProblemIsServedInTheShapeOfAnIssue() {
+        traces.get(OutcomeFixtureController.ERROR_LOG_PATH);
+
+        JsonNode problem = await().atMost(Duration.ofSeconds(10))
+                .until(
+                        () -> errorLogsProblem(api.getJson("/peekaboot/api/insights/data?level=0")),
+                        found -> !found.isMissingNode());
+
+        assertThat(problem.get("severity").asString()).isEqualTo("warning");
+        assertThat(problem.get("series").get(0).asString()).isEqualTo("log-events.errors");
+        assertThat(problem.get("value").asDouble()).isGreaterThanOrEqualTo(1.0);
+        assertThat(problem.get("threshold").asDouble()).isEqualTo(1.0);
+        assertThat(problem.get("unit").asString()).isEqualTo("count");
     }
 
     @Test
@@ -167,5 +191,14 @@ class InsightsApiIT extends TestingAppITBase {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private static JsonNode errorLogsProblem(JsonNode data) {
+        for (JsonNode problem : data.get("problems")) {
+            if ("ERROR_LOGS".equals(problem.get("rule").asString())) {
+                return problem;
+            }
+        }
+        return MissingNode.getInstance();
     }
 }

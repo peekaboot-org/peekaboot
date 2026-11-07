@@ -92,6 +92,11 @@ record LevelData(
         return windows;
     }
 
+    /** {@code seriesId}'s value per sample: the sample itself at level 0, the window's {@code stat} above it. */
+    double[] column(String seriesId, String stat) {
+        return level == 0 ? tickValues.get(seriesId) : statValues.get(seriesId).get(stat);
+    }
+
     private static double newest(double[] values) {
         for (int i = values.length - 1; i >= 0; i--) {
             if (!Double.isNaN(values[i])) {
@@ -103,11 +108,11 @@ record LevelData(
 
     /**
      * The API's view of the series {@code seriesIds} names, in panel order: each one's summary, and in
-     * the full view its samples and their timestamps. The {@code double[]} columns are boxed to
-     * {@code List<Double>} with NaN mapped to null, since Jackson would emit invalid JSON ({@code NaN})
-     * otherwise.
+     * the full view its samples and their timestamps, beside the window's {@code problems}. The
+     * {@code double[]} columns are boxed to {@code List<Double>} with NaN mapped to null, since Jackson
+     * would emit invalid JSON ({@code NaN}) otherwise.
      */
-    InsightsDataResponse toResponse(TraceView view, Collection<String> seriesIds) {
+    InsightsDataResponse toResponse(TraceView view, Collection<String> seriesIds, List<InsightsProblem> problems) {
         boolean full = view == TraceView.FULL;
         Map<String, InsightsDataResponse.SeriesData> series = new LinkedHashMap<>();
         for (String id : seriesIds()) {
@@ -120,7 +125,8 @@ record LevelData(
                                 full && level > 0 ? boxedStats(statValues.get(id)) : null));
             }
         }
-        return new InsightsDataResponse(level, intervalMs, endEpochMs, count, full ? timestamps() : null, series);
+        return new InsightsDataResponse(
+                level, intervalMs, endEpochMs, count, full ? timestamps() : null, series, problems);
     }
 
     private static Map<String, List<Double>> boxedStats(Map<String, double[]> stats) {

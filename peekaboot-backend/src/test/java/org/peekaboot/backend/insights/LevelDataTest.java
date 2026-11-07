@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ class LevelDataTest {
         LevelData data = new LevelData(
                 1, 60_000, 120_000, 2, Map.of(), Map.of("g", columns(given)), Map.of("g", new double[] {1, 0}));
 
-        InsightsDataResponse response = data.toResponse(TraceView.FULL, Set.of("g"));
+        InsightsDataResponse response = data.toResponse(TraceView.FULL, Set.of("g"), List.of());
 
         InsightsDataResponse.SeriesData series = response.series().get("g");
         assertThat(series.values())

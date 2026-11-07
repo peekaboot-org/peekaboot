@@ -8,6 +8,7 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
 import org.peekaboot.backend.storage.StorageDirectory;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -30,7 +31,7 @@ import org.springframework.core.io.ResourceLoader;
 @ConditionalOnPeekabootServlet
 @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.INSIGHTS_ENABLED, matchIfMissing = true)
 @ConditionalOnBean(MeterRegistry.class)
-@EnableConfigurationProperties(InsightsProperties.class)
+@EnableConfigurationProperties({InsightsProperties.class, PeekabootTracingProperties.class})
 public class InsightsAutoConfiguration {
 
     /**
@@ -57,11 +58,14 @@ public class InsightsAutoConfiguration {
                 meterRegistry, properties, resourceLoader, insightsSsePublisher, storageDirectory.getIfAvailable());
     }
 
+    /** {@code SLOW_HTTP} judges the HTTP latency by the slow-trace threshold, so both name one slow request. */
     @Bean
     @ConditionalOnMissingBean
     public InsightsDataReader peekabootInsightsDataReader(
-            InsightsService insightsService, InsightsProperties properties) {
-        return new InsightsDataReader(insightsService, properties);
+            InsightsService insightsService,
+            InsightsProperties properties,
+            PeekabootTracingProperties tracingProperties) {
+        return new InsightsDataReader(insightsService, properties, tracingProperties.getSlowTraceThresholdMs());
     }
 
     @Bean
