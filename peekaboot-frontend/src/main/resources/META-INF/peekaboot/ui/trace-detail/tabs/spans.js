@@ -3,7 +3,8 @@
  * span's three independent panels: attributes (kind, span id, error, tags - opened by the
  * span name or track), a query panel (the statement plus its row count) and a logs panel
  * (that span's own log entries) - each of the latter two opened by its own small button in
- * the row ("N query"/"N logs"), closed until asked for.
+ * the row ("N query"/"N logs"), closed until asked for. Above the tree, the summary's hotspots,
+ * each jumping to its row.
  *
  * Each span renders as one entry: its one-line row, then whichever of its three panels the
  * reader has opened, each built on its first open.
@@ -44,6 +45,7 @@ export function render(container, trace, context = {}) {
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
     const allDetailsToggle = button({className: 'pk-btn pk-btn--small pk-gantt-all-details', text: 'Show all details'});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
+        hotspotList(trace.summary.hotspots, context.goToSpan),
         el('div', {className: 'pk-gantt-toolbar'}, kindLegend(tops), allDetailsToggle),
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
@@ -218,6 +220,24 @@ function kindLegend(tops) {
 
 function kindDot() {
     return el('span', {className: 'pk-gantt-kind-dot', attrs: {'aria-hidden': 'true'}});
+}
+
+/** The spans with the most self time, largest first, as the summary names them; nothing without them. */
+function hotspotList(hotspots, goToSpan) {
+    if (!hotspots?.length) return null;
+    return el('div', {className: 'pk-gantt-hotspots'},
+        el('span', {className: 'pk-label', text: 'Most self time'}),
+        el('ol', {className: 'pk-gantt-hotspots__list'},
+            ...hotspots.map(hotspot => el('li', {}, hotspotButton(hotspot, goToSpan)))));
+}
+
+function hotspotButton(hotspot, goToSpan) {
+    const jump = button({className: 'pk-unbutton pk-gantt-hotspot', title: hotspot.name, attrs: {'data-span-id': hotspot.spanId}},
+        el('span', {className: 'pk-gantt-hotspot__name', text: hotspot.name}),
+        el('span', {className: 'pk-gantt-hotspot__self', text: formatDurationMs(hotspot.selfMs)}));
+    // fresh elements on every render, so per-element listeners cannot pile up
+    jump.addEventListener('click', () => goToSpan(hotspot.spanId));
+    return jump;
 }
 
 function renderSpanEntries(container, span, depth, traceStart, totalDuration, display) {

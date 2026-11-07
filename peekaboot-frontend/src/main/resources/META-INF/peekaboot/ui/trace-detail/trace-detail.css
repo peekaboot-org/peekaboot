@@ -59,6 +59,11 @@
 
 .pk-overlay__duration { font-family: var(--pk-font-mono); font-weight: 600; font-size: var(--pk-text-base); }
 
+/* The cause in the danger ink, which clears AA as text on the header's alt ground; the frame muted beside it. */
+.pk-overlay__cause { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--pk-space-sm); margin-top: var(--pk-space-sm); font-size: var(--pk-text-xs); }
+.pk-overlay__cause-text { color: var(--pk-danger); font-family: var(--pk-font-mono); overflow-wrap: anywhere; }
+.pk-overlay__cause-frame { color: var(--pk-text-muted); font-family: var(--pk-font-mono); overflow-wrap: anywhere; }
+
 /* A .pk-unbutton with the header's own padding. */
 .pk-overlay__close {
     color: var(--pk-text-muted);
@@ -96,6 +101,13 @@
 .pk-gantt-toolbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-md); flex-wrap: wrap; margin-bottom: var(--pk-space-sm); }
 .pk-gantt-legend { display: flex; flex-wrap: wrap; gap: var(--pk-space-md); margin: 0; padding: 0; list-style: none; font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-gantt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The summary's hotspots above the tree, each a .pk-unbutton at the 24px hit-target floor in the link ink. */
+.pk-gantt-hotspots { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); font-size: var(--pk-text-xs); }
+.pk-gantt-hotspots__list { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin: 0; padding: 0; list-style: none; }
+.pk-gantt-hotspot { display: inline-flex; align-items: center; gap: var(--pk-space-xs); min-height: 24px; padding: 0 var(--pk-space-xs); color: var(--pk-primary-text); font-family: var(--pk-font-mono); }
+.pk-gantt-hotspot:hover { color: var(--pk-text); }
+.pk-gantt-hotspot__name { max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* A span's colour scope: its legend dot, row dot, bar and details edge all read it.
    --pk-gantt-kind-dot overrides the dot alone, falling back to --pk-gantt-kind, so the

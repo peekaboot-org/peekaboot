@@ -21,6 +21,7 @@ import {registerBundledFonts} from '../shared/fonts.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
 import {badge, tabStrip} from '../shared/components.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
+import {spanTreeLink} from './span-tree-link.js';
 import {inProgressBadge, interruptedBadge, isSlowTrace, slowBadge, truncatedBadge} from '../shared/trace-stats.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
@@ -221,11 +222,13 @@ function render(content, trace, urlState, display) {
     // delegated once on the container, which outlives every re-render below
     bindCopyables(content);
 
+    // The header's cause link jumps through the tabs, which are wired after the header is built.
+    let goToSpan = () => {};
     const container = el('div', {
         className: 'pk-overlay',
         attrs: {role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pk-overlay-title', tabindex: '-1'}
     }, el('div', {className: 'pk-overlay__container'},
-        header(trace),
+        header(trace, spanId => goToSpan(spanId)),
         el('div', {className: 'pk-tabs'}),
         // In the tab order: it scrolls, and a tab such as Request has no control for the keyboard to scroll it by.
         el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content', tabindex: '0'}})));
@@ -233,7 +236,7 @@ function render(content, trace, urlState, display) {
 
     container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
 
-    wireTabs(container, trace, urlState, display);
+    goToSpan = wireTabs(container, trace, urlState, display);
 
     // Move focus into the dialog. No single interior control is the obvious "first" one
     // given the tab strip + header controls, so the dialog itself (a real ARIA APG
@@ -241,7 +244,7 @@ function render(content, trace, urlState, display) {
     container.focus();
 }
 
-function header(trace) {
+function header(trace, goToSpan) {
     const {summary, data} = trace;
     const rootSpan = data.rootSpan || {};
     const httpExchange = data.httpExchange || {};
@@ -275,7 +278,7 @@ function header(trace) {
         summary.counts.droppedSpans > 0 ? truncatedBadge() : null);
 
     return el('div', {className: 'pk-overlay__header'},
-        el('div', {className: 'pk-overlay__header-main'}, title, meta),
+        el('div', {className: 'pk-overlay__header-main'}, title, meta, causeLine(summary.cause, goToSpan)),
         button({className: 'pk-unbutton pk-overlay__close', text: '×', title: 'Close', attrs: {'aria-label': 'Close trace details'}}));
 }
 
@@ -285,11 +288,23 @@ function completionBadge(summary) {
     return summary.complete ? null : inProgressBadge();
 }
 
+/** Where to start reading a failed trace, as the summary names it: the failure, the application frame it came from, and a jump to its span. */
+function causeLine(cause, goToSpan) {
+    const failure = [cause?.type, cause?.message].filter(Boolean).join(': ');
+    if (!failure) return null;
+    return el('div', {className: 'pk-overlay__cause'},
+        el('span', {className: 'pk-label', text: 'Cause'}),
+        el('span', {className: 'pk-overlay__cause-text', text: failure}),
+        cause.applicationFrame ? el('span', {className: 'pk-overlay__cause-frame', text: `at ${cause.applicationFrame}`}) : null,
+        cause.spanId ? spanTreeLink(cause.spanId, goToSpan, 'Show the span the cause is on') : null);
+}
+
 /**
  * Builds the tab strip and renders the initial tab. The cross-link back to a span's row
  * (goToSpan, from the Queries and Logs tabs) rides along on the view object every tab
  * receives, so a tab can reach it without a hand-off channel of its own - as do the
  * display settings (locale, timeZone, features) the tabs format and colour by.
+ * Returns goToSpan, which the header's cause link takes too.
  */
 function wireTabs(container, trace, urlState, display) {
     const tabContent = container.querySelector('#pk-tab-content');
@@ -370,6 +385,7 @@ function wireTabs(container, trace, urlState, display) {
     });
 
     renderTabContent(tabContent, initialTab, trace, tabView(initialTab, urlState?.initial?.params || {}));
+    return goToSpan;
 }
 
 function renderTabContent(container, tabId, trace, view) {

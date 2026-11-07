@@ -1336,4 +1336,30 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .isGreaterThan(1);
         assertThat(page.url()).as("the param is gone from the URL too").doesNotContain("root=");
     }
+
+    /** Only what the summary names is listed, nothing at all without hotspots, and a click jumps through the overlay. */
+    @Test
+    void theHotspotListShowsWhatTheSummaryNamesAndJumpsThroughTheOverlay() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const jumps = [];
+                const rendered = hotspots => {
+                    const container = document.createElement('div');
+                    m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z', hotspots},
+                            data: {rootSpan: {spanId: 'a', name: 'a'}}}, {goToSpan: spanId => jumps.push(spanId)});
+                    return container;
+                };
+                const listed = rendered([{spanId: 'a', name: 'a', selfMs: 7}]);
+                listed.querySelector('.pk-gantt-hotspot').click();
+                return {
+                    empty: rendered([]).querySelector('.pk-gantt-hotspots') === null,
+                    absent: rendered(undefined).querySelector('.pk-gantt-hotspots') === null,
+                    text: listed.querySelector('.pk-gantt-hotspot').textContent,
+                    jumps
+                };
+            })()
+            """);
+
+        assertThat(facts).isEqualTo(Map.of("empty", true, "absent", true, "text", "a7ms", "jumps", List.of("a")));
+    }
 }

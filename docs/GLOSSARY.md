@@ -404,4 +404,6 @@ The overlay over a single trace, `trace-detail/trace-detail.js`, not the `TraceD
 renders. It runs in a shadow root and is
 loaded two ways: lazily by `toolbar.js` through a dynamic import, eagerly by the dashboard's
 static import. Its four tabs are `request`, `spans`, `queries` and `logs`. The last three show
-badges from `TraceSummary.counts`.
+badges from `TraceSummary.counts`. Its header names `TraceSummary.cause` with a link to the
+cause's span, and the Spans tab lists `TraceSummary.hotspots` above the tree, each linking to its
+row.
