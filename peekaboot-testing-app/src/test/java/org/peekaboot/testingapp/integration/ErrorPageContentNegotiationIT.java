@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.util.StreamUtils;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Swagger UI, curl and fetch() send {@code Accept: *}{@code /*}; they must get the JSON error
@@ -119,6 +120,53 @@ class ErrorPageContentNegotiationIT {
             HttpHeaders headers = fetchBoom("text/html").headers();
 
             traces.awaitTrace(TraceApiClient.traceIdOf(headers), TraceApiClient.errorLogged(OVERRIDE_PAGE_FAILURE));
+        }
+
+        /**
+         * The page answers Spring's 400 for an unconvertible id. A 400 is the caller's mistake, a
+         * CLIENT_ERROR issue on an OK trace, outside Errors, the outcome filter and the digest.
+         */
+        @Test
+        void aBadRequestThePageAnswersIsAClientErrorNotAFailure() {
+            String traceId =
+                    TraceApiClient.traceIdOf(fetch("/persons/abc", "text/html").headers());
+
+            JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
+
+            JsonNode summary = trace.path("summary");
+            assertThat(summary.path("request").path("statusCode").asInt()).isEqualTo(400);
+            assertThat(summary.path("outcome").asString()).isEqualTo("OK");
+            assertThat(summary.path("buckets").valueStream().map(JsonNode::asString))
+                    .doesNotContain("ERRORS");
+            assertThat(summary.path("cause").isNull()).isTrue();
+            assertThat(trace.path("data").path("rootSpan").path("status").asString())
+                    .isEqualTo("OK");
+            assertThat(SpanTree.issuesOfType(trace, "CLIENT_ERROR"))
+                    .singleElement()
+                    .satisfies(issue -> assertThat(issue.path("value").asInt()).isEqualTo(400));
+            assertThat(traces.listedTraceIds("outcome=error")).doesNotContain(traceId);
+            assertThat(api.getJson("/peekaboot/api/errors")
+                            .path("errors")
+                            .valueStream()
+                            .map(entry -> entry.path("lastTraceId").asString()))
+                    .as("the digest records only failed traces")
+                    .doesNotContain(traceId);
+        }
+
+        /** A failure the page answers with 500 still fails the trace and names the handler's exception, unlike the 400 above. */
+        @Test
+        void aFailureThePageAnswersStillFailsTheTrace() {
+            String traceId = TraceApiClient.traceIdOf(fetchBoom("text/html").headers());
+
+            JsonNode summary =
+                    traces.awaitTrace(traceId, TraceApiClient.COMPLETE).path("summary");
+
+            assertThat(summary.path("outcome").asString()).isEqualTo("ERROR");
+            assertThat(summary.path("buckets").valueStream().map(JsonNode::asString))
+                    .contains("ERRORS");
+            assertThat(summary.path("cause").path("type").asString()).isEqualTo("java.lang.IllegalStateException");
+            assertThat(summary.path("cause").path("message").asString())
+                    .isEqualTo("order reconciliation gateway is unreachable");
         }
     }
 }
