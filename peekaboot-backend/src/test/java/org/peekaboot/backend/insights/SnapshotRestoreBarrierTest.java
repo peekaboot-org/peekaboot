@@ -40,7 +40,7 @@ class SnapshotRestoreBarrierTest {
         List<InsightsSnapshot> restored = Collections.synchronizedList(new ArrayList<>());
 
         Thread first = Thread.ofPlatform().start(() -> barrier.arriveBefore(restored::add));
-        sourceEntered.await();
+        awaitQuietly(sourceEntered);
         Thread second = Thread.ofPlatform().start(() -> barrier.arriveBefore(restored::add));
         await().atMost(Duration.ofSeconds(5)).until(() -> second.getState() == Thread.State.BLOCKED);
         release.countDown();

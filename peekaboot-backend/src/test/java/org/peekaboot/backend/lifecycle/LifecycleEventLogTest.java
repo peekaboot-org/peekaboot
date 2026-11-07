@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
+import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
 import ch.qos.logback.classic.Level;
@@ -144,12 +145,7 @@ class LifecycleEventLogTest {
             for (int recorder = 0; recorder < 2; recorder++) {
                 long base = recorder * 1_000L;
                 recorders.add(Thread.ofPlatform().start(() -> {
-                    try {
-                        go.await();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
+                    awaitQuietly(go);
                     for (int i = 0; i < perRecorder; i++) {
                         log.recordAndPersist(start(base + i).build());
                     }

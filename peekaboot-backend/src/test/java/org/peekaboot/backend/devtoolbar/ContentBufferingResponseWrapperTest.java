@@ -3,6 +3,7 @@ package org.peekaboot.backend.devtoolbar;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
@@ -377,7 +378,7 @@ class ContentBufferingResponseWrapperTest {
         ServletOutputStream out = wrapper.getOutputStream();
         out.write("early".getBytes(StandardCharsets.UTF_8));
         worker[0] = new Worker(() -> {
-            handOverStarted.await();
+            awaitQuietly(handOverStarted);
             out.write("-late".getBytes(StandardCharsets.UTF_8));
         });
 
@@ -405,7 +406,7 @@ class ContentBufferingResponseWrapperTest {
         PrintWriter writer = wrapper.getWriter();
         writer.write("early");
         worker[0] = new Worker(() -> {
-            writerDrained.await();
+            awaitQuietly(writerDrained);
             writer.write("-late");
         });
 

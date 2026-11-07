@@ -135,7 +135,8 @@ rather than the events, and `noSnapshot()` the snapshot source with nothing pers
 `InsightsCollectorBuilder.collector(registry)` builds the collector with those defaults. Both sit
 in the `insights` test package because the collector's constructor and its snapshot source are
 package-private. `Latches.awaitQuietly(latch)` waits inside code that cannot
-throw, such as a gauge a test parks in.
+throw, such as a gauge a test parks in, for ten seconds at most, then fails with an
+`AssertionError`.
 `FailingWriteResponse` is the `MockHttpServletResponse` whose writes fail the way a container's
 do (first write, or every write), and `PosixPermissions` reads a path's mode for the tests that
 pin owner-only storage. `Requests.get(path)`/`request(method, path)` build the servlet request a

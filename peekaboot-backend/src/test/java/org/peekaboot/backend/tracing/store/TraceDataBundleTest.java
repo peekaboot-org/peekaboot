@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.Monitors;
@@ -88,7 +89,7 @@ class TraceDataBundleTest {
                 .isTrue();
 
         assertThat(readWhileFiling).containsExactly(false);
-        assertThat(read.join().complete()).isTrue();
+        assertThat(read.orTimeout(10, TimeUnit.SECONDS).join().complete()).isTrue();
     }
 
     /** An ERROR line raises the failure flag and files the trace under the lock the snapshot reads the flag under. */
@@ -110,7 +111,7 @@ class TraceDataBundleTest {
                 .isTrue();
 
         assertThat(readWhileFiling).containsExactly(false);
-        assertThat(read.join().failed()).isTrue();
+        assertThat(read.orTimeout(10, TimeUnit.SECONDS).join().failed()).isTrue();
     }
 
     @Test

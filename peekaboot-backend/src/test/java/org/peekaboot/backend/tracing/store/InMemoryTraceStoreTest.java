@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -702,7 +703,7 @@ class InMemoryTraceStoreTest {
         assertThat(writer.join(Duration.ofSeconds(10))).as("writer finished").isTrue();
         assertThat(reader.join(Duration.ofSeconds(10))).as("reader finished").isTrue();
 
-        assertThat(read.join().failed()).isTrue();
+        assertThat(read.orTimeout(10, TimeUnit.SECONDS).join().failed()).isTrue();
         assertThat(storage.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
     }
 
@@ -729,7 +730,7 @@ class InMemoryTraceStoreTest {
         assertThat(writer.join(Duration.ofSeconds(10))).as("writer finished").isTrue();
         assertThat(reader.join(Duration.ofSeconds(10))).as("reader finished").isTrue();
 
-        assertThat(read.join().failed()).isTrue();
+        assertThat(read.orTimeout(10, TimeUnit.SECONDS).join().failed()).isTrue();
         assertThat(storage.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
     }
 
