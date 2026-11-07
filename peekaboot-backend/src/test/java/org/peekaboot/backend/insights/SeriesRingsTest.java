@@ -37,6 +37,10 @@ class SeriesRingsTest {
         assertThat(data.count()).isEqualTo(1);
         assertThat(data.statValues().get("a").get("avg")).containsExactly(2.0);
         assertThat(data.statValues().get("b").get("avg")).containsExactly(Double.NaN);
+        assertThat(data.statSamples().get("a"))
+                .as("the samples behind each window, which the summary's average weighs by")
+                .containsExactly(2.0);
+        assertThat(data.statSamples().get("b")).containsExactly(0.0);
     }
 
     /**

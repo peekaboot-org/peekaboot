@@ -167,25 +167,26 @@ final class SeriesRings {
                     tickValues.put(entry.getKey(), values);
                     count = values.length;
                 }
-                return new LevelData(0, intervalMs, endEpochMs, count, tickValues, Map.of());
+                return new LevelData(0, intervalMs, endEpochMs, count, tickValues, Map.of(), Map.of());
             }
             Map<String, Map<String, double[]>> statValues = new LinkedHashMap<>();
+            Map<String, double[]> statSamples = new LinkedHashMap<>();
             int count = 0;
             for (Map.Entry<String, StatsRing[]> entry : statsRings.entrySet()) {
                 StatsRing ring = entry.getValue()[level];
                 statValues.put(entry.getKey(), ring.toArrays());
+                statSamples.put(entry.getKey(), ring.samples());
                 count = ring.size();
             }
-            return new LevelData(level, intervalMs, endEpochMs, count, Map.of(), statValues);
+            return new LevelData(level, intervalMs, endEpochMs, count, Map.of(), statValues, statSamples);
         }
     }
 
     /**
-     * Everything persistence needs: every level of every series, including the
-     * {@code samples} column the API's {@link #levelData(int)} deliberately omits. Read under
-     * the same lock as {@link #appendTick}, like {@link #levelData(int)}, so every level holds
-     * whole ticks only, one sample count for every series, and its {@code endEpochMs} dates
-     * the newest of them.
+     * Everything persistence needs: every level of every series, the {@code samples} column
+     * included. Read under the same lock as {@link #appendTick}, like {@link #levelData(int)},
+     * so every level holds whole ticks only, one sample count for every series, and its
+     * {@code endEpochMs} dates the newest of them.
      */
     InsightsSnapshot capture(long writtenAtEpochMs) {
         synchronized (lock) {

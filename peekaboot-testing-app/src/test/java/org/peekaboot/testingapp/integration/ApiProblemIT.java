@@ -43,7 +43,12 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask",
                 "/peekaboot/api/insights/data?level=abc | level",
                 "/peekaboot/api/insights/data | level",
-                "/peekaboot/api/insights/data?level=99 | level"
+                "/peekaboot/api/insights/data?level=99 | level",
+                "/peekaboot/api/insights/data?level=0&level=1 | level",
+                "/peekaboot/api/insights/data?level=0&view=all | view",
+                "/peekaboot/api/insights/data?level=0&series=no.such.series | series",
+                "/peekaboot/api/insights/data?level=0&series=cpu.process,,heap.used | series",
+                "/peekaboot/api/insights/data?level=0&since=yesterday | since"
             })
     void aBadParameterIsRefusedWithAProblemNamingIt(String path, String parameter) {
         Answer answer = fetch(path);

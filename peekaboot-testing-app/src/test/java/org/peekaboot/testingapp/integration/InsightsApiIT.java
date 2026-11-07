@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -25,10 +26,11 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Contract tests for the insights REST/SSE API against the real, auto-configured
- * app: config shape, tick data growing over the ring, and an actual "tick" SSE event on the
- * wire. ApiProblemIT covers the 400 on an invalid level. The test profile's insights levels
- * (see application-test.yml) tick every 250ms so these assertions and the Playwright
- * specs that reuse the same profile don't need to wait out the 10s production default.
+ * app: config shape, the data's two views and its window, the tiles' units, and an
+ * actual "tick" SSE event on the wire. ApiProblemIT covers the 400s on bad parameters.
+ * The test profile's insights levels (see application-test.yml) tick every 250ms so
+ * these assertions and the Playwright specs that reuse the same profile don't need to
+ * wait out the 10s production default.
  */
 class InsightsApiIT extends TestingAppITBase {
 
@@ -59,19 +61,68 @@ class InsightsApiIT extends TestingAppITBase {
     }
 
     @Test
-    void dataReturnsGrowingTickSeries() {
+    void theFullViewServesEverySampleAndWhenItWasTaken() {
         // level 0 ticks every 250ms in the test profile, so two samples are a moment away
         JsonNode data = await().atMost(Duration.ofSeconds(5))
                 .until(
-                        () -> api.getJson("/peekaboot/api/insights/data?level=0"),
+                        () -> api.getJson("/peekaboot/api/insights/data?level=0&view=full"),
                         d -> d.get("count").asInt() >= 2);
 
         // cpu.process (process.cpu.usage) resolves in a real JVM app
         JsonNode values = data.get("series").get("cpu.process").get("values");
-        assertThat(values).isNotEmpty();
+        int count = data.get("count").asInt();
         assertThat(values)
                 .as("one value per tick the response counted, or the ring and the wire disagree")
-                .hasSize(data.get("count").asInt());
+                .hasSize(count);
+        JsonNode timestamps = data.get("timestamps");
+        assertThat(timestamps).hasSize(count);
+        assertThat(timestamps.get(count - 1).asLong())
+                .isEqualTo(data.get("endEpochMs").asLong());
+        assertThat(timestamps.get(count - 1).asLong()
+                        - timestamps.get(count - 2).asLong())
+                .isEqualTo(data.get("intervalMs").asLong());
+    }
+
+    /** The summary view is the default: statistics per series, no samples and no timestamps. */
+    @Test
+    void theDefaultViewSummarisesEachSeriesWithoutItsSamples() {
+        JsonNode data = await().atMost(Duration.ofSeconds(5))
+                .until(
+                        () -> api.getJson("/peekaboot/api/insights/data?level=0"),
+                        d -> d.path("series")
+                                        .path("cpu.process")
+                                        .path("summary")
+                                        .path("samples")
+                                        .asInt()
+                                >= 1);
+
+        JsonNode cpu = data.get("series").get("cpu.process");
+        assertThat(cpu.get("values").isNull()).isTrue();
+        assertThat(cpu.get("stats").isNull()).isTrue();
+        assertThat(data.get("timestamps").isNull()).isTrue();
+        assertThat(cpu.get("summary").get("max").isNumber())
+                .as("a summary over a sample holds its statistics")
+                .isTrue();
+        assertThat(cpu.get("summary").get("max").asDouble())
+                .as("a CPU statistic lies from 0 to 100")
+                .isBetween(0.0, 100.0);
+    }
+
+    @Test
+    void seriesAndSinceNarrowTheResponse() {
+        JsonNode narrowed = api.getJson("/peekaboot/api/insights/data?level=0&series=cpu.process,heap.used");
+        JsonNode future = api.getJson(
+                "/peekaboot/api/insights/data?level=0&since={since}",
+                Instant.now().plus(Duration.ofDays(1)));
+
+        assertThat(narrowed.get("series").propertyNames()).containsExactly("cpu.process", "heap.used");
+        assertThat(future.get("count").asInt()).isZero();
+        assertThat(future.get("series")
+                        .get("cpu.process")
+                        .get("summary")
+                        .get("samples")
+                        .asInt())
+                .isZero();
     }
 
     @Test

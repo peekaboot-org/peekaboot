@@ -256,9 +256,10 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
 
         Request request = page.waitForRequest(
-                "**/api/insights/data?level=1", () -> page.click("#insights-level .pk-insight-level[data-level='1']"));
+                "**/api/insights/data?level=1&view=full",
+                () -> page.click("#insights-level .pk-insight-level[data-level='1']"));
 
-        assertThat(request.url()).contains("level=1");
+        assertThat(request.url()).contains("level=1").contains("view=full");
         assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='1']", "aria-pressed"))
                 .isEqualTo("true");
         assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
@@ -285,7 +286,7 @@ class InsightsTabIT extends PlaywrightTestBase {
         assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isFalse();
 
         page.waitForRequest(
-                "**/api/insights/data?level=1",
+                "**/api/insights/data?level=1&view=full",
                 () -> page.click(cpu + " .pk-insight-panel-levels .pk-insight-level[data-level='1']"));
 
         assertThat(page.locator(cpu + ".pk-insight-panel--overridden").count()).isEqualTo(1);
@@ -434,7 +435,8 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.waitForSelector(cpu + " canvas");
 
         page.waitForRequest(
-                "**/api/insights/data?level=1", () -> page.click(cpuLevels + " .pk-insight-level[data-level='1']"));
+                "**/api/insights/data?level=1&view=full",
+                () -> page.click(cpuLevels + " .pk-insight-level[data-level='1']"));
         page.waitForSelector(cpu + ".pk-insight-panel--overridden");
 
         assertThat(outlineWidth(cpuLevels))
@@ -509,7 +511,7 @@ class InsightsTabIT extends PlaywrightTestBase {
     @Test
     void deepLinkRestoresTheCheckboxesAndAPanelOverride() {
         Request request = page.waitForRequest(
-                "**/api/insights/data?level=1",
+                "**/api/insights/data?level=1&view=full",
                 () -> page.navigate(dashboardUrl("#insights?percentiles=1&restarts=0&panels=cpu:1")));
         assertThat(request.url()).contains("level=1");
 
@@ -547,7 +549,7 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.uncheck("#insights-markers");
         page.waitForFunction("() => window.location.hash.includes('restarts=0')");
         page.waitForRequest(
-                "**/api/insights/data?level=1",
+                "**/api/insights/data?level=1&view=full",
                 () -> page.click(cpu + " .pk-insight-panel-levels .pk-insight-level[data-level='1']"));
         page.waitForFunction("() => new URLSearchParams(window.location.hash.split('?')[1]).get('panels') === 'cpu:1'");
         assertThat(((Number) page.evaluate("() => window.history.length")).intValue())

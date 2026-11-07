@@ -21,12 +21,18 @@ export function createInsightsStream({client, sizeOf, onDirty, onResynced, onClo
     let source = null;
     let resyncPending = false;
 
-    /** One dedupe key per level, so a level-1 load cannot cancel an in-flight level-0 load (see shared/api.js). */
+    /**
+     * One dedupe key per level, so a level-1 load cannot cancel an in-flight level-0 load (see shared/api.js).
+     * The full view: the charts draw every sample, which the default summary view leaves out.
+     */
     async function loadLevel(level) {
         const deltas = [];
         pendingDeltas.set(level, deltas);
         try {
-            const body = await client.get('/api/insights/data', {params: {level}, dedupeKey: `insights-data-${level}`});
+            const body = await client.get('/api/insights/data', {
+                params: {level, view: 'full'},
+                dedupeKey: `insights-data-${level}`
+            });
             if (!body) return;
             const snapshot = normalizeLevel(body, sizeOf(level));
             levels.set(level, snapshot);

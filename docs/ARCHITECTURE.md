@@ -297,7 +297,7 @@ org.peekaboot.backend/
 │   └── trace/              # TraceResource, TraceSummary, TraceDetail, TraceListResponse, TraceTree, SpanNode, HttpExchange, IssueType, ...
 ├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
 │                           # (peekaboot.error-page.override), StackTraceHtml
-├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, LevelDataResponse): InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
+├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, InsightsDataResponse): InsightsCollector, InsightsDataReader (the data endpoint's reading of one level, `LevelData` its window and summaries), StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
 │   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
 ├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info
@@ -1851,6 +1851,18 @@ SpanData
 ├── exception: CapturedExceptionInfo  # null unless the span failed
 └── creationOrder: long
 ```
+
+### The insights data
+
+`GET /peekaboot/api/insights/data` is `InsightsDataReader`, a bean of its own beside
+`InsightsService`, which reads the rings through the collector. `InsightsDataQuery` reads the
+parameters: `level` (required), `view` (`TraceView`, the summary by default), `series` and
+`since`. `LevelData.since` keeps the samples taken at or after `since`; the newest keeps its
+date, so every timestamp still derives from `endEpochMs`, `intervalMs` and `count`. Each series
+gets a `SeriesSummary` over that window: `AggregateStats.of` over level 0's samples, and
+`AggregateStats.ofAggregates` over the windows above it, so the median and the p95 come from the
+windows' averages while the extremes stay exact. The full view adds the samples and a
+`timestamps` array; the Insights tab asks for it, since it charts every sample.
 
 ### The insights SSE stream
 

@@ -7,7 +7,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.support.ExtendedServletRequestDataBinder;
 
 /** Binds a record of query parameters for Peekaboot's controllers from the query string alone, each parameter once. */
-final class QueryParameterBinding {
+public final class QueryParameterBinding {
 
     private QueryParameterBinding() {}
 
@@ -18,7 +18,8 @@ final class QueryParameterBinding {
      * comma of its own, so the raw values are counted here. A parameter the record does not name is
      * left alone.
      */
-    static void bindQueryParametersOnce(WebDataBinder binder, WebRequest request, Class<? extends Record> parameters) {
+    public static void bindQueryParametersOnce(
+            WebDataBinder binder, WebRequest request, Class<? extends Record> parameters) {
         if (binder instanceof ExtendedServletRequestDataBinder requestBinder) {
             requestBinder.setHeaderPredicate(name -> false);
         }

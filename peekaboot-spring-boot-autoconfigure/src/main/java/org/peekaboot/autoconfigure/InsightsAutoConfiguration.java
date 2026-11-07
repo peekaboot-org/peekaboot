@@ -2,6 +2,7 @@ package org.peekaboot.autoconfigure;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.insights.InsightsDataReader;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.web.InsightsController;
@@ -58,8 +59,17 @@ public class InsightsAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public InsightsDataReader peekabootInsightsDataReader(
+            InsightsService insightsService, InsightsProperties properties) {
+        return new InsightsDataReader(insightsService, properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public InsightsController insightsController(
-            InsightsService insightsService, InsightsSsePublisher insightsSsePublisher) {
-        return new InsightsController(insightsService, insightsSsePublisher);
+            InsightsService insightsService,
+            InsightsSsePublisher insightsSsePublisher,
+            InsightsDataReader peekabootInsightsDataReader) {
+        return new InsightsController(insightsService, insightsSsePublisher, peekabootInsightsDataReader);
     }
 }

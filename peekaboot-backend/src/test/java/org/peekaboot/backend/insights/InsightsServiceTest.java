@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.Unit;
-import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -90,37 +89,6 @@ class InsightsServiceTest {
 
         assertThat(service.collector().levelData(0).tickValues().get("cpu.process"))
                 .containsExactly(100.0);
-    }
-
-    @Test
-    void levelDataMapsNaNToNull() {
-        service.collector().tick(10_000); // most default meters unresolved in SimpleMeterRegistry
-        LevelDataResponse data = service.data(0);
-        assertThat(data.count()).isEqualTo(1);
-        assertThat(data.series().get("cpu.process").values()).containsExactly(100.0);
-        assertThat(data.series().get("heap.used").values()).containsExactly((Double) null);
-    }
-
-    @Test
-    void anUnknownLevelIsRefusedNamingTheAcceptedRange() {
-        assertThatThrownBy(() -> service.data(7)).isInstanceOfSatisfying(ApiProblemException.class, e -> {
-            assertThat(e.problem().status()).isEqualTo(400);
-            assertThat(e.problem().parameter()).isEqualTo("level");
-            assertThat(e.problem().detail()).isEqualTo("Unknown insights level 7. Accepted: 0 to 2.");
-        });
-    }
-
-    @Test
-    void aMissingLevelIsRefusedNamingTheAcceptedRange() {
-        assertThatThrownBy(() -> service.data(null)).isInstanceOfSatisfying(ApiProblemException.class, e -> {
-            assertThat(e.problem().parameter()).isEqualTo("level");
-            assertThat(e.problem().detail()).isEqualTo("level is required. Accepted: 0 to 2.");
-        });
-    }
-
-    @Test
-    void aNegativeLevelIsRefused() {
-        assertThatThrownBy(() -> service.data(-1)).isInstanceOf(ApiProblemException.class);
     }
 
     /**

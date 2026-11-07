@@ -40,6 +40,11 @@ final class StatsRing {
         return columns;
     }
 
+    /** The level-0 samples behind each window, oldest first. */
+    double[] samples() {
+        return samples.toArray();
+    }
+
     /**
      * Every column, including the {@code samples} column {@link #toArrays()} withholds
      * from the API - persistence needs it, because the next roll-up weights its average

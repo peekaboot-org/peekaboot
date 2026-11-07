@@ -24,7 +24,7 @@ class TransactionsPanelIT extends TestingAppITBase {
     }
 
     private JsonNode successRates() {
-        return api.getJson("/peekaboot/api/insights/data?level=0")
+        return api.getJson("/peekaboot/api/insights/data?level=0&view=full")
                 .path("series")
                 .path("transactions.success")
                 .path("values");

@@ -88,7 +88,11 @@ class InsightsServicePersistenceTest {
     }
 
     private static List<Double> heapUsedValues(InsightsService service) {
-        return service.data(0).series().get("heap.used").values();
+        return new InsightsDataReader(service, properties())
+                .read(new InsightsDataParameters("0", "full", null, null))
+                .series()
+                .get("heap.used")
+                .values();
     }
 
     private static Double lastNonNull(List<Double> values) {
@@ -143,7 +147,8 @@ class InsightsServicePersistenceTest {
         start(service);
         await().atMost(Duration.ofSeconds(5))
                 .pollInterval(Duration.ofMillis(20))
-                .until(() -> service.data(0).count() >= 1); // a tick has landed, so there was something to write
+                // a tick has landed, so there was something to write
+                .until(() -> service.collector().levelData(0).count() >= 1);
         service.stop();
 
         try (var files = Files.list(directory)) {

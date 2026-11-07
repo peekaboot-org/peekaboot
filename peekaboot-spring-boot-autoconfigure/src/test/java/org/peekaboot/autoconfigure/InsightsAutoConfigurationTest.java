@@ -14,6 +14,8 @@ import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.insights.InsightsDataParameters;
+import org.peekaboot.backend.insights.InsightsDataReader;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
@@ -25,6 +27,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 class InsightsAutoConfigurationTest {
+
+    private static final InsightsDataParameters LEVEL_0 = new InsightsDataParameters("0", null, null, null);
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -39,6 +43,7 @@ class InsightsAutoConfigurationTest {
                 assertThat(context).hasSingleBean(InsightsService.class);
                 assertThat(context).hasSingleBean(InsightsSsePublisher.class);
                 assertThat(context).hasSingleBean(InsightsController.class);
+                assertThat(context).hasSingleBean(InsightsDataReader.class).hasBean("peekabootInsightsDataReader");
             });
             assertStartupInfo(startupLog);
         }
@@ -91,12 +96,13 @@ class InsightsAutoConfigurationTest {
             storageRunner(tempDir, true).run(context -> {
                 assertThat(context).hasNotFailed();
                 InsightsService service = context.getBean(InsightsService.class);
+                InsightsDataReader reader = context.getBean(InsightsDataReader.class);
                 assertThat(service.isRunning()).isTrue();
 
                 // a snapshot is only written once the rings hold something, so wait for a real tick
                 await().atMost(Duration.ofSeconds(5))
                         .pollInterval(Duration.ofMillis(20))
-                        .until(() -> service.data(0).count() > 0);
+                        .until(() -> reader.read(LEVEL_0).count() > 0);
                 service.stop();
 
                 assertThat(tempDir.resolve("insights.snapshot")).exists();
@@ -111,10 +117,11 @@ class InsightsAutoConfigurationTest {
             storageRunner(tempDir, false).run(context -> {
                 assertThat(context).hasNotFailed();
                 InsightsService service = context.getBean(InsightsService.class);
+                InsightsDataReader reader = context.getBean(InsightsDataReader.class);
 
                 await().atMost(Duration.ofSeconds(5))
                         .pollInterval(Duration.ofMillis(20))
-                        .until(() -> service.data(0).count() > 0);
+                        .until(() -> reader.read(LEVEL_0).count() > 0);
                 service.stop();
 
                 try (var files = Files.list(tempDir)) {

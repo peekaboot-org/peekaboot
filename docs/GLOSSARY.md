@@ -200,9 +200,10 @@ Subtree Timing* in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 The Insights tab's history is ring buffers, not a time-series database. Per series,
 `SeriesRings` holds one `DoubleRing` of raw samples for level 0 and one `StatsRing` per coarser
 level. `AggregateStats` is one aggregated window: `min, max, avg, median, p90, p95, p99` plus a
-`samples` count. The API and the SSE events see the seven; `samples` stays internal and is what
-the next roll-up weights its average by. A missing tick is stored as `NaN` (level 0) or
-`AggregateStats.EMPTY` (higher levels) and serialises as JSON `null`, so a gap stays a gap.
+`samples` count. The SSE events and the full view's `stats` carry the seven. `samples` is what
+the next roll-up weights its average by, and what a series summary's `samples` totals. A missing
+tick is stored as `NaN` (level 0) or `AggregateStats.EMPTY` (higher levels) and serialises as
+JSON `null`, so a gap stays a gap.
 
 Every sample is in its series' declared unit: `SeriesSampler` serves a `percent` series' ratio
 meter from 0 to 100 and reads a time gauge in milliseconds, so the rings, the snapshot, the SSE
