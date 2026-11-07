@@ -108,6 +108,46 @@ class SeriesSamplerTest {
         assertThat(sampler.sample(10_000)).isCloseTo(2.0, within(1e-9)); // 20 in 10s
     }
 
+    /** Micrometer registers the 5xx timer on the first 5xx, so a sample before it knows the count was 0. */
+    @Test
+    void aMeterRegisteredAfterAnEarlierSampleCountsFromZero() {
+        SeriesSampler sampler = new SeriesSampler(
+                def("http.server.requests", Map.of("outcome", "SERVER_ERROR"), Stat.RATE),
+                registry,
+                UnresolvedMeterReport.WARN);
+        assertThat(sampler.sample(10_000)).isNaN(); // nothing to count yet
+        Timer.builder("http.server.requests")
+                .tag("outcome", "SERVER_ERROR")
+                .register(registry)
+                .record(Duration.ofMillis(5));
+        assertThat(sampler.sample(10_000)).isCloseTo(0.1, within(1e-9)); // 1 in 10s
+    }
+
+    /** A re-registered meter counts from 0 again, so a sample that found it gone is a known baseline too. */
+    @Test
+    void aMeterBackAfterASampleFoundItGoneCountsFromZero() {
+        Counter counter = registry.counter("hits");
+        counter.increment(50);
+        SeriesSampler sampler =
+                new SeriesSampler(def("hits", Map.of(), Stat.RATE), registry, UnresolvedMeterReport.WARN);
+        sampler.sample(10_000); // baseline 50
+        registry.remove(counter);
+        assertThat(sampler.sample(10_000)).isNaN(); // gone
+        registry.counter("hits").increment(30);
+        assertThat(sampler.sample(10_000)).isCloseTo(3.0, within(1e-9)); // 30 in 10s
+    }
+
+    /** The first request registers its timer, and its latency belongs in the tick it was answered in. */
+    @Test
+    void aTimerRegisteredAfterAnEarlierSampleAveragesItsFirstRecordings() {
+        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), Stat.AVG), registry, UnresolvedMeterReport.WARN);
+        assertThat(sampler.sample(10_000)).isNaN(); // nothing to average yet
+        Timer timer = registry.timer("req");
+        timer.record(Duration.ofMillis(100));
+        timer.record(Duration.ofMillis(300));
+        assertThat(sampler.sample(10_000)).isCloseTo(200.0, within(1e-9));
+    }
+
     @Test
     void timerAvgIsDeltaTotalOverDeltaCountInMillis() {
         Timer timer = registry.timer("req");

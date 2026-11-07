@@ -183,11 +183,20 @@ final class SeriesSampler {
     private double sampleRate(List<Meter> meters, long elapsedMillis) {
         double current = cumulativeCount(meters);
         double previous = previousCount;
-        previousCount = current;
+        previousCount = baseline(meters, current);
         if (Double.isNaN(current) || Double.isNaN(previous) || current < previous) {
             return Double.NaN;
         }
         return (current - previous) * 1000.0 / elapsedMillis;
+    }
+
+    /**
+     * The reading the next sample measures from. A counter or timer registered after this sample
+     * counts from 0, so a name that matched nothing is a known 0. The first sample has no baseline,
+     * as the counts before it are unknown.
+     */
+    private static double baseline(List<Meter> meters, double reading) {
+        return meters.isEmpty() ? 0 : reading;
     }
 
     private static double cumulativeCount(List<Meter> meters) {
@@ -206,8 +215,8 @@ final class SeriesSampler {
         double currentTotal = totalTime(meters);
         double previousCountBaseline = previousCount;
         double previousTotalBaseline = previousTotal;
-        previousCount = currentCount;
-        previousTotal = currentTotal;
+        previousCount = baseline(meters, currentCount);
+        previousTotal = baseline(meters, currentTotal);
 
         if (Double.isNaN(currentCount) || Double.isNaN(currentTotal)) {
             return Double.NaN;

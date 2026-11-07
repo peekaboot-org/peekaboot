@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,12 +20,12 @@ class InsightsDataReaderTest {
 
     private final AtomicReference<Double> heapUsed = new AtomicReference<>(Double.NaN);
     private final AtomicReference<Double> cpu = new AtomicReference<>(0.5);
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private InsightsService service;
     private InsightsDataReader reader;
 
     @BeforeEach
     void setUp() {
-        SimpleMeterRegistry registry = new SimpleMeterRegistry();
         // a supplier, never a weakly held state object: a GC between ticks would turn samples into NaN
         Gauge.builder("jvm.memory.used", heapUsed::get).tag("area", "heap").register(registry);
         Gauge.builder("process.cpu.usage", cpu::get).register(registry);
@@ -127,6 +129,24 @@ class InsightsDataReaderTest {
         assertThat(data.problems()).singleElement().satisfies(problem -> {
             assertThat(problem.rule()).isEqualTo(ProblemRule.CPU_HIGH);
             assertThat(problem.value()).isCloseTo(90.0, within(1e-9));
+        });
+    }
+
+    /** A fresh application registers its request timers on the first request, here a failing one. */
+    @Test
+    void theFirstBurstOfServerErrorsIsNamed() {
+        service.collector().tick(10_000);
+        Timer firstFailures = Timer.builder("http.server.requests")
+                .tag("outcome", "SERVER_ERROR")
+                .register(registry);
+        for (int i = 0; i < 3; i++) {
+            firstFailures.record(Duration.ofMillis(5));
+        }
+        service.collector().tick(20_000);
+
+        assertThat(read("0", null, null, null).problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.rule()).isEqualTo(ProblemRule.SERVER_ERRORS);
+            assertThat(problem.value()).isCloseTo(100.0, within(1e-9));
         });
     }
 
