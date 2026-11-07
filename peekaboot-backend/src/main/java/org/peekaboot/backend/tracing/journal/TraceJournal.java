@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.function.Supplier;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.digest.ErrorDigestFile;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceInput;
 import org.peekaboot.backend.tracing.store.TraceInputs;
@@ -31,13 +32,16 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
 
     private final TraceStore store;
     private final TraceInputs live;
+    private final ErrorDigestFile digestFile;
     private final RestoreGate gate = new RestoreGate(JournalWriter.CAPACITY);
     private final JournalWriter writer;
     private final Thread thread;
 
-    private TraceJournal(TraceStore store, TraceInputs live, JournalFiles files, JournalWriter writer) {
+    private TraceJournal(
+            TraceStore store, TraceInputs live, ErrorDigestFile digestFile, JournalFiles files, JournalWriter writer) {
         this.store = store;
         this.live = live;
+        this.digestFile = digestFile;
         this.writer = writer;
         this.thread = Thread.ofVirtual().name("peekaboot-trace-journal").unstarted(() -> run(files));
     }
@@ -45,40 +49,44 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
     /**
      * Starts the writer thread and returns at once, so no startup waits for the files. The restore
      * replays into {@code store}; every live input reaches {@code live}, which applies it to that store
-     * and hands it to whatever else takes live inputs.
+     * and hands it to whatever else takes live inputs. The writer keeps {@code digestFile} beside the
+     * journal: restored before the gate opens, written on every flush.
      */
     public static TraceJournal start(
             TraceStore store,
             TraceInputs live,
+            ErrorDigestFile digestFile,
             Path directory,
             PeekabootProperties.Storage.Traces settings,
             PeekabootTracingProperties tracing) {
         return start(
                 store,
                 live,
+                digestFile,
                 directory,
                 settings.getFlushInterval(),
                 settings.getMaxJournalSize().toBytes(),
-                () -> new InMemoryTraceStore(tracing),
-                Clock.systemUTC());
+                () -> new InMemoryTraceStore(tracing));
     }
 
-    /**
-     * {@code emptyStore} builds the store a fold replays into, with the live store's caps. {@code clock}
-     * drives the flush cadence and the drop report; tests shorten the cadence.
-     */
+    /** {@code emptyStore} builds the store a fold replays into, with the live store's caps; tests shorten the cadence. */
     static TraceJournal start(
             TraceStore store,
             TraceInputs live,
+            ErrorDigestFile digestFile,
             Path directory,
             Duration flushInterval,
             long maxJournalChars,
-            Supplier<TraceStore> emptyStore,
-            Clock clock) {
+            Supplier<TraceStore> emptyStore) {
         JournalFiles files = new JournalFiles(directory);
-        JournalWriter writer =
-                new JournalWriter(files, new Checkpoint(files, emptyStore), flushInterval, maxJournalChars, clock);
-        TraceJournal journal = new TraceJournal(store, live, files, writer);
+        JournalWriter writer = new JournalWriter(
+                files,
+                new Checkpoint(files, emptyStore),
+                flushInterval,
+                maxJournalChars,
+                Clock.systemUTC(),
+                digestFile::flush);
+        TraceJournal journal = new TraceJournal(store, live, digestFile, files, writer);
         journal.thread.start();
         return journal;
     }
@@ -87,6 +95,7 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
     private void run(JournalFiles files) {
         try {
             TraceReplay.restore(files, store);
+            digestFile.restore();
         } finally {
             gate.open(live);
         }

@@ -131,6 +131,16 @@ class TracePersistenceIT {
                         PeekabootApi.readJson(new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8)));
     }
 
+    /** The digest records a trace once its root is stored, and restores off the startup path, so the count is awaited. */
+    private static JsonNode awaitBoomEntry(PeekabootApi api, int count) {
+        return await().atMost(Duration.ofSeconds(15))
+                .until(
+                        () -> api.getJson("/peekaboot/api/errors?route=/boom")
+                                .path("errors")
+                                .path(0),
+                        entry -> entry.path("count").asInt() == count);
+    }
+
     /**
      * A request that ended just before a graceful close restores as it ended. Its spans still wait in the
      * exporter's batch at the close, which only the tracer provider's destruction exports, so the journal
@@ -284,6 +294,34 @@ class TracePersistenceIT {
                     .satisfies(row -> assertThat(newRun)
                             .as("the new trace's run")
                             .isEqualTo(row.path("startedAt").asString("")));
+        }
+    }
+
+    /**
+     * The error digest is kept beside the traces: the next run serves the count the first one reached,
+     * and its own failure adds to it under a second run. These applications are this class's own, so
+     * the /boom entry counts only this test's requests.
+     */
+    @Test
+    void theErrorDigestSurvivesARestart() {
+        String firstRun;
+        try (ConfigurableApplicationContext first = boot(storageDir)) {
+            TraceApiClient traces = tracesOf(first);
+            traces.get("/boom");
+            traces.get("/boom");
+            firstRun = awaitBoomEntry(traces.api(), 2).path("runs").path(0).asString();
+        }
+
+        try (ConfigurableApplicationContext second = boot(storageDir)) {
+            TraceApiClient traces = tracesOf(second);
+            JsonNode restored = awaitBoomEntry(traces.api(), 2);
+            assertThat(restored.path("runs").valueStream().map(JsonNode::asString))
+                    .containsExactly(firstRun);
+
+            String failed = traces.get("/boom");
+            JsonNode counted = awaitBoomEntry(traces.api(), 3);
+            assertThat(counted.path("lastTraceId").asString()).isEqualTo(failed);
+            assertThat(counted.path("runs")).hasSize(2);
         }
     }
 }

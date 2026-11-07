@@ -218,6 +218,48 @@ class PeekabootTracingAutoConfigurationTest {
         });
     }
 
+    /** The next context reads the digest from errors.jsonl, and its replay of the failed trace counts nothing more. */
+    @Test
+    void theNextContextKeepsTheErrorDigestThisOneTook() {
+        WebApplicationContextRunner persisted = storageRunner.withPropertyValues(
+                "peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir);
+
+        persisted.run(context -> {
+            context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+            ErrorDigest digest = context.getBean(ErrorDigest.class);
+            await().atMost(Duration.ofSeconds(5)).until(() -> !digest.entries().isEmpty());
+        });
+
+        persisted.run(context -> {
+            TraceStore store = context.getBean(TraceStore.class);
+            context.publishEvent(TraceFixtures.untracedLog("live"));
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
+
+            assertThat(store.getTrace(TraceFixtures.TRACE_ID)).isPresent();
+            assertThat(context.getBean(ErrorDigest.class).entries())
+                    .singleElement()
+                    .satisfies(entry -> assertThat(entry.count()).isEqualTo(1));
+        });
+    }
+
+    /** The digest's file follows the trace journal: with traces switched off the digest counts in memory alone. */
+    @Test
+    void theErrorDigestStaysInMemoryWhenTracesAreSwitchedOff() {
+        storageRunner
+                .withPropertyValues(
+                        "peekaboot.storage.enabled=true",
+                        "peekaboot.storage.dir=" + storageDir,
+                        "peekaboot.storage.traces.enabled=false")
+                .run(context -> {
+                    context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+
+                    assertThat(context.getBean(ErrorDigest.class).entries()).hasSize(1);
+                });
+
+        assertThat(storageDir.resolve("errors.jsonl")).doesNotExist();
+    }
+
     /** Closing folds the journal and says nothing: no line from the journal reaches Logback. */
     @Test
     void closingAContextWithTheJournalLogsNothing() {

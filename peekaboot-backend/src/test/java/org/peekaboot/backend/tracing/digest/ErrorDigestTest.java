@@ -227,6 +227,21 @@ class ErrorDigestTest {
         assertThat(digest.changes()).isEqualTo(changes);
     }
 
+    /** A writer gets nothing while the digest holds what it wrote, and otherwise the count with the entries it covers. */
+    @Test
+    void changedSinceHandsTheCountWithTheEntriesItCovers() {
+        assertThat(digest.changedSince(digest.changes())).isNull();
+        digest.record(failed("t1").build());
+        digest.record(failed("t2").on("/carts/{id}").build());
+
+        ErrorDigest.Changed changed = digest.changedSince(0);
+
+        assertThat(changed).isNotNull();
+        assertThat(changed.changes()).isEqualTo(2);
+        assertThat(changed.entries()).isEqualTo(digest.entries());
+        assertThat(digest.changedSince(2)).isNull();
+    }
+
     /** A restored line whose frame kept its line number is the failure this run already holds. */
     @Test
     void aRestoredFrameStillCarryingItsLineNumberIsTheFailureThisRunHolds() {

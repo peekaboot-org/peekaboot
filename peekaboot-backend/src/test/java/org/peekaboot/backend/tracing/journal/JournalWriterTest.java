@@ -40,6 +40,9 @@ class JournalWriterTest {
     /** Each fold's journal as it stood, then the next journal: the writer's folding step, recorded. */
     private final List<List<String>> folded = new CopyOnWriteArrayList<>();
 
+    /** How often the writer ran the step it takes beside each flush. */
+    private final AtomicInteger flushesAlongside = new AtomicInteger();
+
     private JournalWriter writer(JournalFiles files, long maxJournalChars) {
         return writer(files, maxJournalChars, FAST, Clock.systemUTC());
     }
@@ -55,7 +58,8 @@ class JournalWriterTest {
                 },
                 flushInterval,
                 maxJournalChars,
-                clock);
+                clock,
+                flushesAlongside::incrementAndGet);
     }
 
     private static TraceInput logged(String message) {
@@ -240,7 +244,12 @@ class JournalWriterTest {
     void aFailedWriteLeavesTheDropsUnreported() throws IOException {
         JournalFiles files = new JournalFiles(Files.createFile(dir.resolve("not-a-directory")));
         JournalWriter writer = new JournalWriter(
-                files, files::startJournal, Duration.ZERO, Long.MAX_VALUE, Clock.fixed(STARTED, ZoneOffset.UTC));
+                files,
+                files::startJournal,
+                Duration.ZERO,
+                Long.MAX_VALUE,
+                Clock.fixed(STARTED, ZoneOffset.UTC),
+                () -> {});
         for (int i = 0; i < JournalWriter.CAPACITY + 1; i++) {
             writer.offer(logged("line " + i));
         }
@@ -274,7 +283,8 @@ class JournalWriterTest {
                 },
                 FAST,
                 0,
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                () -> {});
         writer.offer(new TraceInput.RunStarted(STARTED));
         writer.offer(logged("after the failure"));
         writer.stop();
@@ -399,7 +409,8 @@ class JournalWriterTest {
                 },
                 FAST,
                 Long.MAX_VALUE,
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                () -> {});
         writer.offer(new TraceInput.RunStarted(STARTED));
         writer.offer(logged("lost"));
         writer.stop();
@@ -420,7 +431,7 @@ class JournalWriterTest {
     void anUncheckedWriteFailureClosesTheJournal() {
         FailingWriter out = new FailingWriter();
         JournalWriter writer = new JournalWriter(
-                new JournalFiles(dir), () -> new OpenJournal(out), FAST, Long.MAX_VALUE, Clock.systemUTC());
+                new JournalFiles(dir), () -> new OpenJournal(out), FAST, Long.MAX_VALUE, Clock.systemUTC(), () -> {});
         writer.offer(new TraceInput.RunStarted(STARTED));
         writer.stop();
 
@@ -434,6 +445,52 @@ class JournalWriterTest {
                     .contains("java.lang.IllegalStateException: cannot encode");
         }
         assertThat(out.closed).isTrue();
+    }
+
+    /** The stop runs the step beside the flush once more, so what the digest took last reaches its file. */
+    @Test
+    void theStopRunsTheStepBesideTheFlush() {
+        JournalWriter writer = writer(
+                new JournalFiles(dir), Long.MAX_VALUE, Duration.ofHours(1), Clock.fixed(STARTED, ZoneOffset.UTC));
+        writer.stop();
+
+        writer.run();
+
+        assertThat(flushesAlongside).hasValue(1);
+    }
+
+    /** A long last fold can outlast the close's wait, so the stop writes the digest before it. */
+    @Test
+    void theStopRunsTheStepBesideTheFlushBeforeTheLastFold() {
+        JournalFiles files = new JournalFiles(dir);
+        List<String> steps = new CopyOnWriteArrayList<>();
+        JournalWriter writer = new JournalWriter(
+                files,
+                () -> {
+                    steps.add("fold");
+                    return files.startJournal();
+                },
+                Duration.ofHours(1),
+                Long.MAX_VALUE,
+                Clock.fixed(STARTED, ZoneOffset.UTC),
+                () -> steps.add("beside"));
+        writer.stop();
+
+        writer.run();
+
+        assertThat(steps).as("the start's fold, the step, the stop's fold").containsExactly("fold", "beside", "fold");
+    }
+
+    /** A zero cadence on a fixed clock makes the one pass before the stop a due flush. */
+    @Test
+    void aDueFlushRunsTheStepBesideIt() {
+        JournalWriter writer =
+                writer(new JournalFiles(dir), Long.MAX_VALUE, Duration.ZERO, Clock.fixed(STARTED, ZoneOffset.UTC));
+        writer.stop();
+
+        writer.run();
+
+        assertThat(flushesAlongside).as("the due flush's and the stop's").hasValue(2);
     }
 
     /** Every write fails unchecked, as an encoding failure would; it records whether it was closed. */

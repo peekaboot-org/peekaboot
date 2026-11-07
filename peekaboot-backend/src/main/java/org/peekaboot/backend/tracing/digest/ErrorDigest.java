@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 
 /**
@@ -92,8 +93,8 @@ public final class ErrorDigest {
 
     /**
      * Puts back what an earlier run recorded, before this run records anything. An entry this run
-     * already holds stays as it is. Leaves {@link #changes} as it was: what was restored is what the
-     * file already holds.
+     * already holds stays as it is. Leaves {@link #changes} as it was; the file restored from tells
+     * for itself whether the digest kept all it held.
      */
     public synchronized void restore(List<DigestedError> restored) {
         restored.forEach(entry -> entries.putIfAbsent(entry.key(), entry));
@@ -101,9 +102,21 @@ public final class ErrorDigest {
     }
 
     /** Rises with every recorded trace, so a writer can tell whether the digest changed since it last wrote. */
-    public synchronized long changes() {
+    synchronized long changes() {
         return changes;
     }
+
+    /**
+     * What a writer that last wrote at {@code written} changes has to write, or null where nothing changed
+     * since. The count and the entries are read under one lock, so the count covers exactly those entries.
+     */
+    @Nullable
+    synchronized Changed changedSince(long written) {
+        return changes == written ? null : new Changed(changes, entries());
+    }
+
+    /** The digest's entries and the change count they stand at. */
+    record Changed(long changes, List<DigestedError> entries) {}
 
     private void evictPastCap() {
         while (entries.size() > MAX_ENTRIES) {

@@ -8,6 +8,7 @@ import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.digest.ErrorDigest;
+import org.peekaboot.backend.tracing.digest.ErrorDigestFile;
 import org.peekaboot.backend.tracing.digest.ErrorDigestRecorder;
 import org.peekaboot.backend.tracing.journal.TraceJournal;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
@@ -86,12 +87,14 @@ public class PeekabootTracingAutoConfiguration {
         public TraceJournal peekabootTraceJournal(
                 TraceStore traceStore,
                 ErrorDigestRecorder errorDigestRecorder,
+                ErrorDigest errorDigest,
                 StorageDirectory storageDirectory,
                 PeekabootProperties properties,
                 PeekabootTracingProperties tracingProperties) {
             return TraceJournal.start(
                     traceStore,
                     errorDigestRecorder.liveInputs(),
+                    new ErrorDigestFile(storageDirectory.root(), errorDigest),
                     storageDirectory.root(),
                     properties.getStorage().getTraces(),
                     tracingProperties);

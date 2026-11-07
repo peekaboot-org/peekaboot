@@ -15,7 +15,8 @@ Three stores opt into the filesystem behind `peekaboot.storage.enabled` and shar
 `peekaboot.storage.dir`. Both properties, their defaults, the per-application subdirectory and
 its fallbacks live on the site under
 [`peekaboot.storage`](https://www.peekaboot.org/docs/configuration/#peekabootstorage). The trace
-journal also needs `peekaboot.storage.traces.enabled`, which is on unless set to false.
+journal also needs `peekaboot.storage.traces.enabled`, which is on unless set to false. The error
+digest's file follows the trace journal.
 
 Like `peekaboot.dev-toolbar.enabled`, the storage switch follows the launch context rather than
 `peekaboot.enabled`'s resolved value: on for an IDE or `spring-boot:run` launch, off everywhere
@@ -213,6 +214,25 @@ The files are a cache, so a restore says what was wrong with them once, at INFO:
 schema version or with a damaged header (both deleted), the count of lines it could not read, or a
 file it could not read at all.
 
+### `errors.jsonl`
+
+The error digest (`ErrorDigest`), written by the trace journal's writer, so it is on disk under
+exactly the switches the traces are: `peekaboot.storage.enabled` on and
+`peekaboot.storage.traces.enabled` not false. Otherwise the digest lives in memory for the run.
+`ErrorDigestFile` writes a header line with the format's version, then one `DigestedError` a line,
+and replaces the file whole through `OwnerOnlyFiles.replaceAtomically`, on a flush that finds the
+digest changed (`ErrorDigest.changedSince`, which reads the count and the entries under one lock)
+and once more at the writer's stop. At startup the journal's thread reads it back after the traces'
+replay and before the restore gate opens, so the live inputs the gate held count on top of the
+restored entries. The replay never reaches `ErrorDigestRecorder`, so a restored failure counts
+once, in the run that captured it.
+
+The file is a cache like the trace files: a header of another version deletes it with one INFO, an
+undecodable line costs only itself, and a failed write warns once and ends writing for the run. A
+restore that skipped or dropped a line has the first flush rewrite the file, so the next start
+reads it clean. `lastMessage` is the summary's cause message, masked as the API masks it, so this
+file holds nothing the trace files do not, and less.
+
 ### API and dashboard
 
 `GET /peekaboot/api/lifecycle/events`, gated by `peekaboot.lifecycle.enabled`, serves the log as
@@ -323,6 +343,7 @@ org.peekaboot.backend/
 │   ├── capture/            # RequestCaptureFilter, PeekabootLogbackAppender: the request and log sources beside the span bridge
 │   ├── config/             # PeekabootTracingProperties
 │   ├── digest/             # The error digest: ErrorDigest, DigestedError, ErrorDigestRecorder (records live failures)
+│   │                       # ErrorDigestFile (errors.jsonl)
 │   ├── event/              # What capture hands the store, and the store keeps: SpanData (+ SpanDataEvent), LogCapturedEvent,
 │   │                       # RequestCompletedEvent, TraceDiscardedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor

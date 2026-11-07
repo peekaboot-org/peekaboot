@@ -22,6 +22,8 @@ import org.slf4j.LoggerFactory;
  * and the logging threads never wait, and the drops are reported at most once a minute. The run's start
  * is never dropped, since without its run line the run's inputs would be held back for good.
  *
+ * <p>Every flush, and the stop, also runs {@code onFlush}, the error digest's write, on this thread.
+ *
  * <p>A run line carries the start the run reports once it is ready, so inputs that arrive before
  * that are held back until the run line is written: every line after a run line belongs to its run.
  * A write or fold that fails, checked or unchecked, warns once and ends writing for the run. The
@@ -53,14 +55,26 @@ final class JournalWriter {
     private final Duration flushInterval;
     private final long maxJournalChars;
     private final Clock clock;
+    private final Runnable onFlush;
     private volatile boolean stopping;
 
-    JournalWriter(JournalFiles files, Folding folding, Duration flushInterval, long maxJournalChars, Clock clock) {
+    /**
+     * {@code onFlush} runs on the writer thread after each flush and once more at the stop, before the last
+     * fold, whether or not the journal still writes.
+     */
+    JournalWriter(
+            JournalFiles files,
+            Folding folding,
+            Duration flushInterval,
+            long maxJournalChars,
+            Clock clock,
+            Runnable onFlush) {
         this.files = files;
         this.folding = folding;
         this.flushInterval = flushInterval;
         this.maxJournalChars = maxJournalChars;
         this.clock = clock;
+        this.onFlush = onFlush;
     }
 
     /**
@@ -105,6 +119,7 @@ final class JournalWriter {
             Instant now = clock.instant();
             if (!now.isBefore(nextFlush)) {
                 appending.flush(now);
+                onFlush.run();
                 nextFlush = now.plus(flushInterval);
             } else if (nextFlush.isAfter(now.plus(flushInterval))) {
                 // the clock stepped back; waiting for the old instant would keep the lines in memory that long
@@ -112,6 +127,7 @@ final class JournalWriter {
             }
             appending.foldPast(maxJournalChars);
         }
+        onFlush.run();
         appending.finish();
         if (interrupted) {
             Thread.currentThread().interrupt();
