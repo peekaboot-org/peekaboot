@@ -122,6 +122,8 @@ them, every parameter absent unless a test names it.
 `LifecycleStarts.start(epochMs)` builds the START event the lifecycle tests replay; a stop
 is `LifecycleEvent.stop`.
 `SeriesDefs.value(id, meter)` is the plain value series the collector tests share.
+`FailedSummaries.failed(traceId)` (in the digest's test package) builds the summary of a failed
+request, cause, route, start and run named only where a test asserts on them.
 `Credentials.generated(password)`, and `loaded`, `configured` and `unpersisted` beside it,
 build the guard's `DashboardCredentials` in each origin, for one user at one fixed instant.
 `InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings

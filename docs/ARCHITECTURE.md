@@ -319,6 +319,7 @@ org.peekaboot.backend/
 │   ├── bridge/otel/        # OtelSpanExporter
 │   ├── capture/            # RequestCaptureFilter, PeekabootLogbackAppender: the request and log sources beside the span bridge
 │   ├── config/             # PeekabootTracingProperties
+│   ├── digest/             # The error digest: ErrorDigest, DigestedError
 │   ├── event/              # What capture hands the store, and the store keeps: SpanData (+ SpanDataEvent), LogCapturedEvent,
 │   │                       # RequestCompletedEvent, TraceDiscardedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor

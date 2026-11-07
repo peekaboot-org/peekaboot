@@ -158,6 +158,14 @@ newest `peekaboot.tracing.max-untraced-logs` (1000) in an `UntracedLogRing` besi
 They count in no bucket and fail no trace. The log search serves them with `traceId` and
 `spanId` null.
 
+### Error digest
+`ErrorDigest` counts every failed trace the application completed, one `DigestedError` per
+cause class, route and top application frame, the frame without its line number, so the same
+failure stays one entry when an edit moves its line. Each entry keeps the count, the first and
+last trace's start times, the last message and trace id, and the starts of the last ten runs it
+occurred in. It outlives the traces: one noisy failure can fill the Errors bucket and evict the
+rest, while the digest keeps up to 500 entries.
+
 ## Where the code and the UI use different words
 
 Each row is a place a grep for the UI's word will not find the code, or the reverse.
