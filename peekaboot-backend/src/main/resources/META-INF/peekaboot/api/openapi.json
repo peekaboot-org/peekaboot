@@ -1,0 +1,1751 @@
+{
+  "openapi": "3.1.1",
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
+  "info": {
+    "title": "Peekaboot API",
+    "version": "1",
+    "summary": "The traces, logs, failures, routes and metrics Peekaboot holds for this application.",
+    "description": "Every endpoint answers `GET` only. An optional field is always present, `null` where it has no value. A point in time Peekaboot records is an ISO-8601 string in UTC. `server.currentTime` keeps the JVM's own offset and `application.git.commit.time` is Actuator's string. Epoch milliseconds appear only in the insights endpoints: `epochMs`, `endEpochMs`, `timestamps` and a `datetime` tile's `value`. Any other field ending in `Ms` is a duration in milliseconds.\n\nAn endpoint refuses a query parameter it does not take, and any parameter sent more than once, with a `400` problem naming it. Spring Security's `continue` is accepted everywhere.\n\nA value Peekaboot masked reads `******`, the literal `/peekaboot/api/features` names in `maskLiteral`. The real value exists but is not shown.\n\nWhere Peekaboot's guard is armed, every endpoint needs HTTP Basic credentials: `peekaboot.security.username`, else the build's artifact id or the application name plus `-admin`, else `peekaboot-admin`, and `peekaboot.security.password`, else the password Peekaboot generated and printed on the start that created it. A `405`, a `406` or an unexpected `500` is the application's own error response.",
+    "license": {"name": "Apache-2.0", "identifier": "Apache-2.0"}
+  },
+  "externalDocs": {
+    "description": "Peekaboot's HTTP API reference",
+    "url": "https://www.peekaboot.org/docs/api/"
+  },
+  "servers": [{"url": "/"}],
+  "security": [{"peekabootBasic": []}, {}],
+  "paths": {
+    "/peekaboot/api/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiDocument",
+        "summary": "Serves the OpenAPI document.",
+        "responses": {
+          "200": {
+            "description": "This document, its server set to where the request reached the API.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OpenApiDocument"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/peekaboot/api/features": {
+      "get": {
+        "operationId": "getFeatures",
+        "summary": "Says which parts of Peekaboot are on, and the thresholds it raises issues at.",
+        "responses": {
+          "200": {
+            "description": "The switches and thresholds.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Features"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/peekaboot/api/traces": {
+      "get": {
+        "operationId": "listTraces",
+        "summary": "Lists traces newest first, with filters and paging.",
+        "description": "A trace that holds some spans but not its root lists no row of its own; fetch it by id.",
+        "parameters": [
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {
+            "name": "bucket",
+            "in": "query",
+            "description": "The bucket to list, any case.",
+            "schema": {"type": "string", "enum": ["ALL", "ERRORS", "SLOW"], "default": "ALL"}
+          },
+          {
+            "name": "rootActionType",
+            "in": "query",
+            "description": "Root action types separated by commas, any case, or `*` alone. Every type except `MAINTENANCE` where absent.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "rootOperation",
+            "in": "query",
+            "description": "Part of the root span's name, any case.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "route",
+            "in": "query",
+            "description": "The request's route pattern, such as `/persons/{id}`, matched exactly.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "The start of the request path, as written.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "statusCode",
+            "in": "query",
+            "description": "The response status, matched exactly.",
+            "schema": {"type": "integer", "minimum": 100, "maximum": 599}
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "description": "The outcome, any case.",
+            "schema": {"type": "string", "enum": ["OK", "ERROR", "IN_PROGRESS", "INTERRUPTED"]}
+          },
+          {
+            "name": "minDurationMs",
+            "in": "query",
+            "description": "Lists traces that took at least this long.",
+            "schema": {"type": "integer", "minimum": 0}
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "An ISO-8601 instant. Keeps traces whose `summary.startTime` is at or after it. Send the `+` of an offset as `%2B`.",
+            "schema": {"type": "string", "format": "date-time"}
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "description": "An ISO-8601 instant, later than `since`. Keeps traces whose `summary.startTime` is before it.",
+            "schema": {"type": "string", "format": "date-time"}
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "description": "`FULL` adds each row's `data`, any case.",
+            "schema": {"type": "string", "enum": ["SUMMARY", "FULL"], "default": "SUMMARY"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of traces.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TraceListResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/peekaboot/api/traces/{traceId}": {
+      "get": {
+        "operationId": "getTrace",
+        "summary": "Returns one trace with its summary, spans, logs, queries and HTTP exchange.",
+        "parameters": [
+          {
+            "name": "traceId",
+            "in": "path",
+            "required": true,
+            "description": "The trace id, 32 hex digits. A response's `Server-Timing: trace;desc=\"00-<traceId>-<spanId>-<flags>\"` header names it.",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trace. `summary.complete` is `false` while spans are still arriving.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TraceResource"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/peekaboot/api/logs": {
+      "get": {
+        "operationId": "searchLogs",
+        "summary": "Searches captured log lines, inside traces and outside them, newest first.",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "description": "Lists this level and every one above it, any case.",
+            "schema": {"type": "string", "enum": ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]}
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Text the message or stack trace contains, any case, after masking.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "logger",
+            "in": "query",
+            "description": "The start of the logger's name, as written.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "traceId",
+            "in": "query",
+            "description": "One trace's lines only.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "An ISO-8601 instant. Keeps lines whose `timestamp` is at or after it. Send the `+` of an offset as `%2B`.",
+            "schema": {"type": "string", "format": "date-time"}
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "description": "An ISO-8601 instant, later than `since`. Keeps lines whose `timestamp` is before it.",
+            "schema": {"type": "string", "format": "date-time"}
+          },
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/Cursor"}
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of log lines.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LogSearchResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/peekaboot/api/routes": {
+      "get": {
+        "operationId": "listRoutes",
+        "summary": "Sums up requests, failures and latency per HTTP route over the traces held now.",
+        "responses": {
+          "200": {
+            "description": "One row per method and route, busiest first.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RouteListResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/peekaboot/api/errors": {
+      "get": {
+        "operationId": "listErrors",
+        "summary": "Lists every failure the traces showed, one entry per cause and route, kept past the traces themselves.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "description": "An ISO-8601 instant. Keeps the entries whose `lastSeen` is at or after it.",
+            "schema": {"type": "string", "format": "date-time"}
+          },
+          {
+            "name": "route",
+            "in": "query",
+            "description": "A route pattern, such as `/orders/{id}`, matched exactly.",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entries, seen latest first.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorDigestResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/peekaboot/api/insights/config": {
+      "get": {
+        "operationId": "getInsightsConfig",
+        "summary": "Returns the Insights levels, panels and tiles.",
+        "responses": {
+          "200": {
+            "description": "The configuration.",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/InsightsConfigResponse"}}
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {
+            "description": "Insights is off (`peekaboot.insights.enabled=false`, or no `MeterRegistry`). The body is the application's own error response."
+          }
+        }
+      }
+    },
+    "/peekaboot/api/insights/data": {
+      "get": {
+        "operationId": "getInsightsData",
+        "summary": "Returns one level's metric history, summarised per series, with the problems the window shows.",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "description": "A configured level, `0` for the finest. `/peekaboot/api/insights/config` lists them.",
+            "schema": {"type": "integer", "minimum": 0},
+            "required": true
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "description": "`FULL` adds `timestamps` and each series' samples, any case.",
+            "schema": {"type": "string", "enum": ["SUMMARY", "FULL"], "default": "SUMMARY"}
+          },
+          {
+            "name": "series",
+            "in": "query",
+            "description": "Series ids separated by commas, such as `cpu.process,heap.used`. Narrows `series`, never `problems`.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "An ISO-8601 instant. The window holds the samples taken at or after it.",
+            "schema": {"type": "string", "format": "date-time"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The window.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InsightsDataResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {
+            "description": "Insights is off (`peekaboot.insights.enabled=false`, or no `MeterRegistry`). The body is the application's own error response."
+          }
+        }
+      }
+    },
+    "/peekaboot/api/insights/stream": {
+      "get": {
+        "operationId": "streamInsights",
+        "summary": "Streams live metric samples as Server-Sent Events.",
+        "responses": {
+          "200": {
+            "description": "A `tick` event per level-0 interval, its data an `InsightsTick`, and a `rollup` event when a higher level's interval closes, its data an `InsightsRollup`. A comment heartbeat follows 15 seconds without an event. The server closes the stream after 30 minutes.",
+            "content": {"text/event-stream": {"schema": {"type": "string"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {
+            "description": "Insights is off (`peekaboot.insights.enabled=false`, or no `MeterRegistry`). The body is the application's own error response."
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/peekaboot/api/lifecycle/events": {
+      "get": {
+        "operationId": "listLifecycleEvents",
+        "summary": "Lists every start and stop of the application, oldest first.",
+        "responses": {
+          "200": {
+            "description": "The events.",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/LifecycleEventsResponse"}}
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {
+            "description": "Lifecycle is off (`peekaboot.lifecycle.enabled=false`). The body is the application's own error response."
+          }
+        }
+      }
+    },
+    "/peekaboot/api/lifecycle/runs": {
+      "get": {
+        "operationId": "listLifecycleRuns",
+        "summary": "Lists one entry per run of the application, newest first.",
+        "responses": {
+          "200": {
+            "description": "The runs.",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/LifecycleRunsResponse"}}
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {
+            "description": "Lifecycle is off (`peekaboot.lifecycle.enabled=false`). The body is the application's own error response."
+          }
+        }
+      }
+    },
+    "/peekaboot/api/actuator/all/insights": {
+      "get": {
+        "operationId": "getActuatorInsights",
+        "summary": "Returns the environment, configuration, health, loggers, migrations, scheduled tasks and runtime facts.",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "description": "A language tag such as `de-DE`, for cron descriptions and the server locale's display name. English where absent.",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "unmask",
+            "in": "query",
+            "description": "`true` shows real values in place of masked ones, only while `peekaboot.unmasking.enabled` is on.",
+            "schema": {"type": "boolean", "default": false}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every section, masked.",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/ActuatorInsightsResponse"}}
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/peekaboot/api/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "summary": "Lists every Micrometer meter, grouped by name.",
+        "responses": {
+          "200": {
+            "description": "The meters, masked.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MetricsInfo"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "peekabootBasic": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Peekaboot's own guard, armed on a deployment launch with `peekaboot.enabled=true` or by `peekaboot.security.enabled=true`."
+      }
+    },
+    "parameters": {
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "How many rows a page holds.",
+        "schema": {"type": "integer", "minimum": 1, "maximum": 10000, "default": 100}
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "description": "The `next` of an earlier response, sent back as it is with the same filters.",
+        "schema": {"type": "string"}
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "A parameter the endpoint does not take, one sent more than once, or a value it cannot read. `parameter` names it.",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiProblem"}}}
+      },
+      "Unauthorized": {
+        "description": "Peekaboot's guard is armed and the request carries no valid credentials.",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiProblem"}}},
+        "headers": {
+          "WWW-Authenticate": {
+            "description": "`Basic realm=\"Peekaboot\", charset=\"UTF-8\"`",
+            "schema": {"type": "string"}
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The store does not hold the trace.",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiProblem"}}}
+      },
+      "ServiceUnavailable": {
+        "description": "The insights stream already has 32 subscribers. Retry later.",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiProblem"}}}
+      }
+    },
+    "schemas": {
+      "ApiProblem": {
+        "type": "object",
+        "description": "An RFC 9457 problem. `type` is always `about:blank` and `title` the status's own phrase.",
+        "additionalProperties": false,
+        "required": ["type", "title", "status", "detail", "parameter"],
+        "properties": {
+          "type": {"type": "string", "const": "about:blank"},
+          "title": {"type": "string"},
+          "status": {"type": "integer", "format": "int32"},
+          "detail": {"type": "string", "description": "What was wrong with this request."},
+          "parameter": {
+            "type": ["string", "null"],
+            "description": "The request parameter at fault, `null` where no single parameter is."
+          }
+        }
+      },
+      "Features": {
+        "type": "object",
+        "description": "Which parts of Peekaboot are on, and the thresholds it raises issues at.",
+        "additionalProperties": false,
+        "required": [
+          "tracing", "tracingSpansPossible", "metrics", "unmaskingEnabled", "insights", "lifecycle",
+          "slowSpanThresholdMs", "verySlowSpanThresholdMs", "slowQueryThresholdMs", "maskLiteral"
+        ],
+        "properties": {
+          "tracing": {
+            "type": "boolean",
+            "description": "The trace store exists (`peekaboot.tracing.enabled`)."
+          },
+          "tracingSpansPossible": {
+            "type": "boolean",
+            "description": "An OpenTelemetry SDK can feed the store. `false` means no span can ever arrive."
+          },
+          "metrics": {"type": "boolean", "description": "A `MeterRegistry` bean exists."},
+          "unmaskingEnabled": {"type": "boolean", "description": "`peekaboot.unmasking.enabled` is on."},
+          "insights": {"type": "boolean", "description": "The `/peekaboot/api/insights/*` endpoints exist."},
+          "lifecycle": {"type": "boolean", "description": "The `/peekaboot/api/lifecycle/*` endpoints exist."},
+          "slowSpanThresholdMs": {"type": "integer", "format": "int64"},
+          "verySlowSpanThresholdMs": {"type": "integer", "format": "int64"},
+          "slowQueryThresholdMs": {"type": "integer", "format": "int64"},
+          "maskLiteral": {"type": "string", "description": "The string a masked value is replaced with."}
+        }
+      },
+      "OpenApiDocument": {
+        "type": "object",
+        "description": "This document.",
+        "additionalProperties": false,
+        "required": [
+          "openapi", "jsonSchemaDialect", "info", "externalDocs", "servers", "security", "paths",
+          "components"
+        ],
+        "properties": {
+          "openapi": {"type": "string", "const": "3.1.1"},
+          "jsonSchemaDialect": {"type": "string"},
+          "info": {"type": "object", "additionalProperties": true},
+          "externalDocs": {"type": "object", "additionalProperties": true},
+          "servers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Where the API is served.",
+              "additionalProperties": false,
+              "required": ["url"],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "The context path and DispatcherServlet prefix, `/` at the root."
+                }
+              }
+            },
+            "minItems": 1,
+            "maxItems": 1
+          },
+          "security": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+          "paths": {"type": "object", "additionalProperties": true},
+          "components": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "TraceListResponse": {
+        "type": "object",
+        "description": "A page of the trace list, newest first.",
+        "additionalProperties": false,
+        "required": ["traces", "bucketCounts", "filteredBucketCounts", "next"],
+        "properties": {
+          "traces": {"type": "array", "items": {"$ref": "#/components/schemas/TraceResource"}},
+          "bucketCounts": {"$ref": "#/components/schemas/BucketCounts"},
+          "filteredBucketCounts": {
+            "anyOf": [{"$ref": "#/components/schemas/BucketCounts"}, {"type": "null"}],
+            "description": "The traces that match every filter. `null` only when the request filters nothing, as `rootActionType=*` alone does; a request naming no type still filters by the default types."
+          },
+          "next": {
+            "type": ["string", "null"],
+            "description": "The `cursor` for the next page, `null` on the last."
+          }
+        }
+      },
+      "BucketCounts": {
+        "type": "object",
+        "description": "How many traces each bucket holds.",
+        "additionalProperties": false,
+        "required": ["all", "errors", "slow"],
+        "properties": {
+          "all": {"type": "integer", "format": "int32"},
+          "errors": {"type": "integer", "format": "int32"},
+          "slow": {"type": "integer", "format": "int32"}
+        }
+      },
+      "TraceResource": {
+        "type": "object",
+        "description": "A trace's summary, and its data where asked for.",
+        "additionalProperties": false,
+        "required": ["summary", "data"],
+        "properties": {
+          "summary": {"$ref": "#/components/schemas/TraceSummary"},
+          "data": {
+            "anyOf": [{"$ref": "#/components/schemas/TraceDetail"}, {"type": "null"}],
+            "description": "`null` on a listing row with `view=summary`."
+          }
+        }
+      },
+      "TraceSummary": {
+        "type": "object",
+        "description": "What an agent reads first about a trace.",
+        "additionalProperties": false,
+        "required": [
+          "traceId", "startTime", "durationMs", "complete", "run", "rootActionType", "rootOperation",
+          "request", "outcome", "buckets", "reasons", "cause", "issues", "hotspots", "counts", "subtree"
+        ],
+        "properties": {
+          "traceId": {"type": "string"},
+          "startTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "`null` while no timed span has arrived."
+          },
+          "durationMs": {"type": "integer", "format": "int64"},
+          "complete": {"type": "boolean"},
+          "run": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The `startedAt` of the run that produced the trace."
+          },
+          "rootActionType": {"$ref": "#/components/schemas/RootActionType"},
+          "rootOperation": {"type": ["string", "null"]},
+          "request": {
+            "anyOf": [{"$ref": "#/components/schemas/TraceSummary.Request"}, {"type": "null"}],
+            "description": "`null` when the root is no HTTP request."
+          },
+          "outcome": {"$ref": "#/components/schemas/TraceOutcome"},
+          "buckets": {"type": "array", "items": {"$ref": "#/components/schemas/TraceBucket"}},
+          "reasons": {"type": "array", "items": {"$ref": "#/components/schemas/TraceReason"}},
+          "cause": {
+            "anyOf": [{"$ref": "#/components/schemas/TraceSummary.Cause"}, {"type": "null"}],
+            "description": "The first failure to look at, `null` when nothing failed."
+          },
+          "issues": {"type": "array", "items": {"$ref": "#/components/schemas/TraceIssue"}},
+          "hotspots": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/TraceSummary.Hotspot"},
+            "maxItems": 3
+          },
+          "counts": {"$ref": "#/components/schemas/TraceSummary.Counts"},
+          "subtree": {
+            "anyOf": [{"$ref": "#/components/schemas/SubtreeView"}, {"type": "null"}],
+            "description": "Set on a listing row for an async task only."
+          }
+        }
+      },
+      "TraceSummary.Request": {
+        "type": "object",
+        "description": "The root request.",
+        "additionalProperties": false,
+        "required": ["method", "route", "path", "statusCode"],
+        "properties": {
+          "method": {"type": ["string", "null"]},
+          "route": {"type": ["string", "null"], "description": "The matched route pattern."},
+          "path": {"type": ["string", "null"]},
+          "statusCode": {"type": ["integer", "null"], "format": "int32"}
+        }
+      },
+      "TraceSummary.Cause": {
+        "type": "object",
+        "description": "The deepest failing span's exception, else the first ERROR log with a stack trace, else a 5xx.",
+        "additionalProperties": false,
+        "required": ["type", "message", "applicationFrame", "spanId"],
+        "properties": {
+          "type": {"type": ["string", "null"]},
+          "message": {"type": ["string", "null"]},
+          "applicationFrame": {
+            "type": ["string", "null"],
+            "description": "The top stack frame inside the application's packages."
+          },
+          "spanId": {"type": ["string", "null"]}
+        }
+      },
+      "TraceSummary.Hotspot": {
+        "type": "object",
+        "description": "A span by its self time.",
+        "additionalProperties": false,
+        "required": ["spanId", "name", "selfMs"],
+        "properties": {
+          "spanId": {"type": "string"},
+          "name": {"type": "string"},
+          "selfMs": {"type": "integer", "format": "int64"}
+        }
+      },
+      "TraceSummary.Counts": {
+        "type": "object",
+        "description": "Spans, queries and logs in the trace.",
+        "additionalProperties": false,
+        "required": ["spans", "queries", "logs", "droppedSpans", "droppedLogs"],
+        "properties": {
+          "spans": {"type": "integer", "format": "int32"},
+          "queries": {"$ref": "#/components/schemas/TraceSummary.QueryCounts"},
+          "logs": {"$ref": "#/components/schemas/TraceSummary.LogCounts"},
+          "droppedSpans": {"type": "integer", "format": "int32"},
+          "droppedLogs": {"type": "integer", "format": "int32"}
+        }
+      },
+      "TraceSummary.QueryCounts": {
+        "type": "object",
+        "description": "The trace's queries.",
+        "additionalProperties": false,
+        "required": ["count", "totalDurationMs"],
+        "properties": {
+          "count": {"type": "integer", "format": "int32"},
+          "totalDurationMs": {"type": "integer", "format": "int64"}
+        }
+      },
+      "TraceSummary.LogCounts": {
+        "type": "object",
+        "description": "The trace's log lines.",
+        "additionalProperties": false,
+        "required": ["count", "errorCount", "warnCount"],
+        "properties": {
+          "count": {"type": "integer", "format": "int32"},
+          "errorCount": {"type": "integer", "format": "int32"},
+          "warnCount": {"type": "integer", "format": "int32"}
+        }
+      },
+      "SubtreeView": {
+        "type": "object",
+        "description": "The async task a listing row stands for.",
+        "additionalProperties": false,
+        "required": ["rootSpanId", "enclosedByStoredTrace"],
+        "properties": {"rootSpanId": {"type": "string"}, "enclosedByStoredTrace": {"type": "boolean"}}
+      },
+      "RootActionType": {
+        "type": "string",
+        "enum": [
+          "HTTP_REQUEST", "SCHEDULED_JOB", "MESSAGE_CONSUMER", "RPC_CALL", "DATABASE", "MAINTENANCE",
+          "ASYNC_TASK", "UNKNOWN"
+        ]
+      },
+      "TraceOutcome": {"type": "string", "enum": ["OK", "ERROR", "IN_PROGRESS", "INTERRUPTED"]},
+      "TraceBucket": {"type": "string", "enum": ["ALL", "ERRORS", "SLOW"]},
+      "TraceReason": {
+        "type": "object",
+        "description": "Why the trace is in a bucket.",
+        "additionalProperties": false,
+        "required": ["kind", "spanId", "detail"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["EXCEPTION", "SERVER_ERROR", "ERROR_LOG", "SLOW"]},
+          "spanId": {"type": ["string", "null"]},
+          "detail": {"type": ["string", "null"]}
+        }
+      },
+      "TraceIssue": {
+        "description": "An issue on a span. `REPEATED_QUERY` carries the repeated statement besides.",
+        "oneOf": [
+          {"$ref": "#/components/schemas/SpanIssue"},
+          {"$ref": "#/components/schemas/RepeatedQueryIssue"}
+        ]
+      },
+      "SpanIssue": {
+        "type": "object",
+        "description": "An issue measured on one span.",
+        "additionalProperties": false,
+        "required": ["type", "severity", "spanId", "value", "threshold", "unit", "message"],
+        "properties": {
+          "type": {"type": "string", "enum": ["SLOW", "VERY_SLOW", "SLOW_QUERY", "CLIENT_ERROR"]},
+          "severity": {"$ref": "#/components/schemas/IssueSeverity"},
+          "spanId": {"type": "string"},
+          "value": {"type": "integer", "format": "int64"},
+          "threshold": {"type": "integer", "format": "int64"},
+          "unit": {"$ref": "#/components/schemas/IssueUnit"},
+          "message": {"type": "string", "description": "One plain sentence."}
+        }
+      },
+      "RepeatedQueryIssue": {
+        "type": "object",
+        "description": "The same normalised statement run at least the threshold's number of times under one parent span.",
+        "additionalProperties": false,
+        "required": [
+          "type", "severity", "spanId", "value", "threshold", "unit", "message", "statement", "count",
+          "totalMs", "spanIds"
+        ],
+        "properties": {
+          "type": {"type": "string", "const": "REPEATED_QUERY"},
+          "severity": {"$ref": "#/components/schemas/IssueSeverity"},
+          "spanId": {"type": "string", "description": "The parent span."},
+          "value": {"type": "integer", "format": "int64"},
+          "threshold": {"type": "integer", "format": "int64"},
+          "unit": {"$ref": "#/components/schemas/IssueUnit"},
+          "message": {"type": "string"},
+          "statement": {"type": "string", "description": "The statement with its literals replaced by `?`."},
+          "count": {"type": "integer", "format": "int32"},
+          "totalMs": {"type": "integer", "format": "int64"},
+          "spanIds": {"type": "array", "items": {"type": "string"}}
+        }
+      },
+      "IssueSeverity": {"type": "string", "enum": ["warning", "error"]},
+      "IssueUnit": {"type": "string", "enum": ["ms", "queries", "status"]},
+      "TraceDetail": {
+        "type": "object",
+        "description": "A trace's spans, logs, queries and HTTP exchange.",
+        "additionalProperties": false,
+        "required": ["rootSpan", "orphans", "logs", "queries", "httpExchange"],
+        "properties": {
+          "rootSpan": {
+            "anyOf": [{"$ref": "#/components/schemas/SpanNode"}, {"type": "null"}],
+            "description": "`null` while the trace is incomplete."
+          },
+          "orphans": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/SpanNode"},
+            "description": "The stored subtrees of an incomplete trace."
+          },
+          "logs": {"type": "array", "items": {"$ref": "#/components/schemas/TraceLog"}},
+          "queries": {"type": "array", "items": {"$ref": "#/components/schemas/QueryInfo"}},
+          "httpExchange": {"anyOf": [{"$ref": "#/components/schemas/HttpExchange"}, {"type": "null"}]}
+        }
+      },
+      "SpanNode": {
+        "type": "object",
+        "description": "A span and its subtree.",
+        "additionalProperties": false,
+        "required": [
+          "spanId", "name", "kind", "startTime", "durationMs", "selfMs", "status", "children", "tags",
+          "events", "issues", "exception", "statement", "rowCount", "asyncEntry"
+        ],
+        "properties": {
+          "spanId": {"type": "string"},
+          "name": {"type": "string"},
+          "kind": {
+            "type": ["string", "null"],
+            "enum": ["SERVER", "CLIENT", "PRODUCER", "CONSUMER", null],
+            "description": "`null` for an internal span."
+          },
+          "startTime": {"type": ["string", "null"], "format": "date-time"},
+          "durationMs": {"type": "integer", "format": "int64"},
+          "selfMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The duration less the time its children covered."
+          },
+          "status": {"type": "string", "enum": ["OK", "ERROR"]},
+          "children": {"type": "array", "items": {"$ref": "#/components/schemas/SpanNode"}},
+          "tags": {"type": "object", "additionalProperties": {"type": ["string", "null"]}},
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/SpanEvent"}},
+          "issues": {"type": "array", "items": {"$ref": "#/components/schemas/TraceIssue"}},
+          "exception": {"anyOf": [{"$ref": "#/components/schemas/SpanExceptionInfo"}, {"type": "null"}]},
+          "statement": {"anyOf": [{"$ref": "#/components/schemas/SqlStatement"}, {"type": "null"}]},
+          "rowCount": {"type": ["integer", "null"], "format": "int64"},
+          "asyncEntry": {"type": "boolean"}
+        }
+      },
+      "SpanEvent": {
+        "type": "object",
+        "description": "An event recorded on a span.",
+        "additionalProperties": false,
+        "required": ["name", "timestamp"],
+        "properties": {"name": {"type": "string"}, "timestamp": {"type": "string", "format": "date-time"}}
+      },
+      "SpanExceptionInfo": {
+        "type": "object",
+        "description": "The exception a failed span recorded, masked and folded.",
+        "additionalProperties": false,
+        "required": ["type", "message", "stackTrace", "hiddenFrames", "applicationFrames"],
+        "properties": {
+          "type": {"type": ["string", "null"]},
+          "message": {"type": ["string", "null"]},
+          "stackTrace": {"type": ["string", "null"]},
+          "hiddenFrames": {"type": "array", "items": {"$ref": "#/components/schemas/StackTraceFolding.Range"}},
+          "applicationFrames": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/StackTraceFolding.Range"}
+          }
+        }
+      },
+      "StackTraceFolding.Range": {
+        "type": "object",
+        "description": "Lines of `stackTrace`, counted from 0, `endExclusive` not included.",
+        "additionalProperties": false,
+        "required": ["start", "endExclusive"],
+        "properties": {
+          "start": {"type": "integer", "format": "int32"},
+          "endExclusive": {"type": "integer", "format": "int32"}
+        }
+      },
+      "SqlStatement": {
+        "type": "object",
+        "description": "A query's SQL, masked.",
+        "additionalProperties": false,
+        "required": ["text", "formatted", "parameters", "omittedParameterSets"],
+        "properties": {
+          "text": {"type": "string"},
+          "formatted": {"type": ["string", "null"]},
+          "parameters": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}},
+            "description": "The bound values, one list per execution."
+          },
+          "omittedParameterSets": {"type": "integer", "format": "int32"}
+        }
+      },
+      "TraceLog": {
+        "type": "object",
+        "description": "A captured log line, masked.",
+        "additionalProperties": false,
+        "required": [
+          "traceId", "spanId", "timestamp", "level", "logger", "thread", "message", "stackTrace",
+          "hiddenFrames", "applicationFrames"
+        ],
+        "properties": {
+          "traceId": {
+            "type": ["string", "null"],
+            "description": "`null` for a line written outside any trace."
+          },
+          "spanId": {"type": ["string", "null"]},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "level": {"type": "string"},
+          "logger": {"type": "string"},
+          "thread": {"type": "string"},
+          "message": {"type": "string"},
+          "stackTrace": {"type": ["string", "null"]},
+          "hiddenFrames": {"type": "array", "items": {"$ref": "#/components/schemas/StackTraceFolding.Range"}},
+          "applicationFrames": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/StackTraceFolding.Range"}
+          }
+        }
+      },
+      "QueryInfo": {
+        "type": "object",
+        "description": "A query span.",
+        "additionalProperties": false,
+        "required": ["spanId", "dbSystem", "dataSourceName", "durationMs", "rowCount", "statement"],
+        "properties": {
+          "spanId": {"type": "string"},
+          "dbSystem": {"type": ["string", "null"]},
+          "dataSourceName": {"type": ["string", "null"]},
+          "durationMs": {"type": "integer", "format": "int64"},
+          "rowCount": {"type": ["integer", "null"], "format": "int64"},
+          "statement": {"anyOf": [{"$ref": "#/components/schemas/SqlStatement"}, {"type": "null"}]}
+        }
+      },
+      "HttpExchange": {
+        "type": "object",
+        "description": "The root request and its response.",
+        "additionalProperties": false,
+        "required": ["request", "response"],
+        "properties": {
+          "request": {"$ref": "#/components/schemas/HttpRequest"},
+          "response": {"$ref": "#/components/schemas/HttpResponse"}
+        }
+      },
+      "HttpRequest": {
+        "type": "object",
+        "description": "The request as captured, masked.",
+        "additionalProperties": false,
+        "required": ["method", "path", "query", "headers", "controller", "params"],
+        "properties": {
+          "method": {"type": "string"},
+          "path": {"type": "string"},
+          "query": {"type": ["string", "null"]},
+          "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+          "controller": {"$ref": "#/components/schemas/HttpRequest.Controller"},
+          "params": {"$ref": "#/components/schemas/HttpRequest.Params"}
+        }
+      },
+      "HttpRequest.Controller": {
+        "type": "object",
+        "description": "The handler that answered.",
+        "additionalProperties": false,
+        "required": ["class", "method"],
+        "properties": {"class": {"type": ["string", "null"]}, "method": {"type": ["string", "null"]}}
+      },
+      "HttpRequest.Params": {
+        "type": "object",
+        "description": "Query and form parameters.",
+        "additionalProperties": false,
+        "required": ["query", "form"],
+        "properties": {
+          "query": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+          "form": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}}
+        }
+      },
+      "HttpResponse": {
+        "type": "object",
+        "description": "The response as captured, masked.",
+        "additionalProperties": false,
+        "required": ["status", "headers"],
+        "properties": {
+          "status": {"type": "integer", "format": "int32"},
+          "headers": {"type": "object", "additionalProperties": {"type": "string"}}
+        }
+      },
+      "RouteListResponse": {
+        "type": "object",
+        "description": "Request counts and latency per route over what the All bucket holds now.",
+        "additionalProperties": false,
+        "required": ["window", "routes"],
+        "properties": {
+          "window": {"$ref": "#/components/schemas/RouteListResponse.Window"},
+          "routes": {"type": "array", "items": {"$ref": "#/components/schemas/RouteStats"}}
+        }
+      },
+      "RouteListResponse.Window": {
+        "type": "object",
+        "description": "The requests counted.",
+        "additionalProperties": false,
+        "required": ["from", "to", "traceCount"],
+        "properties": {
+          "from": {"type": ["string", "null"], "format": "date-time"},
+          "to": {"type": ["string", "null"], "format": "date-time"},
+          "traceCount": {"type": "integer", "format": "int32"}
+        }
+      },
+      "RouteStats": {
+        "type": "object",
+        "description": "One method and route.",
+        "additionalProperties": false,
+        "required": [
+          "method", "route", "count", "errorCount", "p50Ms", "p95Ms", "maxMs", "latestErrorTraceId",
+          "latestSlowTraceId", "issueCounts"
+        ],
+        "properties": {
+          "method": {"type": ["string", "null"]},
+          "route": {"type": ["string", "null"]},
+          "count": {"type": "integer", "format": "int32"},
+          "errorCount": {"type": "integer", "format": "int32"},
+          "p50Ms": {"type": "integer", "format": "int64"},
+          "p95Ms": {"type": "integer", "format": "int64"},
+          "maxMs": {"type": "integer", "format": "int64"},
+          "latestErrorTraceId": {"type": ["string", "null"]},
+          "latestSlowTraceId": {"type": ["string", "null"]},
+          "issueCounts": {"$ref": "#/components/schemas/RouteStats.IssueCounts"}
+        }
+      },
+      "RouteStats.IssueCounts": {
+        "type": "object",
+        "description": "Per issue type, how many requests carry at least one.",
+        "additionalProperties": false,
+        "required": ["SLOW", "VERY_SLOW", "SLOW_QUERY", "REPEATED_QUERY", "CLIENT_ERROR"],
+        "properties": {
+          "SLOW": {"type": "integer", "format": "int32"},
+          "VERY_SLOW": {"type": "integer", "format": "int32"},
+          "SLOW_QUERY": {"type": "integer", "format": "int32"},
+          "REPEATED_QUERY": {"type": "integer", "format": "int32"},
+          "CLIENT_ERROR": {"type": "integer", "format": "int32"}
+        }
+      },
+      "LogSearchResponse": {
+        "type": "object",
+        "description": "A page of the log search, newest first.",
+        "additionalProperties": false,
+        "required": ["logs", "next"],
+        "properties": {
+          "logs": {"type": "array", "items": {"$ref": "#/components/schemas/TraceLog"}},
+          "next": {
+            "type": ["string", "null"],
+            "description": "The `cursor` for the next page, `null` on the last."
+          }
+        }
+      },
+      "ErrorDigestResponse": {
+        "type": "object",
+        "description": "Every failure the traces showed, seen latest first.",
+        "additionalProperties": false,
+        "required": ["errors"],
+        "properties": {
+          "errors": {"type": "array", "items": {"$ref": "#/components/schemas/ErrorDigestEntry"}}
+        }
+      },
+      "ErrorDigestEntry": {
+        "type": "object",
+        "description": "One exception class, route and application frame.",
+        "additionalProperties": false,
+        "required": [
+          "type", "route", "applicationFrame", "count", "firstSeen", "lastSeen", "lastMessage",
+          "lastTraceId", "traceAvailable", "runs"
+        ],
+        "properties": {
+          "type": {"type": ["string", "null"]},
+          "route": {"type": ["string", "null"]},
+          "applicationFrame": {"type": ["string", "null"]},
+          "count": {"type": "integer", "format": "int32", "minimum": 1},
+          "firstSeen": {"type": "string", "format": "date-time"},
+          "lastSeen": {"type": "string", "format": "date-time"},
+          "lastMessage": {"type": ["string", "null"]},
+          "lastTraceId": {"type": "string"},
+          "traceAvailable": {"type": "boolean", "description": "The store still holds `lastTraceId`."},
+          "runs": {
+            "type": "array",
+            "items": {"type": "string", "format": "date-time"},
+            "description": "The `startedAt` of each run it occurred in, the last ten, oldest first."
+          }
+        }
+      },
+      "InsightsConfigResponse": {
+        "type": "object",
+        "description": "The Insights levels, panels and tiles.",
+        "additionalProperties": false,
+        "required": ["levels", "panels", "tiles"],
+        "properties": {
+          "levels": {"type": "array", "items": {"$ref": "#/components/schemas/InsightsConfigResponse.Level"}},
+          "panels": {"type": "array", "items": {"$ref": "#/components/schemas/InsightsConfigResponse.Panel"}},
+          "tiles": {"type": "array", "items": {"$ref": "#/components/schemas/InsightsConfigResponse.Tile"}}
+        }
+      },
+      "InsightsConfigResponse.Level": {
+        "type": "object",
+        "description": "One ring of samples.",
+        "additionalProperties": false,
+        "required": ["index", "intervalMs", "size"],
+        "properties": {
+          "index": {"type": "integer", "format": "int32"},
+          "intervalMs": {"type": "integer", "format": "int64"},
+          "size": {"type": "integer", "format": "int32"}
+        }
+      },
+      "InsightsConfigResponse.Panel": {
+        "type": "object",
+        "description": "One chart.",
+        "additionalProperties": false,
+        "required": ["id", "title", "chart", "unit", "level", "series"],
+        "properties": {
+          "id": {"type": "string"},
+          "title": {"type": "string"},
+          "chart": {"$ref": "#/components/schemas/Chart"},
+          "unit": {"$ref": "#/components/schemas/Unit"},
+          "level": {"type": ["integer", "null"], "format": "int32"},
+          "series": {"type": "array", "items": {"$ref": "#/components/schemas/InsightsConfigResponse.Series"}}
+        }
+      },
+      "InsightsConfigResponse.Series": {
+        "type": "object",
+        "description": "One line of a chart.",
+        "additionalProperties": false,
+        "required": ["id", "label", "unit"],
+        "properties": {
+          "id": {"type": "string", "description": "`<panelId>.<seriesId>`."},
+          "label": {"type": "string"},
+          "unit": {
+            "anyOf": [{"$ref": "#/components/schemas/Unit"}, {"type": "null"}],
+            "description": "`null` takes the panel's unit."
+          }
+        }
+      },
+      "InsightsConfigResponse.Tile": {
+        "type": "object",
+        "description": "One stat tile.",
+        "additionalProperties": false,
+        "required": ["id", "label", "format", "live", "value"],
+        "properties": {
+          "id": {"type": "string"},
+          "label": {"type": "string"},
+          "format": {"$ref": "#/components/schemas/TileFormat"},
+          "live": {"type": ["boolean", "null"]},
+          "value": {"type": ["number", "null"]}
+        }
+      },
+      "Chart": {"type": "string", "enum": ["line", "bars", "bars-line"]},
+      "Unit": {"type": "string", "enum": ["bytes", "percent", "millis", "count", "persec", "bytes-persec"]},
+      "TileFormat": {"type": "string", "enum": ["duration", "datetime", "bytes", "count"]},
+      "InsightsDataResponse": {
+        "type": "object",
+        "description": "One level's window, summarised per series, with the problems it shows.",
+        "additionalProperties": false,
+        "required": ["level", "intervalMs", "endEpochMs", "count", "timestamps", "series", "problems"],
+        "properties": {
+          "level": {"type": "integer", "format": "int32"},
+          "intervalMs": {"type": "integer", "format": "int64"},
+          "endEpochMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the newest sample was taken, epoch milliseconds, 0 before the level's first sample."
+          },
+          "count": {"type": "integer", "format": "int32"},
+          "timestamps": {
+            "type": ["array", "null"],
+            "items": {"type": "integer", "format": "int64"},
+            "description": "Epoch milliseconds, shared by every series. `null` with `view=summary`."
+          },
+          "series": {
+            "type": "object",
+            "additionalProperties": {"$ref": "#/components/schemas/InsightsDataResponse.SeriesData"},
+            "description": "Keyed by series id."
+          },
+          "problems": {"type": "array", "items": {"$ref": "#/components/schemas/InsightsProblem"}}
+        }
+      },
+      "InsightsDataResponse.SeriesData": {
+        "type": "object",
+        "description": "One series over the window.",
+        "additionalProperties": false,
+        "required": ["summary", "values", "stats"],
+        "properties": {
+          "summary": {"$ref": "#/components/schemas/SeriesSummary"},
+          "values": {
+            "type": ["array", "null"],
+            "items": {"type": ["number", "null"]},
+            "description": "Level 0 with `view=full` only."
+          },
+          "stats": {
+            "type": ["object", "null"],
+            "propertyNames": {"enum": ["min", "max", "avg", "median", "p90", "p95", "p99"]},
+            "additionalProperties": {"type": "array", "items": {"type": ["number", "null"]}},
+            "description": "Above level 0 with `view=full` only."
+          }
+        }
+      },
+      "SeriesSummary": {
+        "type": "object",
+        "description": "A series over the window. The statistics are `null` when `samples` is 0.",
+        "additionalProperties": false,
+        "required": ["min", "avg", "max", "median", "p95", "latest", "samples"],
+        "properties": {
+          "min": {"type": ["number", "null"]},
+          "avg": {"type": ["number", "null"]},
+          "max": {"type": ["number", "null"]},
+          "median": {"type": ["number", "null"]},
+          "p95": {"type": ["number", "null"]},
+          "latest": {"type": ["number", "null"]},
+          "samples": {"type": "integer", "format": "int32"}
+        }
+      },
+      "InsightsProblem": {
+        "type": "object",
+        "description": "A rule the window reached.",
+        "additionalProperties": false,
+        "required": ["rule", "severity", "series", "value", "threshold", "unit", "message"],
+        "properties": {
+          "rule": {
+            "type": "string",
+            "enum": [
+              "CPU_HIGH", "GC_OVERHEAD", "HEAP_NEAR_MAX", "THREAD_GROWTH", "POOL_WAITING", "SERVER_ERRORS",
+              "ERROR_LOGS", "SLOW_HTTP"
+            ]
+          },
+          "severity": {"$ref": "#/components/schemas/IssueSeverity"},
+          "series": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "value": {"type": "number"},
+          "threshold": {"type": "number"},
+          "unit": {"$ref": "#/components/schemas/Unit"},
+          "message": {"type": "string"}
+        }
+      },
+      "InsightsTick": {
+        "type": "object",
+        "description": "The data of a `tick` event, one level-0 sample of every series.",
+        "additionalProperties": false,
+        "required": ["epochMs", "values"],
+        "properties": {
+          "epochMs": {"type": "integer", "format": "int64"},
+          "values": {
+            "type": "object",
+            "additionalProperties": {"type": ["number", "null"]},
+            "description": "Keyed by series id."
+          }
+        }
+      },
+      "InsightsRollup": {
+        "type": "object",
+        "description": "The data of the `rollup` event a higher level sends when its interval closes.",
+        "additionalProperties": false,
+        "required": ["level", "epochMs", "entries"],
+        "properties": {
+          "level": {"type": "integer", "format": "int32", "minimum": 1},
+          "epochMs": {"type": "integer", "format": "int64"},
+          "entries": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "propertyNames": {"enum": ["min", "max", "avg", "median", "p90", "p95", "p99"]},
+              "additionalProperties": {"type": ["number", "null"]}
+            },
+            "description": "Keyed by series id."
+          }
+        }
+      },
+      "LifecycleEventsResponse": {
+        "type": "object",
+        "description": "Every start and stop, oldest first.",
+        "additionalProperties": false,
+        "required": ["events"],
+        "properties": {
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/LifecycleEventsResponse.Event"}}
+        }
+      },
+      "LifecycleEventsResponse.Event": {
+        "type": "object",
+        "description": "A start or a stop. A stop carries `type` and `timestamp` only, the rest `null`.",
+        "additionalProperties": false,
+        "required": [
+          "type", "timestamp", "version", "branch", "shortCommitId", "buildTime", "uncleanPrevious"
+        ],
+        "properties": {
+          "type": {"type": "string", "enum": ["start", "stop"]},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "version": {"type": ["string", "null"]},
+          "branch": {"type": ["string", "null"]},
+          "shortCommitId": {"type": ["string", "null"]},
+          "buildTime": {"type": ["string", "null"], "format": "date-time"},
+          "uncleanPrevious": {
+            "type": ["boolean", "null"],
+            "description": "On a start, whether the previous run recorded no stop."
+          }
+        }
+      },
+      "LifecycleRunsResponse": {
+        "type": "object",
+        "description": "One entry per run, newest first.",
+        "additionalProperties": false,
+        "required": ["runs"],
+        "properties": {
+          "runs": {"type": "array", "items": {"$ref": "#/components/schemas/LifecycleRunsResponse.Run"}}
+        }
+      },
+      "LifecycleRunsResponse.Run": {
+        "type": "object",
+        "description": "One run of the application.",
+        "additionalProperties": false,
+        "required": [
+          "startedAt", "stoppedAt", "ranForMs", "downForMs", "version", "branch", "shortCommitId",
+          "buildTime", "changed", "running", "uncleanExit"
+        ],
+        "properties": {
+          "startedAt": {"type": "string", "format": "date-time"},
+          "stoppedAt": {"type": ["string", "null"], "format": "date-time"},
+          "ranForMs": {"type": ["integer", "null"], "format": "int64"},
+          "downForMs": {"type": ["integer", "null"], "format": "int64"},
+          "version": {"type": ["string", "null"]},
+          "branch": {"type": ["string", "null"]},
+          "shortCommitId": {"type": ["string", "null"]},
+          "buildTime": {"type": ["string", "null"], "format": "date-time"},
+          "changed": {"type": "array", "items": {"type": "string", "enum": ["version", "branch", "commit"]}},
+          "running": {"type": "boolean"},
+          "uncleanExit": {"type": "boolean"}
+        }
+      },
+      "ActuatorInsightsResponse": {
+        "type": "object",
+        "description": "What the Overview, Environment, Config, Loggers, Flyway, Liquibase and Scheduled Tasks tabs show.",
+        "additionalProperties": false,
+        "required": [
+          "application", "runtime", "dataSources", "health", "environment", "loggers", "flyway", "liquibase",
+          "config", "scheduledTasks", "server"
+        ],
+        "properties": {
+          "application": {"$ref": "#/components/schemas/ApplicationInfo"},
+          "runtime": {"$ref": "#/components/schemas/RuntimeInfo"},
+          "dataSources": {"type": "array", "items": {"$ref": "#/components/schemas/DataSourceInfo"}},
+          "health": {"$ref": "#/components/schemas/HealthInfo"},
+          "environment": {"$ref": "#/components/schemas/EnvironmentInfo"},
+          "loggers": {"$ref": "#/components/schemas/LoggersInfo"},
+          "flyway": {"$ref": "#/components/schemas/FlywayInfo"},
+          "liquibase": {"$ref": "#/components/schemas/LiquibaseInfo"},
+          "config": {"$ref": "#/components/schemas/ConfigInfo"},
+          "scheduledTasks": {"$ref": "#/components/schemas/ScheduledTasksInfo"},
+          "server": {"$ref": "#/components/schemas/ServerInfo"}
+        }
+      },
+      "ApplicationInfo": {
+        "type": "object",
+        "description": "Build, Git and version facts.",
+        "additionalProperties": false,
+        "required": [
+          "build", "git", "springBootVersion", "springFrameworkVersion", "javaVersion", "javaVendor"
+        ],
+        "properties": {
+          "build": {
+            "type": "object",
+            "additionalProperties": {"description": "Any JSON value, masked as a tree."},
+            "description": "The application's `info.build`, as Actuator reports it."
+          },
+          "git": {"anyOf": [{"$ref": "#/components/schemas/GitInfo"}, {"type": "null"}]},
+          "springBootVersion": {"type": ["string", "null"]},
+          "springFrameworkVersion": {"type": ["string", "null"]},
+          "javaVersion": {"type": ["string", "null"]},
+          "javaVendor": {"type": ["string", "null"]}
+        }
+      },
+      "GitInfo": {
+        "type": "object",
+        "description": "The Git facts Actuator reports.",
+        "additionalProperties": false,
+        "required": ["branch", "commit"],
+        "properties": {
+          "branch": {"type": ["string", "null"]},
+          "commit": {"anyOf": [{"$ref": "#/components/schemas/GitInfo.Commit"}, {"type": "null"}]}
+        }
+      },
+      "GitInfo.Commit": {
+        "type": "object",
+        "description": "The commit.",
+        "additionalProperties": false,
+        "required": ["id", "time"],
+        "properties": {
+          "id": {"type": ["string", "null"]},
+          "time": {"type": ["string", "null"], "description": "Actuator's own string, passed through."}
+        }
+      },
+      "RuntimeInfo": {
+        "type": "object",
+        "description": "The process and the machine.",
+        "additionalProperties": false,
+        "required": ["os", "memory", "storage", "process", "machine"],
+        "properties": {
+          "os": {"anyOf": [{"$ref": "#/components/schemas/OsInfo"}, {"type": "null"}]},
+          "memory": {"anyOf": [{"$ref": "#/components/schemas/MemoryInfo"}, {"type": "null"}]},
+          "storage": {"type": "array", "items": {"$ref": "#/components/schemas/StorageInfo"}},
+          "process": {"$ref": "#/components/schemas/ProcessInfo"},
+          "machine": {"$ref": "#/components/schemas/MachineInfo"}
+        }
+      },
+      "OsInfo": {
+        "type": "object",
+        "description": "The operating system.",
+        "additionalProperties": false,
+        "required": ["name", "version", "arch"],
+        "properties": {
+          "name": {"type": ["string", "null"]},
+          "version": {"type": ["string", "null"]},
+          "arch": {"type": ["string", "null"]}
+        }
+      },
+      "MemoryInfo": {
+        "type": "object",
+        "description": "Heap and non-heap use, in bytes.",
+        "additionalProperties": false,
+        "required": ["heapUsed", "heapMax", "heapUsedPercent", "nonHeapUsed"],
+        "properties": {
+          "heapUsed": {"type": "integer", "format": "int64"},
+          "heapMax": {"type": "integer", "format": "int64"},
+          "heapUsedPercent": {"type": "number"},
+          "nonHeapUsed": {"type": "integer", "format": "int64"}
+        }
+      },
+      "StorageInfo": {
+        "type": "object",
+        "description": "The disk Actuator's disk-space check reads, in bytes.",
+        "additionalProperties": false,
+        "required": ["path", "total", "free", "usedPercent"],
+        "properties": {
+          "path": {"type": "string"},
+          "total": {"type": "integer", "format": "int64"},
+          "free": {"type": "integer", "format": "int64"},
+          "usedPercent": {"type": "number"}
+        }
+      },
+      "ProcessInfo": {
+        "type": "object",
+        "description": "The JVM's process.",
+        "additionalProperties": false,
+        "required": ["username", "uid", "gid", "pid", "parentProcesses"],
+        "properties": {
+          "username": {"type": ["string", "null"]},
+          "uid": {"type": ["string", "null"]},
+          "gid": {"type": ["string", "null"]},
+          "pid": {"type": "integer", "format": "int64"},
+          "parentProcesses": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/ProcessInfo.ParentProcess"}
+          }
+        }
+      },
+      "ProcessInfo.ParentProcess": {
+        "type": "object",
+        "description": "A parent process.",
+        "additionalProperties": false,
+        "required": ["pid", "command"],
+        "properties": {"pid": {"type": "integer", "format": "int64"}, "command": {"type": "string"}}
+      },
+      "MachineInfo": {
+        "type": "object",
+        "description": "The machine.",
+        "additionalProperties": false,
+        "required": ["cpuCount", "cpuModel", "cpuTopology", "totalMemory", "container", "networkAddresses"],
+        "properties": {
+          "cpuCount": {"type": "integer", "format": "int32"},
+          "cpuModel": {"type": ["string", "null"]},
+          "cpuTopology": {"anyOf": [{"$ref": "#/components/schemas/CpuTopology"}, {"type": "null"}]},
+          "totalMemory": {"type": ["integer", "null"], "format": "int64"},
+          "container": {"$ref": "#/components/schemas/ContainerRuntime"},
+          "networkAddresses": {"type": "array", "items": {"$ref": "#/components/schemas/NetworkAddress"}}
+        }
+      },
+      "CpuTopology": {
+        "type": "object",
+        "description": "Cores and threads.",
+        "additionalProperties": false,
+        "required": ["physicalCores", "threadsPerCore"],
+        "properties": {
+          "physicalCores": {"type": "integer", "format": "int32"},
+          "threadsPerCore": {"type": "integer", "format": "int32"}
+        }
+      },
+      "ContainerRuntime": {"type": "string", "enum": ["docker", "podman", "kubernetes", "container", "none"]},
+      "NetworkAddress": {
+        "type": "object",
+        "description": "An address of the machine.",
+        "additionalProperties": false,
+        "required": ["address", "hostname"],
+        "properties": {"address": {"type": "string"}, "hostname": {"type": ["string", "null"]}}
+      },
+      "DataSourceInfo": {
+        "type": "object",
+        "description": "A data source.",
+        "additionalProperties": false,
+        "required": [
+          "name", "databaseProduct", "driver", "hosts", "databaseName", "username", "health", "properties"
+        ],
+        "properties": {
+          "name": {"type": "string"},
+          "databaseProduct": {"type": "string"},
+          "driver": {"type": ["string", "null"]},
+          "hosts": {"type": "array", "items": {"$ref": "#/components/schemas/DataSourceInfo.Host"}},
+          "databaseName": {"type": ["string", "null"]},
+          "username": {"type": ["string", "null"]},
+          "health": {"$ref": "#/components/schemas/HealthStatus"},
+          "properties": {
+            "type": "object",
+            "additionalProperties": {"type": ["string", "null"]},
+            "description": "The JDBC URL's parameters, masked."
+          }
+        }
+      },
+      "DataSourceInfo.Host": {
+        "type": "object",
+        "description": "A database host.",
+        "additionalProperties": false,
+        "required": ["hostname", "port"],
+        "properties": {
+          "hostname": {"type": ["string", "null"]},
+          "port": {"type": ["integer", "null"], "format": "int32"}
+        }
+      },
+      "HealthStatus": {"type": "string", "enum": ["UP", "DOWN", "OUT_OF_SERVICE", "UNKNOWN"]},
+      "HealthInfo": {
+        "type": "object",
+        "description": "Health and every component, composites flattened to `parent/child`.",
+        "additionalProperties": false,
+        "required": ["status", "components"],
+        "properties": {
+          "status": {"$ref": "#/components/schemas/HealthStatus"},
+          "components": {"type": "array", "items": {"$ref": "#/components/schemas/HealthComponent"}}
+        }
+      },
+      "HealthComponent": {
+        "type": "object",
+        "description": "One health component.",
+        "additionalProperties": false,
+        "required": ["name", "status", "details"],
+        "properties": {
+          "name": {"type": "string"},
+          "status": {"$ref": "#/components/schemas/HealthStatus"},
+          "details": {
+            "type": "object",
+            "additionalProperties": {"description": "Any JSON value, masked as a tree."}
+          }
+        }
+      },
+      "EnvironmentInfo": {
+        "type": "object",
+        "description": "Profiles and property sources.",
+        "additionalProperties": false,
+        "required": ["activeProfiles", "propertySources"],
+        "properties": {
+          "activeProfiles": {"type": "array", "items": {"type": "string"}},
+          "propertySources": {"type": "array", "items": {"$ref": "#/components/schemas/PropertyGroup"}}
+        }
+      },
+      "ConfigInfo": {
+        "type": "object",
+        "description": "Every `@ConfigurationProperties` bean.",
+        "additionalProperties": false,
+        "required": ["groups"],
+        "properties": {"groups": {"type": "array", "items": {"$ref": "#/components/schemas/PropertyGroup"}}}
+      },
+      "PropertyGroup": {
+        "type": "object",
+        "description": "A property source, or a `@ConfigurationProperties` prefix.",
+        "additionalProperties": false,
+        "required": ["name", "properties"],
+        "properties": {
+          "name": {"type": "string"},
+          "properties": {"type": "array", "items": {"$ref": "#/components/schemas/Property"}}
+        }
+      },
+      "Property": {
+        "type": "object",
+        "description": "A key and its value as a string, masked.",
+        "additionalProperties": false,
+        "required": ["key", "value"],
+        "properties": {"key": {"type": "string"}, "value": {"type": ["string", "null"]}}
+      },
+      "LoggersInfo": {
+        "type": "object",
+        "description": "Loggers grouped by package.",
+        "additionalProperties": false,
+        "required": ["packages", "totalCount", "configuredCount"],
+        "properties": {
+          "packages": {"type": "array", "items": {"$ref": "#/components/schemas/LoggerGroup"}},
+          "totalCount": {"type": "integer", "format": "int32"},
+          "configuredCount": {"type": "integer", "format": "int32"}
+        }
+      },
+      "LoggerGroup": {
+        "type": "object",
+        "description": "The loggers of one package.",
+        "additionalProperties": false,
+        "required": ["packageName", "loggers"],
+        "properties": {
+          "packageName": {"type": "string"},
+          "loggers": {"type": "array", "items": {"$ref": "#/components/schemas/LoggerInfo"}}
+        }
+      },
+      "LoggerInfo": {
+        "type": "object",
+        "description": "A logger.",
+        "additionalProperties": false,
+        "required": ["name", "configuredLevel", "effectiveLevel"],
+        "properties": {
+          "name": {"type": "string"},
+          "configuredLevel": {
+            "type": ["string", "null"],
+            "description": "`null` where no level is configured."
+          },
+          "effectiveLevel": {"type": ["string", "null"]}
+        }
+      },
+      "FlywayInfo": {
+        "type": "object",
+        "description": "Flyway's migrations.",
+        "additionalProperties": false,
+        "required": ["migrations"],
+        "properties": {
+          "migrations": {"type": "array", "items": {"$ref": "#/components/schemas/MigrationInfo"}}
+        }
+      },
+      "MigrationInfo": {
+        "type": "object",
+        "description": "A migration.",
+        "additionalProperties": false,
+        "required": ["version", "description", "type", "state", "installedOn", "executionTimeMs", "script"],
+        "properties": {
+          "version": {"type": ["string", "null"], "description": "`null` for a repeatable migration."},
+          "description": {"type": ["string", "null"]},
+          "type": {"type": ["string", "null"]},
+          "state": {"type": "string", "enum": ["SUCCESS", "PENDING", "FAILED", "IGNORED", "UNKNOWN"]},
+          "installedOn": {"type": ["string", "null"], "format": "date-time"},
+          "executionTimeMs": {"type": ["integer", "null"], "format": "int32"},
+          "script": {"type": ["string", "null"]}
+        }
+      },
+      "LiquibaseInfo": {
+        "type": "object",
+        "description": "Liquibase's change sets.",
+        "additionalProperties": false,
+        "required": ["changeSets"],
+        "properties": {
+          "changeSets": {"type": "array", "items": {"$ref": "#/components/schemas/ChangeSetInfo"}}
+        }
+      },
+      "ChangeSetInfo": {
+        "type": "object",
+        "description": "A change set.",
+        "additionalProperties": false,
+        "required": ["orderExecuted", "id", "author", "changeLog", "description", "dateExecuted", "execType"],
+        "properties": {
+          "orderExecuted": {"type": ["integer", "null"], "format": "int32"},
+          "id": {"type": "string"},
+          "author": {"type": "string"},
+          "changeLog": {"type": "string"},
+          "description": {"type": ["string", "null"]},
+          "dateExecuted": {"type": ["string", "null"], "format": "date-time"},
+          "execType": {
+            "type": "string",
+            "enum": ["EXECUTED", "FAILED", "SKIPPED", "RERAN", "MARK_RAN", "UNKNOWN"]
+          }
+        }
+      },
+      "ScheduledTasksInfo": {
+        "type": "object",
+        "description": "Scheduled tasks.",
+        "additionalProperties": false,
+        "required": ["tasks", "cronCount", "fixedDelayCount", "fixedRateCount"],
+        "properties": {
+          "tasks": {"type": "array", "items": {"$ref": "#/components/schemas/ScheduledTaskInfo"}},
+          "cronCount": {"type": "integer", "format": "int32"},
+          "fixedDelayCount": {"type": "integer", "format": "int32"},
+          "fixedRateCount": {"type": "integer", "format": "int32"}
+        }
+      },
+      "ScheduledTaskInfo": {
+        "type": "object",
+        "description": "A scheduled task.",
+        "additionalProperties": false,
+        "required": [
+          "target", "type", "schedule", "scheduleDescription", "intervalMs", "lastExecution", "lastStatus",
+          "lastException", "nextExecution"
+        ],
+        "properties": {
+          "target": {"type": "string"},
+          "type": {"type": "string", "enum": ["CRON", "FIXED_DELAY", "FIXED_RATE"]},
+          "schedule": {
+            "type": ["string", "null"],
+            "description": "The cron expression, `null` for a fixed task."
+          },
+          "scheduleDescription": {"type": ["string", "null"]},
+          "intervalMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "`null` for a cron task."
+          },
+          "lastExecution": {"type": ["string", "null"], "format": "date-time"},
+          "lastStatus": {"type": "string", "enum": ["SUCCESS", "FAILED", "PENDING", "RUNNING", "UNKNOWN"]},
+          "lastException": {"type": ["string", "null"]},
+          "nextExecution": {"type": ["string", "null"], "format": "date-time"}
+        }
+      },
+      "ServerInfo": {
+        "type": "object",
+        "description": "The JVM's clock, zone, locale and encoding.",
+        "additionalProperties": false,
+        "required": ["timezone", "timezoneOffset", "currentTime", "locale", "localeDisplay", "fileEncoding"],
+        "properties": {
+          "timezone": {"type": "string"},
+          "timezoneOffset": {"type": "string"},
+          "currentTime": {"type": "string", "format": "date-time", "description": "In the JVM's own offset."},
+          "locale": {"type": "string"},
+          "localeDisplay": {"type": "string"},
+          "fileEncoding": {"type": "string"}
+        }
+      },
+      "MetricsInfo": {
+        "type": "object",
+        "description": "Every meter in the registry, grouped by name.",
+        "additionalProperties": false,
+        "required": ["metrics"],
+        "properties": {"metrics": {"type": "array", "items": {"$ref": "#/components/schemas/MetricGroup"}}}
+      },
+      "MetricGroup": {
+        "type": "object",
+        "description": "The meters of one name.",
+        "additionalProperties": false,
+        "required": ["name", "description", "baseUnit", "type", "measurements"],
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": ["string", "null"]},
+          "baseUnit": {"type": ["string", "null"]},
+          "type": {"type": "string"},
+          "measurements": {"type": "array", "items": {"$ref": "#/components/schemas/MetricMeasurement"}}
+        }
+      },
+      "MetricMeasurement": {
+        "type": "object",
+        "description": "One meter, by its tags.",
+        "additionalProperties": false,
+        "required": ["tags", "statistics"],
+        "properties": {
+          "tags": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Masked."},
+          "statistics": {"type": "array", "items": {"$ref": "#/components/schemas/MetricStatistic"}}
+        }
+      },
+      "MetricStatistic": {
+        "type": "object",
+        "description": "One statistic.",
+        "additionalProperties": false,
+        "required": ["name", "value"],
+        "properties": {
+          "name": {"type": "string"},
+          "value": {"type": ["number", "null"], "description": "`null` where the meter reports NaN."}
+        }
+      }
+    }
+  }
+}

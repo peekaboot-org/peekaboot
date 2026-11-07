@@ -25,6 +25,7 @@ import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -34,7 +35,11 @@ class InsightsAutoConfigurationTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
-                    PeekabootAutoConfiguration.class, InsightsAutoConfiguration.class, JacksonAutoConfiguration.class))
+                    PeekabootAutoConfiguration.class,
+                    InsightsAutoConfiguration.class,
+                    JacksonAutoConfiguration.class,
+                    DispatcherServletAutoConfiguration.class,
+                    PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
@@ -185,7 +190,9 @@ class InsightsAutoConfigurationTest {
                         PeekabootAutoConfiguration.class,
                         PeekabootStorageAutoConfiguration.class,
                         InsightsAutoConfiguration.class,
-                        JacksonAutoConfiguration.class))
+                        JacksonAutoConfiguration.class,
+                        DispatcherServletAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class))
                 .withUserConfiguration(MeterRegistryConfig.class)
                 .withPropertyValues(
                         "peekaboot.enabled=true",

@@ -30,8 +30,8 @@ public final class PeekabootPaths {
     public static final String BASE_PATH = "/peekaboot";
 
     /**
-     * Where the frontend jar ships the UI. Outside every default static location, so a
-     * consumer with Peekaboot off serves none of it.
+     * Where the frontend jar ships the UI and the backend jar the API's document. Outside every
+     * default static location, so a consumer with Peekaboot off serves none of it.
      */
     public static final String CLASSPATH_ROOT = "/META-INF" + BASE_PATH;
 
@@ -206,6 +206,14 @@ public final class PeekabootPaths {
 
     /** {@link #BASE_PATH} as the browser has to address it: behind the request's context path and the DispatcherServlet's prefix. */
     public String basePath(HttpServletRequest request) {
-        return request.getContextPath() + dashboardPath();
+        return dispatcherServletRoot(request) + BASE_PATH;
+    }
+
+    /**
+     * Where the DispatcherServlet's mappings begin as the browser addresses them: the request's
+     * context path and the DispatcherServlet's prefix, {@code ""} at the root.
+     */
+    public String dispatcherServletRoot(HttpServletRequest request) {
+        return request.getContextPath() + dispatcherServletPrefix;
     }
 }

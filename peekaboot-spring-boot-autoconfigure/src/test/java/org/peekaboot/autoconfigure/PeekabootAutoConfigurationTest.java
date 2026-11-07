@@ -47,7 +47,10 @@ class PeekabootAutoConfigurationTest {
     // this class exercises it through a servlet web application context; only
     // doesNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class));
+            .withConfiguration(AutoConfigurations.of(
+                    PeekabootAutoConfiguration.class,
+                    DispatcherServletAutoConfiguration.class,
+                    PeekabootPathsAutoConfiguration.class));
 
     /**
      * The lifecycle switch is read by {@code PeekabootLifecycleAutoConfiguration}'s condition
@@ -459,7 +462,10 @@ class PeekabootAutoConfigurationTest {
     private static WebApplicationContextRunner tracingRunner() {
         return new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class))
+                        PeekabootAutoConfiguration.class,
+                        PeekabootTracingAutoConfiguration.class,
+                        DispatcherServletAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true");
     }
 

@@ -52,7 +52,8 @@ class PeekabootBeanNamesTest {
                         .contains(
                                 "peekabootInsightsController",
                                 "peekabootLifecycleController",
-                                "peekabootTraceController")
+                                "peekabootTraceController",
+                                "peekabootApiController")
                         .allSatisfy(name -> assertThat(name).startsWith("peekaboot"));
             });
         }

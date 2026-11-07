@@ -306,11 +306,12 @@ org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on /peekaboot/api/**), QueryParameterBinding
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on /peekaboot/api/**), QueryParameterBinding, PeekabootApiController (the OpenAPI document)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── actuator/           # ActuatorInsightsResponse: the dashboard's aggregate DTO, one field per section below
+│   ├── api/                # ApiDocument (the bundled OpenAPI document, served with the request's own server), OpenApiDocument
 │   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
 │   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── errors/             # ErrorDigestParameters, ErrorDigestResponse, ErrorDigestEntry: the error digest's request and entries
@@ -575,6 +576,23 @@ endpoint. A handler argument of any other kind fails the request, since the guar
 it reads, and `ApiProblemIT` sends an unknown parameter to every endpoint the application maps.
 The controllers that bind a record also turn off Spring's fallback to a same-named request header
 (`QueryParameterBinding`), so only the query string sets a parameter.
+
+### API contract
+
+`GET /peekaboot/api/openapi.json` serves a hand-written OpenAPI 3.1 document,
+`META-INF/peekaboot/api/openapi.json` in the backend jar, which `ApiDocument` reads once. It
+names every path as Spring maps it, below the DispatcherServlet. Each request gets a copy whose
+one server is that request's context path and DispatcherServlet prefix
+(`PeekabootPaths.dispatcherServletRoot`), or `/` at the root. `PeekabootApiController` reads the
+request from `RequestContextHolder`, since `QueryParameterGuard` fails a handler argument it
+cannot read. The copy reaches the client
+through `PeekabootJson.MAPPER` inside the `OpenApiDocument` record, like every Peekaboot response.
+
+The schemas are named after the Java types they describe. Every object schema lists every
+property as required and allows no other, which is the wire convention that a missing value is
+`null` and never an absent key. The `404` of a feature that is off, a `405`, a `406` and an
+unexpected `500` are the application's own error responses, so the document describes them in
+words only.
 
 ### In-Process Actuator Invocation
 

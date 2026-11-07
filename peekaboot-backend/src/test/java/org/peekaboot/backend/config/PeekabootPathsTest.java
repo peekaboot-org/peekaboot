@@ -255,6 +255,17 @@ class PeekabootPathsTest {
     }
 
     @Test
+    void theDispatcherServletRootIsTheContextPathAndThePrefix() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/ctx/app/peekaboot/api");
+        request.setContextPath("/ctx");
+
+        assertThat(new PeekabootPaths("/actuator", "/ctx", "/app").dispatcherServletRoot(request))
+                .isEqualTo("/ctx/app");
+        assertThat(paths.dispatcherServletRoot(new MockHttpServletRequest("GET", "/peekaboot/api")))
+                .isEmpty();
+    }
+
+    @Test
     void aPathWithinTheDispatcherServletDropsItsPrefix() {
         PeekabootPaths underApp = new PeekabootPaths("/actuator", "", "/app");
 

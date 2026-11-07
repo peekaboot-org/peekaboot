@@ -4,13 +4,16 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.PeekabootWebConfig;
 import org.peekaboot.backend.controller.ErrorDigestController;
 import org.peekaboot.backend.controller.LogController;
+import org.peekaboot.backend.controller.PeekabootApiController;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.controller.TraceController;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
+import org.peekaboot.backend.domain.api.ApiDocument;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.lifecycle.web.LifecycleController;
@@ -170,6 +173,12 @@ public class PeekabootAutoConfiguration {
     @ConditionalOnMissingBean
     public ErrorDigestController peekabootErrorDigestController(ErrorDigestService errorDigestService) {
         return new ErrorDigestController(errorDigestService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PeekabootApiController peekabootApiController(PeekabootPaths peekabootPaths) {
+        return new PeekabootApiController(ApiDocument.bundled(), peekabootPaths);
     }
 
     @Bean

@@ -63,6 +63,7 @@ class ErrorPageContentNegotiationIT {
                 delimiter = '|',
                 value = {
                     "/peekaboot/api/traces?peekabootPageTypo=1 | peekabootPageTypo",
+                    "/peekaboot/api/openapi.json?peekabootPageTypo=1 | peekabootPageTypo",
                     "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask"
                 })
         void aBrowserGetsTheApisProblemForARefusedRequest(String path, String parameter) {

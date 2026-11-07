@@ -10,6 +10,8 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.fixtures.DashboardAsyncDispatchController;
 import org.peekaboot.fixtures.DashboardForwardController;
@@ -117,6 +119,13 @@ class AutoSecuredDashboardIT {
         assertThat(api().headersOf("/peekaboot").getFirst("WWW-Authenticate")).contains("realm=\"Peekaboot\"");
     }
 
+    /** The document sits under /peekaboot/api, so the guard challenges it like every endpoint. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/peekaboot/api/openapi.json"})
+    void theApiDescriptionRejectsAnAnonymousRequest(String path) {
+        assertThat(api().statusOf(path)).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
     @Test
     void theInsightsApiRejectsAnAnonymousRequest() {
         assertThat(api().statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -206,7 +215,8 @@ class AutoSecuredDashboardIT {
 
     /**
      * The rest of the dashboard moves with it: the entry redirect lands under the prefix, the
-     * toolbar leaves the dashboard's own pages alone and loads from where the dashboard now is.
+     * toolbar leaves the dashboard's own pages alone and loads from where the dashboard now is, and
+     * the API's document names the prefix as its server.
      */
     @Test
     void servesTheDashboardAndToolbarUnderTheServletPath(@TempDir Path dir) {
@@ -222,6 +232,12 @@ class AutoSecuredDashboardIT {
             assertThat(redirectTarget(signedIn, "/app/peekaboot")).isEqualTo("/app/peekaboot/ui/dashboard/index.html");
             assertThat(signedIn.get("/app/peekaboot/ui/dashboard/index.html")).doesNotContain("peekaboot-toolbar-data");
             assertThat(anonymous.get("/app/persons")).contains("src=\"/app/peekaboot/ui/toolbar/toolbar.js\"");
+            assertThat(signedIn.getJson("/app/peekaboot/api/openapi.json")
+                            .path("servers")
+                            .path(0)
+                            .path("url")
+                            .asString())
+                    .isEqualTo("/app");
         }
     }
 
