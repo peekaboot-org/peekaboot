@@ -66,9 +66,9 @@ Version 2 holds percent series from 0 to 100 and time gauges in milliseconds, as
 serves them; a version 1 file holds ratios and seconds and is dropped like any unknown version.
 
 `InsightsSnapshotStore` owns the file. It writes through `OwnerOnlyFiles.replaceAtomically` on
-each boundary of `peekaboot.insights.persistence.interval` (default: the coarsest level's own
-interval), and once more synchronously at shutdown after the collector has stopped, so the
-final write sees quiesced rings. A run that never ticked skips the write rather than
+each boundary of `peekaboot.insights.persistence.interval` (default: one minute), and once
+more synchronously at shutdown after the collector has stopped, so the final write sees
+quiesced rings. A run that never ticked skips the write rather than
 overwriting a good file with an empty one. With storage off, `InsightsSnapshotStore.create`
 hands the service `SnapshotStore.NONE`, a store that loads, writes and restores nothing, so
 `InsightsService` drives one store the same way in both cases.

@@ -82,7 +82,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
                 .<SnapshotStore>map(path -> new InsightsSnapshotStore(
                         path,
                         geometry(properties),
-                        properties.resolvePersistenceInterval(),
+                        properties.getPersistence().getInterval(),
                         properties.resolvePersistenceMaxAge()))
                 .orElse(NONE);
     }

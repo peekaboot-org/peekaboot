@@ -193,11 +193,23 @@ class InsightsPropertiesTest {
                 .hasMessageContaining("peekaboot.insights.levels must contain at least one level");
     }
 
+    /** A crash costs at most a minute of history; the age limit still spans the coarsest level. */
     @Test
-    void persistenceDefaultsToOneWritePerCoarsestWindowAndItsWholeSpan() {
+    void persistenceWritesEveryMinuteAndKeepsTheCoarsestLevelsSpan() {
         InsightsProperties properties = new InsightsProperties();
 
-        assertThat(properties.resolvePersistenceInterval()).isEqualTo(Duration.ofHours(1));
+        assertThat(properties.getPersistence().getInterval()).isEqualTo(Duration.ofMinutes(1));
         assertThat(properties.resolvePersistenceMaxAge()).isEqualTo(Duration.ofDays(30)); // 720 one-hour slots
+    }
+
+    /** A YAML null binds through the setter, so the interval has to say so rather than fail on its first boundary. */
+    @Test
+    void rejectsAPersistenceIntervalBoundToNothing() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getPersistence().setInterval(null);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("peekaboot.insights.persistence.interval must be a positive whole number of milliseconds"
+                        + " (null configured)");
     }
 }

@@ -97,7 +97,7 @@ public class InsightsProperties {
         if (persistence == null) {
             throw new IllegalStateException("peekaboot.insights.persistence must not be null");
         }
-        if (persistence.interval != null && !isWholePositiveMillis(persistence.interval)) {
+        if (!isWholePositiveMillis(persistence.interval)) {
             throw new IllegalStateException("peekaboot.insights.persistence.interval must be a positive whole number"
                     + " of milliseconds (" + persistence.interval + " configured)");
         }
@@ -143,13 +143,6 @@ public class InsightsProperties {
         this.persistence = persistence;
     }
 
-    /** The configured value, else the coarsest level's interval. */
-    public Duration resolvePersistenceInterval() {
-        return persistence.getInterval() != null
-                ? persistence.getInterval()
-                : levels.get(levels.size() - 1).getInterval();
-    }
-
     /** The configured value, else the coarsest level's span. */
     public Duration resolvePersistenceMaxAge() {
         if (persistence.getMaxAge() != null) {
@@ -161,8 +154,8 @@ public class InsightsProperties {
 
     public static class Persistence {
 
-        /** How often the rings are written to insights.snapshot; defaults to the coarsest level's interval. */
-        private Duration interval;
+        /** How often the rings are written to insights.snapshot. */
+        private Duration interval = Duration.ofMinutes(1);
 
         /** How old a snapshot may be and still be loaded; defaults to the coarsest level's span (interval x size). */
         private Duration maxAge;
