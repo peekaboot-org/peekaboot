@@ -17,7 +17,7 @@ class ApplicationIdentityConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ApplicationIdentity applicationIdentity(
+    public ApplicationIdentity peekabootApplicationIdentity(
             ObjectProvider<BuildProperties> buildProperties, Environment environment) {
         return new ApplicationIdentity(
                 buildProperties.getIfAvailable(), environment.getProperty("spring.application.name"));

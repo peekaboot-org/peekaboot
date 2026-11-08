@@ -42,13 +42,13 @@ public class InsightsAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public InsightsSsePublisher insightsSsePublisher() {
+    public InsightsSsePublisher peekabootInsightsSsePublisher() {
         return new InsightsSsePublisher(PeekabootJson.MAPPER);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public InsightsService insightsService(
+    public InsightsService peekabootInsightsService(
             MeterRegistry meterRegistry,
             InsightsProperties properties,
             ResourceLoader resourceLoader,

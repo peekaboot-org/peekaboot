@@ -38,7 +38,7 @@ public class PeekabootTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TraceStore traceStore(PeekabootTracingProperties properties) {
+    public TraceStore peekabootTraceStore(PeekabootTracingProperties properties) {
         return new InMemoryTraceStore(properties);
     }
 
@@ -66,7 +66,7 @@ public class PeekabootTracingAutoConfiguration {
     /** Hands every input to the trace journal where one runs, else to the store and then the error digest. */
     @Bean
     @ConditionalOnMissingBean
-    public TraceStoreEventListener traceStoreEventListener(
+    public TraceStoreEventListener peekabootTraceStoreEventListener(
             ErrorDigestRecorder errorDigestRecorder,
             ObjectProvider<TraceJournal> traceJournal,
             ApplicationContext applicationContext) {

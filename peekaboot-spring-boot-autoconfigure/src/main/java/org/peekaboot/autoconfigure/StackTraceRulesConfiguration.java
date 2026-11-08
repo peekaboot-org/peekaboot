@@ -19,7 +19,7 @@ class StackTraceRulesConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public StackTraceRules stackTraceRules(
+    public StackTraceRules peekabootStackTraceRules(
             PeekabootProperties properties, Environment environment, BeanFactory beanFactory) {
         PeekabootProperties.StackTrace stackTrace = properties.getStackTrace();
         return StackTraceRules.resolve(

@@ -14,7 +14,7 @@ public class QueryParameterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public QueryParameterObservationFilter queryParameterObservationFilter() {
+    public QueryParameterObservationFilter peekabootQueryParameterObservationFilter() {
         return new QueryParameterObservationFilter();
     }
 }

@@ -910,20 +910,26 @@ hooks that run before or outside the application context are registered in
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
 | `LocalDevDetector` | (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
 
-Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean`. Most
-match by type, so an application bean of the same type replaces the default outright; the
-`FilterRegistrationBean`s match by their deduced generic type, so an application's other
-filter registrations never back one of them off. A named set matches by name instead:
-`tracingInterceptorConfigurer`, because several `WebMvcConfigurer` beans coexist and a type
-match would let one suppress them all; and each `InsightsSource` bean in
-`ActuatorSourcesAutoConfiguration`, because they share that one type and a type match would
-let an application overriding a single source suppress every reading. The datasource
-metadata is a bean of its own type, `DataSourceMetadataList`, rather than a
-`List<DataSourceMetadata>`: Spring resolves the list type by collecting `DataSourceMetadata`
-beans first, so one application bean of that type would have replaced the whole list.
-Both the list and the ready banner collect DataSources the way Boot's `db` health
-contributor does, `defaultCandidate = false` ones included: plain `Map<String, DataSource>`
-injection skips those, and Boot's how-to declares a second DataSource that way.
+Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean`, apart from
+the two `DependsOnTraceJournal` post-processors in `OtelTracingAutoConfiguration`, which add a
+dependency on the trace journal and have nothing to replace. All but one are named with the
+`peekaboot` prefix, because component scanning names an application's own bean after its class
+and a second definition under a taken name stops the context. The exception is the fallback
+`error` view, which Boot's `BeanNameViewResolver` finds by that name. A filter registration sets
+no name of its own, so its filter is registered under the bean name. `PeekabootBeanNamesTest`
+holds the rule. Most conditions match by type, so an application bean of the same type replaces
+the default outright; the `FilterRegistrationBean`s match by their deduced generic type, so an
+application's other filter registrations never back one of them off. A named set matches by name
+instead: `peekabootTracingInterceptorConfigurer`, because several `WebMvcConfigurer` beans
+coexist and a type match would let one suppress them all; and each `InsightsSource` bean in
+`ActuatorSourcesAutoConfiguration`, because they share that one type and a type match would let
+an application overriding a single source suppress every reading. The datasource metadata is a
+bean of its own type, `DataSourceMetadataList`, rather than a `List<DataSourceMetadata>`: Spring
+resolves the list type by collecting `DataSourceMetadata` beans first, so one application bean
+of that type would have replaced the whole list. Both the list and the ready banner collect
+DataSources the way Boot's `db` health contributor does, `defaultCandidate = false` ones
+included: plain `Map<String, DataSource>` injection skips those, and Boot's how-to declares a
+second DataSource that way.
 
 The ten actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
 `mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the
@@ -971,9 +977,9 @@ dependencies of this module and the backend, so no consumer of the starter can b
 them.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
-controllers, services and actuator wiring, all as explicit `@Bean` methods whose names yield
-the class-derived bean names `ServerUrlResolver`'s dashboard check relies on. It needs the
-servlet guard because `PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type.
+controllers, services and actuator wiring, all as explicit `@Bean` methods.
+`ServerUrlResolver`'s dashboard check looks for the bean named `peekabootWebConfig`. It needs
+the servlet guard because `PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type.
 `PeekabootWebConfig` is also the only thing that serves the UI bundle. The bundle lives at
 `classpath:/META-INF/peekaboot/ui/`, outside every static location Boot serves by default,
 and its resource handler exists only while `peekaboot.enabled` is `true`. With Peekaboot off
@@ -1205,7 +1211,7 @@ public class OtelTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public OtelSpanExporter otelSpanExporter(...) { ... }
+    public OtelSpanExporter peekabootOtelSpanExporter(...) { ... }
 }
 ```
 
@@ -1298,7 +1304,7 @@ served inherited the leftover context and was captured into that same trace.
 shape. Nesting is strictly LIFO on one thread, which is what lets a plain stack be right here.
 
 `TracingInterceptorAutoConfiguration` registers two beans: the interceptor, and an anonymous
-`WebMvcConfigurer` named `tracingInterceptorConfigurer` that adds it with
+`WebMvcConfigurer` named `peekabootTracingInterceptorConfigurer` that adds it with
 `addPathPatterns("/**")` and `excludePathPatterns(peekabootPaths.excludePatterns())`, which is
 where the exclusion prefixes reach the interceptor. That configurer's
 `@ConditionalOnMissingBean` matches by *name*, not by type: a type check on `WebMvcConfigurer`
@@ -1330,11 +1336,12 @@ every scheduled job into an async task.
 
 `AsyncInstrumentationAutoConfiguration` registers the bean as `peekabootAsyncTaskDecorator`, and
 its `@ConditionalOnMissingBean` matches that name, not the `TaskDecorator` type, for the same reason
-`tracingInterceptorConfigurer` above matches by name. `ContextPropagatingTaskDecorator`, which
-Boot registers when an application sets `spring.task.execution.propagate-context=true`, is
-itself a `TaskDecorator` bean; a type-based condition would treat it as already satisfying the
-condition and back Peekaboot's decorator off in exactly the configuration this feature exists to
-serve. Peekaboot never sets that property itself.
+`peekabootTracingInterceptorConfigurer` above matches by name.
+`ContextPropagatingTaskDecorator`, which Boot registers when an application sets
+`spring.task.execution.propagate-context=true`, is itself a `TaskDecorator` bean; a type-based
+condition would treat it as already satisfying the condition and back Peekaboot's decorator off
+in exactly the configuration this feature exists to serve. Peekaboot never sets that property
+itself.
 
 Both decorators can therefore coexist, folded by Boot into one `CompositeTaskDecorator`. The
 fold makes the list's first element innermost, and `ObjectProvider.orderedStream()` sorts

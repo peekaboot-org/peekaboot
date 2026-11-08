@@ -52,26 +52,26 @@ public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ActiveProfilesLine activeProfilesLine(Environment environment) {
+    public ActiveProfilesLine peekabootActiveProfilesLine(Environment environment) {
         return new ActiveProfilesLine(environment);
     }
 
     /** Without build-info.properties the ready banner prints "Build information not available" in place of the coordinates. */
     @Bean
     @ConditionalOnMissingBean
-    public BuildInfoProvider buildInfoProvider(ObjectProvider<BuildProperties> buildProperties) {
+    public BuildInfoProvider peekabootBuildInfoProvider(ObjectProvider<BuildProperties> buildProperties) {
         return new BuildInfoProvider(buildProperties.getIfAvailable());
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ServerUrlResolver serverUrlResolver(Environment environment, ObjectProvider<PeekabootPaths> paths) {
+    public ServerUrlResolver peekabootServerUrlResolver(Environment environment, ObjectProvider<PeekabootPaths> paths) {
         return new ServerUrlResolver(environment, paths);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ApplicationReadyListener applicationReadyListener(
+    public ApplicationReadyListener peekabootApplicationReadyListener(
             ActiveProfilesLine activeProfilesLine,
             BuildInfoProvider buildInfoProvider,
             ApplicationIdentity applicationIdentity,
@@ -107,14 +107,14 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public HikariPoolInfo hikariPoolInfo() {
+        public HikariPoolInfo peekabootHikariPoolInfo() {
             return new HikariPoolInfo();
         }
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ApplicationStoppedListener applicationStoppedListener(
+    public ApplicationStoppedListener peekabootApplicationStoppedListener(
             ApplicationIdentity applicationIdentity, ApplicationContext applicationContext) {
         return new ApplicationStoppedListener(applicationIdentity, applicationContext);
     }
@@ -125,7 +125,7 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public DataSourceMetadataList dataSourceMetadataList(ConfigurableListableBeanFactory beanFactory) {
+        public DataSourceMetadataList peekabootDataSourceMetadataList(ConfigurableListableBeanFactory beanFactory) {
             List<DataSourceMetadata> entries = new ArrayList<>();
             ApplicationBeans.ofType(beanFactory, DataSource.class)
                     .forEach((name, dataSource) ->
@@ -144,7 +144,7 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public LifecycleEventLog lifecycleEventLog(StorageDirectory storageDirectory) {
+        public LifecycleEventLog peekabootLifecycleEventLog(StorageDirectory storageDirectory) {
             LifecycleEventLog eventLog = LifecycleEventLog.create(storageDirectory);
             eventLog.beginLoad();
             return eventLog;
@@ -152,7 +152,7 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public LifecycleEventRecorder lifecycleEventRecorder(
+        public LifecycleEventRecorder peekabootLifecycleEventRecorder(
                 LifecycleEventLog lifecycleEventLog,
                 BuildInfoProvider buildInfoProvider,
                 ObjectProvider<GitProperties> gitProperties,
@@ -163,13 +163,13 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public LifecycleEvents lifecycleEvents(LifecycleEventLog lifecycleEventLog) {
+        public LifecycleEvents peekabootLifecycleEvents(LifecycleEventLog lifecycleEventLog) {
             return new LifecycleEvents(lifecycleEventLog);
         }
 
         @Bean
         @ConditionalOnMissingBean
-        public LifecycleRuns lifecycleRuns(LifecycleEventLog lifecycleEventLog) {
+        public LifecycleRuns peekabootLifecycleRuns(LifecycleEventLog lifecycleEventLog) {
             return new LifecycleRuns(lifecycleEventLog);
         }
 

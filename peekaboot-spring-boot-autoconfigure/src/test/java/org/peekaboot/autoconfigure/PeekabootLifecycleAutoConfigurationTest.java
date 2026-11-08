@@ -91,7 +91,7 @@ class PeekabootLifecycleAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("spring.info.build.location=classpath:test-build-info.properties")
                 .run(context -> {
-                    assertThat(context).hasBean("buildInfoProvider");
+                    assertThat(context).hasBean("peekabootBuildInfoProvider");
                     assertThat(context.getBean(BuildInfoProvider.class).getFormattedInfo())
                             .isEqualTo("org.peekaboot:lifecycle-test-app:1.2.3");
                 });
@@ -101,7 +101,7 @@ class PeekabootLifecycleAutoConfigurationTest {
     @Test
     void buildInfoProviderReportsNoBuildInfoWithoutBuildProperties() {
         contextRunner.run(context -> {
-            assertThat(context).hasBean("buildInfoProvider");
+            assertThat(context).hasBean("peekabootBuildInfoProvider");
             assertThat(context).hasSingleBean(BuildInfoProvider.class);
             assertThat(context.getBean(BuildInfoProvider.class).getFormattedInfo())
                     .isEqualTo("Build information not available");

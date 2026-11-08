@@ -55,7 +55,7 @@ public class PeekabootSecurityAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public SecurityPostureListener securityPostureListener(SecurityPosture securityPosture) {
+    public SecurityPostureListener peekabootSecurityPostureListener(SecurityPosture securityPosture) {
         return new SecurityPostureListener(securityPosture);
     }
 
@@ -68,7 +68,7 @@ public class PeekabootSecurityAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public SecurityPosture securityPosture(
+    public SecurityPosture peekabootSecurityPosture(
             ObjectProvider<DashboardCredentials> credentials,
             ObjectProvider<CredentialsFile> credentialsFile,
             PeekabootPaths paths,
@@ -113,7 +113,7 @@ public class PeekabootSecurityAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        DashboardCredentials dashboardCredentials(
+        DashboardCredentials peekabootDashboardCredentials(
                 PeekabootProperties properties,
                 CredentialsFile credentialsFile,
                 ApplicationIdentity applicationIdentity) {
@@ -124,7 +124,7 @@ public class PeekabootSecurityAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        CredentialCache credentialCache() {
+        CredentialCache peekabootCredentialCache() {
             return new CredentialCache();
         }
 
@@ -132,7 +132,7 @@ public class PeekabootSecurityAutoConfiguration {
         // filter registrations never back this one off
         @Bean
         @ConditionalOnMissingBean
-        FilterRegistrationBean<DashboardAuthenticationFilter> dashboardAuthenticationFilter(
+        FilterRegistrationBean<DashboardAuthenticationFilter> peekabootDashboardAuthenticationFilter(
                 DashboardCredentials credentials, CredentialCache credentialCache, PeekabootPaths paths) {
 
             FilterRegistrationBean<DashboardAuthenticationFilter> registration = new FilterRegistrationBean<>();
@@ -145,7 +145,6 @@ public class PeekabootSecurityAutoConfiguration {
                     DispatcherType.REQUEST, DispatcherType.FORWARD, DispatcherType.INCLUDE, DispatcherType.ASYNC);
             // fixed, since the guard answers for the path whatever Spring Security's filter order is
             registration.setOrder(0);
-            registration.setName("dashboardAuthenticationFilter");
             return registration;
         }
     }

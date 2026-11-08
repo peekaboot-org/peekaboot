@@ -209,8 +209,8 @@ class PeekabootAutoConfigurationTest {
      * The contract behind every explicit {@code @Bean} carrying
      * {@code @ConditionalOnMissingBean}: an application that defines its own bean under an
      * auto-configured name wins, instead of the second definition raising
-     * {@code BeanDefinitionOverrideException}. maskingEngine covers a bean this class has
-     * always declared explicitly; metricsService covers the wider registered graph.
+     * {@code BeanDefinitionOverrideException}. peekabootMaskingEngine covers a bean this class
+     * has always declared explicitly; peekabootMetricsService covers the wider registered graph.
      */
     @Test
     void userSuppliedSameNamedBeansReplaceTheDefaults() {
@@ -219,8 +219,10 @@ class PeekabootAutoConfigurationTest {
                 .withUserConfiguration(UserSameNamedBeansConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context.getBean("maskingEngine")).isSameAs(UserSameNamedBeansConfig.MASKING_ENGINE);
-                    assertThat(context.getBean("metricsService")).isSameAs(UserSameNamedBeansConfig.METRICS_SERVICE);
+                    assertThat(context.getBean("peekabootMaskingEngine"))
+                            .isSameAs(UserSameNamedBeansConfig.MASKING_ENGINE);
+                    assertThat(context.getBean("peekabootMetricsService"))
+                            .isSameAs(UserSameNamedBeansConfig.METRICS_SERVICE);
                 });
     }
 
@@ -420,12 +422,12 @@ class PeekabootAutoConfigurationTest {
         static final MetricsService METRICS_SERVICE = new MetricsService(null, MASKING_ENGINE);
 
         @Bean
-        MaskingEngine maskingEngine() {
+        MaskingEngine peekabootMaskingEngine() {
             return MASKING_ENGINE;
         }
 
         @Bean
-        MetricsService metricsService() {
+        MetricsService peekabootMetricsService() {
             return METRICS_SERVICE;
         }
     }

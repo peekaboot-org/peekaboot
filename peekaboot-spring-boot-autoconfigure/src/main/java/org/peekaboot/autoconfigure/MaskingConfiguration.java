@@ -17,7 +17,7 @@ class MaskingConfiguration {
     /** Stateless, so one instance serves every site; a bean so each site injects it rather than building its own. */
     @Bean
     @ConditionalOnMissingBean
-    public MaskingEngine maskingEngine() {
+    public MaskingEngine peekabootMaskingEngine() {
         return new MaskingEngine();
     }
 }

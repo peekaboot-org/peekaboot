@@ -22,7 +22,7 @@ public class TracingInterceptorAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TracingHandlerInterceptor tracingHandlerInterceptor(ObservationRegistry observationRegistry) {
+    public TracingHandlerInterceptor peekabootTracingHandlerInterceptor(ObservationRegistry observationRegistry) {
         log.debug("Peekaboot TracingHandlerInterceptor registered for handler/view span capture");
         return new TracingHandlerInterceptor(observationRegistry);
     }
@@ -30,8 +30,8 @@ public class TracingInterceptorAutoConfiguration {
     // matched by name: a type check on WebMvcConfigurer would let any of the
     // application's own configurers back this registration off
     @Bean
-    @ConditionalOnMissingBean(name = "tracingInterceptorConfigurer")
-    public WebMvcConfigurer tracingInterceptorConfigurer(
+    @ConditionalOnMissingBean(name = "peekabootTracingInterceptorConfigurer")
+    public WebMvcConfigurer peekabootTracingInterceptorConfigurer(
             TracingHandlerInterceptor interceptor, PeekabootPaths peekabootPaths) {
         return new WebMvcConfigurer() {
             @Override

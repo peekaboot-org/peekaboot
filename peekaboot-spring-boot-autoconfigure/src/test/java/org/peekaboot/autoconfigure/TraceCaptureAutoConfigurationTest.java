@@ -63,7 +63,7 @@ class TraceCaptureAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar.enabled=false")
                 .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
-                    assertThat(context).hasBean("requestCaptureFilter");
+                    assertThat(context).hasBean("peekabootRequestCaptureFilter");
                     assertThat(context).hasSingleBean(LogbackAppenderRegistrar.class);
                 });
     }
@@ -76,7 +76,7 @@ class TraceCaptureAutoConfigurationTest {
                 .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean("requestCaptureFilter");
+                    assertThat(context).doesNotHaveBean("peekabootRequestCaptureFilter");
                     assertThat(context).doesNotHaveBean(LogbackAppenderRegistrar.class);
                 });
     }
@@ -88,7 +88,7 @@ class TraceCaptureAutoConfigurationTest {
                 .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean("requestCaptureFilter");
+                    assertThat(context).doesNotHaveBean("peekabootRequestCaptureFilter");
                     assertThat(context).doesNotHaveBean(LogbackAppenderRegistrar.class);
                 });
     }
@@ -98,7 +98,7 @@ class TraceCaptureAutoConfigurationTest {
     void doesNotCreateTheRequestFilterWhenTracerBeanMissing() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
-            assertThat(context).doesNotHaveBean("requestCaptureFilter");
+            assertThat(context).doesNotHaveBean("peekabootRequestCaptureFilter");
             assertThat(context).hasSingleBean(LogbackAppenderRegistrar.class);
         });
     }
@@ -110,7 +110,7 @@ class TraceCaptureAutoConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(BraveAutoConfiguration.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).hasBean("requestCaptureFilter");
+                    assertThat(context).hasBean("peekabootRequestCaptureFilter");
                 });
     }
 
@@ -271,7 +271,7 @@ class TraceCaptureAutoConfigurationTest {
                 .withUserConfiguration(MinimalPropertiesConfig.class, TracerOnlyConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).hasBean("requestCaptureFilter");
+                    assertThat(context).hasBean("peekabootRequestCaptureFilter");
                     assertThat(context).hasSingleBean(MaskingEngine.class);
                 });
     }
@@ -315,7 +315,7 @@ class TraceCaptureAutoConfigurationTest {
     static class MinimalPropertiesConfig {}
 
     /** Destroyed before the registrar, which it depends on, and logs one line while it is. */
-    @DependsOn("logbackAppenderRegistrar")
+    @DependsOn("peekabootLogbackAppenderRegistrar")
     static class ShutdownLogger {
 
         final String message = "logged while destroyed " + UUID.randomUUID();
@@ -329,7 +329,7 @@ class TraceCaptureAutoConfigurationTest {
     }
 
     /** Fails the refresh once the registrar has attached the appender. */
-    @DependsOn("logbackAppenderRegistrar")
+    @DependsOn("peekabootLogbackAppenderRegistrar")
     static class FailingAfterCapture {
 
         static final String FAILURE = "the refresh fails after capture began";

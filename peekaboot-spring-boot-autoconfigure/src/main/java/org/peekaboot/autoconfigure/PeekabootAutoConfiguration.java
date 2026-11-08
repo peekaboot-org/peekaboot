@@ -45,11 +45,10 @@ import org.springframework.context.annotation.Import;
  * Core auto-configuration: the dashboard controllers, the actuator/trace services and the
  * servlet web config, each an explicit {@link Bean @Bean} method. Every
  * bean is {@link ConditionalOnMissingBean @ConditionalOnMissingBean}, so an application
- * bean of the same type replaces the default instead of colliding with it. Each keeps the name
- * component scanning would derive from its class (some are looked up by exactly that
- * name, e.g. {@code ServerUrlResolver#DASHBOARD_CONFIG_BEAN_NAME}), except a controller whose
- * class name a host app may also use. Its bean name takes a {@code peekaboot} prefix, because a
- * host bean of another type under the same name stops the context from starting.
+ * bean of the same type replaces the default instead of colliding with it. Each bean name takes a
+ * {@code peekaboot} prefix, because component scanning names a host's own bean after its class
+ * and a second definition under that name stops the context from starting.
+ * {@code ServerUrlResolver#DASHBOARD_CONFIG_BEAN_NAME} names the one bean looked up by name.
  *
  * <p>Binds the tracing and insights properties whatever their switches say, so the Config
  * tab shows the switch that turned a feature off.
@@ -74,19 +73,19 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ActuatorResponseParser actuatorResponseParser() {
+    public ActuatorResponseParser peekabootActuatorResponseParser() {
         return new ActuatorResponseParser();
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ActuatorReadings actuatorReadings(ObjectProvider<InsightsSource> sources) {
+    public ActuatorReadings peekabootActuatorReadings(ObjectProvider<InsightsSource> sources) {
         return new ActuatorReadings(sources.orderedStream().toList());
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ActuatorInsightsService actuatorInsightsService(
+    public ActuatorInsightsService peekabootActuatorInsightsService(
             ActuatorReadings actuatorReadings,
             ActuatorResponseParser actuatorResponseParser,
             MaskingEngine maskingEngine,
@@ -98,14 +97,15 @@ public class PeekabootAutoConfiguration {
     /** The registry is absent on an application without Boot's metrics auto-configuration; the service then reports itself unavailable. */
     @Bean
     @ConditionalOnMissingBean
-    public MetricsService metricsService(ObjectProvider<MeterRegistry> meterRegistry, MaskingEngine maskingEngine) {
+    public MetricsService peekabootMetricsService(
+            ObjectProvider<MeterRegistry> meterRegistry, MaskingEngine maskingEngine) {
         return new MetricsService(meterRegistry.getIfAvailable(), maskingEngine);
     }
 
     /** The trace store is absent while {@code peekaboot.tracing.enabled} is false; the service then reports tracing unavailable. */
     @Bean
     @ConditionalOnMissingBean
-    public TraceInsightsService traceInsightsService(
+    public TraceInsightsService peekabootTraceInsightsService(
             ObjectProvider<TraceStore> traceStore,
             MaskingEngine maskingEngine,
             ObjectProvider<SqlFormatter> sqlFormatter,
@@ -183,7 +183,7 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ApiProblemHandler apiProblemHandler() {
+    public ApiProblemHandler peekabootApiProblemHandler() {
         return new ApiProblemHandler();
     }
 
@@ -194,7 +194,7 @@ public class PeekabootAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public SqlFormatter hibernateSqlFormatter() {
+        public SqlFormatter peekabootHibernateSqlFormatter() {
             return new HibernateSqlFormatter();
         }
     }

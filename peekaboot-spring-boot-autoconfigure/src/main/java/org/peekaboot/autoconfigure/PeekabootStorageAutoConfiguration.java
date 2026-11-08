@@ -24,7 +24,8 @@ public class PeekabootStorageAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public StorageDirectory storageDirectory(PeekabootProperties properties, ApplicationIdentity applicationIdentity) {
+    public StorageDirectory peekabootStorageDirectory(
+            PeekabootProperties properties, ApplicationIdentity applicationIdentity) {
         return StorageDirectory.resolve(properties.getStorage(), applicationIdentity.qualifiedId());
     }
 }

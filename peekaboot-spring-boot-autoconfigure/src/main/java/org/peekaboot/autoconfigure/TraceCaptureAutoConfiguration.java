@@ -38,7 +38,7 @@ public class TraceCaptureAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean({Tracer.class, TraceStore.class})
-    public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
+    public FilterRegistrationBean<RequestCaptureFilter> peekabootRequestCaptureFilter(
             Tracer tracer,
             ApplicationEventPublisher eventPublisher,
             MaskingEngine maskingEngine,
@@ -49,7 +49,6 @@ public class TraceCaptureAutoConfiguration {
         // inside Boot's ServerHttpObservationFilter (HIGHEST_PRECEDENCE + 1), so the server
         // span is current, and ahead of Spring Security, so rejected requests are captured too
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
-        registration.setName("requestCaptureFilter");
         log.debug("RequestCaptureFilter registered for all URLs");
         return registration;
     }
@@ -61,7 +60,7 @@ public class TraceCaptureAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationContext applicationContext) {
+        LogbackAppenderRegistrar peekabootLogbackAppenderRegistrar(ApplicationContext applicationContext) {
             return new LogbackAppenderRegistrar(applicationContext);
         }
     }

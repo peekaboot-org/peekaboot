@@ -32,7 +32,7 @@ public class HibernateStatisticsMetricsAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    HibernateStatisticsMeterBinder hibernateStatisticsMeterBinder(
+    HibernateStatisticsMeterBinder peekabootHibernateStatisticsMeterBinder(
             ConfigurableListableBeanFactory beanFactory, MeterRegistry meterRegistry) {
         return new HibernateStatisticsMeterBinder(beanFactory, meterRegistry);
     }

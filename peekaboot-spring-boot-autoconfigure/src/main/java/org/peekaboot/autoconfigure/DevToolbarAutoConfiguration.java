@@ -41,7 +41,7 @@ public class DevToolbarAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ToolbarDataProvider toolbarDataProvider(PeekabootTracingProperties tracingProperties) {
+    public ToolbarDataProvider peekabootToolbarDataProvider(PeekabootTracingProperties tracingProperties) {
         return new ToolbarDataProvider(tracingProperties);
     }
 
@@ -50,7 +50,7 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(Tracer.class)
-    public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
+    public FilterRegistrationBean<DevToolbarFilter> peekabootDevToolbarFilter(
             ToolbarDataProvider toolbarDataProvider,
             Tracer tracer,
             PeekabootPaths peekabootPaths,
@@ -68,7 +68,6 @@ public class DevToolbarAutoConfiguration {
         // bar belongs on it. What the bar reports there comes from the original request.
         registration.setDispatcherTypes(DispatcherType.REQUEST, DispatcherType.ERROR);
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
-        registration.setName("devToolbarFilter");
         log.debug("DevToolbarFilter registered for all URLs");
         return registration;
     }
@@ -80,7 +79,7 @@ public class DevToolbarAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        TomcatForwardResponseCustomizer tomcatForwardResponseCustomizer() {
+        TomcatForwardResponseCustomizer peekabootTomcatForwardResponseCustomizer() {
             return new TomcatForwardResponseCustomizer();
         }
     }

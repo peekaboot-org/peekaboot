@@ -78,7 +78,7 @@ class PeekabootSecurityAutoConfigurationTest {
                 .withPropertyValues("peekaboot.security.enabled=false")
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(DashboardCredentials.class);
-                    assertThat(context).doesNotHaveBean("dashboardAuthenticationFilter");
+                    assertThat(context).doesNotHaveBean("peekabootDashboardAuthenticationFilter");
                 });
     }
 
@@ -115,7 +115,7 @@ class PeekabootSecurityAutoConfigurationTest {
     /**
      * {@code @ConditionalOnBooleanProperty} matches neither {@code true} nor {@code false} for a
      * value like this, so a typo here must not be able to leave zero posture beans and break
-     * {@code securityPostureListener}'s dependency resolution.
+     * {@code peekabootSecurityPostureListener}'s dependency resolution.
      */
     @Test
     void contextStartsWithANonBooleanSecurityEnabledValue(@TempDir Path storageDir) {
@@ -388,14 +388,14 @@ class PeekabootSecurityAutoConfigurationTest {
         runner(storageDir)
                 .withUserConfiguration(ForeignFilterRegistrations.class)
                 .run(context -> {
-                    assertThat(context).hasBean("dashboardAuthenticationFilter");
+                    assertThat(context).hasBean("peekabootDashboardAuthenticationFilter");
                     assertThat(context.getBean(SecurityPosture.class).report()).isPresent();
                 });
     }
 
     @SuppressWarnings("unchecked")
     private static FilterRegistrationBean<DashboardAuthenticationFilter> registration(ApplicationContext context) {
-        return context.getBean("dashboardAuthenticationFilter", FilterRegistrationBean.class);
+        return context.getBean("peekabootDashboardAuthenticationFilter", FilterRegistrationBean.class);
     }
 
     /** Declared as {@code FilterRegistrationBean<?>}, the way Logbook declares its two. */

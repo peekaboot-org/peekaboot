@@ -119,7 +119,7 @@ class ActuatorReadingsIT {
     @TestConfiguration
     static class ThrowingSourceConfig {
         @Bean
-        InsightsSource loggersInsightsSource() {
+        InsightsSource peekabootLoggersInsightsSource() {
             return new InsightsSource("loggers", () -> {
                 throw new IllegalStateException("boom");
             });

@@ -20,7 +20,8 @@ public class OtelTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher, PeekabootPaths peekabootPaths) {
+    public OtelSpanExporter peekabootOtelSpanExporter(
+            ApplicationEventPublisher eventPublisher, PeekabootPaths peekabootPaths) {
         return new OtelSpanExporter(eventPublisher, peekabootPaths);
     }
 

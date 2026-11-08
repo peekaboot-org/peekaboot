@@ -40,7 +40,7 @@ class DevToolbarAutoConfigurationTest {
                 .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
-                    assertThat(context).hasBean("devToolbarFilter");
+                    assertThat(context).hasBean("peekabootDevToolbarFilter");
                 });
     }
 
@@ -52,9 +52,9 @@ class DevToolbarAutoConfigurationTest {
                 .withUserConfiguration(TracerOnlyConfig.class, UserSameNamedBeansConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context.getBean("toolbarDataProvider"))
+                    assertThat(context.getBean("peekabootToolbarDataProvider"))
                             .isSameAs(UserSameNamedBeansConfig.TOOLBAR_DATA_PROVIDER);
-                    assertThat(context.getBean("devToolbarFilter"))
+                    assertThat(context.getBean("peekabootDevToolbarFilter"))
                             .isSameAs(UserSameNamedBeansConfig.FILTER_REGISTRATION);
                 });
     }
@@ -70,8 +70,8 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar.enabled=true", "springdoc.swagger-ui.path=" + swaggerUiPath)
                 .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
-                    DevToolbarFilter filter =
-                            (DevToolbarFilter) context.getBean("devToolbarFilter", FilterRegistrationBean.class)
+                    DevToolbarFilter filter = (DevToolbarFilter)
+                            context.getBean("peekabootDevToolbarFilter", FilterRegistrationBean.class)
                                     .getFilter();
                     MockHttpServletRequest request = new MockHttpServletRequest("GET", "/admin/swagger-ui/index.html");
                     request.setServletPath("/admin/swagger-ui/index.html");
@@ -92,8 +92,8 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar.enabled=true", "springdoc.api-docs.path=/spec")
                 .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
-                    DevToolbarFilter filter =
-                            (DevToolbarFilter) context.getBean("devToolbarFilter", FilterRegistrationBean.class)
+                    DevToolbarFilter filter = (DevToolbarFilter)
+                            context.getBean("peekabootDevToolbarFilter", FilterRegistrationBean.class)
                                     .getFilter();
                     MockHttpServletRequest request = new MockHttpServletRequest("GET", "/swagger-ui/index.html");
                     request.setServletPath("/swagger-ui/index.html");
@@ -114,7 +114,7 @@ class DevToolbarAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .withUserConfiguration(TracerOnlyConfig.class)
-                .run(context -> assertThat(context.getBean("devToolbarFilter", FilterRegistrationBean.class))
+                .run(context -> assertThat(context.getBean("peekabootDevToolbarFilter", FilterRegistrationBean.class))
                         .extracting(FilterRegistrationBean::determineDispatcherTypes)
                         .isEqualTo(EnumSet.of(DispatcherType.REQUEST, DispatcherType.ERROR)));
     }
@@ -123,7 +123,7 @@ class DevToolbarAutoConfigurationTest {
     void doesNotCreateBeansWhenDevToolbarDisabled() {
         contextRunner.withPropertyValues("peekaboot.dev-toolbar.enabled=false").run(context -> {
             assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
-            assertThat(context).doesNotHaveBean("devToolbarFilter");
+            assertThat(context).doesNotHaveBean("peekabootDevToolbarFilter");
         });
     }
 
@@ -131,18 +131,18 @@ class DevToolbarAutoConfigurationTest {
     void doesNotCreateBeansWhenDevToolbarPropertyMissing() {
         contextRunner.run(context -> {
             assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
-            assertThat(context).doesNotHaveBean("devToolbarFilter");
+            assertThat(context).doesNotHaveBean("peekabootDevToolbarFilter");
         });
     }
 
     @Test
     void doesNotCreateTheFilterWhenTracerBeanMissing() {
-        // devToolbarFilter's @ConditionalOnBean(Tracer.class) must keep it unregistered, while
-        // toolbarDataProvider (no such condition) still registers.
+        // peekabootDevToolbarFilter's @ConditionalOnBean(Tracer.class) must keep it unregistered,
+        // while peekabootToolbarDataProvider (no such condition) still registers.
         contextRunner.withPropertyValues("peekaboot.dev-toolbar.enabled=true").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(ToolbarDataProvider.class);
-            assertThat(context).doesNotHaveBean("devToolbarFilter");
+            assertThat(context).doesNotHaveBean("peekabootDevToolbarFilter");
         });
     }
 
@@ -161,7 +161,7 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).hasBean("devToolbarFilter");
+                    assertThat(context).hasBean("peekabootDevToolbarFilter");
                 });
     }
 
@@ -176,7 +176,7 @@ class DevToolbarAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
-                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                    assertThat(context).doesNotHaveBean("peekabootDevToolbarFilter");
                 });
     }
 
@@ -219,12 +219,12 @@ class DevToolbarAutoConfigurationTest {
         static final FilterRegistrationBean<DevToolbarFilter> FILTER_REGISTRATION = new FilterRegistrationBean<>();
 
         @Bean
-        ToolbarDataProvider toolbarDataProvider() {
+        ToolbarDataProvider peekabootToolbarDataProvider() {
             return TOOLBAR_DATA_PROVIDER;
         }
 
         @Bean
-        FilterRegistrationBean<DevToolbarFilter> devToolbarFilter() {
+        FilterRegistrationBean<DevToolbarFilter> peekabootDevToolbarFilter() {
             return FILTER_REGISTRATION;
         }
     }

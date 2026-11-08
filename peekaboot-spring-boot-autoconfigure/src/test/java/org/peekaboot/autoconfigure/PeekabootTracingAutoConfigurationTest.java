@@ -458,9 +458,9 @@ class PeekabootTracingAutoConfigurationTest {
                 .withUserConfiguration(ObservationRegistryConfig.class, UserInterceptorConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context.getBean("tracingHandlerInterceptor"))
+                    assertThat(context.getBean("peekabootTracingHandlerInterceptor"))
                             .isSameAs(UserInterceptorConfig.INTERCEPTOR);
-                    assertThat(context.getBean("tracingInterceptorConfigurer"))
+                    assertThat(context.getBean("peekabootTracingInterceptorConfigurer"))
                             .isSameAs(UserInterceptorConfig.CONFIGURER);
                 });
     }
@@ -481,12 +481,12 @@ class PeekabootTracingAutoConfigurationTest {
         static final WebMvcConfigurer CONFIGURER = new WebMvcConfigurer() {};
 
         @Bean
-        TracingHandlerInterceptor tracingHandlerInterceptor() {
+        TracingHandlerInterceptor peekabootTracingHandlerInterceptor() {
             return INTERCEPTOR;
         }
 
         @Bean
-        WebMvcConfigurer tracingInterceptorConfigurer() {
+        WebMvcConfigurer peekabootTracingInterceptorConfigurer() {
             return CONFIGURER;
         }
     }

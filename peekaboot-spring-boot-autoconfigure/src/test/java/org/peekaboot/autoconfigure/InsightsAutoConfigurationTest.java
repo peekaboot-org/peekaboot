@@ -83,7 +83,7 @@ class InsightsAutoConfigurationTest {
                     .withUserConfiguration(MeterRegistryConfig.class, UserSameNamedBeansConfig.class)
                     .run(context -> {
                         assertThat(context).hasNotFailed();
-                        assertThat(context.getBean("insightsSsePublisher"))
+                        assertThat(context.getBean("peekabootInsightsSsePublisher"))
                                 .isSameAs(UserSameNamedBeansConfig.SSE_PUBLISHER);
                         // the user's publisher is also the listener the service publishes through
                         assertThat(context).hasSingleBean(InsightsService.class);
@@ -216,7 +216,7 @@ class InsightsAutoConfigurationTest {
         static final InsightsSsePublisher SSE_PUBLISHER = new InsightsSsePublisher(PeekabootJson.MAPPER);
 
         @Bean
-        InsightsSsePublisher insightsSsePublisher() {
+        InsightsSsePublisher peekabootInsightsSsePublisher() {
             return SSE_PUBLISHER;
         }
     }

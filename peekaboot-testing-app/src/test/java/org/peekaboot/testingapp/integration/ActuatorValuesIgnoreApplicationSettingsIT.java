@@ -20,8 +20,8 @@ import tools.jackson.databind.JsonNode;
  * outright. Health survives that exclusion only because
  * {@code PeekabootEndpointExposureOutcomeContributor} keeps its bean alive;
  * {@code theHealthTabCarriesTheComponentsAndTheirDetails} is what pins that end to end - the
- * exclusion would otherwise leave {@code healthInsightsSource}'s {@code HealthEndpoint} bean
- * absent.
+ * exclusion would otherwise leave {@code peekabootHealthInsightsSource}'s
+ * {@code HealthEndpoint} bean absent.
  * Peekaboot builds those endpoints itself (see {@code ActuatorSourcesAutoConfiguration}), so
  * the dashboard reads the same data either way, and what it masks is {@code MaskingEngine}'s
  * decision alone - {@code server.port} readable, the datasource password not. Health is turned
