@@ -3,9 +3,12 @@ package org.peekaboot.backend.errorpage;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
+import io.micrometer.observation.tck.TestObservationRegistry;
+import io.micrometer.tracing.handler.TracingObservationHandler.TracingContext;
 import jakarta.servlet.RequestDispatcher;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,12 +25,14 @@ import org.springframework.context.support.StaticMessageSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.server.observation.ServerRequestObservationContext;
 import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.filter.ServerHttpObservationFilter;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.ModelAndView;
@@ -537,6 +542,69 @@ class PeekabootErrorExceptionResolverTest {
                 resolver.resolveException(request, response, null, new IllegalStateException("boom"));
 
         assertThat(modelAndView).isNull();
+    }
+
+    /**
+     * Spring clears the error request attributes once the page has rendered, before its
+     * observation filter reads them, so the page fails the server observation itself.
+     */
+    @Test
+    void failsTheServerObservationWithTheExceptionItAnswersWith5xx() throws Exception {
+        IllegalStateException failure = new IllegalStateException("boom");
+
+        assertThat(resolveObserved(failure).getError()).isSameAs(failure);
+    }
+
+    @Test
+    void failsTheServerObservationForAServerErrorSpringMaps() throws Exception {
+        ResponseStatusException unavailable = new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+
+        assertThat(resolveObserved(unavailable).getError()).isSameAs(unavailable);
+    }
+
+    /** The cyclic chain's status is read off its links, but the observation still fails with what was thrown. */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void failsTheServerObservationForAServerErrorAboveACycle() throws Exception {
+        ResponseStatusException unavailable =
+                new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, null, cycle());
+
+        assertThat(resolveObserved(unavailable).getError()).isSameAs(unavailable);
+    }
+
+    /** A 4xx is the caller's mistake, a CLIENT_ERROR issue on an OK trace. */
+    @Test
+    void leavesTheServerObservationAloneForA4xx() throws Exception {
+        assertThat(resolveObserved(new ResponseStatusException(HttpStatus.NOT_FOUND))
+                        .getError())
+                .isNull();
+    }
+
+    /** {@code TracingContext.getSpan()} is nullable, and a context without a span still fails the observation. */
+    @Test
+    void failsTheServerObservationWhereItsTracingContextHoldsNoSpan() throws Exception {
+        IllegalStateException failure = new IllegalStateException("boom");
+
+        ServerRequestObservationContext observed =
+                resolveObserved(failure, context -> context.put(TracingContext.class, new TracingContext()));
+
+        assertThat(observed.getError()).isSameAs(failure);
+    }
+
+    private ServerRequestObservationContext resolveObserved(Exception failure) throws Exception {
+        return resolveObserved(failure, context -> {});
+    }
+
+    /** Resolves {@code failure} for an HTML request inside Spring's own server observation filter. */
+    private ServerRequestObservationContext resolveObserved(
+            Exception failure, Consumer<ServerRequestObservationContext> beforeResolving) throws Exception {
+        request.addHeader("Accept", "text/html");
+        new ServerHttpObservationFilter(TestObservationRegistry.create()).doFilter(request, response, (req, res) -> {
+            beforeResolving.accept(
+                    ServerHttpObservationFilter.findObservationContext(request).orElseThrow());
+            resolver.resolveException(request, response, null, failure);
+        });
+        return ServerHttpObservationFilter.findObservationContext(request).orElseThrow();
     }
 
     /** A handler of Peekaboot's own, inside the package its API advice answers for. */

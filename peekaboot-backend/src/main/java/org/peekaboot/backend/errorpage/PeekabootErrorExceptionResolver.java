@@ -87,7 +87,7 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
         if (chain.cyclic()) {
             // Spring checks every answer for a disconnected client by walking the whole chain, which never ends here.
             HttpStatusCode annotated = annotatedStatusOf(chain.links());
-            return annotated != null ? page(request, annotated) : unmappedPage(request, ex);
+            return annotated != null ? page(request, annotated, ex) : unmappedPage(request, ex);
         }
         return ApiProblemHandler.answers(handler, ex) ? null : springMappedPage(request, response, handler, ex);
     }
@@ -111,7 +111,7 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
         if (recorder.message != null) {
             request.setAttribute(RequestDispatcher.ERROR_MESSAGE, recorder.message);
         }
-        return page(request, HttpStatusCode.valueOf(recorder.status));
+        return page(request, HttpStatusCode.valueOf(recorder.status), ex);
     }
 
     /**
@@ -128,10 +128,17 @@ public class PeekabootErrorExceptionResolver implements HandlerExceptionResolver
     /** Unmapped, it would have escaped to the container, which logs it at ERROR under this message. */
     private ModelAndView unmappedPage(HttpServletRequest request, Exception ex) {
         log.error("Request processing failed: {}", ex.toString(), ex);
-        return page(request, HttpStatus.INTERNAL_SERVER_ERROR);
+        return page(request, HttpStatus.INTERNAL_SERVER_ERROR, ex);
     }
 
-    private ModelAndView page(HttpServletRequest request, HttpStatusCode status) {
+    /**
+     * A 4xx is the caller's mistake and fails nothing; a 5xx fails the request's server span with
+     * the exception, as an exception escaping to the container fails it.
+     */
+    private ModelAndView page(HttpServletRequest request, HttpStatusCode status, Exception ex) {
+        if (status.is5xxServerError()) {
+            ServerRequestFailure.record(request, ex);
+        }
         request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, status.value());
         request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, request.getRequestURI());
         request.setAttribute(RequestDispatcher.ERROR_METHOD, request.getMethod());

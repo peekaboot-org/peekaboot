@@ -363,7 +363,7 @@ org.peekaboot.backend/
 
 ### Tracing Flow
 
-1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`. A span failed when its status is ERROR. An exception a view renders never fails the request's server span, because `DispatcherServlet.processDispatchResult` clears the error request attributes after rendering, before `ServerHttpObservationFilter` reads them. So Peekaboot's error page leaves the server span OK whether it answers 4xx or 5xx. A 5xx trace still fails through its HTTP status and the ERROR log the page writes for an unhandled exception
+1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`. A span failed when its status is ERROR. `DispatcherServlet.processDispatchResult` clears the error request attributes after an error view renders, before `ServerHttpObservationFilter` reads them, so an exception a view renders never reaches the server span that way. Where `peekaboot.error-page.override` answers an exception with a 5xx page, `ServerRequestFailure` fails the server span with that exception itself. A 4xx the page answers leaves the server span OK. So does a page rendered on the ERROR dispatch, which runs after the server span has ended, and so does an application's own view. Their 5xx still fails the trace through its HTTP status
 2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and hands each event on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else `ErrorDigestRecorder.liveInputs()`, which applies it to the store and then records the trace in the error digest where the input made it complete and failed. The journal hands its live inputs to the same recorder, and replays its files into the store directly, so a restored trace never counts again. The store (`InMemoryTraceStore`) is three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event. One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
@@ -750,8 +750,11 @@ or reason. Where that mapping answers without a status, a client that
 already hung up, the resolver returns its empty `ModelAndView`, so nothing is written to the dead
 connection. Anything left is a 500, and since the container would have logged it at ERROR had it escaped,
 the resolver logs it on its own logger as `Request processing failed: <exception>`, the message
-`FrameworkServlet` gives it. It sets `RequestDispatcher.ERROR_STATUS_CODE`, `ERROR_REQUEST_URI` and
-`ERROR_METHOD` on the request (nothing else sets that last one on a REQUEST dispatch), so
+`FrameworkServlet` gives it. For a 5xx it first fails the request's server span with the exception
+through `ServerRequestFailure`, because Spring clears the error request attributes before its
+observation filter reads them (see *Tracing Flow*). It sets `RequestDispatcher.ERROR_STATUS_CODE`,
+`ERROR_REQUEST_URI` and `ERROR_METHOD` on the request (nothing else sets that last one on a
+REQUEST dispatch), so
 `PeekabootErrorView` renders the same request line, status and reason it would off a real ERROR
 dispatch, and returns a `ModelAndView` carrying that status and a `PeekabootErrorView` built the
 same way the `ErrorViewResolver`'s is, from the shared `StackTraceRules` and `PeekabootPaths` beans.

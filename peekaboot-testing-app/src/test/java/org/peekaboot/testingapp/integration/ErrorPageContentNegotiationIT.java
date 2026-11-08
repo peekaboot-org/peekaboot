@@ -155,6 +155,36 @@ class ErrorPageContentNegotiationIT {
                     .doesNotContain(traceId);
         }
 
+        /**
+         * Spring clears the error request attributes once the page has rendered, before its
+         * observation filter reads them. The page fails the server span itself, as the exception
+         * escaping to the container fails it without the override.
+         */
+        @Test
+        void aFailureThePageAnswersFailsTheServerSpan() {
+            String traceId = TraceApiClient.traceIdOf(fetchBoom("text/html").headers());
+
+            JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
+
+            JsonNode rootSpan = trace.path("data").path("rootSpan");
+            String rootSpanId = rootSpan.path("spanId").asString();
+            assertThat(rootSpan.path("status").asString()).isEqualTo("ERROR");
+            assertThat(rootSpan.path("exception").path("type").asString()).isEqualTo("java.lang.IllegalStateException");
+            assertThat(rootSpan.path("exception").path("message").asString())
+                    .isEqualTo("order reconciliation gateway is unreachable");
+            assertThat(rootSpan.path("tags").path("exception").asString()).isEqualTo("IllegalStateException");
+            JsonNode summary = trace.path("summary");
+            assertThat(summary.path("reasons")
+                            .valueStream()
+                            .filter(reason ->
+                                    "EXCEPTION".equals(reason.path("kind").asString()))
+                            .map(reason -> reason.path("spanId").asString()))
+                    .containsExactly(rootSpanId);
+            assertThat(summary.path("cause").path("spanId").asString()).isEqualTo(rootSpanId);
+            assertThat(summary.path("cause").path("applicationFrame").asString())
+                    .startsWith("org.peekaboot.testingapp.controller.OrderController.boom(");
+        }
+
         /** A failure the page answers with 500 still fails the trace and names the handler's exception, unlike the 400 above. */
         @Test
         void aFailureThePageAnswersStillFailsTheTrace() {
