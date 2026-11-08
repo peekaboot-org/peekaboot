@@ -119,9 +119,9 @@ class AutoSecuredDashboardIT {
         assertThat(api().headersOf("/peekaboot").getFirst("WWW-Authenticate")).contains("realm=\"Peekaboot\"");
     }
 
-    /** The document sits under /peekaboot/api, so the guard challenges it like every endpoint. */
+    /** The document and the index sit at /peekaboot/api, so the guard challenges them like every endpoint. */
     @ParameterizedTest
-    @ValueSource(strings = {"/peekaboot/api/openapi.json"})
+    @ValueSource(strings = {"/peekaboot/api/openapi.json", "/peekaboot/api"})
     void theApiDescriptionRejectsAnAnonymousRequest(String path) {
         assertThat(api().statusOf(path)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
@@ -228,7 +228,7 @@ class AutoSecuredDashboardIT {
     /**
      * The rest of the dashboard moves with it: the entry redirect lands under the prefix, the
      * toolbar leaves the dashboard's own pages alone and loads from where the dashboard now is, and
-     * the API's document names the prefix as its server.
+     * the API's document and index name the prefix.
      */
     @Test
     void servesTheDashboardAndToolbarUnderTheServletPath(@TempDir Path dir) {
@@ -250,6 +250,8 @@ class AutoSecuredDashboardIT {
                             .path("url")
                             .asString())
                     .isEqualTo("/app");
+            assertThat(signedIn.getJson("/app/peekaboot/api").path("openapi").asString())
+                    .isEqualTo("/app/peekaboot/api/openapi.json");
         }
     }
 

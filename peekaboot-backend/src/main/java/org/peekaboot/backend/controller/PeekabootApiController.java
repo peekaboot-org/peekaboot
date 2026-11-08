@@ -2,6 +2,7 @@ package org.peekaboot.backend.controller;
 
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.domain.api.ApiDocument;
+import org.peekaboot.backend.domain.api.ApiIndex;
 import org.peekaboot.backend.domain.api.OpenApiDocument;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -9,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-/** The API described for a client that reads it. */
+/** The API described for a client that reads it, the OpenAPI document and the index drawn from it. */
 @RestController
 public class PeekabootApiController {
 
@@ -19,6 +20,11 @@ public class PeekabootApiController {
     public PeekabootApiController(ApiDocument document, PeekabootPaths paths) {
         this.document = document;
         this.paths = paths;
+    }
+
+    @GetMapping(value = ApiDocument.API_ROOT, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiIndex index() {
+        return document.index(dispatcherServletRoot());
     }
 
     @GetMapping(value = ApiDocument.DOCUMENT_PATH, produces = MediaType.APPLICATION_JSON_VALUE)

@@ -306,12 +306,12 @@ org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on /peekaboot/api/**), QueryParameterBinding, PeekabootApiController (the OpenAPI document)
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on /peekaboot/api/**), QueryParameterBinding, PeekabootApiController (the OpenAPI document and the API's index)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── actuator/           # ActuatorInsightsResponse: the dashboard's aggregate DTO, one field per section below
-│   ├── api/                # ApiDocument (the bundled OpenAPI document, served with the request's own server), OpenApiDocument
+│   ├── api/                # ApiDocument (the bundled OpenAPI document, served with the request's own server), OpenApiDocument, ApiIndex
 │   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
 │   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── errors/             # ErrorDigestParameters, ErrorDigestResponse, ErrorDigestEntry: the error digest's request and entries
@@ -594,6 +594,11 @@ names `QueryParameterGuard` lists in its refusal, and real answers of every endp
 stream's data included, must validate against the schemas. `ApiContract` validates with
 networknt's JSON Schema validator in the OpenAPI 3.1 dialect, so a field added to a record
 without its schema fails the build.
+
+`GET /peekaboot/api` is the index drawn from the same document. It lists each path behind the
+request's prefix with its operation's `summary` as its purpose, and the document's own path. An
+endpoint reaches the index when it reaches the document, and `OpenApiContractIT` fails until it
+does.
 
 The schemas are named after the Java types they describe. Every object schema lists every
 property as required and allows no other, which is the wire convention that a missing value is

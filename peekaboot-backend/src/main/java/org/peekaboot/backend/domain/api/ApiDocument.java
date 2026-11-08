@@ -3,6 +3,7 @@ package org.peekaboot.backend.domain.api;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.List;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.config.PeekabootPaths;
 import tools.jackson.databind.node.ObjectNode;
@@ -25,8 +26,16 @@ public final class ApiDocument {
 
     private final ObjectNode document;
 
+    private final List<ApiIndex.Endpoint> endpoints;
+
     private ApiDocument(ObjectNode document) {
         this.document = document;
+        this.endpoints = document.path("paths")
+                .propertyStream()
+                .map(path -> new ApiIndex.Endpoint(
+                        path.getKey(),
+                        path.getValue().path("get").path("summary").asString()))
+                .toList();
     }
 
     /** The document the backend jar ships. */
@@ -50,5 +59,14 @@ public final class ApiDocument {
         ObjectNode copy = document.deepCopy();
         copy.putArray("servers").addObject().put("url", root.isEmpty() ? "/" : root);
         return new OpenApiDocument(copy);
+    }
+
+    /** Every path the document describes with its summary, each behind {@code root} as {@link #forServer} names it. */
+    public ApiIndex index(String root) {
+        return new ApiIndex(
+                root + DOCUMENT_PATH,
+                endpoints.stream()
+                        .map(endpoint -> new ApiIndex.Endpoint(root + endpoint.path(), endpoint.purpose()))
+                        .toList());
     }
 }

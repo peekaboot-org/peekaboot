@@ -38,4 +38,21 @@ class ApiDocumentTest {
         assertThat(first.content().path("servers").path(0).path("url").asString())
                 .isEqualTo("/a");
     }
+
+    @Test
+    void theIndexListsEveryPathBehindItsRootWithItsSummary() {
+        ApiIndex index = bundled.index("/ctx");
+
+        assertThat(index.openapi()).isEqualTo("/ctx/peekaboot/api/openapi.json");
+        assertThat(index.endpoints())
+                .hasSize(bundled.forServer("").content().path("paths").size())
+                .first()
+                .isEqualTo(new ApiIndex.Endpoint(
+                        "/ctx/peekaboot/api",
+                        "Lists every endpoint with one line on what it is for, and where the OpenAPI document is."));
+        assertThat(index.endpoints()).allSatisfy(endpoint -> {
+            assertThat(endpoint.path()).startsWith("/ctx/peekaboot/api");
+            assertThat(endpoint.purpose()).isNotBlank();
+        });
+    }
 }

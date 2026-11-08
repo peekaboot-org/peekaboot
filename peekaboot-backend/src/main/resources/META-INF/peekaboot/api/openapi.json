@@ -15,6 +15,20 @@
   "servers": [{"url": "/"}],
   "security": [{"peekabootBasic": []}, {}],
   "paths": {
+    "/peekaboot/api": {
+      "get": {
+        "operationId": "getApiIndex",
+        "summary": "Lists every endpoint with one line on what it is for, and where the OpenAPI document is.",
+        "responses": {
+          "200": {
+            "description": "The index.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiIndex"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
     "/peekaboot/api/openapi.json": {
       "get": {
         "operationId": "getOpenApiDocument",
@@ -535,6 +549,29 @@
           "security": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
           "paths": {"type": "object", "additionalProperties": true},
           "components": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "ApiIndex": {
+        "type": "object",
+        "description": "Where this document is, and every endpoint it describes.",
+        "additionalProperties": false,
+        "required": ["openapi", "endpoints"],
+        "properties": {
+          "openapi": {"type": "string", "description": "The path of this document, as a client addresses it."},
+          "endpoints": {"type": "array", "items": {"$ref": "#/components/schemas/ApiIndex.Endpoint"}}
+        }
+      },
+      "ApiIndex.Endpoint": {
+        "type": "object",
+        "description": "One endpoint and what it is for.",
+        "additionalProperties": false,
+        "required": ["path", "purpose"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The path template as a client addresses it, such as `/peekaboot/api/traces/{traceId}`."
+          },
+          "purpose": {"type": "string", "description": "The operation's summary in this document."}
         }
       },
       "TraceListResponse": {

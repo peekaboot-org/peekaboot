@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.domain.api.ApiDocument;
 import org.peekaboot.backend.problem.ApiProblemHandler;
@@ -31,10 +33,20 @@ class PeekabootApiControllerTest {
                 .andExpect(jsonPath("$.servers[0].url").value("/ctx"));
     }
 
-    /** The guard reads what a handler takes off its signature, and this one takes nothing. */
     @Test
-    void refusesAParameterTheEndpointDoesNotTake() throws Exception {
-        mvc.perform(get("/ctx/peekaboot/api/openapi.json").contextPath("/ctx").param("format", "yaml"))
+    void servesTheIndexWithEveryPathBehindTheContextPath() throws Exception {
+        mvc.perform(get("/ctx/peekaboot/api").contextPath("/ctx"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.openapi").value("/ctx/peekaboot/api/openapi.json"))
+                .andExpect(jsonPath("$.endpoints[0].path").value("/ctx/peekaboot/api"));
+    }
+
+    /** The guard reads what a handler takes off its signature; neither handler takes anything. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/ctx/peekaboot/api/openapi.json", "/ctx/peekaboot/api"})
+    void refusesAParameterNeitherEndpointTakes(String path) throws Exception {
+        mvc.perform(get(path).contextPath("/ctx").param("format", "yaml"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.parameter").value("format"))
                 .andExpect(jsonPath("$.detail").value("Unknown parameter 'format'. Accepted: none."));

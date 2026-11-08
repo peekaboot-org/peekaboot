@@ -205,10 +205,31 @@ class OpenApiContractIT extends TestingAppITBase {
         assertThat(contract.document().path("servers").toString()).isEqualTo("[{\"url\":\"/\"}]");
     }
 
+    /** The index is drawn from the document, so it lists the same paths in the same order, each with its summary. */
+    @Test
+    void theIndexListsEveryPathTheDocumentDescribesWithItsSummary() {
+        JsonNode index = api.getJson(ApiContract.INDEX_PATH);
+
+        assertThat(index.path("openapi").asString()).isEqualTo(ApiContract.DOCUMENT_PATH);
+        assertThat(index.path("endpoints")
+                        .valueStream()
+                        .map(endpoint -> endpoint.path("path").asString()))
+                .containsExactlyElementsOf(contract.document().path("paths").propertyNames());
+        assertThat(index.path("endpoints")
+                        .valueStream()
+                        .map(endpoint -> endpoint.path("purpose").asString()))
+                .containsExactlyElementsOf(contract.document()
+                        .path("paths")
+                        .valueStream()
+                        .map(path -> path.path("get").path("summary").asString())
+                        .toList());
+    }
+
     @ParameterizedTest
     @CsvSource(
             delimiter = '|',
             value = {
+                "/peekaboot/api | /peekaboot/api",
                 "/peekaboot/api/openapi.json | /peekaboot/api/openapi.json",
                 "/peekaboot/api/features | /peekaboot/api/features",
                 "/peekaboot/api/traces | /peekaboot/api/traces",
