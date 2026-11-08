@@ -67,6 +67,7 @@ Full docs live at [www.peekaboot.org](https://www.peekaboot.org).
 - [Insights](https://www.peekaboot.org/docs/insights/)
 - [Configuration](https://www.peekaboot.org/docs/configuration/)
 - [HTTP API](https://www.peekaboot.org/docs/api/)
+- [Agents](https://www.peekaboot.org/docs/agents/)
 - [Security](https://www.peekaboot.org/docs/security/)
 - [Troubleshooting](https://www.peekaboot.org/docs/troubleshooting/)
 - [Releases](https://www.peekaboot.org/releases/)
