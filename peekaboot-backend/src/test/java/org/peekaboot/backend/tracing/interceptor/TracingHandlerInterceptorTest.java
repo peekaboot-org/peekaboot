@@ -183,6 +183,90 @@ class TracingHandlerInterceptorTest {
                 .hasBeenStopped();
     }
 
+    /** A resolver that answers the handler's exception hands afterCompletion none; the handler span still fails with it. */
+    @Test
+    void afterCompletion_recordsAFailureAResolverAnsweredOnTheHandlerObservation() {
+        Object handler = new Object();
+        IllegalStateException failure = new IllegalStateException("answered by a resolver");
+
+        interceptor.preHandle(request, response, handler);
+        TracingHandlerInterceptor.failHandler(request, failure);
+        interceptor.afterCompletion(request, response, handler, null);
+
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.handler")
+                .that()
+                .hasError(failure)
+                .hasBeenStopped();
+    }
+
+    /** The error page can render where Peekaboot's tracing is off, so no interceptor ran. */
+    @Test
+    void failHandler_isANoOpWhereTheInterceptorNeverRan() {
+        TracingHandlerInterceptor.failHandler(request, new IllegalStateException("answered by a resolver"));
+
+        assertThat(request.getAttributeNames().hasMoreElements()).isFalse();
+    }
+
+    /** A forwarded handler's failure is its own dispatch's; the forwarding dispatch's spans stay OK. */
+    @Test
+    void failHandler_failsOnlyTheInnermostDispatchsHandler() {
+        List<Throwable> handlerErrors = new ArrayList<>();
+        observationRegistry.observationConfig().observationHandler(new ObservationHandler<>() {
+            @Override
+            public boolean supportsContext(Observation.Context context) {
+                return true;
+            }
+
+            @Override
+            public void onStop(Observation.Context context) {
+                if ("spring.handler".equals(context.getName())) {
+                    handlerErrors.add(context.getError());
+                }
+            }
+        });
+        Object outerHandler = new Object();
+        Object forwardedHandler = new Object();
+        IllegalStateException failure = new IllegalStateException("answered by a resolver");
+
+        interceptor.preHandle(request, response, outerHandler);
+        interceptor.postHandle(request, response, outerHandler, new ModelAndView("forward:/users"));
+        request.setDispatcherType(DispatcherType.FORWARD);
+        interceptor.preHandle(request, response, forwardedHandler);
+        TracingHandlerInterceptor.failHandler(request, failure);
+        interceptor.afterCompletion(request, response, forwardedHandler, null);
+        request.setDispatcherType(DispatcherType.REQUEST);
+        interceptor.afterCompletion(request, response, outerHandler, null);
+
+        assertThat(handlerErrors)
+                .as("outer handler first, then the forwarded one")
+                .containsExactly(null, failure);
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.view.render")
+                .that()
+                .doesNotHaveError();
+    }
+
+    /** The handler span ended when the handler handed off, so an async failure leaves it OK, as without a resolver. */
+    @Test
+    void failHandler_onTheAsyncRedispatchLeavesTheEndedHandlerSpanAlone() {
+        Object handler = new Object();
+
+        interceptor.preHandle(request, response, handler);
+        interceptor.afterConcurrentHandlingStarted(request, response, handler);
+        request.setDispatcherType(DispatcherType.ASYNC);
+        interceptor.preHandle(request, response, handler);
+        TracingHandlerInterceptor.failHandler(request, new IllegalStateException("answered by a resolver"));
+        interceptor.afterCompletion(request, response, handler, null);
+
+        assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.handler")
+                .that()
+                .doesNotHaveError()
+                .hasBeenStopped();
+    }
+
     @Test
     void preHandle_shouldResolveHandlerMethodName() throws NoSuchMethodException {
         request.setRequestURI("/api/users");

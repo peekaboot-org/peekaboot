@@ -50,6 +50,20 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         private Observation.Scope handlerScope;
         private Observation viewObservation;
         private Observation.Scope viewScope;
+        private Throwable resolvedFailure;
+    }
+
+    /**
+     * Fails the handler span of the request's current dispatch with {@code failure} once it
+     * completes. {@link #afterCompletion} receives only an exception that escapes every
+     * resolver, so a resolver answering a failure would otherwise leave the span OK. A no-op
+     * where this interceptor never ran for the request.
+     */
+    public static void failHandler(HttpServletRequest request, Throwable failure) {
+        if (request.getAttribute(DISPATCH_STACK_ATTR) instanceof Deque<?> dispatches
+                && dispatches.peek() instanceof DispatchObservations dispatch) {
+            dispatch.resolvedFailure = failure;
+        }
     }
 
     /**
@@ -129,10 +143,10 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         }
 
         // an exception in the handler skips postHandle
-        stopHandlerObservation(dispatch, ex);
+        stopHandlerObservation(dispatch, ex != null ? ex : dispatch.resolvedFailure);
     }
 
-    private static void stopHandlerObservation(DispatchObservations dispatch, Exception ex) {
+    private static void stopHandlerObservation(DispatchObservations dispatch, Throwable ex) {
         if (dispatch.handlerObservation == null) {
             return;
         }
@@ -142,7 +156,7 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         log.trace("Stopped handler observation");
     }
 
-    private static void stop(Observation observation, Observation.Scope scope, Exception ex) {
+    private static void stop(Observation observation, Observation.Scope scope, Throwable ex) {
         closeScope(scope);
         if (ex != null) {
             observation.error(ex);

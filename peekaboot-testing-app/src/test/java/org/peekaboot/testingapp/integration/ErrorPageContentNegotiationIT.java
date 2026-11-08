@@ -81,6 +81,35 @@ class ErrorPageContentNegotiationIT {
             }
         }
 
+        /**
+         * The handler threw, so its span fails with the exception, as it does where the exception
+         * escapes to the container, and the summary's cause is the span nearest the throw.
+         */
+        @Test
+        void aFailureFailsTheHandlerSpanAndIsItsCause() {
+            String traceId = TraceApiClient.traceIdOf(fetchBoom("text/html").headers());
+
+            JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
+
+            JsonNode handlerSpan = SpanTree.spanTagged(trace, "handler.name", "OrderController.boom");
+            String handlerSpanId = SpanTree.spanId(handlerSpan);
+            assertThat(handlerSpan.path("status").asString()).isEqualTo("ERROR");
+            assertThat(handlerSpan.path("exception").path("type").asString())
+                    .isEqualTo("java.lang.IllegalStateException");
+            assertThat(handlerSpan.path("exception").path("message").asString())
+                    .isEqualTo("order reconciliation gateway is unreachable");
+            JsonNode summary = trace.path("summary");
+            assertThat(summary.path("reasons")
+                            .valueStream()
+                            .filter(reason ->
+                                    "EXCEPTION".equals(reason.path("kind").asString()))
+                            .map(reason -> reason.path("spanId").asString()))
+                    .containsExactly(SpanTree.spanId(trace.path("data").path("rootSpan")), handlerSpanId);
+            assertThat(summary.path("cause").path("spanId").asString()).isEqualTo(handlerSpanId);
+            assertThat(summary.path("cause").path("applicationFrame").asString())
+                    .startsWith("org.peekaboot.testingapp.controller.OrderController.boom(");
+        }
+
         ErrorResponse fetch(String path, String accept) {
             return api.restClient()
                     .get()
@@ -135,14 +164,18 @@ class ErrorPageContentNegotiationIT {
 
             JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
 
+            assertThat(trace.path("data").path("rootSpan").path("status").asString())
+                    .isEqualTo("OK");
+            assertThat(SpanTree.spanTagged(trace, "handler.name", "PersonController.person")
+                            .path("status")
+                            .asString())
+                    .isEqualTo("OK");
             JsonNode summary = trace.path("summary");
             assertThat(summary.path("request").path("statusCode").asInt()).isEqualTo(400);
             assertThat(summary.path("outcome").asString()).isEqualTo("OK");
             assertThat(summary.path("buckets").valueStream().map(JsonNode::asString))
                     .doesNotContain("ERRORS");
             assertThat(summary.path("cause").isNull()).isTrue();
-            assertThat(trace.path("data").path("rootSpan").path("status").asString())
-                    .isEqualTo("OK");
             assertThat(SpanTree.issuesOfType(trace, "CLIENT_ERROR"))
                     .singleElement()
                     .satisfies(issue -> assertThat(issue.path("value").asInt()).isEqualTo(400));
@@ -167,22 +200,11 @@ class ErrorPageContentNegotiationIT {
             JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
 
             JsonNode rootSpan = trace.path("data").path("rootSpan");
-            String rootSpanId = rootSpan.path("spanId").asString();
             assertThat(rootSpan.path("status").asString()).isEqualTo("ERROR");
             assertThat(rootSpan.path("exception").path("type").asString()).isEqualTo("java.lang.IllegalStateException");
             assertThat(rootSpan.path("exception").path("message").asString())
                     .isEqualTo("order reconciliation gateway is unreachable");
             assertThat(rootSpan.path("tags").path("exception").asString()).isEqualTo("IllegalStateException");
-            JsonNode summary = trace.path("summary");
-            assertThat(summary.path("reasons")
-                            .valueStream()
-                            .filter(reason ->
-                                    "EXCEPTION".equals(reason.path("kind").asString()))
-                            .map(reason -> reason.path("spanId").asString()))
-                    .containsExactly(rootSpanId);
-            assertThat(summary.path("cause").path("spanId").asString()).isEqualTo(rootSpanId);
-            assertThat(summary.path("cause").path("applicationFrame").asString())
-                    .startsWith("org.peekaboot.testingapp.controller.OrderController.boom(");
         }
 
         /** A failure the page answers with 500 still fails the trace and names the handler's exception, unlike the 400 above. */

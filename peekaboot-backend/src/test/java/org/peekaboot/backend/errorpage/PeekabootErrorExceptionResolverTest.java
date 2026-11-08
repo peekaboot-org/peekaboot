@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Timeout;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.problemfixture.ApplicationEndpoint;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.TypeMismatchException;
@@ -589,6 +590,37 @@ class PeekabootErrorExceptionResolverTest {
                 resolveObserved(failure, context -> context.put(TracingContext.class, new TracingContext()));
 
         assertThat(observed.getError()).isSameAs(failure);
+    }
+
+    /** The handler threw what the page answers with 5xx, so its span fails as the server span does, a Spring-mapped 5xx included. */
+    @Test
+    void failsTheHandlerObservationForAServerErrorSpringMaps() {
+        ResponseStatusException unavailable = new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+
+        assertThat(resolveInsideTheHandlerObservation(unavailable))
+                .hasObservationWithNameEqualTo("spring.handler")
+                .that()
+                .hasError(unavailable);
+    }
+
+    @Test
+    void leavesTheHandlerObservationAloneForA4xx() {
+        assertThat(resolveInsideTheHandlerObservation(new ResponseStatusException(HttpStatus.NOT_FOUND)))
+                .hasObservationWithNameEqualTo("spring.handler")
+                .that()
+                .doesNotHaveError();
+    }
+
+    /** Resolves {@code failure} for an HTML request between the callbacks Peekaboot's handler interceptor gets from Spring. */
+    private TestObservationRegistry resolveInsideTheHandlerObservation(Exception failure) {
+        TestObservationRegistry registry = TestObservationRegistry.create();
+        TracingHandlerInterceptor interceptor = new TracingHandlerInterceptor(registry);
+        Object handler = new Object();
+        request.addHeader("Accept", "text/html");
+        interceptor.preHandle(request, response, handler);
+        resolver.resolveException(request, response, handler, failure);
+        interceptor.afterCompletion(request, response, handler, null);
+        return registry;
     }
 
     private ServerRequestObservationContext resolveObserved(Exception failure) throws Exception {

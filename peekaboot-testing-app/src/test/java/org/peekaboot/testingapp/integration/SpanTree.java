@@ -214,6 +214,20 @@ final class SpanTree {
         return spans;
     }
 
+    /** The first span whose tag {@code key} reads {@code value}, in walk order, or an error when none does. */
+    static JsonNode spanTagged(JsonNode trace, String key, String value) {
+        List<JsonNode> found = new ArrayList<>();
+        walk(data(trace).path("rootSpan"), span -> {
+            if (value.equals(span.path("tags").path(key).asString(""))) {
+                found.add(span);
+            }
+        });
+        if (found.isEmpty()) {
+            throw new AssertionError("no span tagged " + key + "=" + value + ", among " + names(trace));
+        }
+        return found.getFirst();
+    }
+
     private static JsonNode data(JsonNode trace) {
         return trace.path("data");
     }
