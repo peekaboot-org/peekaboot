@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -17,12 +19,14 @@ import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.core.io.DefaultResourceLoader;
 
 class LifecycleEventRecorderTest {
 
@@ -48,9 +52,17 @@ class LifecycleEventRecorderTest {
     }
 
     private static ApplicationReadyEvent ready(ConfigurableApplicationContext context, long timestamp) {
+        SpringApplication application = new SpringApplication(LifecycleEventRecorderTest.class);
+        application.setMainApplicationClass(LifecycleEventRecorderTest.class);
+        return ready(context, timestamp, application);
+    }
+
+    private static ApplicationReadyEvent ready(
+            ConfigurableApplicationContext context, long timestamp, SpringApplication application) {
         ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
         when(event.getApplicationContext()).thenReturn(context);
         when(event.getTimestamp()).thenReturn(timestamp);
+        when(event.getSpringApplication()).thenReturn(application);
         return event;
     }
 
@@ -99,16 +111,38 @@ class LifecycleEventRecorderTest {
     }
 
     @Test
-    void anApplicationWithoutBuildOrGitInfoStillRecordsItsStart() {
+    void anApplicationWithoutBuildOrGitInfoStillRecordsItsStart() throws IOException {
         LifecycleEventLog log = log();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
 
-        recorder.onReady(ready(context, 1L));
+        // an empty classpath, so a git.properties in the test JVM's own classpath cannot answer for the application
+        try (URLClassLoader classpath = new URLClassLoader(new URL[0], null)) {
+            recorder.onReady(ready(context, 1L, new SpringApplication(new DefaultResourceLoader(classpath))));
 
-        await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
+            await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
+        }
         assertThat(log.events().get(0).build()).isEmpty();
         assertThat(log.events().get(0).git()).isEmpty();
+    }
+
+    /** Where the host names no git.properties, the recorder reads the application's own. */
+    @Test
+    void anApplicationsOwnGitPropertiesIsRecordedWhereTheHostLocatesNone(@TempDir Path resources) throws IOException {
+        Files.writeString(resources.resolve("git.properties"), "git.branch=main\ngit.commit.id.abbrev=own1234\n");
+        LifecycleEventLog log = log();
+        ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
+
+        try (URLClassLoader classpath =
+                new URLClassLoader(new URL[] {resources.toUri().toURL()}, null)) {
+            recorder.onReady(ready(context, 1L, new SpringApplication(new DefaultResourceLoader(classpath))));
+
+            await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
+        }
+        assertThat(log.events().get(0).git())
+                .containsEntry("branch", "main")
+                .containsEntry("commit.id.abbrev", "own1234");
     }
 
     /**

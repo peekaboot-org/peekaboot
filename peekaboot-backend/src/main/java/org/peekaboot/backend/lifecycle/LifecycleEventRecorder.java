@@ -1,6 +1,7 @@
 package org.peekaboot.backend.lifecycle;
 
 import java.time.Clock;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.ApplicationContext;
@@ -17,28 +18,33 @@ public class LifecycleEventRecorder {
 
     private final LifecycleEventLog eventLog;
     private final BuildInfoProvider buildInfoProvider;
-    private final GitProperties gitProperties;
+    private final @Nullable GitProperties hostLocatedGitProperties;
     private final ApplicationContext ownContext;
     private final Clock clock;
 
+    /**
+     * Records the start with the application's own git facts.
+     *
+     * @param hostLocatedGitProperties Boot's, where the host names its git.properties with {@code spring.info.git.location}; null has the recorder read the application's own
+     */
     public LifecycleEventRecorder(
             LifecycleEventLog eventLog,
             BuildInfoProvider buildInfoProvider,
-            GitProperties gitProperties,
+            @Nullable GitProperties hostLocatedGitProperties,
             ApplicationContext ownContext) {
-        this(eventLog, buildInfoProvider, gitProperties, ownContext, Clock.systemUTC());
+        this(eventLog, buildInfoProvider, hostLocatedGitProperties, ownContext, Clock.systemUTC());
     }
 
     /** {@code clock} supplies the instant a stop is stamped with; tests fix it. */
     LifecycleEventRecorder(
             LifecycleEventLog eventLog,
             BuildInfoProvider buildInfoProvider,
-            GitProperties gitProperties,
+            @Nullable GitProperties hostLocatedGitProperties,
             ApplicationContext ownContext,
             Clock clock) {
         this.eventLog = eventLog;
         this.buildInfoProvider = buildInfoProvider;
-        this.gitProperties = gitProperties;
+        this.hostLocatedGitProperties = hostLocatedGitProperties;
         this.ownContext = ownContext;
         this.clock = clock;
     }
@@ -48,6 +54,9 @@ public class LifecycleEventRecorder {
         if (!ContextEvents.fromOwnContext(event, ownContext)) {
             return;
         }
+        GitProperties gitProperties = hostLocatedGitProperties != null
+                ? hostLocatedGitProperties
+                : ApplicationGitProperties.of(event.getSpringApplication());
         eventLog.recordWhenLoaded(LifecycleEvent.start(
                 event.getTimestamp(),
                 ProcessHandle.current().pid(),

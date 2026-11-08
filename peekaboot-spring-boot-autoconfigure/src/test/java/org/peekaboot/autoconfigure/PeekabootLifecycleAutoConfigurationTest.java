@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -8,22 +9,32 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.pool.HikariPool;
+import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 import javax.sql.DataSource;
 import net.osslabz.jdbc.DatabaseProduct;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
+import org.peekaboot.backend.lifecycle.LifecycleEvent;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.lifecycle.LifecycleRuns;
@@ -33,6 +44,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.info.GitProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -47,6 +59,8 @@ import org.springframework.context.annotation.Configuration;
  * never match.
  */
 class PeekabootLifecycleAutoConfigurationTest {
+
+    private static final String DEPENDENCY_JAR = "dependency.jar";
 
     private LogCapture stopBanner;
     private LogCapture hikariStartStopChatter;
@@ -241,6 +255,59 @@ class PeekabootLifecycleAutoConfigurationTest {
                         .isEqualTo("Failed to extract metadata from DataSource 'brokenDataSource': db down");
             });
         }
+    }
+
+    /**
+     * Boot reads the first git.properties on the classpath. For an application without one of
+     * its own, that is a dependency's, and jdbc-url-parser, which Peekaboot brings, ships one.
+     */
+    @Test
+    void aDependencysGitPropertiesIsNotRecordedAsTheApplicationsBuild(@TempDir Path directory) throws IOException {
+        try (URLClassLoader classpath = withDependencyShippingGitProperties(directory)) {
+            contextRunner.withClassLoader(classpath).run(context -> {
+                assertThat(context)
+                        .as("Boot reads a dependency's git.properties")
+                        .hasSingleBean(GitProperties.class);
+                assertThat(recordedStart(context).git()).isEmpty();
+            });
+        }
+    }
+
+    /** spring.info.git.location is the host naming its build's file, wherever that file sits. */
+    @Test
+    void aGitPropertiesTheHostLocatesIsRecordedWhereverItSits(@TempDir Path directory) throws IOException {
+        try (URLClassLoader classpath = withDependencyShippingGitProperties(directory)) {
+            contextRunner
+                    .withClassLoader(classpath)
+                    .withPropertyValues("spring.info.git.location=jar:"
+                            + directory.resolve(DEPENDENCY_JAR).toUri() + "!/git.properties")
+                    .run(context -> assertThat(recordedStart(context).git())
+                            .containsEntry("commit.id.abbrev", "dep1234")
+                            .containsEntry("build.version", "9.9.9"));
+        }
+    }
+
+    /** The test classpath plus a dependency jar whose root holds a git.properties. */
+    private static URLClassLoader withDependencyShippingGitProperties(Path directory) throws IOException {
+        Path jar = directory.resolve(DEPENDENCY_JAR);
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            out.putNextEntry(new JarEntry("git.properties"));
+            out.write("git.commit.id.abbrev=dep1234\ngit.build.version=9.9.9\n".getBytes(StandardCharsets.ISO_8859_1));
+        }
+        return new URLClassLoader(
+                new URL[] {jar.toUri().toURL()}, PeekabootLifecycleAutoConfigurationTest.class.getClassLoader());
+    }
+
+    /** Fires the ApplicationReadyEvent of an application whose main class is this test at the recorder. */
+    private static LifecycleEvent recordedStart(AssertableApplicationContext context) {
+        SpringApplication application = new SpringApplication(PeekabootLifecycleAutoConfigurationTest.class);
+        application.setMainApplicationClass(PeekabootLifecycleAutoConfigurationTest.class);
+        context.getBean(LifecycleEventRecorder.class)
+                .onReady(new ApplicationReadyEvent(
+                        application, new String[0], context.getSourceApplicationContext(), Duration.ZERO));
+        LifecycleEventLog eventLog = context.getBean(LifecycleEventLog.class);
+        await().atMost(Duration.ofSeconds(5)).until(() -> eventLog.events().size() == 1);
+        return eventLog.events().getFirst();
     }
 
     /** Fires the ApplicationReadyEvent at the context's listener and returns the banner it logs. */

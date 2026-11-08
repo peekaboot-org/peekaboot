@@ -156,9 +156,12 @@ public class PeekabootLifecycleAutoConfiguration {
                 LifecycleEventLog lifecycleEventLog,
                 BuildInfoProvider buildInfoProvider,
                 ObjectProvider<GitProperties> gitProperties,
+                Environment environment,
                 ApplicationContext applicationContext) {
-            return new LifecycleEventRecorder(
-                    lifecycleEventLog, buildInfoProvider, gitProperties.getIfAvailable(), applicationContext);
+            // Boot's bean reads the first git.properties on the classpath, which can be a library's.
+            GitProperties hostLocated =
+                    environment.containsProperty("spring.info.git.location") ? gitProperties.getIfAvailable() : null;
+            return new LifecycleEventRecorder(lifecycleEventLog, buildInfoProvider, hostLocated, applicationContext);
         }
 
         @Bean

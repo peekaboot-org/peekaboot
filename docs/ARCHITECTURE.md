@@ -122,6 +122,14 @@ every kept entry under
 A stop event carries only its own timestamp and pid, since its build belongs to the start it
 follows, which the log still remembers.
 
+The git entries come from the application's own `git.properties`, which `ApplicationGitProperties`
+finds when the application is ready. Boot's `GitProperties` reads the first one on the classpath.
+For an application without one, that is whichever library ships one. jdbc-url-parser, which the
+backend depends on, does. A `git.properties` in a classpath directory counts, since only a project
+being built puts one there and Gradle keeps resources apart from classes. One inside a jar counts
+only at the root the main application class was loaded from, `BOOT-INF/classes/` in a Boot jar.
+Where the host sets `spring.info.git.location`, the recorder takes Boot's `GitProperties` as it is.
+
 The log's in-memory half runs independently of `peekaboot.storage.enabled`. With storage off,
 `LifecycleEventLog` still records the current run's start and stop in memory and serves them
 from there; `LifecycleEventFile` is never consulted. That is why a dashboard with persistence
@@ -324,7 +332,7 @@ org.peekaboot.backend/
 ├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, InsightsDataResponse): InsightsCollector, InsightsDataReader (the data endpoint's reading of one level, `LevelData` its window and summaries), StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
 │   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
-├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info
+├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info and the application's own git info
 │   └── web/                # LifecycleController: /peekaboot/api/lifecycle/*
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
