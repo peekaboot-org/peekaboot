@@ -39,7 +39,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
@@ -263,7 +262,7 @@ class PeekabootLifecycleAutoConfigurationTest {
                 assertThat(context)
                         .as("Boot reads a dependency's git.properties")
                         .hasSingleBean(GitProperties.class);
-                assertThat(recordedStart(context).git()).isEmpty();
+                assertThat(recordedStart(context, directory).git()).isEmpty();
             });
         }
     }
@@ -278,20 +277,26 @@ class PeekabootLifecycleAutoConfigurationTest {
                             + directory
                                     .resolve(GitPropertiesFixture.DEPENDENCY_JAR)
                                     .toUri() + "!/git.properties")
-                    .run(context -> assertThat(recordedStart(context).git())
+                    .run(context -> assertThat(recordedStart(context, directory).git())
                             .containsEntry("commit.id.abbrev", "dep1234")
                             .containsEntry("build.version", "9.9.9"));
         }
     }
 
-    /** Starts an application whose main class is this test, then fires its ApplicationReadyEvent at the recorder. */
-    private static LifecycleEvent recordedStart(AssertableApplicationContext context) {
-        SpringApplication application = new SpringApplication(PeekabootLifecycleAutoConfigurationTest.class);
-        application.setMainApplicationClass(PeekabootLifecycleAutoConfigurationTest.class);
+    /**
+     * Publishes the started and ready events of an application whose classpath is the dependency jar
+     * in {@code directory} alone, and returns the event it records.
+     */
+    private static LifecycleEvent recordedStart(AssertableApplicationContext context, Path directory)
+            throws IOException {
         ConfigurableApplicationContext source = context.getSourceApplicationContext();
-        source.publishEvent(new ApplicationStartedEvent(application, new String[0], source, Duration.ZERO));
+        GitPropertiesFixture.publishStarted(source, directory.resolve(GitPropertiesFixture.DEPENDENCY_JAR));
         context.getBean(LifecycleEventRecorder.class)
-                .onReady(new ApplicationReadyEvent(application, new String[0], source, Duration.ZERO));
+                .onReady(new ApplicationReadyEvent(
+                        new SpringApplication(PeekabootLifecycleAutoConfigurationTest.class),
+                        new String[0],
+                        source,
+                        Duration.ZERO));
         LifecycleEventLog eventLog = context.getBean(LifecycleEventLog.class);
         await().atMost(Duration.ofSeconds(5)).until(() -> eventLog.events().size() == 1);
         return eventLog.events().getFirst();

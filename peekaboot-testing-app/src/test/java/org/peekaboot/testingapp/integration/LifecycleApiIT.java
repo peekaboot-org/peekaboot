@@ -2,12 +2,12 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.time.Duration;
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.ObjectProvider;
+import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
@@ -30,7 +30,7 @@ class LifecycleApiIT extends TestingAppITBase {
     private BuildProperties buildProperties;
 
     @Autowired
-    private ObjectProvider<GitProperties> gitProperties;
+    private ApplicationGitProperties applicationGitProperties;
 
     @Test
     void theRunningApplicationServesItsOwnStartWithEveryBuildFieldItKnows() {
@@ -47,22 +47,24 @@ class LifecycleApiIT extends TestingAppITBase {
     }
 
     /**
-     * The pom's {@code failOnNoGitDirectory=false} lets the build run without a resolvable
-     * {@code .git} directory, in which case no {@code git.properties} - and no
-     * {@code GitProperties} bean - exists and the lifecycle history carries no git facts.
+     * Held to the application's own git.properties, as Peekaboot reads it. Without a resolvable
+     * {@code .git}, Gradle's plugin writes none, so Boot's {@code GitProperties} bean is a
+     * dependency's. Maven's git-commit-id still writes one, holding only the build time and version.
+     * The history then serves the branch and commit as null in both builds.
      */
     @Test
     void theRunningApplicationServesTheGitFactsOfItsBuild() {
-        GitProperties git = gitProperties.getIfAvailable();
-        assumeTrue(git != null, "the build generated no git.properties");
+        GitProperties git = applicationGitProperties.get();
+        String branch = git == null ? null : git.getBranch();
+        String shortCommitId = git == null ? null : git.getShortCommitId();
 
         JsonNode event = awaitFirst("/peekaboot/api/lifecycle/events", "events").get(0);
         JsonNode run = awaitFirst("/peekaboot/api/lifecycle/runs", "runs").get(0);
 
-        assertThat(event.required("branch").asString()).isEqualTo(git.getBranch());
-        assertThat(event.required("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
-        assertThat(run.required("branch").asString()).isEqualTo(git.getBranch());
-        assertThat(run.required("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
+        assertThat(stringOrNull(event.required("branch"))).isEqualTo(branch);
+        assertThat(stringOrNull(event.required("shortCommitId"))).isEqualTo(shortCommitId);
+        assertThat(stringOrNull(run.required("branch"))).isEqualTo(branch);
+        assertThat(stringOrNull(run.required("shortCommitId"))).isEqualTo(shortCommitId);
     }
 
     @Test
@@ -80,6 +82,11 @@ class LifecycleApiIT extends TestingAppITBase {
         assertThat(run.required("changed")).isEmpty();
         assertThat(run.required("version").asString()).isEqualTo(buildProperties.getVersion());
         assertThat(Instant.parse(run.required("buildTime").asString())).isAfter(Instant.EPOCH);
+    }
+
+    /** {@code asString} reads a JSON null as an empty string. */
+    private static @Nullable String stringOrNull(JsonNode node) {
+        return node.isNull() ? null : node.asString();
     }
 
     /**
