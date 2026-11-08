@@ -105,6 +105,7 @@ gitProperties {
         "git.build.version",
         "git.commit.id.abbrev",
         "git.commit.id",
+        "git.commit.time",
     )
 }
 

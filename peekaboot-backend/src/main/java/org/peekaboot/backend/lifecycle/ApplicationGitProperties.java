@@ -9,7 +9,10 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.boot.info.GitProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.io.UrlResource;
 import org.springframework.core.io.support.EncodedResource;
 import org.springframework.core.io.support.PropertiesLoaderUtils;
@@ -21,8 +24,9 @@ import org.springframework.util.ClassUtils;
  * jdbc-url-parser, which Peekaboot brings, does. One in a directory belongs to a project being
  * built: the application, a module of it, or the resources directory Gradle keeps apart from its
  * classes. One inside a jar counts only at the classpath root the main application class came from.
+ * The Overview and the lifecycle log both show it.
  */
-final class ApplicationGitProperties {
+public final class ApplicationGitProperties {
 
     private static final Logger log = LoggerFactory.getLogger(ApplicationGitProperties.class);
 
@@ -30,7 +34,34 @@ final class ApplicationGitProperties {
 
     private static final String PREFIX = "git.";
 
-    private ApplicationGitProperties() {}
+    private final @Nullable GitProperties hostLocated;
+
+    private final ApplicationContext ownContext;
+
+    // set on the starting thread, read by request threads
+    private volatile @Nullable GitProperties own;
+
+    /**
+     * Reads the application's own git.properties once it has started, the first moment its main class is known.
+     *
+     * @param hostLocated Boot's, where the host names its git.properties with {@code spring.info.git.location}; null has this read the application's own
+     */
+    public ApplicationGitProperties(@Nullable GitProperties hostLocated, ApplicationContext ownContext) {
+        this.hostLocated = hostLocated;
+        this.ownContext = ownContext;
+    }
+
+    /** Null where the application has no git.properties of its own, or has not started yet. */
+    public @Nullable GitProperties get() {
+        return hostLocated != null ? hostLocated : own;
+    }
+
+    @EventListener
+    public void onStarted(ApplicationStartedEvent event) {
+        if (hostLocated == null && ContextEvents.fromOwnContext(event, ownContext)) {
+            own = of(event.getSpringApplication());
+        }
+    }
 
     /** Null where the application has no git.properties of its own, or where it cannot be read. */
     static @Nullable GitProperties of(SpringApplication application) {

@@ -1,11 +1,21 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import io.opentelemetry.sdk.trace.export.SpanExporter;
+import java.io.IOException;
+import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -13,6 +23,7 @@ import org.peekaboot.backend.controller.ErrorDigestController;
 import org.peekaboot.backend.controller.LogController;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.controller.TraceController;
+import org.peekaboot.backend.domain.application.GitInfo;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SqlStatement;
@@ -20,21 +31,32 @@ import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
+import org.peekaboot.backend.lifecycle.LifecycleEventLog;
+import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.LogSearchService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
+import org.peekaboot.testsupport.LogCapture;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.actuate.autoconfigure.info.InfoContributorAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
+import org.springframework.boot.info.GitProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
@@ -412,6 +434,148 @@ class PeekabootAutoConfigurationTest {
                         assertThat(features.tracing()).isTrue();
                         assertThat(features.tracingSpansPossible()).isFalse();
                     });
+        }
+    }
+
+    /**
+     * Boot's {@code GitProperties} reads the first git.properties on the classpath. For an
+     * application without one of its own, that is a dependency's, and jdbc-url-parser, which
+     * Peekaboot brings, ships one. The host's own actuator info keeps showing it.
+     */
+    @Nested
+    class OverviewGit {
+
+        private final WebApplicationContextRunner overviewContextRunner = new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootAutoConfiguration.class,
+                        ActuatorSourcesAutoConfiguration.class,
+                        ProjectInfoAutoConfiguration.class,
+                        InfoContributorAutoConfiguration.class,
+                        DispatcherServletAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true");
+
+        @Test
+        void leavesOutADependencysGitProperties(@TempDir Path directory) throws IOException {
+            try (URLClassLoader classpath = GitPropertiesFixture.withDependencyShippingGitProperties(directory)) {
+                overviewContextRunner.withClassLoader(classpath).run(context -> {
+                    assertThat(context)
+                            .as("Boot reads a dependency's git.properties")
+                            .hasSingleBean(GitProperties.class);
+                    GitPropertiesFixture.publishStarted(
+                            context.getSourceApplicationContext(),
+                            directory.resolve(GitPropertiesFixture.DEPENDENCY_JAR));
+
+                    assertThat(overviewGit(context)).isNull();
+                });
+            }
+        }
+
+        /** The commit time is read as git-commit-id writes it by default and served as an instant. */
+        @Test
+        void showsTheApplicationsOwnGitProperties(@TempDir Path directory) throws IOException {
+            Path resources = Files.createDirectories(directory.resolve("resources"));
+            Files.writeString(
+                    resources.resolve("git.properties"),
+                    "git.branch=main\ngit.commit.id.abbrev=own1234\ngit.commit.time=2026-11-08T10\\:00\\:00+0100\n");
+            try (URLClassLoader classpath = GitPropertiesFixture.withDependencyShippingGitProperties(directory)) {
+                overviewContextRunner.withClassLoader(classpath).run(context -> {
+                    GitPropertiesFixture.publishStarted(
+                            context.getSourceApplicationContext(),
+                            directory.resolve(GitPropertiesFixture.DEPENDENCY_JAR),
+                            resources);
+
+                    GitInfo git = overviewGit(context);
+                    assertThat(git).isNotNull();
+                    assertThat(git.branch()).isEqualTo("main");
+                    assertThat(git.commit().id()).isEqualTo("own1234");
+                    assertThat(git.commit().time()).isEqualTo(Instant.parse("2026-11-08T09:00:00Z"));
+                });
+            }
+        }
+
+        /** A host that turns Boot's git info contributor off keeps its git out of the Overview too. */
+        @Test
+        void showsNoGitWhereTheHostTurnsInfoGitOff(@TempDir Path directory) throws IOException {
+            assertThat(overviewGitOfOwnFile(directory, "management.info.git.enabled=false"))
+                    .isNull();
+        }
+
+        @Test
+        void showsNoGitWhereTheHostTurnsInfoDefaultsOff(@TempDir Path directory) throws IOException {
+            assertThat(overviewGitOfOwnFile(directory, "management.info.defaults.enabled=false"))
+                    .isNull();
+        }
+
+        @Test
+        void showsGitWhereTheHostTurnsInfoGitBackOn(@TempDir Path directory) throws IOException {
+            assertThat(overviewGitOfOwnFile(
+                            directory, "management.info.defaults.enabled=false", "management.info.git.enabled=true"))
+                    .isEqualTo(new GitInfo("main", null));
+        }
+
+        /** Boot's switch governs the Overview alone; the history keeps the build each run came from. */
+        @Test
+        void theLifecycleLogKeepsTheGitTheOverviewLeavesOut(@TempDir Path directory) throws IOException {
+            Path resources = Files.createDirectories(directory.resolve("resources"));
+            Files.writeString(resources.resolve("git.properties"), "git.branch=main\n");
+            // closing the context logs the stop banner at INFO
+            try (LogCapture stopBanner = LogCapture.attach(ApplicationStoppedListener.class)) {
+                overviewContextRunner
+                        .withConfiguration(AutoConfigurations.of(
+                                PeekabootStorageAutoConfiguration.class, PeekabootLifecycleAutoConfiguration.class))
+                        .withPropertyValues("management.info.git.enabled=false")
+                        .run(context -> {
+                            ConfigurableApplicationContext source = context.getSourceApplicationContext();
+                            GitPropertiesFixture.publishStarted(source, resources);
+                            context.getBean(LifecycleEventRecorder.class)
+                                    .onReady(new ApplicationReadyEvent(
+                                            new SpringApplication(), new String[0], source, Duration.ZERO));
+                            LifecycleEventLog eventLog = context.getBean(LifecycleEventLog.class);
+                            await().atMost(Duration.ofSeconds(5))
+                                    .until(() -> eventLog.events().size() == 1);
+
+                            assertThat(overviewGit(context)).isNull();
+                            assertThat(eventLog.events().getFirst().git()).containsEntry("branch", "main");
+                        });
+            }
+        }
+
+        /** spring.info.git.location is the host naming its build's file, wherever that file sits. */
+        @Test
+        void showsTheGitPropertiesTheHostLocates(@TempDir Path directory) throws IOException {
+            try (URLClassLoader classpath = GitPropertiesFixture.withDependencyShippingGitProperties(directory)) {
+                overviewContextRunner
+                        .withClassLoader(classpath)
+                        .withPropertyValues("spring.info.git.location=jar:"
+                                + directory
+                                        .resolve(GitPropertiesFixture.DEPENDENCY_JAR)
+                                        .toUri()
+                                + "!/git.properties")
+                        .run(context -> {
+                            GitInfo git = overviewGit(context);
+                            assertThat(git).isNotNull();
+                            assertThat(git.commit().id()).isEqualTo("dep1234");
+                        });
+            }
+        }
+
+        private GitInfo overviewGitOfOwnFile(Path directory, String... properties) throws IOException {
+            Path resources = Files.createDirectories(directory.resolve("resources"));
+            Files.writeString(resources.resolve("git.properties"), "git.branch=main\n");
+            AtomicReference<GitInfo> git = new AtomicReference<>();
+            overviewContextRunner.withPropertyValues(properties).run(context -> {
+                GitPropertiesFixture.publishStarted(context.getSourceApplicationContext(), resources);
+                git.set(overviewGit(context));
+            });
+            return git.get();
+        }
+
+        private static GitInfo overviewGit(AssertableWebApplicationContext context) {
+            return context.getBean(ActuatorInsightsService.class)
+                    .getInsights(Locale.ENGLISH, false)
+                    .application()
+                    .git();
         }
     }
 

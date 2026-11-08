@@ -129,19 +129,6 @@ class ActuatorResponseParserTest {
         }
     }
 
-    /** Boot's {@code management.info.git.mode=full} nests the commit id instead of sending a String. */
-    @Test
-    void bindsAFullModeGitCommitId() {
-        Map<String, Object> data = Map.of(
-                "info",
-                Map.of("git", Map.of("commit", Map.of("id", Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4")))));
-
-        ActuatorParsedData response = parser.parse(data);
-
-        assertThat(response.info().git().commit().id())
-                .isEqualTo(Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4"));
-    }
-
     @Test
     void parsesPojoEndpointResults() {
         // At runtime the invoked operations return POJOs (HealthEndpoint's descriptor,

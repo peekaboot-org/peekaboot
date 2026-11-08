@@ -16,6 +16,7 @@ import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.api.ApiDocument;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
 import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.mapper.trace.HibernateSqlFormatter;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
@@ -32,6 +33,7 @@ import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.digest.ErrorDigest;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.actuate.autoconfigure.info.ConditionalOnEnabledInfoContributor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -57,7 +59,7 @@ import org.springframework.context.annotation.Import;
 @ConditionalOnPeekabootServlet
 @ConditionalOnClass(HealthEndpoint.class)
 @EnableConfigurationProperties({PeekabootProperties.class, PeekabootTracingProperties.class, InsightsProperties.class})
-@Import({StackTraceRulesConfiguration.class, MaskingConfiguration.class})
+@Import({StackTraceRulesConfiguration.class, MaskingConfiguration.class, ApplicationGitPropertiesConfiguration.class})
 public class PeekabootAutoConfiguration {
 
     /**
@@ -89,10 +91,21 @@ public class PeekabootAutoConfiguration {
             ActuatorReadings actuatorReadings,
             ActuatorResponseParser actuatorResponseParser,
             MaskingEngine maskingEngine,
-            ObjectProvider<DataSourceMetadataList> dataSourceMetadataList) {
+            ObjectProvider<DataSourceMetadataList> dataSourceMetadataList,
+            ApplicationGitProperties applicationGitProperties,
+            ObjectProvider<OverviewGitConfiguration> infoGitContributorOn) {
         return new ActuatorInsightsService(
-                actuatorReadings, actuatorResponseParser, maskingEngine, dataSourceMetadataList);
+                actuatorReadings,
+                actuatorResponseParser,
+                maskingEngine,
+                dataSourceMetadataList,
+                infoGitContributorOn.getIfAvailable() != null ? applicationGitProperties : null);
     }
+
+    /** Present exactly where Boot's git info contributor is on, since a host that turns it off keeps git off the Overview too. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnEnabledInfoContributor("git")
+    static class OverviewGitConfiguration {}
 
     /** The registry is absent on an application without Boot's metrics auto-configuration; the service then reports itself unavailable. */
     @Bean

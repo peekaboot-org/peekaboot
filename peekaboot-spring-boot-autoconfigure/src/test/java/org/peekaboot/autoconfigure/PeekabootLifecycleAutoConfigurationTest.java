@@ -10,17 +10,12 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.pool.HikariPool;
 import java.io.IOException;
-import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.jar.JarEntry;
-import java.util.jar.JarOutputStream;
 import javax.sql.DataSource;
 import net.osslabz.jdbc.DatabaseProduct;
 import org.h2.jdbcx.JdbcDataSource;
@@ -44,10 +39,12 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -59,8 +56,6 @@ import org.springframework.context.annotation.Configuration;
  * never match.
  */
 class PeekabootLifecycleAutoConfigurationTest {
-
-    private static final String DEPENDENCY_JAR = "dependency.jar";
 
     private LogCapture stopBanner;
     private LogCapture hikariStartStopChatter;
@@ -263,7 +258,7 @@ class PeekabootLifecycleAutoConfigurationTest {
      */
     @Test
     void aDependencysGitPropertiesIsNotRecordedAsTheApplicationsBuild(@TempDir Path directory) throws IOException {
-        try (URLClassLoader classpath = withDependencyShippingGitProperties(directory)) {
+        try (URLClassLoader classpath = GitPropertiesFixture.withDependencyShippingGitProperties(directory)) {
             contextRunner.withClassLoader(classpath).run(context -> {
                 assertThat(context)
                         .as("Boot reads a dependency's git.properties")
@@ -276,35 +271,27 @@ class PeekabootLifecycleAutoConfigurationTest {
     /** spring.info.git.location is the host naming its build's file, wherever that file sits. */
     @Test
     void aGitPropertiesTheHostLocatesIsRecordedWhereverItSits(@TempDir Path directory) throws IOException {
-        try (URLClassLoader classpath = withDependencyShippingGitProperties(directory)) {
+        try (URLClassLoader classpath = GitPropertiesFixture.withDependencyShippingGitProperties(directory)) {
             contextRunner
                     .withClassLoader(classpath)
                     .withPropertyValues("spring.info.git.location=jar:"
-                            + directory.resolve(DEPENDENCY_JAR).toUri() + "!/git.properties")
+                            + directory
+                                    .resolve(GitPropertiesFixture.DEPENDENCY_JAR)
+                                    .toUri() + "!/git.properties")
                     .run(context -> assertThat(recordedStart(context).git())
                             .containsEntry("commit.id.abbrev", "dep1234")
                             .containsEntry("build.version", "9.9.9"));
         }
     }
 
-    /** The test classpath plus a dependency jar whose root holds a git.properties. */
-    private static URLClassLoader withDependencyShippingGitProperties(Path directory) throws IOException {
-        Path jar = directory.resolve(DEPENDENCY_JAR);
-        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
-            out.putNextEntry(new JarEntry("git.properties"));
-            out.write("git.commit.id.abbrev=dep1234\ngit.build.version=9.9.9\n".getBytes(StandardCharsets.ISO_8859_1));
-        }
-        return new URLClassLoader(
-                new URL[] {jar.toUri().toURL()}, PeekabootLifecycleAutoConfigurationTest.class.getClassLoader());
-    }
-
-    /** Fires the ApplicationReadyEvent of an application whose main class is this test at the recorder. */
+    /** Starts an application whose main class is this test, then fires its ApplicationReadyEvent at the recorder. */
     private static LifecycleEvent recordedStart(AssertableApplicationContext context) {
         SpringApplication application = new SpringApplication(PeekabootLifecycleAutoConfigurationTest.class);
         application.setMainApplicationClass(PeekabootLifecycleAutoConfigurationTest.class);
+        ConfigurableApplicationContext source = context.getSourceApplicationContext();
+        source.publishEvent(new ApplicationStartedEvent(application, new String[0], source, Duration.ZERO));
         context.getBean(LifecycleEventRecorder.class)
-                .onReady(new ApplicationReadyEvent(
-                        application, new String[0], context.getSourceApplicationContext(), Duration.ZERO));
+                .onReady(new ApplicationReadyEvent(application, new String[0], source, Duration.ZERO));
         LifecycleEventLog eventLog = context.getBean(LifecycleEventLog.class);
         await().atMost(Duration.ofSeconds(5)).until(() -> eventLog.events().size() == 1);
         return eventLog.events().getFirst();

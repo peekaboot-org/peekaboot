@@ -10,11 +10,13 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import org.jspecify.annotations.Nullable;
@@ -22,7 +24,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.boot.info.GitProperties;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.util.ClassUtils;
 
@@ -120,6 +125,51 @@ class ApplicationGitPropertiesTest {
                                 "Peekaboot could not read the application's git.properties: java.io.FileNotFoundException: ");
             });
         }
+    }
+
+    @Test
+    void theApplicationsOwnIsReadOnceItHasStarted() throws Exception {
+        StaticApplicationContext context = new StaticApplicationContext();
+        ApplicationGitProperties gitProperties = new ApplicationGitProperties(null, context);
+        try (URLClassLoader classpath = classpath(directory("resources", false, Map.of("git.properties", OWN_GIT)))) {
+            assertThat(gitProperties.get()).as("before the start").isNull();
+
+            gitProperties.onStarted(started(context, classpath));
+        }
+        assertThat(gitProperties.get()).isNotNull();
+        assertThat(gitProperties.get().getShortCommitId()).isEqualTo("own1234");
+    }
+
+    /** A child context's start reaches the parent's listeners too. */
+    @Test
+    void anotherContextsStartIsNotRead() throws Exception {
+        ApplicationGitProperties gitProperties = new ApplicationGitProperties(null, new StaticApplicationContext());
+        try (URLClassLoader classpath = classpath(directory("resources", false, Map.of("git.properties", OWN_GIT)))) {
+            gitProperties.onStarted(started(new StaticApplicationContext(), classpath));
+        }
+        assertThat(gitProperties.get()).isNull();
+    }
+
+    /** spring.info.git.location is the host naming its build's file, so the application's own never replaces it. */
+    @Test
+    void theFileTheHostLocatesIsServedFromTheOutset() throws Exception {
+        StaticApplicationContext context = new StaticApplicationContext();
+        Properties entries = new Properties();
+        entries.setProperty("commit.id.abbrev", "host123");
+        GitProperties hostLocated = new GitProperties(entries);
+        ApplicationGitProperties gitProperties = new ApplicationGitProperties(hostLocated, context);
+        assertThat(gitProperties.get()).as("before the start").isSameAs(hostLocated);
+
+        try (URLClassLoader classpath = classpath(directory("resources", false, Map.of("git.properties", OWN_GIT)))) {
+            gitProperties.onStarted(started(context, classpath));
+        }
+        assertThat(gitProperties.get()).isSameAs(hostLocated);
+    }
+
+    private static ApplicationStartedEvent started(ConfigurableApplicationContext context, URLClassLoader classpath) {
+        SpringApplication application = new SpringApplication(new DefaultResourceLoader(classpath));
+        application.setMainApplicationClass(null);
+        return new ApplicationStartedEvent(application, new String[0], context, Duration.ZERO);
     }
 
     private static @Nullable GitProperties read(URLClassLoader classpath, boolean withMainClass)

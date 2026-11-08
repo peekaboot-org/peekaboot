@@ -7,6 +7,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import net.osslabz.jdbc.DatabaseProduct;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.ActuatorReadings;
@@ -15,13 +16,17 @@ import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.actuator.ActuatorInsightsResponse;
+import org.peekaboot.backend.domain.application.GitInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.domain.liquibase.ChangeSetExecType;
 import org.peekaboot.backend.domain.liquibase.ChangeSetInfo;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
+import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.boot.info.GitProperties;
+import org.springframework.context.support.StaticApplicationContext;
 
 class ActuatorInsightsServiceTest {
 
@@ -178,26 +183,19 @@ class ActuatorInsightsServiceTest {
                 .containsIgnoringCase("Stunde");
     }
 
-    /** Boot's {@code management.info.git.mode=full} nests the commit id as {@code {full, abbrev}}. */
+    /** Boot's info.git reads the first git.properties on the classpath, here a dependency's. */
     @Test
-    void getInsights_shouldShowTheAbbreviatedCommitIdInFullGitMode() {
-        ActuatorInsightsService service = service(Map.of(
-                "info",
-                Map.of(
-                        "git",
-                        Map.of(
-                                "branch",
-                                "main",
-                                "commit",
-                                Map.of(
-                                        "id",
-                                        Map.of("full", "1a2b3c4d5e6f7a8b", "abbrev", "1a2b3c4"),
-                                        "time",
-                                        "2026-01-10T20:52:19Z")))));
+    void getInsights_shouldShowTheApplicationsOwnGitFactsOverInfoGit() {
+        Properties own = new Properties();
+        own.setProperty("branch", "main");
+        own.setProperty("commit.id.abbrev", "own1234");
+        ActuatorInsightsService service = service(
+                Map.of("info", Map.of("git", Map.of("commit", Map.of("id", "52971e1")))),
+                new StaticListableBeanFactory(),
+                new ApplicationGitProperties(new GitProperties(own), new StaticApplicationContext()));
 
-        ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
-
-        assertThat(response.application().git().commit().id()).isEqualTo("1a2b3c4");
+        assertThat(service.getInsights(Locale.ENGLISH, false).application().git())
+                .isEqualTo(new GitInfo("main", new GitInfo.Commit("own1234", null)));
     }
 
     /** A section that does not bind is left out like a failed read, so it cannot blank the other tabs. */
@@ -229,8 +227,16 @@ class ActuatorInsightsServiceTest {
         return service(sections, beanFactory);
     }
 
+    /** An application that has not started yet, so it shows no git facts. */
     private static ActuatorInsightsService service(
             Map<String, Object> sections, StaticListableBeanFactory beanFactory) {
+        return service(sections, beanFactory, new ApplicationGitProperties(null, new StaticApplicationContext()));
+    }
+
+    private static ActuatorInsightsService service(
+            Map<String, Object> sections,
+            StaticListableBeanFactory beanFactory,
+            ApplicationGitProperties applicationGitProperties) {
         List<InsightsSource> sources = sections.entrySet().stream()
                 .map(section -> new InsightsSource(section.getKey(), section::getValue))
                 .toList();
@@ -238,6 +244,7 @@ class ActuatorInsightsServiceTest {
                 new ActuatorReadings(sources),
                 new ActuatorResponseParser(),
                 new MaskingEngine(),
-                beanFactory.getBeanProvider(DataSourceMetadataList.class));
+                beanFactory.getBeanProvider(DataSourceMetadataList.class),
+                applicationGitProperties);
     }
 }

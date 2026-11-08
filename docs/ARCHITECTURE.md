@@ -123,12 +123,14 @@ A stop event carries only its own timestamp and pid, since its build belongs to 
 follows, which the log still remembers.
 
 The git entries come from the application's own `git.properties`, which `ApplicationGitProperties`
-finds when the application is ready. Boot's `GitProperties` reads the first one on the classpath.
+reads once the application has started, the first moment its main class is known. The Overview's
+git card shows the same file where Boot's git info contributor is on. Boot's `GitProperties`
+reads the first one on the classpath.
 For an application without one, that is whichever library ships one. jdbc-url-parser, which the
 backend depends on, does. A `git.properties` in a classpath directory counts, since only a project
 being built puts one there and Gradle keeps resources apart from classes. One inside a jar counts
 only at the root the main application class was loaded from, `BOOT-INF/classes/` in a Boot jar.
-Where the host sets `spring.info.git.location`, the recorder takes Boot's `GitProperties` as it is.
+Where the host sets `spring.info.git.location`, Peekaboot takes Boot's `GitProperties` as it is.
 
 The log's in-memory half runs independently of `peekaboot.storage.enabled`. With storage off,
 `LifecycleEventLog` still records the current run's start and stop in memory and serves them
@@ -511,11 +513,17 @@ syntax does (`servers[0].host`), so the Config tab's filter matches nested keys 
 Masking runs on the tree first (`TreeMasker`, by leaf key), so a sensitive key anywhere in it
 arrives as the single masked leaf its subtree collapsed to.
 
-`ApplicationMapper` copies only `branch`, `commit.id` and `commit.time` off `info.git` into the
-`GitInfo` record, for the reason the lifecycle log whitelists its `GitProperties` entries (see
-*`lifecycle.jsonl`*): a remote URL can carry a token and a committer's address is personal data.
-Under `management.info.git.mode=full` Boot nests `commit.id` as `{full, abbrev}`; the mapper
-sends the abbreviation, else the full id, so `commit.id` is always a String on the wire.
+`ApplicationMapper` copies only the branch, the commit id and the commit time of the application's
+own `git.properties` into the `GitInfo` record, for the reason the lifecycle log whitelists its
+`GitProperties` entries (see *`lifecycle.jsonl`*): a remote URL can carry a token and a committer's
+address is personal data. It reads the file through `ApplicationGitProperties`, since Boot's
+`info.git` can show a library's. The host's own `/actuator/info` stays as Boot builds it. The id is
+`git.commit.id.abbrev`, else `git.commit.id` cut to seven characters, else `git.commit.id.full`.
+A file that names neither branch nor commit reads as no git info.
+Where the host turns Boot's git info contributor off (`management.info.git.enabled`, else
+`management.info.defaults.enabled`), the Overview shows no git info either. The lifecycle log
+records it either way, since the switch governs what `/actuator/info` shows and the history is
+Peekaboot's own.
 `info.build` stays a free-form map, masked, because the consuming app fills it itself.
 
 The word `insights` marks these BFF endpoints as a path *suffix* and the unrelated metric
@@ -537,10 +545,9 @@ them, so the browser reads every instant through `format.js`'s `instantMs`, whic
 first and agrees with Java's `toEpochMilli` (`SpansTabIT.readsNanosecondStartsToTheMillisecond`). Epoch millis remain only where the
 browser does arithmetic on a chart series: a level's `endEpochMs` and the insights stream's
 `epochMs`, from which every sample's x position is counted back. A duration is a `long` named
-`...Ms`, `MigrationInfo.executionTimeMs` included. Two times are strings.
+`...Ms`, `MigrationInfo.executionTimeMs` included. One time is a string.
 `ServerInfo.currentTime` is the JVM's clock as an ISO-8601 offset date-time in the JVM's zone,
 which the Overview renders in the dashboard's chosen zone like every other time.
-`GitInfo.Commit.time` is the actuator's own string, passed through.
 
 `PeekabootJsonMessageConverter` (registered first by `PeekabootWebConfig`) claims every return
 value whose class lives under `org.peekaboot.backend.`. The scope has to be the value's type,

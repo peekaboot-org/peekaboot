@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.ApplicationContext;
@@ -51,18 +52,15 @@ class LifecycleEventRecorderTest {
         return log;
     }
 
-    private static ApplicationReadyEvent ready(ConfigurableApplicationContext context, long timestamp) {
-        SpringApplication application = new SpringApplication(LifecycleEventRecorderTest.class);
-        application.setMainApplicationClass(LifecycleEventRecorderTest.class);
-        return ready(context, timestamp, application);
+    /** An application whose start never ran, so it read no git.properties. */
+    private static ApplicationGitProperties noGitProperties() {
+        return new ApplicationGitProperties(null, mock(ApplicationContext.class));
     }
 
-    private static ApplicationReadyEvent ready(
-            ConfigurableApplicationContext context, long timestamp, SpringApplication application) {
+    private static ApplicationReadyEvent ready(ConfigurableApplicationContext context, long timestamp) {
         ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
         when(event.getApplicationContext()).thenReturn(context);
         when(event.getTimestamp()).thenReturn(timestamp);
-        when(event.getSpringApplication()).thenReturn(application);
         return event;
     }
 
@@ -70,8 +68,11 @@ class LifecycleEventRecorderTest {
     void aReadyApplicationIsRecordedWithTheBuildAndGitFactsTheViewsRead() {
         LifecycleEventLog log = log();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
-        LifecycleEventRecorder recorder =
-                new LifecycleEventRecorder(log, new BuildInfoProvider(buildProperties()), gitProperties(), context);
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(
+                log,
+                new BuildInfoProvider(buildProperties()),
+                new ApplicationGitProperties(gitProperties(), context),
+                context);
 
         recorder.onReady(ready(context, 1_756_000_000_000L));
 
@@ -99,7 +100,10 @@ class LifecycleEventRecorderTest {
         log.beginLoad();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         LifecycleEventRecorder recorder = new LifecycleEventRecorder(
-                log, new BuildInfoProvider(buildProperties()), new GitProperties(git), context);
+                log,
+                new BuildInfoProvider(buildProperties()),
+                new ApplicationGitProperties(new GitProperties(git), context),
+                context);
 
         recorder.onReady(ready(context, 1_756_000_000_000L));
 
@@ -111,35 +115,40 @@ class LifecycleEventRecorderTest {
     }
 
     @Test
-    void anApplicationWithoutBuildOrGitInfoStillRecordsItsStart() throws IOException {
+    void anApplicationWithoutBuildOrGitInfoStillRecordsItsStart() {
         LifecycleEventLog log = log();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context);
 
-        // an empty classpath, so a git.properties in the test JVM's own classpath cannot answer for the application
-        try (URLClassLoader classpath = new URLClassLoader(new URL[0], null)) {
-            recorder.onReady(ready(context, 1L, new SpringApplication(new DefaultResourceLoader(classpath))));
+        recorder.onReady(ready(context, 1L));
 
-            await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
-        }
+        await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
         assertThat(log.events().get(0).build()).isEmpty();
         assertThat(log.events().get(0).git()).isEmpty();
     }
 
-    /** Where the host names no git.properties, the recorder reads the application's own. */
+    /** The application's own git.properties, read as it started, is what its ready start records. */
     @Test
-    void anApplicationsOwnGitPropertiesIsRecordedWhereTheHostLocatesNone(@TempDir Path resources) throws IOException {
+    void theGitFactsReadAtTheStartAreRecorded(@TempDir Path resources) throws IOException {
         Files.writeString(resources.resolve("git.properties"), "git.branch=main\ngit.commit.id.abbrev=own1234\n");
         LifecycleEventLog log = log();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
+        ApplicationGitProperties gitProperties = new ApplicationGitProperties(null, context);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), gitProperties, context);
 
         try (URLClassLoader classpath =
                 new URLClassLoader(new URL[] {resources.toUri().toURL()}, null)) {
-            recorder.onReady(ready(context, 1L, new SpringApplication(new DefaultResourceLoader(classpath))));
-
-            await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
+            gitProperties.onStarted(new ApplicationStartedEvent(
+                    new SpringApplication(new DefaultResourceLoader(classpath)),
+                    new String[0],
+                    context,
+                    Duration.ZERO));
         }
+        recorder.onReady(ready(context, 1L));
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
         assertThat(log.events().get(0).git())
                 .containsEntry("branch", "main")
                 .containsEntry("commit.id.abbrev", "own1234");
@@ -153,7 +162,8 @@ class LifecycleEventRecorderTest {
     void anotherContextsReadyIsNotRecorded() {
         LifecycleEventLog log = log();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context);
 
         recorder.onReady(ready(mock(ConfigurableApplicationContext.class), 1L));
         recorder.onReady(ready(context, 2L));
@@ -171,7 +181,7 @@ class LifecycleEventRecorderTest {
         ApplicationContext context = mock(ApplicationContext.class);
         Clock clock = Clock.fixed(Instant.parse("2026-09-11T08:00:00Z"), ZoneOffset.UTC);
         LifecycleEventRecorder recorder =
-                new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context, clock);
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context, clock);
 
         recorder.onClosed(new ContextClosedEvent(context));
 
@@ -188,8 +198,8 @@ class LifecycleEventRecorderTest {
     @Test
     void anotherContextsCloseIsNotRecorded() {
         LifecycleEventLog log = log();
-        LifecycleEventRecorder recorder =
-                new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, mock(ApplicationContext.class));
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(
+                log, new BuildInfoProvider(null), noGitProperties(), mock(ApplicationContext.class));
 
         recorder.onClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
 

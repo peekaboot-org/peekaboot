@@ -9,6 +9,7 @@ import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.ActiveProfilesLine;
+import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
@@ -30,7 +31,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.info.BuildProperties;
-import org.springframework.boot.info.GitProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,7 +47,8 @@ import org.springframework.core.env.Environment;
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.LIFECYCLE_ENABLED, matchIfMissing = true)
-@Import({MaskingConfiguration.class, ApplicationIdentityConfiguration.class})
+@Import({MaskingConfiguration.class, ApplicationIdentityConfiguration.class, ApplicationGitPropertiesConfiguration.class
+})
 public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
@@ -155,13 +156,10 @@ public class PeekabootLifecycleAutoConfiguration {
         public LifecycleEventRecorder peekabootLifecycleEventRecorder(
                 LifecycleEventLog lifecycleEventLog,
                 BuildInfoProvider buildInfoProvider,
-                ObjectProvider<GitProperties> gitProperties,
-                Environment environment,
+                ApplicationGitProperties applicationGitProperties,
                 ApplicationContext applicationContext) {
-            // Boot's bean reads the first git.properties on the classpath, which can be a library's.
-            GitProperties hostLocated =
-                    environment.containsProperty("spring.info.git.location") ? gitProperties.getIfAvailable() : null;
-            return new LifecycleEventRecorder(lifecycleEventLog, buildInfoProvider, hostLocated, applicationContext);
+            return new LifecycleEventRecorder(
+                    lifecycleEventLog, buildInfoProvider, applicationGitProperties, applicationContext);
         }
 
         @Bean

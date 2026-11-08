@@ -3,6 +3,7 @@ package org.peekaboot.backend.service;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
@@ -10,6 +11,7 @@ import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.actuator.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.server.ServerInfo;
+import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
 import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
 import org.peekaboot.backend.mapper.actuator.ConfigMapper;
 import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
@@ -38,16 +40,20 @@ public final class ActuatorInsightsService {
     private final ConfigMapper configMapper;
     private final ScheduledTasksMapper scheduledTasksMapper;
     private final List<DataSourceMetadata> dataSourceMetadataList;
+    private final @Nullable ApplicationGitProperties applicationGitProperties;
 
     /**
      * The mappers are built here rather than injected: each is stateless and needs at most
      * the engine, so the service is the one place the masking policy enters the pipeline.
+     *
+     * @param applicationGitProperties null where the host turns Boot's git info contributor off, which keeps git off the Overview
      */
     public ActuatorInsightsService(
             ActuatorReadings actuatorReadings,
             ActuatorResponseParser responseParser,
             MaskingEngine maskingEngine,
-            ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider) {
+            ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider,
+            @Nullable ApplicationGitProperties applicationGitProperties) {
         this.actuatorReadings = actuatorReadings;
         this.responseParser = responseParser;
         this.healthMapper = new HealthMapper(maskingEngine);
@@ -63,6 +69,7 @@ public final class ActuatorInsightsService {
         this.dataSourceMetadataList = dataSourceMetadataListProvider
                 .getIfAvailable(() -> DataSourceMetadataList.EMPTY)
                 .entries();
+        this.applicationGitProperties = applicationGitProperties;
     }
 
     /**
@@ -76,7 +83,11 @@ public final class ActuatorInsightsService {
         ActuatorParsedData typed = responseParser.parse(rawData);
 
         return new ActuatorInsightsResponse(
-                applicationMapper.map(typed.info(), typed.spring(), unmask),
+                applicationMapper.map(
+                        typed.info(),
+                        applicationGitProperties != null ? applicationGitProperties.get() : null,
+                        typed.spring(),
+                        unmask),
                 runtimeMapper.map(typed.info(), typed.health()),
                 dataSourceMapper.map(dataSourceMetadataList, typed.health(), unmask),
                 healthMapper.map(typed.health(), unmask),

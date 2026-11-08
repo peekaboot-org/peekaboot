@@ -16,8 +16,7 @@ class RuntimeMapperTest {
 
     @Test
     void map_shouldExtractOsInfo() {
-        InfoResponse info =
-                new InfoResponse(null, null, null, new InfoResponse.OsDescriptor("amd64", "Linux", "5.15"), null);
+        InfoResponse info = new InfoResponse(null, null, new InfoResponse.OsDescriptor("amd64", "Linux", "5.15"), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os().name()).isEqualTo("Linux");
         assertThat(result.os().version()).isEqualTo("5.15");
@@ -54,7 +53,6 @@ class RuntimeMapperTest {
                 null,
                 null,
                 null,
-                null,
                 new InfoResponse.ProcessDescriptor(new InfoResponse.ProcessDescriptor.MemoryDescriptor(
                         new InfoResponse.ProcessDescriptor.MemoryDescriptor.MemoryUsageDescriptor(
                                 500_000_000L, 100_000_000L),
@@ -68,7 +66,7 @@ class RuntimeMapperTest {
 
     @Test
     void map_shouldHandleMissingOsInfo() {
-        InfoResponse info = new InfoResponse(null, null, null, null, null);
+        InfoResponse info = new InfoResponse(null, null, null, null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
     }
@@ -88,7 +86,6 @@ class RuntimeMapperTest {
     @Test
     void map_shouldReturnNullMemoryWhenHeapUsedAndMaxAreBothZero() {
         InfoResponse info = new InfoResponse(
-                null,
                 null,
                 null,
                 null,
@@ -112,7 +109,7 @@ class RuntimeMapperTest {
 
     @Test
     void map_shouldReturnNullOsInfoWhenAllFieldsAreNull() {
-        InfoResponse info = new InfoResponse(null, null, null, new InfoResponse.OsDescriptor(null, null, null), null);
+        InfoResponse info = new InfoResponse(null, null, new InfoResponse.OsDescriptor(null, null, null), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
     }
@@ -121,7 +118,6 @@ class RuntimeMapperTest {
     @Test
     void map_shouldReportAnUnboundedHeapAsAZeroShare() {
         InfoResponse info = new InfoResponse(
-                null,
                 null,
                 null,
                 null,
@@ -136,7 +132,6 @@ class RuntimeMapperTest {
     @Test
     void map_shouldReturnNullMemoryWhenOnlyNonHeapIsKnown() {
         InfoResponse info = new InfoResponse(
-                null,
                 null,
                 null,
                 null,
