@@ -49,6 +49,8 @@
         <peekaboot.it.excludedTags />
         <!-- A property, not an inline version: the CI workflows key their browser cache on it. -->
         <playwright.version>1.63.0</playwright.version>
+        <!-- The JSON Schema validator OpenApiContractIT checks the API's answers with. -->
+        <json-schema-validator.version>3.0.8</json-schema-validator.version>
         <!-- Not a published artifact: it exists to host the sample app and its UI tests.
              This module does not inherit peekaboot-parent, so the peekaboot-publish
              profile, and with it central-publishing-maven-plugin, never applies here.
@@ -205,6 +207,13 @@
             <groupId>com.microsoft.playwright</groupId>
             <artifactId>playwright</artifactId>
             <version>${playwright.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Validates the API's real answers against its OpenAPI document, in the OpenAPI 3.1 dialect. -->
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>${json-schema-validator.version}</version>
             <scope>test</scope>
         </dependency>
         <!-- The axe-core rule engine, injected into a page Playwright already drives:

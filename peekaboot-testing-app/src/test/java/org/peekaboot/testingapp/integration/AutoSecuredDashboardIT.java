@@ -126,6 +126,18 @@ class AutoSecuredDashboardIT {
         assertThat(api().statusOf(path)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    /** The guard's refusal is the 401 the document describes. */
+    @Test
+    void theRefusalIsTheUnauthorizedTheDocumentDescribes() {
+        ApiContract contract =
+                ApiContract.servedBy(api().withBasicAuth(credentials.username(), credentials.plaintext()));
+
+        ApiContract.Exchange refusal = ApiContract.exchange(api(), "/peekaboot/api/traces");
+
+        assertThat(refusal.status()).isEqualTo(401);
+        contract.assertMatches("/peekaboot/api/traces", refusal);
+    }
+
     @Test
     void theInsightsApiRejectsAnAnonymousRequest() {
         assertThat(api().statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);

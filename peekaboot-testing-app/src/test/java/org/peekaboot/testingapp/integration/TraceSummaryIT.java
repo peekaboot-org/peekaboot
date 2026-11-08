@@ -6,7 +6,6 @@ import static org.awaitility.Awaitility.await;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -20,9 +19,6 @@ import tools.jackson.databind.JsonNode;
 
 /** What the trace API says about a whole trace, its buckets and its outcome and why it got them. */
 class TraceSummaryIT extends TestingAppITBase {
-
-    /** Past the default repeated-query threshold of 5. */
-    private static final int REPEATING_ORDERS = 6;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -301,10 +297,7 @@ class TraceSummaryIT extends TestingAppITBase {
     /** The orders page loads each order's lines one query at a time, so enough orders make it an N+1. */
     @Test
     void theSummaryListsEveryIssueOnTheTreeAndCountsWhatTheDataHolds() {
-        List<CustomerOrder> orders = IntStream.rangeClosed(1, REPEATING_ORDERS)
-                .mapToObj(i -> OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-ISSUES-" + i))
-                .toList();
-        try {
+        OrderFixtures.withRepeatingOrders(orderRepository, orderLineRepository, "WIDGET-ISSUES-", () -> {
             String traceId = traces.get("/orders");
 
             JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
@@ -323,9 +316,7 @@ class TraceSummaryIT extends TestingAppITBase {
                     .isEqualTo(trace.path("data").path("logs").size());
             assertThat(summary.path("counts").path("spans").asInt())
                     .isEqualTo(SpanTree.names(trace).size());
-        } finally {
-            orders.forEach(order -> OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order));
-        }
+        });
     }
 
     @Test

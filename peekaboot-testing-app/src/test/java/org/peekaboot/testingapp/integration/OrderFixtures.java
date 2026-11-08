@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
+import java.util.stream.IntStream;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.order.NewOrder;
@@ -17,6 +19,9 @@ import org.springframework.http.ResponseEntity;
  * orders page, or placed through the order API, for a test about what placing one does.
  */
 public final class OrderFixtures {
+
+    /** Above the default repeated-query threshold of 5, which the orders page's per-order queries have to reach. */
+    private static final int REPEATING_ORDERS = 6;
 
     private OrderFixtures() {}
 
@@ -69,6 +74,22 @@ public final class OrderFixtures {
                 .as("POST /api/orders answered %s", response.getBody())
                 .isEqualTo(HttpStatus.CREATED);
         return response;
+    }
+
+    /**
+     * Runs {@code test} with enough seeded orders that the orders page is an N+1, each with one line
+     * whose SKU is {@code skuPrefix} and a number, and deletes them afterwards however {@code test} ends.
+     */
+    public static void withRepeatingOrders(
+            OrderRepository orderRepository, OrderLineRepository orderLineRepository, String skuPrefix, Runnable test) {
+        List<CustomerOrder> orders = IntStream.rangeClosed(1, REPEATING_ORDERS)
+                .mapToObj(i -> seedOrder(orderRepository, orderLineRepository, 1L, skuPrefix + i))
+                .toList();
+        try {
+            test.run();
+        } finally {
+            orders.forEach(order -> deleteOrder(orderRepository, orderLineRepository, order));
+        }
     }
 
     /** Undoes {@link #seedOrder}, so a test leaves the context's shared database as it found it. */

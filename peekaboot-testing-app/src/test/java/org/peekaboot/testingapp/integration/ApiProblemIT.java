@@ -3,7 +3,6 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -143,12 +142,7 @@ class ApiProblemIT extends TestingAppITBase {
      */
     @Test
     void everyEndpointRefusesAParameterItDoesNotTake() {
-        List<String> paths = mappings.getHandlerMethods().keySet().stream()
-                .flatMap(info -> info.getPatternValues().stream())
-                .filter(pattern -> pattern.startsWith("/peekaboot/api/"))
-                .sorted(Comparator.comparing((String pattern) -> pattern.endsWith("/stream"))
-                        .thenComparing(Comparator.naturalOrder()))
-                .toList();
+        List<String> paths = ApiMappings.paths(mappings);
         assertThat(paths)
                 .as("the API's mappings")
                 .contains(
@@ -158,7 +152,7 @@ class ApiProblemIT extends TestingAppITBase {
                         "/peekaboot/api/insights/stream");
 
         for (String path : paths) {
-            Answer answer = fetch(path.replaceAll("\\{[^}]+}", "x") + "?peekabootTypo=1");
+            Answer answer = fetch(ApiMappings.withUnknownParameter(path));
 
             assertThat(answer.status()).as(path).isEqualTo(400);
             assertThat(answer.contentType()).as(path).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);

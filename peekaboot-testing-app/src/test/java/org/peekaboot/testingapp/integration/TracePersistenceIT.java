@@ -252,6 +252,7 @@ class TracePersistenceIT {
                     .as("the /boom trace, as the first run served it")
                     .isEqualTo(failedBefore);
             assertThat(cutOff.path("summary").path("complete").asBoolean(true)).isFalse();
+            ApiContract.servedBy(api).assertOk("/peekaboot/api/traces/{traceId}", cutOff);
             assertThat(run(cutOff)).isEqualTo(run(okBefore)).isNotBlank();
             assertThat(traces.listedTraceIds("outcome=interrupted")).contains(listedCutOffTraceId);
             assertThat(traces.listedTraceIds("outcome=in_progress")).doesNotContain(listedCutOffTraceId);

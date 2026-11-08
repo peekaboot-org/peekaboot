@@ -157,12 +157,12 @@ module's pom, a module's own properties over the root pom's. Scripts read one wi
 `pomProperty("...")` from `buildSrc/src/main/kotlin/PomProperties.kt`; `buildSrc`, a build of
 its own, reads `spring-boot.version` for the Boot plugin directly. So the Spring Boot line,
 datasource-micrometer, JaCoCo, PMD, the compiler release level, the coverage floors, the Node
-pin, Playwright, the IT defaults and the build instant each live in one pom. Mockito's agent
-jar takes its version from the Boot BOM, as Maven does. `maven-release-plugin` rewrites the
-poms alone and Dependabot bumps a pom property alone, so a copy on the Gradle side would go
-stale behind a green build, because CI builds Gradle only on Dependabot branches.
-`BuildVersionLockstepTest` fails if `gradle.properties` holds anything but Gradle's own
-settings, or if a Gradle script pins a build instant of its own.
+pin, Playwright, the JSON Schema validator, the IT defaults and the build instant each live in
+one pom. Mockito's agent jar takes its version from the Boot BOM, as Maven does.
+`maven-release-plugin` rewrites the poms alone and Dependabot bumps a pom property alone, so a
+copy on the Gradle side would go stale behind a green build, because CI builds Gradle only on
+Dependabot branches. `BuildVersionLockstepTest` fails if `gradle.properties` holds anything but
+Gradle's own settings, or if a Gradle script pins a build instant of its own.
 
 A value with no pom property behind it is written on both sides and has to change on both:
 Error Prone, palantir, Checkstyle, SpotBugs and Spotless, all spelled inside plugin
@@ -203,6 +203,10 @@ Maven's nearest-wins settles springdoc's transitive Jackson at the version the B
 pins, where Gradle's highest-wins takes the newer one springdoc asks for and pulls in
 `aopalliance` besides. Acceptable for an unpublished sample app, and the first thing to
 reconcile if the Gradle build is ever promoted.
+
+Gradle excludes Jackson from the JSON Schema validator, whose pom asks for a newer Jackson than
+the Boot BOM's. Highest-wins therefore cannot lift the Jackson the ITs run Peekaboot on, and the
+testing app's test classpath stays the same as Maven's.
 
 Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-publish`
 and `peekaboot-release` profiles, and the CI wiring around them. Nor the dependency check, which guards a Maven
@@ -407,6 +411,11 @@ covers only the build mechanics.
   `./mvnw verify` needs Docker (see [Prerequisites](#prerequisites)).
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
   install it explicitly with the `exec:java` invocation in the module README if that fails.
+- `peekaboot-testing-app/src/test/resources/openapi/oas-3.1-schema-2022-10-07.json` is the
+  OpenAPI Initiative's schema for OpenAPI 3.1 documents, from
+  `https://spec.openapis.org/oas/3.1/schema/2022-10-07`, under the Apache License 2.0. It is
+  test data, so `OpenApiContractIT` checks the document's structure without a network, and no
+  artifact ships it.
 - The shared test helpers live in `peekaboot-test-support`. Its
   [README](peekaboot-test-support/README.md) names them and their consumers, and says why
   a module rather than a `-tests` jar.

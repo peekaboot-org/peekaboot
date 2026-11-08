@@ -41,6 +41,7 @@ class TraceCompletenessIT extends TestingAppITBase {
             assertThat(inFlight.path("data").path("rootSpan").isNull())
                     .as("rootSpan is null, not absent")
                     .isTrue();
+            ApiContract.servedBy(api).assertOk("/peekaboot/api/traces/{traceId}", inFlight);
 
             held.release();
             assertThat(response.get(15, TimeUnit.SECONDS).statusCode()).isEqualTo(200);

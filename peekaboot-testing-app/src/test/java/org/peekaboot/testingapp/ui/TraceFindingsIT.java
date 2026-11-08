@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.IntStream;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.fixtures.OutcomeFixtureController;
@@ -29,9 +28,6 @@ class TraceFindingsIT extends TraceOverlayTestBase {
 
     private static final String WITH_A_REPEATED_QUERY = "trace => (" + ROOT_SPAN_EXPORTED + ")(trace)"
             + " && trace.summary.issues.some(issue => issue.type === 'REPEATED_QUERY')";
-
-    /** Enough orders that the orders page runs its line queries at the default repeated-query threshold of 5. */
-    private static final int REPEATING_ORDERS = 6;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -126,8 +122,7 @@ class TraceFindingsIT extends TraceOverlayTestBase {
      */
     @Test
     void aRepeatedQueryIsBadgedOnTheSpanThatRanIt() {
-        List<CustomerOrder> orders = seedRepeatingOrders();
-        try {
+        OrderFixtures.withRepeatingOrders(orderRepository, orderLineRepository, "WIDGET-FINDINGS-", () -> {
             String traceId = traceIdOf(page.navigate(baseUrl + contextPath() + "/orders"));
             JsonNode summary = awaitTrace(traceId, WITH_A_REPEATED_QUERY).path("summary");
             String spanId = repeatedQuerySpanId(summary);
@@ -157,9 +152,7 @@ class TraceFindingsIT extends TraceOverlayTestBase {
                     .isEqualTo(onTheSpan.stream()
                             .map(issue -> issue.path("message").asString())
                             .toList());
-        } finally {
-            deleteOrders(orders);
-        }
+        });
     }
 
     /**
@@ -169,8 +162,7 @@ class TraceFindingsIT extends TraceOverlayTestBase {
     @Test
     void aSpanRepeatingSeveralStatementsKeepsItsNameAndLogChipInSight() {
         page.setViewportSize(1440, 900);
-        List<CustomerOrder> orders = seedRepeatingOrders();
-        try {
+        OrderFixtures.withRepeatingOrders(orderRepository, orderLineRepository, "WIDGET-FINDINGS-", () -> {
             String traceId = traceIdOf(page.navigate(baseUrl + contextPath() + "/orders"));
             JsonNode trace = awaitTrace(traceId, WITH_A_REPEATED_QUERY);
             String spanId = repeatedQuerySpanId(trace.path("summary"));
@@ -202,9 +194,7 @@ class TraceFindingsIT extends TraceOverlayTestBase {
                             """, row))
                     .as("the log chip ends inside the name cell, which clips what overflows it")
                     .isEqualTo(true);
-        } finally {
-            deleteOrders(orders);
-        }
+        });
     }
 
     /** A 4xx is the caller's mistake: a badge on the request's span and no cause in the header. */
@@ -253,17 +243,6 @@ class TraceFindingsIT extends TraceOverlayTestBase {
         } finally {
             OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
         }
-    }
-
-    private List<CustomerOrder> seedRepeatingOrders() {
-        return IntStream.rangeClosed(1, REPEATING_ORDERS)
-                .mapToObj(
-                        i -> OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-FINDINGS-" + i))
-                .toList();
-    }
-
-    private void deleteOrders(List<CustomerOrder> orders) {
-        orders.forEach(order -> OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order));
     }
 
     private static String repeatedQuerySpanId(JsonNode summary) {

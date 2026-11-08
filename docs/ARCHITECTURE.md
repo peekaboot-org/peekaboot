@@ -588,6 +588,13 @@ request from `RequestContextHolder`, since `QueryParameterGuard` fails a handler
 cannot read. The copy reaches the client
 through `PeekabootJson.MAPPER` inside the `OpenApiDocument` record, like every Peekaboot response.
 
+`OpenApiContractIT` holds the document to the running application. Its paths must equal the
+application's mappings under `/peekaboot/api`, each operation's query parameters must equal the
+names `QueryParameterGuard` lists in its refusal, and real answers of every endpoint, the event
+stream's data included, must validate against the schemas. `ApiContract` validates with
+networknt's JSON Schema validator in the OpenAPI 3.1 dialect, so a field added to a record
+without its schema fails the build.
+
 The schemas are named after the Java types they describe. Every object schema lists every
 property as required and allows no other, which is the wire convention that a missing value is
 `null` and never an absent key. The `404` of a feature that is off, a `405`, a `406` and an
