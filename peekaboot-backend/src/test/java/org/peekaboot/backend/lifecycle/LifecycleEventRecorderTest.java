@@ -15,7 +15,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -160,7 +159,9 @@ class LifecycleEventRecorderTest {
      */
     @Test
     void anotherContextsReadyIsNotRecorded() {
-        LifecycleEventLog log = log();
+        // records on the calling thread, so every start the recorder accepted is in the log once onReady returns
+        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        log.beginLoad();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         LifecycleEventRecorder recorder =
                 new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context);
@@ -168,11 +169,7 @@ class LifecycleEventRecorderTest {
         recorder.onReady(ready(mock(ConfigurableApplicationContext.class), 1L));
         recorder.onReady(ready(context, 2L));
 
-        // the starts are appended on their own threads; the own one arriving and staying alone
-        // is what shows the other was never recorded
-        await().atMost(Duration.ofSeconds(5))
-                .during(Duration.ofMillis(300))
-                .until(() -> log.events().stream().map(LifecycleEvent::epochMs).toList(), List.of(2L)::equals);
+        assertThat(log.events()).extracting(LifecycleEvent::epochMs).containsExactly(2L);
     }
 
     @Test

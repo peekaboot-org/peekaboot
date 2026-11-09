@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.slf4j.Logger;
@@ -28,9 +29,12 @@ public final class LifecycleEventLog {
 
     public static final int MAX_EVENTS = 1000;
     private static final Duration LOAD_WAIT = Duration.ofSeconds(5);
+    private static final Executor RECORD_ON_VIRTUAL_THREAD =
+            append -> Thread.ofVirtual().name("peekaboot-lifecycle-record").start(append);
 
     private final LifecycleEventFile file;
     private final Duration loadWait;
+    private final Executor recordWhenLoadedExecutor;
     private final List<LifecycleEvent> events = new ArrayList<>();
     private final CountDownLatch loaded = new CountDownLatch(1);
     private volatile boolean writeFailureLogged;
@@ -41,8 +45,18 @@ public final class LifecycleEventLog {
 
     /** {@code loadWait} bounds how long a recorder waits for the history; tests shorten it. */
     LifecycleEventLog(LifecycleEventFile file, Duration loadWait) {
+        this(file, loadWait, RECORD_ON_VIRTUAL_THREAD);
+    }
+
+    /** {@code recordWhenLoadedExecutor} runs {@link #recordWhenLoaded}'s append; tests run it inline. */
+    LifecycleEventLog(LifecycleEventFile file, Executor recordWhenLoadedExecutor) {
+        this(file, LOAD_WAIT, recordWhenLoadedExecutor);
+    }
+
+    private LifecycleEventLog(LifecycleEventFile file, Duration loadWait, Executor recordWhenLoadedExecutor) {
         this.file = file;
         this.loadWait = loadWait;
+        this.recordWhenLoadedExecutor = recordWhenLoadedExecutor;
     }
 
     /** The log for {@code storage}: backed by its lifecycle file, or in memory alone while storage is off. */
@@ -76,7 +90,7 @@ public final class LifecycleEventLog {
 
     /** Appends as soon as the history is in memory, on a virtual thread so the caller never waits. */
     public void recordWhenLoaded(LifecycleEvent event) {
-        Thread.ofVirtual().name("peekaboot-lifecycle-record").start(() -> appendOnceLoaded(event));
+        recordWhenLoadedExecutor.execute(() -> appendOnceLoaded(event));
     }
 
     /** Appends and persists before returning; drops the event if the history never arrived. */
