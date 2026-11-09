@@ -93,6 +93,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         log.info(report.toString());
     }
 
+    /** Run async, the security posture, dispatched after this, could be logged above the banner. */
+    @Override
+    public boolean supportsAsyncExecution() {
+        return false;
+    }
+
     private void appendApplicationInfo(StringBuilder report) {
 
         String appName = applicationIdentity.displayName();

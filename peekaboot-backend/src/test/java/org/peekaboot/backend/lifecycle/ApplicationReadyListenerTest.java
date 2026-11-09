@@ -3,8 +3,11 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.zaxxer.hikari.HikariDataSource;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -22,16 +25,51 @@ import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.security.SecurityPosture;
+import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.backend.text.BannerFrame;
 import org.peekaboot.testsupport.LogCapture;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.event.SimpleApplicationEventMulticaster;
 import org.springframework.core.env.Environment;
 import org.springframework.mock.env.MockEnvironment;
 
 class ApplicationReadyListenerTest {
+
+    /** The security posture reports below this banner, an order an async multicaster's executor need not keep. */
+    @Test
+    void banner_isLoggedAboveTheSecurityPostureUnderAnAsyncMulticaster() {
+        ApplicationReadyEvent event = ReadyEvents.webApplication(8083);
+        Deque<Runnable> held = new ArrayDeque<>();
+        SimpleApplicationEventMulticaster multicaster = new SimpleApplicationEventMulticaster();
+        multicaster.setTaskExecutor(held::push);
+        multicaster.addApplicationListener(banner().listenerOf(event.getApplicationContext()));
+        multicaster.addApplicationListener(
+                new SecurityPostureListener(SecurityPosture.disabledOnADeployment("/peekaboot", false)));
+        Logger postureLogger = (Logger) LoggerFactory.getLogger(SecurityPostureListener.class);
+        try (LogCapture bannerCapture = LogCapture.attach(ApplicationReadyListener.class);
+                LogCapture postureCapture = LogCapture.attach(SecurityPostureListener.class)) {
+            // one list for both loggers, so it holds the two lines in the order they were logged
+            postureLogger.addAppender(bannerCapture.appender());
+            try {
+                multicaster.multicastEvent(event);
+                while (!held.isEmpty()) {
+                    held.pop().run();
+                }
+            } finally {
+                postureLogger.detachAppender(bannerCapture.appender());
+            }
+
+            assertThat(bannerCapture.appender().list)
+                    .extracting(ILoggingEvent::getLoggerName)
+                    .containsExactly(ApplicationReadyListener.class.getName(), SecurityPostureListener.class.getName());
+            assertThat(postureCapture.appender().list).hasSize(1);
+        }
+    }
 
     /** The first line names the application and its profiles; the build line is the coordinates a deploy is checked against. */
     @Test
