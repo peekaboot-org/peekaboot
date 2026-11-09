@@ -59,6 +59,12 @@ class LogbackAppenderRegistrar implements ApplicationListener<ContextClosedEvent
         }
     }
 
+    /** Run async, the detach could come after the beans are destroyed, which is the order the close event exists to prevent. */
+    @Override
+    public boolean supportsAsyncExecution() {
+        return false;
+    }
+
     /** The fallback for a context whose refresh failed, which publishes no ContextClosedEvent. */
     @PreDestroy
     void detachAppender() {

@@ -43,6 +43,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.event.EventListener;
+import org.springframework.context.event.SimpleApplicationEventMulticaster;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.support.SpringFactoriesLoader;
 
@@ -159,6 +160,21 @@ class TraceCaptureAutoConfigurationTest {
                 .as("a line from the running context is captured, the one from its shutdown is not")
                 .contains(whileRunning)
                 .doesNotContain(shutdownLogger.get().message);
+    }
+
+    /** An async multicaster may run the close listeners after the beans are destroyed, or never. */
+    @Test
+    void stopsCapturingBeforeAnyBeanIsDestroyedUnderAnAsyncMulticaster() {
+        int before = peekabootAppenderCount();
+        AtomicReference<ShutdownLogger> shutdownLogger = new AtomicReference<>();
+
+        contextRunner
+                .withUserConfiguration(TracerOnlyConfig.class, ShutdownLogger.class, NeverRunEventsConfig.class)
+                .run(context -> shutdownLogger.set(context.getBean(ShutdownLogger.class)));
+
+        assertThat(shutdownLogger.get().appendersWhileDestroyed)
+                .as("the appender is detached before any bean is destroyed")
+                .isEqualTo(before);
     }
 
     /**
@@ -337,6 +353,17 @@ class TraceCaptureAutoConfigurationTest {
         @PostConstruct
         void fail() {
             throw new IllegalStateException(FAILURE);
+        }
+    }
+
+    /** An async multicaster whose executor never gets to run what it is handed, as at JVM exit. */
+    @Configuration
+    static class NeverRunEventsConfig {
+        @Bean
+        SimpleApplicationEventMulticaster applicationEventMulticaster() {
+            SimpleApplicationEventMulticaster multicaster = new SimpleApplicationEventMulticaster();
+            multicaster.setTaskExecutor(task -> {});
+            return multicaster;
         }
     }
 
