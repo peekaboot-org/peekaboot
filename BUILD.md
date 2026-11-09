@@ -207,10 +207,6 @@ builds, and Gradle's also carries `aopalliance`, which only Gradle resolves thro
 micrometer-tracing. Acceptable for an unpublished sample app, and the first thing to
 reconcile if the Gradle build is ever promoted.
 
-Gradle excludes Jackson from the JSON Schema validator, whose pom asks for a newer Jackson than
-the Boot BOM's. Highest-wins therefore cannot lift the Jackson the ITs run Peekaboot on, and the
-testing app's test classpath stays the same as Maven's.
-
 Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-publish`
 and `peekaboot-release` profiles, and the CI wiring around them. Nor the dependency check, which guards a Maven
 resolution behaviour Gradle does not have. Outside the testing app's enforced BOM, Gradle takes

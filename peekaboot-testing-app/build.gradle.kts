@@ -56,13 +56,8 @@ dependencies {
     testImplementation("com.microsoft.playwright:playwright:${pomProperty("playwright.version")}")
     // the axe-core rule engine, in lockstep with pom.xml
     testImplementation("com.deque.html.axe-core:playwright:4.13.0")
-    // the OpenAPI document's validator, in lockstep with pom.xml; Maven settles its Jackson at the Boot BOM's version, and
-    // highest-wins would lift the whole test classpath to the newer Jackson the validator was built against
-    testImplementation("com.networknt:json-schema-validator:${pomProperty("json-schema-validator.version")}") {
-        exclude(group = "tools.jackson.core")
-        exclude(group = "tools.jackson.dataformat")
-    }
-    testRuntimeOnly("tools.jackson.dataformat:jackson-dataformat-yaml")
+    // the OpenAPI document's validator, in lockstep with pom.xml
+    testImplementation("com.networknt:json-schema-validator:${pomProperty("json-schema-validator.version")}")
 }
 
 // The Maven module's annotationProcessorPaths lists Error Prone alone, so its jar carries no
