@@ -119,7 +119,8 @@ proves two things: the sample app builds on Boot's own plugin defaults (`-parame
 `@..@` resource filtering), and it leans on nothing in `peekaboot-parent`'s build config.
 It proves nothing about consuming the published artifact. Inside the reactor the starter
 resolves from the reactor under either parent, and both parents manage dependencies
-through the same `spring-boot-dependencies` BOM, so dependency resolution is identical. A
+through the same `spring-boot-dependencies` BOM, so dependency resolution matches apart from
+the parent's slf4j-api override (see [the dependency check](#the-dependency-check)). A
 real consume-as-a-user check would build outside the reactor against an installed jar,
 and nothing here does that. The cost of the split is duplication: its POM re-declares the
 verify-bound static-analysis gates, the JaCoCo and Mockito agent wiring, the
@@ -147,7 +148,10 @@ same tool versions, reading the same `config/` files, plus the reactor-wide cove
 `build.gradle.kts` declares only its dependencies; `peekaboot-testing-app` adds the Spring
 Boot and git-properties plugins. Gradle has no counterpart to a Maven parent, so what the
 Maven module's `spring-boot-starter-parent` proves (see [The reactor](#the-reactor)) has
-no Gradle equivalent; the module shares the conventions.
+no Gradle equivalent; the module shares the conventions. It adds the Boot BOM as an enforced
+platform, so its transitives settle at the BOM's versions, as `spring-boot-starter-parent`
+settles them in Maven, and the dependency-management plugin in a default Gradle host. The
+enforced versions also override the conventions' slf4j-api constraint there.
 
 ### Lockstep
 
@@ -198,10 +202,9 @@ sides.
 Across systems, verified by building each twice and cross-diffing, every class file and
 resource in the published jars is byte-identical. The expected differences are
 `META-INF/MANIFEST.MF` (Maven adds `Created-By`/`Build-Jdk-Spec`) and Maven's
-`META-INF/maven/**`. The testing-app boot jar also differs in dependency resolution:
-Maven's nearest-wins settles springdoc's transitive Jackson at the version the Boot BOM
-pins, where Gradle's highest-wins takes the newer one springdoc asks for and pulls in
-`aopalliance` besides. Acceptable for an unpublished sample app, and the first thing to
+`META-INF/maven/**`. The testing-app boot jar resolves the same dependency versions in both
+builds, and Gradle's also carries `aopalliance`, which only Gradle resolves through
+micrometer-tracing. Acceptable for an unpublished sample app, and the first thing to
 reconcile if the Gradle build is ever promoted.
 
 Gradle excludes Jackson from the JSON Schema validator, whose pom asks for a newer Jackson than
@@ -210,8 +213,9 @@ testing app's test classpath stays the same as Maven's.
 
 Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-publish`
 and `peekaboot-release` profiles, and the CI wiring around them. Nor the dependency check, which guards a Maven
-resolution behaviour Gradle does not have. Gradle takes the highest requested version, so
-it cannot settle a transitive below what a dependent asked for.
+resolution behaviour Gradle does not have. Outside the testing app's enforced BOM, Gradle takes
+the highest requested version, so it cannot settle a transitive below what a dependent asked
+for.
 
 The remaining gates are mirrored too: `-Werror` in the conventions plugin, and a
 `check`-bound task apiece for the starter's
@@ -306,11 +310,11 @@ module directory alike.
 inherits the parent. It fails when Maven's nearest-wins resolution settles a transitive
 *below* the version one of its dependents asked for. That is the shape that reaches a
 consumer as a `NoSuchMethodError`, and a BOM import makes it easy to introduce. The
-published modules are clean. The reactor's one violation is springdoc's swagger chain
-wanting a newer Jackson than the Boot BOM pins, and it lives in the sample app, which does
-not inherit the parent. `peekaboot-coverage` skips the rule for the same reason: its
-dependencies exist to force build order, so they drag the sample app's closure in with
-them.
+published modules are clean. The reactor's violations, springdoc's swagger chain wanting a
+newer Jackson than the Boot BOM pins and jdbc-url-parser a newer slf4j-api, live in the
+sample app. It does not inherit the parent and resolves what a Boot host resolves.
+`peekaboot-coverage` skips the rule for the same reason: its dependencies exist to force
+build order, so they drag the sample app's closure in with them.
 
 ### The starter's optional-dependency contract
 

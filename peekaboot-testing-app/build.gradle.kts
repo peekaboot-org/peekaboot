@@ -14,6 +14,8 @@ description = "Peekaboot Testing App - sample application for manual and automat
 val springBootVersion = pomProperty("spring-boot.version")
 
 dependencies {
+    // Settles transitives at the Boot BOM's versions, as a BOM import does for a Maven host.
+    implementation(enforcedPlatform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-restclient")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
