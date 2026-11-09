@@ -9,12 +9,15 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.text.BannerFrame;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.SimpleApplicationEventMulticaster;
 
 class ApplicationStoppedListenerTest {
 
@@ -54,6 +57,25 @@ class ApplicationStoppedListenerTest {
             listener.onApplicationEvent(new ContextClosedEvent(contextUpFor(Duration.ofMinutes(4))));
 
             assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
+    /** An async multicaster would log the banner after the close returned, past the logging shutdown, or never. */
+    @Test
+    void theBannerIsLoggedBeforeTheCloseReturns() {
+        ApplicationContext context = contextUpFor(Duration.ofMinutes(5));
+        List<Runnable> held = new ArrayList<>();
+        SimpleApplicationEventMulticaster multicaster = new SimpleApplicationEventMulticaster();
+        multicaster.setTaskExecutor(held::add);
+        multicaster.addApplicationListener(new ApplicationStoppedListener(UNNAMED, context, STOP));
+        try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
+            multicaster.multicastEvent(new ContextClosedEvent(context));
+
+            assertThat(capture.appender().list)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .asString()
+                    .contains("Application [unknown] stopped after 5 minutes");
         }
     }
 

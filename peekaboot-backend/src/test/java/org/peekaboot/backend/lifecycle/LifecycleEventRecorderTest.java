@@ -243,11 +243,24 @@ class LifecycleEventRecorderTest {
         LifecycleEventRecorder recorder =
                 new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context, clock);
 
-        recorder.onClosed(new ContextClosedEvent(context));
+        recorder.onApplicationEvent(new ContextClosedEvent(context));
 
         assertThat(log.events())
                 .extracting(LifecycleEvent::type, LifecycleEvent::epochMs)
                 .containsExactly(tuple(LifecycleEvent.Type.STOP, clock.millis()));
+    }
+
+    /** An async multicaster would run the close listener after the context destroyed it, or after the JVM exited. */
+    @Test
+    void theStopIsRecordedBeforeTheContextHasClosed() {
+        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        log.beginLoad();
+        NewestFirstExecutor executor = new NewestFirstExecutor();
+        AnnotationConfigApplicationContext context = asyncContext(executor, log);
+
+        context.close();
+
+        assertThat(log.events()).extracting(LifecycleEvent::type).containsExactly(LifecycleEvent.Type.STOP);
     }
 
     /**
@@ -261,7 +274,7 @@ class LifecycleEventRecorderTest {
         LifecycleEventRecorder recorder = new LifecycleEventRecorder(
                 log, new BuildInfoProvider(null), noGitProperties(), mock(ApplicationContext.class));
 
-        recorder.onClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
+        recorder.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContext.class)));
 
         assertThat(log.events()).isEmpty();
     }

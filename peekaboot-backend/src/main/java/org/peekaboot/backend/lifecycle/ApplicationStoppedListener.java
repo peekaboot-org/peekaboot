@@ -66,4 +66,10 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
 
         log.info(report.toString());
     }
+
+    /** Run async, the banner could be logged after the close returned, or never once the JVM exits. */
+    @Override
+    public boolean supportsAsyncExecution() {
+        return false;
+    }
 }

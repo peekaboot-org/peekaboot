@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import java.time.Clock;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 
@@ -12,7 +13,7 @@ import org.springframework.context.event.EventListener;
  * <p>The start is stamped with the ready event's own timestamp - the moment the
  * application could actually serve, which is what a marker on a chart should point at.
  */
-public class LifecycleEventRecorder {
+public class LifecycleEventRecorder implements ApplicationListener<ContextClosedEvent> {
 
     private final LifecycleEventLog eventLog;
     private final BuildInfoProvider buildInfoProvider;
@@ -54,12 +55,21 @@ public class LifecycleEventRecorder {
                 InfoEntries.of(gitProperties.readFor(event.getSpringApplication()))));
     }
 
-    @EventListener
-    public void onClosed(ContextClosedEvent event) {
+    @Override
+    public void onApplicationEvent(ContextClosedEvent event) {
         if (!ContextEvents.fromOwnContext(event, ownContext)) {
             return;
         }
         eventLog.recordAndPersist(
                 LifecycleEvent.stop(clock.millis(), ProcessHandle.current().pid()));
+    }
+
+    /**
+     * Run async, the stop could be recorded after the context destroyed this bean, or never once the JVM exits. An
+     * {@code @EventListener} method has no such opt-out, hence the interface.
+     */
+    @Override
+    public boolean supportsAsyncExecution() {
+        return false;
     }
 }
