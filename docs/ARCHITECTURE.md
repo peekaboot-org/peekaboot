@@ -123,9 +123,9 @@ A stop event carries only its own timestamp and pid, since its build belongs to 
 follows, which the log still remembers.
 
 The git entries come from the application's own `git.properties`, which `ApplicationGitProperties`
-reads once the application has started, the first moment its main class is known. The Overview's
-git card shows the same file where Boot's git info contributor is on. Boot's `GitProperties`
-reads the first one on the classpath.
+reads at the start or at ready, whichever listener runs first, once the main class is known. The
+Overview's git card shows the same file where Boot's git info contributor is on. Boot's
+`GitProperties` reads the first one on the classpath.
 For an application without one, that is whichever library ships one. jdbc-url-parser, which the
 backend depends on, does. A `git.properties` in a classpath directory counts, since only a project
 being built puts one there and Gradle keeps resources apart from classes. One inside a jar counts

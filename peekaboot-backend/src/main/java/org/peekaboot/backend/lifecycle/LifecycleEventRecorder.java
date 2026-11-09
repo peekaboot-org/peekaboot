@@ -51,7 +51,7 @@ public class LifecycleEventRecorder {
                 event.getTimestamp(),
                 ProcessHandle.current().pid(),
                 buildInfoProvider.getEntries(),
-                InfoEntries.of(gitProperties.get())));
+                InfoEntries.of(gitProperties.readFor(event.getSpringApplication()))));
     }
 
     @EventListener

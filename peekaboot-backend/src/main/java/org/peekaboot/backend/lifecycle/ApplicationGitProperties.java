@@ -38,11 +38,11 @@ public final class ApplicationGitProperties {
 
     private final ApplicationContext ownContext;
 
-    // set on the starting thread, read by request threads
+    // set by an event listener, read by request threads
     private volatile @Nullable GitProperties own;
 
     /**
-     * Reads the application's own git.properties once it has started, the first moment its main class is known.
+     * Reads the application's own git.properties at its start or ready, whichever comes first, once its main class is known.
      *
      * @param hostLocated Boot's, where the host names its git.properties with {@code spring.info.git.location}; null has this read the application's own
      */
@@ -58,9 +58,20 @@ public final class ApplicationGitProperties {
 
     @EventListener
     public void onStarted(ApplicationStartedEvent event) {
-        if (hostLocated == null && ContextEvents.fromOwnContext(event, ownContext)) {
-            own = of(event.getSpringApplication());
+        if (ContextEvents.fromOwnContext(event, ownContext)) {
+            readFor(event.getSpringApplication());
         }
+    }
+
+    /**
+     * Reads the application's own git.properties now unless it was read already, then answers as {@link #get()}. The ready
+     * listener calls this because an async multicaster may run it before the start listener.
+     */
+    public @Nullable GitProperties readFor(SpringApplication application) {
+        if (hostLocated == null && own == null) {
+            own = of(application);
+        }
+        return get();
     }
 
     /** Null where the application has no git.properties of its own, or where it cannot be read. */

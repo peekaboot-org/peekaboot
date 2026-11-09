@@ -15,7 +15,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Properties;
+import java.util.concurrent.Executor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
@@ -25,7 +28,10 @@ import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.SimpleApplicationEventMulticaster;
+import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.core.io.DefaultResourceLoader;
 
 class LifecycleEventRecorderTest {
@@ -60,7 +66,41 @@ class LifecycleEventRecorderTest {
         ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
         when(event.getApplicationContext()).thenReturn(context);
         when(event.getTimestamp()).thenReturn(timestamp);
+        when(event.getSpringApplication()).thenReturn(new SpringApplication());
         return event;
+    }
+
+    /** Runs nothing until told, then the newest task first, as a host's event executor may. */
+    private static final class NewestFirstExecutor implements Executor {
+
+        private final Deque<Runnable> held = new ArrayDeque<>();
+
+        @Override
+        public void execute(Runnable task) {
+            held.push(task);
+        }
+
+        void runHeld() {
+            while (!held.isEmpty()) {
+                held.pop().run();
+            }
+        }
+    }
+
+    /** A context whose listeners run on {@code executor}, as under a host's async event multicaster. */
+    private static AnnotationConfigApplicationContext asyncContext(Executor executor, LifecycleEventLog log) {
+        AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+        SimpleApplicationEventMulticaster multicaster = new SimpleApplicationEventMulticaster(context.getBeanFactory());
+        multicaster.setTaskExecutor(executor);
+        context.getBeanFactory()
+                .registerSingleton(AbstractApplicationContext.APPLICATION_EVENT_MULTICASTER_BEAN_NAME, multicaster);
+        context.registerBean(ApplicationGitProperties.class, () -> new ApplicationGitProperties(null, context));
+        context.registerBean(
+                LifecycleEventRecorder.class,
+                () -> new LifecycleEventRecorder(
+                        log, new BuildInfoProvider(null), context.getBean(ApplicationGitProperties.class), context));
+        context.refresh();
+        return context;
     }
 
     @Test
@@ -151,6 +191,29 @@ class LifecycleEventRecorderTest {
         assertThat(log.events().get(0).git())
                 .containsEntry("branch", "main")
                 .containsEntry("commit.id.abbrev", "own1234");
+    }
+
+    /** An async multicaster may run the ready listeners before the started one that reads git.properties. */
+    @Test
+    void theGitFactsAreRecordedWhenTheReadyListenerRunsBeforeTheStartedOne(@TempDir Path resources) throws IOException {
+        Files.writeString(resources.resolve("git.properties"), "git.branch=main\n");
+        // records on the calling thread, so the start is in the log once the held listeners have run
+        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        log.beginLoad();
+        NewestFirstExecutor executor = new NewestFirstExecutor();
+        try (URLClassLoader classpath =
+                        new URLClassLoader(new URL[] {resources.toUri().toURL()}, null);
+                AnnotationConfigApplicationContext context = asyncContext(executor, log)) {
+            SpringApplication application = new SpringApplication(new DefaultResourceLoader(classpath));
+            context.publishEvent(new ApplicationStartedEvent(application, new String[0], context, Duration.ZERO));
+            context.publishEvent(new ApplicationReadyEvent(application, new String[0], context, Duration.ZERO));
+
+            executor.runHeld();
+
+            assertThat(log.events())
+                    .singleElement()
+                    .satisfies(start -> assertThat(start.git()).containsEntry("branch", "main"));
+        }
     }
 
     /**
