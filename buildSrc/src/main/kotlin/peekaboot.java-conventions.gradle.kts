@@ -74,8 +74,8 @@ dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     "mockitoAgent"(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
-    // peekaboot-parent's slf4j-api override, without which highest-wins settles on
-    // jdbc-url-parser's older request.
+    // peekaboot-parent's slf4j-api override, so both builds resolve the version Maven's
+    // require-upper-bound-deps settles on.
     constraints {
         api("org.slf4j:slf4j-api:2.0.20")
     }

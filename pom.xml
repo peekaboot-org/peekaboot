@@ -92,7 +92,7 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- jdbc-url-parser 0.1.2 depends on slf4j-api 2.0.19, ahead of the 2.0.18
+            <!-- jdbc-url-parser 0.1.3 depends on slf4j-api 2.0.20, ahead of the 2.0.18
                  spring-boot-dependencies 4.1.1 manages; override so require-upper-bound-deps
                  passes. -->
             <dependency>
