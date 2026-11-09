@@ -42,8 +42,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  *
  * <p>The testing-app pom does not inherit {@code peekaboot-parent}, so it repeats the build
  * instant, the JaCoCo, PMD and Surefire versions, the compiler release level and the Spring Boot
- * line by hand. The build instant, JaCoCo, PMD and Boot copies are compared against the root pom
- * the same way. The rest is not: Dependabot bumps both poms in one pull request.
+ * line by hand. All but the release level are compared against the root pom the same way.
  */
 class BuildVersionLockstepTest {
 
@@ -96,6 +95,15 @@ class BuildVersionLockstepTest {
                 "/project/properties/pmd.version",
                 "/project/properties/pmd.version",
                 "both poms run the one PMD ruleset; a different release can flag different code");
+    }
+
+    @Test
+    @Timeout(10)
+    void testingAppPinsTheSameSurefireVersionAsTheRootPom() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/surefire.version",
+                "/project/properties/surefire.version",
+                "Dependabot can bump the root pom's surefire.version alone; the testing-app copy moves by hand");
     }
 
     @Test

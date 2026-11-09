@@ -27,7 +27,7 @@
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <pmd.version>7.28.0</pmd.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
-        <surefire.version>3.6.0</surefire.version>
+        <surefire.version>3.6.1</surefire.version>
         <jacocoArgLine />
         <!-- The *IT suite parallelizes INSIDE one JVM (threads, below) rather than
              across forks: one JVM means one Spring context cache, so the suite's 11
