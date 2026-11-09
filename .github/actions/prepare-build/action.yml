@@ -59,21 +59,28 @@ runs:
         # letting the upload go out without credentials.
         mvn-server-repository-origins: ${{ inputs.server-origin != '' && format('{0}:{1}', inputs.server-id, inputs.server-origin) || '' }}
 
-    # A browser build changes with the Playwright version and nothing else, so the cache is
-    # keyed on that property rather than on every pom. The engine list joins the key because
-    # each matrix leg installs only its own: sharing one entry would have them overwrite it
-    # in turn, and every leg would restore an engine it cannot use.
+    # A browser build changes with the Playwright version and the host's OS release, so the
+    # cache is keyed on those rather than on every pom. Each Ubuntu release gets its own WebKit
+    # build in the same webkit-<revision> directory, and install skips any build it finds there,
+    # so one restored from another release fails to load its libraries. The engine list joins the
+    # key because each matrix leg installs only its own: sharing one entry would have them
+    # overwrite it in turn, and every leg would restore an engine it cannot use.
     - name: playwright-version
       id: playwright
       shell: bash
       run: echo "version=$(sed -n 's:.*<playwright.version>\(.*\)</playwright.version>.*:\1:p' peekaboot-testing-app/pom.xml)" >> "$GITHUB_OUTPUT"
 
+    - name: os-release
+      id: os
+      shell: bash
+      run: echo "release=$(. /etc/os-release && echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
+
     - name: Cache Playwright browsers
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ inputs.browsers }}-${{ steps.playwright.outputs.version }}
-        restore-keys: playwright-${{ runner.os }}-${{ inputs.browsers }}-
+        key: playwright-${{ runner.os }}-${{ steps.os.outputs.release }}-${{ inputs.browsers }}-${{ steps.playwright.outputs.version }}
+        restore-keys: playwright-${{ runner.os }}-${{ steps.os.outputs.release }}-${{ inputs.browsers }}-
 
     # The frontend lint gate's npm packages. The Node distribution itself needs no entry:
     # frontend-maven-plugin caches the tarball as a Maven artifact, which setup-java's

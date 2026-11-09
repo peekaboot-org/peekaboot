@@ -184,8 +184,10 @@ runs. WebKit is the engine that does need those libraries on Linux, which is why
 nightly cross-browser workflow installs with `--with-deps`.
 
 CI (`.github/workflows/build-on-push.yml`) caches `~/.cache/ms-playwright` keyed on the
-`playwright.version` property in this module's pom and on the engines it installs, so the
-download only happens when Playwright, and with it the browser build, changes.
+`playwright.version` property in this module's pom, on the runner's OS release and on the
+engines it installs, so the download only happens when Playwright or the runner image's
+Ubuntu release changes. The release is in the key because Playwright ships a separate WebKit
+build per Ubuntu release under the same directory name.
 `.github/workflows/cross-browser.yml` runs the suite nightly on all three engines and does
 install with `--with-deps`: GitHub-hosted Ubuntu runners have passwordless `sudo`, and
 WebKit does not start without those libraries.
