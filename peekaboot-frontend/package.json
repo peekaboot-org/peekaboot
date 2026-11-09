@@ -12,7 +12,7 @@
     "eslint": "10.14.0",
     "eslint-plugin-import-x": "4.17.1",
     "globals": "17.14.0",
-    "html-validate": "11.17.0",
+    "html-validate": "11.18.0",
     "stylelint": "17.16.0",
     "stylelint-config-recommended": "18.0.0",
     "stylelint-value-no-unknown-custom-properties": "6.1.1"
