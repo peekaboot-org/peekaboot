@@ -371,9 +371,8 @@
                  "classpath:git.properties" to a SINGLE resource, so a library that ships
                  one competes with the host application's own file and can win. Version
                  and configuration are pinned here because a bare declaration falls back
-                 to Spring Boot's managed version, which fails the build when no usable
-                 .git is present (e.g. a worktree whose absolute gitdir pointer does not
-                 resolve on this machine, or an exported source tree). -->
+                 to Spring Boot's managed version, which fails the build when no .git is
+                 present (e.g. an exported source tree). -->
             <plugin>
                 <groupId>io.github.git-commit-id</groupId>
                 <artifactId>git-commit-id-maven-plugin</artifactId>
@@ -521,6 +520,27 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>git-work-tree</id>
+            <activation>
+                <file>
+                    <exists>${project.basedir}/../.git</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.github.git-commit-id</groupId>
+                        <artifactId>git-commit-id-maven-plugin</artifactId>
+                        <!-- JGit reads a linked worktree's main checkout (git-commit-id #215); native git runs in this directory's parent -->
+                        <configuration>
+                            <useNativeGit>true</useNativeGit>
+                            <dotGitDirectory>${project.basedir}</dotGitDirectory>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!-- Firefox and WebKit hold back the chromium-only tests, whose subject is Chromium's
              own behaviour rather than peekaboot's. One profile per engine rather than a
              negated match: an unset property matches a negated value too, which would strip

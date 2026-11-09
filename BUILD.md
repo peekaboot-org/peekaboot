@@ -17,6 +17,7 @@ Gradle build must be kept in lockstep.
 | --- | --- |
 | JDK | **25**, the root pom's `peekaboot.java.version`, which both builds compile against. No toolchains, no fallback |
 | Maven / Gradle | The checked-in wrappers. Each fetches its own build tool at the version and SHA-256 pinned in `.mvn/wrapper/maven-wrapper.properties` and `gradle/wrapper/gradle-wrapper.properties`. A local Maven 3.9+ works the same |
+| Git | `git` on PATH when building from a checkout: wherever `.git` exists the testing app reads its git state with native git (see [Things that will bite you](#things-that-will-bite-you)) |
 | Docker | Needed by `./mvnw verify`: three testing-app ITs start their engine through Testcontainers (see its [README](peekaboot-testing-app/README.md#the-automated-ui-suite-srctest)). Also for running the sample app and for `ScreenshotCapture` |
 | Network | First run only: the wrappers fetch their build tool, the frontend gate fetches Node and its npm packages, Playwright fetches Chromium into `~/.cache/ms-playwright`, and Testcontainers pulls the MySQL, Redis and go-httpbin images |
 
@@ -807,7 +808,12 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
   Spring resolves `classpath:git.properties` to a single resource, so a library shipping one
   can beat the host application's own file in the host's `/actuator/info`. The dashboard reads
   only the application's own file, through `ApplicationGitProperties`. The testing-app pins the
-  version itself with `failOnNoGitDirectory=false`, so a worktree whose gitdir pointer does not
-  resolve, or an exported source tree, builds fine everywhere.
+  version itself with `failOnNoGitDirectory=false`, so an exported source tree without `.git`
+  builds. Wherever `../.git` exists, its `git-work-tree` profile runs native git in the work
+  tree, since the plugin's JGit mode reads a linked worktree's main checkout (upstream #215).
+  That needs `git` on PATH. A worktree whose gitdir pointer does not resolve on this machine
+  fails either way. The profile relies on native git running in the parent of
+  `dotGitDirectory`, which the plugin does not document, so re-check a worktree's
+  `git.properties` when Dependabot bumps the plugin.
 - The empty `peekaboot-spring-boot-starter` jar is intentional, and so are the empty
   `-sources`/`-javadoc` jars of the starter and the frontend. Do not "fix" the warnings.
