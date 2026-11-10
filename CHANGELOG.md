@@ -1,3 +1,372 @@
+## 1.2.0 - 2026-11-10
+
+### Features
+- Sort span tags in code-point order
+- Mark slow queries with the shared SLOW pill
+- Give Queries the Logs tab's span-tree link
+- Name a filter target by class and method
+- Spell out the toolbar's pending stats
+- Show the heap meter's maximum as Max Heap
+- Move issue thresholds to peekaboot.tracing
+- Rename dev-toolbar and enable-unmasking keys
+- Show the insights switch when it is off
+- Capture requests and logs under tracing
+- Hide the Lifecycle tab when lifecycle is off
+- Name handler and view spans by their target
+- Name the app in banners without build-info
+- Bind Hibernate panel meters without the jar
+- Capture a failed span's exception
+- Serve a failed span's folded stack trace
+- Answer the API's errors with problem details
+- Give the guard's 401 a problem body
+- List 5xx answers in the Errors bucket
+- Give each issue its value and threshold
+- Flag repeated queries under one span
+- Flag 4xx answers as client errors
+- Say why a trace failed or ran slow
+- Serve traces as summary and data
+- Name the first failure in a trace
+- List the spans with the most self time
+- Filter the trace list
+- Page the trace list by row position
+- Name each log's trace, logger and thread
+- Keep logs written outside any trace
+- Search captured logs
+- Aggregate traces per route
+- File a trace in its buckets as it is stored
+- Name the run that produced each trace
+- Refuse a page token from before a restart
+- Write the store's inputs as journal lines
+- Append trace inputs to a journal
+- Replay the trace journal at startup
+- Fold the trace journal into a snapshot
+- Keep traces across restarts
+- Mark a trace cut off by a restart
+- Serve each start with its whole build
+- Summarise the insights data
+- Name problems in the insights data
+- Fold failed traces into an error digest
+- Record live failed traces in the digest
+- Serve the error digest
+- Keep the error digest across restarts
+- Refuse unknown query parameters
+- Mark interrupted traces on the Traces tab
+- Show a trace's cause and hotspots
+- Show self time and issue badges on spans
+- Serve the API's OpenAPI document
+- List the API's endpoints at /peekaboot/api
+- Record git even when events run async
+- Detach log capture on the closing thread
+
+### Bug fixes
+- Link published poms to the real project page
+- Keep insights working in full git mode
+- Never write credentials through a symlink
+- Find Swagger UI behind a slash-less path
+- Keep a stored password with a blank username
+- Ignore a child context's ready event
+- Label Tomcat session creation per second
+- Refuse insights intervals finer than 1ms
+- Keep the Traces controls still on refresh
+- Stop Safari rounding times up a millisecond
+- Colour the toolbar by effective thresholds
+- Skip a relocated Swagger UI's own calls
+- Mask captured log messages and stack traces
+- Group omitted parameter sets by locale
+- Serve in-flight traces as incomplete
+- Keep dashboard requests out of observations
+- Refuse unknown trace list filters
+- Judge slow spans by their self time
+- Refuse an out-of-range trace list limit
+- Serve insights values in their units
+- Save the insights history every minute
+- Count a late meter's first tick from zero
+- Keep API refusals problem+json for browsers
+- Prefix the insights and lifecycle beans
+- Fail the server span of a 5xx error page
+- Prefix the remaining Peekaboot beans
+- Fail the handler span of a 5xx error page
+- Ignore a dependency's git.properties
+- Show the app's own git info on Overview
+- Run stop listeners on the closing thread
+- Keep the ready banner above the posture
+
+### Dependency upgrades
+- **deps**: Bump jdbc-url-parser to 0.1.3
+
+### Documentation
+- Name UNKNOWN for a direct reconcile call
+- Say mvn verify needs Docker
+- Describe test-support once, in its README
+- Point at the lockstep test for its checks
+- Document commands with the Maven wrapper
+- State the -am and -Dtest rule once
+- Drop banned words and dash asides
+- Give each build fact one home
+- Say the Slow threshold excludes async work
+- Drop comments that restate code or history
+- Describe properties in plain user terms
+- Say the banners print build placeholders
+- Point comments at insights-panels.js
+- State current reasons in three CSS comments
+- Document the overlay's token fallbacks
+- Give currentContext its real reason
+- Name SharedFixturesConfig's profiles
+- List the doc pages in the site's order
+- Say what unmasking reveals
+- Name the filters that read PeekabootPaths
+- Name the span's statement field
+- Fix the toolbar's slow-colour reference
+- Drop request bodies from code-block comment
+- Drop the tab list from fetchFeatures
+- List domain/property in the package tree
+- Link the agents page from the README
+- Link the agent skill from the README
+
+### Internal changes
+- Read trace bundles through snapshot only
+- Share the interceptor's observation stop
+- Drop needless response casts in wrapper
+- Remove filter members only tests used
+- Pass the original request to the toolbar
+- Read the current span once per request
+- Let the bundle answer whether it failed
+- Hold the trace buckets in one EnumMap
+- Give each trace bundle its own caps
+- Derive a span's duration from its ends
+- Inject the appender's event publisher
+- Drop null guards no caller can reach
+- Declare the actuator section ids once
+- Drop unread parsed actuator fields
+- Rename the parsed actuator records
+- Stream the migration mappers
+- Share one lenient enum lookup
+- Default the request locale in one place
+- Own the datasource wire types
+- Group metrics into name order directly
+- Share query statements across a detail
+- Share the listed trace tree constructor
+- Move root action classification out
+- Share the tag prefix scan through Tags
+- Build span issues through one helper
+- Construct each trace log in one place
+- Compose shared auto-config conditions
+- Share one stylesheet list
+- Read classpath UI text in one place
+- Name the management base path once
+- Import the toolbar config's Logger
+- Change a credentials origin in one call
+- Read the toolbar switch from properties
+- Inline the Logback reattach call
+- Scan the launch stack once
+- Move the detection source name
+- Hide the internal detection key
+- Name the mask literal one way
+- Drop TreeMasker's forwarding overloads
+- Inject one MaskingEngine at every site
+- Merge panel overrides onto the defaults
+- Share the insights loop and thread join
+- Read the level geometry from one place
+- Take the rate baseline once per sample
+- Roll up finer aggregates as records
+- Drop InsightsCollector's SmartLifecycle
+- Write every banner line through helpers
+- Join banner lists with Collectors
+- Name loggers log and event logs eventLog
+- Diff first starts with BuildFacts.NONE
+- Make LifecycleRuns.Timing a record
+- Give LifecycleEventLog a storage factory
+- Keep the info keys BuildFacts reads
+- Derive insights wire names from names
+- Decode stat rows next to byName
+- Call the API's level view LevelData
+- Merge the datasource toggle rules
+- Replace literal 4px sizes with tokens
+- Size the logo-mark link once in base.css
+- Drop the dark --pk-on-primary-wash
+- Move the locale select's padding
+- Remove unused hooks from the dashboard
+- Build every surface on dom.js's el()
+- Colour log levels by their badge variant
+- Build count-badge rows with countSummary
+- Pass the group-name variant to group()
+- Share the card-table render
+- Parse Insights URL state in one place
+- Walk the span tree through one generator
+- Style table header cells as .pk-label
+- One status-dot class for health dots
+- Drop an unheard stopPropagation
+- Switch overlay tabs through one function
+- Export the shells' render directly
+- Sync the bucket buttons in one function
+- Colour span issues by backend severity
+- Drop UI fallbacks for shapes never sent
+- Price lines and name customers once
+- Drop unused id setters on demo entities
+- Name the person lookup without a span
+- Drop remoteServiceName from spans
+- Drop unread trace detail fields
+- Serve each query's statement once
+- Drop the uncaptured request body fields
+- Drop unread fields from four responses
+- Drop the summed span duration
+- Drop the configured flag from loggers
+- Count omitted parameter sets as a field
+- Rename SpanNode.query to statement
+- Share one property group shape
+- Drop the spans summary error count
+- Serve every instant as ISO-8601
+- Drop the JS threshold and mask copies
+- Share one ApplicationIdentity
+- Drop BuildInfoProvider's unused members
+- Move span-tag vocabulary to tracing.tags
+- Move feature payloads beside their code
+- Move formatters and datasource facts
+- Split filter/ and log/ by feature
+- Move trace mapping into mapper.trace
+- Rename PeekabootActuatorService
+- Rename lifecycle EnvironmentInfo
+- Build trace mappers in their service
+- Drop TraceStore.clear
+- Read wall time through a Clock
+- Narrow package-internal types
+- Drop slowTraceThresholdMs from features
+- Drop unread commitId and instanceName
+- Rename executionTime to executionTimeMs
+- Share the captured stack trace line cap
+- Build tab summaries in TraceSummaries
+- Assemble traces outside the service
+- Serve traces from their own controller
+
+### Tests
+- Share span stubs and request builders
+- Build bundle fixtures with the span presets
+- Add an async task preset to Spans
+- Use Spring's decorator to propagate context
+- Read observation key values via Micrometer
+- Record listener observations the shared way
+- Drop a hand-rolled observation recorder
+- Pin sibling order by start time
+- Rename the lone orphan root test
+- Use the jdbcQuery preset in query tests
+- Reuse the fixture store for bucket tests
+- Run the no-DataSource fallback for real
+- Pin the trace listing pass-through
+- Give the launch-kind tests fixed inputs
+- Render error pages from the shared request
+- Derive one-off runners from the field runner
+- Pin LogCapture's restore on close
+- Share auto-config and pom lookups
+- Build autoconfigure trace fixtures once
+- Build dashboard credentials in one fixture
+- Share the local-server helpers across ITs
+- Build ready banners from one fixture
+- Close contexts with real ContextClosedEvents
+- One rule per InsightsProperties test
+- Share awaitQuietly and the event file name
+- Build insights collectors with a builder
+- Tick restore tests on a stepping clock
+- Pin the badge, iconLink and cell builders
+- Pin the overlay's log level colours
+- Pin each group tab's name variant
+- Pin the health dots' colour and size
+- Read Server-Timing trace ids in one place
+- Share the integration ITs' context setup
+- Post orders as JSON through one helper
+- Seed and delete orders via OrderFixtures
+- Pin the customer fallback to its own id
+- Read restarted apps through PeekabootApi
+- Run the error page's shared tests per path
+- Read listings and queries through helpers
+- Keep image tags in step with compose
+- Import the H2 test infrastructure once
+- Boot the UI suite through @TestingAppTest
+- Read UI trace ids through ServerTiming
+- Prefix the context path in two UI openers
+- Share the context-path UI setup
+- Give Toolbar waits for its own readouts
+- Import UI modules through importModule
+- Move traces deep-link filter tests
+- Seed and list UI traces through the base
+- Seed TracesTabIT orders via OrderFixtures
+- Pin the Slow bucket test to its own trace
+- Build dashboard URLs and deep links once
+- Park and lose first requests via the base
+- Compute WCAG contrast once, in ColourVision
+- Name the two gantt row counters apart
+- Assert the notice reveal in one test only
+- Pin idle mode to the fetched request's id
+- Register the lifecycle history in one place
+- Name the persons handler in CopyableIdIT
+- Release the late span after the first render
+- Keep UI test helpers in one block
+- Split TraceOverlayIT by overlay tab
+- Wait for the dashboard to paint Geist
+- Keep helpers at one end of each test class
+- Unwrap Optionals with orElseThrow
+- Assert single log events with singleElement
+- Fail a placed order that is not created
+- Pin batch statement order past index 9
+- Bound the N+1 count on orders present
+- Require the folded query statement
+- Reuse the span tree and order fixtures
+- Check served Max Heap against this JVM
+- Capture the Liquibase tab screenshot
+- Show Liquibase's MySQL dates in any JVM zone
+- Drop a test of unread security defaults
+- Align span error helpers with exception()
+- Keep trace summary checks off the clock
+- Restore traces across a real restart
+- Keep task threads off the web-app loader
+- Bound the latch waits in backend tests
+- Pin a 4xx page as a client error
+- Hold the API to its OpenAPI document
+- Stop git tests depending on the classpath
+- Drop a timing window in a recorder test
+
+### Build, CI and chores
+- **deps-dev**: Bump eslint in /peekaboot-frontend
+- **deps-dev**: Bump html-validate in /peekaboot-frontend
+- **deps**: Bump gradle-wrapper from 9.8.1 to 9.8.2
+- Hold dependency updates back a week
+- Refuse a doomed release before it starts
+- Build the next snapshot after a release
+- Release with plain git and gh
+- Drop the token from checkouts that never push
+- Pass expressions to scripts through env
+- Lint workflows and scripts on every push
+- Name peekaboot-publish in skip comments
+- Drop the compiler's restated release
+- Set the encodings without an indirection
+- Drop the frontend's default resources
+- Declare empty-javadoc-jar once
+- Pin install and deploy in the testing-app
+- Drop backend's second datasource-micrometer
+- Skip config metadata in Gradle testing-app
+- Read pom properties in the Gradle build
+- Declare the server origin through setup-java
+- Verify only the testing-app per engine
+- Run the release's full verify once
+- Drop the plugin version from await-release
+- Say why .npmrc mutes audit and fund
+- Merge the GitHub Actions Dependabot entries
+- Drop unused Maven template ignores
+- **deps-dev**: Bump com.microsoft.playwright:playwright
+- **deps**: Bump surefire.version from 3.6.0 to 3.6.1
+- **deps-dev**: Pin playwright to 1.63.0
+- **deps**: Bump org.jacoco:jacoco-maven-plugin from 0.8.15 to 0.8.16
+- **deps**: Bump org.apache.maven.plugins:maven-enforcer-plugin
+- **deps**: Bump gradle/actions/wrapper-validation from 6.4.0 to 6.4.1
+- **deps-dev**: Bump globals in /peekaboot-frontend
+- Keep descriptions in Gradle metadata
+- Align the testing app's versions
+- Drop a redundant Jackson exclusion
+- Align the testing app's surefire version
+- Read a worktree's own git state
+- Key browser cache on the runner's OS release
+
+**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.1.0...1.2.0
+
 ## 1.1.0 - 2026-10-17
 
 ### Features
