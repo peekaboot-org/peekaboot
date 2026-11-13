@@ -17,14 +17,17 @@ import java.nio.charset.StandardCharsets;
  * wrapper flips to passthrough - hands the buffered bytes to the real response and
  * delegates every further write - as soon as a non-HTML content type is declared (via
  * {@code setContentType} or, as Spring's message converters do it, the {@code Content-Type}
- * header), the buffer outgrows the cap, or {@link #enablePassthrough()} is called for an
- * async request. Streaming and async responses therefore work and no large body is held
- * in heap; a page past the cap is served without the toolbar.
+ * header), the buffer outgrows the cap, the handler sets a {@code WriteListener}, or
+ * {@link #enablePassthrough()} is called for an async request. Streaming and async
+ * responses therefore work and no large body is held in heap; a page past the cap is
+ * served without the toolbar.
  *
  * <p>Reset and commit semantics follow Spring's {@code ContentCachingResponseWrapper}:
  * {@link #reset()} clears the buffer along with the real response, {@link #isCommitted()}
  * is true once the real response is, and {@code sendError}/{@code sendRedirect} drop
- * what was buffered, since the container replaces the body either way.
+ * what was buffered, since the container replaces the body either way. Unlike it,
+ * {@link #reset()} also forgets whether the writer or the stream was picked, as
+ * {@code ServletResponse.reset} requires; {@link #resetBuffer()} keeps the choice.
  */
 class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
 
@@ -203,6 +206,9 @@ class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
     public void reset() {
         super.reset();
         buffer.reset();
+        writer = null;
+        writerCharset = null;
+        outputStream = null;
     }
 
     @Override
@@ -302,12 +308,22 @@ class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
 
         @Override
         public boolean isReady() {
-            return true;
+            try {
+                return !passthrough || getResponse().getOutputStream().isReady();
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to ask the real response whether it is ready", e);
+            }
         }
 
+        /** Non-blocking writes mean a streamed response, which gets no toolbar; the real stream calls the listener. */
         @Override
         public void setWriteListener(WriteListener listener) {
-            // buffering wrapper does not support non-blocking IO
+            try {
+                enablePassthrough();
+                getResponse().getOutputStream().setWriteListener(listener);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to hand the write listener to the real response", e);
+            }
         }
     }
 

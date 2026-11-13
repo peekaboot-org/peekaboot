@@ -7,6 +7,7 @@ import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
+import jakarta.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -23,9 +24,18 @@ import org.junit.jupiter.api.function.ThrowingConsumer;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.peekaboot.backend.testsupport.FailingWriteResponse;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 class ContentBufferingResponseWrapperTest {
+
+    private static final WriteListener UNUSED_LISTENER = new WriteListener() {
+        @Override
+        public void onWritePossible() {}
+
+        @Override
+        public void onError(Throwable throwable) {}
+    };
 
     MockHttpServletResponse originalResponse;
     ContentBufferingResponseWrapper wrapper;
@@ -241,6 +251,77 @@ class ContentBufferingResponseWrapperTest {
         assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
     }
 
+    /**
+     * A handler that sets a write listener writes without blocking, from a container thread
+     * and for as long as it likes. Such a response streams; a listener kept here would never
+     * be called and the request would never end.
+     */
+    @Test
+    void aWriteListenerSwitchesToPassthroughAndReachesTheRealStream() throws IOException {
+        NonBlockingResponse realResponse = new NonBlockingResponse();
+        wrapper = new ContentBufferingResponseWrapper(realResponse);
+        ServletOutputStream out = wrapper.getOutputStream();
+        out.write("early".getBytes(StandardCharsets.UTF_8));
+
+        out.setWriteListener(UNUSED_LISTENER);
+
+        assertThat(realResponse.listener).isSameAs(UNUSED_LISTENER);
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(realResponse.getContentAsString()).isEqualTo("early");
+    }
+
+    @Test
+    void aHandOverThatFailsForAWriteListenerIsAnIllegalState() throws IOException {
+        IOException brokenPipe = new IOException("Broken pipe");
+        wrapper = new ContentBufferingResponseWrapper(FailingWriteResponse.failingEveryWrite(brokenPipe));
+        ServletOutputStream out = wrapper.getOutputStream();
+        out.write("early".getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> out.setWriteListener(UNUSED_LISTENER))
+                .isInstanceOf(IllegalStateException.class)
+                .hasCause(brokenPipe);
+    }
+
+    @Test
+    void isReadyFollowsTheRealStreamInPassthrough() throws IOException {
+        NonBlockingResponse realResponse = new NonBlockingResponse();
+        wrapper = new ContentBufferingResponseWrapper(realResponse);
+        wrapper.enablePassthrough();
+
+        realResponse.ready = false;
+        assertThat(wrapper.getOutputStream().isReady()).isFalse();
+
+        realResponse.ready = true;
+        assertThat(wrapper.getOutputStream().isReady()).isTrue();
+    }
+
+    /** The buffer takes every write, so a real stream that is not ready holds nothing up yet. */
+    @Test
+    void isReadyWhileBuffering() throws IOException {
+        NonBlockingResponse realResponse = new NonBlockingResponse();
+        wrapper = new ContentBufferingResponseWrapper(realResponse);
+        realResponse.ready = false;
+
+        assertThat(wrapper.getOutputStream().isReady()).isTrue();
+    }
+
+    @Test
+    void isReadyIsAnIllegalStateWhereTheRealResponseHasNoStream() throws IOException {
+        IOException noStream = new IOException("No stream");
+        wrapper = new ContentBufferingResponseWrapper(new HttpServletResponseWrapper(originalResponse) {
+            @Override
+            public ServletOutputStream getOutputStream() throws IOException {
+                throw noStream;
+            }
+        });
+        wrapper.enablePassthrough();
+        ServletOutputStream out = wrapper.getOutputStream();
+
+        assertThatThrownBy(out::isReady)
+                .isInstanceOf(IllegalStateException.class)
+                .hasCause(noStream);
+    }
+
     @Test
     void resetBufferResetsTheRealResponseInPassthrough() throws IOException {
         wrapper.enablePassthrough();
@@ -261,6 +342,48 @@ class ContentBufferingResponseWrapperTest {
 
         assertThat(originalResponse.containsHeader("X-Stale")).isFalse();
         assertThat(wrapper.getContentAsString()).isEmpty();
+    }
+
+    /** ServletResponse.reset clears the choice between writer and stream along with the body. */
+    @Test
+    void aResetResponseMayPickItsWriterOrStreamAgain() throws IOException {
+        wrapper.getWriter().write("by writer");
+
+        wrapper.reset();
+        wrapper.getOutputStream().write("by stream".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(wrapper.getContentAsString()).isEqualTo("by stream");
+
+        wrapper.reset();
+        wrapper.getWriter().write("by writer again");
+
+        assertThat(wrapper.getContentAsString()).isEqualTo("by writer again");
+    }
+
+    /** The first writer encoded for a charset the reset took back; the next one follows what is declared by then. */
+    @Test
+    void aWriterPickedAfterAResetEncodesWithTheCharsetDeclaredSince() throws IOException {
+        wrapper.setContentType("text/html;charset=ISO-8859-1");
+        wrapper.getWriter().write("Grüße");
+        wrapper.flushBuffer();
+
+        wrapper.reset();
+        wrapper.setContentType("text/html;charset=UTF-8");
+        wrapper.getWriter().write("Grüße");
+        wrapper.flushBuffer();
+        wrapper.copyBodyToResponse();
+
+        assertThat(originalResponse.getContentAsByteArray()).isEqualTo("Grüße".getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void resetBufferKeepsTheWriterOrStreamChoice() throws IOException {
+        PrintWriter writer = wrapper.getWriter();
+
+        wrapper.resetBuffer();
+
+        assertThat(wrapper.getWriter()).isSameAs(writer);
+        assertThatThrownBy(() -> wrapper.getOutputStream()).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -498,6 +621,39 @@ class ContentBufferingResponseWrapperTest {
         @Override
         public void setWriteListener(WriteListener listener) {
             // not needed by the wrapper under test
+        }
+    }
+
+    /** A real response whose stream keeps the write listener it is handed and is only as ready as it is told to be. */
+    private static final class NonBlockingResponse extends MockHttpServletResponse {
+
+        private final ServletOutputStream body = super.getOutputStream();
+        private WriteListener listener;
+        private boolean ready = true;
+
+        @Override
+        public ServletOutputStream getOutputStream() {
+            return new ServletOutputStream() {
+                @Override
+                public void write(int b) throws IOException {
+                    body.write(b);
+                }
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
+                    body.write(b, off, len);
+                }
+
+                @Override
+                public boolean isReady() {
+                    return ready;
+                }
+
+                @Override
+                public void setWriteListener(WriteListener writeListener) {
+                    listener = writeListener;
+                }
+            };
         }
     }
 
