@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.problem.ApiProblem;
 import org.slf4j.Logger;
@@ -26,10 +27,17 @@ public final class CredentialsAccess implements DashboardAccess {
 
     private final DashboardCredentials credentials;
     private final CredentialCache cache;
+    private final DerivationGate gate;
+    private final AtomicBoolean shedLogged = new AtomicBoolean();
 
     public CredentialsAccess(DashboardCredentials credentials, CredentialCache cache) {
+        this(credentials, cache, new DerivationGate(DerivationGate.MAX_CONCURRENT));
+    }
+
+    CredentialsAccess(DashboardCredentials credentials, CredentialCache cache, DerivationGate gate) {
         this.credentials = credentials;
         this.cache = cache;
+        this.gate = gate;
     }
 
     @Override
@@ -50,13 +58,30 @@ public final class CredentialsAccess implements DashboardAccess {
             return true;
         }
         Presented presented = parse(header);
-        if (presented == null
-                || !constantTimeEquals(credentials.username(), presented.username())
-                || !credentials.passwordHash().matches(presented.password())) {
+        if (presented == null || !constantTimeEquals(credentials.username(), presented.username())) {
             return false;
         }
-        cache.remember(header);
-        return true;
+        return switch (gate.check(header, () -> credentials.passwordHash().matches(presented.password()))) {
+            case MATCHED -> {
+                cache.remember(header);
+                yield true;
+            }
+            case REJECTED -> false;
+            case SHED -> {
+                logShedOnce();
+                yield false;
+            }
+        };
+    }
+
+    /** Once, because every shed sign-in after the first says the same and an attacker sets the rate. */
+    private void logShedOnce() {
+        if (shedLogged.compareAndSet(false, true)) {
+            log.warn(
+                    "Peekaboot refused a sign-in unchecked because {} password checks were already running."
+                            + " It logs this once.",
+                    gate.maxConcurrent());
+        }
     }
 
     private static @Nullable Presented parse(String header) {
@@ -98,10 +123,10 @@ public final class CredentialsAccess implements DashboardAccess {
 
     /**
      * Belt-and-braces over a value that is public anyway - the username is
-     * {@code <application name>-admin}, visible by construction. The {@code ||} short-circuit in
-     * {@link #verify} is deliberate: skipping the 210,000-iteration derivation on a wrong username
-     * means that answer costs microseconds rather than the ~100ms a right one takes, so a wrong
-     * username never buys an attacker a free PBKDF2 derivation.
+     * {@code <application name>-admin}, visible by construction. {@link #verify} answers a wrong
+     * username before it asks the {@link DerivationGate}, deliberately: that answer costs
+     * microseconds rather than the ~100ms a right one takes, so a wrong username buys an attacker
+     * neither a PBKDF2 derivation nor one of the gate's slots.
      */
     private static boolean constantTimeEquals(String expected, String presented) {
         return MessageDigest.isEqual(

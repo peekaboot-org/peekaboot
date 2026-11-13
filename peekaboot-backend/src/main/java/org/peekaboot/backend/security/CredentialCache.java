@@ -14,9 +14,9 @@ import java.util.Map;
  * Remembers which {@code Authorization} headers have already been verified, so the dashboard's
  * many XHRs per page cost one PBKDF2 derivation between them rather than one each.
  *
- * <p>Only successful verifications are remembered, so a wrong password always pays the full cost
- * and the cache buys an attacker nothing. Headers are keyed by their SHA-256, so the password
- * itself is not held in the map.
+ * <p>Only successful verifications are remembered, so the cache buys an attacker nothing: a wrong
+ * password is derived again every time, as far as {@code DerivationGate} lets it run. Headers are
+ * keyed by their SHA-256, so the password itself is not held in the map.
  */
 public class CredentialCache {
 
