@@ -167,6 +167,18 @@ class AutoSecuredDashboardIT {
                 .isEqualTo(HttpStatus.OK);
     }
 
+    /** The right password after the two shows the guard was still checking and not refusing everyone. */
+    @Test
+    void rejectsAWrongPasswordEveryTime() {
+        PeekabootApi wrong = api().withBasicAuth(credentials.username(), "wrong");
+
+        assertThat(wrong.statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(wrong.statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(api().withBasicAuth(credentials.username(), credentials.plaintext())
+                        .statusOf(INSIGHTS_API))
+                .isEqualTo(HttpStatus.OK);
+    }
+
     /** The application's own path stays reachable: the guard names only {@code /peekaboot/**}. */
     @Test
     void theApplicationsOwnPathsStayAnonymouslyReachable() {

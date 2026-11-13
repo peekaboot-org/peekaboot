@@ -244,6 +244,25 @@ class DashboardAuthenticationFilterTest {
         assertThat(chainCalls).hasValue(2);
     }
 
+    /** A rejection must leave nothing behind that admits the header the next time. */
+    @Test
+    void aRejectedHeaderIsRejectedAgain() throws Exception {
+        var filter = filter();
+        var firstResponse = new MockHttpServletResponse();
+        var request = get("/peekaboot/");
+        request.addHeader("Authorization", basic("orders-admin", "wrong"));
+        filter.doFilter(request, firstResponse, chain);
+
+        var secondResponse = new MockHttpServletResponse();
+        var secondRequest = get("/peekaboot/");
+        secondRequest.addHeader("Authorization", basic("orders-admin", "wrong"));
+        filter.doFilter(secondRequest, secondResponse, chain);
+
+        assertThat(firstResponse.getStatus()).isEqualTo(401);
+        assertThat(secondResponse.getStatus()).isEqualTo(401);
+        assertThat(chainCalls).hasValue(0);
+    }
+
     @Test
     void refusesANonHttpRequest() {
         ServletRequest request = mock(ServletRequest.class);
