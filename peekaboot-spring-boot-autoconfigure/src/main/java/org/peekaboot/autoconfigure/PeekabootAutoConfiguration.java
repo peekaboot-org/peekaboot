@@ -42,6 +42,7 @@ import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Core auto-configuration: the dashboard controllers, the actuator/trace services and the
@@ -57,7 +58,7 @@ import org.springframework.context.annotation.Import;
  */
 @AutoConfiguration(after = {PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class})
 @ConditionalOnPeekabootServlet
-@ConditionalOnClass(HealthEndpoint.class)
+@ConditionalOnClass({HealthEndpoint.class, WebMvcConfigurer.class})
 @EnableConfigurationProperties({PeekabootProperties.class, PeekabootTracingProperties.class, InsightsProperties.class})
 @Import({StackTraceRulesConfiguration.class, MaskingConfiguration.class, ApplicationGitPropertiesConfiguration.class})
 public class PeekabootAutoConfiguration {

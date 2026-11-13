@@ -13,10 +13,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * Auto-configuration for the Peekaboot insights dashboard: the metrics
@@ -24,11 +26,13 @@ import org.springframework.core.io.ResourceLoader;
  * Requires a {@link MeterRegistry} bean, since insights has nothing to sample
  * without one - and that bean comes from Boot's metrics auto-configuration, which
  * sorts after every {@code org.peekaboot} class unless an edge says otherwise.
+ * Requires Spring MVC as well, since the stream is an {@link SseEmitter}.
  */
 @AutoConfiguration(
         after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class},
         afterName = "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration")
 @ConditionalOnPeekabootServlet
+@ConditionalOnClass(SseEmitter.class)
 @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.INSIGHTS_ENABLED, matchIfMissing = true)
 @ConditionalOnBean(MeterRegistry.class)
 @EnableConfigurationProperties({InsightsProperties.class, PeekabootTracingProperties.class})
