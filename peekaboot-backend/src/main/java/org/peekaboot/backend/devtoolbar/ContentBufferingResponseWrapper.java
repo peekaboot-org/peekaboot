@@ -319,6 +319,7 @@ class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
         @Override
         public void setWriteListener(WriteListener listener) {
             try {
+                // Buffered bytes first: a stream that has a listener refuses a write until isReady() said yes.
                 enablePassthrough();
                 getResponse().getOutputStream().setWriteListener(listener);
             } catch (IOException e) {

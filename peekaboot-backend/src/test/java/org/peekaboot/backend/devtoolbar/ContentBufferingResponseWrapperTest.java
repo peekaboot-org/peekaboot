@@ -270,6 +270,19 @@ class ContentBufferingResponseWrapperTest {
         assertThat(realResponse.getContentAsString()).isEqualTo("early");
     }
 
+    /** A container's stream that has a listener refuses a write until it said it is ready. */
+    @Test
+    void theBufferedBytesAreOutBeforeTheRealStreamGetsTheWriteListener() throws IOException {
+        NonBlockingResponse realResponse = new NonBlockingResponse();
+        wrapper = new ContentBufferingResponseWrapper(realResponse);
+        ServletOutputStream out = wrapper.getOutputStream();
+        out.write("early".getBytes(StandardCharsets.UTF_8));
+
+        out.setWriteListener(UNUSED_LISTENER);
+
+        assertThat(realResponse.bodyWhenTheListenerArrived).isEqualTo("early");
+    }
+
     @Test
     void aHandOverThatFailsForAWriteListenerIsAnIllegalState() throws IOException {
         IOException brokenPipe = new IOException("Broken pipe");
@@ -624,11 +637,15 @@ class ContentBufferingResponseWrapperTest {
         }
     }
 
-    /** A real response whose stream keeps the write listener it is handed and is only as ready as it is told to be. */
+    /**
+     * A real response whose stream keeps the write listener it is handed, with the body it
+     * held at that moment, and is only as ready as it is told to be.
+     */
     private static final class NonBlockingResponse extends MockHttpServletResponse {
 
         private final ServletOutputStream body = super.getOutputStream();
         private WriteListener listener;
+        private String bodyWhenTheListenerArrived;
         private boolean ready = true;
 
         @Override
@@ -652,6 +669,7 @@ class ContentBufferingResponseWrapperTest {
                 @Override
                 public void setWriteListener(WriteListener writeListener) {
                     listener = writeListener;
+                    bodyWhenTheListenerArrived = new String(getContentAsByteArray(), StandardCharsets.UTF_8);
                 }
             };
         }
