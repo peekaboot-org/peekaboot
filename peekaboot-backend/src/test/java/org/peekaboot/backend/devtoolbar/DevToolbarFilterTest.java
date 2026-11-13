@@ -268,6 +268,28 @@ class DevToolbarFilterTest {
         assertThat(result).doesNotContain("Peekaboot");
     }
 
+    /** A range of a page carries a Content-Range that describes the bytes the handler wrote. */
+    @Test
+    void leavesAPartialContentResponseAlone() throws Exception {
+        String range = "<html><body><h1>Hello</h1></body></html>";
+        doAnswer(invocation -> {
+                    ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
+                    wrapper.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
+                    wrapper.setHeader("Content-Range", "bytes 0-39/200");
+                    wrapper.setContentType("text/html");
+                    wrapper.getWriter().write(range);
+                    return null;
+                })
+                .when(chain)
+                .doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_PARTIAL_CONTENT);
+        assertThat(response.getHeader("Content-Range")).isEqualTo("bytes 0-39/200");
+        assertThat(response.getContentAsString()).isEqualTo(range);
+    }
+
     /** An error page is a page: the bar goes in and says which status the request ended with. */
     @Test
     void theToolbarIsInjectedIntoAnErrorPageWithItsStatus() throws Exception {

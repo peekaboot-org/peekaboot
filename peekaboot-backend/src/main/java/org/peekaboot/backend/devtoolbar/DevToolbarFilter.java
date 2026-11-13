@@ -226,6 +226,13 @@ public class DevToolbarFilter implements Filter {
 
         log.trace("Response content-type: {} for {}", wrappedResponse.getContentType(), original.uri());
 
+        if (wrappedResponse.getStatus() == HttpServletResponse.SC_PARTIAL_CONTENT) {
+            // Content-Range numbers the bytes the handler wrote; a bar in between shifts them.
+            log.trace("Skipping toolbar injection - partial content");
+            wrappedResponse.copyBodyToResponse();
+            return;
+        }
+
         if (!wrappedResponse.isHtml()) {
             log.trace("Skipping toolbar injection - not HTML: {}", wrappedResponse.getContentType());
             wrappedResponse.copyBodyToResponse();
