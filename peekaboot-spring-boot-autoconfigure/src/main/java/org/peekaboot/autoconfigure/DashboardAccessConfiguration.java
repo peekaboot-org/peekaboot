@@ -1,11 +1,14 @@
 package org.peekaboot.autoconfigure;
 
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.function.Predicate;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.security.DashboardAccess;
 import org.peekaboot.backend.security.DashboardAccessInterceptor;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.LoopbackOnlyAccess;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -51,6 +54,16 @@ class DashboardAccessConfiguration {
         // admitting everything here would leave the handlers open behind a guard that is declared
         throw new IllegalStateException("The guard registration '" + guards[0]
                 + "' holds no DashboardAuthenticationFilter, so Peekaboot cannot tell what it asks.");
+    }
+
+    /**
+     * Whether a request may see the dev toolbar and the error page's exception detail, which
+     * show outside the dashboard what the dashboard holds. An application that excluded the
+     * access rule altogether has none to ask, so everything is permitted there.
+     */
+    static Predicate<HttpServletRequest> debugDetailPermitted(ObjectProvider<DashboardAccess> access) {
+        DashboardAccess rule = access.getIfAvailable(DashboardAccess::open);
+        return rule::permitsDebugDetail;
     }
 
     @Configuration(proxyBeanMethods = false)

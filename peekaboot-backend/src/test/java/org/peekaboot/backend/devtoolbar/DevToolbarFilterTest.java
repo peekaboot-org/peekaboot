@@ -103,6 +103,23 @@ class DevToolbarFilterTest {
         verify(chain).doFilter(request, response);
     }
 
+    /** A client the access rule keeps off the dashboard gets the page as the application wrote it. */
+    @Test
+    void aRequestTheAccessRuleRefusesGetsNoBar() throws Exception {
+        DevToolbarFilter refusing = new DevToolbarFilter(
+                toolbarDataProvider,
+                tracer,
+                PeekabootPaths.defaults(),
+                PeekabootPaths.DEFAULT_SWAGGER_UI_PATH,
+                PeekabootPaths.DEFAULT_API_DOCS_PATH,
+                request -> false);
+        chainWritesHtml("<html><body></body></html>");
+
+        refusing.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).isEqualTo("<html><body></body></html>");
+    }
+
     /**
      * Peekaboot's own endpoints stay excluded behind a context path: the filter matches on
      * the container's mapped, context-relative path rather than the raw request URI - which
@@ -499,7 +516,8 @@ class DevToolbarFilterTest {
                 tracer,
                 new PeekabootPaths("/actuator", "/ctx", "/app"),
                 "/admin/docs.html",
-                "/spec");
+                "/spec",
+                request -> true);
         request = underTheDispatcherServletsPrefix("/admin/swagger-ui/index.html");
         request.setContextPath("/ctx");
         request.setRequestURI("/ctx/app/admin/swagger-ui/index.html");
@@ -672,7 +690,12 @@ class DevToolbarFilterTest {
     /** Every path default in place, with springdoc's UI configured at {@code swaggerUiPath}. */
     private DevToolbarFilter filterWith(ToolbarDataProvider provider, String swaggerUiPath) {
         return new DevToolbarFilter(
-                provider, tracer, PeekabootPaths.defaults(), swaggerUiPath, PeekabootPaths.DEFAULT_API_DOCS_PATH);
+                provider,
+                tracer,
+                PeekabootPaths.defaults(),
+                swaggerUiPath,
+                PeekabootPaths.DEFAULT_API_DOCS_PATH,
+                request -> true);
     }
 
     /** Under spring.mvc.servlet.path the container maps the DispatcherServlet's prefix as the servlet path. */
@@ -689,6 +712,7 @@ class DevToolbarFilterTest {
                 tracer,
                 new PeekabootPaths("/actuator", "", "/app"),
                 PeekabootPaths.DEFAULT_SWAGGER_UI_PATH,
-                PeekabootPaths.DEFAULT_API_DOCS_PATH);
+                PeekabootPaths.DEFAULT_API_DOCS_PATH,
+                request -> true);
     }
 }

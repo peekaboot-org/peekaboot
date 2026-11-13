@@ -4,7 +4,9 @@ import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
+import org.peekaboot.backend.security.DashboardAccess;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionMessage;
 import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
@@ -61,16 +63,22 @@ public class ErrorPageAutoConfiguration {
     @ConditionalOnBooleanProperty(name = "spring.web.error.whitelabel.enabled", matchIfMissing = true)
     @Conditional(ErrorPageAutoConfiguration.ErrorTemplateMissingCondition.class)
     public PeekabootErrorView peekabootErrorView(
-            ErrorAttributes errorAttributes, StackTraceRules stackTraceRules, PeekabootPaths paths) {
-        return new PeekabootErrorView(errorAttributes, stackTraceRules, paths);
+            ErrorAttributes errorAttributes,
+            StackTraceRules stackTraceRules,
+            PeekabootPaths paths,
+            ObjectProvider<DashboardAccess> access) {
+        return errorView(errorAttributes, stackTraceRules, paths, access);
     }
 
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_OVERRIDE)
     public PeekabootErrorViewResolver peekabootErrorViewResolver(
-            ErrorAttributes errorAttributes, StackTraceRules stackTraceRules, PeekabootPaths paths) {
-        return new PeekabootErrorViewResolver(new PeekabootErrorView(errorAttributes, stackTraceRules, paths));
+            ErrorAttributes errorAttributes,
+            StackTraceRules stackTraceRules,
+            PeekabootPaths paths,
+            ObjectProvider<DashboardAccess> access) {
+        return new PeekabootErrorViewResolver(errorView(errorAttributes, stackTraceRules, paths, access));
     }
 
     @Bean
@@ -80,12 +88,27 @@ public class ErrorPageAutoConfiguration {
             ErrorAttributes errorAttributes,
             StackTraceRules stackTraceRules,
             PeekabootPaths paths,
+            ObjectProvider<DashboardAccess> access,
             MessageSource messageSource,
             Environment environment) {
         return new PeekabootErrorExceptionResolver(
-                new PeekabootErrorView(errorAttributes, stackTraceRules, paths),
+                errorView(errorAttributes, stackTraceRules, paths, access),
                 messageSource,
                 environment.getProperty("spring.mvc.log-resolved-exception", Boolean.class, false));
+    }
+
+    /**
+     * The one place the page is built, so every path to it reads the application's attributes
+     * through the access rule and keeps exception detail from a client the rule refuses.
+     */
+    private static PeekabootErrorView errorView(
+            ErrorAttributes errorAttributes,
+            StackTraceRules stackTraceRules,
+            PeekabootPaths paths,
+            ObjectProvider<DashboardAccess> access) {
+        ErrorAttributes gated =
+                new GatedErrorAttributes(errorAttributes, DashboardAccessConfiguration.debugDetailPermitted(access));
+        return new PeekabootErrorView(gated, stackTraceRules, paths);
     }
 
     /**

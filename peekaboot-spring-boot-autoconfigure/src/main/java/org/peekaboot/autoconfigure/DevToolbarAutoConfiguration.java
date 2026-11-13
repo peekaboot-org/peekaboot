@@ -5,9 +5,11 @@ import jakarta.servlet.DispatcherType;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.DevToolbarFilter;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.security.DashboardAccess;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -54,7 +56,8 @@ public class DevToolbarAutoConfiguration {
             ToolbarDataProvider toolbarDataProvider,
             Tracer tracer,
             PeekabootPaths peekabootPaths,
-            Environment environment) {
+            Environment environment,
+            ObjectProvider<DashboardAccess> access) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
         // read via the Environment: springdoc's SwaggerUiConfigProperties may not be on the classpath
         registration.setFilter(new DevToolbarFilter(
@@ -62,7 +65,8 @@ public class DevToolbarAutoConfiguration {
                 tracer,
                 peekabootPaths,
                 PeekabootPaths.swaggerUiPath(environment.getProperty("springdoc.swagger-ui.path")),
-                PeekabootPaths.apiDocsPath(environment.getProperty("springdoc.api-docs.path"))));
+                PeekabootPaths.apiDocsPath(environment.getProperty("springdoc.api-docs.path")),
+                DashboardAccessConfiguration.debugDetailPermitted(access)));
         registration.addUrlPatterns("/*");
         // ERROR as well as REQUEST: the error page is rendered on its own dispatch, and the
         // bar belongs on it. What the bar reports there comes from the original request.

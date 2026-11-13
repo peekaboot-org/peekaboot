@@ -12,6 +12,8 @@ import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
+import org.peekaboot.backend.security.DashboardAccess;
+import org.peekaboot.backend.security.LoopbackOnlyAccess;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -30,6 +32,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.DispatcherServlet;
+import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolver;
 import org.springframework.web.servlet.view.BeanNameViewResolver;
@@ -42,6 +45,9 @@ import org.springframework.web.servlet.view.BeanNameViewResolver;
  * opt-out of that back-off: with it set, Peekaboot's page wins instead.
  */
 class ErrorPageAutoConfigurationTest {
+
+    /** The message of {@link #exceptionWithVendorFrame()} as the page marks it up. The failed path is {@code /boom} too. */
+    private static final String MESSAGE_ON_THE_PAGE = ">boom<";
 
     // DispatcherServletAutoConfiguration for the DispatcherServletPath bean
     // ErrorMvcAutoConfiguration.ErrorPageCustomizer needs
@@ -99,16 +105,8 @@ class ErrorPageAutoConfigurationTest {
                 .run(context -> {
                     View view = context.getBean("error", View.class);
 
-                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/error");
-                    request.setServletPath("/error");
-                    request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
-                    request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/boom");
-                    request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exceptionWithVendorFrame());
-                    MockHttpServletResponse response = new MockHttpServletResponse();
-
-                    view.render(Map.of(), request, response);
-
-                    assertThat(response.getContentAsString()).contains("<details class=\"pk-stack-trace__hidden\"");
+                    assertThat(rendered(view, errorDispatchOf(exceptionWithVendorFrame())))
+                            .contains("<details class=\"pk-stack-trace__hidden\"");
                 });
     }
 
@@ -129,16 +127,8 @@ class ErrorPageAutoConfigurationTest {
                 .run(context -> {
                     View view = context.getBean("error", View.class);
 
-                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/error");
-                    request.setServletPath("/error");
-                    request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
-                    request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/boom");
-                    request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, exceptionWithVendorFrame());
-                    MockHttpServletResponse response = new MockHttpServletResponse();
-
-                    view.render(Map.of(), request, response);
-
-                    assertThat(response.getContentAsString()).contains("<details class=\"pk-stack-trace__hidden\"");
+                    assertThat(rendered(view, errorDispatchOf(exceptionWithVendorFrame())))
+                            .contains("<details class=\"pk-stack-trace__hidden\"");
                 });
     }
 
@@ -357,6 +347,53 @@ class ErrorPageAutoConfigurationTest {
                 });
     }
 
+    /** The page in Boot's fallback slot asks the rule that keeps a client off the dashboard. */
+    @Test
+    void theFallbackPageKeepsExceptionDetailOnThisMachine() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true")
+                .withBean(DashboardAccess.class, LoopbackOnlyAccess::new)
+                .run(context -> assertKeepsExceptionDetailOnThisMachine(context.getBean("error", View.class)));
+    }
+
+    @Test
+    void theOverridingPageKeepsExceptionDetailOnThisMachine() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .withBean(DashboardAccess.class, LoopbackOnlyAccess::new)
+                .run(context -> assertKeepsExceptionDetailOnThisMachine(
+                        context.getBean(PeekabootErrorViewResolver.class).view()));
+    }
+
+    /** The exception resolver renders inside the REQUEST dispatch, where the reason travels as the error message. */
+    @Test
+    void thePageThatBeatsAdviceKeepsExceptionDetailOnThisMachine() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .withBean(DashboardAccess.class, LoopbackOnlyAccess::new)
+                .run(context -> {
+                    PeekabootErrorExceptionResolver resolver = context.getBean(PeekabootErrorExceptionResolver.class);
+
+                    assertThat(pageFor(resolver, "evil.example"))
+                            .contains("pk-error__status")
+                            .doesNotContain("gateway unreachable");
+                    assertThat(pageFor(resolver, "localhost")).contains("gateway unreachable");
+                });
+    }
+
+    /** What the resolver answers a browser that asked {@code host} for a page whose handler gave up on its gateway. */
+    private static String pageFor(PeekabootErrorExceptionResolver resolver, String host) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
+        request.addHeader("Accept", "text/html");
+        request.addHeader("Host", host);
+        ModelAndView page = resolver.resolveException(
+                request,
+                new MockHttpServletResponse(),
+                null,
+                new ResponseStatusException(HttpStatus.BAD_GATEWAY, "gateway unreachable"));
+        return rendered(page.getView(), request);
+    }
+
     /** An application that brings its own replaces Peekaboot's, like every other Peekaboot bean. */
     @Test
     void backsOffForAnApplicationsOwnExceptionResolver() {
@@ -377,6 +414,38 @@ class ErrorPageAutoConfigurationTest {
                 .withBean("ownViewResolver", PeekabootErrorViewResolver.class, () -> own)
                 .run(context -> assertThat(context.getBean(PeekabootErrorViewResolver.class))
                         .isSameAs(own));
+    }
+
+    /**
+     * The error dispatch of a request that failed with {@link #exceptionWithVendorFrame()},
+     * rendered once for a browser that named another host and once for one on this machine.
+     */
+    private static void assertKeepsExceptionDetailOnThisMachine(View view) throws Exception {
+        MockHttpServletRequest fromAnotherHost = errorDispatchOf(exceptionWithVendorFrame());
+        fromAnotherHost.addHeader("Host", "evil.example");
+        MockHttpServletRequest fromThisMachine = errorDispatchOf(exceptionWithVendorFrame());
+        fromThisMachine.addHeader("Host", "localhost");
+
+        assertThat(rendered(view, fromAnotherHost))
+                .contains("pk-error__status")
+                .doesNotContain("IllegalStateException", MESSAGE_ON_THE_PAGE, "com.acme.vendor");
+        assertThat(rendered(view, fromThisMachine))
+                .contains("IllegalStateException", MESSAGE_ON_THE_PAGE, "com.acme.vendor");
+    }
+
+    private static MockHttpServletRequest errorDispatchOf(Throwable failure) {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/error");
+        request.setServletPath("/error");
+        request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
+        request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/boom");
+        request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, failure);
+        return request;
+    }
+
+    private static String rendered(View view, MockHttpServletRequest request) throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        view.render(Map.of(), request, response);
+        return response.getContentAsString();
     }
 
     private static PeekabootErrorView ownView() {

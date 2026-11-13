@@ -11,6 +11,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.devtoolbar.DevToolbarFilter;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.security.DashboardAccess;
+import org.peekaboot.backend.security.LoopbackOnlyAccess;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration;
@@ -105,6 +107,30 @@ class DevToolbarAutoConfigurationTest {
 
                     assertThat(response.getContentAsString())
                             .contains("\"ignoredPathPrefixes\":[\"/swagger-ui/\",\"/spec\"]");
+                });
+    }
+
+    /** The rule that keeps a client off the dashboard keeps the bar off the pages it is served. */
+    @Test
+    void theAccessRuleReachesTheToolbarFilter() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar.enabled=true")
+                .withUserConfiguration(TracerOnlyConfig.class)
+                .withBean(DashboardAccess.class, LoopbackOnlyAccess::new)
+                .run(context -> {
+                    DevToolbarFilter filter = (DevToolbarFilter)
+                            context.getBean("peekabootDevToolbarFilter", FilterRegistrationBean.class)
+                                    .getFilter();
+                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/users");
+                    request.setServletPath("/users");
+                    request.addHeader("Host", "evil.example");
+                    MockHttpServletResponse response = new MockHttpServletResponse();
+                    filter.doFilter(request, response, (req, res) -> {
+                        res.setContentType("text/html");
+                        res.getWriter().write("<html><body></body></html>");
+                    });
+
+                    assertThat(response.getContentAsString()).isEqualTo("<html><body></body></html>");
                 });
     }
 

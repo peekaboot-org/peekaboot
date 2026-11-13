@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.slf4j.Logger;
@@ -40,6 +41,7 @@ public class DevToolbarFilter implements Filter {
     private final PeekabootPaths paths;
     private final String swaggerUiPrefix;
     private final String apiDocsPath;
+    private final Predicate<HttpServletRequest> barPermitted;
     // Reads the bar's stylesheets off the classpath once, at construction, and caches the
     // rendered fragment's CSS; there is one filter instance per application.
     private final ToolbarShell toolbarShell = new ToolbarShell();
@@ -47,18 +49,22 @@ public class DevToolbarFilter implements Filter {
     /**
      * @param swaggerUiPath the effective {@code springdoc.swagger-ui.path}, for the idle-mode check
      * @param apiDocsPath the effective {@code springdoc.api-docs.path}, whose calls idle mode ignores
+     * @param barPermitted whether the client behind a request may see the bar, which reports
+     *     what the dashboard holds and links into it
      */
     public DevToolbarFilter(
             ToolbarDataProvider toolbarDataProvider,
             Tracer tracer,
             PeekabootPaths paths,
             String swaggerUiPath,
-            String apiDocsPath) {
+            String apiDocsPath,
+            Predicate<HttpServletRequest> barPermitted) {
         this.toolbarDataProvider = toolbarDataProvider;
         this.tracer = tracer;
         this.paths = paths;
         this.swaggerUiPrefix = swaggerUiPrefix(swaggerUiPath);
         this.apiDocsPath = apiDocsPath;
+        this.barPermitted = barPermitted;
     }
 
     /**
@@ -209,7 +215,7 @@ public class DevToolbarFilter implements Filter {
         }
 
         String xRequestedWith = request.getHeader("X-Requested-With");
-        return "XMLHttpRequest".equalsIgnoreCase(xRequestedWith);
+        return "XMLHttpRequest".equalsIgnoreCase(xRequestedWith) || !barPermitted.test(request);
     }
 
     private void processResponse(
