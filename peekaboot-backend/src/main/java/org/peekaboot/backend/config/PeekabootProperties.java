@@ -29,6 +29,8 @@ public class PeekabootProperties {
 
     private StackTrace stackTrace = new StackTrace();
 
+    private RemoteAccess remoteAccess = new RemoteAccess();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -91,6 +93,14 @@ public class PeekabootProperties {
 
     public void setStackTrace(StackTrace stackTrace) {
         this.stackTrace = stackTrace;
+    }
+
+    public RemoteAccess getRemoteAccess() {
+        return remoteAccess;
+    }
+
+    public void setRemoteAccess(RemoteAccess remoteAccess) {
+        this.remoteAccess = remoteAccess;
     }
 
     public static class DevToolbar {
@@ -363,6 +373,23 @@ public class PeekabootProperties {
 
         public void setExclude(List<String> exclude) {
             this.exclude = exclude;
+        }
+    }
+
+    public static class RemoteAccess {
+
+        /**
+         * Whether a client other than this machine reaches Peekaboot on a local run. Without
+         * effect once the guard is armed or on a deployment.
+         */
+        private boolean enabled = false;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
     }
 }

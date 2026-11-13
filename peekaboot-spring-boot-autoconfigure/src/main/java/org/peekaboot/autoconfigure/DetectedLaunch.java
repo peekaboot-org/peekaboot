@@ -34,4 +34,8 @@ final class DetectedLaunch extends PropertySource<LocalDevDetector.LaunchKind> {
         }
         return Optional.empty();
     }
+
+    static boolean is(Environment environment, LocalDevDetector.LaunchKind kind) {
+        return in(environment).filter(kind::equals).isPresent();
+    }
 }

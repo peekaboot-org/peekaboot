@@ -42,7 +42,7 @@ public final class SecurityPosture {
         return Optional.ofNullable(report);
     }
 
-    /** Nothing to say: a local development or test launch, where none of this applies. */
+    /** Nothing to say: a test launch, or a local run that answers this machine only. */
     public static SecurityPosture quiet() {
         return new SecurityPosture(null);
     }
@@ -58,6 +58,20 @@ public final class SecurityPosture {
                 + " must. See " + DOCS;
         return new SecurityPosture(
                 new Report(Level.WARN, errorPageOn ? text + "\n" + ERROR_PAGE_ON_A_DEPLOYMENT : text));
+    }
+
+    /**
+     * The operator opened a local run to other clients and no guard stands in front of it. One
+     * reminder, not a banner.
+     *
+     * @param dashboardPath where the dashboard sits below the context path, as {@code PeekabootPaths} resolves it
+     */
+    public static SecurityPosture remoteAccessOnALocalRun(String dashboardPath) {
+        return new SecurityPosture(new Report(
+                Level.WARN,
+                "peekaboot.remote-access.enabled=true on a local run. Anyone who can reach this port reads "
+                        + dashboardPath + "/** without signing in and gets the dev toolbar and the error page."
+                        + " Set peekaboot.security.enabled=true to put Peekaboot's login in front. See " + DOCS));
     }
 
     /**

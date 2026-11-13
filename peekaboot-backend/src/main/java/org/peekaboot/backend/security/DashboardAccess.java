@@ -10,6 +10,11 @@ public interface DashboardAccess {
     /** True when the request may proceed, false once this has answered the response itself. */
     boolean admit(HttpServletRequest request, HttpServletResponse response) throws IOException;
 
+    /** Whether a page served to this request may carry the dev toolbar and exception detail. */
+    default boolean permitsDebugDetail(HttpServletRequest request) {
+        return true;
+    }
+
     /** Admits every request, for an application with no guard. */
     static DashboardAccess open() {
         return (request, response) -> true;

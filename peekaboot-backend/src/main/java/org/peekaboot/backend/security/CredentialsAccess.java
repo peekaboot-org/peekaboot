@@ -1,6 +1,5 @@
 package org.peekaboot.backend.security;
 
-import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -8,12 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 import org.jspecify.annotations.Nullable;
-import org.peekaboot.backend.config.ApiSecurityHeaders;
-import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.problem.ApiProblem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
 
 /** Admits a request that carries Peekaboot's own credentials over HTTP Basic and challenges every other. */
 public final class CredentialsAccess implements DashboardAccess {
@@ -94,26 +90,10 @@ public final class CredentialsAccess implements DashboardAccess {
 
     private record Presented(String username, String password) {}
 
-    /**
-     * A 401 with a problem body, set rather than sent: {@code sendError} would dispatch to the error
-     * page and re-enter the chain. The guard answers before the API's header interceptor runs, so it
-     * sets {@link ApiSecurityHeaders} itself. An include gets nothing from it. An include cannot set
-     * the status, so the including response keeps its own, and a body would land inside the
-     * including page. A committed response gets no body either, since its status is already sent
-     * and it would only gain trailing bytes.
-     */
+    /** A 401 that tells the client how to sign in, see {@link Refusals#answer}. */
     private static void challenge(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setHeader(CHALLENGE_HEADER, CHALLENGE);
-        ApiSecurityHeaders.apply(response);
-        if (request.getDispatcherType() == DispatcherType.INCLUDE || response.isCommitted()) {
-            response.setContentLength(0);
-            return;
-        }
-        byte[] body = PeekabootJson.MAPPER.writeValueAsBytes(CHALLENGED);
-        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.setContentLength(body.length);
-        response.getOutputStream().write(body);
+        Refusals.answer(request, response, CHALLENGED);
     }
 
     /**

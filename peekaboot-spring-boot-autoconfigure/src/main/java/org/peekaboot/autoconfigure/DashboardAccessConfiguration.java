@@ -1,8 +1,10 @@
 package org.peekaboot.autoconfigure;
 
+import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.security.DashboardAccess;
 import org.peekaboot.backend.security.DashboardAccessInterceptor;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
+import org.peekaboot.backend.security.LoopbackOnlyAccess;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -10,6 +12,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -25,13 +28,21 @@ class DashboardAccessConfiguration {
      * The registered guard's own check, so an application that replaced the guard is asked for
      * its credentials at both points and never for Peekaboot's. Found by bean definition, for
      * the reason the posture's own lookup in {@link PeekabootSecurityAutoConfiguration} gives.
+     *
+     * <p>Without a guard a local run answers this machine only, since nothing else stands in
+     * front of it. A deployment with the guard off is the application's own security's to cover,
+     * and a test drives the application with whatever client it likes, so neither gets the rule.
      */
     @Bean
     @ConditionalOnMissingBean
-    DashboardAccess peekabootDashboardAccess(ListableBeanFactory beanFactory) {
+    DashboardAccess peekabootDashboardAccess(
+            ListableBeanFactory beanFactory, Environment environment, PeekabootProperties properties) {
         String[] guards = beanFactory.getBeanNamesForType(PeekabootSecurityAutoConfiguration.GUARD_TYPE, true, false);
         if (guards.length == 0) {
-            return DashboardAccess.open();
+            return DetectedLaunch.is(environment, LocalDevDetector.LaunchKind.LOCAL_DEV)
+                            && !properties.getRemoteAccess().isEnabled()
+                    ? new LoopbackOnlyAccess()
+                    : DashboardAccess.open();
         }
         FilterRegistrationBean<?> guard = beanFactory.getBean(guards[0], FilterRegistrationBean.class);
         if (guard.getFilter() instanceof DashboardAuthenticationFilter filter) {

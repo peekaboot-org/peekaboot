@@ -497,14 +497,168 @@ class PeekabootSecurityAutoConfigurationTest {
                 });
     }
 
+    /** No login stands in front of a local run, so only the machine it runs on is answered. */
+    @Test
+    void aLocalRunWithoutTheGuardAnswersLoopbackOnly(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.LOCAL_DEV))
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .run(context -> {
+                    DashboardAccess access = context.getBean(DashboardAccess.class);
+                    MockHttpServletResponse refused = new MockHttpServletResponse();
+
+                    assertThat(access.admit(fromAnotherMachine(), refused)).isFalse();
+                    assertThat(refused.getStatus()).isEqualTo(403);
+                    assertThat(access.admit(fromThisMachine(), new MockHttpServletResponse()))
+                            .isTrue();
+                });
+    }
+
+    @Test
+    void remoteAccessOpensALocalRun(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.LOCAL_DEV))
+                .withPropertyValues("peekaboot.security.enabled=false", "peekaboot.remote-access.enabled=true")
+                .run(context -> assertThat(admitsFromAnotherMachine(context)).isTrue());
+    }
+
+    /** The login is the answer to a remote client there, so the loopback rule never refuses one it would admit. */
+    @Test
+    void anArmedGuardOnALocalRunDecidesAlone(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.LOCAL_DEV))
+                .run(context -> {
+                    DashboardCredentials credentials = context.getBean(DashboardCredentials.class);
+                    DashboardAccess access = context.getBean(DashboardAccess.class);
+                    MockHttpServletResponse challenged = new MockHttpServletResponse();
+                    MockHttpServletRequest signedIn = fromAnotherMachine();
+                    signedIn.addHeader("Authorization", basic(credentials.username(), credentials.plaintext()));
+
+                    assertThat(access.admit(fromAnotherMachine(), challenged)).isFalse();
+                    assertThat(challenged.getStatus()).isEqualTo(401);
+                    assertThat(access.admit(signedIn, new MockHttpServletResponse()))
+                            .isTrue();
+                });
+    }
+
+    /** The operator handed the path to the application's own security, which may sit behind any proxy. */
+    @Test
+    void aDeploymentWithTheGuardOffIsNotLoopbackOnly(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .run(context -> assertThat(admitsFromAnotherMachine(context)).isTrue());
+    }
+
+    /** A test drives the application with whatever client and Host it likes. */
+    @Test
+    void aTestLaunchIsNotLoopbackOnly(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .run(context -> assertThat(admitsFromAnotherMachine(context)).isTrue());
+    }
+
+    @Test
+    void warnsThatRemoteAccessLeavesALocalRunOpen(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.LOCAL_DEV))
+                .withPropertyValues("peekaboot.security.enabled=false", "peekaboot.remote-access.enabled=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(report -> {
+                            assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
+                            assertThat(report.text())
+                                    .contains("peekaboot.remote-access.enabled=true on a local run")
+                                    .contains(" /peekaboot/** ");
+                        }));
+    }
+
+    @Test
+    void staysQuietOnALoopbackOnlyLocalRun(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.LOCAL_DEV))
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .isEmpty());
+    }
+
+    /** The switch opens nothing there, so there is nothing to warn about. */
+    @Test
+    void saysNothingAboutRemoteAccessBehindAnArmedGuard(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.LOCAL_DEV))
+                .withPropertyValues("peekaboot.remote-access.enabled=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(report -> assertThat(report.text())
+                                .contains("Peekaboot challenges every /peekaboot/** request")
+                                .doesNotContain("peekaboot.remote-access.enabled")));
+    }
+
+    /** The application's own guard asks for credentials, so nobody reads the dashboard without signing in. */
+    @Test
+    void saysNothingAboutRemoteAccessBehindAGuardTheApplicationReplaced(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.LOCAL_DEV))
+                .withUserConfiguration(ReplacedGuard.class)
+                .withPropertyValues("peekaboot.security.enabled=false", "peekaboot.remote-access.enabled=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .isEmpty());
+    }
+
+    @Test
+    void saysNothingAboutRemoteAccessOnATestLaunch(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.security.enabled=false", "peekaboot.remote-access.enabled=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .isEmpty());
+    }
+
+    /** The deployment's own warning stands: the switch means nothing there. */
+    @Test
+    void saysNothingAboutRemoteAccessOnADeployment(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
+                .withPropertyValues("peekaboot.security.enabled=false", "peekaboot.remote-access.enabled=true")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(report -> assertThat(report.text())
+                                .contains("peekaboot.security.enabled=false on a deployment")
+                                .doesNotContain("peekaboot.remote-access.enabled")));
+    }
+
+    private static boolean admitsFromAnotherMachine(ApplicationContext context) throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        boolean admitted = context.getBean(DashboardAccess.class).admit(fromAnotherMachine(), response);
+        assertThat(response.getStatus()).isEqualTo(admitted ? 200 : 403);
+        return admitted;
+    }
+
+    private static MockHttpServletRequest fromAnotherMachine() {
+        MockHttpServletRequest request = fromThisMachine();
+        request.setRemoteAddr("10.0.0.5");
+        return request;
+    }
+
+    private static MockHttpServletRequest fromThisMachine() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/peekaboot/api/features");
+        request.setRemoteAddr("127.0.0.1");
+        request.addHeader("Host", "localhost");
+        return request;
+    }
+
     private static boolean admits(DashboardAccess access, String username, String password) throws IOException {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader(
-                "Authorization",
-                "Basic "
-                        + Base64.getEncoder()
-                                .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8)));
+        request.addHeader("Authorization", basic(username, password));
         return access.admit(request, new MockHttpServletResponse());
+    }
+
+    private static String basic(String username, String password) {
+        return "Basic "
+                + Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 
     @SuppressWarnings("unchecked")

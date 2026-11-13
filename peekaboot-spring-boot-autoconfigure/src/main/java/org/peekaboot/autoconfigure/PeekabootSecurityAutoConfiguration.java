@@ -87,8 +87,11 @@ public class PeekabootSecurityAutoConfiguration {
                     properties.getDevToolbar().isEnabled(),
                     errorPageOnADeployment);
         }
-        return deploymentLaunch
-                ? SecurityPosture.disabledOnADeployment(paths.dashboardPath(), errorPageOnADeployment)
+        if (deploymentLaunch) {
+            return SecurityPosture.disabledOnADeployment(paths.dashboardPath(), errorPageOnADeployment);
+        }
+        return openToRemoteClients(beanFactory, environment, properties)
+                ? SecurityPosture.remoteAccessOnALocalRun(paths.dashboardPath())
                 : SecurityPosture.quiet();
     }
 
@@ -178,8 +181,14 @@ public class PeekabootSecurityAutoConfiguration {
 
     /** Detected-only, so an explicit override of {@code peekaboot.security.enabled} does not hide what was detected. */
     private static boolean deploymentLaunch(Environment environment) {
-        return DetectedLaunch.in(environment)
-                .filter(LocalDevDetector.LaunchKind.DEPLOYMENT::equals)
-                .isPresent();
+        return DetectedLaunch.is(environment, LocalDevDetector.LaunchKind.DEPLOYMENT);
+    }
+
+    /** Where {@link DashboardAccessConfiguration} would answer this machine only and the switch opened it instead. */
+    private static boolean openToRemoteClients(
+            ListableBeanFactory beanFactory, Environment environment, PeekabootProperties properties) {
+        return !guardRegistered(beanFactory)
+                && DetectedLaunch.is(environment, LocalDevDetector.LaunchKind.LOCAL_DEV)
+                && properties.getRemoteAccess().isEnabled();
     }
 }

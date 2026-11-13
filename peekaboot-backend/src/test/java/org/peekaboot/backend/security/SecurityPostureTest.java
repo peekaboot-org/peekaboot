@@ -185,6 +185,21 @@ class SecurityPostureTest {
     }
 
     @Test
+    void remoteAccessOnALocalRun_isOneWarningLineNamingTheSwitchAndThePath() {
+        var report = SecurityPosture.remoteAccessOnALocalRun(DASHBOARD_BEHIND_A_SERVLET_PATH)
+                .report()
+                .orElseThrow();
+
+        assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
+        assertThat(report.text())
+                .isEqualTo("peekaboot.remote-access.enabled=true on a local run. Anyone who can reach this port"
+                        + " reads /app/peekaboot/** without signing in and gets the dev toolbar and the error"
+                        + " page. Set peekaboot.security.enabled=true to put Peekaboot's login in front. See"
+                        + " https://www.peekaboot.org/docs/security/")
+                .hasLineCount(1);
+    }
+
+    @Test
     void quiet_reportsNothing() {
         assertThat(SecurityPosture.quiet().report()).isEmpty();
     }
