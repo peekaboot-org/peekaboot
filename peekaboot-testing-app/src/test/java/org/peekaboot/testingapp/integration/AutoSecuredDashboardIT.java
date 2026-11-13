@@ -180,6 +180,15 @@ class AutoSecuredDashboardIT {
         assertThat(content).contains("pbkdf2-sha256$").doesNotContain(credentials.plaintext());
     }
 
+    /** The search term is the banner's title and never the password, so an echoed query decides nothing. */
+    @Test
+    void theGeneratedPasswordNeverReachesTheLogApi() {
+        String found = api().withBasicAuth(credentials.username(), credentials.plaintext())
+                .get("/peekaboot/api/logs?q=Peekaboot Security");
+
+        assertThat(found).doesNotContain(credentials.plaintext());
+    }
+
     /**
      * The central promise: a password generated on one run still opens the dashboard on a
      * genuinely new one. Boots two full applications in sequence against the same credentials

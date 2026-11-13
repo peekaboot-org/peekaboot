@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.backend.stacktrace.CapturedStackTraces;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -16,7 +17,9 @@ import org.springframework.context.ApplicationEventPublisher;
  * Logback appender that captures log events and publishes them via Spring events.
  * Uses MDC for traceId/spanId correlation since logback events contain frozen MDC state.
  *
- * <p>Every event Logback delivers is captured. The appender applies no threshold of its own:
+ * <p>Every event Logback delivers is captured, except what {@link SecurityPostureListener} logs:
+ * its banner prints the generated dashboard password, which belongs in the application's log and
+ * in nothing Peekaboot stores or serves. The appender applies no threshold of its own:
  * it hangs off the root logger, so the levels configured under {@code logging.level.*} have
  * already decided what arrives, and a second floor here would only make the Logs tab disagree
  * with the log file. Per-trace volume stays bounded by
@@ -38,6 +41,9 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
 
     @Override
     protected void append(ILoggingEvent event) {
+        if (SecurityPostureListener.class.getName().equals(event.getLoggerName())) {
+            return;
+        }
         Map<String, String> mdc = Objects.requireNonNullElse(event.getMDCPropertyMap(), Map.of());
         String traceId = present(mdc.get(TRACE_ID_KEY));
         String spanId = traceId != null ? mdc.get(SPAN_ID_KEY) : null;

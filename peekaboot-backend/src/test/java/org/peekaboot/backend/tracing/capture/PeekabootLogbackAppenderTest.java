@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -147,6 +148,29 @@ class PeekabootLogbackAppenderTest {
         logger.error("while stopped");
 
         assertThat(captured).isEmpty();
+    }
+
+    /** The posture is where the generated dashboard password is printed, so the logger decides and never the text. */
+    @Test
+    @DisplayName("never captures the security posture, at INFO or at WARN")
+    void neverCapturesTheSecurityPosture() {
+        Logger postureLogger = loggerContext.getLogger(SecurityPostureListener.class);
+        postureLogger.setLevel(Level.INFO);
+        postureLogger.setAdditive(false);
+        postureLogger.addAppender(appender);
+        try {
+            postureLogger.info("Password: hunter2");
+            postureLogger.warn("Password: hunter2");
+            logger.info("Password: hunter2");
+        } finally {
+            postureLogger.detachAppender(appender);
+            postureLogger.setLevel(null);
+            postureLogger.setAdditive(true);
+        }
+
+        assertThat(captured)
+                .extracting(LogCapturedEvent::logger)
+                .containsExactly(PeekabootLogbackAppenderTest.class.getName());
     }
 
     @Test
