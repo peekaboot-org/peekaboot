@@ -3,13 +3,17 @@ package org.peekaboot.backend.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
 
 class DashboardCredentialsResolverTest {
@@ -75,6 +79,32 @@ class DashboardCredentialsResolverTest {
         assertThat(second.plaintext()).isNull();
         assertThat(second.passwordHash().matches(first.plaintext())).isTrue();
         assertThat(second.createdAt()).isEqualTo(first.createdAt());
+    }
+
+    @Test
+    void resolve_replacesAnExposedFileWithAnOwnerOnlyOne(@TempDir Path dir) throws IOException {
+        PosixPermissions.assumeSupported();
+        var path = dir.resolve("security.properties");
+        var file = new CredentialsFile(path);
+        var exposed =
+                new DashboardCredentialsResolver(new PeekabootProperties.Security(), file, "orders-service").resolve();
+        Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-r--r--"));
+
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            var credentials = new DashboardCredentialsResolver(
+                            new PeekabootProperties.Security(), file, "orders-service")
+                    .resolve();
+
+            assertThat(credentials.origin()).isEqualTo(DashboardCredentials.Origin.GENERATED);
+            assertThat(credentials.passwordHash().matches(exposed.plaintext())).isFalse();
+            assertThat(PosixPermissions.of(path)).isEqualTo("rw-------");
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("The Peekaboot credentials file " + path
+                                + " is accessible to its group or to others; generating a new password");
+            });
+        }
     }
 
     @Test

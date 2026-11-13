@@ -58,7 +58,8 @@ public final class PasswordHash {
         }
         try {
             int iterations = Integer.parseInt(fields[1]);
-            if (iterations <= 0) {
+            if (iterations != ITERATIONS) {
+                // a lower count is weaker than what of() writes, and a higher one is derived on every sign-in
                 return Optional.empty();
             }
             Base64.Decoder decoder = Base64.getDecoder();

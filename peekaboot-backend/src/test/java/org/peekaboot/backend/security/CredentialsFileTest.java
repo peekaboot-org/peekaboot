@@ -146,7 +146,7 @@ class CredentialsFileTest {
     @ValueSource(strings = {"", "username=\n", "username=  \n"})
     void read_keepsThePasswordOfAFileWithoutAUsername(String usernameLine, @TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
-        Files.writeString(
+        writeOwnerOnly(
                 path,
                 usernameLine + "password=" + PasswordHash.of("s3cret").format() + "\ncreated=2026-09-11T08:15:30Z\n");
 
@@ -155,6 +155,41 @@ class CredentialsFileTest {
         assertThat(stored)
                 .hasValueSatisfying(credentials ->
                         assertThat(credentials.passwordHash().matches("s3cret")).isTrue());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"rw-r-----", "rw----r--", "rw--w----", "rw-----w-", "rw---x---", "rw------x"})
+    void read_refusesAFileItsGroupOrOthersCanAccess(String mode, @TempDir Path dir) throws IOException {
+        PosixPermissions.assumeSupported();
+        var path = dir.resolve("security.properties");
+        var file = new CredentialsFile(path);
+        file.write(Credentials.generated("s3cret"));
+        Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(mode));
+
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            assertThat(file.read()).isEmpty();
+
+            assertSingleWarning(capture, path + " is accessible to its group or to others; generating a new password");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"rw-------", "r--------"})
+    void read_usesAnOwnerOnlyFile(String mode, @TempDir Path dir) throws IOException {
+        PosixPermissions.assumeSupported();
+        var path = dir.resolve("security.properties");
+        var file = new CredentialsFile(path);
+        file.write(Credentials.generated("s3cret"));
+        Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(mode));
+
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            assertThat(file.read())
+                    .hasValueSatisfying(
+                            credentials -> assertThat(credentials.passwordHash().matches("s3cret"))
+                                    .isTrue());
+
+            assertThat(capture.appender().list).isEmpty();
+        }
     }
 
     @Test
@@ -166,7 +201,7 @@ class CredentialsFileTest {
     @Test
     void read_isEmptyWhenTheEntryIsUnparseable(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
-        Files.writeString(path, "username=orders-admin\npassword=not-a-hash\ncreated=2026-09-11T08:15:30Z\n");
+        writeOwnerOnly(path, "username=orders-admin\npassword=not-a-hash\ncreated=2026-09-11T08:15:30Z\n");
 
         try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
             assertThat(new CredentialsFile(path).read()).isEmpty();
@@ -178,7 +213,7 @@ class CredentialsFileTest {
     @Test
     void read_isEmptyWhenTheCreationInstantIsUnparseable(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
-        Files.writeString(
+        writeOwnerOnly(
                 path,
                 "username=orders-admin\npassword=" + PasswordHash.of("s3cret").format() + "\ncreated=never\n");
 
@@ -226,6 +261,15 @@ class CredentialsFileTest {
             CredentialsFile.unpersisted().write(Credentials.generated("s3cret"));
 
             assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
+    /** A file written by hand takes the umask's mode, which {@code read} refuses where it leaves a group or others bit. */
+    private static void writeOwnerOnly(Path path, String content) throws IOException {
+        Files.writeString(path, content);
+        var posix = Files.getFileAttributeView(path, PosixFileAttributeView.class);
+        if (posix != null) {
+            posix.setPermissions(PosixFilePermissions.fromString("rw-------"));
         }
     }
 

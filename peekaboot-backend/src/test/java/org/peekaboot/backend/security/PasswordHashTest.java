@@ -3,6 +3,8 @@ package org.peekaboot.backend.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class PasswordHashTest {
 
@@ -82,5 +84,13 @@ class PasswordHashTest {
     void parse_verifiesAPinnedEncoding() {
         assertThat(PasswordHash.parse(PINNED_ENCODING).orElseThrow().matches("pinned"))
                 .isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-1", "0", "1", "209999", "210001", "2000000000"})
+    void parse_rejectsAnIterationCountItDoesNotWrite(String iterations) {
+        var encoded = PINNED_ENCODING.replace("$210000$", "$" + iterations + "$");
+
+        assertThat(PasswordHash.parse(encoded)).isEmpty();
     }
 }

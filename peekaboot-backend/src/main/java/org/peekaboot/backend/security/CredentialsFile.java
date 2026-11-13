@@ -6,10 +6,14 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.slf4j.Logger;
@@ -22,6 +26,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Every path, an explicit {@code peekaboot.security.credentials-file} included, is written
  * through {@link OwnerOnlyFiles}: owner-only, replaced in one step, never through a symlink.
+ * A file its group or others can access is not read, since whoever else can read it has the
+ * hash and whoever else can write it chose the password.
  */
 public final class CredentialsFile {
 
@@ -30,6 +36,14 @@ public final class CredentialsFile {
     private static final String USERNAME_KEY = "username";
     private static final String PASSWORD_KEY = "password";
     private static final String CREATED_KEY = "created";
+
+    private static final Set<PosixFilePermission> BEYOND_THE_OWNER = Set.of(
+            PosixFilePermission.GROUP_READ,
+            PosixFilePermission.GROUP_WRITE,
+            PosixFilePermission.GROUP_EXECUTE,
+            PosixFilePermission.OTHERS_READ,
+            PosixFilePermission.OTHERS_WRITE,
+            PosixFilePermission.OTHERS_EXECUTE);
 
     private static final String HEADER = "Peekaboot generated these credentials for its"
             + " /peekaboot/** guard.\nDelete this file for a new password, or set"
@@ -60,13 +74,28 @@ public final class CredentialsFile {
             return Optional.empty();
         }
         Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            properties.load(reader);
+        try {
+            if (isAccessibleBeyondItsOwner(path)) {
+                log.warn(
+                        "The Peekaboot credentials file {} is accessible to its group or to others;"
+                                + " generating a new password",
+                        path);
+                return Optional.empty();
+            }
+            try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+                properties.load(reader);
+            }
         } catch (IOException | IllegalArgumentException e) {
             log.warn("Could not read the Peekaboot credentials file {}: {}", path, e.getMessage());
             return Optional.empty();
         }
         return parse(properties);
+    }
+
+    /** False on a file system without POSIX modes (Windows), where there is nothing to judge by. */
+    private static boolean isAccessibleBeyondItsOwner(Path file) throws IOException {
+        PosixFileAttributeView posix = Files.getFileAttributeView(file, PosixFileAttributeView.class);
+        return posix != null && !Collections.disjoint(posix.readAttributes().permissions(), BEYOND_THE_OWNER);
     }
 
     /** False when nothing was persisted, which the caller reports rather than retries. */
