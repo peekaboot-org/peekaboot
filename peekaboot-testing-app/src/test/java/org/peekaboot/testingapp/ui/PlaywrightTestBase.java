@@ -327,9 +327,9 @@ abstract class PlaywrightTestBase {
     }
 
     /** What {@link #collectPolicyViolations()} has recorded for the current document. */
-    @SuppressWarnings("unchecked")
     protected List<String> policyViolations() {
-        return (List<String>) page.evaluate("() => window.__policyViolations");
+        List<?> violations = (List<?>) page.evaluate("() => window.__policyViolations");
+        return violations.stream().map(String.class::cast).toList();
     }
 
     /**

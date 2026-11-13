@@ -80,9 +80,10 @@ final class TraceOverlay extends ShadowHost {
     }
 
     /** The ids of the tabs the overlay's strip offers, in the order it shows them. */
-    @SuppressWarnings("unchecked")
     List<String> tabs() {
-        return (List<String>) evaluate("root => Array.from(root.querySelectorAll('.pk-tab'), tab => tab.dataset.tab)");
+        List<?> ids =
+                (List<?>) evaluate("root => Array.from(root.querySelectorAll('.pk-tab'), tab => tab.dataset.tab)");
+        return ids.stream().map(String.class::cast).toList();
     }
 
     String selectedTab() {
