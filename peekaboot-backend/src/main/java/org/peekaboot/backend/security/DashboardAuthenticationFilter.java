@@ -45,4 +45,9 @@ public class DashboardAuthenticationFilter implements Filter {
             chain.doFilter(request, response);
         }
     }
+
+    /** What this filter asks, for the handler-level check to ask the same. */
+    public DashboardAccess access() {
+        return access;
+    }
 }

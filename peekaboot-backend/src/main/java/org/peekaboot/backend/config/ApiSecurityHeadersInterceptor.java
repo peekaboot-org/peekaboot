@@ -5,9 +5,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * Sets {@link ApiSecurityHeaders} on every {@code /peekaboot/api/**} response. A consumer's
- * Spring Security chain covering the path adds the same headers itself; without one, nothing
- * does.
+ * Sets {@link ApiSecurityHeaders} on every response of Peekaboot's API. A consumer's Spring
+ * Security chain covering the path adds the same headers itself; without one, nothing does.
  */
 class ApiSecurityHeadersInterceptor implements HandlerInterceptor {
 

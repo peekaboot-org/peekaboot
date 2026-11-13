@@ -43,14 +43,14 @@ import org.springframework.util.StringUtils;
 @AutoConfiguration(after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class})
 @ConditionalOnPeekabootServlet
 @EnableConfigurationProperties(PeekabootProperties.class)
-@Import(ApplicationIdentityConfiguration.class)
+@Import({ApplicationIdentityConfiguration.class, DashboardAccessConfiguration.class})
 public class PeekabootSecurityAutoConfiguration {
 
     private static final String CREDENTIALS_FILE_NAME = "security.properties";
 
     private static final String ERROR_ATTRIBUTES_CLASS = "org.springframework.boot.webmvc.error.ErrorAttributes";
 
-    private static final ResolvableType GUARD_TYPE =
+    static final ResolvableType GUARD_TYPE =
             ResolvableType.forClassWithGenerics(FilterRegistrationBean.class, DashboardAuthenticationFilter.class);
 
     @Bean

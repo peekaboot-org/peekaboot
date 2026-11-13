@@ -28,9 +28,6 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
     /** The dashboard's page, relative to {@link PeekabootPaths#BASE_PATH}. */
     private static final String DASHBOARD_INDEX = "ui/dashboard/index.html";
 
-    /** Peekaboot's API, the one place its interceptors apply. */
-    private static final String API_PATTERN = PeekabootPaths.BASE_PATH + "/api/**";
-
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // The dev toolbar rides on every page of the host application, so a font that
@@ -67,10 +64,15 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
         registry.addRedirectViewController(PeekabootPaths.BASE_PATH + "/", DASHBOARD_INDEX);
     }
 
-    /** The headers go on first, so a refusal from the guard carries them too. */
+    /**
+     * Bound to the API's handlers and to no path, since a host can serve them outside
+     * {@code /peekaboot/api/**}. The headers go on first, so a refusal from the parameter guard
+     * carries them too.
+     */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new ApiSecurityHeadersInterceptor()).addPathPatterns(API_PATTERN);
-        registry.addInterceptor(new QueryParameterGuard()).addPathPatterns(API_PATTERN);
+        registry.addInterceptor(
+                PeekabootHandlers.whereHandler(PeekabootHandlers::isApi, new ApiSecurityHeadersInterceptor()));
+        registry.addInterceptor(PeekabootHandlers.whereHandler(PeekabootHandlers::isApi, new QueryParameterGuard()));
     }
 }

@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
  * What Peekaboot serves under {@code /peekaboot} through the real, auto-configured app, and
  * on what terms: JSON holding environment variables and captured headers must not be stored by
  * a proxy or the back-forward cache, nor content-sniffed (ApiSecurityHeadersInterceptor,
- * registered by PeekabootWebConfig for /peekaboot/api/** only - the dashboard's static
+ * registered by PeekabootWebConfig for the API's handlers only - the dashboard's static
  * assets keep their own, revalidating cache policy), and the assets themselves have to arrive
  * at all.
  */

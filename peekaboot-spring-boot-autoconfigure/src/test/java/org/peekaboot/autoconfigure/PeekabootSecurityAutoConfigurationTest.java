@@ -4,16 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import jakarta.servlet.Filter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.security.CredentialCache;
 import org.peekaboot.backend.security.CredentialsFile;
+import org.peekaboot.backend.security.DashboardAccess;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
+import org.peekaboot.backend.security.PasswordHash;
 import org.peekaboot.backend.security.SecurityPosture;
 import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.testsupport.LogCapture;
@@ -21,6 +28,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.web.context.servlet.AnnotationConfigServletWebApplicationContext;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletPath;
@@ -28,6 +36,9 @@ import org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfigura
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 class PeekabootSecurityAutoConfigurationTest {
 
@@ -393,6 +404,104 @@ class PeekabootSecurityAutoConfigurationTest {
                 });
     }
 
+    /** The handler-level check and the filter give one answer, the registered guard's. */
+    @Test
+    void theHandlerCheckAsksTheRegisteredGuardsCredentials(@TempDir Path storageDir) {
+        runner(storageDir).run(context -> {
+            DashboardCredentials credentials = context.getBean(DashboardCredentials.class);
+            DashboardAccess access = context.getBean(DashboardAccess.class);
+            MockHttpServletResponse challenged = new MockHttpServletResponse();
+
+            assertThat(admits(access, credentials.username(), credentials.plaintext()))
+                    .isTrue();
+            assertThat(access.admit(new MockHttpServletRequest(), challenged)).isFalse();
+            assertThat(challenged.getStatus()).isEqualTo(401);
+        });
+    }
+
+    /**
+     * An application that replaced the guard keeps one set of credentials for the dashboard. A
+     * handler check that asked Peekaboot's generated ones would refuse every request the
+     * application's filter let through.
+     */
+    @Test
+    void theHandlerCheckFollowsAGuardTheApplicationReplaced(@TempDir Path storageDir) {
+        runner(storageDir).withUserConfiguration(ReplacedGuard.class).run(context -> {
+            DashboardCredentials generated = context.getBean(DashboardCredentials.class);
+            DashboardAccess access = context.getBean(DashboardAccess.class);
+
+            assertThat(admits(access, ReplacedGuard.USERNAME, ReplacedGuard.PASSWORD))
+                    .isTrue();
+            assertThat(admits(access, generated.username(), generated.plaintext()))
+                    .isFalse();
+        });
+    }
+
+    @Test
+    void withoutAGuardTheHandlerCheckAdmitsEveryRequest(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .run(context -> {
+                    MockHttpServletResponse response = new MockHttpServletResponse();
+
+                    assertThat(context.getBean(DashboardAccess.class).admit(new MockHttpServletRequest(), response))
+                            .isTrue();
+                    assertThat(response.getStatus()).isEqualTo(200);
+                });
+    }
+
+    /**
+     * A guard that cannot say what it asks must not leave the handlers open behind it. The context
+     * logs the failed refresh as a WARN, which this test asserts and keeps off the console.
+     */
+    @Test
+    void refusesToStartBehindAGuardRegistrationThatHoldsNoFilter(@TempDir Path storageDir) {
+        try (LogCapture refreshWarnings = LogCapture.attach(AnnotationConfigServletWebApplicationContext.class)) {
+            runner(storageDir)
+                    .withUserConfiguration(GuardWithoutItsFilter.class)
+                    .run(context -> assertThat(context)
+                            .getFailure()
+                            .rootCause()
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessageContaining("emptyGuard")
+                            .hasMessageContaining("DashboardAuthenticationFilter"));
+
+            assertThat(refreshWarnings.appender().list).singleElement().satisfies(warning -> {
+                assertThat(warning.getLevel()).isEqualTo(Level.WARN);
+                assertThat(warning.getFormattedMessage())
+                        .contains("cancelling refresh attempt")
+                        .contains("emptyGuard");
+            });
+        }
+    }
+
+    @Test
+    void registersTheHandlerCheckWithSpringMvc(@TempDir Path storageDir) {
+        runner(storageDir).run(context -> assertThat(context).hasBean("peekabootDashboardAccessConfigurer"));
+    }
+
+    /** A servlet application without Spring MVC has no handlers to check, and the filter still guards it. */
+    @Test
+    void registersNoHandlerCheckWithoutSpringMvc(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withClassLoader(new FilteredClassLoader(WebMvcConfigurer.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean("peekabootDashboardAccessConfigurer");
+                    assertThat(context).hasSingleBean(DashboardAccess.class);
+                });
+    }
+
+    private static boolean admits(DashboardAccess access, String username, String password) throws IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(
+                "Authorization",
+                "Basic "
+                        + Base64.getEncoder()
+                                .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8)));
+        return access.admit(request, new MockHttpServletResponse());
+    }
+
     @SuppressWarnings("unchecked")
     private static FilterRegistrationBean<DashboardAuthenticationFilter> registration(ApplicationContext context) {
         return context.getBean("peekabootDashboardAuthenticationFilter", FilterRegistrationBean.class);
@@ -419,6 +528,34 @@ class PeekabootSecurityAutoConfigurationTest {
         @Bean
         FilterRegistrationBean<?> logbookFilter() {
             return passThrough();
+        }
+    }
+
+    /** The application's own guard, over credentials Peekaboot never generated. */
+    @Configuration(proxyBeanMethods = false)
+    static class ReplacedGuard {
+
+        static final String USERNAME = "its-admin";
+        static final String PASSWORD = "its-own";
+
+        @Bean
+        FilterRegistrationBean<DashboardAuthenticationFilter> applicationsOwnGuard() {
+            DashboardCredentials credentials = new DashboardCredentials(
+                    USERNAME,
+                    PasswordHash.of(PASSWORD),
+                    null,
+                    Instant.parse("2026-09-11T08:15:30Z"),
+                    DashboardCredentials.Origin.CONFIGURED);
+            return new FilterRegistrationBean<>(new DashboardAuthenticationFilter(credentials, new CredentialCache()));
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class GuardWithoutItsFilter {
+
+        @Bean
+        FilterRegistrationBean<DashboardAuthenticationFilter> emptyGuard() {
+            return new FilterRegistrationBean<>();
         }
     }
 
