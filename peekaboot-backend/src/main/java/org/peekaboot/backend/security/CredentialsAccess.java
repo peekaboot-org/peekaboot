@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.problem.ApiProblem;
 import org.slf4j.Logger;
@@ -24,6 +25,7 @@ public final class CredentialsAccess implements DashboardAccess {
     private static final String BASIC_PREFIX = "Basic ";
     private static final ApiProblem CHALLENGED = ApiProblem.unauthorized(
             "Peekaboot's dashboard and API need Peekaboot's own credentials, sent with HTTP Basic.");
+    private static final Pattern CONTROL_CHARACTERS = Pattern.compile("\\p{Cc}");
 
     private final DashboardCredentials credentials;
     private final CredentialCache cache;
@@ -110,7 +112,12 @@ public final class CredentialsAccess implements DashboardAccess {
         log.debug(
                 "Rejected credentials for {} - presented username was {}",
                 request.getRequestURI(),
-                presented != null ? presented.username() : "<unparseable>");
+                presented != null ? withoutControlCharacters(presented.username()) : "<unparseable>");
+    }
+
+    /** The client chooses the username, and a line break or an escape sequence in it would forge log lines. */
+    private static String withoutControlCharacters(String presentedUsername) {
+        return CONTROL_CHARACTERS.matcher(presentedUsername).replaceAll("?");
     }
 
     private record Presented(String username, String password) {}

@@ -43,6 +43,20 @@ class CredentialsAccessTest {
         }
     }
 
+    @Test
+    void stripsControlCharactersFromTheUsernameItLogs() throws Exception {
+        assertThat(lineLoggedFor("orders\r\nINFO forged\u001b[31m"))
+                .isEqualTo("Rejected credentials for /peekaboot/api/insights - presented username was"
+                        + " orders??INFO forged?[31m");
+    }
+
+    @Test
+    void stripsTheControlCharactersBeyondAsciiToo() throws Exception {
+        assertThat(lineLoggedFor("orders\u0085INFO forged\u009b31m"))
+                .isEqualTo("Rejected credentials for /peekaboot/api/insights - presented username was"
+                        + " orders?INFO forged?31m");
+    }
+
     /** Takes the gate's one slot with a check that is inside its derivation when this returns. */
     private void hold(DerivationGate gate) {
         var entered = new CountDownLatch(1);
@@ -56,15 +70,33 @@ class CredentialsAccessTest {
     }
 
     private static int statusFor(CredentialsAccess access, String password) throws IOException {
+        return statusFor(access, "orders-admin", password);
+    }
+
+    private static int statusFor(CredentialsAccess access, String username, String password) throws IOException {
         var request = get("/peekaboot/api/insights");
         request.addHeader(
                 "Authorization",
                 "Basic "
                         + Base64.getEncoder()
-                                .encodeToString(("orders-admin:" + password).getBytes(StandardCharsets.UTF_8)));
+                                .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8)));
         var response = new MockHttpServletResponse();
 
         assertThat(access.admit(request, response)).isFalse();
         return response.getStatus();
+    }
+
+    /** The one DEBUG line the guard writes for a sign-in under a username that is not Peekaboot's. */
+    private static String lineLoggedFor(String username) throws IOException {
+        var access = new CredentialsAccess(Credentials.loaded("s3cret"), new CredentialCache());
+
+        try (LogCapture logs = LogCapture.attach(DashboardAuthenticationFilter.class, Level.DEBUG)) {
+            assertThat(statusFor(access, username, "s3cret")).isEqualTo(401);
+
+            assertThat(logs.appender().list)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getLevel()).isEqualTo(Level.DEBUG));
+            return logs.appender().list.getFirst().getFormattedMessage();
+        }
     }
 }
