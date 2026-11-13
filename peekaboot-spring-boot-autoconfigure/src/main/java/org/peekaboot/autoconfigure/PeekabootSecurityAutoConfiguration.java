@@ -178,6 +178,8 @@ public class PeekabootSecurityAutoConfiguration {
 
     /** Detected-only, so an explicit override of {@code peekaboot.security.enabled} does not hide what was detected. */
     private static boolean deploymentLaunch(Environment environment) {
-        return environment.getProperty(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, Boolean.class, false);
+        return DetectedLaunch.in(environment)
+                .filter(LocalDevDetector.LaunchKind.DEPLOYMENT::equals)
+                .isPresent();
     }
 }

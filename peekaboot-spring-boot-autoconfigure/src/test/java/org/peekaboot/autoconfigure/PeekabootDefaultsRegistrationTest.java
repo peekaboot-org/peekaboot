@@ -25,6 +25,9 @@ class PeekabootDefaultsRegistrationTest {
             // JUnit frames are on the stack, so detection must report "not local dev"
             assertThat(context.getEnvironment().getProperty("peekaboot.enabled", Boolean.class))
                     .isFalse();
+            assertThat(DetectedLaunch.in(context.getEnvironment()))
+                    .as("the detected launch reaches the environment the context's beans read")
+                    .contains(LocalDevDetector.LaunchKind.TEST);
         }
     }
 

@@ -268,15 +268,25 @@ class PeekabootSecurityAutoConfigurationTest {
 
     /**
      * Detected-only: an explicit override of {@code peekaboot.security.enabled} does not hide
-     * what the launch context detected - see
-     * {@link PeekabootPropertyKeys#SECURITY_DEPLOYMENT_DETECTED}.
+     * what the launch context detected - see {@link DetectedLaunch}.
      */
     @Test
     void reportsTheDeploymentWarningWhenDetectionMarkedTheLaunchADeployment(@TempDir Path storageDir) {
         runner(storageDir)
-                .withPropertyValues(
-                        "peekaboot.security.enabled=false",
-                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .hasValueSatisfying(
+                                report -> assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN)));
+    }
+
+    /** The posture asks the detected launch itself, so no property hides a deployment from it. */
+    @Test
+    void aPropertyCannotSilenceTheDeploymentWarning(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
+                .withPropertyValues("peekaboot.security.enabled=false", "peekaboot.security.deployment-detected=false")
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
                         .hasValueSatisfying(
@@ -296,9 +306,8 @@ class PeekabootSecurityAutoConfigurationTest {
     void warnsAboutTheErrorPageOnADeploymentWithTheGuardArmed(@TempDir Path storageDir) {
         runner(storageDir)
                 .withConfiguration(ERROR_PAGE)
-                .withPropertyValues(
-                        "peekaboot.error-page.enabled=true",
-                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
+                .withPropertyValues("peekaboot.error-page.enabled=true")
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
                         .hasValueSatisfying(report -> {
@@ -311,10 +320,8 @@ class PeekabootSecurityAutoConfigurationTest {
     void warnsAboutTheErrorPageOnADeploymentWithTheGuardOff(@TempDir Path storageDir) {
         runner(storageDir)
                 .withConfiguration(ERROR_PAGE)
-                .withPropertyValues(
-                        "peekaboot.security.enabled=false",
-                        "peekaboot.error-page.enabled=true",
-                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
+                .withPropertyValues("peekaboot.security.enabled=false", "peekaboot.error-page.enabled=true")
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
                         .hasValueSatisfying(
@@ -326,10 +333,8 @@ class PeekabootSecurityAutoConfigurationTest {
     void saysNothingAboutAnErrorPageThatBackedOffForTheApplicationsTemplate(@TempDir Path storageDir) {
         runner(storageDir)
                 .withConfiguration(ERROR_PAGE)
-                .withPropertyValues(
-                        "peekaboot.error-page.enabled=true",
-                        "test.error-template=true",
-                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
+                .withPropertyValues("peekaboot.error-page.enabled=true", "test.error-template=true")
                 .run(context -> {
                     assertThat(context).doesNotHaveBean("error");
                     assertThat(context.getBean(SecurityPosture.class).report())
@@ -343,11 +348,11 @@ class PeekabootSecurityAutoConfigurationTest {
     void warnsAboutAnOverridingErrorPageDespiteTheApplicationsTemplate(@TempDir Path storageDir) {
         runner(storageDir)
                 .withConfiguration(ERROR_PAGE)
+                .withInitializer(DetectedLaunches.as(LocalDevDetector.LaunchKind.DEPLOYMENT))
                 .withPropertyValues(
                         "peekaboot.error-page.enabled=true",
                         "peekaboot.error-page.override=true",
-                        "test.error-template=true",
-                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
+                        "test.error-template=true")
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
                         .hasValueSatisfying(

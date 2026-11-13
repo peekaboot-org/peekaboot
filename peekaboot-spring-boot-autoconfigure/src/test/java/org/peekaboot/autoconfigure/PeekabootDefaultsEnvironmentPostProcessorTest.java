@@ -299,7 +299,6 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED,
                         PeekabootPropertyKeys.STORAGE_ENABLED,
                         PeekabootPropertyKeys.SECURITY_ENABLED,
-                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED,
                         PeekabootPropertyKeys.ERROR_PAGE_ENABLED);
         assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isNull();
@@ -354,19 +353,17 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         .get(PeekabootDefaultsEnvironmentPostProcessor.DETECTION_PROPERTY_SOURCE_NAME)
                         .getProperty("peekaboot.security.enabled"))
                 .isEqualTo(true);
-        // unlike the switch above, this one is never overridden - PeekabootSecurityAutoConfiguration
+        // unlike the switch above, the launch is never overridden - PeekabootSecurityAutoConfiguration
         // reads it to tell this exact case (an explicit false on a real deployment) from a local
         // or test launch, which the resolved peekaboot.security.enabled alone cannot answer
-        assertThat(environment.getProperty(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, Boolean.class))
-                .isTrue();
+        assertThat(DetectedLaunch.in(environment)).contains(LocalDevDetector.LaunchKind.DEPLOYMENT);
     }
 
     /**
      * The detection source's own name disappears once Boot's {@code defaultProperties} already
      * exists (see {@link #foldsItsDefaultsUnderneathTheApplicationsDefaultProperties}) - the
-     * deployment signal has to survive that fold regardless, since
-     * {@code PeekabootSecurityAutoConfiguration} reads it directly off the {@code Environment}
-     * rather than by the source's name.
+     * deployment signal has to survive that fold regardless, so it travels in a source of its
+     * own, which {@code PeekabootSecurityAutoConfiguration} reads off the {@code Environment}.
      */
     @Test
     void theDetectedDeploymentSignalSurvivesTheFoldIntoDefaultProperties() {
@@ -383,8 +380,20 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isFalse();
         assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
                 .isFalse();
-        assertThat(environment.getProperty(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, Boolean.class))
-                .isTrue();
+        assertThat(DetectedLaunch.in(environment)).contains(LocalDevDetector.LaunchKind.DEPLOYMENT);
+    }
+
+    /** The launch travels where no property reaches, so configuration can neither hide a deployment nor fake one. */
+    @Test
+    void aPropertyCannotClaimOrDenyADeployment() {
+        MockEnvironment denying = new MockEnvironment().withProperty("peekaboot.security.deployment-detected", "false");
+        MockEnvironment claiming = new MockEnvironment().withProperty("peekaboot.security.deployment-detected", "true");
+
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(denying, servletApplication());
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(claiming, servletApplication());
+
+        assertThat(DetectedLaunch.in(denying)).contains(LocalDevDetector.LaunchKind.DEPLOYMENT);
+        assertThat(DetectedLaunch.in(claiming)).contains(LocalDevDetector.LaunchKind.LOCAL_DEV);
     }
 
     /**
@@ -462,6 +471,8 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         "peekabootDevToolbarDefaults");
         assertThat(environment.getPropertySources())
                 .filteredOn(source -> source.getName().startsWith("peekaboot"))
+                // the launch source answers no property at all
+                .filteredOn(source -> !(source instanceof DetectedLaunch))
                 .allSatisfy(source -> assertThat(((EnumerablePropertySource<?>) source).getPropertyNames())
                         .noneMatch(name -> name.startsWith("spring.web.error")));
     }

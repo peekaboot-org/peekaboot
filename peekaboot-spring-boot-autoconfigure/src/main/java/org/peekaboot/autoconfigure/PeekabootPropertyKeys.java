@@ -36,14 +36,6 @@ final class PeekabootPropertyKeys {
     /** The automatic-security switch; defaulted from the launch context like {@link #ENABLED}. */
     static final String SECURITY_ENABLED = "peekaboot.security.enabled";
 
-    /**
-     * Detected-only: whether the launch context was a deployment, independent of any explicit
-     * {@link #SECURITY_ENABLED} override. An application must never set this itself - it exists
-     * so a component can tell a detected default from an override after {@link #SECURITY_ENABLED}
-     * has already resolved, which reading that key alone cannot answer.
-     */
-    static final String SECURITY_DEPLOYMENT_DETECTED = "peekaboot.security.deployment-detected";
-
     /** The error-page switch; defaulted from the launch context like {@link #ENABLED}. */
     static final String ERROR_PAGE_ENABLED = "peekaboot.error-page.enabled";
 

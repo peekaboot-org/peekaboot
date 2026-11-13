@@ -31,7 +31,8 @@ import org.springframework.core.io.Resource;
  * is neither, so a consumer's own {@code @SpringBootTest} is not made to start authenticating
  * against a dashboard it never armed. Peekaboot's defaults apply at the lowest precedence, so
  * any application property wins - {@code SpringApplication.setDefaultProperties} included. An
- * explicit setting for any of the five always overrides the detection.
+ * explicit setting for any of the five always overrides the detection. The launch itself
+ * travels in {@link DetectedLaunch}, which no setting reaches.
  *
  * <p>All defaults live in yml resources. {@code peekaboot-no-push-defaults.yml} is applied
  * unconditionally, so the starter never pushes telemetry anywhere unless the application
@@ -49,8 +50,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
      * when the application has not already called {@code SpringApplication.setDefaultProperties}
      * or {@code SpringApplicationBuilder.properties}; otherwise these entries are folded into
      * Boot's own {@code defaultProperties} source instead and this name never appears. A signal
-     * that must survive regardless of which branch ran needs its own property key, not this
-     * source's name - see {@link PeekabootPropertyKeys#SECURITY_DEPLOYMENT_DETECTED}.
+     * that must survive regardless of which branch ran needs a source of its own, not this
+     * source's name - see {@link DetectedLaunch}.
      */
     static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
 
@@ -90,10 +91,9 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         // Security follows the deployment launch rather than localDevelopment: a test is
         // neither, and a consumer's @SpringBootTest must not start being challenged.
         detected.put(PeekabootPropertyKeys.SECURITY_ENABLED, deploymentLaunch);
-        // Nothing is meant to set it, so it reads as detected, also once these entries are folded
-        // into defaultProperties (see #contribute) and this method's own property source never appears.
-        detected.put(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, deploymentLaunch);
         contribute(environment, new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
+        // It answers no property, so first gives it no precedence and leaves the defaults the last sources.
+        environment.getPropertySources().addFirst(new DetectedLaunch(launchKind));
         // After the detected defaults, which a blank detected switch falls back to.
         BooleanSwitches.treatBlanksAsUnset(environment, detected);
         // After the blanks give way, so a yes beneath one is checked too, and before the read of
