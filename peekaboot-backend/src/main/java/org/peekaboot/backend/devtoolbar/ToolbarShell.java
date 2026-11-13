@@ -53,6 +53,9 @@ class ToolbarShell {
      * The bar's markup with placeholders for everything that varies: the inlined CSS and the
      * stylesheet links, folded in once at construction, and the base path and data blob,
      * filled in per page.
+     *
+     * <p>ASCII only, with character references for the rest. The filter encodes the fragment
+     * with the page's charset, which need not have an ellipsis or a dash.
      */
     private static final String TEMPLATE = """
             <!-- Peekaboot Dev Toolbar -->
@@ -68,11 +71,11 @@ class ToolbarShell {
                                 <span class="pk-toolbar__path" id="pk-path"></span>
                                 <span class="pk-toolbar__controller" id="pk-controller"></span>
                                 <span class="pk-toolbar__metrics" id="pk-metrics">
-                                    <span class="pk-toolbar__pending">Waiting for request…</span>
+                                    <span class="pk-toolbar__pending">Waiting for request&hellip;</span>
                                 </span>
                             </span>
                         </button>
-                        <span class="pk-toolbar__auth" id="pk-auth"><a href="{{BASE}}/" target="_blank" title="The toolbar's script or data did not load — an authorization gate or a strict Content-Security-Policy usually explains it.">Peekaboot toolbar could not start — sign in, or check that its script is allowed to load</a></span>
+                        <span class="pk-toolbar__auth" id="pk-auth"><a href="{{BASE}}/" target="_blank" title="The toolbar's script or data did not load &mdash; an authorization gate or a strict Content-Security-Policy usually explains it.">Peekaboot toolbar could not start &mdash; sign in, or check that its script is allowed to load</a></span>
                         <span class="pk-toolbar__trace" id="pk-trace">-</span>
                         <a class="pk-logo-mark" href="{{BASE}}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard"></a>
                     </div>

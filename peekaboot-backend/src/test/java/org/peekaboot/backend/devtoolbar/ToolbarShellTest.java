@@ -3,6 +3,7 @@ package org.peekaboot.backend.devtoolbar;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
 /**
  * The bar is rendered on the server rather than built by toolbar.js, so that a
@@ -164,6 +165,15 @@ class ToolbarShellTest {
         String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).containsPattern("<a [^>]*title=\"[^\"]*authorization[^\"]*Content-Security-Policy[^\"]*\"");
+    }
+
+    /** The filter encodes the fragment with the page's charset, and a character that charset lacks arrives as "?". */
+    @Test
+    void theFragmentIsAsciiWhateverItCarries() {
+        String blob = new ToolbarDataProvider(new PeekabootTracingProperties())
+                .getToolbarSummaryJson(BASE_PATH, "GET", "/café", 200, null);
+
+        assertThat(shell.render(BASE_PATH, blob)).matches("\\p{ASCII}*");
     }
 
     /** The sheets carry their design rationale as comments; no host page needs to download them. */

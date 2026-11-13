@@ -243,6 +243,20 @@ class DevToolbarFilterTest {
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
     }
 
+    /** The bar's own text has to arrive whole on a page whose charset has no ellipsis and no dash. */
+    @Test
+    void theBarSurvivesAPageInLatin1() throws Exception {
+        chainWrites("text/html;charset=ISO-8859-1", "<html><body>café</body></html>");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(new String(response.getContentAsByteArray(), StandardCharsets.ISO_8859_1))
+                .contains("café")
+                .contains("Waiting for request&hellip;")
+                .contains("could not start &mdash; sign in")
+                .doesNotContain("request?");
+    }
+
     /** A Content-Length counted in characters would cut a UTF-8 page short of its last bytes. */
     @Test
     void contentLengthCountsTheEncodedBytesOfAMultibyteBody() throws Exception {

@@ -57,6 +57,15 @@ class ToolbarDataProviderTest {
         assertThat(json).contains("\\u003c/script\\u003e");
     }
 
+    /** The blob is encoded with the page's charset, and a script element decodes no character reference. */
+    @Test
+    void escapesNonAsciiCharactersAndStillReadsBackTheSame() {
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/café", 200, null);
+
+        assertThat(json).matches("\\p{ASCII}*");
+        assertThat(PeekabootJson.MAPPER.readTree(json).path("path").asString()).isEqualTo("/café");
+    }
+
     /** The base path is whatever the filter resolved for this request - context path included. */
     @Test
     void shouldCarryTheBasePathItIsGiven() {

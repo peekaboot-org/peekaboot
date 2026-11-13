@@ -7,6 +7,7 @@ import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import tools.jackson.core.SerializableString;
 import tools.jackson.core.io.CharacterEscapes;
 import tools.jackson.core.io.SerializedString;
+import tools.jackson.core.json.JsonWriteFeature;
 import tools.jackson.databind.ObjectWriter;
 
 /** The JSON blob {@link ToolbarShell} embeds in the page for toolbar.js to read before it calls home. */
@@ -17,8 +18,13 @@ public class ToolbarDataProvider {
      * {@code <} and {@code >} are written as the unicode escapes {@code ScriptSafeEscapes}
      * holds: a literal {@code </script>} in a request path would otherwise end the element
      * and inject markup.
+     *
+     * <p>Everything beyond ASCII is escaped too. The filter encodes the blob with the page's
+     * charset, which may lack the character, and a script element decodes no character
+     * reference.
      */
-    private static final ObjectWriter WRITER = PeekabootJson.MAPPER.writer().with(new ScriptSafeEscapes());
+    private static final ObjectWriter WRITER =
+            PeekabootJson.MAPPER.writer().with(new ScriptSafeEscapes()).with(JsonWriteFeature.ESCAPE_NON_ASCII);
 
     private final PeekabootTracingProperties tracingProperties;
 
