@@ -3,7 +3,6 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Response;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -21,9 +20,7 @@ class CspToolbarIT extends PlaywrightTestBase {
     @Test
     void theBarStaysStyledWhenThePolicyDropsTheInlineStylesheet() {
         captureBrowserSignals();
-        page.addInitScript("window.__cspViolations = [];"
-                + "document.addEventListener('securitypolicyviolation',"
-                + " e => window.__cspViolations.push(e.violatedDirective));");
+        collectPolicyViolations();
         serveWithCsp("**/persons", "style-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/persons");
@@ -32,9 +29,7 @@ class CspToolbarIT extends PlaywrightTestBase {
         assertThat(navigation.headers())
                 .as("the policy reached the document under test")
                 .containsEntry("content-security-policy", "style-src 'self'");
-        @SuppressWarnings("unchecked")
-        List<String> violations = (List<String>) page.evaluate("() => window.__cspViolations");
-        assertThat(violations)
+        assertThat(policyViolations())
                 .as("the inline stylesheet was actually dropped, not merely allowed to pass")
                 .anyMatch(directive -> directive.startsWith("style-src"));
         assertThat(cssVar("#peekaboot-toolbar-host", "position")).isEqualTo("fixed");

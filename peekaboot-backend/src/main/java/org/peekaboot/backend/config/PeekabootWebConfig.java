@@ -65,14 +65,16 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
     }
 
     /**
-     * Bound to the API's handlers and to no path, since a host can serve them outside
-     * {@code /peekaboot/api/**}. The headers go on first, so a refusal from the parameter guard
-     * carries them too.
+     * Bound to Peekaboot's handlers and to no path, since a host can serve them outside
+     * {@code /peekaboot/**}. The API's headers go on first, so a refusal from the parameter
+     * guard carries them too.
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(
                 PeekabootHandlers.whereHandler(PeekabootHandlers::isApi, new ApiSecurityHeadersInterceptor()));
         registry.addInterceptor(PeekabootHandlers.whereHandler(PeekabootHandlers::isApi, new QueryParameterGuard()));
+        registry.addInterceptor(
+                PeekabootHandlers.whereHandler(PeekabootHandlers::isUi, new UiSecurityHeadersInterceptor()));
     }
 }

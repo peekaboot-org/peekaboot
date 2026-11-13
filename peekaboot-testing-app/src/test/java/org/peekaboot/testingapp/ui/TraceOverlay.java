@@ -79,6 +79,12 @@ final class TraceOverlay extends ShadowHost {
         waitFor(".pk-log");
     }
 
+    /** The ids of the tabs the overlay's strip offers, in the order it shows them. */
+    @SuppressWarnings("unchecked")
+    List<String> tabs() {
+        return (List<String>) evaluate("root => Array.from(root.querySelectorAll('.pk-tab'), tab => tab.dataset.tab)");
+    }
+
     String selectedTab() {
         return (String) evaluate("root => root.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
     }

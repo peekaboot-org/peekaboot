@@ -12,7 +12,8 @@ import org.springframework.http.HttpStatus;
  * on what terms: JSON holding environment variables and captured headers must not be stored by
  * a proxy or the back-forward cache, nor content-sniffed (ApiSecurityHeadersInterceptor,
  * registered by PeekabootWebConfig for the API's handlers only - the dashboard's static
- * assets keep their own, revalidating cache policy), and the assets themselves have to arrive
+ * assets keep their own, revalidating cache policy), the UI says what it may load and that it
+ * is not to be framed (UiSecurityHeadersInterceptor), and the assets themselves have to arrive
  * at all.
  */
 class ApiHeadersIT extends TestingAppITBase {
@@ -30,6 +31,17 @@ class ApiHeadersIT extends TestingAppITBase {
         HttpHeaders headers = api.headersOf("/peekaboot/ui/dashboard/index.html");
 
         assertThat(headers.getCacheControl()).isEqualTo("no-cache");
+    }
+
+    @Test
+    void dashboardAssetsCarryTheUiSecurityHeaders() {
+        HttpHeaders headers = api.headersOf("/peekaboot/ui/dashboard/index.html");
+
+        assertThat(headers.getFirst("Content-Security-Policy"))
+                .isEqualTo("default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+                        + " form-action 'self'");
+        assertThat(headers.getFirst("X-Frame-Options")).isEqualTo("DENY");
+        assertThat(headers.getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
     }
 
     /**

@@ -316,6 +316,23 @@ abstract class PlaywrightTestBase {
     }
 
     /**
+     * Records every Content-Security-Policy violation of the documents this page loads from
+     * here on, as the violated directive followed by what was blocked. The event is composed,
+     * so a violation inside a shadow root reaches the document too.
+     */
+    protected void collectPolicyViolations() {
+        page.addInitScript("window.__policyViolations = [];"
+                + "document.addEventListener('securitypolicyviolation',"
+                + " e => window.__policyViolations.push(e.violatedDirective + ' ' + e.blockedURI));");
+    }
+
+    /** What {@link #collectPolicyViolations()} has recorded for the current document. */
+    @SuppressWarnings("unchecked")
+    protected List<String> policyViolations() {
+        return (List<String>) page.evaluate("() => window.__policyViolations");
+    }
+
+    /**
      * Hands every request for {@code urlGlob} to {@code interception} until the returned action
      * runs, and lets every later one through, with the route installed for the whole test.
      * Unrouting instead can remove the page's last route, which switches request interception
