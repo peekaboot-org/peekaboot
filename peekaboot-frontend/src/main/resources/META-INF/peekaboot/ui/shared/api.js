@@ -3,7 +3,8 @@
  *
  * Overlapping calls to the same path are common -- the 30s auto-refresh, manual
  * refresh and locale changes all race. Each path keeps a generation counter so a
- * slow older response resolves to null instead of overwriting a newer one.
+ * slow older request resolves to null, whether it answered or failed, instead of
+ * overwriting a newer one or reporting an error over it.
  *
  * That counter is keyed by path by default, which assumes one owner per endpoint.
  * Where two independent views read the same endpoint on their own schedules -- the
@@ -26,6 +27,7 @@ export function createClient({basePath = BASE_PATH} = {}) {
     async function get(path, {params, dedupeKey = path} = {}) {
         const generation = (generations.get(dedupeKey) || 0) + 1;
         generations.set(dedupeKey, generation);
+        const overtaken = () => generations.get(dedupeKey) !== generation;
 
         const url = new URL(basePath + path, window.location.origin);
         if (params) {
@@ -34,14 +36,20 @@ export function createClient({basePath = BASE_PATH} = {}) {
             });
         }
 
-        const response = await fetch(url);
+        try {
+            const response = await fetch(url);
 
-        if (generations.get(dedupeKey) !== generation) return null;
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (overtaken()) return null;
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        const body = await response.json();
-        // checked again: a newer request can win while this body is still being parsed
-        return generations.get(dedupeKey) === generation ? body : null;
+            const body = await response.json();
+            // checked again: a newer request can win while this body is still being parsed
+            return overtaken() ? null : body;
+        } catch (error) {
+            // the caller has moved on to the newer request, so this failure is nobody's to report
+            if (overtaken()) return null;
+            throw error;
+        }
     }
 
     // basePath is exposed for callers that cannot go through get(), e.g. the

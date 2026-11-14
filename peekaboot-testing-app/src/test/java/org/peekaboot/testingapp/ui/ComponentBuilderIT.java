@@ -198,6 +198,75 @@ class ComponentBuilderIT extends PlaywrightTestBase {
     }
 
     /**
+     * Runs {@code body}, an async function body over a {@code client} whose requests wait in
+     * {@code calls} until the body resolves or rejects them, with {@code settle()} letting
+     * pending work run.
+     */
+    private Object evalClientOverHeldRequests(String body) {
+        return importModule(
+                "shared/api.js",
+                "(async () => {"
+                        + " const calls = [];"
+                        + " window.fetch = () => new Promise((resolve, reject) => calls.push({resolve, reject}));"
+                        + " const settle = () => new Promise(resolve => setTimeout(resolve));"
+                        + " const client = m.createClient({basePath: '/peekaboot'});"
+                        + body
+                        + "})()");
+    }
+
+    /** The poll a manual refresh overtook can still lose its connection, and its caller has newer data by then. */
+    @Test
+    void aRequestThatFailsAfterANewerOneStartedResolvesToNull() {
+        assertThat(evalClientOverHeldRequests("""
+                const first = client.get('/x');
+                const second = client.get('/x');
+                calls[0].reject(new TypeError('network changed'));
+                calls[1].resolve(new Response('{"ok":true}'));
+                return JSON.stringify([await first, await second]);
+                """)).isEqualTo("[null,{\"ok\":true}]");
+    }
+
+    @Test
+    void anHttpErrorAfterANewerRequestStartedResolvesToNull() {
+        assertThat(evalClientOverHeldRequests("""
+                const first = client.get('/x');
+                const second = client.get('/x');
+                calls[0].resolve(new Response('', {status: 503}));
+                calls[1].resolve(new Response('{"ok":true}'));
+                return JSON.stringify([await first, await second]);
+                """)).isEqualTo("[null,{\"ok\":true}]");
+    }
+
+    /**
+     * The first body is a stream the test holds open, so the first call is past its status
+     * check and waiting on the body when the second one starts.
+     */
+    @Test
+    void aBodyThatFailsAfterANewerRequestStartedResolvesToNull() {
+        assertThat(evalClientOverHeldRequests("""
+                let held;
+                const first = client.get('/x');
+                calls[0].resolve(new Response(new ReadableStream({start(controller) { held = controller; }})));
+                await settle();
+                const second = client.get('/x');
+                held.enqueue(new TextEncoder().encode('not json'));
+                held.close();
+                calls[1].resolve(new Response('{"ok":true}'));
+                return JSON.stringify([await first, await second]);
+                """)).isEqualTo("[null,{\"ok\":true}]");
+    }
+
+    @Test
+    void theLatestRequestStillRejectsWhenItFails() {
+        assertThat(evalClientOverHeldRequests("""
+                const only = client.get('/x');
+                calls[0].reject(new TypeError('offline'));
+                try { await only; return 'resolved'; }
+                catch (e) { return e.message; }
+                """)).isEqualTo("offline");
+    }
+
+    /**
      * Fires two calls to the same path without awaiting between them, so both are
      * genuinely in flight together (the dashboard's auto-refresh, manual refresh and
      * locale switch all do this). The first request is parked at the route until the

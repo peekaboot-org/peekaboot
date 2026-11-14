@@ -10,6 +10,7 @@ import com.microsoft.playwright.options.WaitUntilState;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -380,6 +381,36 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         page.waitForSelector("#error", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
         assertThat(page.isVisible("#error")).isFalse();
+    }
+
+    /**
+     * A refresh a newer one overtook has nothing to report: the newer one's data is on the page.
+     * The older request is held at its route until the newer one has answered and is then
+     * aborted, a real network failure that arrives last. The page has seen it once the browser
+     * has reported it and one more task has run.
+     */
+    @Test
+    void aFailedPollDoesNotRaiseTheBannerOverNewerData() {
+        openDashboard();
+        ParkedRequest overtaken = parkFirst("**/api/actuator/all/insights*");
+        page.click("#refresh-btn");
+        overtaken.awaitParked();
+        page.waitForResponse("**/api/actuator/all/insights*", () -> page.click("#refresh-btn"));
+
+        AtomicBoolean failureReported = new AtomicBoolean();
+        page.onRequestFailed(request -> {
+            if (request.url().contains("/api/actuator/all/insights")) {
+                failureReported.set(true);
+            }
+        });
+        overtaken.fail();
+        page.waitForCondition(failureReported::get);
+        page.evaluate("() => new Promise(resolve => setTimeout(resolve))");
+
+        assertThat(page.isHidden("#error"))
+                .as("the overtaken refresh's failure raises no banner")
+                .isTrue();
+        assertThat(page.locator("#build-info > *").count()).isPositive();
     }
 
     /**

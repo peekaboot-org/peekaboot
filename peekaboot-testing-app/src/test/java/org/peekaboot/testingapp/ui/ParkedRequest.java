@@ -4,7 +4,7 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Route;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** A real request held at its route until the test lets it through; see {@link PlaywrightTestBase#parkFirst}. */
+/** A real request held at its route until the test lets it through or fails it; see {@link PlaywrightTestBase#parkFirst}. */
 final class ParkedRequest {
 
     private final Page page;
@@ -29,10 +29,19 @@ final class ParkedRequest {
 
     /** Lets the request through to the server, whose real response then answers it. */
     void resume() {
+        release().resume();
+    }
+
+    /** Aborts the request, which the page sees as a network failure. */
+    void fail() {
+        release().abort();
+    }
+
+    private Route release() {
         Route parked = route.getAndSet(null);
         if (parked == null) {
             throw new IllegalStateException("no request is parked");
         }
-        parked.resume();
+        return parked;
     }
 }
