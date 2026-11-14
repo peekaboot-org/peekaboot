@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
@@ -29,6 +30,9 @@ import org.springframework.core.annotation.Order;
 // room for SecurityPostureListener, which reports below this banner at LOWEST_PRECEDENCE
 @Order(Ordered.LOWEST_PRECEDENCE - 100)
 public class ApplicationReadyListener implements ApplicationListener<ApplicationReadyEvent> {
+
+    /** How long the banner waits for the databases to answer, all of them together. */
+    static final Duration DATABASE_WAIT = Duration.ofSeconds(2);
 
     private static final Logger log = LoggerFactory.getLogger(ApplicationReadyListener.class);
 
@@ -171,35 +175,47 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private void appendDatabaseInfo(StringBuilder report) {
 
-        List<DataSourceMetadata> entries = dataSourceMetadataList.entries();
+        List<String> names = dataSourceMetadataList.dataSourceNames();
 
-        if (entries.isEmpty()) {
+        if (names.isEmpty()) {
             BannerFrame.line(report, " Database: No database configured");
             return;
         }
 
-        for (DataSourceMetadata metadata : entries) {
-            BannerFrame.text(
-                    report,
-                    String.format(
-                            " DB Connection [%s]: %s on %s (user: %s)",
-                            metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()));
-            BannerFrame.blankLine(report);
+        List<DataSourceMetadata> answered = dataSourceMetadataList.entriesWithin(DATABASE_WAIT);
 
-            if (!metadata.connectionParams().isEmpty()) {
-                String params = connectionParamsMasker.mask(metadata.connectionParams()).entrySet().stream()
-                        .map(e -> e.getKey() + "=" + e.getValue())
-                        .collect(Collectors.joining(", "));
-                BannerFrame.line(report, " DB Connection Params: " + params);
-            }
+        for (String name : names) {
+            answered.stream()
+                    .filter(metadata -> metadata.dataSourceName().equals(name))
+                    .findFirst()
+                    .ifPresentOrElse(
+                            metadata -> appendConnectionInfo(report, metadata),
+                            () -> BannerFrame.line(
+                                    report, String.format(" DB Connection [%s]: no connection yet", name)));
 
-            BannerFrame.line(
-                    report,
-                    String.format(
-                            " DB Version: %s %s", metadata.databaseProductName(), metadata.databaseProductVersion()));
-
-            appendPoolInfo(report, metadata.dataSourceName());
+            appendPoolInfo(report, name);
         }
+    }
+
+    private void appendConnectionInfo(StringBuilder report, DataSourceMetadata metadata) {
+
+        BannerFrame.text(
+                report,
+                String.format(
+                        " DB Connection [%s]: %s on %s (user: %s)",
+                        metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()));
+        BannerFrame.blankLine(report);
+
+        if (!metadata.connectionParams().isEmpty()) {
+            String params = connectionParamsMasker.mask(metadata.connectionParams()).entrySet().stream()
+                    .map(e -> e.getKey() + "=" + e.getValue())
+                    .collect(Collectors.joining(", "));
+            BannerFrame.line(report, " DB Connection Params: " + params);
+        }
+
+        BannerFrame.line(
+                report,
+                String.format(" DB Version: %s %s", metadata.databaseProductName(), metadata.databaseProductVersion()));
     }
 
     private void appendPoolInfo(StringBuilder report, String dataSourceName) {

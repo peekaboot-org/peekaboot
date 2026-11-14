@@ -2,21 +2,19 @@ package org.peekaboot.backend.datasource;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import javax.sql.DataSource;
 import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.JdbcUrl;
 import net.osslabz.jdbc.JdbcUrlParser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * What one {@code DataSource} bean connects to, read once at startup from a live
- * connection's {@link DatabaseMetaData} and the JDBC URL it reports.
+ * What one {@code DataSource} bean connects to, read from a live connection's
+ * {@link DatabaseMetaData} and the JDBC URL it reports.
  *
  * @param databaseProduct what the JDBC URL names, so a MariaDB reached through a
  *                        {@code jdbc:mysql:} URL reports MySQL
@@ -32,8 +30,6 @@ public record DataSourceMetadata(
         String databaseProductVersion,
         String driverName) {
 
-    private static final Logger log = LoggerFactory.getLogger(DataSourceMetadata.class);
-
     public DataSourceMetadata {
         hosts = hosts == null ? List.of() : hosts;
         connectionParams = connectionParams == null ? Map.of() : connectionParams;
@@ -48,7 +44,8 @@ public record DataSourceMetadata(
                 + databaseProductVersion + ", driverName=" + driverName + "]";
     }
 
-    public static Optional<DataSourceMetadata> fromDataSource(String dataSourceName, DataSource dataSource) {
+    /** Opens a connection. Throws what the pool, the driver or the URL parser throws. */
+    public static DataSourceMetadata read(String dataSourceName, DataSource dataSource) throws SQLException {
 
         try (Connection connection = dataSource.getConnection()) {
             DatabaseMetaData metaData = connection.getMetaData();
@@ -56,7 +53,7 @@ public record DataSourceMetadata(
             String username = metaData.getUserName();
             JdbcUrl jdbcUrl = JdbcUrlParser.parse(url);
 
-            return Optional.of(new DataSourceMetadata(
+            return new DataSourceMetadata(
                     dataSourceName,
                     username,
                     jdbcUrl.hosts(),
@@ -65,11 +62,7 @@ public record DataSourceMetadata(
                     jdbcUrl.properties(),
                     metaData.getDatabaseProductName(),
                     metaData.getDatabaseProductVersion(),
-                    metaData.getDriverName()));
-        } catch (Exception e) {
-            log.warn("Failed to extract metadata from DataSource '{}': {}", dataSourceName, e.getMessage());
+                    metaData.getDriverName());
         }
-
-        return Optional.empty();
     }
 }

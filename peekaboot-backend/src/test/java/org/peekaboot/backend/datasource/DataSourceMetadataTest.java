@@ -1,31 +1,24 @@
 package org.peekaboot.backend.datasource;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import ch.qos.logback.classic.Level;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import javax.sql.DataSource;
 import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testsupport.LogCapture;
 
 class DataSourceMetadataTest {
 
     @Test
-    void extractsMetadataFromWorkingDataSource() {
+    void extractsMetadataFromWorkingDataSource() throws SQLException {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:metadata-test;DB_CLOSE_DELAY=-1");
 
-        DataSourceMetadata metadata =
-                DataSourceMetadata.fromDataSource("primary", dataSource).orElseThrow();
+        DataSourceMetadata metadata = DataSourceMetadata.read("primary", dataSource);
 
         assertThat(metadata.dataSourceName()).isEqualTo("primary");
         assertThat(metadata.databaseProductName()).isEqualTo("H2");
@@ -33,12 +26,11 @@ class DataSourceMetadataTest {
     }
 
     @Test
-    void extractsConnectionDetailsAndDriverFromWorkingDataSource() {
+    void extractsConnectionDetailsAndDriverFromWorkingDataSource() throws SQLException {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:metadata-test-2;DB_CLOSE_DELAY=-1");
 
-        DataSourceMetadata m =
-                DataSourceMetadata.fromDataSource("primary", dataSource).orElseThrow();
+        DataSourceMetadata m = DataSourceMetadata.read("primary", dataSource);
 
         assertThat(m.username()).isEqualTo("");
         assertThat(m.hosts()).isEmpty();
@@ -72,40 +64,5 @@ class DataSourceMetadataTest {
                 .contains("orders")
                 .doesNotContain("s3cret")
                 .doesNotContain("password");
-    }
-
-    @Test
-    void returnsEmptyWhenConnectionFails() throws SQLException {
-        DataSource failing = mock(DataSource.class);
-        when(failing.getConnection()).thenThrow(new SQLException("db down"));
-
-        try (LogCapture capture = LogCapture.attach(DataSourceMetadata.class)) {
-            Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("broken", failing);
-
-            assertThat(metadata).isEmpty();
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage())
-                        .isEqualTo("Failed to extract metadata from DataSource 'broken': db down");
-            });
-        }
-    }
-
-    @Test
-    void returnsEmptyWhenMetadataExtractionThrowsRuntimeException() throws SQLException {
-        // e.g. JdbcUrlParser choking on an exotic URL must not crash startup
-        DataSource failing = mock(DataSource.class);
-        when(failing.getConnection()).thenThrow(new IllegalStateException("unparseable"));
-
-        try (LogCapture capture = LogCapture.attach(DataSourceMetadata.class)) {
-            Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("exotic", failing);
-
-            assertThat(metadata).isEmpty();
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage())
-                        .isEqualTo("Failed to extract metadata from DataSource 'exotic': unparseable");
-            });
-        }
     }
 }

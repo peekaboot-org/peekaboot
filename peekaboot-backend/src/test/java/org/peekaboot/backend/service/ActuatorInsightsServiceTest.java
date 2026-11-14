@@ -2,6 +2,7 @@ package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import net.osslabz.jdbc.DatabaseProduct;
+import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.InsightsSource;
@@ -17,6 +19,7 @@ import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.actuator.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.application.GitInfo;
+import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.domain.liquibase.ChangeSetExecType;
 import org.peekaboot.backend.domain.liquibase.ChangeSetInfo;
@@ -101,6 +104,20 @@ class ActuatorInsightsServiceTest {
 
         assertThat(response.dataSources()).hasSize(1);
         assertThat(response.dataSources().get(0).name()).isEqualTo("primaryDS");
+    }
+
+    /** The list reads its DataSources after the service is built, so the service asks it on every request. */
+    @Test
+    void getInsights_shouldShowDataSourcesThatResolveAfterConstruction() {
+        JdbcDataSource dataSource = new JdbcDataSource();
+        dataSource.setURL("jdbc:h2:mem:insights-resolved-later");
+        ActuatorInsightsService service =
+                service(Map.of(), DataSourceMetadataList.resolving(Map.of("primaryDS", dataSource)));
+
+        await().untilAsserted(() -> assertThat(
+                        service.getInsights(Locale.ENGLISH, false).dataSources())
+                .extracting(DataSourceInfo::name)
+                .containsExactly("primaryDS"));
     }
 
     @Test

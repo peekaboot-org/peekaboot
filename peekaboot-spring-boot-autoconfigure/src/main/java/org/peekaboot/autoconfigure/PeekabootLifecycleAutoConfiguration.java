@@ -1,11 +1,8 @@
 package org.peekaboot.autoconfigure;
 
-import java.util.ArrayList;
-import java.util.List;
 import javax.sql.DataSource;
 import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.ActiveProfilesLine;
@@ -127,11 +124,7 @@ public class PeekabootLifecycleAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         public DataSourceMetadataList peekabootDataSourceMetadataList(ConfigurableListableBeanFactory beanFactory) {
-            List<DataSourceMetadata> entries = new ArrayList<>();
-            ApplicationBeans.ofType(beanFactory, DataSource.class)
-                    .forEach((name, dataSource) ->
-                            DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(entries::add));
-            return new DataSourceMetadataList(entries);
+            return DataSourceMetadataList.resolving(ApplicationBeans.ofType(beanFactory, DataSource.class));
         }
     }
 

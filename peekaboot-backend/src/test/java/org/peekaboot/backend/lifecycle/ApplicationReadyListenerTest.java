@@ -2,10 +2,13 @@ package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.zaxxer.hikari.HikariDataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
@@ -183,7 +186,7 @@ class ApplicationReadyListenerTest {
     }
 
     @Test
-    void banner_reportsThePoolSettingsOfAHikariDataSource() {
+    void banner_reportsThePoolSettingsOfAHikariDataSource() throws SQLException {
         DataSourceMetadata metadata = h2Metadata("primary");
         try (HikariDataSource hikari = new HikariDataSource()) {
             hikari.setMinimumIdle(3);
@@ -206,7 +209,7 @@ class ApplicationReadyListenerTest {
      * simply skip the pool lines, not fail the ApplicationReadyEvent.
      */
     @Test
-    void banner_omitsThePoolLinesWithoutAPoolInfoContributor() {
+    void banner_omitsThePoolLinesWithoutAPoolInfoContributor() throws SQLException {
         DataSourceMetadata metadata = h2Metadata("primary");
 
         String report = banner().metadata(metadata)
@@ -214,6 +217,40 @@ class ApplicationReadyListenerTest {
                 .render(ReadyEvents.webApplication(8083));
 
         assertThat(report).contains(" DB Connection [primary]").doesNotContain("DB Pool");
+    }
+
+    /** A database that is down is still a database: its line says so instead of "No database configured". */
+    @Test
+    void banner_namesADataSourceThatHasNotAnswered() throws SQLException {
+        DataSource down = mock(DataSource.class);
+        when(down.getConnection()).thenThrow(new SQLException("db down"));
+        try (LogCapture ignored = LogCapture.attach(DataSourceMetadataList.class)) {
+            String report = banner().metadataList(DataSourceMetadataList.resolving(Map.of("primary", down)))
+                    .render(ReadyEvents.webApplication(8083));
+
+            assertThat(report)
+                    .contains(" DB Connection [primary]: no connection yet")
+                    .doesNotContain("No database configured");
+        }
+    }
+
+    /** The pool's sizing is configuration, known without a connection. */
+    @Test
+    void banner_stillReportsThePoolOfADataSourceThatHasNotAnswered() {
+        try (HikariDataSource hikari = new UnreachableHikariDataSource();
+                LogCapture ignored = LogCapture.attach(DataSourceMetadataList.class)) {
+            hikari.setMinimumIdle(3);
+            hikari.setMaximumPoolSize(7);
+
+            String report = banner().metadataList(DataSourceMetadataList.resolving(Map.of("primary", hikari)))
+                    .dataSources(Map.of("primary", hikari))
+                    .hikari(new HikariPoolInfo())
+                    .render(ReadyEvents.webApplication(8083));
+
+            assertThat(report)
+                    .contains(" DB Connection [primary]: no connection yet")
+                    .contains(" DB Pool: minimumIdle=3, maximumPoolSize=7");
+        }
     }
 
     /**
@@ -295,14 +332,23 @@ class ApplicationReadyListenerTest {
     }
 
     /** The metadata a real in-memory H2 reports for {@code name}; the banner reads only the name off it. */
-    private static DataSourceMetadata h2Metadata(String name) {
+    private static DataSourceMetadata h2Metadata(String name) throws SQLException {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:banner-" + name + ";DB_CLOSE_DELAY=-1");
-        return DataSourceMetadata.fromDataSource(name, dataSource).orElseThrow();
+        return DataSourceMetadata.read(name, dataSource);
     }
 
     private static Banner banner() {
         return new Banner();
+    }
+
+    /** Fails before Hikari starts a pool, so the pool itself logs nothing. */
+    private static final class UnreachableHikariDataSource extends HikariDataSource {
+
+        @Override
+        public Connection getConnection() throws SQLException {
+            throw new SQLException("db down");
+        }
     }
 
     /** The listener's collaborators, neutral unless a test sets one: no profiles, no build info, no databases. */
@@ -331,6 +377,11 @@ class ApplicationReadyListenerTest {
 
         Banner metadata(DataSourceMetadata... metadata) {
             this.metadata = new DataSourceMetadataList(List.of(metadata));
+            return this;
+        }
+
+        Banner metadataList(DataSourceMetadataList metadataList) {
+            this.metadata = metadataList;
             return this;
         }
 

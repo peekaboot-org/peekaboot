@@ -3,6 +3,8 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
@@ -148,8 +150,7 @@ class PeekabootLifecycleAutoConfigurationTest {
                 .withPropertyValues("spring.datasource.url=jdbc:h2:mem:lifecycleprimary;DB_CLOSE_DELAY=-1")
                 .withUserConfiguration(SecondaryDataSourceConfig.class)
                 .run(context -> {
-                    assertThat(context.getBean(DataSourceMetadataList.class).entries())
-                            .extracting(DataSourceMetadata::dataSourceName)
+                    assertThat(context.getBean(DataSourceMetadataList.class).dataSourceNames())
                             .containsExactlyInAnyOrder("dataSource", "secondaryDataSource");
                     String banner = readyBanner(context);
                     assertThat(banner).contains(" DB Connection [secondaryDataSource]");
@@ -234,20 +235,38 @@ class PeekabootLifecycleAutoConfigurationTest {
                 });
     }
 
+    /** A database that is down or slow would otherwise hold the start for the pool's timeout. */
     @Test
-    void brokenDataSourceDoesNotFailStartup() {
-        try (LogCapture capture = LogCapture.attach(DataSourceMetadata.class)) {
+    void noConnectionIsOpenedWhileTheContextStarts() {
+        try (LogCapture capture = LogCapture.attach(DataSourceMetadataList.class)) {
             contextRunner.withUserConfiguration(BrokenDataSourceConfig.class).run(context -> {
                 assertThat(context).hasNotFailed();
-                assertThat(context.getBean(DataSourceMetadataList.class).entries())
-                        .isEmpty();
+                verify(context.getBean("brokenDataSource", DataSource.class), never())
+                        .getConnection();
             });
 
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage())
-                        .isEqualTo("Failed to extract metadata from DataSource 'brokenDataSource': db down");
-            });
+            assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
+    /** The ready banner is the first reader, so a database that is down is reported there, after the start. */
+    @Test
+    void aBrokenDataSourceIsNamedOnTheBannerAndWarnedOnce() {
+        try (LogCapture capture = LogCapture.attach(DataSourceMetadataList.class)) {
+            contextRunner
+                    .withUserConfiguration(BrokenDataSourceConfig.class)
+                    .run(context -> assertThat(readyBanner(context))
+                            .contains(" DB Connection [brokenDataSource]: no connection yet")
+                            .doesNotContain("No database configured"));
+
+            // awaited: the banner stops waiting for a read after two seconds, and the read warns when it ends
+            await().untilAsserted(() -> assertThat(capture.appender().list)
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        assertThat(event.getFormattedMessage())
+                                .isEqualTo("Failed to extract metadata from DataSource 'brokenDataSource': db down");
+                    }));
         }
     }
 
