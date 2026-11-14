@@ -9,6 +9,8 @@ import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
 import java.lang.management.ManagementFactory;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.runtime.ContainerRuntime;
 import org.peekaboot.backend.domain.runtime.CpuTopology;
@@ -18,12 +20,25 @@ import tools.jackson.databind.node.ObjectNode;
 
 class OverviewMachineIT extends PlaywrightTestBase {
 
+    private static final String DATASOURCE_TOGGLE = ".pk-card[data-datasource] .pk-datasources__toggle button";
+    private static final String DATASOURCE_PARAMS = ".pk-card[data-datasource] .pk-datasources__params";
+
     /** What the card renders a byte count as; the same module the card builds its rows with. */
     private String formatBytes(long bytes) {
         // As a string: Playwright's argument serializer takes no Java long.
         return (String) page.evaluate(
                 "async (value) => (await import('/peekaboot/ui/shared/format.js')).formatBytes(Number(value))",
                 String.valueOf(bytes));
+    }
+
+    /** Serves every insights answer with its {@code runtime} node changed by {@code rewrite}. */
+    private void serveRuntimeRewrittenBy(Consumer<ObjectNode> rewrite) {
+        page.route("**/peekaboot/api/actuator/all/insights**", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode insights = (ObjectNode) readJson(response.text());
+            rewrite.accept((ObjectNode) insights.path("runtime"));
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(insights.toString()));
+        });
     }
 
     /** Splits by address family the way the card does: a ":" in the literal means IPv6. */
@@ -55,12 +70,7 @@ class OverviewMachineIT extends PlaywrightTestBase {
     @Test
     void maxHeapRowShowsTheHeapMetersMaximum() {
         long servedHeapMax = 123_456_789L;
-        page.route("**/peekaboot/api/actuator/all/insights**", route -> {
-            APIResponse response = route.fetch();
-            ObjectNode insights = (ObjectNode) readJson(response.text());
-            ((ObjectNode) insights.path("runtime").path("memory")).put("heapMax", servedHeapMax);
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(insights.toString()));
-        });
+        serveRuntimeRewrittenBy(runtime -> ((ObjectNode) runtime.path("memory")).put("heapMax", servedHeapMax));
         openDashboard();
         page.waitForSelector("#machine-info .pk-kv");
 
@@ -157,6 +167,9 @@ class OverviewMachineIT extends PlaywrightTestBase {
         assumeTrue(
                 !family(addresses, false).isEmpty() && !family(addresses, true).isEmpty(),
                 "needs a machine with both an IPv4 and an IPv6 address");
+        AtomicInteger answers = new AtomicInteger();
+        serveRuntimeRewrittenBy(runtime ->
+                ((ObjectNode) runtime.path("machine")).put("cpuModel", "CPU of answer " + answers.incrementAndGet()));
 
         openDashboard();
         page.waitForSelector("#machine-net-ipv6-btn");
@@ -170,13 +183,34 @@ class OverviewMachineIT extends PlaywrightTestBase {
             assertThat(text).contains(address.address());
         }
 
-        // the open family is transient per-browser UI, but a refresh rebuild must keep
-        // it (the group-expansion convention) - tag the panel so the rebuild is provable
+        // the open family is transient per-browser UI, but a refresh that rebuilds the card
+        // must keep it. Every answer names another CPU model, so the card is rebuilt, and the
+        // tag on the panel proves it
         page.evaluate("() => document.querySelector('#machine-net-ipv6').dataset.probe = 'pre-refresh'");
         page.click("#refresh-btn");
         page.waitForFunction("() => !document.querySelector('#machine-net-ipv6').dataset.probe");
         assertThat(page.getAttribute("#machine-net-ipv6-btn", "aria-selected")).isEqualTo("true");
         assertThat(page.isVisible("#machine-net-ipv6")).isTrue();
+    }
+
+    /**
+     * A card whose data did not change is left alone by a refresh, so focus inside it stays
+     * where the reader put it. The probe is on the focused tab: a rebuilt card carries none.
+     */
+    @Test
+    void aFocusedNetworkTabKeepsFocusAcrossARefresh() {
+        assumeTrue(
+                !MachineInfo.current().networkAddresses().isEmpty(),
+                "needs a machine with at least one non-local address");
+        openDashboard();
+        page.focus("#machine-net-tabs .pk-tab[aria-selected='true']");
+        page.evaluate("() => document.activeElement.dataset.probe = '1'");
+
+        refreshLeavingFocusInPlace("**/api/actuator/all/insights*");
+
+        assertThat(page.evaluate("() => document.activeElement.dataset.probe"))
+                .as("the focused element is still the network tab")
+                .isEqualTo("1");
     }
 
     @Test
@@ -243,15 +277,17 @@ class OverviewMachineIT extends PlaywrightTestBase {
     @Test
     void datasourceCardSitsBesideJvmDefaultsInTheCardGrid() {
         openDashboard();
-        page.waitForSelector(".pk-grid > .pk-card[data-datasource]");
+        page.waitForSelector(".pk-card[data-datasource]");
 
         // the two-column card grid pairs grid neighbours, so the first datasource card
-        // has to follow JVM Defaults in DOM order to land beside it
-        Object neighbour = page.evaluate(
-                "() => document.querySelector('#jvm-defaults-card').nextElementSibling?.dataset.datasource ?? null");
-        assertThat(neighbour)
+        // has to be the grid's next item after JVM Defaults to land beside it
+        assertThat(page.locator("#jvm-defaults-card + #datasource-cards > .pk-card[data-datasource]:first-child")
+                        .count())
                 .as("the first datasource card directly follows the JVM Defaults card")
-                .isNotNull();
+                .isEqualTo(1);
+        assertThat(page.evaluate("() => getComputedStyle(document.getElementById('datasource-cards')).display"))
+                .as("the cards' own parent takes no box, so each card is an item of the grid")
+                .isEqualTo("contents");
     }
 
     /**
@@ -262,12 +298,10 @@ class OverviewMachineIT extends PlaywrightTestBase {
     @Test
     void theDatasourceCardHidesItsConnectionParamsBehindAToggle() {
         openDashboard();
-        page.waitForSelector(".pk-card[data-datasource] .pk-datasources__toggle button");
+        page.waitForSelector(DATASOURCE_TOGGLE);
 
-        Locator toggle = page.locator(".pk-card[data-datasource] .pk-datasources__toggle button")
-                .first();
-        Locator params = page.locator(".pk-card[data-datasource] .pk-datasources__params")
-                .first();
+        Locator toggle = page.locator(DATASOURCE_TOGGLE).first();
+        Locator params = page.locator(DATASOURCE_PARAMS).first();
         assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
         assertThat(params.isHidden()).isTrue();
 
@@ -281,5 +315,22 @@ class OverviewMachineIT extends PlaywrightTestBase {
 
         assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
         assertThat(params.isHidden()).isTrue();
+    }
+
+    /**
+     * A refresh leaves the card of a datasource that did not change alone, so the connection
+     * params the reader opened are still on screen after it.
+     */
+    @Test
+    void openConnectionParamsStayOpenAcrossARefresh() {
+        openDashboard();
+        page.waitForSelector(DATASOURCE_TOGGLE);
+        page.locator(DATASOURCE_TOGGLE).first().click();
+
+        refreshLeavingFocusInPlace("**/api/actuator/all/insights*");
+
+        assertThat(page.locator(DATASOURCE_PARAMS).first().isVisible())
+                .as("the connection params the reader opened")
+                .isTrue();
     }
 }

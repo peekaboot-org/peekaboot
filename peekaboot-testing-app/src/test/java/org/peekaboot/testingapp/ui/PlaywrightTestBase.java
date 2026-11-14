@@ -256,6 +256,21 @@ abstract class PlaywrightTestBase {
         Fonts.awaitReady(page);
     }
 
+    /**
+     * Refreshes the dashboard through the Refresh button's own handler, which leaves focus where
+     * it is, and returns once the page has handled the answer to {@code urlGlob}: its body has
+     * finished and one more task has run.
+     */
+    protected void refreshLeavingFocusInPlace(String urlGlob) {
+        Response answer = page.waitForResponse(
+                urlGlob, () -> page.evaluate("() => document.getElementById('refresh-btn').click()"));
+        String failure = answer.finished();
+        if (failure != null) {
+            throw new IllegalStateException("the refresh's answer to " + urlGlob + " failed: " + failure);
+        }
+        page.evaluate("() => new Promise(resolve => setTimeout(resolve))");
+    }
+
     /** The dashboard's address, for a test that navigates there itself: one that catches the page mid-boot, say. */
     protected String dashboardUrl() {
         return dashboardUrl("");

@@ -5,6 +5,7 @@
  */
 import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
+import {keyedChildren, renderIfChanged} from '../../shared/keyed.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatNumber, formatPlainValue, formatTileValue} from '../../shared/format.js';
@@ -18,18 +19,19 @@ export function create(container) {
 
     function render(data, context = {}) {
         const {locale, timeZone} = context;
+        const formats = {locale, timeZone};
         const {application, runtime, dataSources, health} = data;
 
         renderInsightTiles(container, tileRow, context);
-        renderBuildInfo(container, application?.build, {locale, timeZone});
-        renderGitInfo(container, application?.git, {locale, timeZone});
-        renderSpringInfo(container, application);
-        renderJavaInfo(container, application);
-        renderOsInfo(container, runtime);
-        renderMachineInfo(container, runtime, locale);
-        renderJvmDefaults(container, data.server, {locale, timeZone});
+        renderBuildInfo(container, application?.build, formats);
+        renderGitInfo(container, application?.git, formats);
+        renderSpringInfo(container, application, formats);
+        renderJavaInfo(container, application, formats);
+        renderOsInfo(container, runtime, formats);
+        renderMachineInfo(container, runtime, formats);
+        renderJvmDefaults(container, data.server, formats);
         renderDataSourcesInfo(container, dataSources);
-        renderMemoryInfo(container, runtime);
+        renderMemoryInfo(container, runtime, formats);
         renderHealthBanner(container, health, locale);
         renderHealthComponents(container, health?.components);
     }
@@ -105,56 +107,60 @@ function renderInsightTiles(container, tileRow, context) {
 
 /**
  * Fills a card body from `value`, or shows `emptyMessage` when there is nothing to show
- * (null, or an object with no entries).
+ * (null, or an object with no entries). A body last filled from the same value in the same
+ * `formats` (locale and time zone) is left as it is, so a refresh takes neither focus nor a
+ * text selection out of a card that did not change.
  */
-function fillCard(container, selector, value, emptyMessage, fill) {
+function fillCard(container, selector, value, emptyMessage, {locale, timeZone}, fill) {
     const body = container.querySelector(selector);
     if (!body) return;
-    body.innerHTML = '';
-    if (!value || Object.keys(value).length === 0) {
-        body.appendChild(emptyState(emptyMessage));
-        return;
-    }
-    fill(body, value);
+    renderIfChanged(body, JSON.stringify([value, locale, timeZone]), () => {
+        body.replaceChildren();
+        if (!value || Object.keys(value).length === 0) {
+            body.appendChild(emptyState(emptyMessage));
+            return;
+        }
+        fill(body, value);
+    });
 }
 
-function renderBuildInfo(container, build, dateOptions) {
-    fillCard(container, '#build-info', build, 'No build info available', body => {
+function renderBuildInfo(container, build, formats) {
+    fillCard(container, '#build-info', build, 'No build info available', formats, body => {
         if (build.name) body.appendChild(kvRow('Name', build.name));
         if (build.version) body.appendChild(kvRow('Version', build.version));
         if (build.group) body.appendChild(kvRow('Group', build.group));
         if (build.artifact) body.appendChild(kvRow('Artifact', build.artifact));
-        if (build.time) body.appendChild(kvRow('Built', formatDateTime(build.time, dateOptions)));
+        if (build.time) body.appendChild(kvRow('Built', formatDateTime(build.time, formats)));
     });
 }
 
-function renderGitInfo(container, git, dateOptions) {
-    fillCard(container, '#git-info', git, 'No git info available', body => {
+function renderGitInfo(container, git, formats) {
+    fillCard(container, '#git-info', git, 'No git info available', formats, body => {
         if (git.branch) body.appendChild(kvRow('Branch', git.branch));
         if (git.commit?.id) body.appendChild(kvRow('Commit', git.commit.id, {mono: true}));
-        if (git.commit?.time) body.appendChild(kvRow('Commit Time', formatDateTime(git.commit.time, dateOptions)));
+        if (git.commit?.time) body.appendChild(kvRow('Commit Time', formatDateTime(git.commit.time, formats)));
     });
 }
 
-function renderSpringInfo(container, application) {
-    fillCard(container, '#spring-info', application, 'No Spring info available', body => {
+function renderSpringInfo(container, application, formats) {
+    fillCard(container, '#spring-info', application, 'No Spring info available', formats, body => {
         if (application.springBootVersion) body.appendChild(kvRow('Boot', application.springBootVersion));
         if (application.springFrameworkVersion) body.appendChild(kvRow('Framework', application.springFrameworkVersion));
     });
 }
 
-function renderJavaInfo(container, application) {
-    fillCard(container, '#java-info', application, 'No Java info available', body => {
+function renderJavaInfo(container, application, formats) {
+    fillCard(container, '#java-info', application, 'No Java info available', formats, body => {
         if (application.javaVersion) body.appendChild(kvRow('Version', application.javaVersion));
         if (application.javaVendor) body.appendChild(kvRow('Vendor', application.javaVendor));
     });
 }
 
-function renderOsInfo(container, runtime) {
+function renderOsInfo(container, runtime, formats) {
     const os = runtime?.os;
     const process = runtime?.process;
 
-    fillCard(container, '#os-info', os || process ? {os, process} : null, 'No system info available', body => {
+    fillCard(container, '#os-info', os || process ? {os, process} : null, 'No system info available', formats, body => {
         if (os) {
             if (os.name) body.appendChild(kvRow('OS', `${os.name} ${os.version || ''}`));
             if (os.arch) body.appendChild(kvRow('Architecture', os.arch));
@@ -186,24 +192,22 @@ function renderOsInfo(container, runtime) {
  * not the host's. Every other fact is best-effort: what the backend couldn't read
  * arrives null/empty and renders no row at all.
  */
-function renderMachineInfo(container, runtime, locale) {
-    const body = container.querySelector('#machine-info');
-    const previousFamily = body.querySelector('#machine-net-tabs .pk-tab[aria-selected="true"]')?.dataset.tab;
-    body.innerHTML = '';
-
+function renderMachineInfo(container, runtime, formats) {
     const machine = runtime?.machine;
-    if (!machine) {
-        body.appendChild(emptyState('No machine info available'));
-        return;
-    }
+    const heapMax = runtime?.memory?.heapMax;
+    // read here, before a card that did change is emptied
+    const previousFamily = container.querySelector('#machine-net-tabs .pk-tab[aria-selected="true"]')?.dataset.tab;
 
-    if (machine.cpuCount) body.appendChild(kvRow('CPU Cores', cpuCoresValue(machine, locale)));
-    if (machine.cpuModel) body.appendChild(kvRow('CPU Model', machine.cpuModel));
-    if (machine.totalMemory) body.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
-    if (runtime.memory?.heapMax) body.appendChild(kvRow('Max Heap', formatBytes(runtime.memory.heapMax)));
-    body.appendChild(kvRow('Container', machine.container || 'none'));
+    const facts = machine ? {machine, heapMax} : null;
+    fillCard(container, '#machine-info', facts, 'No machine info available', formats, body => {
+        if (machine.cpuCount) body.appendChild(kvRow('CPU Cores', cpuCoresValue(machine, formats.locale)));
+        if (machine.cpuModel) body.appendChild(kvRow('CPU Model', machine.cpuModel));
+        if (machine.totalMemory) body.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
+        if (heapMax) body.appendChild(kvRow('Max Heap', formatBytes(heapMax)));
+        body.appendChild(kvRow('Container', machine.container || 'none'));
 
-    renderNetworkAddresses(body, machine.networkAddresses ?? [], previousFamily);
+        renderNetworkAddresses(body, machine.networkAddresses ?? [], previousFamily);
+    });
 }
 
 const IP_FAMILIES = [
@@ -221,9 +225,8 @@ function ipFamily(address) {
  * labels carry the context a key column would, so the rows are bare full-width
  * address (+ hostname) text. A family with no addresses hides its tab, the same way
  * the main strip hides tabs for absent features; with no addresses at all nothing
- * renders. Which family is open is transient per-browser UI - carried across the
- * refresh rebuild via previousFamily (the group-expansion convention), never into
- * the URL.
+ * renders. Which family is open is transient per-browser UI - carried across a
+ * rebuild of the card via previousFamily, never into the URL.
  */
 function renderNetworkAddresses(body, addresses, previousFamily) {
     if (addresses.length === 0) return;
@@ -269,8 +272,8 @@ function cpuCoresValue(machine, locale) {
         : `${cpuCount} (${formatNumber(topology.physicalCores, {locale})} cores, SMT off)`;
 }
 
-function renderJvmDefaults(container, server, {locale, timeZone}) {
-    fillCard(container, '#jvm-defaults-info', server, 'No JVM defaults available', body => {
+function renderJvmDefaults(container, server, formats) {
+    fillCard(container, '#jvm-defaults-info', server, 'No JVM defaults available', formats, body => {
         if (server.locale) {
             const localeDisplay = server.localeDisplay ? ` (${server.localeDisplay})` : '';
             body.appendChild(kvRow('Locale', `${server.locale}${localeDisplay}`));
@@ -281,7 +284,7 @@ function renderJvmDefaults(container, server, {locale, timeZone}) {
         }
         if (server.currentTime) {
             body.appendChild(kvRow('Server Time',
-                formatDateTimeWith(server.currentTime, {dateStyle: 'medium', timeStyle: 'medium'}, {locale, timeZone})));
+                formatDateTimeWith(server.currentTime, {dateStyle: 'medium', timeStyle: 'medium'}, formats)));
         }
         if (server.fileEncoding) body.appendChild(kvRow('File Encoding', server.fileEncoding));
     });
@@ -290,11 +293,14 @@ function renderJvmDefaults(container, server, {locale, timeZone}) {
 /**
  * Datasource cards join the main card grid right after JVM Defaults, so a single
  * datasource sits beside it in the two-column layout and further ones flow on in
- * grid order. Rebuilt from scratch on every refresh cycle.
+ * grid order. Their parent takes no box of its own (pk-contents), and is there for the
+ * cards to be keyed in: one whose datasource did not change keeps its open params.
  */
 function renderDataSourcesInfo(container, dataSources) {
-    container.querySelectorAll('.pk-card[data-datasource]').forEach(card => card.remove());
-    container.querySelector('#jvm-defaults-card').after(...(dataSources ?? []).map(renderDataSourceCard));
+    keyedChildren(container.querySelector('#datasource-cards'), dataSources ?? [], {
+        key: ds => ds.name || 'DataSource',
+        build: renderDataSourceCard
+    });
 }
 
 function renderDataSourceCard(ds) {
@@ -339,37 +345,30 @@ function usageSection(label, caption, percent) {
     return el('div', {className: 'pk-section'}, kvRow(label, caption, {tight: true}), meter(percent));
 }
 
-function renderMemoryInfo(container, runtime) {
-    const body = container.querySelector('#memory-info');
-    body.innerHTML = '';
-
+function renderMemoryInfo(container, runtime, formats) {
     const memory = runtime?.memory;
-    const storage = runtime?.storage;
+    const storage = runtime?.storage ?? [];
 
-    if (!memory && (!storage || storage.length === 0)) {
-        body.appendChild(emptyState('No memory info available'));
-        return;
-    }
+    const usage = memory || storage.length > 0 ? {memory, storage} : null;
+    fillCard(container, '#memory-info', usage, 'No memory info available', formats, body => {
+        if (memory) {
+            const heapPercent = memory.heapUsedPercent;
+            body.appendChild(usageSection('Heap',
+                `${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapMax)} (${heapPercent.toFixed(1)}%)`,
+                heapPercent));
 
-    if (memory) {
-        const heapPercent = memory.heapUsedPercent;
-        body.appendChild(usageSection('Heap',
-            `${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapMax)} (${heapPercent.toFixed(1)}%)`,
-            heapPercent));
-
-        if (memory.nonHeapUsed) {
-            body.appendChild(kvRow('Non-Heap', formatBytes(memory.nonHeapUsed), {tight: true}));
+            if (memory.nonHeapUsed) {
+                body.appendChild(kvRow('Non-Heap', formatBytes(memory.nonHeapUsed), {tight: true}));
+            }
         }
-    }
 
-    if (storage && storage.length > 0) {
         storage.forEach(s => {
             const used = s.total - s.free;
             body.appendChild(usageSection(s.path,
                 `${formatBytes(used)} used / ${formatBytes(s.total)} total (${formatBytes(s.free)} free)`,
                 s.usedPercent));
         });
-    }
+    });
 }
 
 /** 'error' -> 'down', 'muted' -> 'unknown', 'ok' -> no modifier. */

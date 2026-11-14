@@ -71,6 +71,9 @@
 @media (min-width: 768px) {
     .pk-grid { grid-template-columns: repeat(2, 1fr); }
 }
+/* A parent that takes no box: its children are laid out as its own parent's, so the
+   datasource cards are grid items of .pk-grid while they have a parent to be keyed in. */
+.pk-contents { display: contents; }
 /* Vertical rhythm between stacked Overview sections (card grid, memory card, health
    details). Not on the health banner, which leads the tab whenever the tile row is hidden. */
 .pk-section { margin-top: var(--pk-space-md); }

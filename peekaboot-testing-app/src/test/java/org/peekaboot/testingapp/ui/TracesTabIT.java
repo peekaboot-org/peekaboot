@@ -155,6 +155,39 @@ class TracesTabIT extends PlaywrightTestBase {
     }
 
     /**
+     * A refresh brings the list up to date by key, so the row of a trace that did not change is
+     * the same element afterwards and the reader's place in the list holds. The probe is on the
+     * focused button: a rebuilt row carries none.
+     */
+    @Test
+    void aFocusedTraceRowKeepsFocusAcrossARefresh() {
+        String traceId = openTracesTabWithATrace();
+        page.focus(Dashboard.traceItem(traceId) + " .pk-trace-item__open");
+        page.evaluate("() => document.activeElement.dataset.probe = '1'");
+
+        refreshLeavingFocusInPlace("**/api/traces?*");
+
+        assertThat(page.evaluate("() => document.activeElement.dataset.probe"))
+                .as("the focused element is still the row's open button")
+                .isEqualTo("1");
+    }
+
+    /** A listed trace comes back unchanged with the next answer: only the reader's locale puts its row out of date. */
+    @Test
+    void aLocaleSwitchRedrawsTheStartTimeOfARowThatDidNotChange() {
+        String traceId = openTracesTabWithATrace();
+        Locator started = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__time");
+        String english = started.textContent();
+
+        page.selectOption("#locale-select", "de-DE");
+        page.waitForCondition(() -> !started.textContent().equals(english));
+
+        assertThat(started.textContent())
+                .as("the same instant, rendered in the chosen locale")
+                .isNotEqualTo(english);
+    }
+
+    /**
      * tabStrip()'s {silent: true} option exists for this:
      * handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
      * so that syncing the strip's visual selection on a hash-driven boot doesn't also

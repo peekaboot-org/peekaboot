@@ -11,6 +11,7 @@
  */
 import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
+import {keyedChildren} from '../../shared/keyed.js';
 import {formatDurationMs, formatDateTime, formatNumber, shortTarget} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
@@ -274,17 +275,14 @@ export function create(container) {
     }
 
     function renderList(result, context) {
-        // Not cleared until the response is in hand - otherwise every 30s refresh of the
-        // currently visible tab would blank the list for the network round trip's duration,
-        // even though nothing about it changed.
         const listEl = container.querySelector('#traces-list');
         const noTracesEl = container.querySelector('#no-traces');
-        listEl.innerHTML = '';
 
         updateFilterIndicator();
 
         const traces = result?.traces;
         if (!traces || traces.length === 0) {
+            listEl.replaceChildren();
             noTracesEl.querySelector('p').textContent = isUserFiltered()
                 ? 'No traces match the selected filters'
                 : BUCKET_EMPTY_MESSAGES[currentBucket];
@@ -293,7 +291,12 @@ export function create(container) {
         }
 
         noTracesEl.classList.add('hidden');
-        traces.forEach(row => listEl.appendChild(renderTraceItem(row.summary, context)));
+        // By key, so the 30s refresh leaves the row of a trace that did not change, and focus in it, alone.
+        keyedChildren(listEl, traces, {
+            key: row => `${row.summary.traceId}/${row.summary.subtree?.rootSpanId ?? ''}`,
+            signature: row => JSON.stringify([row.summary, context.locale, context.timeZone]),
+            build: row => renderTraceItem(row.summary, context)
+        });
     }
 
     function updateFilterIndicator() {
