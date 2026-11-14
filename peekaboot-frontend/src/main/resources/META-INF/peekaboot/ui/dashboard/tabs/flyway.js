@@ -20,9 +20,11 @@ export function isAvailable(data) {
 }
 
 export function render(container, data, {locale, timeZone} = {}) {
-    const migrations = data?.flyway?.migrations || [];
-    const rows = migrations.map(migration => renderRow(migration, {locale, timeZone}));
-    cardTable(container.querySelector('#flyway-timeline'), COLUMNS, rows);
+    cardTable(container.querySelector('#flyway-timeline'), COLUMNS, data?.flyway?.migrations || [], {
+        key: migration => migration.script ?? `${migration.version}|${migration.description}`,
+        row: migration => renderRow(migration, {locale, timeZone}),
+        revision: [locale, timeZone].join('|')
+    });
 }
 
 function renderRow(migration, {locale, timeZone}) {

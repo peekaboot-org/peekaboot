@@ -13,9 +13,11 @@ export function isAvailable(data) {
 }
 
 export function render(container, data, {locale, timeZone} = {}) {
-    const changeSets = data?.liquibase?.changeSets || [];
-    const rows = changeSets.map(changeSet => renderRow(changeSet, {locale, timeZone}));
-    cardTable(container.querySelector('#liquibase-changesets'), COLUMNS, rows);
+    cardTable(container.querySelector('#liquibase-changesets'), COLUMNS, data?.liquibase?.changeSets || [], {
+        key: changeSet => `${changeSet.id}|${changeSet.author}|${changeSet.changeLog}`,
+        row: changeSet => renderRow(changeSet, {locale, timeZone}),
+        revision: [locale, timeZone].join('|')
+    });
 }
 
 function renderRow(changeSet, {locale, timeZone}) {

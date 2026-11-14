@@ -2,7 +2,7 @@
  * The shell shared by the dashboard tabs that show a list of collapsible groups, filterable
  * or not (config.js, environment.js, loggers.js, meters.js, scheduled-tasks.js): the
  * module-level data/context, the filter input wired once, the URL <-> filter
- * reconciliation, the expansion state that survives a re-render, and the empty states. A
+ * reconciliation, the groups updated by key on a re-render, and the empty states. A
  * tab supplies only what differs - where its groups come from, how one group is filtered,
  * and how a group's header and items look. A tab with no `inputId` has no filter: every
  * group renders, and its `filterGroup` is called with an empty query.
@@ -21,8 +21,7 @@
  *                                  state is more than the single "q" the default handles
  *   afterRender(container, {groups, filtered, query, context})
  *                               -> optional hook run after every (re-)render, the empty
- *                                  states included - meters.js's match-count readout and
- *                                  header columns
+ *                                  states included - meters.js's match-count readout
  *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
  *                                  instead of the shared payload render() receives, on the
  *                                  self-fetching-tab.js contract (active-tab guard,
@@ -35,7 +34,7 @@
  * refresh(container), which re-renders with the current filter for a control the tab wires
  * itself (loggers.js's checkbox).
  */
-import {groupList, expandedKeys, emptyState, loadingBlock, kvRow} from './components.js';
+import {groupList, emptyState, loadingBlock, kvRow} from './components.js';
 import {formatCount, formatPlainValue} from './format.js';
 import {reconcileTextFilter, writeTextFilter} from './url-filter.js';
 import {selfFetchingTab} from './self-fetching-tab.js';
@@ -112,25 +111,20 @@ export function filteredGroupTab({
     function renderGroups(container) {
         const query = currentQuery(container);
         const target = list(container);
-        // Must run before the container is cleared below - it reads the DOM's current
-        // aria-expanded state so a re-render (e.g. the 30s auto-refresh) can restore it.
-        const expanded = expandedKeys(target);
-        target.innerHTML = '';
 
         const groups = select(currentData);
         if (!groups || groups.length === 0) {
-            target.appendChild(emptyState(emptyMessage));
+            target.replaceChildren(emptyState(emptyMessage));
             afterRender?.(container, {groups: [], filtered: [], query, context: currentContext});
             return;
         }
 
         const top = extraTop?.(currentData, currentContext);
-        if (top) target.appendChild(top);
 
         const filtered = groups.map(group => filterGroup(group, query)).filter(Boolean);
         if (filtered.length === 0) {
             const message = query ? noMatchMessage(query) : emptyMessage;
-            target.appendChild(emptyState(message));
+            target.replaceChildren(...[top, emptyState(message)].filter(Boolean));
             afterRender?.(container, {groups, filtered, query, context: currentContext});
             return;
         }
@@ -139,8 +133,10 @@ export function filteredGroupTab({
             key,
             header: group => header(group, query, currentContext),
             items: (group, list) => items(group, list, query, currentContext),
-            expandedKeys: expanded
+            revision: [query, currentContext.locale, currentContext.timeZone].join('|')
         });
+        // after groupList, which removes what it did not build: the last render's top included
+        if (top) target.prepend(top);
         afterRender?.(container, {groups, filtered, query, context: currentContext});
     }
 
@@ -152,7 +148,7 @@ export function filteredGroupTab({
  * the backend's PropertyGroup {name, properties} of {key, value} properties, matched on
  * either, values rendered as one line of text (a structured value as JSON), and the "Show
  * secrets" control (unmask-control.js) in the slot `unmaskSlotId` names. A group's name -
- * config's prefix, a property source's name - doubles as its identity for expansion restore.
+ * config's prefix, a property source's name - doubles as the key it is updated by.
  */
 export function propertyGroupTab({inputId, listId, unmaskSlotId, select, extraTop, emptyMessage}) {
     const tab = filteredGroupTab({

@@ -132,6 +132,38 @@ class LifecycleTabIT extends PlaywrightTestBase {
         assertThat(pagerButton("Next").isDisabled()).as("Next on page 3").isTrue();
     }
 
+    /** A page step redraws the rows, and the reader's next Enter has to reach the button they pressed. */
+    @Test
+    void thePagerKeepsFocusOnTheButtonThatWasPressed() {
+        openLifecycle();
+        Locator next = pagerButton("Next");
+        next.focus();
+        next.evaluate("button => { button.dataset.probe = '1'; }");
+
+        page.keyboard().press("Enter");
+        page.waitForFunction(
+                "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 2 of 3'");
+
+        assertThat(page.evaluate("() => document.activeElement.dataset.probe"))
+                .as("the focused element is still the Next button")
+                .isEqualTo("1");
+    }
+
+    /** A finished run comes back unchanged with the next answer: only the reader's locale puts its row out of date. */
+    @Test
+    void aLocaleSwitchRedrawsTheDatesOfARunThatDidNotChange() {
+        openLifecycle();
+        Locator started = cell(row(1), "Started");
+        String english = started.textContent();
+
+        page.selectOption("#locale-select", "de-DE");
+        page.waitForCondition(() -> !started.textContent().equals(english));
+
+        assertThat(started.textContent())
+                .as("the same instant, rendered in the chosen locale")
+                .isNotEqualTo(english);
+    }
+
     /**
      * The pager's current page is URL state (url-state.js): a deep link must land on
      * that page, not on page one with the reader left to click their own way back.

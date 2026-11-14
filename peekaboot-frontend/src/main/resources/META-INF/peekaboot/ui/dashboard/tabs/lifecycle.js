@@ -45,6 +45,8 @@ export function isAvailable(data, features) {
 
 export const {render} = tab;
 
+const pager = createPager();
+
 /**
  * The URL's 1-based page param as this module's 0-based page index; anything
  * unparseable, fractional or below 1 is page one. Exported for the browser tests.
@@ -99,11 +101,15 @@ function renderTable(container, context) {
     const start = currentPage * PAGE_SIZE;
     const {locale, timeZone} = context;
 
-    const rows = runs.slice(start, start + PAGE_SIZE).map(run => renderRow(run, {locale, timeZone}));
-    cardTable(target, COLUMNS, rows);
+    cardTable(target, COLUMNS, runs.slice(start, start + PAGE_SIZE), {
+        key: run => run.startedAt,
+        row: run => renderRow(run, {locale, timeZone}),
+        revision: [locale, timeZone].join('|')
+    });
     // Rendered whenever there is at least one run, even for a single page, so the
     // control is discoverable and its presence is stable to test.
-    target.appendChild(renderPager(totalPages, locale));
+    if (pager.element.parentElement !== target) target.append(pager.element);
+    pager.show(totalPages, locale);
 }
 
 function renderRow(run, dateOptions) {
@@ -165,12 +171,14 @@ function buildCell(run, dateOptions) {
         run.changed && run.changed.length > 0 ? badge(`Deployment: ${run.changed.join(', ')}`, 'info') : null);
 }
 
-function renderPager(totalPages, locale) {
-    // The step is all the two buttons differ by: it says where a click goes and, with
-    // totalPages, whether there is a page to go to at all.
+/**
+ * The pager, built once: a page step changes what its buttons and readout say, never the
+ * nodes, so the button that was pressed keeps the focus. `show` brings it up to date with
+ * the current page.
+ */
+function createPager() {
     function pagerButton(label, delta) {
-        const outOfRange = currentPage + delta < 0 || currentPage + delta >= totalPages;
-        const btn = button({className: 'pk-btn pk-btn--small', text: label, attrs: {disabled: outOfRange ? '' : null}});
+        const btn = button({className: 'pk-btn pk-btn--small', text: label});
         btn.addEventListener('click', () => {
             currentPage += delta;
             writePageParam();
@@ -179,11 +187,16 @@ function renderPager(totalPages, locale) {
         return btn;
     }
 
-    return el('div', {className: 'pk-lifecycle-pager'},
-        pagerButton('Previous', -1),
-        el('span', {
-            className: 'pk-lifecycle-pager__readout',
-            text: `Page ${formatNumber(currentPage + 1, {locale})} of ${formatNumber(totalPages, {locale})}`
-        }),
-        pagerButton('Next', 1));
+    const previous = pagerButton('Previous', -1);
+    const next = pagerButton('Next', 1);
+    const readout = el('span', {className: 'pk-lifecycle-pager__readout'});
+
+    return {
+        element: el('div', {className: 'pk-lifecycle-pager'}, previous, readout, next),
+        show(totalPages, locale) {
+            previous.disabled = currentPage === 0;
+            next.disabled = currentPage >= totalPages - 1;
+            readout.textContent = `Page ${formatNumber(currentPage + 1, {locale})} of ${formatNumber(totalPages, {locale})}`;
+        }
+    };
 }

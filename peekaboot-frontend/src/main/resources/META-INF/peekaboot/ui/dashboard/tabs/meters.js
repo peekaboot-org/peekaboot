@@ -29,7 +29,9 @@ const tab = filteredGroupTab({
         name: metric.name,
         count: formatCount(metric.measurements.length, 'measurement', {locale: context.locale}),
         highlight: query,
-        nameModifier: 'mono'
+        nameModifier: 'mono',
+        // the unit cell is there even when empty: without it the count slides into the unit's column
+        meta: [badge(metric.type, 'info'), el('span', {className: 'pk-metric__unit', text: metric.baseUnit || ''})]
     }),
     items: (metric, list, query, context) => {
         if (metric.description) list.appendChild(el('div', {className: 'pk-metric__description', text: metric.description}));
@@ -38,10 +40,7 @@ const tab = filteredGroupTab({
     },
     emptyMessage: 'No metrics available',
     noMatchMessage: query => `No metrics matching "${query}"`,
-    afterRender: (container, rendered) => {
-        updateCount(container, rendered);
-        addHeaderColumns(container.querySelector('#meters-list'), rendered.filtered);
-    }
+    afterRender: updateCount
 });
 
 export function isAvailable(data, features) {
@@ -62,28 +61,6 @@ function updateCount(container, {groups, filtered, query, context}) {
             ? `${formatNumber(filtered.length, {locale})} / ${formatNumber(groups.length, {locale})} metrics`
             : `${formatNumber(groups.length, {locale})} metrics`;
     }
-}
-
-/**
- * The shared group() header only knows name/count - the metric type badge and unit
- * are appended afterwards.
- *
- * The three trailing items move into a .pk-group__meta grid so they line up as columns
- * down the list. The unit cell is always emitted, empty when the metric has no base
- * unit, because a missing cell would slide the count into the unit's column.
- */
-function addHeaderColumns(listEl, metrics) {
-    const metricsByName = new Map(metrics.map(metric => [metric.name, metric]));
-
-    listEl.querySelectorAll('.pk-group').forEach(groupEl => {
-        const metric = metricsByName.get(groupEl.dataset.groupKey);
-        if (!metric) return;
-
-        const countEl = groupEl.querySelector('.pk-group__count');
-        const meta = el('span', {className: 'pk-group__meta'});
-        countEl.replaceWith(meta);
-        meta.append(badge(metric.type, 'info'), el('span', {className: 'pk-metric__unit', text: metric.baseUnit || ''}), countEl);
-    });
 }
 
 function matchesMetricFilter(metric, query) {

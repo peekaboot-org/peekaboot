@@ -86,6 +86,29 @@ class LiquibaseTabIT extends PlaywrightTestBase {
                 .isEqualTo(List.of(List.of(false, "pk-badge pk-badge--ok"), List.of(true, "pk-badge pk-badge--error")));
     }
 
+    /** One change set, rendered three times: only the reader's locale and time zone put its row out of date. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aLocaleOrTimeZoneSwitchRedrawsTheExecutionDateOfAnUnchangedChangeSet() {
+        Object executed = importModule("dashboard/tabs/liquibase.js", """
+                (() => {
+                    const container = document.createElement('div');
+                    container.innerHTML = '<div id="liquibase-changesets"></div>';
+                    const executedFor = display => {
+                        m.render(container, {liquibase: {changeSets: [{orderExecuted: 1, id: 'create-product',
+                            author: 'peekaboot', changeLog: 'db.changelog-master.yaml', description: 'createTable',
+                            dateExecuted: '2026-01-15T12:00:00Z', execType: 'EXECUTED'}]}}, display);
+                        return container.querySelector('tbody tr td:nth-child(6)').textContent;
+                    };
+                    return [executedFor({locale: 'en-US', timeZone: 'UTC'}),
+                        executedFor({locale: 'de-DE', timeZone: 'UTC'}),
+                        executedFor({locale: 'de-DE', timeZone: 'Asia/Tokyo'})];
+                })()
+                """);
+
+        assertThat((List<String>) executed).hasSize(3).doesNotHaveDuplicates();
+    }
+
     /** Boot's own Liquibase bean migrated the inventory DataSource; the tab shows its history. */
     @Test
     void liquibaseTabListsEveryInventoryChangeSetAsExecuted() throws IOException {

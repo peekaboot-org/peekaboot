@@ -1,8 +1,15 @@
 import {el, button} from './dom.js';
 import {formatNumber} from './format.js';
+import {keyedChildren, renderIfChanged} from './keyed.js';
 import {highlightText} from './markup.js';
 
 let groupSequence = 0;
+
+/** Group element -> the {header, list} group() returned with it, for groupList's update in place. */
+const groupParts = new WeakMap();
+
+/** A cardTable target -> the <tbody> of the table it holds. */
+const cardTableBodies = new WeakMap();
 
 /** A semantic pill. Variant is one of ok, warn, error, error-soft, info, muted (components.css). */
 export function badge(text, variant = 'muted', {title} = {}) {
@@ -49,9 +56,24 @@ export function table(columns, rows, {className} = {}) {
         el('table', {className: 'pk-table' + (className ? ` ${className}` : '')}, head, el('tbody', {}, ...rows)));
 }
 
-/** Replaces `target`'s content with a card-styled table of `rows`: the one shape every list-of-records tab shows. */
-export function cardTable(target, columns, rows) {
-    target.replaceChildren(table(columns, rows, {className: 'pk-table--card'}));
+/**
+ * Shows `items` in `target` as a card-styled table, the one shape every list-of-records tab
+ * shows. The table is built once; its rows then update by key (see keyed.js), so a row whose
+ * item did not change stays the node it was.
+ *
+ *   key(item) -> stable identity string
+ *   row(item) -> the item's <tr>
+ *   revision  -> as in groupList
+ */
+export function cardTable(target, columns, items, {key, row, revision = ''}) {
+    let body = cardTableBodies.get(target);
+    if (!body || !target.contains(body)) {
+        const built = table(columns, [], {className: 'pk-table--card'});
+        body = built.querySelector('tbody');
+        cardTableBodies.set(target, body);
+        target.replaceChildren(built);
+    }
+    keyedChildren(body, items, {key, build: row, signature: item => JSON.stringify(item) + revision});
 }
 
 /** A table cell: `children` are text or elements; `title` keeps a truncating cell's full value reachable. */
@@ -91,15 +113,14 @@ export function kvRow(key, value, {mono = false, tight = false, highlight} = {})
  * callers can populate the list and drive state without re-querying. `highlight`,
  * when given, is a plain query string applied to the name via highlightText(); the
  * count is always rendered as plain text. `nameModifier` picks one of the name's
- * components.css variants (`strong`, `mono`).
+ * components.css variants (`strong`, `mono`). `meta` is an array of elements that share
+ * `.pk-group__meta` with the count, ahead of it, as columns that line up down a list.
  */
-export function group({name, count, expanded = false, highlight, nameModifier} = {}) {
+export function group({name, count, expanded = false, highlight, nameModifier, meta} = {}) {
     const listId = `pk-group-list-${++groupSequence}`;
-    const nameClass = 'pk-group__name' + (nameModifier ? ` pk-group__name--${nameModifier}` : '');
 
     const header = button({className: 'pk-group__header', attrs: {'aria-expanded': String(expanded), 'aria-controls': listId}},
-        withHighlightedText(el('span', {className: nameClass}), name == null ? '' : String(name), highlight),
-        el('span', {className: 'pk-group__count', text: count == null ? '' : String(count)}));
+        ...groupHeaderContent({name, count, highlight, nameModifier, meta}));
     const list = el('div', {className: 'pk-group__list', attrs: {id: listId, hidden: expanded ? null : ''}});
 
     header.addEventListener('click', () => {
@@ -109,6 +130,16 @@ export function group({name, count, expanded = false, highlight, nameModifier} =
     });
 
     return {element: el('div', {className: 'pk-group'}, header, list), header, list};
+}
+
+/** What a group's header button holds: see group() for the options. */
+function groupHeaderContent({name, count, highlight, nameModifier, meta}) {
+    const nameClass = 'pk-group__name' + (nameModifier ? ` pk-group__name--${nameModifier}` : '');
+    const countEl = el('span', {className: 'pk-group__count', text: count == null ? '' : String(count)});
+    return [
+        withHighlightedText(el('span', {className: nameClass}), name == null ? '' : String(name), highlight),
+        meta ? el('span', {className: 'pk-group__meta'}, ...meta, countEl) : countEl
+    ];
 }
 
 /** A usage bar. percent is clamped to 0..100 and drives the fill's severity. */
@@ -123,29 +154,40 @@ export function meter(percent) {
 }
 
 /**
- * Renders a list of collapsible groups, restoring the expansion state captured
- * by expandedKeys() so an auto-refresh does not collapse what the user opened.
+ * Shows `groups` in `container` as collapsible groups that update by key (see keyed.js): a
+ * group that stays keeps its header button, its open state and its list element, so an
+ * auto-refresh neither collapses what the reader opened nor takes focus off a header. A
+ * group that changed gets its header content and its list filled again.
  *
  *   key(group)         -> stable identity string
- *   header(group)      -> {name, count, highlight, nameModifier}
- *   items(group, list) -> populates the list element
+ *   header(group)      -> {name, count, highlight, nameModifier, meta}
+ *   items(group, list) -> populates the empty list element
+ *   revision           -> a string for what the rendering depends on besides the group:
+ *                         query, locale, time zone
  */
-export function groupList(container, groups, {key, header, items, expandedKeys: expanded}) {
-    groups.forEach(data => {
-        const identity = key(data);
-        const built = group({...header(data), expanded: Boolean(expanded && expanded.has(identity))});
-        built.element.dataset.groupKey = identity;
-        items(data, built.list);
-        container.appendChild(built.element);
+export function groupList(container, groups, {key, header, items, revision = ''}) {
+    const signature = data => JSON.stringify(data) + revision;
+    const fillList = (list, data) => renderIfChanged(list, signature(data), () => {
+        list.replaceChildren();
+        items(data, list);
     });
-}
 
-/** Captures which groups are expanded. Call before clearing the container. */
-export function expandedKeys(container) {
-    if (!container) return new Set();
-    return new Set(Array.from(container.querySelectorAll('.pk-group__header[aria-expanded="true"]'))
-        .map(header => header.parentElement?.dataset.groupKey)
-        .filter(Boolean));
+    keyedChildren(container, groups, {
+        key,
+        signature,
+        build: data => {
+            const built = group(header(data));
+            built.element.dataset.groupKey = key(data);
+            groupParts.set(built.element, built);
+            fillList(built.list, data);
+            return built.element;
+        },
+        update: (element, data) => {
+            const parts = groupParts.get(element);
+            parts.header.replaceChildren(...groupHeaderContent(header(data)));
+            fillList(parts.list, data);
+        }
+    });
 }
 
 /**

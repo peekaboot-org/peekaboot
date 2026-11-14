@@ -31,6 +31,22 @@ class MetersTabIT extends PlaywrightTestBase {
                 .isLessThan(parseGroupedInt(counts.group(2)));
     }
 
+    /**
+     * A meter that matches stays listed as the group it was, and its name still has to gain the
+     * highlight. Read without a wait: the next poll redraws every meter whose value moved, and a
+     * wait would let that paint the highlight a keystroke missed.
+     */
+    @Test
+    void theFilterHighlightsTheNameOfAMeterThatStaysListed() {
+        openDashboard();
+        dashboard.openTab("meters");
+
+        page.fill("#meters-filter", "jvm.memory");
+
+        assertThat(page.evaluate("() => document.querySelector('#meters-list .pk-group__name mark')?.textContent"))
+                .isEqualTo("jvm.memory");
+    }
+
     /** Every meter's type badge fits its column whole, clipped nowhere and clear of the unit beside it. */
     @Test
     void everyMeterTypeBadgeFitsItsColumn() {

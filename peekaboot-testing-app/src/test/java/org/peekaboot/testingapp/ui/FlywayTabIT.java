@@ -4,6 +4,7 @@ import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -104,5 +105,28 @@ class FlywayTabIT extends PlaywrightTestBase {
             """);
 
         assertThat((String) durationCellClass).doesNotContain("slow");
+    }
+
+    /** One migration, rendered three times: only the reader's locale and time zone put its row out of date. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aLocaleOrTimeZoneSwitchRedrawsTheInstallDateOfAnUnchangedMigration() {
+        Object installed = importModule("dashboard/tabs/flyway.js", """
+            (() => {
+                const container = document.createElement('div');
+                container.innerHTML = '<div id="flyway-timeline"></div>';
+                const installedFor = display => {
+                    m.render(container, {flyway: {migrations: [{version: '1', description: 'init',
+                        script: 'V1__init.sql', type: 'SQL', executionTimeMs: 5,
+                        installedOn: '2026-01-15T12:00:00Z', state: 'SUCCESS'}]}}, display);
+                    return container.querySelector('tbody tr td:nth-child(6)').textContent;
+                };
+                return [installedFor({locale: 'en-US', timeZone: 'UTC'}),
+                    installedFor({locale: 'de-DE', timeZone: 'UTC'}),
+                    installedFor({locale: 'de-DE', timeZone: 'Asia/Tokyo'})];
+            })()
+            """);
+
+        assertThat((List<String>) installed).hasSize(3).doesNotHaveDuplicates();
     }
 }

@@ -5,7 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exercises the shared component builders and API client in a real browser.
+ * Exercises the shared component builders, the keyed updates under them and the API client in
+ * a real browser.
  *
  * kvRow/group intentionally do NOT accept pre-escaped markup (no keyHtml/valueHtml/
  * nameHtml). They accept a plain `highlight` query string and call highlightText()
@@ -125,50 +126,250 @@ class ComponentBuilderIT extends PlaywrightTestBase {
     }
 
     /**
-     * groupList + expandedKeys exist so a 30s auto-refresh does not silently collapse
-     * a group the user just opened: expandedKeys() must be read before the container
-     * is cleared, and the next groupList() call must restore it. A groupList that
-     * ignores the restored keys entirely, or an expandedKeys that fails to capture
-     * the click, would both leave group "a" collapsed after the re-render below.
+     * Runs {@code body}, a function body over the components module {@code m}, with an empty
+     * {@code container} in the document, {@code render(groups, revision)} listing groups shaped
+     * {@code {id, name, count}} into it, and {@code part(id, name)} finding one group's
+     * {@code header} or {@code list}.
+     */
+    private Object evalGroupList(String body) {
+        return evalBuilders("""
+                const container = document.body.appendChild(document.createElement('div'));
+                const render = (groups, revision) => m.groupList(container, groups, {
+                    key: g => g.id,
+                    header: g => ({name: g.name, count: g.count}),
+                    items: (g, list) => list.append(`${g.name} ${revision}`),
+                    revision
+                });
+                const part = (id, name) => container.querySelector(`[data-group-key="${id}"] .pk-group__${name}`);
+                const alpha = {id: 'a', name: 'Alpha', count: '1 item'};
+                const beta = {id: 'b', name: 'Beta', count: '1 item'};
+                """ + body);
+    }
+
+    /**
+     * A refresh must not close the group the reader opened, nor take focus off its header, and a
+     * group nobody opened stays closed.
      */
     @Test
-    void groupListRestoresExpandedKeysAcrossRerender() {
-        assertThat(evalBuilders("""
-                const container = document.createElement('div');
-                document.body.appendChild(container);
-                const groups = [{id: 'a', name: 'Alpha'}, {id: 'b', name: 'Beta'}];
-                const render = (expanded) => m.groupList(container, groups, {
-                    key: g => g.id,
-                    header: g => ({name: g.name, count: '1 item'}),
-                    items: (g, list) => { list.textContent = g.name; },
-                    expandedKeys: expanded
-                });
+    void groupListKeepsAGroupOpenAndItsHeaderFocusedAcrossAnUpdate() {
+        assertThat(evalGroupList("""
+                render([alpha, beta], 'en');
+                const header = part('a', 'header');
+                const list = part('a', 'list');
+                header.click();
+                header.focus();
 
-                render();
-                container.querySelector('[data-group-key="a"] .pk-group__header').click();
-                const captured = m.expandedKeys(container);
+                render([{...alpha, count: '2 items'}, beta], 'en');
 
-                container.innerHTML = '';
-                render(captured);
-
-                const headerA = container.querySelector('[data-group-key="a"] .pk-group__header');
-                const headerB = container.querySelector('[data-group-key="b"] .pk-group__header');
-                return headerA.getAttribute('aria-expanded') + ':' + headerB.getAttribute('aria-expanded');
-                """)).isEqualTo("true:false");
+                return [part('a', 'header') === header, part('a', 'list') === list,
+                    header.getAttribute('aria-expanded'), document.activeElement === header,
+                    header.querySelector('.pk-group__count').textContent,
+                    part('b', 'header').getAttribute('aria-expanded')].join('|');
+                """)).isEqualTo("true|true|true|true|2 items|false");
     }
 
     @Test
-    void expandedKeysIsEmptyWhenNothingIsExpanded() {
+    void groupListDropsAGroupThatLeftTheData() {
+        assertThat(evalGroupList("""
+                render([alpha, beta], 'en');
+                render([alpha], 'en');
+                return container.querySelectorAll('[data-group-key="b"]').length
+                    + '|' + container.querySelectorAll('.pk-group').length;
+                """)).isEqualTo("0|1");
+    }
+
+    /** The revision stands for what a row shows besides its data: a language switch redraws equal groups. */
+    @Test
+    void groupListRefillsAnOpenGroupWhenTheRevisionChanges() {
+        assertThat(evalGroupList("""
+                render([alpha], 'en');
+                part('a', 'header').click();
+                render([alpha], 'en');
+                const sameRevision = part('a', 'list').textContent;
+                render([alpha], 'de');
+                return sameRevision + '|' + part('a', 'list').textContent
+                    + '|' + part('a', 'header').getAttribute('aria-expanded');
+                """)).isEqualTo("Alpha en|Alpha de|true");
+    }
+
+    @Test
+    void aGroupHeaderCarriesItsMetaBeforeTheCount() {
         assertThat(evalBuilders("""
-                const container = document.createElement('div');
-                document.body.appendChild(container);
-                m.groupList(container, [{id: 'a', name: 'Alpha'}], {
-                    key: g => g.id,
-                    header: g => ({name: g.name, count: '1 item'}),
-                    items: () => {}
-                });
-                return m.expandedKeys(container).size;
-                """)).isEqualTo(0);
+                const g = m.group({name: 'n', count: '1 item', meta: [m.badge('TIMER', 'info')]});
+                const meta = g.header.querySelector('.pk-group__meta');
+                return [...meta.children].map(child => child.className).join('|')
+                    + '|' + g.header.querySelectorAll('.pk-group__count').length;
+                """)).isEqualTo("pk-badge pk-badge--info|pk-group__count|1");
+        assertThat(evalBuilders(
+                        "return m.group({name: 'n', count: '1 item'}).header.querySelector('.pk-group__meta');"))
+                .as("a header without meta has no meta element")
+                .isNull();
+    }
+
+    /**
+     * Runs {@code body}, a function body over the components module {@code m}, with an empty
+     * {@code target} in the document and {@code render(items, revision)} showing items shaped
+     * {@code {id, label}} as a card table of one column.
+     */
+    private Object evalCardTable(String body) {
+        return evalBuilders("""
+                const target = document.body.appendChild(document.createElement('div'));
+                const row = item => {
+                    const tr = document.createElement('tr');
+                    tr.append(m.textCell(item.label));
+                    return tr;
+                };
+                const render = (items, revision) =>
+                    m.cardTable(target, ['Label'], items, {key: item => item.id, row, revision});
+                """ + body);
+    }
+
+    @Test
+    void cardTableKeepsARowWhoseDataDidNotChange() {
+        assertThat(evalCardTable("""
+                render([{id: 'a', label: 'A'}], 'en');
+                const table = target.querySelector('table');
+                const kept = target.querySelector('tbody tr');
+                render([{id: 'a', label: 'A'}], 'en');
+                return [target.querySelector('table') === table, target.querySelector('tbody tr') === kept,
+                    table.className, target.querySelectorAll('tbody tr').length].join('|');
+                """)).isEqualTo("true|true|pk-table pk-table--card|1");
+    }
+
+    /** A timezone switch changes every date a row shows while the row's data stays equal. */
+    @Test
+    void cardTableRebuildsARowWhenTheRevisionChanges() {
+        assertThat(evalCardTable("""
+                render([{id: 'a', label: 'A'}], 'en');
+                const table = target.querySelector('table');
+                const before = target.querySelector('tbody tr');
+                render([{id: 'a', label: 'A'}], 'de');
+                return [target.querySelector('table') === table, target.querySelector('tbody tr') === before,
+                    target.querySelectorAll('tbody tr').length].join('|');
+                """)).isEqualTo("true|false|1");
+    }
+
+    /**
+     * Runs {@code body}, a function body over the keyed module {@code m}, with an empty
+     * {@code parent} in the document and {@code options} whose {@code build} turns an
+     * {@code {id, label}} item into {@code <div><button>label</button></div>} and counts its
+     * calls in {@code builds}.
+     */
+    private Object evalKeyed(String body) {
+        return importModule("shared/keyed.js", """
+                (async () => {
+                    const parent = document.body.appendChild(document.createElement('div'));
+                    let builds = 0;
+                    const build = item => {
+                        builds++;
+                        const row = document.createElement('div');
+                        row.appendChild(document.createElement('button')).textContent = item.label;
+                        return row;
+                    };
+                    const options = {key: item => item.id, build};
+                    const labels = () => [...parent.children].map(child => child.textContent).join(',');
+                """ + body + "})()");
+    }
+
+    @Test
+    void keyedChildrenLeavesAnUnchangedChildUntouched() {
+        assertThat(evalKeyed("""
+                m.keyedChildren(parent, [{id: 'a', label: 'A'}, {id: 'b', label: 'B'}], options);
+                const first = parent.children[0];
+                m.keyedChildren(parent, [{id: 'a', label: 'A'}, {id: 'b', label: 'B'}], options);
+                return (parent.children[0] === first) + '|' + builds;
+                """)).isEqualTo("true|2");
+    }
+
+    /** Re-inserting a node blurs what is focused inside it, so a row that stays is never moved. */
+    @Test
+    void keyedChildrenAddsAndRemovesWithoutMovingTheRest() {
+        assertThat(evalKeyed("""
+                const [a, b, c, x] = ['a', 'b', 'c', 'x'].map(id => ({id, label: id}));
+                m.keyedChildren(parent, [a, b, c], options);
+                const focused = parent.children[1].querySelector('button');
+                focused.focus();
+                m.keyedChildren(parent, [x, a, b], options);
+                return labels() + '|' + (document.activeElement === focused);
+                """)).isEqualTo("x,a,b|true");
+    }
+
+    @Test
+    void keyedChildrenReplacesAChangedChildAndKeepsFocusInside() {
+        assertThat(evalKeyed("""
+                m.keyedChildren(parent, [{id: 'a', label: 'A'}, {id: 'b', label: 'B'}], options);
+                const before = parent.children[1];
+                before.querySelector('button').focus();
+                m.keyedChildren(parent, [{id: 'a', label: 'A'}, {id: 'b', label: 'B2'}], options);
+                return (parent.children[1] !== before) + '|' + labels() + '|' + document.activeElement.textContent;
+                """)).isEqualTo("true|A,B2|B2");
+    }
+
+    /** Two rows of one trace, two migrations with one script: the second must not swallow the first. */
+    @Test
+    void keyedChildrenKeepsItemsWithARepeatedKeyApart() {
+        assertThat(evalKeyed("""
+                const items = [{id: 'a', label: '1'}, {id: 'a', label: '2'}];
+                m.keyedChildren(parent, items, options);
+                const nodes = [...parent.children];
+                m.keyedChildren(parent, items, options);
+                return labels() + '|' + nodes.length
+                    + '|' + (parent.children.length === 2 && nodes.every((node, i) => parent.children[i] === node));
+                """)).isEqualTo("1,2|2|true");
+    }
+
+    /** With {@code update}, a changed child is the same node brought up to date, and an unchanged one is left alone. */
+    @Test
+    void keyedChildrenHandsAChangedChildToUpdateInPlace() {
+        assertThat(evalKeyed("""
+                const updated = [];
+                const update = (element, item) => {
+                    updated.push(item.id);
+                    element.querySelector('button').textContent = item.label;
+                };
+                m.keyedChildren(parent, [{id: 'a', label: 'A'}, {id: 'b', label: 'B'}], {...options, update});
+                const before = parent.children[1];
+                m.keyedChildren(parent, [{id: 'a', label: 'A'}, {id: 'b', label: 'B2'}], {...options, update});
+                return (parent.children[1] === before) + '|' + labels() + '|' + updated.join(',') + '|' + builds;
+                """)).isEqualTo("true|A,B2|b|2");
+    }
+
+    /** A sort order the data itself changed is followed, and what the list did not build makes way. */
+    @Test
+    void keyedChildrenFollowsTheItemsOrderAndRemovesWhatItDidNotBuild() {
+        assertThat(evalKeyed("""
+                parent.append(document.createElement('p'), 'loose text');
+                const [a, b, c] = ['a', 'b', 'c'].map(id => ({id, label: id}));
+                m.keyedChildren(parent, [a, b, c], options);
+                const nodes = [...parent.children];
+                m.keyedChildren(parent, [c, a, b], options);
+                return labels() + '|' + parent.childNodes.length + '|' + builds
+                    + '|' + [2, 0, 1].every((old, i) => parent.children[i] === nodes[old]);
+                """)).isEqualTo("c,a,b|3|3|true");
+    }
+
+    @Test
+    void renderIfChangedSkipsAnUnchangedSignature() {
+        assertThat(evalKeyed("""
+                let fills = 0;
+                const fill = () => { fills++; };
+                const filled = [m.renderIfChanged(parent, 'one', fill), m.renderIfChanged(parent, 'one', fill)];
+                const afterTwo = fills;
+                filled.push(m.renderIfChanged(parent, 'two', fill));
+                return afterTwo + '|' + fills + '|' + filled.join(',');
+                """)).isEqualTo("1|2|true,false,true");
+    }
+
+    /** A refill replaces the control the reader is on, so focus goes to the one that took its place. */
+    @Test
+    void renderIfChangedMovesFocusToTheSamePositionInTheNewContent() {
+        assertThat(evalKeyed("""
+                const fill = label => element => element.replaceChildren(build({label: 'first'}), build({label}));
+                m.renderIfChanged(parent, 'one', fill('old'));
+                parent.children[1].querySelector('button').focus();
+                m.renderIfChanged(parent, 'two', fill('new'));
+                return document.activeElement.textContent;
+                """)).isEqualTo("new");
     }
 
     @Test
