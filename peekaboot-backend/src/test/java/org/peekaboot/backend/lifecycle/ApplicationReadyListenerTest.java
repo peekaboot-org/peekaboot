@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
+import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.security.SecurityPosture;
@@ -309,7 +310,7 @@ class ApplicationReadyListenerTest {
         private Environment environment = new MockEnvironment();
         private BuildInfoProvider buildInfo = new BuildInfoProvider(null);
         private ApplicationIdentity identity = new ApplicationIdentity(null, null);
-        private List<DataSourceMetadata> metadata = List.of();
+        private DataSourceMetadataList metadata = DataSourceMetadataList.EMPTY;
         private Map<String, DataSource> dataSources = Map.of();
         private HikariPoolInfo hikariPoolInfo;
 
@@ -329,7 +330,7 @@ class ApplicationReadyListenerTest {
         }
 
         Banner metadata(DataSourceMetadata... metadata) {
-            this.metadata = List.of(metadata);
+            this.metadata = new DataSourceMetadataList(List.of(metadata));
             return this;
         }
 

@@ -89,7 +89,7 @@ public class PeekabootLifecycleAutoConfiguration {
                 buildInfoProvider,
                 applicationIdentity,
                 serverUrlResolver,
-                dataSourceMetadataList.entries(),
+                dataSourceMetadataList,
                 ApplicationBeans.ofType(beanFactory, DataSource.class),
                 hikariPoolInfoProvider.getIfAvailable(),
                 maskingEngine,

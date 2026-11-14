@@ -1,13 +1,11 @@
 package org.peekaboot.backend.service;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
-import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.actuator.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.server.ServerInfo;
@@ -39,7 +37,7 @@ public final class ActuatorInsightsService {
     private final LiquibaseMapper liquibaseMapper;
     private final ConfigMapper configMapper;
     private final ScheduledTasksMapper scheduledTasksMapper;
-    private final List<DataSourceMetadata> dataSourceMetadataList;
+    private final DataSourceMetadataList dataSourceMetadataList;
     private final @Nullable ApplicationGitProperties applicationGitProperties;
 
     /**
@@ -66,9 +64,7 @@ public final class ActuatorInsightsService {
         this.liquibaseMapper = new LiquibaseMapper();
         this.configMapper = new ConfigMapper(maskingEngine);
         this.scheduledTasksMapper = new ScheduledTasksMapper(maskingEngine);
-        this.dataSourceMetadataList = dataSourceMetadataListProvider
-                .getIfAvailable(() -> DataSourceMetadataList.EMPTY)
-                .entries();
+        this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(() -> DataSourceMetadataList.EMPTY);
         this.applicationGitProperties = applicationGitProperties;
     }
 
@@ -89,7 +85,7 @@ public final class ActuatorInsightsService {
                         typed.spring(),
                         unmask),
                 runtimeMapper.map(typed.info(), typed.health()),
-                dataSourceMapper.map(dataSourceMetadataList, typed.health(), unmask),
+                dataSourceMapper.map(dataSourceMetadataList.entries(), typed.health(), unmask),
                 healthMapper.map(typed.health(), unmask),
                 environmentMapper.map(typed.env(), unmask),
                 loggersMapper.map(typed.loggers()),

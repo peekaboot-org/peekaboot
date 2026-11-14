@@ -11,6 +11,7 @@ import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
+import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
@@ -39,7 +40,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private final ServerUrlResolver serverUrlResolver;
 
-    private final List<DataSourceMetadata> dataSourceMetadataList;
+    private final DataSourceMetadataList dataSourceMetadataList;
 
     private final Map<String, DataSource> dataSources;
 
@@ -56,7 +57,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             BuildInfoProvider buildInfoProvider,
             ApplicationIdentity applicationIdentity,
             ServerUrlResolver serverUrlResolver,
-            List<DataSourceMetadata> dataSourceMetadataList,
+            DataSourceMetadataList dataSourceMetadataList,
             Map<String, DataSource> dataSources,
             @Nullable HikariPoolInfo hikariPoolInfo,
             MaskingEngine maskingEngine,
@@ -170,12 +171,14 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private void appendDatabaseInfo(StringBuilder report) {
 
-        if (dataSourceMetadataList.isEmpty()) {
+        List<DataSourceMetadata> entries = dataSourceMetadataList.entries();
+
+        if (entries.isEmpty()) {
             BannerFrame.line(report, " Database: No database configured");
             return;
         }
 
-        for (DataSourceMetadata metadata : dataSourceMetadataList) {
+        for (DataSourceMetadata metadata : entries) {
             BannerFrame.text(
                     report,
                     String.format(
