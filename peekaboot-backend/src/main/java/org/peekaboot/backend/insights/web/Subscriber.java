@@ -39,7 +39,11 @@ final class Subscriber {
     private final BlockingQueue<OutboundEvent> lane = new ArrayBlockingQueue<>(LANE_CAPACITY);
     private final Thread sender;
     private final Runnable onDrop;
-    /** Set before the drop interrupts the sender, so a sender that leaves on that interrupt sees it. */
+    /**
+     * Set before the drop interrupts the sender, so a sender that leaves on that interrupt
+     * sees it. The sender also reads it after every send, since Tomcat's blocking write
+     * consumes an interrupt and a sender that returned from one would never learn of the drop.
+     */
     private volatile boolean dropped;
 
     /** {@code onDrop} detaches this subscriber from the publisher. */
@@ -75,7 +79,7 @@ final class Subscriber {
 
     private void drainLane() {
         try {
-            while (true) {
+            while (!dropped) {
                 OutboundEvent event = lane.take();
                 if (event.isHeartbeat()) {
                     emitter.send(SseEmitter.event().comment("hb"));
@@ -84,10 +88,6 @@ final class Subscriber {
                 }
             }
         } catch (InterruptedException e) {
-            if (dropped) {
-                endStream(emitter::complete, LANE_OVERFLOW);
-            }
-            // Restored last, so the completion's flush does not run on an interrupted thread.
             Thread.currentThread().interrupt();
         } catch (IOException | IllegalStateException e) {
             log.debug("Dropping insights SSE subscriber after send failure: {}", e.toString());
@@ -97,6 +97,19 @@ final class Subscriber {
                 // The emitter detaches the subscriber itself, but only when the completion goes through.
                 onDrop.run();
             }
+            return;
+        }
+        if (dropped) {
+            endDroppedStream();
+        }
+    }
+
+    /** Holds a pending interrupt back, so the completion's flush does not run on an interrupted thread. */
+    private void endDroppedStream() {
+        boolean interrupted = Thread.interrupted();
+        endStream(emitter::complete, LANE_OVERFLOW);
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 

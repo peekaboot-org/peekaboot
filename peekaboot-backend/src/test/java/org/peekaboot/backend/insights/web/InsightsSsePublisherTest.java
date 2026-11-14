@@ -497,6 +497,100 @@ class InsightsSsePublisherTest {
     }
 
     /**
+     * Tomcat's blocking write consumes an interrupt and waits on, so the drop's interrupt is
+     * gone when the wedged send returns. The sender still learns that it was dropped, ends
+     * the stream, and sends none of the stale events its lane holds.
+     */
+    @Test
+    void aDroppedPeerWhoseWriteConsumedTheInterruptHasItsStreamCompletedAndIsSentNothingMore() throws Exception {
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        CountDownLatch interruptConsumed = new CountDownLatch(1);
+        Semaphore releaseWrite = new Semaphore(0);
+        MockHttpServletResponse response =
+                wedgingOnTheFirstWrite(writeStarted, consumingTheInterrupt(interruptConsumed, releaseWrite));
+        DispatchedStream stream = new DispatchedStream(publisher.subscribe(), response);
+        try (LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
+            publisher.heartbeat();
+            assertThat(writeStarted.await(3, TimeUnit.SECONDS))
+                    .as("the sender is wedged inside send()")
+                    .isTrue();
+            // Fanned out on this thread, so the drop has run in full, its own attempt at the
+            // completion included, and only the sender is left to end the stream.
+            for (int i = 0; i <= Subscriber.LANE_CAPACITY; i++) {
+                publisher.heartbeat();
+            }
+            assertThat(publisher.subscriberCount())
+                    .as("the wedged peer is dropped on lane overflow")
+                    .isZero();
+            assertThat(interruptConsumed.await(3, TimeUnit.SECONDS))
+                    .as("the wedged write consumed the drop's interrupt")
+                    .isTrue();
+
+            releaseWrite.release();
+
+            await().atMost(Duration.ofSeconds(3))
+                    .alias("the stream is completed once the write returns")
+                    .until(() -> stream.result() == null);
+            assertThat(response.getContentAsString())
+                    .as("the heartbeat that was in flight, and none of the lane's")
+                    .isEqualTo(":hb\n\n");
+            assertThat(logs.appender().list)
+                    .as("the drop, and nothing about ending the stream")
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                        assertThat(event.getFormattedMessage()).contains("stopped reading");
+                    });
+        } finally {
+            releaseWrite.release();
+        }
+    }
+
+    /**
+     * A write that an interrupt cannot end can return with the drop's interrupt still
+     * pending. The sender holds it back while it ends the stream, so the completion's
+     * flush does not run on an interrupted thread.
+     */
+    @Test
+    void aDroppedPeersStreamIsCompletedWithThePendingInterruptHeldBack() throws Exception {
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        Semaphore releaseWrite = new Semaphore(0);
+        DispatchedStream stream =
+                new DispatchedStream(publisher.subscribe(), wedgingOnTheFirstWrite(writeStarted, releaseWrite));
+        CompletableFuture<Boolean> interruptedWhileCompleting = new CompletableFuture<>();
+        stream.onCompletionDispatch(
+                () -> interruptedWhileCompleting.complete(Thread.currentThread().isInterrupted()));
+        try (LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
+            publisher.heartbeat();
+            assertThat(writeStarted.await(3, TimeUnit.SECONDS))
+                    .as("the sender is wedged inside send()")
+                    .isTrue();
+            // Fanned out on this thread, so the drop has interrupted the sender before the write is released.
+            for (int i = 0; i <= Subscriber.LANE_CAPACITY; i++) {
+                publisher.heartbeat();
+            }
+            assertThat(publisher.subscriberCount())
+                    .as("the wedged peer is dropped on lane overflow")
+                    .isZero();
+
+            releaseWrite.release();
+
+            assertThat(interruptedWhileCompleting.get(3, TimeUnit.SECONDS))
+                    .as("the sender's interrupt flag while it completes the stream")
+                    .isFalse();
+            assertThat(logs.appender().list)
+                    .as("the drop, and nothing about ending the stream")
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                        assertThat(event.getFormattedMessage()).contains("stopped reading");
+                    });
+        } finally {
+            releaseWrite.release();
+        }
+    }
+
+    /**
      * The sender ends a dropped peer's stream from its own thread, where a container that
      * has already let the peer go refuses the completion. That is as routine there as after
      * a failed send, and must not come out of the thread as an uncaught exception.
@@ -881,22 +975,46 @@ class InsightsSsePublisherTest {
 
     /**
      * A response whose first write blocks until released - a peer that has stopped reading.
+     * An interrupt does not end this write and stays pending when it returns.
+     */
+    private static MockHttpServletResponse wedgingOnTheFirstWrite(CountDownLatch writeStarted, Semaphore releaseWrite) {
+        return wedgingOnTheFirstWrite(writeStarted, releaseWrite::acquireUninterruptibly);
+    }
+
+    /**
+     * Blocks until released the way Tomcat's blocking write does (NioSocketWrapper.doWrite):
+     * an interrupt does not end the wait, and the flag is clear once the write returns.
+     */
+    private static Runnable consumingTheInterrupt(CountDownLatch interruptConsumed, Semaphore releaseWrite) {
+        return () -> {
+            try {
+                releaseWrite.acquire();
+            } catch (InterruptedException e) {
+                interruptConsumed.countDown();
+                releaseWrite.acquireUninterruptibly();
+            }
+        };
+    }
+
+    /**
+     * A response whose first write runs {@code wedge} before anything is written.
      * One stream per response: Spring fetches the output stream once per converter write,
      * and a send spans several, so a fresh stream each time would wedge the same send again.
      */
-    private static MockHttpServletResponse wedgingOnTheFirstWrite(CountDownLatch writeStarted, Semaphore releaseWrite) {
+    private static MockHttpServletResponse wedgingOnTheFirstWrite(CountDownLatch writeStarted, Runnable wedge) {
         return new MockHttpServletResponse() {
+            private final ServletOutputStream written = super.getOutputStream();
             private final ServletOutputStream stream = new ServletOutputStream() {
                 private boolean wedged;
 
                 @Override
-                public void write(int b) {
+                public void write(int b) throws IOException {
                     if (!wedged) {
                         wedged = true;
                         writeStarted.countDown();
-                        // a container's socket write is not interruptible either
-                        releaseWrite.acquireUninterruptibly();
+                        wedge.run();
                     }
+                    written.write(b);
                 }
 
                 @Override
@@ -948,10 +1066,15 @@ class InsightsSsePublisherTest {
 
         /** Makes the container refuse the completion dispatch, as one that has already errored does. */
         void refusesDispatchWith(RuntimeException refusal) {
-            MockAsyncContext asyncContext = (MockAsyncContext) Objects.requireNonNull(request.getAsyncContext());
-            asyncContext.addDispatchHandler(() -> {
+            onCompletionDispatch(() -> {
                 throw refusal;
             });
+        }
+
+        /** Runs {@code handler} on the thread that completes the stream, inside the completion. */
+        void onCompletionDispatch(Runnable handler) {
+            MockAsyncContext asyncContext = (MockAsyncContext) Objects.requireNonNull(request.getAsyncContext());
+            asyncContext.addDispatchHandler(handler);
         }
 
         /** What the async dispatch would hand back: null for a completed stream, or the exception. */
