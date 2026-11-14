@@ -17,6 +17,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.diagnostics.FailureAnalyzedException;
 import org.springframework.boot.env.DefaultPropertiesPropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -417,6 +419,24 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         assertThat(DetectedLaunch.in(denying)).contains(LocalDevDetector.LaunchKind.DEPLOYMENT);
         assertThat(DetectedLaunch.in(claiming)).contains(LocalDevDetector.LaunchKind.LOCAL_DEV);
+    }
+
+    /**
+     * The source reaches every host that carries the starter, Peekaboot on or off. A source Boot's
+     * binder asks, and that cannot list its names, makes every bind walk its nested beans.
+     */
+    @ParameterizedTest
+    @EnumSource(LocalDevDetector.LaunchKind.class)
+    void theBinderNeverAsksTheLaunchSource(LocalDevDetector.LaunchKind launchKind) {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(launchKind).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(ConfigurationPropertySources.from(environment.getPropertySources()))
+                .extracting(ConfigurationPropertySource::getUnderlyingSource)
+                .isNotEmpty()
+                .doesNotHaveAnyElementsOfTypes(DetectedLaunch.class);
+        assertThat(DetectedLaunch.in(environment)).contains(launchKind);
     }
 
     /**
