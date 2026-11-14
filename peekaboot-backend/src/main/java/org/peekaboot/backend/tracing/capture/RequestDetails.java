@@ -14,12 +14,15 @@ import java.util.Set;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.text.CountFormat;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.HandlerMapping;
 
-/** The headers and parameters of a request as a trace carries them, each name and value capped and then masked. */
+/** A finished request as a trace carries it, each header and parameter name and value capped and then masked. */
 final class RequestDetails {
 
     /** A key sent in both the query string and the body lists its query values and is absent from {@code form}. */
-    record Parameters(Map<String, List<String>> query, Map<String, List<String>> form) {}
+    private record Parameters(Map<String, List<String>> query, Map<String, List<String>> form) {}
 
     /**
      * Holds a Content-Security-Policy or a Referer whole. The masking patterns run on the
@@ -35,7 +38,35 @@ final class RequestDetails {
         this.tagMasker = new TagMasker(maskingEngine);
     }
 
-    Map<String, String> requestHeaders(HttpServletRequest request) {
+    /** The status is passed in: after a handler threw, the response does not carry it yet. */
+    RequestCompletedEvent event(ParameterReads request, HttpServletResponse response, String traceId, int status) {
+        Map<String, String> requestHeaders = requestHeaders(request);
+        Map<String, String> responseHeaders = responseHeaders(response);
+        Parameters parameters = parameters(request);
+
+        String controllerClass = null;
+        String controllerMethod = null;
+        Object handler = request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
+        if (handler instanceof HandlerMethod handlerMethod) {
+            controllerClass = handlerMethod.getBeanType().getName();
+            controllerMethod = handlerMethod.getMethod().getName();
+        }
+
+        return new RequestCompletedEvent(
+                traceId,
+                request.getMethod(),
+                request.getRequestURI(),
+                maskingEngine.maskQueryString(request.getQueryString()),
+                requestHeaders,
+                controllerClass,
+                controllerMethod,
+                parameters.query(),
+                parameters.form(),
+                status,
+                responseHeaders);
+    }
+
+    private Map<String, String> requestHeaders(HttpServletRequest request) {
         Map<String, String> headers = new HashMap<>();
         Collections.list(request.getHeaderNames())
                 .forEach(name -> headers.put(capped(name), cappedHeader(Collections.list(request.getHeaders(name)))));
@@ -43,7 +74,7 @@ final class RequestDetails {
     }
 
     /** A header sent more than once (Set-Cookie, typically) is captured as one comma-joined value. */
-    Map<String, String> responseHeaders(HttpServletResponse response) {
+    private Map<String, String> responseHeaders(HttpServletResponse response) {
         Map<String, String> headers = new HashMap<>();
         response.getHeaderNames().forEach(name -> headers.put(capped(name), cappedHeader(response.getHeaders(name))));
         return tagMasker.mask(headers);
@@ -54,7 +85,7 @@ final class RequestDetails {
      * parameters are read only when the application read them. Query parameters come from the
      * query string, which costs no container call.
      */
-    Parameters parameters(ParameterReads request) {
+    private Parameters parameters(ParameterReads request) {
         Map<String, List<String>> query = queryParameters(request.getQueryString());
         Map<String, List<String>> form = request.parametersRead() ? formParameters(request, query.keySet()) : Map.of();
         return new Parameters(query, form);

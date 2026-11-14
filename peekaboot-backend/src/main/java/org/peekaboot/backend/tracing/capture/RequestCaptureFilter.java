@@ -13,15 +13,11 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.web.method.HandlerMethod;
-import org.springframework.web.servlet.HandlerMapping;
 
 /**
  * Filter that captures HTTP request/response details and publishes them via Spring events.
@@ -34,7 +30,6 @@ public class RequestCaptureFilter implements Filter {
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
     private static final String CAPTURE_FAILED = "Failed to capture request details";
 
-    private final MaskingEngine maskingEngine;
     private final RequestDetails requestDetails;
 
     private final Tracer tracer;
@@ -48,7 +43,6 @@ public class RequestCaptureFilter implements Filter {
             PeekabootPaths paths) {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
-        this.maskingEngine = maskingEngine;
         this.requestDetails = new RequestDetails(maskingEngine);
         this.paths = paths;
     }
@@ -180,32 +174,7 @@ public class RequestCaptureFilter implements Filter {
     }
 
     private void captureRequest(ParameterReads request, HttpServletResponse response, String traceId, int status) {
-        Map<String, String> requestHeaders = requestDetails.requestHeaders(request);
-        Map<String, String> responseHeaders = requestDetails.responseHeaders(response);
-        var parameters = requestDetails.parameters(request);
-
-        String controllerClass = null;
-        String controllerMethod = null;
-        Object handler = request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
-        if (handler instanceof HandlerMethod handlerMethod) {
-            controllerClass = handlerMethod.getBeanType().getName();
-            controllerMethod = handlerMethod.getMethod().getName();
-        }
-
-        RequestCompletedEvent event = new RequestCompletedEvent(
-                traceId,
-                request.getMethod(),
-                request.getRequestURI(),
-                maskingEngine.maskQueryString(request.getQueryString()),
-                requestHeaders,
-                controllerClass,
-                controllerMethod,
-                parameters.query(),
-                parameters.form(),
-                status,
-                responseHeaders);
-
-        eventPublisher.publishEvent(event);
+        eventPublisher.publishEvent(requestDetails.event(request, response, traceId, status));
         log.trace("Published RequestCompletedEvent for trace {}", traceId);
     }
 }
