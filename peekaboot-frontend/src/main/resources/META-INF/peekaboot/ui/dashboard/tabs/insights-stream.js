@@ -2,8 +2,8 @@
  * The Insights tab's live data: a client-side mirror of the server's ring buffers (one
  * snapshot per loaded level, see insights-store.js), the EventSource that keeps it
  * current with tick/rollup events instead of polling, and the resync that repairs it
- * after a reconnect. No DOM: what a delta means for the charts is the caller's business,
- * reported through the callbacks.
+ * after a reconnect or a pause. No DOM: what a delta means for the charts is the
+ * caller's business, reported through the callbacks.
  *
  *   sizeOf(level)    -> the configured ring size of a level (normalizeLevel's `size`)
  *   onDirty(level)   -> a level's mirror changed (a delta, or a resync's fresh snapshot)
@@ -134,9 +134,17 @@ export function createInsightsStream({client, sizeOf, onDirty, onResynced, onClo
         onResynced();
     }
 
-    function close() {
+    /** Closes the stream and keeps the mirrored levels, for resume() to bring up to date. */
+    function pause() {
         source?.close();
         source = null;
+    }
+
+    /** Reopens a paused stream; the open that follows resyncs, since the deltas sent meanwhile never arrived. */
+    function resume() {
+        if (source) return;
+        resyncPending = true;
+        connect();
     }
 
     return {
@@ -146,6 +154,7 @@ export function createInsightsStream({client, sizeOf, onDirty, onResynced, onClo
         events: () => lifecycleEvents,
         connect,
         reconnectIfClosed,
-        close
+        pause,
+        resume
     };
 }

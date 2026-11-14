@@ -12,7 +12,8 @@
  *   - insights-panels.js: the panel cards and their chart lifecycle, where a chart only
  *     exists once its card has been scrolled into view.
  * update() is called on every 30s dashboard refresh while the tab is showing and must not
- * rebuild any of this.
+ * rebuild any of this. hide() closes the stream and show() reopens it, so a tab nobody is
+ * looking at holds no connection.
  */
 import {urlState} from '../../shared/url-filter.js';
 import {createInsightsStream} from './insights-stream.js';
@@ -57,6 +58,7 @@ export function panelOverridesFromUrl(params, {panels: configured, levels}) {
 
 export function create(container) {
     let initialized = false;
+    let showing = false;
     let config = null;          // /config response
     let currentContext = null;
     let stream = null;
@@ -69,7 +71,19 @@ export function create(container) {
     // shown while the browser has given up on the stream (see insights-stream.js)
     let streamStoppedNote = null;
 
-    function render(data, context) {
+    function show(data, context) {
+        showing = true;
+        // paused by hide(), or never opened by an init that finished behind another tab
+        stream?.resume();
+        return update(data, context);
+    }
+
+    function hide() {
+        showing = false;
+        stream?.pause();
+    }
+
+    function update(data, context) {
         currentContext = context;
         if (initialized) {
             // SSE keeps this tab live; the 30s cycle must not rebuild it. Only the
@@ -170,8 +184,9 @@ export function create(container) {
             // readouts then go live with the next tick instead of waiting on a
             // request that carries every series' whole ring. A tick arriving before
             // the snapshot lands is replayed onto it, since the server may have served
-            // the snapshot before that sample (see insights-stream.js).
-            stream.connect();
+            // the snapshot before that sample (see insights-stream.js). A reader who left
+            // while the config was on its way gets the stream from the next show().
+            if (showing) stream.connect();
             await stream.loadLifecycleEvents();
             // level 0 backs the panel readouts and is where every tick lands, so it
             // is loaded up front rather than on a panel's demand; the charts coming
@@ -186,7 +201,7 @@ export function create(container) {
 
     /** Releases everything init() may have wired up; safe to call at any point of init. */
     function teardown() {
-        stream?.close();
+        stream?.pause();
         panels?.destroy();
         // the toolbar's four listeners read `panels`, so its markup goes with them rather than
         // staying clickable against torn-down state until the next update
@@ -252,5 +267,5 @@ export function create(container) {
         markersCheckbox.checked = show;
     }
 
-    return {show: render, update: render};
+    return {show, update, hide};
 }

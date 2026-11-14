@@ -23,6 +23,38 @@ class InsightsTabIT extends PlaywrightTestBase {
         dashboard.openTab("insights");
     }
 
+    /** Collects every EventSource the page opens from here on in {@code window.__pkStreams}, in the order opened. */
+    private void recordEventSources() {
+        page.addInitScript("window.__pkStreams = [];"
+                + "window.EventSource = class extends EventSource {"
+                + "  constructor(...args) { super(...args); window.__pkStreams.push(this); }"
+                + "};");
+    }
+
+    private int eventSourcesOpened() {
+        return (int) page.evaluate("() => window.__pkStreams.length");
+    }
+
+    /**
+     * Waits for a tick pushed after {@code previous} was read off {@code readout}. The changed
+     * value and the blink have to be observed together: .pk-blink is only added for a value
+     * that actually changed, but it outlives its animation, so finding it on its own says
+     * nothing about any tick after the read. The test profile ticks every 250ms; the budget
+     * is deliberately generous, since what is under test is that a pushed tick reaches the
+     * DOM, not how fast a loaded CI host gets it there. CPU usage is re-sampled on every
+     * tick, so its readout does move.
+     */
+    private void waitForAPushedTick(String readout, String previous) {
+        page.waitForFunction(
+                "([selector, previous]) => {"
+                        + "  const element = document.querySelector(selector);"
+                        + "  return !!element && element.textContent !== previous"
+                        + "      && element.classList.contains('pk-blink');"
+                        + "}",
+                List.of(readout, previous),
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+    }
+
     /**
      * A left-to-right drag across the middle of a chart's plotting area - uPlot's
      * drag-select gesture.
@@ -232,20 +264,7 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.waitForFunction("(selector) => document.querySelector(selector)?.textContent.trim()", value);
         String before = page.textContent(value);
 
-        // The changed value and the blink have to be observed together: .pk-blink is only
-        // added for a value that actually changed, but it outlives its animation, so
-        // finding it on its own says nothing about any tick after this read. The test
-        // profile ticks every 250ms; the budget is deliberately generous, since what is
-        // under test is that a pushed tick reaches the DOM, not how fast a loaded CI host
-        // gets it there. CPU usage is re-sampled on every tick, so the readout does move.
-        page.waitForFunction(
-                "([selector, previous]) => {"
-                        + "  const element = document.querySelector(selector);"
-                        + "  return !!element && element.textContent !== previous"
-                        + "      && element.classList.contains('pk-blink');"
-                        + "}",
-                List.of(value, before),
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        waitForAPushedTick(value, before);
 
         assertThat(page.textContent(value)).as("a live CPU reading moves").isNotEqualTo(before);
     }
@@ -676,13 +695,73 @@ class InsightsTabIT extends PlaywrightTestBase {
 
         String value = "#insights-panels .pk-insight-panel[data-panel-id='cpu'] .pk-insight-current";
         String before = page.textContent(value);
-        page.waitForFunction(
-                "([selector, previous]) => {"
-                        + "  const element = document.querySelector(selector);"
-                        + "  return !!element && element.textContent !== previous"
-                        + "      && element.classList.contains('pk-blink');"
-                        + "}",
-                List.of(value, before),
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        waitForAPushedTick(value, before);
+    }
+
+    /**
+     * A hidden Insights tab holds no connection. Leaving closes the stream and keeps the
+     * mirrored rings. Coming back opens a new stream, whose open fetches what the mirror
+     * missed (the restart markers lead that resync, and nothing else on the page asks for
+     * them), and the readouts move again.
+     */
+    @Test
+    void theStreamClosesWhileAnotherTabShowsAndResumesOnReturn() {
+        recordEventSources();
+        openInsights();
+        page.waitForFunction("() => window.__pkStreams[0]?.readyState === 1");
+
+        dashboard.openTab("overview");
+        page.waitForFunction("() => window.__pkStreams[0].readyState === 2");
+
+        page.waitForRequest("**/api/lifecycle/events", () -> dashboard.openTab("insights"));
+        page.waitForFunction("() => window.__pkStreams.length === 2 && window.__pkStreams[1].readyState === 1");
+        String value = "#insights-panels .pk-insight-panel[data-panel-id='cpu'] .pk-insight-current";
+        waitForAPushedTick(value, page.textContent(value));
+    }
+
+    /**
+     * The config is held at its route until the reader has left for Overview, so the tab
+     * finishes initialising behind it, where nobody reads a chart: it opens no stream there,
+     * and the return opens the one. The page has both answers (this tab's and the tile
+     * row's) once their bodies have finished and one more task has run.
+     */
+    @Test
+    void leavingBeforeTheConfigArrivesOpensNoStream() {
+        recordEventSources();
+        List<String> configAnswers = new ArrayList<>();
+        page.onRequestFinished(request -> {
+            if (request.url().endsWith("/api/insights/config")) configAnswers.add(request.url());
+        });
+        ParkedRequest tabRequest = parkFirst("**/api/insights/config");
+        page.navigate(dashboardUrl("#insights"));
+        tabRequest.awaitParked();
+
+        page.click(Dashboard.tabButton("overview"));
+        tabRequest.resume();
+        page.waitForCondition(() -> configAnswers.size() == 2);
+        page.evaluate("() => new Promise(resolve => setTimeout(resolve))");
+
+        assertThat(eventSourcesOpened()).as("streams opened behind Overview").isZero();
+
+        dashboard.openTab("insights");
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu']");
+        assertThat(eventSourcesOpened()).as("streams opened by the return").isEqualTo(1);
+    }
+
+    /**
+     * A hash change that stays on the tab (Back to a link that names another level, say) shows
+     * the tab again with no hide in between. The stream it has open is the one it keeps.
+     */
+    @Test
+    void aHashChangeThatStaysOnTheTabKeepsTheStreamItHas() {
+        recordEventSources();
+        openInsights();
+        page.waitForFunction("() => window.__pkStreams[0]?.readyState === 1");
+
+        page.evaluate("() => { window.location.hash = '#insights?level=1'; }");
+        page.waitForSelector("#insights-level .pk-insight-level[data-level='1'][aria-pressed='true']");
+
+        assertThat(eventSourcesOpened()).isEqualTo(1);
+        assertThat(page.evaluate("() => window.__pkStreams[0].readyState")).isEqualTo(1);
     }
 }
