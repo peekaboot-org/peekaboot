@@ -45,6 +45,11 @@ final class Subscriber {
      * consumes an interrupt and a sender that returned from one would never learn of the drop.
      */
     private volatile boolean dropped;
+    /**
+     * Set before every interrupt of the sender, for the same reason: a sender back from a
+     * write that consumed the interrupt would wait on a lane nobody fills again.
+     */
+    private volatile boolean senderInterrupted;
 
     /** {@code onDrop} detaches this subscriber from the publisher. */
     Subscriber(InsightsSsePublisher.SubscriberEmitter emitter, Runnable onDrop) {
@@ -64,6 +69,7 @@ final class Subscriber {
 
     /** Ends the sender before its next take; a send already inside the container's write runs on. */
     void interruptSender() {
+        senderInterrupted = true;
         sender.interrupt();
     }
 
@@ -79,7 +85,7 @@ final class Subscriber {
 
     private void drainLane() {
         try {
-            while (!dropped) {
+            while (!dropped && !senderInterrupted) {
                 OutboundEvent event = lane.take();
                 if (event.isHeartbeat()) {
                     emitter.send(SseEmitter.event().comment("hb"));

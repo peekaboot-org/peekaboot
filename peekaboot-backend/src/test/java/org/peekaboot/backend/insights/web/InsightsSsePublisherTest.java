@@ -23,6 +23,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.AggregateStats;
@@ -183,6 +184,48 @@ class InsightsSsePublisherTest {
                     .isFalse();
             assertThat(stream.result()).as("a completed stream").isNull();
             assertThat(publisher.subscriberCount()).isZero();
+        } finally {
+            releaseWrite.release();
+        }
+    }
+
+    /**
+     * Tomcat's blocking write consumes the interrupt of stop() as it does a drop's. The
+     * sender returns from that write detached, to a lane nobody fills again, and must end
+     * there: one left waiting holds the context's classes after a restart.
+     */
+    @Test
+    void aSenderWhoseWriteConsumedTheInterruptOfStopEndsOnceTheWriteReturns() throws Exception {
+        InsightsSsePublisher publisher = tracked(new InsightsSsePublisher(new ObjectMapper(), Duration.ZERO));
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        CountDownLatch interruptConsumed = new CountDownLatch(1);
+        Semaphore releaseWrite = new Semaphore(0);
+        AtomicReference<Thread> sender = new AtomicReference<>();
+        Runnable wedge = consumingTheInterrupt(interruptConsumed, releaseWrite);
+        MockHttpServletResponse response = wedgingOnTheFirstWrite(writeStarted, () -> {
+            sender.set(Thread.currentThread());
+            wedge.run();
+        });
+        new DispatchedStream(publisher.subscribe(), response);
+        try {
+            publisher.heartbeat();
+            assertThat(writeStarted.await(3, TimeUnit.SECONDS))
+                    .as("the sender is wedged inside send()")
+                    .isTrue();
+            publisher.heartbeat();
+
+            publisher.stop();
+            assertThat(interruptConsumed.await(3, TimeUnit.SECONDS))
+                    .as("the wedged write consumed the interrupt of stop()")
+                    .isTrue();
+            releaseWrite.release();
+
+            await().atMost(Duration.ofSeconds(3))
+                    .alias("the sender ends once its write returns")
+                    .until(() -> !sender.get().isAlive());
+            assertThat(response.getContentAsString())
+                    .as("the heartbeat that was in flight, and not the one in the lane")
+                    .isEqualTo(":hb\n\n");
         } finally {
             releaseWrite.release();
         }
