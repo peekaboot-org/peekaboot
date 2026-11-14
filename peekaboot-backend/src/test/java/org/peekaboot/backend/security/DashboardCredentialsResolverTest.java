@@ -19,15 +19,31 @@ import org.peekaboot.testsupport.LogCapture;
 class DashboardCredentialsResolverTest {
 
     @Test
-    void resolve_prefersTheConfiguredPasswordAndPersistsNothing(@TempDir Path dir) {
+    void resolve_prefersTheConfiguredPasswordOverAStoredOne(@TempDir Path dir) {
+        var file = new CredentialsFile(dir.resolve("security.properties"));
+        var generated =
+                new DashboardCredentialsResolver(new PeekabootProperties.Security(), file, "orders-service").resolve();
+        var security = new PeekabootProperties.Security();
+        security.setPassword("from-the-vault");
+
+        var credentials = new DashboardCredentialsResolver(security, file, "orders-service").resolve();
+
+        assertThat(credentials.origin()).isEqualTo(DashboardCredentials.Origin.CONFIGURED);
+        assertThat(credentials.passwordHash().matches("from-the-vault")).isTrue();
+        assertThat(file.read()).hasValueSatisfying(stored -> {
+            assertThat(stored.passwordHash().matches(generated.plaintext())).isTrue();
+            assertThat(stored.passwordHash().matches("from-the-vault")).isFalse();
+        });
+    }
+
+    @Test
+    void resolve_persistsNothingForAConfiguredPassword(@TempDir Path dir) {
         var security = new PeekabootProperties.Security();
         security.setPassword("from-the-vault");
         var file = new CredentialsFile(dir.resolve("security.properties"));
 
         var credentials = new DashboardCredentialsResolver(security, file, "orders-service").resolve();
 
-        assertThat(credentials.origin()).isEqualTo(DashboardCredentials.Origin.CONFIGURED);
-        assertThat(credentials.passwordHash().matches("from-the-vault")).isTrue();
         assertThat(credentials.plaintext()).isNull();
         assertThat(file.read()).isEmpty();
     }
