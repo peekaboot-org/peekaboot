@@ -414,6 +414,97 @@ class DashboardShellIT extends PlaywrightTestBase {
     }
 
     /**
+     * The features decide which tabs exist, so the dashboard loads no data without them: a lost
+     * features request is a failed refresh, and the next refresh asks again. The deep link to a
+     * tab that needs a feature waits for that answer instead of falling back to Overview.
+     */
+    @Test
+    void aFeaturesRequestThatFailsIsRetriedWithTheNextRefresh() {
+        loseFirst("**/peekaboot/api/features");
+        page.navigate(dashboardUrl("#traces"));
+        page.waitForSelector("#error:not(.hidden)");
+
+        page.click("#refresh-btn");
+        page.waitForSelector(Dashboard.tabReadySelector("traces"));
+
+        assertThat(page.url()).endsWith("#traces");
+        assertThat(page.isHidden("#error")).isTrue();
+        assertThat(dashboard.visibleTabs()).contains("insights", "lifecycle", "traces", "meters");
+    }
+
+    /**
+     * Two refreshes can ask for the features at once, and the client answers the older request
+     * with null. That is neither a set of features nor a failure. The older request is held at
+     * its route until the newer one has brought the dashboard up, so its null arrives last: the
+     * page has it once the browser has reported the response and one more task has run. Its body
+     * is never read, so there is no finished response to wait for. The timezone toggle then
+     * renders again from whatever features the shell holds.
+     */
+    @Test
+    void aFeaturesRequestANewerOneOvertookLeavesTheFeaturesInPlace() {
+        ParkedRequest overtaken = parkFirst("**/peekaboot/api/features");
+        page.navigate(dashboardUrl("#traces"));
+        overtaken.awaitParked();
+        page.click("#refresh-btn");
+        page.waitForSelector(Dashboard.tabReadySelector("traces"));
+
+        page.waitForResponse("**/peekaboot/api/features", overtaken::resume);
+        page.evaluate("() => new Promise(resolve => setTimeout(resolve))");
+        page.click("#timezone-toggle");
+
+        assertThat(page.url()).endsWith("#traces");
+        assertThat(page.isHidden("#error")).isTrue();
+        assertThat(dashboard.visibleTabs()).contains("insights", "lifecycle", "traces", "meters");
+    }
+
+    /**
+     * The shell does not act on a hash change while it has no features, so their first answer
+     * replays whatever the hash says by then, Overview included: here the reader opened
+     * Environment and went Back during the outage.
+     */
+    @Test
+    void aHashChangeDuringAFeaturesOutageIsHonouredOnceTheFeaturesArrive() {
+        loseFirst("**/peekaboot/api/features");
+        page.navigate(dashboardUrl());
+        page.waitForSelector("#error:not(.hidden)");
+        page.click(Dashboard.tabButton("environment"));
+        page.goBack();
+
+        page.click("#refresh-btn");
+        page.waitForFunction("() => document.getElementById('last-updated').textContent !== ''");
+
+        assertThat(dashboard.selectedTab()).isEqualTo("overview");
+        assertThat(page.getAttribute(".pk-tab-panel.active", "id")).isEqualTo("overview-tab");
+    }
+
+    /**
+     * A trace link followed while the shell has no features opens no overlay, because the
+     * overlay keeps the features it is handed for its whole lifetime. The hash is set in the
+     * page, as a pasted link does, and the read waits until the page's own hashchange listeners
+     * have run. The refresh that brings the features then opens the trace.
+     */
+    @Test
+    void aTraceLinkFollowedDuringAFeaturesOutageOpensOnceTheFeaturesArrive() {
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        loseFirst("**/peekaboot/api/features");
+        page.navigate(dashboardUrl());
+        page.waitForSelector("#error:not(.hidden)");
+
+        page.evaluate(
+                "hash => new Promise(resolve => {"
+                        + " window.addEventListener('hashchange', () => setTimeout(resolve), {once: true});"
+                        + " location.hash = hash; })",
+                "#traces/" + traceId);
+        assertThat(page.locator(TraceOverlay.HOST).count())
+                .as("overlays opened without features")
+                .isZero();
+
+        page.click("#refresh-btn");
+        overlay.awaitTrace(traceId);
+    }
+
+    /**
      * The timezone toggle switches which zone every rendered timestamp is read in, says which
      * one is showing, and remembers the choice. The readout has to become the server's real
      * zone from the payload - "Unknown" is what it says when nothing arrived - and the button

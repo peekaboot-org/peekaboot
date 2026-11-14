@@ -37,7 +37,9 @@ const TAB_FAILURE = ':scope > .pk-tab-failure';
 const client = createClient();
 
 let data = null;
-let features = {};
+// null until /api/features has answered; every tab's isAvailable() check reads them, so
+// fetchData() loads no payload before that
+let features = null;
 let mainTabs = null;
 // tab id -> the instance its module's create() returned, made the first time the tab is used
 const instances = new Map();
@@ -65,6 +67,8 @@ let unmaskRequested = false;
 let urlChangeInProgress = false;
 
 function handleHashChange() {
+    // fetchData() replays the hash once the features are in
+    if (!features) return;
     const {tab, detail, subview, params} = parseAppHash();
     const tabId = resolveTabId(tab);
     // an unknown id renders Overview, so the URL says Overview too - the same correction
@@ -187,10 +191,10 @@ function initTabs() {
     });
     // tabStrip's own initial select() is silent (button-only), so on a deep-linked
     // boot (e.g. "#environment") the panel would otherwise stay on Overview until
-    // init() runs the deep link's handleHashChange() - a window where the accessibility
-    // tree (aria-selected) and the visible panel disagree. Setting the panel
-    // synchronously here keeps them atomic; handleHashChange() still runs to enter the
-    // tab (and re-showTab()s the same id - a harmless no-op).
+    // fetchData() replays the hash - a window where the accessibility tree
+    // (aria-selected) and the visible panel disagree. Setting the panel synchronously
+    // here keeps them atomic; handleHashChange() still runs to enter the tab (and
+    // re-showTab()s the same id - a harmless no-op).
     showTab(initialTabId);
 
     window.addEventListener('hashchange', handleHashChange);
@@ -206,7 +210,7 @@ function currentContext() {
         locale,
         timeZone: useServerTimezone && serverTimezone ? serverTimezone.timezone : undefined,
         openTrace,
-        features,
+        features: features ?? {},
         unmaskRequested,
         toggleUnmask,
         // The active tab's own query params, and how it writes them back - see
@@ -238,19 +242,6 @@ function currentContext() {
 function toggleUnmask() {
     unmaskRequested = !unmaskRequested;
     fetchData();
-}
-
-/**
- * Fetched once at boot, before the first fetchData() - feeds every registered tab's
- * (optional) isAvailable(data, features) check once the first fetchData() ->
- * renderData() cycle runs.
- */
-async function fetchFeatures() {
-    try {
-        features = await client.get('/api/features') || {};
-    } catch (error) {
-        console.warn('Could not fetch features:', error);
-    }
 }
 
 function tabById(tabId) {
@@ -345,6 +336,16 @@ async function fetchData() {
     try {
         if (!data) loadingEl.classList.remove('hidden');
         errorEl.classList.add('hidden');
+
+        if (!features) {
+            // inside the try: a failure fails this refresh, and the next one asks again
+            const loaded = await client.get('/api/features');
+            if (loaded === null) return; // superseded by a newer request
+            features = loaded;
+            // The hash is honoured only now: the overlay it may open keeps the features it
+            // is handed for its whole lifetime, and handleHashChange() ignored it until here.
+            handleHashChange();
+        }
 
         const result = await client.get(API_PATH, {params: {locale, unmask: unmaskRequested ? 'true' : undefined}});
         if (result === null) return; // superseded by a newer request
@@ -471,17 +472,13 @@ function initErrorClose() {
 
 // --- Boot -------------------------------------------------------------------------------
 
-async function init() {
+function init() {
     initTheme();
     initTabs();
     initRefreshControls();
     initTimezoneControls();
     initLocaleSelector();
     initErrorClose();
-    await fetchFeatures();
-    // A deep link is honoured only now: the overlay it may open keeps the features it is
-    // handed for its whole lifetime, so it must not open on the empty placeholder.
-    if (parseAppHash().tab !== 'overview') handleHashChange();
     fetchData();
 }
 
