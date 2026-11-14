@@ -1,14 +1,15 @@
 /**
  * Peekaboot dashboard bootstrap.
  *
- * Owns theme wiring, the tab registry, hash routing, auto-refresh, the locale/timezone
- * controls and the single error banner. Each tab's own rendering lives in its own module
- * under tabs/ (the contract is documented in peekaboot-frontend/README.md, "How to add a
- * dashboard tab") - this file never renders domain data itself, only decides which tab
- * module to hand the fetched payload to.
+ * Owns theme wiring, the tab registry and lifecycle, hash routing, auto-refresh, the
+ * locale/timezone controls and the single error banner. Each tab's own rendering lives in
+ * its own module under tabs/ (the contract is documented in peekaboot-frontend/README.md,
+ * "How to add a dashboard tab") - this file never renders domain data itself, only shows,
+ * updates and hides the one tab that is on screen.
  */
 import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
+import {el} from '../shared/dom.js';
 import {bindTheme, applyTheme, storeTheme} from '../shared/theme.js';
 import {readSetting, writeSetting, readLocaleSetting, LOCALE_STORAGE_KEY} from '../shared/storage.js';
 import {formatDateTimeWith} from '../shared/format.js';
@@ -30,12 +31,20 @@ const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
 const TABS = [overview, insights, lifecycle, traces, meters, environment, flyway, liquibase, loggers, config, scheduledTasks];
 const TAB_IDS = TABS.map(tab => tab.id);
+// the note runHook() leaves in a tab's own panel, never one a tab rendered further down
+const TAB_FAILURE = ':scope > .pk-tab-failure';
 
 const client = createClient();
 
 let data = null;
 let features = {};
 let mainTabs = null;
+// tab id -> the instance its module's create() returned, made the first time the tab is used
+const instances = new Map();
+// The tab whose panel is on screen, and the one whose show() has run: they differ until
+// the first payload arrives, since no tab is shown without data.
+let visibleTabId = null;
+let shownTabId = null;
 let refreshTimer = null;
 let isPaused = false;
 let locale = readLocaleSetting() || navigator.language || 'en-US';
@@ -65,7 +74,7 @@ function handleHashChange() {
     showTab(tabId);
     urlChangeInProgress = true;
     try {
-        renderTabById(tabId);
+        enterTab(tabId);
     } finally {
         urlChangeInProgress = false;
     }
@@ -162,6 +171,7 @@ function showTab(tabId) {
     document.querySelectorAll('.pk-tab-panel').forEach(section => section.classList.remove('active'));
     const content = document.getElementById(`${tabId}-tab`);
     if (content) content.classList.add('active');
+    visibleTabId = tabId;
 }
 
 function initTabs() {
@@ -171,7 +181,7 @@ function initTabs() {
         onSelect: tabId => {
             showTab(tabId);
             pushAppHash({tab: tabId});
-            renderTabById(tabId);
+            enterTab(tabId);
         },
         initial: initialTabId
     });
@@ -179,8 +189,8 @@ function initTabs() {
     // boot (e.g. "#environment") the panel would otherwise stay on Overview until
     // init() runs the deep link's handleHashChange() - a window where the accessibility
     // tree (aria-selected) and the visible panel disagree. Setting the panel
-    // synchronously here keeps them atomic; handleHashChange() still runs to do the
-    // actual data render (and re-showTab()s the same id - a harmless no-op).
+    // synchronously here keeps them atomic; handleHashChange() still runs to enter the
+    // tab (and re-showTab()s the same id - a harmless no-op).
     showTab(initialTabId);
 
     window.addEventListener('hashchange', handleHashChange);
@@ -188,14 +198,8 @@ function initTabs() {
 
 // --- Data fetching --------------------------------------------------------------------
 
-/**
- * `active` says whether the tab being rendered is the visible one. Every tab is rendered
- * on the 30s cycle whichever is showing (see renderData), but `urlParams` reflect the
- * URL's tab, so a background render must not reconcile with them, and a tab that fetches
- * for itself skips the round trip - renderTabById() renders it again the moment it is
- * switched to.
- */
-function currentContext({active = false} = {}) {
+/** What a tab's show() and update() receive beside the payload; only the visible tab is handed one. */
+function currentContext() {
     const {params: urlParams} = parseAppHash();
     return {
         client,
@@ -203,7 +207,6 @@ function currentContext({active = false} = {}) {
         timeZone: useServerTimezone && serverTimezone ? serverTimezone.timezone : undefined,
         openTrace,
         features,
-        active,
         unmaskRequested,
         toggleUnmask,
         // The active tab's own query params, and how it writes them back - see
@@ -217,8 +220,8 @@ function currentContext({active = false} = {}) {
         setUrlParams: params => {
             const {tab: currentTab, detail: currentDetail, subview: currentSubview} = parseAppHash();
             // The params slot belongs to the deepest view: while the overlay is open it
-            // owns it via its own urlState.update (buildTraceUrlState above), and a
-            // background tab's write would replace the overlay's params wholesale.
+            // owns it via its own urlState.update (buildTraceUrlState above), and the
+            // tab's write would replace the overlay's params wholesale.
             if (currentDetail) return;
             replaceAppHash({tab: resolveTabId(currentTab), detail: currentDetail, subview: currentSubview, params});
         }
@@ -250,24 +253,52 @@ async function fetchFeatures() {
     }
 }
 
+function tabById(tabId) {
+    return TABS.find(tab => tab.id === tabId);
+}
+
+function isAvailable(tab) {
+    return tab.isAvailable ? tab.isAvailable(data, features) : true;
+}
+
 /**
- * Renders one tab against the latest data, and shows/hides its strip button according
- * to its (optional) isAvailable(data, features) check - driven by the tab contract
- * instead of one-off code per tab. The active-tab guard every tab applies is the
- * `active` flag on the context (see currentContext).
+ * Calls one lifecycle hook of a tab - show, update or hide - and keeps a failure inside
+ * that tab: a hook that throws or rejects leaves a note at the top of the tab's own panel,
+ * which the next hook that succeeds takes away again. The page banner stays for a payload
+ * that failed to load.
  */
-function renderTab(tab) {
-    if (!data) return;
-    const available = tab.isAvailable ? tab.isAvailable(data, features) : true;
-    const button = document.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
-    if (button) button.classList.toggle('hidden', !available);
+async function runHook(tab, name, ...args) {
     const section = document.getElementById(`${tab.id}-tab`);
-    if (!available) {
-        if (section?.classList.contains('active')) fallBackToOverview();
+    try {
+        if (!instances.has(tab.id)) instances.set(tab.id, tab.create(section));
+        await instances.get(tab.id)[name]?.(...args);
+        section.querySelector(TAB_FAILURE)?.remove();
+    } catch (error) {
+        console.error(`The ${tab.id} tab failed in ${name}():`, error);
+        let note = section.querySelector(TAB_FAILURE);
+        if (!note) {
+            note = el('div', {className: 'pk-tab-failure', attrs: {role: 'alert'}});
+            section.prepend(note);
+        }
+        note.textContent = `This tab could not be shown: ${error.message}`;
+    }
+}
+
+/**
+ * Makes a tab the one on screen - wherever a tab becomes newly active (tab-strip click,
+ * hash-driven navigation, the first payload) - and hides the one shown before it. Nothing
+ * is shown before the first payload has arrived; renderData() enters the visible tab then.
+ */
+function enterTab(tabId) {
+    if (!data) return;
+    const tab = tabById(tabId);
+    if (!isAvailable(tab)) {
+        fallBackToOverview();
         return;
     }
-
-    if (section) tab.render(section, data, currentContext({active: section.classList.contains('active')}));
+    if (shownTabId && shownTabId !== tabId) runHook(tabById(shownTabId), 'hide');
+    shownTabId = tabId;
+    runHook(tab, 'show', data, currentContext());
 }
 
 /**
@@ -283,19 +314,25 @@ function fallBackToOverview() {
     // A "#traces/<id>" link with tracing off may have opened the overlay before the data
     // arrived; the hash no longer names it, so its own close-time cleanup stays a no-op.
     closeTraceDetail();
-    renderTabById('overview');
+    enterTab('overview');
 }
 
-/** Renders every registered tab against the latest data - the 30s auto-refresh path. */
+/**
+ * Brings the page in line with the latest data - a new payload, or a timezone switch:
+ * every strip button follows its tab's (optional) isAvailable(data, features) check, and
+ * the visible tab alone is updated. A hidden tab is rendered when it is switched to.
+ */
 function renderData() {
-    TABS.forEach(renderTab);
-}
+    if (!data) return;
+    TABS.forEach(tab => {
+        const button = document.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
+        if (button) button.classList.toggle('hidden', !isAvailable(tab));
+    });
 
-/** Renders a single tab by id - wherever a tab becomes newly active (tab-strip click,
- * hash-driven navigation), so a self-fetching tab does not wait for the next 30s cycle. */
-function renderTabById(tabId) {
-    const tab = TABS.find(t => t.id === tabId);
-    if (tab) renderTab(tab);
+    const visibleTab = tabById(visibleTabId);
+    // not shown yet on the first payload, and no longer available once its feature is gone
+    if (shownTabId === visibleTabId && isAvailable(visibleTab)) runHook(visibleTab, 'update', data, currentContext());
+    else enterTab(visibleTabId);
 }
 
 async function fetchData() {

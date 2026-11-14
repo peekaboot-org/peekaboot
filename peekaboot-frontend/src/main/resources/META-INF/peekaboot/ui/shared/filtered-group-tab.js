@@ -1,7 +1,7 @@
 /**
  * The shell shared by the dashboard tabs that show a list of collapsible groups, filterable
- * or not (config.js, environment.js, loggers.js, meters.js, scheduled-tasks.js): the
- * module-level data/context, the filter input wired once, the URL <-> filter
+ * or not (config.js, environment.js, loggers.js, meters.js, scheduled-tasks.js): the tab
+ * instance with its data and context, the filter input wired once, the URL <-> filter
  * reconciliation, the groups updated by key on a re-render, and the empty states. A
  * tab supplies only what differs - where its groups come from, how one group is filtered,
  * and how a group's header and items look. A tab with no `inputId` has no filter: every
@@ -16,24 +16,23 @@
  *   extraTop(data, context)     -> optional element rendered above the groups, or null
  *   emptyMessage                -> shown when the payload has no groups at all
  *   noMatchMessage(query)       -> shown when the filter narrows everything away
- *   filterState(input, container)
- *                               -> optional: the filter's URL state {reconcile, save} (see
+ *   filterState(input)          -> optional: the filter's URL state {reconcile, save} (see
  *                                  url-filter.js) for a tab that keeps more in the URL
  *                                  than the single "q" of the default, textFilterState
  *   afterRender(container, {groups, filtered, query, context})
  *                               -> optional hook run after every (re-)render, the empty
  *                                  states included - meters.js's match-count readout
  *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
- *                                  instead of the shared payload render() receives, on the
- *                                  self-fetching-tab.js contract (active-tab guard,
+ *                                  instead of the shared payload show() receives, on the
+ *                                  self-fetching-tab.js contract (stopped while hidden,
  *                                  supersession, rejection). Resolves to the data select()
  *                                  reads; a rejection renders fetchErrorMessage.
  *   loadingMessage              -> shown while the very first fetchData() is in flight
  *   fetchErrorMessage(error)    -> shown when fetchData() rejects
  *
- * The returned tab exposes render(container, data, context) - the tab-module contract - and
- * refresh(container), which writes the filter to the URL and re-renders with it, for a
- * control the tab wires itself (loggers.js's checkbox).
+ * The call is one tab instance over `container`, the tab's panel. It returns show, update
+ * and hide - the tab contract - and refresh(), which writes the filter to the URL and
+ * re-renders with it, for a control the tab wires itself (loggers.js's checkbox).
  */
 import {groupList, emptyState, loadingBlock, kvRow} from './components.js';
 import {formatCount, formatPlainValue} from './format.js';
@@ -41,78 +40,53 @@ import {textFilterState} from './url-filter.js';
 import {selfFetchingTab} from './self-fetching-tab.js';
 import {renderUnmaskControl} from './unmask-control.js';
 
-export function filteredGroupTab({
+export function filteredGroupTab(container, {
     inputId, listId, select, filterGroup, key, header, items, extraTop,
     emptyMessage, noMatchMessage, filterState = textFilterState, afterRender,
     fetchData, loadingMessage = 'Loading...', fetchErrorMessage = error => `Failed to load: ${error.message}`
 }) {
+    const target = container.querySelector(`#${listId}`);
+    const filterInput = inputId ? container.querySelector(`#${inputId}`) : null;
+    // nothing for a tab without a filter input
+    const filterUrlState = filterInput ? filterState(filterInput) : null;
     let currentData = null;
-    // The most recent render() call's context - read by the persistent filter listener
-    // (wired once), so a later keystroke formats its groups with the latest locale and
-    // timeZone instead of whatever was current the first time this tab was rendered.
+    // The most recent show() or update() call's context - read by the filter listener, so
+    // a later keystroke formats its groups with the latest locale and timeZone instead of
+    // whatever was current the first time this tab was shown.
     let currentContext = null;
 
     const fetcher = fetchData && selfFetchingTab({
         fetch: fetchData,
-        reconcile: (container, context) => filterUrlState(container)?.reconcile(context),
-        // Only before the very first data arrives - a background refresh of an
-        // already-populated, currently visible list must not blank it for the round
-        // trip's duration (renderGroups replaces the content once the response is in).
-        loading: (container, {firstLoad}) => {
-            if (firstLoad) list(container).replaceChildren(loadingBlock(loadingMessage));
+        // Only before the very first data arrives - a refresh of an already-populated list
+        // must not blank it for the round trip's duration (renderGroups replaces the
+        // content once the response is in).
+        loading: (panel, {firstLoad}) => {
+            if (firstLoad) target.replaceChildren(loadingBlock(loadingMessage));
         },
-        renderResult: (container, result) => {
+        renderResult: (panel, result) => {
             currentData = result;
-            renderGroups(container);
+            renderGroups();
         },
-        renderError: (container, error) => list(container).replaceChildren(emptyState(fetchErrorMessage(error)))
+        renderError: (panel, error) => target.replaceChildren(emptyState(fetchErrorMessage(error)))
     });
 
-    function render(container, data, context) {
+    filterInput?.addEventListener('input', refresh);
+
+    function render(data, context) {
         currentContext = context;
-        wireFilter(container);
-        if (fetcher) {
-            fetcher.render(container, data, context);
-            return;
-        }
+        filterUrlState?.reconcile(context);
+        if (fetcher) return fetcher.load(container, context);
         currentData = data;
-        if (context.active) filterUrlState(container)?.reconcile(context);
-        renderGroups(container);
+        renderGroups();
     }
 
-    function refresh(container) {
-        filterUrlState(container)?.save(currentContext);
-        renderGroups(container);
+    function refresh() {
+        filterUrlState?.save(currentContext);
+        renderGroups();
     }
 
-    function list(container) {
-        return container.querySelector(`#${listId}`);
-    }
-
-    function input(container) {
-        return inputId ? container.querySelector(`#${inputId}`) : null;
-    }
-
-    /** The filter's URL state, or nothing for a tab without a filter input. */
-    function filterUrlState(container) {
-        const filterInput = input(container);
-        return filterInput ? filterState(filterInput, container) : null;
-    }
-
-    function currentQuery(container) {
-        return input(container)?.value.trim() || '';
-    }
-
-    function wireFilter(container) {
-        const filterInput = input(container);
-        if (!filterInput || filterInput.dataset.wired) return;
-        filterInput.dataset.wired = 'true';
-        filterInput.addEventListener('input', () => refresh(container));
-    }
-
-    function renderGroups(container) {
-        const query = currentQuery(container);
-        const target = list(container);
+    function renderGroups() {
+        const query = filterInput?.value.trim() || '';
 
         const groups = select(currentData);
         if (!groups || groups.length === 0) {
@@ -142,7 +116,7 @@ export function filteredGroupTab({
         afterRender?.(container, {groups, filtered, query, context: currentContext});
     }
 
-    return {render, refresh};
+    return {show: render, update: render, hide: () => fetcher?.stop(), refresh};
 }
 
 /**
@@ -152,8 +126,8 @@ export function filteredGroupTab({
  * secrets" control (unmask-control.js) in the slot `unmaskSlotId` names. A group's name -
  * config's prefix, a property source's name - doubles as the key it is updated by.
  */
-export function propertyGroupTab({inputId, listId, unmaskSlotId, select, extraTop, emptyMessage}) {
-    const tab = filteredGroupTab({
+export function propertyGroupTab(container, {inputId, listId, unmaskSlotId, select, extraTop, emptyMessage}) {
+    const tab = filteredGroupTab(container, {
         inputId,
         listId,
         select,
@@ -173,13 +147,14 @@ export function propertyGroupTab({inputId, listId, unmaskSlotId, select, extraTo
         emptyMessage,
         noMatchMessage: query => `No properties matching "${query}"`
     });
+    const unmaskSlot = container.querySelector(`#${unmaskSlotId}`);
 
-    function render(container, data, context) {
-        renderUnmaskControl(container.querySelector(`#${unmaskSlotId}`), context);
-        tab.render(container, data, context);
+    function render(data, context) {
+        renderUnmaskControl(unmaskSlot, context);
+        return tab.show(data, context);
     }
 
-    return {render};
+    return {show: render, update: render, hide: tab.hide};
 }
 
 /**

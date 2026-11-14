@@ -12,12 +12,16 @@ export function isAvailable(data) {
     return Boolean(data?.liquibase?.changeSets?.length);
 }
 
-export function render(container, data, {locale, timeZone} = {}) {
-    cardTable(container.querySelector('#liquibase-changesets'), COLUMNS, data?.liquibase?.changeSets || [], {
-        key: changeSet => `${changeSet.id}|${changeSet.author}|${changeSet.changeLog}`,
-        row: changeSet => renderRow(changeSet, {locale, timeZone}),
-        revision: [locale, timeZone].join('|')
-    });
+export function create(container) {
+    function render(data, {locale, timeZone} = {}) {
+        cardTable(container.querySelector('#liquibase-changesets'), COLUMNS, data?.liquibase?.changeSets || [], {
+            key: changeSet => `${changeSet.id}|${changeSet.author}|${changeSet.changeLog}`,
+            row: changeSet => renderRow(changeSet, {locale, timeZone}),
+            revision: [locale, timeZone].join('|')
+        });
+    }
+
+    return {show: render, update: render};
 }
 
 function renderRow(changeSet, {locale, timeZone}) {

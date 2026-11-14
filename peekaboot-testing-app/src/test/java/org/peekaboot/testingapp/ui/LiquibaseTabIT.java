@@ -20,7 +20,7 @@ class LiquibaseTabIT extends PlaywrightTestBase {
     private static final String RENDER_TWO_CHANGE_SETS = """
             const container = document.createElement('div');
             container.innerHTML = '<div id="liquibase-changesets"></div>';
-            m.render(container, {liquibase: {changeSets: [
+            m.create(container).show({liquibase: {changeSets: [
                 {orderExecuted: 1, id: 'create-product', author: 'peekaboot',
                     changeLog: 'db/changelog/inventory/db.changelog-master.yaml',
                     description: 'createTable tableName=product', dateExecuted: 0, execType: 'EXECUTED'},
@@ -53,7 +53,7 @@ class LiquibaseTabIT extends PlaywrightTestBase {
                 (() => {
                     const container = document.createElement('div');
                     container.innerHTML = '<div id="liquibase-changesets"></div>';
-                    m.render(container, {liquibase: {changeSets: [
+                    m.create(container).show({liquibase: {changeSets: [
                         {orderExecuted: null, id: null, author: null, changeLog: null,
                             description: null, dateExecuted: null, execType: null},
                         {id: 'undated', dateExecuted: ''}
@@ -94,8 +94,9 @@ class LiquibaseTabIT extends PlaywrightTestBase {
                 (() => {
                     const container = document.createElement('div');
                     container.innerHTML = '<div id="liquibase-changesets"></div>';
+                    const tab = m.create(container);
                     const executedFor = display => {
-                        m.render(container, {liquibase: {changeSets: [{orderExecuted: 1, id: 'create-product',
+                        tab.show({liquibase: {changeSets: [{orderExecuted: 1, id: 'create-product',
                             author: 'peekaboot', changeLog: 'db.changelog-master.yaml', description: 'createTable',
                             dateExecuted: '2026-01-15T12:00:00Z', execType: 'EXECUTED'}]}}, display);
                         return container.querySelector('tbody tr td:nth-child(6)').textContent;

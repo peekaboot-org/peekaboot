@@ -7,16 +7,16 @@ import {propertyGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'config';
 
-const tab = propertyGroupTab({
-    inputId: 'config-filter',
-    listId: 'config-groups',
-    unmaskSlotId: 'config-unmask-slot',
-    select: data => data?.config?.groups,
-    emptyMessage: 'No configuration properties available'
-});
-
 export function isAvailable(data) {
     return Boolean(data?.config?.groups?.length);
 }
 
-export const {render} = tab;
+export function create(container) {
+    return propertyGroupTab(container, {
+        inputId: 'config-filter',
+        listId: 'config-groups',
+        unmaskSlotId: 'config-unmask-slot',
+        select: data => data?.config?.groups,
+        emptyMessage: 'No configuration properties available'
+    });
+}

@@ -124,7 +124,8 @@
 
 /* Error banner. The tint is faint enough (0.04 alpha) that the danger-red text keeps
    clear AA headroom in both themes (4.99:1 light, 5.54:1 dark). */
-.pk-error-banner {
+.pk-error-banner,
+.pk-tab-failure {
     background: var(--pk-danger-tint, rgba(210, 31, 31, 0.04));
     border: 1px solid var(--pk-danger);
     border-radius: var(--pk-radius);
@@ -140,6 +141,9 @@
 /* .pk-unbutton .pk-icon-btn: as a bare glyph button this measured 10.5x18, under WCAG 2.2's
    target-size floor. The box grows, the glyph does not. */
 .pk-error-banner__close { color: var(--pk-danger); font-size: var(--pk-text-lg); line-height: 1; }
+/* The banner's box at the top of one tab's panel, for a tab that could not be shown
+   (main.js's runHook). */
+.pk-tab-failure { color: var(--pk-danger); }
 
 /* Filter (search box used by the environment/loggers/config/meters tabs) */
 /* A row, not a block: the count sits beside the input, and the icon is centred

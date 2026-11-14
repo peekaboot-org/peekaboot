@@ -8,16 +8,16 @@ import {propertyGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'environment';
 
-const tab = propertyGroupTab({
-    inputId: 'env-filter',
-    listId: 'property-sources',
-    unmaskSlotId: 'env-unmask-slot',
-    select: data => data?.environment?.propertySources,
-    extraTop: data => renderActiveProfiles(data.environment.activeProfiles),
-    emptyMessage: 'No environment properties available'
-});
-
-export const {render} = tab;
+export function create(container) {
+    return propertyGroupTab(container, {
+        inputId: 'env-filter',
+        listId: 'property-sources',
+        unmaskSlotId: 'env-unmask-slot',
+        select: data => data?.environment?.propertySources,
+        extraTop: data => renderActiveProfiles(data.environment.activeProfiles),
+        emptyMessage: 'No environment properties available'
+    });
+}
 
 function renderActiveProfiles(activeProfiles) {
     if (!activeProfiles || activeProfiles.length === 0) return null;

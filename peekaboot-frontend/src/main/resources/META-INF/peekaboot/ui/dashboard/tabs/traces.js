@@ -6,8 +6,8 @@
  * below restores like any deep link.
  *
  * Fetched from its own endpoint (not part of the main dashboard payload), on the
- * self-fetching-tab.js contract: a background render skips the round trip, and a slow
- * older response never overwrites a newer one.
+ * self-fetching-tab.js contract: nothing is fetched or rendered while the tab is hidden,
+ * and a slow older response never overwrites a newer one.
  */
 import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
@@ -28,13 +28,6 @@ const SELECTABLE_TYPES = ROOT_ACTION_TYPES.filter(type => type !== EXCLUDABLE_TY
 const TYPE_CHIPS = '#traces-filter input[name="type"]';
 const EXCLUSION_LIFTED = 'none';
 
-// Empty set with the exclusion in place means no type in the request, which the backend
-// answers with its default view - every type except the excludable one.
-let selectedRootActionTypes = new Set();
-let maintenanceExcluded = true;
-let currentRootOperationFilter = null;
-let currentBucket = 'all';
-
 // What a row's click shortcut leaves alone; the open button itself is one, so its own click is not repeated.
 const INTERACTIVE_ELEMENTS = 'a, button, input, select, textarea, label, summary, [tabindex]';
 
@@ -44,40 +37,290 @@ const BUCKET_EMPTY_MESSAGES = {
     slow: 'No slow traces recorded'
 };
 
-const tab = selfFetchingTab({
-    fetch: context => context.client.get('/api/traces', {params: requestParams()}),
-    reconcile: reconcileWithUrl,
-    // Only before the first list arrives: the block sits above the controls, so showing it
-    // for a refresh would push them and the list down for the round trip.
-    loading: (container, {firstLoad}) => {
-        if (!firstLoad) return;
-        container.querySelector('#traces-loading').classList.remove('hidden');
-        container.querySelector('#no-traces').classList.add('hidden');
-    },
-    renderResult: (container, result, context) => {
-        updateBucketCounts(container, result.bucketCounts, result.filteredBucketCounts, context.locale);
-        renderList(container, result, context);
-        container.querySelector('#traces-loading').classList.add('hidden');
-    },
-    renderError: (container, error) => {
-        container.querySelector('#traces-list').replaceChildren(emptyState(`Failed to load traces: ${error.message}`));
-        container.querySelector('#traces-loading').classList.add('hidden');
-    }
-});
-
 export function isAvailable(data, features) {
     return Boolean(features?.tracing);
 }
 
-export function render(container, data, context) {
-    if (!context.features?.tracingSpansPossible) {
-        showWhyNoTracesCanAppear(container);
-        return;
-    }
+export function create(container) {
+    // Empty set with the exclusion in place means no type in the request, which the backend
+    // answers with its default view - every type except the excludable one.
+    let selectedRootActionTypes = new Set();
+    let maintenanceExcluded = true;
+    let currentRootOperationFilter = null;
+    let currentBucket = 'all';
+
+    const tab = selfFetchingTab({
+        fetch: context => context.client.get('/api/traces', {params: requestParams()}),
+        // Only before the first list arrives: the block sits above the controls, so showing it
+        // for a refresh would push them and the list down for the round trip.
+        loading: (panel, {firstLoad}) => {
+            if (!firstLoad) return;
+            container.querySelector('#traces-loading').classList.remove('hidden');
+            container.querySelector('#no-traces').classList.add('hidden');
+        },
+        renderResult: (panel, result, context) => {
+            updateBucketCounts(result.bucketCounts, result.filteredBucketCounts, context.locale);
+            renderList(result, context);
+            container.querySelector('#traces-loading').classList.add('hidden');
+        },
+        renderError: (panel, error) => {
+            container.querySelector('#traces-list').replaceChildren(emptyState(`Failed to load traces: ${error.message}`));
+            container.querySelector('#traces-loading').classList.add('hidden');
+        }
+    });
+
+    /** Bucket, types, root operation and the exclusion as URL state (see shared/url-filter.js). */
+    const filterState = urlState({
+        keys: ['bucket', 'type', 'op', 'excluded'],
+        read: filterFromUrl,
+        apply: applyFilter,
+        params: filterParams
+    });
+
     // delegated on the panel, which survives every re-render of the trace list
     bindCopyables(container);
-    wireControls(container);
-    tab.render(container, data, context);
+    wireControls();
+
+    function render(data, context) {
+        if (!context.features?.tracingSpansPossible) {
+            showWhyNoTracesCanAppear(container);
+            return;
+        }
+        reconcileWithUrl(context);
+        return tab.load(container, context);
+    }
+
+    /**
+     * A detail segment in the hash means the overlay owns the params slot: no seed, no write
+     * (main.js's setUrlParams drops the write side of the same rule) - the overlay's own
+     * level/q params are not this tab's bucket/type/op.
+     */
+    function reconcileWithUrl(context) {
+        if (parseAppHash().detail) return;
+        filterState.reconcile(context);
+    }
+
+    /**
+     * Makes the given filter the current one and shows it on the controls. Compares against
+     * the current state rather than unconditionally overwriting it, so this is a no-op once
+     * the URL already matches (the steady state on every render while a filter is active).
+     */
+    function applyFilter(filter) {
+        const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
+        const typesJoined = [...filter.types].sort().join(',');
+        if (filter.bucket === currentBucket && typesJoined === currentTypesJoined
+            && filter.rootOperation === currentRootOperationFilter
+            && filter.maintenanceExcluded === maintenanceExcluded) {
+            return;
+        }
+
+        currentBucket = filter.bucket;
+        selectedRootActionTypes = new Set(filter.types);
+        currentRootOperationFilter = filter.rootOperation;
+        maintenanceExcluded = filter.maintenanceExcluded;
+
+        syncBucketButtons();
+        syncFilterCheckboxes();
+    }
+
+    function syncBucketButtons() {
+        container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn =>
+            btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket)));
+    }
+
+    function syncFilterCheckboxes() {
+        container.querySelectorAll(TYPE_CHIPS).forEach(cb => {
+            cb.checked = selectedRootActionTypes.has(cb.value);
+        });
+        container.querySelector('#traces-filter-exclude-maintenance').checked = maintenanceExcluded;
+    }
+
+    function isUserFiltered() {
+        return selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null || !maintenanceExcluded;
+    }
+
+    /**
+     * The current filter as URL params, omitting each key that's at its default so a clean
+     * filter yields a clean "#traces" hash.
+     */
+    function filterParams() {
+        const params = {};
+        if (currentBucket !== 'all') params.bucket = currentBucket;
+        if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
+        if (currentRootOperationFilter) params.op = currentRootOperationFilter;
+        if (!maintenanceExcluded) params.excluded = EXCLUSION_LIFTED;
+        return params;
+    }
+
+    /** The listing request's query, from the same state the URL params are written from. */
+    function requestParams() {
+        const params = {limit: 50};
+        if (currentBucket !== 'all') params.bucket = currentBucket;
+        const rootActionType = requestedRootActionType();
+        if (rootActionType) params.rootActionType = rootActionType;
+        if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
+        return params;
+    }
+
+    /** Null asks for the backend's default view, '*' for every type. */
+    function requestedRootActionType() {
+        if (maintenanceExcluded) {
+            return selectedRootActionTypes.size > 0 ? Array.from(selectedRootActionTypes).join(',') : null;
+        }
+        return selectedRootActionTypes.size > 0 ? [...selectedRootActionTypes, EXCLUDABLE_TYPE].join(',') : '*';
+    }
+
+    function wireControls() {
+        container.querySelector('#traces-loading').appendChild(loadingBlock('Loading traces...'));
+
+        syncBucketButtons();
+        container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.bucket === currentBucket) return;
+                currentBucket = btn.dataset.bucket;
+                syncBucketButtons();
+                filterState.save(tab.context());
+                tab.refetch();
+            });
+        });
+
+        renderTypeFilterCheckboxes();
+
+        const clearBtn = container.querySelector('#traces-filter-clear');
+        if (clearBtn) clearBtn.addEventListener('click', resetFilter);
+    }
+
+    /**
+     * Generated from ROOT_ACTION_TYPES rather than hardcoded in index.html, so adding a
+     * root action type means no HTML edit. Each type checkbox's accessible name comes
+     * from the wrapping <label>, matching the loggers tab's checkbox-label convention; the
+     * exclusion checkbox's aria-label overrides it.
+     */
+    function renderTypeFilterCheckboxes() {
+        const filterEl = container.querySelector('#traces-filter');
+        const excludedGroup = filterEl.querySelector('#traces-filter-excluded');
+
+        SELECTABLE_TYPES.forEach(type => {
+            const checkbox = filterCheckbox(type, () => {
+                if (checkbox.checked) selectedRootActionTypes.add(type);
+                else selectedRootActionTypes.delete(type);
+            });
+            checkbox.name = 'type';
+            filterEl.insertBefore(checkbox.parentElement, excludedGroup);
+        });
+
+        const exclusion = filterCheckbox(EXCLUDABLE_TYPE, () => {
+            maintenanceExcluded = exclusion.checked;
+        });
+        exclusion.id = 'traces-filter-exclude-maintenance';
+        // Checked excludes here and includes on every box beside it, so the verb is in the name.
+        exclusion.setAttribute('aria-label', `Exclude ${rootActionLabel(EXCLUDABLE_TYPE)}`);
+        exclusion.checked = maintenanceExcluded;
+        excludedGroup.append(exclusion.parentElement);
+    }
+
+    /** A labelled checkbox that applies its change to the filter state, then refetches. */
+    function filterCheckbox(type, applyChange) {
+        const checkbox = el('input', {attrs: {type: 'checkbox', value: type}});
+        checkbox.addEventListener('change', () => {
+            applyChange();
+            filterState.save(tab.context());
+            tab.refetch();
+        });
+
+        // The label wraps the checkbox, which is how the caller reaches it (parentElement).
+        // The icon and text are one flex item, so the icon sits a space from its label rather than a flex gap.
+        el('label', {className: 'pk-checkbox-label'}, checkbox,
+            el('span', {}, el('span', {text: rootActionIcon(type), attrs: {'aria-hidden': 'true'}}), ' ' + rootActionLabel(type)));
+        return checkbox;
+    }
+
+    function resetFilter() {
+        selectedRootActionTypes.clear();
+        currentRootOperationFilter = null;
+        maintenanceExcluded = true;
+        syncFilterCheckboxes();
+        filterState.save(tab.context());
+        tab.refetch();
+    }
+
+    /**
+     * The plain number is what the list can actually show - the backend's default view
+     * already leaves its hidden types out, so the filtered count is the truthful one. The
+     * "shown / total" pair appears only for a filter the user chose, with the store's full
+     * count (hidden types included) as the total.
+     */
+    function updateBucketCounts(counts, filteredCounts, locale) {
+        if (!counts) return;
+        const userFiltered = isUserFiltered();
+        const grouped = n => formatNumber(n, {locale});
+        container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
+            const bucket = btn.dataset.bucket;
+            const bucketLabel = bucket.charAt(0).toUpperCase() + bucket.slice(1);
+            const count = counts[bucket];
+
+            let label;
+            if (count == null) {
+                label = bucketLabel;
+            } else if (userFiltered && filteredCounts) {
+                label = `${bucketLabel} (${grouped(filteredCounts[bucket])} / ${grouped(count)})`;
+            } else if (filteredCounts) {
+                label = `${bucketLabel} (${grouped(filteredCounts[bucket])})`;
+            } else {
+                label = `${bucketLabel} (${grouped(count)})`;
+            }
+            btn.textContent = label;
+        });
+    }
+
+    function renderList(result, context) {
+        // Not cleared until the response is in hand - otherwise every 30s refresh of the
+        // currently visible tab would blank the list for the network round trip's duration,
+        // even though nothing about it changed.
+        const listEl = container.querySelector('#traces-list');
+        const noTracesEl = container.querySelector('#no-traces');
+        listEl.innerHTML = '';
+
+        updateFilterIndicator();
+
+        const traces = result?.traces;
+        if (!traces || traces.length === 0) {
+            noTracesEl.querySelector('p').textContent = isUserFiltered()
+                ? 'No traces match the selected filters'
+                : BUCKET_EMPTY_MESSAGES[currentBucket];
+            noTracesEl.classList.remove('hidden');
+            return;
+        }
+
+        noTracesEl.classList.add('hidden');
+        traces.forEach(row => listEl.appendChild(renderTraceItem(row.summary, context)));
+    }
+
+    function updateFilterIndicator() {
+        const filterBanner = container.querySelector('#traces-active-filter');
+        const filterText = filterBanner?.querySelector('.pk-filter-banner__text');
+        if (!filterBanner || !filterText) return;
+
+        if (isUserFiltered()) {
+            const filterParts = [];
+            if (selectedRootActionTypes.size > 0) {
+                const activeFilters = Array.from(selectedRootActionTypes).map(type => rootActionLabel(type)).join(', ');
+                filterParts.push(`Type: ${activeFilters}`);
+            }
+            if (currentRootOperationFilter !== null) {
+                filterParts.push(`Target: ${shortTarget(currentRootOperationFilter)}`);
+            }
+            if (!maintenanceExcluded) {
+                filterParts.push(`${rootActionLabel(EXCLUDABLE_TYPE)} included`);
+            }
+            filterText.textContent = `Filtering: ${filterParts.join(' | ')}`;
+            filterBanner.classList.remove('hidden');
+        } else {
+            filterBanner.classList.add('hidden');
+        }
+    }
+
+    return {show: render, update: render, hide: tab.stop};
 }
 
 /**
@@ -87,24 +330,6 @@ export function render(container, data, context) {
 function showWhyNoTracesCanAppear(container) {
     Array.from(container.children).forEach(child =>
         child.classList.toggle('hidden', child.id !== 'traces-unavailable'));
-}
-
-/** Bucket, types, root operation and the exclusion as URL state (see shared/url-filter.js). */
-const filterState = urlState({
-    keys: ['bucket', 'type', 'op', 'excluded'],
-    read: filterFromUrl,
-    apply: applyFilter,
-    params: filterParams
-});
-
-/**
- * A detail segment in the hash means the overlay owns the params slot: no seed, no write
- * (main.js's setUrlParams drops the write side of the same rule) - the overlay's own
- * level/q params are not this tab's bucket/type/op.
- */
-function reconcileWithUrl(container, context) {
-    if (parseAppHash().detail) return;
-    filterState.reconcile(context);
 }
 
 /** The filter the URL params name, a missing or unrecognized value at its default. */
@@ -120,229 +345,6 @@ function filterFromUrl(urlParams) {
         rootOperation: urlParams.op || null,
         maintenanceExcluded: urlParams.excluded !== EXCLUSION_LIFTED
     };
-}
-
-/**
- * Makes the given filter the current one and shows it on the controls. Compares against
- * the current state rather than unconditionally overwriting it, so this is a no-op once
- * the URL already matches (the steady state on every render while a filter is active).
- */
-function applyFilter(filter) {
-    const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
-    const typesJoined = [...filter.types].sort().join(',');
-    if (filter.bucket === currentBucket && typesJoined === currentTypesJoined
-        && filter.rootOperation === currentRootOperationFilter
-        && filter.maintenanceExcluded === maintenanceExcluded) {
-        return;
-    }
-
-    currentBucket = filter.bucket;
-    selectedRootActionTypes = new Set(filter.types);
-    currentRootOperationFilter = filter.rootOperation;
-    maintenanceExcluded = filter.maintenanceExcluded;
-
-    syncBucketButtons(tab.container());
-    syncFilterCheckboxes(tab.container());
-}
-
-function syncBucketButtons(container) {
-    container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn =>
-        btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket)));
-}
-
-function syncFilterCheckboxes(container) {
-    container.querySelectorAll(TYPE_CHIPS).forEach(cb => {
-        cb.checked = selectedRootActionTypes.has(cb.value);
-    });
-    container.querySelector('#traces-filter-exclude-maintenance').checked = maintenanceExcluded;
-}
-
-function isUserFiltered() {
-    return selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null || !maintenanceExcluded;
-}
-
-/**
- * The current filter as URL params, omitting each key that's at its default so a clean
- * filter yields a clean "#traces" hash.
- */
-function filterParams() {
-    const params = {};
-    if (currentBucket !== 'all') params.bucket = currentBucket;
-    if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
-    if (currentRootOperationFilter) params.op = currentRootOperationFilter;
-    if (!maintenanceExcluded) params.excluded = EXCLUSION_LIFTED;
-    return params;
-}
-
-/** The listing request's query, from the same state the URL params are written from. */
-function requestParams() {
-    const params = {limit: 50};
-    if (currentBucket !== 'all') params.bucket = currentBucket;
-    const rootActionType = requestedRootActionType();
-    if (rootActionType) params.rootActionType = rootActionType;
-    if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
-    return params;
-}
-
-/** Null asks for the backend's default view, '*' for every type. */
-function requestedRootActionType() {
-    if (maintenanceExcluded) {
-        return selectedRootActionTypes.size > 0 ? Array.from(selectedRootActionTypes).join(',') : null;
-    }
-    return selectedRootActionTypes.size > 0 ? [...selectedRootActionTypes, EXCLUDABLE_TYPE].join(',') : '*';
-}
-
-function wireControls(container) {
-    if (container.dataset.wired) return;
-    container.dataset.wired = 'true';
-
-    container.querySelector('#traces-loading').appendChild(loadingBlock('Loading traces...'));
-
-    syncBucketButtons(container);
-    container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (btn.dataset.bucket === currentBucket) return;
-            currentBucket = btn.dataset.bucket;
-            syncBucketButtons(container);
-            filterState.save(tab.context());
-            tab.refetch();
-        });
-    });
-
-    renderTypeFilterCheckboxes(container);
-
-    const clearBtn = container.querySelector('#traces-filter-clear');
-    if (clearBtn) clearBtn.addEventListener('click', resetFilter);
-}
-
-/**
- * Generated from ROOT_ACTION_TYPES rather than hardcoded in index.html, so adding a
- * root action type means no HTML edit. Each type checkbox's accessible name comes
- * from the wrapping <label>, matching the loggers tab's checkbox-label convention; the
- * exclusion checkbox's aria-label overrides it.
- */
-function renderTypeFilterCheckboxes(container) {
-    const filterEl = container.querySelector('#traces-filter');
-    const excludedGroup = filterEl.querySelector('#traces-filter-excluded');
-
-    SELECTABLE_TYPES.forEach(type => {
-        const checkbox = filterCheckbox(type, () => {
-            if (checkbox.checked) selectedRootActionTypes.add(type);
-            else selectedRootActionTypes.delete(type);
-        });
-        checkbox.name = 'type';
-        filterEl.insertBefore(checkbox.parentElement, excludedGroup);
-    });
-
-    const exclusion = filterCheckbox(EXCLUDABLE_TYPE, () => {
-        maintenanceExcluded = exclusion.checked;
-    });
-    exclusion.id = 'traces-filter-exclude-maintenance';
-    // Checked excludes here and includes on every box beside it, so the verb is in the name.
-    exclusion.setAttribute('aria-label', `Exclude ${rootActionLabel(EXCLUDABLE_TYPE)}`);
-    exclusion.checked = maintenanceExcluded;
-    excludedGroup.append(exclusion.parentElement);
-}
-
-/** A labelled checkbox that applies its change to the filter state, then refetches. */
-function filterCheckbox(type, applyChange) {
-    const checkbox = el('input', {attrs: {type: 'checkbox', value: type}});
-    checkbox.addEventListener('change', () => {
-        applyChange();
-        filterState.save(tab.context());
-        tab.refetch();
-    });
-
-    // The label wraps the checkbox, which is how the caller reaches it (parentElement).
-    // The icon and text are one flex item, so the icon sits a space from its label rather than a flex gap.
-    el('label', {className: 'pk-checkbox-label'}, checkbox,
-        el('span', {}, el('span', {text: rootActionIcon(type), attrs: {'aria-hidden': 'true'}}), ' ' + rootActionLabel(type)));
-    return checkbox;
-}
-
-function resetFilter() {
-    selectedRootActionTypes.clear();
-    currentRootOperationFilter = null;
-    maintenanceExcluded = true;
-    syncFilterCheckboxes(tab.container());
-    filterState.save(tab.context());
-    tab.refetch();
-}
-
-/**
- * The plain number is what the list can actually show - the backend's default view
- * already leaves its hidden types out, so the filtered count is the truthful one. The
- * "shown / total" pair appears only for a filter the user chose, with the store's full
- * count (hidden types included) as the total.
- */
-function updateBucketCounts(container, counts, filteredCounts, locale) {
-    if (!counts) return;
-    const userFiltered = isUserFiltered();
-    const grouped = n => formatNumber(n, {locale});
-    container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
-        const bucket = btn.dataset.bucket;
-        const bucketLabel = bucket.charAt(0).toUpperCase() + bucket.slice(1);
-        const count = counts[bucket];
-
-        let label;
-        if (count == null) {
-            label = bucketLabel;
-        } else if (userFiltered && filteredCounts) {
-            label = `${bucketLabel} (${grouped(filteredCounts[bucket])} / ${grouped(count)})`;
-        } else if (filteredCounts) {
-            label = `${bucketLabel} (${grouped(filteredCounts[bucket])})`;
-        } else {
-            label = `${bucketLabel} (${grouped(count)})`;
-        }
-        btn.textContent = label;
-    });
-}
-
-function renderList(container, result, context) {
-    // Not cleared until the response is in hand - otherwise every 30s refresh of the
-    // currently visible tab would blank the list for the network round trip's duration,
-    // even though nothing about it changed.
-    const listEl = container.querySelector('#traces-list');
-    const noTracesEl = container.querySelector('#no-traces');
-    listEl.innerHTML = '';
-
-    updateFilterIndicator(container);
-
-    const traces = result?.traces;
-    if (!traces || traces.length === 0) {
-        noTracesEl.querySelector('p').textContent = isUserFiltered()
-            ? 'No traces match the selected filters'
-            : BUCKET_EMPTY_MESSAGES[currentBucket];
-        noTracesEl.classList.remove('hidden');
-        return;
-    }
-
-    noTracesEl.classList.add('hidden');
-    traces.forEach(row => listEl.appendChild(renderTraceItem(row.summary, context)));
-}
-
-function updateFilterIndicator(container) {
-    const filterBanner = container.querySelector('#traces-active-filter');
-    const filterText = filterBanner?.querySelector('.pk-filter-banner__text');
-    if (!filterBanner || !filterText) return;
-
-    if (isUserFiltered()) {
-        const filterParts = [];
-        if (selectedRootActionTypes.size > 0) {
-            const activeFilters = Array.from(selectedRootActionTypes).map(type => rootActionLabel(type)).join(', ');
-            filterParts.push(`Type: ${activeFilters}`);
-        }
-        if (currentRootOperationFilter !== null) {
-            filterParts.push(`Target: ${shortTarget(currentRootOperationFilter)}`);
-        }
-        if (!maintenanceExcluded) {
-            filterParts.push(`${rootActionLabel(EXCLUDABLE_TYPE)} included`);
-        }
-        filterText.textContent = `Filtering: ${filterParts.join(' | ')}`;
-        filterBanner.classList.remove('hidden');
-    } else {
-        filterBanner.classList.add('hidden');
-    }
 }
 
 function renderTraceItem(trace, context) {

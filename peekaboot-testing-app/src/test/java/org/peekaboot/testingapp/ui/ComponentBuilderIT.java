@@ -2,11 +2,12 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exercises the shared component builders, the keyed updates under them and the API client in
- * a real browser.
+ * Exercises the shared component builders, the keyed updates under them, the API client and
+ * the self-fetching tab shell in a real browser.
  *
  * kvRow/group intentionally do NOT accept pre-escaped markup (no keyHtml/valueHtml/
  * nameHtml). They accept a plain `highlight` query string and call highlightText()
@@ -497,6 +498,66 @@ class ComponentBuilderIT extends PlaywrightTestBase {
             """);
 
         assertThat(result).isEqualTo("true|true");
+    }
+
+    /**
+     * Runs {@code body}, an async function body over the self-fetching-tab module {@code m},
+     * with {@code seen} for what the tab rendered and a detached {@code container}.
+     */
+    private Object evalSelfFetchingTab(String body) {
+        return importModule(
+                "shared/self-fetching-tab.js",
+                "(async () => { const seen = []; const container = document.createElement('div');" + body + "})()");
+    }
+
+    /** A result the tab cannot render is a failed load, so it gets the error state like one. */
+    @Test
+    void aRenderThatThrowsReachesTheErrorState() {
+        assertThat(evalSelfFetchingTab("""
+                const tab = m.selfFetchingTab({fetch: async () => ({}), renderResult: () => { throw new Error('boom'); },
+                    renderError: (container, error) => seen.push(error.message)});
+                await tab.load(container, {});
+                return seen;
+                """)).isEqualTo(List.of("boom"));
+    }
+
+    @Test
+    void anAnswerThatArrivesAfterStopRendersNothing() {
+        assertThat(evalSelfFetchingTab("""
+                let release;
+                const tab = m.selfFetchingTab({fetch: () => new Promise(resolve => { release = resolve; }),
+                    renderResult: () => seen.push('result'), renderError: () => seen.push('error')});
+                const pending = tab.load(container, {}); tab.stop(); release({}); await pending;
+                return seen;
+                """)).isEqualTo(List.of());
+    }
+
+    @Test
+    void aFailureThatArrivesAfterStopRendersNothing() {
+        assertThat(evalSelfFetchingTab("""
+                let fail;
+                const tab = m.selfFetchingTab({fetch: () => new Promise((resolve, reject) => { fail = reject; }),
+                    renderResult: () => seen.push('result'), renderError: () => seen.push('error')});
+                const pending = tab.load(container, {}); tab.stop(); fail(new Error('offline')); await pending;
+                return seen;
+                """)).isEqualTo(List.of());
+    }
+
+    /** A control the tab wired keeps its listener while the tab is hidden, so its refetch has to wait for the next load. */
+    @Test
+    void aRefetchAfterStopFetchesNothingUntilTheNextLoad() {
+        assertThat(evalSelfFetchingTab("""
+                let fetches = 0;
+                const tab = m.selfFetchingTab({fetch: async () => ++fetches,
+                    renderResult: (container, result) => seen.push(result), renderError: () => seen.push('error')});
+                await tab.load(container, {});
+                tab.stop();
+                await tab.refetch();
+                seen.push('stopped');
+                await tab.load(container, {});
+                await tab.refetch();
+                return seen;
+                """)).isEqualTo(List.of(1, "stopped", 2, 3));
     }
 
     @Test

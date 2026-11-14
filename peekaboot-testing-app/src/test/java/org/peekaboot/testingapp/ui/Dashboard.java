@@ -15,7 +15,7 @@ final class Dashboard {
 
     /**
      * The selector each tab renders once its own data has arrived. {@code #<id>-tab.active}
-     * only proves the panel is showing, not that its render() has populated it, so a tab is
+     * only proves the panel is showing, not that its show() has populated it, so a tab is
      * opened against this instead. The Traces tab counts as rendered with an empty list too:
      * the list is shared with every class, so which trace a test needs is its own business
      * (see {@link #awaitListedTrace}).
@@ -34,9 +34,10 @@ final class Dashboard {
             Map.entry("scheduled-tasks", "#scheduled-tasks-groups .pk-group"));
 
     /**
-     * JS predicate: the tab's panel has finished its fade-in. Hidden tabs render too, so a ready
-     * selector can match mid-fade, and axe blends that opacity into every contrast it measures.
-     * Only the panel's own animations count, since pulses inside it never finish.
+     * JS predicate: the tab's panel has finished its fade-in. A tab renders the moment it is
+     * shown and keeps what it rendered while hidden, so a ready selector can match mid-fade,
+     * and axe blends that opacity into every contrast it measures. Only the panel's own
+     * animations count, since pulses inside it never finish.
      */
     private static final String PANEL_FADED_IN =
             "id => document.getElementById(id + '-tab').getAnimations().every(a => a.playState === 'finished')";

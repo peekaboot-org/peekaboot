@@ -475,13 +475,13 @@ class SharedModuleIT extends PlaywrightTestBase {
                     const container = document.createElement('div');
                     container.innerHTML = '<div id="pk-fgt-list"></div><div id="pk-fgt-unmask"></div>';
                     document.body.appendChild(container);
-                    const tab = m.propertyGroupTab({
+                    const tab = m.propertyGroupTab(container, {
                         listId: 'pk-fgt-list', unmaskSlotId: 'pk-fgt-unmask',
                         select: data => data.groups,
                         emptyMessage: 'none'
                     });
                     const properties = Array.from({length: 1234}, (_, i) => ({key: 'k' + i, value: i}));
-                    tab.render(container, {groups: [{name: 'g', properties}]}, {locale: 'de-DE', active: false});
+                    tab.show({groups: [{name: 'g', properties}]}, {locale: 'de-DE'});
                     return container.querySelector('.pk-group__count').textContent;
                 })()
                 """);

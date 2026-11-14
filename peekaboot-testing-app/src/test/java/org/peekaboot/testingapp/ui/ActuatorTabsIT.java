@@ -166,7 +166,7 @@ class ActuatorTabsIT extends PlaywrightTestBase {
                 container.innerHTML = '<div id="scheduled-tasks-groups"></div>';
                 container.id = 'pk-tasks-test-container';
                 document.body.appendChild(container);
-                m.render(container, {scheduledTasks: {tasks: [{target: 'demo.Job.run', type: 'FIXED_RATE',
+                m.create(container).show({scheduledTasks: {tasks: [{target: 'demo.Job.run', type: 'FIXED_RATE',
                     intervalMs: 60000, lastStatus: 'FAILED', lastExecution: 0,
                     lastException: 'java.lang.IllegalStateException: fixedDelay failed'}],
                     cronCount: 0, fixedDelayCount: 0, fixedRateCount: 1}}, {});
@@ -178,5 +178,35 @@ class ActuatorTabsIT extends PlaywrightTestBase {
         assertThat(page.textContent("#pk-tasks-test-container .pk-task__exception"))
                 .contains("Error during last Execution:")
                 .contains("fixedDelay failed");
+    }
+
+    /**
+     * A task that ran again gets a new row, and the open group's list is rebuilt around it. The
+     * reader's place in that list is the link at the same position in the new one.
+     */
+    @Test
+    void aFocusedLinkInAnOpenGroupKeepsFocusWhenItsRowChanges() {
+        Object focus = importModule("dashboard/tabs/scheduled-tasks.js", """
+            (() => {
+                const container = document.createElement('div');
+                container.innerHTML = '<div id="scheduled-tasks-groups"></div>';
+                document.body.appendChild(container);
+                const ranAt = lastExecution => ({scheduledTasks: {tasks: [{target: 'demo.Job.run', type: 'FIXED_RATE',
+                    intervalMs: 60000, lastStatus: 'SUCCESS', lastExecution}],
+                    cronCount: 0, fixedDelayCount: 0, fixedRateCount: 1}});
+                const context = {features: {tracing: true}};
+                const tab = m.create(container);
+                tab.show(ranAt('2026-01-15T12:00:00Z'), context);
+                container.querySelector('.pk-group__header').click();
+                const link = container.querySelector('.pk-task__traces-link');
+                link.focus();
+                tab.update(ranAt('2026-01-15T12:01:00Z'), context);
+                return [link.isConnected, document.activeElement.classList.contains('pk-task__traces-link')];
+            })()
+            """);
+
+        assertThat(focus)
+                .as("whether the focused link is still in the document, and whether a traces link has the focus")
+                .isEqualTo(List.of(false, true));
     }
 }

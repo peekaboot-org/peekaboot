@@ -12,22 +12,29 @@ import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'overview';
 
-export function render(container, data, context = {}) {
-    const {locale, timeZone} = context;
-    const {application, runtime, dataSources, health} = data;
+export function create(container) {
+    const tileRow = insightTileRow();
+    wireHealthBanner(container);
 
-    renderInsightTiles(container, data, context);
-    renderBuildInfo(container, application?.build, {locale, timeZone});
-    renderGitInfo(container, application?.git, {locale, timeZone});
-    renderSpringInfo(container, application);
-    renderJavaInfo(container, application);
-    renderOsInfo(container, runtime);
-    renderMachineInfo(container, runtime, locale);
-    renderJvmDefaults(container, data.server, {locale, timeZone});
-    renderDataSourcesInfo(container, dataSources);
-    renderMemoryInfo(container, runtime);
-    renderHealthBanner(container, health, locale);
-    renderHealthComponents(container, health?.components);
+    function render(data, context = {}) {
+        const {locale, timeZone} = context;
+        const {application, runtime, dataSources, health} = data;
+
+        renderInsightTiles(container, tileRow, context);
+        renderBuildInfo(container, application?.build, {locale, timeZone});
+        renderGitInfo(container, application?.git, {locale, timeZone});
+        renderSpringInfo(container, application);
+        renderJavaInfo(container, application);
+        renderOsInfo(container, runtime);
+        renderMachineInfo(container, runtime, locale);
+        renderJvmDefaults(container, data.server, {locale, timeZone});
+        renderDataSourcesInfo(container, dataSources);
+        renderMemoryInfo(container, runtime);
+        renderHealthBanner(container, health, locale);
+        renderHealthComponents(container, health?.components);
+    }
+
+    return {show: render, update: render, hide: tileRow.stop};
 }
 
 /**
@@ -57,41 +64,43 @@ function tileIcon(tileId) {
  * contract: fetched only while this tab is the one showing, and hidden outright, rather
  * than left as an empty box, when the endpoint is unreachable.
  */
-const tileRow = selfFetchingTab({
-    // own dedupe key: the Insights tab loads this same path on its own schedule, and on
-    // a "#insights" deep link both fire in the same cycle - sharing the default per-path
-    // counter would leave whichever called first with a null and this row hidden until
-    // the next refresh (see shared/api.js)
-    fetch: ({client}) => client.get('/api/insights/config', {dedupeKey: 'insight-tiles'}),
-    renderResult: (container, config, {locale, timeZone}) => {
-        const tiles = config.tiles ?? [];
-        const row = container.querySelector('#insights-tiles');
-        row.innerHTML = tiles.map(tile => `
-            <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
-                ${tileIcon(tile.id)}
-                <div class="pk-insight-tile__text">
-                    <div class="pk-insight-tile__label pk-label">${escapeHtml(tile.label)}</div>
-                    <div class="pk-insight-tile__value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
+function insightTileRow() {
+    return selfFetchingTab({
+        // own dedupe key: the Insights tab loads this same path on its own schedule, and on
+        // a "#insights" deep link both fire in the same cycle - sharing the default per-path
+        // counter would leave whichever called first with a null and this row hidden until
+        // the next refresh (see shared/api.js)
+        fetch: ({client}) => client.get('/api/insights/config', {dedupeKey: 'insight-tiles'}),
+        renderResult: (container, config, {locale, timeZone}) => {
+            const tiles = config.tiles ?? [];
+            const row = container.querySelector('#insights-tiles');
+            row.innerHTML = tiles.map(tile => `
+                <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
+                    ${tileIcon(tile.id)}
+                    <div class="pk-insight-tile__text">
+                        <div class="pk-insight-tile__label pk-label">${escapeHtml(tile.label)}</div>
+                        <div class="pk-insight-tile__value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
+                    </div>
                 </div>
-            </div>
-        `).join('');
-        row.classList.toggle('hidden', tiles.length === 0);
-    },
-    renderError: (container, error) => {
-        console.warn('Insight tiles unavailable:', error);
-        container.querySelector('#insights-tiles').classList.add('hidden');
-    }
-});
+            `).join('');
+            row.classList.toggle('hidden', tiles.length === 0);
+        },
+        renderError: (container, error) => {
+            console.warn('Insight tiles unavailable:', error);
+            container.querySelector('#insights-tiles').classList.add('hidden');
+        }
+    });
+}
 
 /** The row is hidden outright when insights are switched off; otherwise the tile fetch above fills it. */
-function renderInsightTiles(container, data, context) {
+function renderInsightTiles(container, tileRow, context) {
     const row = container.querySelector('#insights-tiles');
     if (!row) return;
     if (!context.features?.insights || !context.client) {
         row.classList.add('hidden');
         return;
     }
-    tileRow.render(container, data, context);
+    tileRow.load(container, context);
 }
 
 /**
@@ -370,12 +379,22 @@ function healthModifier(severity) {
     return null;
 }
 
+/** The banner is a button that opens and closes the component grid below it. */
+function wireHealthBanner(container) {
+    const banner = container.querySelector('#health-banner');
+    const healthComponents = container.querySelector('#health-components');
+    banner.addEventListener('click', () => {
+        const willExpand = banner.getAttribute('aria-expanded') !== 'true';
+        banner.setAttribute('aria-expanded', String(willExpand));
+        healthComponents.hidden = !willExpand;
+    });
+}
+
 function renderHealthBanner(container, health, locale) {
     const banner = container.querySelector('#health-banner');
     const dot = container.querySelector('#health-dot');
     const statusContainer = container.querySelector('#health-status-container');
     const summary = container.querySelector('#health-summary');
-    const healthComponents = container.querySelector('#health-components');
 
     const status = health?.status || 'UNKNOWN';
     const severity = healthSeverity(status);
@@ -399,12 +418,6 @@ function renderHealthBanner(container, health, locale) {
     summary.textContent = components && components.length > 0
         ? `${formatNumber(components.filter(c => c.status === 'UP').length, {locale})}/${formatNumber(components.length, {locale})} healthy`
         : '';
-
-    banner.onclick = () => {
-        const willExpand = banner.getAttribute('aria-expanded') !== 'true';
-        banner.setAttribute('aria-expanded', String(willExpand));
-        healthComponents.hidden = !willExpand;
-    };
 }
 
 function renderHealthComponents(container, components) {

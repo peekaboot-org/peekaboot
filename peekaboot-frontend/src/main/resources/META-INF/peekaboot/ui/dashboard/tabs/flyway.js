@@ -19,12 +19,16 @@ export function isAvailable(data) {
     return Boolean(data?.flyway?.migrations?.length);
 }
 
-export function render(container, data, {locale, timeZone} = {}) {
-    cardTable(container.querySelector('#flyway-timeline'), COLUMNS, data?.flyway?.migrations || [], {
-        key: migration => migration.script ?? `${migration.version}|${migration.description}`,
-        row: migration => renderRow(migration, {locale, timeZone}),
-        revision: [locale, timeZone].join('|')
-    });
+export function create(container) {
+    function render(data, {locale, timeZone} = {}) {
+        cardTable(container.querySelector('#flyway-timeline'), COLUMNS, data?.flyway?.migrations || [], {
+            key: migration => migration.script ?? `${migration.version}|${migration.description}`,
+            row: migration => renderRow(migration, {locale, timeZone}),
+            revision: [locale, timeZone].join('|')
+        });
+    }
+
+    return {show: render, update: render};
 }
 
 function renderRow(migration, {locale, timeZone}) {

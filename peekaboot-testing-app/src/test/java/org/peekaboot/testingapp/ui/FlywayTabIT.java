@@ -98,7 +98,7 @@ class FlywayTabIT extends PlaywrightTestBase {
             (() => {
                 const container = document.createElement('div');
                 container.innerHTML = '<div id="flyway-timeline"></div>';
-                m.render(container, {flyway: {migrations: [{version: '1', description: 'init',
+                m.create(container).show({flyway: {migrations: [{version: '1', description: 'init',
                     script: 'V1__init.sql', type: 'SQL', executionTimeMs: 5000, installedOn: 0, state: 'SUCCESS'}]}}, {});
                 return container.querySelector('td.pk-table__num').className;
             })()
@@ -115,8 +115,9 @@ class FlywayTabIT extends PlaywrightTestBase {
             (() => {
                 const container = document.createElement('div');
                 container.innerHTML = '<div id="flyway-timeline"></div>';
+                const tab = m.create(container);
                 const installedFor = display => {
-                    m.render(container, {flyway: {migrations: [{version: '1', description: 'init',
+                    tab.show({flyway: {migrations: [{version: '1', description: 'init',
                         script: 'V1__init.sql', type: 'SQL', executionTimeMs: 5,
                         installedOn: '2026-01-15T12:00:00Z', state: 'SUCCESS'}]}}, display);
                     return container.querySelector('tbody tr td:nth-child(6)').textContent;

@@ -6,8 +6,8 @@
  *
  * Fetched from its own endpoint, on the self-fetching-tab.js contract.
  *
- * The current page is module-level state, not derived from the fetch response, so it
- * survives across those 30s re-renders - a reader on page 3 is not bounced back to page
+ * The current page is the tab instance's state, not derived from the fetch response, so
+ * it survives across the 30s refreshes - a reader on page 3 is not bounced back to page
  * 1 every refresh. It only moves when the refreshed run list no longer has that many
  * pages (renderTable clamps it to the new last page).
  */
@@ -22,30 +22,9 @@ export const id = 'lifecycle';
 const PAGE_SIZE = 20;
 const COLUMNS = ['Started', 'Ran for', 'Stopped', 'Down before', 'Build'];
 
-let runs = null;        // most recent /api/lifecycle/runs response's `runs`, or null before the first load
-let currentPage = 0;    // 0-indexed, survives across render() calls - see doc comment above
-
-const tab = selfFetchingTab({
-    fetch: context => context.client.get('/api/lifecycle/runs'),
-    reconcile: (container, context) => pageState.reconcile(context),
-    renderResult: (container, result, context) => {
-        runs = result.runs || [];
-        renderTable(container, context);
-    },
-    renderError: (container, error) => {
-        console.warn('Lifecycle history unavailable:', error);
-        runs = null;
-        container.querySelector('#lifecycle-runs').replaceChildren(emptyState('Lifecycle history is unavailable'));
-    }
-});
-
 export function isAvailable(data, features) {
     return Boolean(features?.lifecycle);
 }
-
-export const {render} = tab;
-
-const pager = createPager();
 
 /**
  * The URL's 1-based page param as this module's 0-based page index; anything
@@ -56,51 +35,108 @@ export function pageFromUrl(params) {
     return Number.isInteger(page) && page >= 1 ? page - 1 : 0;
 }
 
-/**
- * The pager's page as URL state (see shared/url-filter.js): 1-based in the URL, matching
- * the readout, and left out on page one so the default yields a clean "#lifecycle" hash.
- * A page read from the URL may still overshoot the run list (a stale link) - renderTable's
- * clamp corrects both the page and the URL once the list is known.
- */
-const pageState = urlState({
-    keys: ['page'],
-    read: pageFromUrl,
-    apply: page => {
-        currentPage = page;
-    },
-    params: () => (currentPage === 0 ? {} : {page: String(currentPage + 1)})
-});
+export function create(container) {
+    let runs = null;        // most recent /api/lifecycle/runs response's `runs`, or null before the first load
+    let currentPage = 0;    // 0-indexed, survives across refreshes - see doc comment above
 
-function renderTable(container, context) {
-    const target = container.querySelector('#lifecycle-runs');
-    if (!runs || runs.length === 0) {
-        target.replaceChildren(emptyState('No runs recorded yet'));
-        return;
-    }
-
-    const totalPages = Math.max(1, Math.ceil(runs.length / PAGE_SIZE));
-    // Clamp rather than reset - a shrinking list (unlikely, but the log is a ring
-    // buffer) must not maroon the reader past the new last page; a growing one must
-    // not move them off the page they were reading.
-    const clamped = Math.min(Math.max(currentPage, 0), totalPages - 1);
-    if (clamped !== currentPage) {
-        currentPage = clamped;
-        // the URL must name the page actually shown, not the out-of-range one it asked for
-        pageState.save(context);
-    }
-
-    const start = currentPage * PAGE_SIZE;
-    const {locale, timeZone} = context;
-
-    cardTable(target, COLUMNS, runs.slice(start, start + PAGE_SIZE), {
-        key: run => run.startedAt,
-        row: run => renderRow(run, {locale, timeZone}),
-        revision: [locale, timeZone].join('|')
+    const tab = selfFetchingTab({
+        fetch: context => context.client.get('/api/lifecycle/runs'),
+        renderResult: (panel, result, context) => {
+            runs = result.runs || [];
+            renderTable(context);
+        },
+        renderError: (panel, error) => {
+            console.warn('Lifecycle history unavailable:', error);
+            runs = null;
+            container.querySelector('#lifecycle-runs').replaceChildren(emptyState('Lifecycle history is unavailable'));
+        }
     });
-    // Rendered whenever there is at least one run, even for a single page, so the
-    // control is discoverable and its presence is stable to test.
-    if (pager.element.parentElement !== target) target.append(pager.element);
-    pager.show(totalPages, locale);
+
+    /**
+     * The pager's page as URL state (see shared/url-filter.js): 1-based in the URL, matching
+     * the readout, and left out on page one so the default yields a clean "#lifecycle" hash.
+     * A page read from the URL may still overshoot the run list (a stale link) - renderTable's
+     * clamp corrects both the page and the URL once the list is known.
+     */
+    const pageState = urlState({
+        keys: ['page'],
+        read: pageFromUrl,
+        apply: page => {
+            currentPage = page;
+        },
+        params: () => (currentPage === 0 ? {} : {page: String(currentPage + 1)})
+    });
+
+    const pager = createPager();
+
+    function render(data, context) {
+        pageState.reconcile(context);
+        return tab.load(container, context);
+    }
+
+    function renderTable(context) {
+        const target = container.querySelector('#lifecycle-runs');
+        if (!runs || runs.length === 0) {
+            target.replaceChildren(emptyState('No runs recorded yet'));
+            return;
+        }
+
+        const totalPages = Math.max(1, Math.ceil(runs.length / PAGE_SIZE));
+        // Clamp rather than reset - a shrinking list (unlikely, but the log is a ring
+        // buffer) must not maroon the reader past the new last page; a growing one must
+        // not move them off the page they were reading.
+        const clamped = Math.min(Math.max(currentPage, 0), totalPages - 1);
+        if (clamped !== currentPage) {
+            currentPage = clamped;
+            // the URL must name the page actually shown, not the out-of-range one it asked for
+            pageState.save(context);
+        }
+
+        const start = currentPage * PAGE_SIZE;
+        const {locale, timeZone} = context;
+
+        cardTable(target, COLUMNS, runs.slice(start, start + PAGE_SIZE), {
+            key: run => run.startedAt,
+            row: run => renderRow(run, {locale, timeZone}),
+            revision: [locale, timeZone].join('|')
+        });
+        // Rendered whenever there is at least one run, even for a single page, so the
+        // control is discoverable and its presence is stable to test.
+        if (pager.element.parentElement !== target) target.append(pager.element);
+        pager.show(totalPages, locale);
+    }
+
+    /**
+     * The pager, built once: a page step changes what its buttons and readout say, never the
+     * nodes, so the button that was pressed keeps the focus. `show` brings it up to date with
+     * the current page.
+     */
+    function createPager() {
+        function pagerButton(label, delta) {
+            const btn = button({className: 'pk-btn pk-btn--small', text: label});
+            btn.addEventListener('click', () => {
+                currentPage += delta;
+                pageState.save(tab.context());
+                renderTable(tab.context());
+            });
+            return btn;
+        }
+
+        const previous = pagerButton('Previous', -1);
+        const next = pagerButton('Next', 1);
+        const readout = el('span', {className: 'pk-lifecycle-pager__readout'});
+
+        return {
+            element: el('div', {className: 'pk-lifecycle-pager'}, previous, readout, next),
+            show(totalPages, locale) {
+                previous.disabled = currentPage === 0;
+                next.disabled = currentPage >= totalPages - 1;
+                readout.textContent = `Page ${formatNumber(currentPage + 1, {locale})} of ${formatNumber(totalPages, {locale})}`;
+            }
+        };
+    }
+
+    return {show: render, update: render, hide: tab.stop};
 }
 
 function renderRow(run, dateOptions) {
@@ -160,34 +196,4 @@ function buildCell(run, dateOptions) {
         // commit, in that order) - the badge repeats it verbatim rather than just
         // saying "changed".
         run.changed && run.changed.length > 0 ? badge(`Deployment: ${run.changed.join(', ')}`, 'info') : null);
-}
-
-/**
- * The pager, built once: a page step changes what its buttons and readout say, never the
- * nodes, so the button that was pressed keeps the focus. `show` brings it up to date with
- * the current page.
- */
-function createPager() {
-    function pagerButton(label, delta) {
-        const btn = button({className: 'pk-btn pk-btn--small', text: label});
-        btn.addEventListener('click', () => {
-            currentPage += delta;
-            pageState.save(tab.context());
-            renderTable(tab.container(), tab.context());
-        });
-        return btn;
-    }
-
-    const previous = pagerButton('Previous', -1);
-    const next = pagerButton('Next', 1);
-    const readout = el('span', {className: 'pk-lifecycle-pager__readout'});
-
-    return {
-        element: el('div', {className: 'pk-lifecycle-pager'}, previous, readout, next),
-        show(totalPages, locale) {
-            previous.disabled = currentPage === 0;
-            next.disabled = currentPage >= totalPages - 1;
-            readout.textContent = `Page ${formatNumber(currentPage + 1, {locale})} of ${formatNumber(totalPages, {locale})}`;
-        }
-    };
 }

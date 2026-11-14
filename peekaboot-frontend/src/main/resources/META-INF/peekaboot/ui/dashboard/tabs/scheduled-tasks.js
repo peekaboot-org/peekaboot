@@ -18,32 +18,32 @@ const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 
 
 export const TASK_TYPES = Object.keys(TYPE_LABELS);
 
-// no inputId: the group shell without a filter (see filtered-group-tab.js)
-const tab = filteredGroupTab({
-    listId: 'scheduled-tasks-groups',
-    select: data => groupsByType(data?.scheduledTasks?.tasks),
-    filterGroup: group => group,
-    key: group => group.type,
-    header: (group, query, context) => ({
-        name: TYPE_LABELS[group.type],
-        count: formatCount(group.tasks.length, 'task', {locale: context.locale})
-    }),
-    items: (group, list, query, context) => group.tasks.forEach(task =>
-        list.appendChild(renderTaskRow(task, group.type, context))),
-    extraTop: ({scheduledTasks}, context) => countSummary([
-        ['Total', scheduledTasks.tasks.length],
-        ['Cron', scheduledTasks.cronCount],
-        ['Fixed Delay', scheduledTasks.fixedDelayCount],
-        ['Fixed Rate', scheduledTasks.fixedRateCount]
-    ], context.locale),
-    emptyMessage: 'No scheduled tasks configured'
-});
-
 export function isAvailable(data) {
     return Boolean(data?.scheduledTasks?.tasks?.length);
 }
 
-export const {render} = tab;
+export function create(container) {
+    // no inputId: the group shell without a filter (see filtered-group-tab.js)
+    return filteredGroupTab(container, {
+        listId: 'scheduled-tasks-groups',
+        select: data => groupsByType(data?.scheduledTasks?.tasks),
+        filterGroup: group => group,
+        key: group => group.type,
+        header: (group, query, context) => ({
+            name: TYPE_LABELS[group.type],
+            count: formatCount(group.tasks.length, 'task', {locale: context.locale})
+        }),
+        items: (group, list, query, context) => group.tasks.forEach(task =>
+            list.appendChild(renderTaskRow(task, group.type, context))),
+        extraTop: ({scheduledTasks}, context) => countSummary([
+            ['Total', scheduledTasks.tasks.length],
+            ['Cron', scheduledTasks.cronCount],
+            ['Fixed Delay', scheduledTasks.fixedDelayCount],
+            ['Fixed Rate', scheduledTasks.fixedRateCount]
+        ], context.locale),
+        emptyMessage: 'No scheduled tasks configured'
+    });
+}
 
 function groupsByType(tasks) {
     if (!tasks) return [];

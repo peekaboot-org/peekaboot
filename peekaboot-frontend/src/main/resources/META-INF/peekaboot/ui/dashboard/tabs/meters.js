@@ -12,42 +12,42 @@ import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'meters';
 
-const tab = filteredGroupTab({
-    inputId: 'meters-filter',
-    listId: 'meters-list',
-    fetchData: async context => {
-        const result = await context.client.get('/api/metrics');
-        return result === null ? null : result.metrics || [];
-    },
-    loadingMessage: 'Loading metrics...',
-    fetchErrorMessage: error => `Failed to load metrics: ${error.message}`,
-    select: metrics => metrics,
-    // a metric either matches as a whole or not at all - its measurements are never narrowed
-    filterGroup: (metric, query) => (!query || matchesMetricFilter(metric, query) ? metric : null),
-    key: metric => metric.name,
-    header: (metric, query, context) => ({
-        name: metric.name,
-        count: formatCount(metric.measurements.length, 'measurement', {locale: context.locale}),
-        highlight: query,
-        nameModifier: 'mono',
-        // the unit cell is there even when empty: without it the count slides into the unit's column
-        meta: [badge(metric.type, 'info'), el('span', {className: 'pk-metric__unit', text: metric.baseUnit || ''})]
-    }),
-    items: (metric, list, query, context) => {
-        if (metric.description) list.appendChild(el('div', {className: 'pk-metric__description', text: metric.description}));
-        metric.measurements.forEach(measurement =>
-            list.appendChild(renderMeasurement(measurement, query, metric.baseUnit, context.locale)));
-    },
-    emptyMessage: 'No metrics available',
-    noMatchMessage: query => `No metrics matching "${query}"`,
-    afterRender: updateCount
-});
-
 export function isAvailable(data, features) {
     return Boolean(features?.metrics);
 }
 
-export const {render} = tab;
+export function create(container) {
+    return filteredGroupTab(container, {
+        inputId: 'meters-filter',
+        listId: 'meters-list',
+        fetchData: async context => {
+            const result = await context.client.get('/api/metrics');
+            return result === null ? null : result.metrics || [];
+        },
+        loadingMessage: 'Loading metrics...',
+        fetchErrorMessage: error => `Failed to load metrics: ${error.message}`,
+        select: metrics => metrics,
+        // a metric either matches as a whole or not at all - its measurements are never narrowed
+        filterGroup: (metric, query) => (!query || matchesMetricFilter(metric, query) ? metric : null),
+        key: metric => metric.name,
+        header: (metric, query, context) => ({
+            name: metric.name,
+            count: formatCount(metric.measurements.length, 'measurement', {locale: context.locale}),
+            highlight: query,
+            nameModifier: 'mono',
+            // the unit cell is there even when empty: without it the count slides into the unit's column
+            meta: [badge(metric.type, 'info'), el('span', {className: 'pk-metric__unit', text: metric.baseUnit || ''})]
+        }),
+        items: (metric, list, query, context) => {
+            if (metric.description) list.appendChild(el('div', {className: 'pk-metric__description', text: metric.description}));
+            metric.measurements.forEach(measurement =>
+                list.appendChild(renderMeasurement(measurement, query, metric.baseUnit, context.locale)));
+        },
+        emptyMessage: 'No metrics available',
+        noMatchMessage: query => `No metrics matching "${query}"`,
+        afterRender: updateCount
+    });
+}
 
 /** The "N / M metrics" readout beside the filter input, updated on every render. */
 function updateCount(container, {groups, filtered, query, context}) {

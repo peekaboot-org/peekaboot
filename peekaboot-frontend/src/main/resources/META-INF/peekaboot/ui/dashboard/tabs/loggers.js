@@ -12,79 +12,66 @@ import {urlState} from '../../shared/url-filter.js';
 
 export const id = 'loggers';
 
-const tab = filteredGroupTab({
-    inputId: 'loggers-filter',
-    listId: 'loggers-list',
-    select: data => data?.loggers?.packages,
-    filterGroup: (group, query) => {
-        const loggers = group.loggers.filter(logger => matches(logger, query));
-        return loggers.length > 0 ? {packageName: group.packageName, loggers} : null;
-    },
-    key: group => group.packageName,
-    header: (group, query, context) => ({
-        name: group.packageName,
-        count: formatCount(group.loggers.length, 'logger', {locale: context.locale}),
-        highlight: query,
-        nameModifier: 'strong'
-    }),
-    items: (group, list, query) => group.loggers.forEach(logger =>
-        list.appendChild(renderLoggerRow(logger, query))),
-    extraTop: ({loggers}, context) => countSummary([
-        ['Total', loggers.totalCount],
-        ['Configured', loggers.configuredCount]
-    ], context.locale),
-    emptyMessage: 'No loggers available',
-    noMatchMessage: () => 'No loggers matching criteria',
-    filterState
-});
-
-// The checkbox is this tab's own second filter control: wired once here, its state
-// read by matches() below and kept in the URL beside the text filter's "q".
-let configuredOnly = false;
-
 export function isAvailable(data) {
     return Boolean(data?.loggers?.packages?.length);
 }
 
-export function render(container, data, context) {
-    wireCheckbox(container);
-    tab.render(container, data, context);
-}
-
-function wireCheckbox(container) {
+export function create(container) {
+    // The checkbox is this tab's own second filter control: its state is read by the
+    // group filter below and kept in the URL beside the text filter's "q".
     const checkbox = container.querySelector('#loggers-configured-only');
-    if (!checkbox || checkbox.dataset.wired) return;
-    checkbox.dataset.wired = 'true';
-    checkbox.addEventListener('change', () => {
-        configuredOnly = checkbox.checked;
-        tab.refresh(container);
-    });
-}
+    let configuredOnly = false;
 
-/**
- * The filter input and the configured-only checkbox as one URL state (see
- * shared/url-filter.js), since a single "q" would not carry the checkbox. Both keys are
- * written together, so a param missing from a URL that names the other is at its default.
- */
-function filterState(input, container) {
-    const checkbox = container.querySelector('#loggers-configured-only');
-
-    return urlState({
-        keys: ['q', 'configured'],
-        read: urlParams => ({query: urlParams.q || '', configuredOnly: urlParams.configured === '1'}),
-        apply: state => {
-            if (state.query !== input.value.trim()) input.value = state.query;
-            if (checkbox) checkbox.checked = state.configuredOnly;
-            configuredOnly = state.configuredOnly;
+    const tab = filteredGroupTab(container, {
+        inputId: 'loggers-filter',
+        listId: 'loggers-list',
+        select: data => data?.loggers?.packages,
+        filterGroup: (group, query) => {
+            const loggers = group.loggers.filter(logger => matches(logger, query, configuredOnly));
+            return loggers.length > 0 ? {packageName: group.packageName, loggers} : null;
         },
-        params: () => {
-            const params = {};
-            const query = input.value.trim();
-            if (query) params.q = query;
-            if (configuredOnly) params.configured = '1';
-            return params;
-        }
+        key: group => group.packageName,
+        header: (group, query, context) => ({
+            name: group.packageName,
+            count: formatCount(group.loggers.length, 'logger', {locale: context.locale}),
+            highlight: query,
+            nameModifier: 'strong'
+        }),
+        items: (group, list, query) => group.loggers.forEach(logger =>
+            list.appendChild(renderLoggerRow(logger, query))),
+        extraTop: ({loggers}, context) => countSummary([
+            ['Total', loggers.totalCount],
+            ['Configured', loggers.configuredCount]
+        ], context.locale),
+        emptyMessage: 'No loggers available',
+        noMatchMessage: () => 'No loggers matching criteria',
+        // The filter input and the checkbox as one URL state (see shared/url-filter.js),
+        // since a single "q" would not carry the checkbox. Both keys are written together,
+        // so a param missing from a URL that names the other is at its default.
+        filterState: input => urlState({
+            keys: ['q', 'configured'],
+            read: urlParams => ({query: urlParams.q || '', configuredOnly: urlParams.configured === '1'}),
+            apply: state => {
+                if (state.query !== input.value.trim()) input.value = state.query;
+                if (checkbox) checkbox.checked = state.configuredOnly;
+                configuredOnly = state.configuredOnly;
+            },
+            params: () => {
+                const params = {};
+                const query = input.value.trim();
+                if (query) params.q = query;
+                if (configuredOnly) params.configured = '1';
+                return params;
+            }
+        })
     });
+
+    checkbox?.addEventListener('change', () => {
+        configuredOnly = checkbox.checked;
+        tab.refresh();
+    });
+
+    return tab;
 }
 
 /** A logger with an explicitly configured level, as opposed to one merely inheriting its parent's. */
@@ -92,7 +79,7 @@ function isConfigured(logger) {
     return logger.configuredLevel != null;
 }
 
-function matches(logger, query) {
+function matches(logger, query, configuredOnly) {
     if (configuredOnly && !isConfigured(logger)) return false;
     return !query || logger.name.toLowerCase().includes(query.toLowerCase());
 }
