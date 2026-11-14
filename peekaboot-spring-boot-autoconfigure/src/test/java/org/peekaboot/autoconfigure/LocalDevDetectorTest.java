@@ -21,6 +21,9 @@ import org.peekaboot.autoconfigure.LocalDevDetector.LaunchSignals;
 
 class LocalDevDetectorTest {
 
+    /** Stands in for the JVM's system class loader: the signals and the main thread of a launch share it. */
+    private static final ClassLoader APPLICATION_CLASS_LOADER = new ClassLoader() {};
+
     private static final StackTraceElement[] CLEAN_STACK =
             stackOf("org.peekaboot.example.ExampleApplication", "org.springframework.boot.SpringApplication");
 
@@ -158,7 +161,7 @@ class LocalDevDetectorTest {
 
     @Test
     void rejectsAnIdeShapedLaunchInsideAContainer() {
-        LaunchSignals signals = new LaunchSignals(IDE_LAUNCH.classPath(), true);
+        LaunchSignals signals = new LaunchSignals(IDE_LAUNCH.classPath(), true, APPLICATION_CLASS_LOADER);
 
         assertThat(LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
                 .isEqualTo(LaunchKind.DEPLOYMENT);
@@ -195,7 +198,7 @@ class LocalDevDetectorTest {
     void rejectsADevToolsRestartInsideAContainer() {
         // build output present, so only the container marker can produce the rejection -
         // a Jib-shaped class path would pass through buildOutputOnClassPath() alone
-        LaunchSignals signals = new LaunchSignals(IDE_LAUNCH.classPath(), true);
+        LaunchSignals signals = new LaunchSignals(IDE_LAUNCH.classPath(), true, APPLICATION_CLASS_LOADER);
 
         assertThat(LocalDevDetector.launchKind(devToolsRestartedThread(), CLEAN_STACK, signals))
                 .isEqualTo(LaunchKind.DEPLOYMENT);
@@ -204,7 +207,7 @@ class LocalDevDetectorTest {
     @Test
     void rejectsThreadNotNamedMain() {
         Thread thread = new Thread(() -> {}, "worker-1");
-        thread.setContextClassLoader(new FakeAppClassLoader());
+        thread.setContextClassLoader(APPLICATION_CLASS_LOADER);
 
         assertThat(LocalDevDetector.launchKind(thread, CLEAN_STACK, IDE_LAUNCH)).isEqualTo(LaunchKind.DEPLOYMENT);
     }
@@ -212,9 +215,18 @@ class LocalDevDetectorTest {
     @Test
     void rejectsNonAppClassLoader() {
         // packaged jars run under Boot's LaunchedClassLoader, wars under the
-        // container's webapp loader - neither name contains "AppClassLoader"
+        // container's webapp loader - neither is the loader the JVM started on
         Thread thread = new Thread(() -> {}, "main");
         thread.setContextClassLoader(new PackagedArchiveClassLoader());
+
+        assertThat(LocalDevDetector.launchKind(thread, CLEAN_STACK, IDE_LAUNCH)).isEqualTo(LaunchKind.DEPLOYMENT);
+    }
+
+    /** Jetty runs a war under its WebAppClassLoader, whose name holds the JDK loader's as a substring. */
+    @Test
+    void rejectsAForeignLoaderWhoseNameContainsAppClassLoader() {
+        Thread thread = new Thread(() -> {}, "main");
+        thread.setContextClassLoader(new WebAppClassLoader());
 
         assertThat(LocalDevDetector.launchKind(thread, CLEAN_STACK, IDE_LAUNCH)).isEqualTo(LaunchKind.DEPLOYMENT);
     }
@@ -262,7 +274,7 @@ class LocalDevDetectorTest {
                 () -> result.set(LocalDevDetector.launchKind(
                         Thread.currentThread(), Thread.currentThread().getStackTrace(), IDE_LAUNCH)),
                 "main");
-        thread.setContextClassLoader(new FakeAppClassLoader());
+        thread.setContextClassLoader(APPLICATION_CLASS_LOADER);
         thread.start();
         thread.join();
 
@@ -313,7 +325,7 @@ class LocalDevDetectorTest {
     @Test
     void isADeploymentInAContainerDespiteBuildOutput() {
         var stack = stackOf("com.acme.App");
-        var signals = new LaunchSignals("/app/target/classes", true);
+        var signals = new LaunchSignals("/app/target/classes", true, APPLICATION_CLASS_LOADER);
 
         var kind = LocalDevDetector.launchKind(mainThreadWithAppClassLoader(), stack, signals);
 
@@ -327,7 +339,7 @@ class LocalDevDetectorTest {
     }
 
     private static LaunchSignals signals(String... classPathEntries) {
-        return new LaunchSignals(String.join(File.pathSeparator, classPathEntries), false);
+        return new LaunchSignals(String.join(File.pathSeparator, classPathEntries), false, APPLICATION_CLASS_LOADER);
     }
 
     /** An empty jar whose manifest carries the given space-separated Class-Path entries. */
@@ -345,7 +357,7 @@ class LocalDevDetectorTest {
 
     private static Thread mainThreadWithAppClassLoader() {
         Thread thread = new Thread(() -> {}, "main");
-        thread.setContextClassLoader(new FakeAppClassLoader());
+        thread.setContextClassLoader(APPLICATION_CLASS_LOADER);
         return thread;
     }
 
@@ -355,11 +367,10 @@ class LocalDevDetectorTest {
         return thread;
     }
 
-    /** Class name intentionally contains "AppClassLoader", like jdk.internal.loader.ClassLoaders$AppClassLoader. */
-    private static final class FakeAppClassLoader extends ClassLoader {}
-
     /** Class name intentionally contains "RestartClassLoader", like DevTools' restart.classloader.RestartClassLoader. */
     private static final class FakeRestartClassLoader extends ClassLoader {}
 
     private static final class PackagedArchiveClassLoader extends ClassLoader {}
+
+    private static final class WebAppClassLoader extends ClassLoader {}
 }

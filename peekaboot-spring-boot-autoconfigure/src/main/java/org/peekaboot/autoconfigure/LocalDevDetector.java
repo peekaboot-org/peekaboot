@@ -21,9 +21,9 @@ import org.springframework.core.NativeDetector;
  * image.
  *
  * <p>Starts from the heuristics Spring Boot DevTools uses ({@code DevToolsEnablementDeducer}
- * and {@code DefaultRestartInitializer}): the {@code main} thread runs on the JDK's
- * {@code AppClassLoader} (packaged jars use Boot's {@code LaunchedClassLoader}, wars the
- * container's webapp loader) and no test-framework or AOT frames are on the stack. That
+ * and {@code DefaultRestartInitializer}): the {@code main} thread runs on the JVM's system
+ * class loader (packaged jars use Boot's {@code LaunchedClassLoader}, wars the container's
+ * webapp loader) and no test-framework or AOT frames are on the stack. That
  * alone also matches every exploded-classpath launch - a Jib image, Spring Boot's
  * {@code extract} layout, a hand-written {@code java -cp} - so two further signals decide:
  * the class path must contain a build tool's output directory (the positive proof of an
@@ -77,17 +77,19 @@ final class LocalDevDetector {
     private LocalDevDetector() {}
 
     /**
-     * The launch facts the class-loader, thread and stack checks cannot see: the class
-     * path and whether the process runs in a container. A record so tests can state a
-     * launch shape outright instead of faking a JVM.
+     * The launch facts the thread and its stack do not carry: the class path, whether the
+     * process runs in a container, and the class loader the JVM starts an application on.
+     * A record so tests can state a launch shape outright instead of faking a JVM.
      */
-    record LaunchSignals(String classPath, boolean containerMarkers) {
+    record LaunchSignals(String classPath, boolean containerMarkers, ClassLoader applicationClassLoader) {
 
         static LaunchSignals fromRuntime() {
             // any detected runtime means the exploded class path is an image
             // layout, not a developer's checkout
             return new LaunchSignals(
-                    System.getProperty("java.class.path", ""), ContainerRuntime.current() != ContainerRuntime.NONE);
+                    System.getProperty("java.class.path", ""),
+                    ContainerRuntime.current() != ContainerRuntime.NONE,
+                    ClassLoader.getSystemClassLoader());
         }
 
         boolean buildOutputOnClassPath() {
@@ -192,7 +194,8 @@ final class LocalDevDetector {
         if (!"main".equals(thread.getName())) {
             return false;
         }
-        return classLoader.getClass().getName().contains("AppClassLoader") && isDeveloperLaunch(signals);
+        // Object's equals, so identity: a match on the name would also take Jetty's WebAppClassLoader
+        return signals.applicationClassLoader().equals(classLoader) && isDeveloperLaunch(signals);
     }
 
     private static boolean isTestLaunch(StackTraceElement[] stackTrace) {
