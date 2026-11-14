@@ -237,17 +237,34 @@ class LifecycleEventRecorderTest {
 
     @Test
     void aClosingContextIsRecordedAsAStopAtTheClocksInstant() {
-        LifecycleEventLog log = log();
-        ApplicationContext context = mock(ApplicationContext.class);
+        // records on the calling thread, so the start is in the log before the context closes
+        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        log.beginLoad();
+        ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         Clock clock = Clock.fixed(Instant.parse("2026-09-11T08:00:00Z"), ZoneOffset.UTC);
         LifecycleEventRecorder recorder =
                 new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context, clock);
+        recorder.onReady(ready(context, 1_000));
 
         recorder.onApplicationEvent(new ContextClosedEvent(context));
 
         assertThat(log.events())
                 .extracting(LifecycleEvent::type, LifecycleEvent::epochMs)
-                .containsExactly(tuple(LifecycleEvent.Type.STOP, clock.millis()));
+                .containsExactly(
+                        tuple(LifecycleEvent.Type.START, 1_000L), tuple(LifecycleEvent.Type.STOP, clock.millis()));
+    }
+
+    /** A start that failed never reached ready, so a stop would end a run the log never began. */
+    @Test
+    void aContextThatClosesBeforeItWasReadyRecordsNoStop() {
+        LifecycleEventLog log = log();
+        ApplicationContext context = mock(ApplicationContext.class);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context);
+
+        recorder.onApplicationEvent(new ContextClosedEvent(context));
+
+        assertThat(log.events()).isEmpty();
     }
 
     /** An async multicaster would run the close listener after the context destroyed it, or after the JVM exited. */
@@ -257,10 +274,14 @@ class LifecycleEventRecorderTest {
         log.beginLoad();
         NewestFirstExecutor executor = new NewestFirstExecutor();
         AnnotationConfigApplicationContext context = asyncContext(executor, log);
+        context.publishEvent(new ApplicationReadyEvent(new SpringApplication(), new String[0], context, Duration.ZERO));
+        executor.runHeld();
 
         context.close();
 
-        assertThat(log.events()).extracting(LifecycleEvent::type).containsExactly(LifecycleEvent.Type.STOP);
+        assertThat(log.events())
+                .extracting(LifecycleEvent::type)
+                .containsExactly(LifecycleEvent.Type.START, LifecycleEvent.Type.STOP);
     }
 
     /**
@@ -270,12 +291,16 @@ class LifecycleEventRecorderTest {
      */
     @Test
     void anotherContextsCloseIsNotRecorded() {
-        LifecycleEventLog log = log();
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(
-                log, new BuildInfoProvider(null), noGitProperties(), mock(ApplicationContext.class));
+        // records on the calling thread, so the start that lets a stop through is in the log first
+        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        log.beginLoad();
+        ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), noGitProperties(), context);
+        recorder.onReady(ready(context, 1L));
 
         recorder.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContext.class)));
 
-        assertThat(log.events()).isEmpty();
+        assertThat(log.events()).extracting(LifecycleEvent::type).containsExactly(LifecycleEvent.Type.START);
     }
 }

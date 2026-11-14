@@ -21,6 +21,9 @@ public class LifecycleEventRecorder implements ApplicationListener<ContextClosed
     private final ApplicationContext ownContext;
     private final Clock clock;
 
+    /** A context that closes before it was ready has no start for a stop to end. */
+    private volatile boolean startRecorded;
+
     public LifecycleEventRecorder(
             LifecycleEventLog eventLog,
             BuildInfoProvider buildInfoProvider,
@@ -53,11 +56,12 @@ public class LifecycleEventRecorder implements ApplicationListener<ContextClosed
                 ProcessHandle.current().pid(),
                 buildInfoProvider.getEntries(),
                 InfoEntries.of(gitProperties.readFor(event.getSpringApplication()))));
+        startRecorded = true;
     }
 
     @Override
     public void onApplicationEvent(ContextClosedEvent event) {
-        if (!ContextEvents.fromOwnContext(event, ownContext)) {
+        if (!startRecorded || !ContextEvents.fromOwnContext(event, ownContext)) {
             return;
         }
         eventLog.recordAndPersist(
