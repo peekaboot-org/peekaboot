@@ -25,6 +25,9 @@ class LoopbackOnlyIT {
 
     private static final String ANOTHER_HOST = "evil.example";
 
+    /** Only the loopback rule's refusal names it, so a 403 from anything else does not pass for one. */
+    private static final String THE_SWITCH = "peekaboot.remote-access.enabled";
+
     /** The markup of a rendered frame. The class name alone is in the stylesheet every error page inlines. */
     private static final String STACK_FRAME = "<span class=\"pk-stack-trace__frame";
 
@@ -49,7 +52,7 @@ class LoopbackOnlyIT {
         assertThat(server.rawGet("/peekaboot/api/features", Map.of("Host", ANOTHER_HOST)))
                 .startsWith("HTTP/1.1 403")
                 .contains("application/problem+json")
-                .contains("peekaboot.remote-access.enabled");
+                .contains(THE_SWITCH);
     }
 
     @Test
@@ -57,20 +60,25 @@ class LoopbackOnlyIT {
         Map<String, String> crossSite =
                 Map.of("Host", THIS_MACHINE, "Sec-Fetch-Site", "cross-site", "Sec-Fetch-Mode", "cors");
 
-        assertThat(server.rawGet("/peekaboot/api/features", crossSite)).startsWith("HTTP/1.1 403");
+        assertThat(server.rawGet("/peekaboot/api/features", crossSite))
+                .startsWith("HTTP/1.1 403")
+                .contains(THE_SWITCH);
     }
 
     @Test
     void aForeignOriginIsRefused() {
         Map<String, String> foreignOrigin = Map.of("Host", THIS_MACHINE, "Origin", "http://" + ANOTHER_HOST);
 
-        assertThat(server.rawGet("/peekaboot/api/features", foreignOrigin)).startsWith("HTTP/1.1 403");
+        assertThat(server.rawGet("/peekaboot/api/features", foreignOrigin))
+                .startsWith("HTTP/1.1 403")
+                .contains(THE_SWITCH);
     }
 
     @Test
     void theUiIsRefusedToo() {
         assertThat(server.rawGet("/peekaboot/ui/dashboard/main.js", Map.of("Host", ANOTHER_HOST)))
-                .startsWith("HTTP/1.1 403");
+                .startsWith("HTTP/1.1 403")
+                .contains(THE_SWITCH);
     }
 
     @Test
