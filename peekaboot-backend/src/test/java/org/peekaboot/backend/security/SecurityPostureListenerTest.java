@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import ch.qos.logback.classic.Level;
 import java.nio.file.Path;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.Credentials;
 import org.peekaboot.testsupport.LogCapture;
@@ -38,7 +39,8 @@ class SecurityPostureListenerTest {
 
     @Test
     void onApplicationEvent_logsAnInfoPostureAtInfo() {
-        var posture = SecurityPosture.armed("/peekaboot", Credentials.generated("hunter2"), FILE, false, false);
+        var posture = SecurityPosture.armed(
+                "/peekaboot", Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC);
         var expectedText = posture.report().orElseThrow().text();
 
         try (var logs = LogCapture.attach(SecurityPostureListener.class)) {

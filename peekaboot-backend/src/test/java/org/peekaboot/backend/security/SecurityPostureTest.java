@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.Credentials;
 import org.peekaboot.backend.text.BannerFrame;
@@ -20,7 +20,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_printsTheGeneratedPasswordOnce() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -34,7 +35,8 @@ class SecurityPostureTest {
     /** One headline whatever else is on the class path: the guard answers for the path on its own. */
     @Test
     void armed_saysTheGuardChallengesEveryRequest() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -46,7 +48,12 @@ class SecurityPostureTest {
     @Test
     void armed_namesThePathTheGuardActuallyCovers() {
         var report = SecurityPosture.armed(
-                        DASHBOARD_BEHIND_A_SERVLET_PATH, Credentials.generated("hunter2"), FILE, false, false)
+                        DASHBOARD_BEHIND_A_SERVLET_PATH,
+                        Credentials.generated("hunter2"),
+                        FILE,
+                        false,
+                        false,
+                        ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -55,7 +62,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_namesTheSwitchThatHandsThePathToYourOwnSecurity() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -67,7 +75,8 @@ class SecurityPostureTest {
     /** An armed guard is the intended setup, so it is a note, not an alarm. */
     @Test
     void armed_onlyInformsWhileTheToolbarIsOff() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -75,24 +84,25 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_neverPrintsAPasswordItDidNotGenerate() {
+    void armed_datesALoadedPasswordInTheZoneItIsGiven() {
         var loaded = Credentials.loaded("hunter2");
 
-        var report = SecurityPosture.armed(DASHBOARD, loaded, FILE, false, false)
+        var inPagoPago = SecurityPosture.armed(DASHBOARD, loaded, FILE, false, false, ZoneId.of("Pacific/Pago_Pago"))
+                .report()
+                .orElseThrow();
+        var inUtc = SecurityPosture.armed(DASHBOARD, loaded, FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
-        String expectedDate = DateTimeFormatter.ISO_LOCAL_DATE
-                .withZone(ZoneId.systemDefault())
-                .format(Credentials.CREATED);
-        assertThat(report.text()).doesNotContain("hunter2").contains(expectedDate);
+        assertThat(inPagoPago.text()).contains("2026-09-10").doesNotContain("hunter2");
+        assertThat(inUtc.text()).contains("2026-09-11").doesNotContain("hunter2");
     }
 
     @Test
     void armed_saysNothingAboutAFileForAConfiguredPassword() {
         var configured = Credentials.configured("from-the-vault");
 
-        var report = SecurityPosture.armed(DASHBOARD, configured, FILE, false, false)
+        var report = SecurityPosture.armed(DASHBOARD, configured, FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -101,7 +111,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_warnsThatAWriteFailureWillChangeThePassword() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.unpersisted("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.unpersisted("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -110,7 +121,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_saysStorageIsOffWhenThereIsNoCredentialsFile() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.unpersisted("hunter2"), null, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.unpersisted("hunter2"), null, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -123,7 +135,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_warnsAboutTheToolbarWhenItIsOn() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, true, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, true, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -137,7 +150,8 @@ class SecurityPostureTest {
      */
     @Test
     void armed_warnsWhenTheToolbarIsOn() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, true, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, true, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -207,7 +221,8 @@ class SecurityPostureTest {
     /** The error page serves stack traces to anyone, outside the guard; an operator running at WARN has to hear it. */
     @Test
     void armed_warnsWhenTheErrorPageIsOnADeployment() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, true)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, false, true, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 
@@ -217,7 +232,8 @@ class SecurityPostureTest {
 
     @Test
     void armed_saysNothingAboutTheErrorPageWhileItIsOff() {
-        var report = SecurityPosture.armed(DASHBOARD, Credentials.generated("hunter2"), FILE, false, false)
+        var report = SecurityPosture.armed(
+                        DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
                 .orElseThrow();
 

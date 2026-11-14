@@ -2,6 +2,7 @@ package org.peekaboot.autoconfigure;
 
 import jakarta.servlet.DispatcherType;
 import java.nio.file.Path;
+import java.time.ZoneId;
 import java.util.stream.Stream;
 import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
@@ -85,7 +86,8 @@ public class PeekabootSecurityAutoConfiguration {
                     resolvedCredentials,
                     resolvedCredentialsFile.path().orElse(null),
                     properties.getDevToolbar().isEnabled(),
-                    errorPageOnADeployment);
+                    errorPageOnADeployment,
+                    ZoneId.systemDefault());
         }
         if (deploymentLaunch) {
             return SecurityPosture.disabledOnADeployment(paths.dashboardPath(), errorPageOnADeployment);

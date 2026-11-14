@@ -1,8 +1,8 @@
 package org.peekaboot.backend.security;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.text.BannerFrame;
@@ -15,8 +15,6 @@ import org.peekaboot.backend.text.BannerFrame;
  * disappears entirely while {@code peekaboot.lifecycle.enabled} is false.
  */
 public final class SecurityPosture {
-
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.systemDefault());
 
     private static final String DOCS = "https://www.peekaboot.org/docs/security/";
 
@@ -78,18 +76,20 @@ public final class SecurityPosture {
      * The guard is armed: a banner with the credentials, at WARN while the toolbar or a deployed error page is on.
      *
      * @param dashboardPath where the dashboard sits below the context path, as {@code PeekabootPaths} resolves it
+     * @param zone the time zone a stored password's date is printed in
      */
     public static SecurityPosture armed(
             String dashboardPath,
             DashboardCredentials credentials,
             @Nullable Path credentialsFile,
             boolean devToolbarOn,
-            boolean errorPageOnADeployment) {
+            boolean errorPageOnADeployment,
+            ZoneId zone) {
 
         StringBuilder report = BannerFrame.open("Peekaboot Security");
         BannerFrame.line(report, " Peekaboot challenges every " + dashboardPath + "/** request with HTTP Basic.");
         BannerFrame.line(report, " Username: " + credentials.username());
-        BannerFrame.line(report, passwordLine(credentials, credentialsFile));
+        BannerFrame.line(report, passwordLine(credentials, credentialsFile, zone));
         if (devToolbarOn) {
             BannerFrame.line(
                     report,
@@ -105,11 +105,12 @@ public final class SecurityPosture {
         return new SecurityPosture(new Report(level, report.toString()));
     }
 
-    private static String passwordLine(DashboardCredentials credentials, @Nullable Path credentialsFile) {
+    private static String passwordLine(DashboardCredentials credentials, @Nullable Path credentialsFile, ZoneId zone) {
         return switch (credentials.origin()) {
             case CONFIGURED -> " Password: taken from peekaboot.security.password";
             case LOADED ->
-                " Password: unchanged since " + DATE.format(credentials.createdAt()) + ", hashed in " + credentialsFile;
+                " Password: unchanged since " + LocalDate.ofInstant(credentials.createdAt(), zone) + ", hashed in "
+                        + credentialsFile;
             case GENERATED ->
                 " Password: " + credentials.plaintext() + "  (shown once; hashed in " + credentialsFile + ")";
             case GENERATED_UNPERSISTED ->
