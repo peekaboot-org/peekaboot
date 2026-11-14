@@ -33,13 +33,18 @@ export function create(container) {
 
 function renderRow(migration, {locale, timeZone}) {
     return el('tr', {className: STATE_STRIPES[migration.state]},
-        textCell(`V${migration.version}`, 'pk-flyway-row__version pk-table__shrink'),
+        textCell(versionLabel(migration.version), 'pk-flyway-row__version pk-table__shrink'),
         textCell(migration.description, 'pk-flyway-row__description'),
         textCell(migration.script, 'pk-table__mono pk-flyway-row__script'),
         textCell(migration.type, 'pk-table__shrink'),
         durationCell(migration.executionTimeMs),
         textCell(formatDateTime(migration.installedOn, {locale, timeZone}), 'pk-table__shrink'),
         cell({className: 'pk-table__shrink'}, badge(migration.state, migrationStateVariant(migration.state))));
+}
+
+/** A repeatable migration carries no version, so the cell names its kind. */
+function versionLabel(version) {
+    return version == null ? 'Repeatable' : `V${version}`;
 }
 
 /**

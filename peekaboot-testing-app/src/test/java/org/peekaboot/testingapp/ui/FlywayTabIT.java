@@ -107,6 +107,26 @@ class FlywayTabIT extends PlaywrightTestBase {
         assertThat((String) durationCellClass).doesNotContain("slow");
     }
 
+    /** A repeatable migration has no version, and the row says so where "Vnull" stood. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRepeatableMigrationIsNamedInsteadOfAVersion() {
+        Object firstCells = importModule("dashboard/tabs/flyway.js", """
+            (() => {
+                const container = document.createElement('div');
+                container.innerHTML = '<div id="flyway-timeline"></div>';
+                m.create(container).show({flyway: {migrations: [
+                    {version: null, description: 'views', script: 'R__views.sql', type: 'SQL',
+                        executionTimeMs: 5, installedOn: 0, state: 'SUCCESS'},
+                    {version: '1', description: 'init', script: 'V1__init.sql', type: 'SQL',
+                        executionTimeMs: 5, installedOn: 0, state: 'SUCCESS'}]}}, {});
+                return [...container.querySelectorAll('tbody tr td:first-child')].map(cell => cell.textContent);
+            })()
+            """);
+
+        assertThat((List<String>) firstCells).containsExactly("Repeatable", "V1");
+    }
+
     /** One migration, rendered three times: only the reader's locale and time zone put its row out of date. */
     @Test
     @SuppressWarnings("unchecked")
