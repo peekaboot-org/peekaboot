@@ -76,7 +76,10 @@ final class InsightsSnapshotStore implements SnapshotStore {
         this.schedule = schedule;
     }
 
-    /** The store for {@code properties}' persistence settings, or {@link SnapshotStore#NONE} while storage is off. */
+    /**
+     * The store for {@code properties}' persistence settings, or {@link SnapshotStore#NONE} where
+     * this instance writes no file.
+     */
     static SnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
         if (storage == null) {
             return NONE;

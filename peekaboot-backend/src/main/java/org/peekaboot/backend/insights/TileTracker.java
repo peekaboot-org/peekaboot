@@ -18,7 +18,8 @@ import org.peekaboot.backend.insights.config.TileDef;
  * tile values off {@code /api/insights/config} the moment the dashboard opens, routinely
  * before the first boundary-aligned tick. Every tile is a plain {@code value}-stat sample,
  * so a read needs no elapsed interval, and concurrent reads race only benignly: sampling
- * is idempotent and {@code TileState.value}/{@code frozen} are volatile.
+ * is idempotent and {@code TileState.value}/{@code frozen} are volatile. A tile whose meter
+ * throws may log its warning twice when two reads race.
  */
 final class TileTracker {
 

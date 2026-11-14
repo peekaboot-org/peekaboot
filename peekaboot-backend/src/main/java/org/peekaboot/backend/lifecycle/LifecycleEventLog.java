@@ -15,7 +15,8 @@ import tools.jackson.core.JacksonException;
 
 /**
  * The application's start/stop history: at most {@link #MAX_EVENTS} events in memory,
- * oldest dropped first, backed by a file when storage is switched on.
+ * oldest dropped first, backed by a file while storage is on and this instance is the one
+ * that writes it.
  *
  * <p>The file is read on a virtual thread, never on the startup path - an application
  * embedding Peekaboot must not boot one millisecond slower for a dev tool's history.
@@ -51,7 +52,7 @@ public final class LifecycleEventLog {
         this.recordWhenLoadedExecutor = recordWhenLoadedExecutor;
     }
 
-    /** The log for {@code storage}: backed by its lifecycle file, or in memory alone while storage is off. */
+    /** The log for {@code storage}: backed by its lifecycle file, or in memory alone where it has none. */
     public static LifecycleEventLog create(StorageDirectory storage) {
         return new LifecycleEventLog(
                 storage.file(LifecycleEventFile.FILE_NAME)

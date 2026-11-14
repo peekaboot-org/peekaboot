@@ -7,12 +7,13 @@ import java.util.function.Supplier;
 
 /**
  * The persistence side of a collector's rings: loaded in the background, written on a
- * cadence and once more at shutdown. {@link #NONE} is the store while storage is off, so
- * the service drives one store the same way whether or not a file exists.
+ * cadence and once more at shutdown. {@link #NONE} is the store while storage is off or
+ * another instance writes the directory, so the service drives one store the same way
+ * whether or not a file exists.
  */
 interface SnapshotStore extends InsightsCollector.SnapshotSource {
 
-    /** Storage off: nothing to load, nothing to write, and no history ever arrives. */
+    /** No file: nothing to load, nothing to write, and no history ever arrives. */
     // UncommentedEmptyMethodBody: the constant's name is the documentation
     @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
     SnapshotStore NONE = new SnapshotStore() {
@@ -49,6 +50,6 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
     /** Stops the writer and takes the final snapshot; called after the collector has stopped. */
     void stop();
 
-    /** Whether the rings outlive this run; false while storage is off. */
+    /** Whether the rings outlive this run; false for {@link #NONE}. */
     boolean persists();
 }
