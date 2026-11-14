@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
@@ -48,7 +49,10 @@ import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolv
 class PeekabootErrorExceptionResolverTest {
 
     private final PeekabootErrorView view = new PeekabootErrorView(
-            new DefaultErrorAttributes(), new StackTraceRules(List.of(), List.of()), PeekabootPaths.defaults());
+            new DefaultErrorAttributes(),
+            new StackTraceRules(List.of(), List.of()),
+            PeekabootPaths.defaults(),
+            new MaskingEngine());
 
     private final StaticMessageSource messages = new StaticMessageSource();
 

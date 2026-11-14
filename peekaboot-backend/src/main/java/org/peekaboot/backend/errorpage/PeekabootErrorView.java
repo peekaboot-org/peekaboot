@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.FoldedTrace;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.ui.ClasspathText;
@@ -28,7 +29,8 @@ import org.springframework.web.util.HtmlUtils;
  * every {@code Include} switched on. The application's {@code spring.web.error.include-*}
  * settings are therefore neither read nor changed by this page. They govern what its error
  * <em>responses</em> carry; this page is for the developer debugging the failure, which is why
- * {@code SecurityPosture} warns when a deployment has it on.
+ * {@code SecurityPosture} warns when a deployment has it on. The message and the trace are
+ * masked by value shape, as a failed span's are.
  *
  * <p>Like the dev toolbar's shell, the stylesheets travel with the markup as well as being
  * linked, so a reader who has put an authorization gate in front of {@code /peekaboot/**} -
@@ -130,16 +132,24 @@ public class PeekabootErrorView implements View {
 
     private final PeekabootPaths paths;
 
+    private final MaskingEngine maskingEngine;
+
     /**
      * @param errorAttributes the application's own, so this page and its error responses
      *     describe the same failure
      * @param stackTraceRules the folding the Logs tab uses too
      * @param paths where the page's own URLs point, which the DispatcherServlet's prefix moves
+     * @param maskingEngine the masking the dashboard uses too
      */
-    public PeekabootErrorView(ErrorAttributes errorAttributes, StackTraceRules stackTraceRules, PeekabootPaths paths) {
+    public PeekabootErrorView(
+            ErrorAttributes errorAttributes,
+            StackTraceRules stackTraceRules,
+            PeekabootPaths paths,
+            MaskingEngine maskingEngine) {
         this.errorAttributes = errorAttributes;
         this.stackTraceRules = stackTraceRules;
         this.paths = paths;
+        this.maskingEngine = maskingEngine;
     }
 
     @Override
@@ -181,18 +191,25 @@ public class PeekabootErrorView implements View {
         Object trace = attributes.get("trace");
         if (trace == null) {
             return new Detail(
-                    Placeholders.fill(MESSAGE_DETAIL, Map.of("MESSAGE", escape(attributes.get("message")))), false);
+                    Placeholders.fill(MESSAGE_DETAIL, Map.of("MESSAGE", escape(masked(attributes.get("message"))))),
+                    false);
         }
-        FoldedTrace folded = stackTraceRules.fold(trace.toString());
+        // Masked whole before folding, so a secret spanning lines still matches and the ranges index the masked lines.
+        FoldedTrace folded = stackTraceRules.fold(masked(trace));
         boolean revealsSomething = !folded.hidden().isEmpty();
         String html = Placeholders.fill(
                 EXCEPTION_DETAIL,
                 Map.of(
                         "EXCEPTION", escape(attributes.get("exception")),
-                        "MESSAGE", escape(attributes.get("message")),
+                        "MESSAGE", escape(masked(attributes.get("message"))),
                         "REVEAL", revealsSomething ? REVEAL_CONTROL : "",
                         "FRAMES", StackTraceHtml.render(folded)));
         return new Detail(html, revealsSomething);
+    }
+
+    /** Masked before it is escaped: an escaped quote would hide a quoted option from its rule. */
+    private String masked(Object value) {
+        return value == null ? "" : maskingEngine.maskValue(value.toString());
     }
 
     /** A client error recedes beside a server error, the two tiers every Peekaboot surface shows a status in. */

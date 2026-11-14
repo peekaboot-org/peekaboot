@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * The one {@link MaskingEngine} every masking site injects: the dashboard's mappers and
- * services, the request capture and the lifecycle banner. Imported by each of those
+ * services, the request capture, the lifecycle banner and the error page. Imported by each of those
  * auto-configurations rather than being one, so it exists wherever any of them runs, the
  * banner's plain non-web application and the capture without the actuator included.
  */

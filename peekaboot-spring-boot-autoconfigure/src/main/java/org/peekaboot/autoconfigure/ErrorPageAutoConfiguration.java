@@ -4,6 +4,7 @@ import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.security.DashboardAccess;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.springframework.beans.factory.ObjectProvider;
@@ -51,7 +52,7 @@ import org.springframework.web.servlet.DispatcherServlet;
 @ConditionalOnPeekabootServlet
 @ConditionalOnClass({DispatcherServlet.class, ErrorAttributes.class})
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED)
-@Import(StackTraceRulesConfiguration.class)
+@Import({StackTraceRulesConfiguration.class, MaskingConfiguration.class})
 public class ErrorPageAutoConfiguration {
 
     @Bean(name = "error")
@@ -66,8 +67,9 @@ public class ErrorPageAutoConfiguration {
             ErrorAttributes errorAttributes,
             StackTraceRules stackTraceRules,
             PeekabootPaths paths,
+            MaskingEngine maskingEngine,
             ObjectProvider<DashboardAccess> access) {
-        return errorView(errorAttributes, stackTraceRules, paths, access);
+        return errorView(errorAttributes, stackTraceRules, paths, maskingEngine, access);
     }
 
     @Bean
@@ -77,8 +79,10 @@ public class ErrorPageAutoConfiguration {
             ErrorAttributes errorAttributes,
             StackTraceRules stackTraceRules,
             PeekabootPaths paths,
+            MaskingEngine maskingEngine,
             ObjectProvider<DashboardAccess> access) {
-        return new PeekabootErrorViewResolver(errorView(errorAttributes, stackTraceRules, paths, access));
+        return new PeekabootErrorViewResolver(
+                errorView(errorAttributes, stackTraceRules, paths, maskingEngine, access));
     }
 
     @Bean
@@ -88,11 +92,12 @@ public class ErrorPageAutoConfiguration {
             ErrorAttributes errorAttributes,
             StackTraceRules stackTraceRules,
             PeekabootPaths paths,
+            MaskingEngine maskingEngine,
             ObjectProvider<DashboardAccess> access,
             MessageSource messageSource,
             Environment environment) {
         return new PeekabootErrorExceptionResolver(
-                errorView(errorAttributes, stackTraceRules, paths, access),
+                errorView(errorAttributes, stackTraceRules, paths, maskingEngine, access),
                 messageSource,
                 environment.getProperty("spring.mvc.log-resolved-exception", Boolean.class, false));
     }
@@ -105,10 +110,11 @@ public class ErrorPageAutoConfiguration {
             ErrorAttributes errorAttributes,
             StackTraceRules stackTraceRules,
             PeekabootPaths paths,
+            MaskingEngine maskingEngine,
             ObjectProvider<DashboardAccess> access) {
         ErrorAttributes gated =
                 new GatedErrorAttributes(errorAttributes, DashboardAccessConfiguration.debugDetailPermitted(access));
-        return new PeekabootErrorView(gated, stackTraceRules, paths);
+        return new PeekabootErrorView(gated, stackTraceRules, paths, maskingEngine);
     }
 
     /**

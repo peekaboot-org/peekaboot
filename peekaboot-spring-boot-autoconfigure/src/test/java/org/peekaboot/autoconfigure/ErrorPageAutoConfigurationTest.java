@@ -12,6 +12,7 @@ import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.peekaboot.backend.errorpage.PeekabootErrorViewResolver;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.security.DashboardAccess;
 import org.peekaboot.backend.security.LoopbackOnlyAccess;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
@@ -77,6 +78,15 @@ class ErrorPageAutoConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
                 .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
                 .run(context -> assertThat(context).hasSingleBean(StackTraceRules.class));
+    }
+
+    /** One engine for the page and the dashboard, so both mask by the same rules. */
+    @Test
+    void sharesOneMaskingEngineWithTheDashboard() {
+        contextRunner
+                .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .run(context -> assertThat(context).hasSingleBean(MaskingEngine.class));
     }
 
     @Test
@@ -450,7 +460,10 @@ class ErrorPageAutoConfigurationTest {
 
     private static PeekabootErrorView ownView() {
         return new PeekabootErrorView(
-                new DefaultErrorAttributes(), new StackTraceRules(List.of(), List.of()), PeekabootPaths.defaults());
+                new DefaultErrorAttributes(),
+                new StackTraceRules(List.of(), List.of()),
+                PeekabootPaths.defaults(),
+                new MaskingEngine());
     }
 
     private static Throwable exceptionWithVendorFrame() {

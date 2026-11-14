@@ -11,6 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -26,7 +27,8 @@ class PeekabootErrorViewTest {
     private final PeekabootErrorView view = new PeekabootErrorView(
             new DefaultErrorAttributes(),
             new StackTraceRules(List.of(), List.of("com.example")),
-            PeekabootPaths.defaults());
+            PeekabootPaths.defaults(),
+            new MaskingEngine());
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -186,6 +188,79 @@ class PeekabootErrorViewTest {
                 .contains("&lt;script&gt;");
     }
 
+    /** A driver puts its connection URL in the message, and the trace's first line repeats the message. */
+    @Test
+    void masksACredentialInTheExceptionMessage() throws Exception {
+        request.setAttribute(
+                RequestDispatcher.ERROR_EXCEPTION,
+                new IllegalStateException("cannot reach jdbc:postgresql://app:S3cr3tPassw0rd@db:5432/orders"));
+
+        view.render(Map.of(), request, response);
+
+        assertThat(response.getContentAsString())
+                .contains("<p class=\"pk-error__message\">cannot reach jdbc:postgresql://******@db:5432/orders</p>")
+                .contains("IllegalStateException: cannot reach jdbc:postgresql://******@db:5432/orders")
+                .doesNotContain("S3cr3tPassw0rd");
+    }
+
+    /** A cause's message is on the page only as a line of the trace. */
+    @Test
+    void masksACredentialInACausesMessageInTheStackTrace() throws Exception {
+        request.setAttribute(
+                RequestDispatcher.ERROR_EXCEPTION,
+                new IllegalStateException(
+                        "startup failed", new RuntimeException("GET https://api.example.com/v1?api_key=abc123")));
+
+        view.render(Map.of(), request, response);
+
+        assertThat(response.getContentAsString()).contains("?api_key=******").doesNotContain("abc123");
+    }
+
+    @Test
+    void masksACredentialInASendErrorMessage() throws Exception {
+        request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 404);
+        request.setAttribute(RequestDispatcher.ERROR_MESSAGE, "bad link https://admin:hunter2@internal.example.com/x");
+
+        view.render(Map.of(), request, response);
+
+        assertThat(response.getContentAsString())
+                .contains("https://******@internal.example.com/x")
+                .doesNotContain("hunter2");
+    }
+
+    /** The quoted-option rule reads a double quote, which escaping would have turned into an entity. */
+    @Test
+    void masksAQuotedCredentialBeforeEscapingIt() throws Exception {
+        request.setAttribute(
+                RequestDispatcher.ERROR_EXCEPTION, new IllegalStateException("login failed for password=\"hunter2\""));
+
+        view.render(Map.of(), request, response);
+
+        assertThat(response.getContentAsString())
+                .contains("<p class=\"pk-error__message\">login failed for password=&quot;******&quot;</p>")
+                .contains("IllegalStateException: login failed for password=&quot;******&quot;")
+                .doesNotContain("hunter2");
+    }
+
+    /**
+     * The trace is masked whole and folded afterwards. A key that spans lines matches only that
+     * way, and it leaves fewer lines behind, which the folding has to count.
+     */
+    @Test
+    void masksAKeyThatSpansLinesOfTheStackTraceBeforeFoldingIt() {
+        String page = render(
+                view(List.of("org.springframework"), true),
+                exceptionWithFrameworkFrames("bad key -----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----"));
+
+        assertThat(page)
+                .contains("IllegalStateException: bad key ******\n</span>"
+                        + "<span class=\"pk-stack-trace__frame pk-stack-trace__frame--app\">"
+                        + "\tat com.example.Widget.process(Widget.java:10)\n</span>"
+                        + "<details class=\"pk-stack-trace__hidden\">")
+                .contains("2 frames hidden")
+                .doesNotContain("MIIEvQ", "PRIVATE KEY");
+    }
+
     /** Behind a context path every URL the page writes has to carry that prefix, like the bar's. */
     @Test
     void prefixesItsStylesheetsWithTheContextPath() throws Exception {
@@ -214,7 +289,8 @@ class PeekabootErrorViewTest {
         PeekabootErrorView underApp = new PeekabootErrorView(
                 new DefaultErrorAttributes(),
                 new StackTraceRules(List.of(), List.of("com.example")),
-                new PeekabootPaths("/actuator", "", "/app"));
+                new PeekabootPaths("/actuator", "", "/app"),
+                new MaskingEngine());
 
         underApp.render(Map.of(), request, response);
 
@@ -320,7 +396,8 @@ class PeekabootErrorViewTest {
         return new PeekabootErrorView(
                 new DefaultErrorAttributes(),
                 StackTraceRules.resolve(fold, exclusions, null, List.of("com.example")),
-                PeekabootPaths.defaults());
+                PeekabootPaths.defaults(),
+                new MaskingEngine());
     }
 
     /**
