@@ -1,5 +1,6 @@
 package org.peekaboot.backend.security;
 
+import jakarta.servlet.ServletRequestWrapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -17,6 +18,10 @@ import org.springframework.http.HttpStatus;
  * of it. A loopback client address alone does not prove that. A proxy or tunnel on this machine
  * has one whoever it speaks for, and so has this machine's browser while a page of another site,
  * or a name another site points at this machine, drives it.
+ *
+ * <p>The rule reads the container's own request. What the container itself rewrote before the
+ * servlet API hands it out stays out of sight: under {@code server.forward-headers-strategy=native}
+ * the client address is already the one a forwarding header claimed.
  */
 public final class LoopbackOnlyAccess implements DashboardAccess {
 
@@ -49,10 +54,25 @@ public final class LoopbackOnlyAccess implements DashboardAccess {
     }
 
     public boolean permits(HttpServletRequest request) {
-        return isLoopbackLiteral(request.getRemoteAddr())
-                && isRelayedForNoOtherMachine(request)
-                && namesThisMachine(requestedAuthority(request))
-                && comesFromNoOtherSite(request);
+        HttpServletRequest received = asTheContainerReceivedIt(request);
+        return isLoopbackLiteral(received.getRemoteAddr())
+                && isRelayedForNoOtherMachine(received)
+                && namesThisMachine(requestedAuthority(received))
+                && comesFromNoOtherSite(received);
+    }
+
+    /**
+     * The request beneath every wrapper. A host that trusts forwarding headers wraps it in one that
+     * answers with the address and host those headers claim and hides the headers, as Spring's
+     * {@code ForwardedHeaderFilter} does.
+     */
+    private static HttpServletRequest asTheContainerReceivedIt(HttpServletRequest request) {
+        HttpServletRequest received = request;
+        while (received instanceof ServletRequestWrapper wrapper
+                && wrapper.getRequest() instanceof HttpServletRequest wrapped) {
+            received = wrapped;
+        }
+        return received;
     }
 
     private static boolean isRelayedForNoOtherMachine(HttpServletRequest request) {

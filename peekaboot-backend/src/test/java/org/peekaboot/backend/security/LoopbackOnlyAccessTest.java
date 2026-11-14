@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Named.named;
 import static org.peekaboot.backend.testsupport.Requests.request;
 
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Named;
@@ -15,8 +16,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 import tools.jackson.databind.JsonNode;
 
 class LoopbackOnlyAccessTest {
@@ -146,6 +149,42 @@ class LoopbackOnlyAccessTest {
         assertThat(access.permits(local("X-Forwarded-For", forwardedFor))).isTrue();
     }
 
+    /** The filter answers with the address the header claims and hides the header from whatever follows it. */
+    @Test
+    void refusesAnotherMachineThatClaimsToRelayThisOne() throws Exception {
+        MockHttpServletRequest claiming = get("192.168.1.50", "localhost:8080");
+        claiming.addHeader("X-Forwarded-For", "127.0.0.1");
+
+        assertThat(access.permits(behindForwardedHeaderFilter(claiming))).isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "X-Forwarded-For, 203.0.113.9",
+        "X-Forwarded-For, '127.0.0.1, 203.0.113.9'",
+        "Forwarded, for=203.0.113.9",
+        "Forwarded, for=127.0.0.1",
+    })
+    void refusesARelayedRequestBehindAForwardedHeaderFilter(String header, String value) throws Exception {
+        assertThat(access.permits(behindForwardedHeaderFilter(local(header, value))))
+                .isFalse();
+    }
+
+    /** The filter answers with the forwarded host where the rule asks an HTTP/2 request for its server name. */
+    @Test
+    void refusesAnHttp2RequestThatNamesAnotherHostBehindAForwardedHeaderFilter() throws Exception {
+        MockHttpServletRequest rebound = overHttp2("evil.example");
+        rebound.addHeader("X-Forwarded-Host", "localhost");
+
+        assertThat(access.permits(behindForwardedHeaderFilter(rebound))).isFalse();
+    }
+
+    @Test
+    void permitsARelayOfThisMachinesOwnRequestBehindAForwardedHeaderFilter() throws Exception {
+        assertThat(access.permits(behindForwardedHeaderFilter(local("X-Forwarded-For", "127.0.0.1"))))
+                .isTrue();
+    }
+
     @Test
     void aRefusalNamesTheSwitchInAProblemBody() throws Exception {
         var response = new MockHttpServletResponse();
@@ -202,6 +241,15 @@ class LoopbackOnlyAccessTest {
             request.addHeader("Host", host);
         }
         return request;
+    }
+
+    /** The request as a host with {@code server.forward-headers-strategy=framework} hands it on. */
+    private static HttpServletRequest behindForwardedHeaderFilter(MockHttpServletRequest received) throws Exception {
+        MockFilterChain handedOn = new MockFilterChain();
+        new ForwardedHeaderFilter().doFilter(received, new MockHttpServletResponse(), handedOn);
+        HttpServletRequest wrapped = (HttpServletRequest) handedOn.getRequest();
+        assertThat(wrapped).isNotSameAs(received);
+        return wrapped;
     }
 
     private static MockHttpServletRequest overHttp2(String authority) {
