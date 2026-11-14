@@ -126,6 +126,38 @@ class InsightsSnapshotStoreTest {
         }
     }
 
+    /** The rings hold megabytes; once the collector has them, a second copy here is dead weight for the run. */
+    @Test
+    void theLoadedHistoryIsHandedOverOnce() {
+        InsightsSnapshotStore writer = store(Duration.ofDays(30));
+        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        writer.stop();
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+
+        assertThat(loadWith(store)).isPresent();
+
+        assertThat(store.awaitSnapshot(Duration.ZERO)).isEmpty();
+    }
+
+    /** The collector waits once and never comes back, so history that lands later would be held for nobody. */
+    @Test
+    void historyThatArrivesAfterTheWaitGaveUpIsNotKept() {
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
+            assertThat(store.awaitSnapshot(Duration.ZERO)).isEmpty();
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: persisted history did not arrive in time; starting empty");
+            });
+        }
+        store.completeLoaded(() -> Optional.of(snapshot(NOW, 10_000, 90)));
+
+        assertThat(store.awaitSnapshot(Duration.ofSeconds(5))).isEmpty();
+    }
+
     @Test
     void aRunThatNeverSampledDoesNotReplaceGoodHistory() throws IOException {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));

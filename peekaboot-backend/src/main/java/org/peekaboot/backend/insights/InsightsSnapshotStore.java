@@ -41,10 +41,14 @@ final class InsightsSnapshotStore implements SnapshotStore {
     private final Duration interval;
     private final Duration maxAge;
     private final IntervalBoundary schedule;
-    /** Released once the load has ended, however it ended; {@link #persisted} no longer changes by then. */
+    /** Released once the load has ended, however it ended. */
     private final CountDownLatch loaded = new CountDownLatch(1);
 
-    private volatile Optional<InsightsSnapshot> persisted = Optional.empty();
+    private final Object persistedLock = new Object();
+    /** What the load found, until {@link #awaitSnapshot} takes it; guarded by {@link #persistedLock}. */
+    private Optional<InsightsSnapshot> persisted = Optional.empty();
+    /** Whether {@link #awaitSnapshot} has returned, so nobody is left to take a later load; same guard. */
+    private boolean waitEnded;
 
     private volatile Supplier<InsightsSnapshot> capture;
     private volatile BooleanSupplier historyRestored = () -> false;
@@ -108,7 +112,12 @@ final class InsightsSnapshotStore implements SnapshotStore {
      */
     void completeLoaded(Supplier<Optional<InsightsSnapshot>> source) {
         try {
-            persisted = source.get();
+            Optional<InsightsSnapshot> found = source.get();
+            synchronized (persistedLock) {
+                if (!waitEnded) {
+                    persisted = found;
+                }
+            }
         } finally {
             loaded.countDown();
         }
@@ -120,19 +129,32 @@ final class InsightsSnapshotStore implements SnapshotStore {
      * collector level thread whose contract is to keep ticking regardless. An interrupt
      * restores the thread's flag and returns empty rather than lingering for the full
      * timeout, which is what lets shutdown cut a parked restore short.
+     *
+     * <p>The rings are handed over once. The collector copies them into its own, so the
+     * store holds none after this returns, and a load that ends later is dropped.
      */
     @Override
     public Optional<InsightsSnapshot> awaitSnapshot(Duration timeout) {
+        boolean arrived = false;
         try {
-            if (loaded.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                return persisted;
+            arrived = loaded.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!arrived) {
+                log.info("Peekaboot insights: persisted history did not arrive in time; starting empty");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return Optional.empty();
         }
-        log.info("Peekaboot insights: persisted history did not arrive in time; starting empty");
-        return Optional.empty();
+        Optional<InsightsSnapshot> handedOver = takePersisted();
+        return arrived ? handedOver : Optional.empty();
+    }
+
+    private Optional<InsightsSnapshot> takePersisted() {
+        synchronized (persistedLock) {
+            Optional<InsightsSnapshot> taken = persisted;
+            persisted = Optional.empty();
+            waitEnded = true;
+            return taken;
+        }
     }
 
     @Override
