@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
+import ch.qos.logback.classic.Level;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -12,6 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.testsupport.PosixPermissions;
+import org.peekaboot.testsupport.LogCapture;
 
 class LifecycleEventFileTest {
 
@@ -77,6 +81,58 @@ class LifecycleEventFileTest {
 
         assertThat(read).hasSize(1);
         assertThat(read.get(0).epochMs()).isEqualTo(2_000);
+    }
+
+    /** One such byte used to fail the whole read, and the next event then overwrote the history. */
+    @Test
+    void aLineHoldingBytesThatAreNotUtf8CostsOnlyItself() throws IOException {
+        Path path = directory.resolve(LifecycleEventFile.FILE_NAME);
+        LifecycleEventFile file = file();
+        file.write(List.of(start(1_000).build(), start(2_000).build()));
+        List<String> lines = Files.readAllLines(path);
+        try (OutputStream out = Files.newOutputStream(path)) {
+            out.write((lines.get(0) + "\n").getBytes(StandardCharsets.UTF_8));
+            out.write(new byte[] {(byte) 0xC3, 0x28, '\n'});
+            out.write((lines.get(1) + "\n").getBytes(StandardCharsets.UTF_8));
+        }
+
+        List<LifecycleEvent> read = file.read();
+
+        assertThat(read).extracting(LifecycleEvent::epochMs).containsExactly(1_000L, 2_000L);
+    }
+
+    /** Captured at DEBUG, so a line cut in half at the cap would show as a skipped one. */
+    @Test
+    void aFilePastTheReadCapIsReadFromItsNewestEnd() throws IOException {
+        Path path = directory.resolve(LifecycleEventFile.FILE_NAME);
+        LifecycleEventFile file = file();
+        String longVersion = "v".repeat(400);
+        int count = LifecycleEventFile.MAX_READ_BYTES / longVersion.length() + 1;
+        List<LifecycleEvent> written = new ArrayList<>(count);
+        for (int epochMs = 1; epochMs <= count; epochMs++) {
+            written.add(start(epochMs).version(longVersion).build());
+        }
+        long newest = written.getLast().epochMs();
+        file.write(written);
+        assertThat(Files.size(path)).isGreaterThan(LifecycleEventFile.MAX_READ_BYTES);
+
+        try (LogCapture logs = LogCapture.attach(LifecycleEventFile.class, Level.DEBUG)) {
+            List<LifecycleEvent> read = file.read();
+
+            assertThat(read.size()).as("events read").isPositive().isLessThan(count);
+            assertThat(read).allMatch(event -> event.type() == LifecycleEvent.Type.START);
+            assertThat(read)
+                    .extracting(LifecycleEvent::epochMs)
+                    .isSorted()
+                    .doesNotHaveDuplicates()
+                    .endsWith(newest);
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot lifecycle: " + path + " is larger than "
+                                + LifecycleEventFile.MAX_READ_BYTES + " bytes; reading its newest part");
+            });
+        }
     }
 
     @Test

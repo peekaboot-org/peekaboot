@@ -1,6 +1,9 @@
 package org.peekaboot.backend.lifecycle;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,20 +35,26 @@ public final class LifecycleEventFile {
 
     public static final String FILE_NAME = "lifecycle.jsonl";
 
+    /** Bounds the memory a read takes. Ten times what a full log weighs, so the log's own writes never reach it. */
+    static final int MAX_READ_BYTES = 4 * 1024 * 1024;
+
     private final Path file;
 
     public LifecycleEventFile(Path file) {
         this.file = file;
     }
 
-    /** The log as written, oldest first; an absent or unreadable file is simply no history. */
+    /**
+     * The log as written, oldest first; an absent or unreadable file is simply no history.
+     * Of a file past {@link #MAX_READ_BYTES} only the newest lines are read.
+     */
     public List<LifecycleEvent> read() {
         if (!Files.exists(file)) {
             return List.of();
         }
         List<String> lines;
         try {
-            lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            lines = newestLines();
         } catch (IOException e) {
             log.info("Peekaboot lifecycle: cannot read {}; starting with an empty log", file, e);
             return List.of();
@@ -67,6 +76,26 @@ public final class LifecycleEventFile {
             log.debug("Peekaboot lifecycle: skipped {} unreadable line(s) in {}", skipped, file);
         }
         return events;
+    }
+
+    /** Decoded leniently: a byte that is not UTF-8 becomes U+FFFD and costs its own line, not the read. */
+    private List<String> newestLines() throws IOException {
+        try (SeekableByteChannel channel = Files.newByteChannel(file);
+                InputStream in = Channels.newInputStream(channel)) {
+            long excess = channel.size() - MAX_READ_BYTES;
+            if (excess <= 0) {
+                return decode(in).lines().toList();
+            }
+            log.info("Peekaboot lifecycle: {} is larger than {} bytes; reading its newest part", file, MAX_READ_BYTES);
+            channel.position(excess);
+            String tail = decode(in);
+            // the cap cuts the tail's first line short, so that line is dropped
+            return tail.substring(tail.indexOf('\n') + 1).lines().toList();
+        }
+    }
+
+    private static String decode(InputStream in) throws IOException {
+        return new String(in.readNBytes(MAX_READ_BYTES), StandardCharsets.UTF_8);
     }
 
     /**
