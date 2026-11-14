@@ -119,7 +119,7 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
-        verify(eventPublisher, never()).publishEvent(any());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -238,8 +238,6 @@ class RequestCaptureFilterTest {
     void capturesQueryParameters() throws Exception {
         CurrentSpans.stub(tracer, "trace1");
         request.setQueryString("page=1&size=10");
-        request.setParameter("page", "1");
-        request.setParameter("size", "10");
 
         filter.doFilter(request, response, chain);
 
@@ -253,8 +251,6 @@ class RequestCaptureFilterTest {
         CurrentSpans.stub(tracer, "trace1");
         request = get("/search");
         request.setQueryString("api_key=xyz&q=widgets");
-        request.setParameter("api_key", "xyz");
-        request.setParameter("q", "widgets");
 
         filter.doFilter(request, response, chain);
 
@@ -268,8 +264,6 @@ class RequestCaptureFilterTest {
         CurrentSpans.stub(tracer, "trace1");
         request = get("/search");
         request.setQueryString("api_key=xyz&q=widgets");
-        request.setParameter("api_key", "xyz");
-        request.setParameter("q", "widgets");
 
         filter.doFilter(request, response, chain);
 
@@ -334,8 +328,6 @@ class RequestCaptureFilterTest {
         CurrentSpans.stub(tracer, "trace1");
         request = get("/search");
         request.setQueryString("debug&q=widgets");
-        request.setParameter("debug", "");
-        request.setParameter("q", "widgets");
 
         filter.doFilter(request, response, chain);
 
@@ -353,7 +345,6 @@ class RequestCaptureFilterTest {
         CurrentSpans.stub(tracer, "trace1");
         request = get("/orders");
         request.setQueryString(queryString);
-        request.setParameter("q", "widgets");
 
         try (LogCapture capture = LogCapture.attach(RequestCaptureFilter.class)) {
             filter.doFilter(request, response, chain);
@@ -772,7 +763,7 @@ class RequestCaptureFilterTest {
             filter.doFilter(request, response, chain);
 
             assertThat(requestGivenToTheChain().getRequest()).isSameAs(request);
-            verify(eventPublisher, never()).publishEvent(any());
+            verifyNoInteractions(eventPublisher);
             assertWarnedOnceThatTheCaptureFailed(capture, "boom");
         }
     }
@@ -820,7 +811,7 @@ class RequestCaptureFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        verify(eventPublisher, never()).publishEvent(any());
+        verifyNoInteractions(eventPublisher);
         assertThat(asyncContext.getListeners()).hasSize(1);
 
         response.setStatus(500);
@@ -866,7 +857,7 @@ class RequestCaptureFilterTest {
         AsyncListener listener = asyncContext.getListeners().get(0);
 
         listener.onTimeout(new AsyncEvent(asyncContext));
-        verify(eventPublisher, never()).publishEvent(any());
+        verifyNoInteractions(eventPublisher);
         response.setStatus(503);
         asyncContext.complete();
 
@@ -881,7 +872,7 @@ class RequestCaptureFilterTest {
         AsyncListener listener = asyncContext.getListeners().get(0);
 
         listener.onError(new AsyncEvent(asyncContext, new IllegalStateException("handler failed")));
-        verify(eventPublisher, never()).publishEvent(any());
+        verifyNoInteractions(eventPublisher);
         response.setStatus(500);
         asyncContext.complete();
 
