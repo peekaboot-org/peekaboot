@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 import static org.peekaboot.backend.testsupport.Requests.get;
 
 import ch.qos.logback.classic.Level;
+import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncEvent;
@@ -78,14 +80,36 @@ class RequestCaptureFilterTest {
 
     @ParameterizedTest
     @ValueSource(
-            strings = {"/static/app.js", "/webjars/jquery.js", "/actuator/health", "/peekaboot/api/traces", "/error"})
+            strings = {
+                "/static/app.js",
+                "/webjars/jquery.js",
+                "/actuator/health",
+                "/peekaboot",
+                "/peekaboot/api/traces",
+                "/error"
+            })
     void skipsExcludedPaths(String path) throws Exception {
+        stubACurrentSpan();
         request = get(path);
 
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
-        verify(eventPublisher, never()).publishEvent(any());
+        verifyNoInteractions(eventPublisher);
+        assertThat(response.containsHeader("Server-Timing")).isFalse();
+    }
+
+    /** A path that only resembles an excluded prefix is the application's own. */
+    @ParameterizedTest
+    @ValueSource(strings = {"/errors", "/peekabooty", "/staticfiles/app.js", "/actuators"})
+    void capturesPathsThatOnlyResembleAnExcludedPrefix(String path) throws Exception {
+        stubACurrentSpan();
+        request = get(path);
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().path()).isEqualTo(path);
+        assertThat(response.containsHeader("Server-Timing")).isTrue();
     }
 
     @Test
@@ -759,6 +783,7 @@ class RequestCaptureFilterTest {
      */
     @Test
     void skipsPeekabootPathsBehindAContextPath() throws Exception {
+        stubACurrentSpan();
         request.setContextPath("/app");
         request.setRequestURI("/app/peekaboot/api/traces");
         request.setServletPath("/peekaboot/api/traces");
@@ -766,7 +791,8 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
-        verify(eventPublisher, never()).publishEvent(any());
+        verifyNoInteractions(eventPublisher);
+        assertThat(response.containsHeader("Server-Timing")).isFalse();
     }
 
     /** The captured path is what the browser addressed - context path included. */
@@ -893,6 +919,11 @@ class RequestCaptureFilterTest {
 
         assertThat(requestGivenToTheChain().getRequest()).isSameAs(request);
         verifyNoInteractions(eventPublisher);
+    }
+
+    /** Lenient: an excluded path never asks the tracer, which strict stubs report as an unused stub. */
+    private void stubACurrentSpan() {
+        lenient().when(tracer.currentSpan()).thenReturn(Span.NOOP);
     }
 
     private RequestCompletedEvent publishedEvent() {
