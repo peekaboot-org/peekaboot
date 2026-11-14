@@ -225,6 +225,7 @@ export function createInsightsPanels({
             // ensureUplot() drops its cached promise on failure, so the next time this
             // card enters the viewport the script load is attempted again
             console.warn(`Insights panel "${panel.definition.id}" could not be charted:`, error);
+            showInsteadOfChart(panel, 'Chart could not be loaded');
             return;
         }
         panel.creating = false;
@@ -281,10 +282,15 @@ export function createInsightsPanels({
     /** Swaps the chart mount between the "no data" message and an empty mount, ready for a chart. */
     function setEmpty(panel, empty) {
         panel.empty = empty;
-        panel.element.classList.toggle(EMPTY_PANEL_CLASS, empty);
+        showInsteadOfChart(panel, empty ? 'No data' : null);
+    }
+
+    /** Puts `message` where the chart goes. With null the mount is left empty, ready for a chart. */
+    function showInsteadOfChart(panel, message) {
+        panel.element.classList.toggle(EMPTY_PANEL_CLASS, message !== null);
         panel.mount.replaceChildren();
-        if (!empty) return;
-        panel.mount.appendChild(el('div', {className: 'pk-note pk-insight-empty', text: 'No data'}));
+        if (message === null) return;
+        panel.mount.appendChild(el('div', {className: 'pk-note pk-insight-empty', text: message}));
     }
 
     function destroyChart(panel) {

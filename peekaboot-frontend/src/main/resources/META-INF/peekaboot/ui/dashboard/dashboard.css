@@ -446,6 +446,8 @@
    each other; min() lets a narrower viewport have a single full-width column instead of
    a horizontal scroll. */
 #insights-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: var(--pk-space-md); }
+/* The tab's own failure message is not a card, so it takes the whole row. */
+#insights-panels > .pk-empty { grid-column: 1 / -1; }
 .pk-insight-panel { border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); padding: var(--pk-space-md); background: var(--pk-bg); }
 .pk-insight-panel__header { display: flex; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }
 .pk-insight-panel__title { margin: 0; font-size: var(--pk-text-sm); font-weight: 600; }
@@ -458,7 +460,7 @@
 .pk-insight-panel--overridden .pk-insight-panel-levels { border-radius: var(--pk-radius); outline: 1px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-insight-panel-reset { width: 24px; height: 24px; color: var(--pk-primary-text); }
 .pk-insight-chart { min-height: 180px; }
-/* Cards for an absent subsystem carry a message instead of a chart (see insights-panels.js). */
+/* A card with no chart to show carries a message in its place (see insights-panels.js). */
 .pk-insight-panel--empty .pk-insight-chart { display: flex; align-items: center; justify-content: center; }
 .pk-insight-empty { font-size: var(--pk-text-sm); }
 .pk-insight-chart .u-legend { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }

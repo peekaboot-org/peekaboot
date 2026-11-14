@@ -111,6 +111,11 @@ class TracesTabIT extends PlaywrightTestBase {
                 "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected", count);
     }
 
+    /** Answers every listing request from here on with a 500. */
+    private void failEveryListing() {
+        page.route("**/api/traces?*", route -> route.fulfill(new Route.FulfillOptions().setStatus(500)));
+    }
+
     /**
      * Puts a failed SCHEDULED_JOB trace in the store by running the sample app's failing
      * job, and returns its id once the Errors bucket lists it - the same reasoning as
@@ -332,6 +337,35 @@ class TracesTabIT extends PlaywrightTestBase {
         assertThat(page.textContent("#traces-shown"))
                 .isEqualTo("Showing the 1 newest rows. Narrow the filter to reach older ones.");
         assertThat(page.isVisible("#traces-more")).isTrue();
+    }
+
+    /**
+     * A listing that fails is reported in the list's place. The empty state left by the answer
+     * before it would say something else about the same list, so it goes.
+     */
+    @Test
+    void aFailedListingShowsTheErrorAlone() {
+        openDashboard("#traces?op=no-such-" + UUID.randomUUID(), "#no-traces:not(.hidden)");
+        failEveryListing();
+
+        page.click("#traces-bucket .pk-btn[data-bucket='errors']");
+        page.waitForSelector("#traces-list .pk-empty");
+
+        assertThat(page.textContent("#traces-list .pk-empty")).startsWith("Failed to load traces");
+        assertThat(page.isHidden("#no-traces")).isTrue();
+    }
+
+    /** The count under the list is of rows the error has replaced, so it goes with them. */
+    @Test
+    void aFailedListingTakesTheRowCountWithTheRows() {
+        openDashboard(storePagingProbes(60), Dashboard.TRACE_ITEM);
+        assertThat(page.isVisible("#traces-more")).isTrue();
+        failEveryListing();
+
+        page.click(LOAD_MORE);
+        page.waitForSelector("#traces-list .pk-empty");
+
+        assertThat(page.isHidden("#traces-more")).isTrue();
     }
 
     /**

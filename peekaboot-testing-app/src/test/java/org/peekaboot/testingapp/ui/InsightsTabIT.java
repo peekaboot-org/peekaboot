@@ -13,6 +13,11 @@ import org.junit.jupiter.api.Test;
 
 class InsightsTabIT extends PlaywrightTestBase {
 
+    private static final String CPU_PANEL = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+
+    /** The vendored chart library, which insights-chart.js adds to the page for the first chart. */
+    private static final String UPLOT_SCRIPT = "**/vendor/uplot/uplot.iife.min.js";
+
     @BeforeEach
     void captureBrowserConsole() {
         captureBrowserSignals();
@@ -763,5 +768,61 @@ class InsightsTabIT extends PlaywrightTestBase {
 
         assertThat(eventSourcesOpened()).isEqualTo(1);
         assertThat(page.evaluate("() => window.__pkStreams[0].readyState")).isEqualTo(1);
+    }
+
+    /**
+     * Without its config the tab has nothing to draw, and it says so where the panels go. The
+     * next refresh asks again, and the panels take the message's place.
+     */
+    @Test
+    void aConfigThatFailsIsReportedOnTheTab() {
+        Runnable releaseConfig = interceptUntilReleased(
+                "**/api/insights/config", route -> route.fulfill(new Route.FulfillOptions().setStatus(500)));
+
+        page.navigate(dashboardUrl("#insights"));
+        page.waitForSelector("#insights-panels .pk-empty");
+        assertThat(page.textContent("#insights-panels .pk-empty")).isEqualTo("Insights are unavailable: HTTP 500");
+        assertThat(page.evaluate("() => document.querySelector('#insights-panels .pk-empty').offsetWidth"
+                        + " === document.getElementById('insights-panels').clientWidth"))
+                .as("the message spans the tab instead of sitting in one card's column")
+                .isEqualTo(true);
+
+        releaseConfig.run();
+        page.click("#refresh-btn");
+        page.waitForSelector("#insights-panels .pk-insight-panel");
+        assertThat(page.locator("#insights-panels .pk-empty").count()).isZero();
+    }
+
+    /** A card whose chart library does not arrive says so, instead of staying blank. */
+    @Test
+    void aChartThatCannotLoadSaysSoOnItsCard() {
+        page.route(UPLOT_SCRIPT, Route::abort);
+        openInsights();
+
+        page.waitForSelector(CPU_PANEL + " .pk-insight-empty");
+        assertThat(page.textContent(CPU_PANEL + " .pk-insight-empty")).isEqualTo("Chart could not be loaded");
+        assertThat(page.locator(CPU_PANEL + " canvas").count()).isZero();
+    }
+
+    /**
+     * A card asks for its chart again when it comes back into view, and the chart takes the
+     * note's place. The last card starts below the fold in this viewport, so showing it scrolls
+     * the first one away.
+     */
+    @Test
+    void aChartThatLoadsOnALaterTryTakesTheNotesPlace() {
+        page.setViewportSize(1000, 600);
+        Runnable releaseLibrary = interceptUntilReleased(UPLOT_SCRIPT, Route::abort);
+        openInsights();
+        page.waitForSelector(CPU_PANEL + " .pk-insight-empty");
+
+        releaseLibrary.run();
+        String lastPanel = "#insights-panels .pk-insight-panel[data-panel-id='log-events']";
+        page.locator(lastPanel).scrollIntoViewIfNeeded();
+        page.waitForSelector(lastPanel + " canvas");
+        page.locator(CPU_PANEL).scrollIntoViewIfNeeded();
+        page.waitForSelector(CPU_PANEL + " canvas");
+
+        assertThat(page.locator(CPU_PANEL + " .pk-insight-empty").count()).isZero();
     }
 }

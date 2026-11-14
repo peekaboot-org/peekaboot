@@ -15,6 +15,7 @@
  * rebuild any of this. hide() closes the stream and show() reopens it, so a tab nobody is
  * looking at holds no connection.
  */
+import {emptyState} from '../../shared/components.js';
 import {urlState} from '../../shared/url-filter.js';
 import {createInsightsStream} from './insights-stream.js';
 import {createInsightsPanels, levelButtonsHtml, updateLevelButtons, RESET_ICON} from './insights-panels.js';
@@ -194,6 +195,9 @@ export function create(container) {
             await stream.ensureLevel(0);
         } catch (error) {
             console.warn('Insights tab failed to initialise:', error);
+            // takes the place of the cards too, where the failure came after they were drawn
+            container.querySelector('#insights-panels')
+                .replaceChildren(emptyState(`Insights are unavailable: ${error.message}`));
             teardown();
             initialized = false;   // a later refresh cycle retries from scratch
         }

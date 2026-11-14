@@ -74,6 +74,9 @@ export function create(container) {
         renderError: (panel, error) => {
             container.querySelector('#traces-list').replaceChildren(emptyState(`Failed to load traces: ${error.message}`));
             container.querySelector('#traces-loading').classList.add('hidden');
+            // Both describe the list the error just replaced.
+            container.querySelector('#no-traces').classList.add('hidden');
+            container.querySelector('#traces-more').classList.add('hidden');
         }
     });
 
