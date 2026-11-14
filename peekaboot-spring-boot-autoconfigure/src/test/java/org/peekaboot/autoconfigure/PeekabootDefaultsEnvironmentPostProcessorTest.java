@@ -168,6 +168,30 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isEqualTo(expectDefaults);
     }
 
+    /** The starter's JDBC instrumentation exists for the Queries tab, so it follows the resolved switch. */
+    @ParameterizedTest(name = "local={0} enabled={1}")
+    @CsvSource(
+            nullValues = "-",
+            value = {"true, -, -", "false, -, false", "false, true, -", "true, false, false"})
+    void queryCaptureIsSwitchedOffWhilePeekabootIsOff(boolean localDevelopment, Boolean enabled, String expected) {
+        MockEnvironment environment = new MockEnvironment();
+        setIfGiven(environment, "peekaboot.enabled", enabled);
+
+        postProcessor(localDevelopment).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("jdbc.datasource-proxy.enabled")).isEqualTo(expected);
+    }
+
+    @Test
+    void anApplicationCanKeepQueryCaptureOnWhilePeekabootIsOff() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("jdbc.datasource-proxy.enabled", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("jdbc.datasource-proxy.enabled")).isEqualTo("true");
+    }
+
     @Test
     void disablesOtlpMetricsExportWhenPeekabootEnabled() {
         MockEnvironment environment = new MockEnvironment();
@@ -559,6 +583,16 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         "peekabootNoPushDefaults",
                         "peekabootDefaults",
                         "peekabootDevToolbarDefaults");
+    }
+
+    @Test
+    void theOffDefaultsHaveLowestPrecedence() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+
+        postProcessor(false).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getPropertySources().stream().map(PropertySource::getName))
+                .endsWith("peekabootDetection", "peekabootNoPushDefaults", "peekabootOffDefaults");
     }
 
     /**

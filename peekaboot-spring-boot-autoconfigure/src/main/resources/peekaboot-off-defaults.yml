@@ -1,0 +1,9 @@
+# Applied only while peekaboot is disabled. The starter brings datasource-micrometer for the
+# Queries tab, and left alone it would wrap every DataSource of an application that has
+# Peekaboot switched off.
+# Apps that use datasource-micrometer themselves set this to true in their own application.yml
+
+jdbc:
+  datasource-proxy:
+    # datasource-micrometer default: true
+    enabled: false

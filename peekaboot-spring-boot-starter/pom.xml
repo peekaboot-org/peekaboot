@@ -46,6 +46,8 @@
 
              Both wrap the application's own DataSource beans. A host that instruments its
              DataSource itself excludes them here or sets jdbc.datasource-proxy.enabled=false.
+             Peekaboot sets that itself while it is off, as a default the host's own setting
+             overrides.
 
              -opentelemetry is <optional> in -spring-boot's own pom, so it has to be asked for
              by name. It supplies the convention that tags query spans with the current

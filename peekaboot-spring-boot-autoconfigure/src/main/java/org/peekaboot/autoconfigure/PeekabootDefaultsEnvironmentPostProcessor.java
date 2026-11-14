@@ -36,7 +36,9 @@ import org.springframework.core.io.Resource;
  *
  * <p>All defaults live in yml resources. {@code peekaboot-no-push-defaults.yml} is applied
  * unconditionally, so the starter never pushes telemetry anywhere unless the application
- * explicitly opts in. The observability defaults in {@code peekaboot-defaults.yml} apply only
+ * explicitly opts in. {@code peekaboot-off-defaults.yml} applies only while Peekaboot resolves
+ * disabled and keeps the starter's datasource-micrometer from wrapping the application's
+ * DataSources. The observability defaults in {@code peekaboot-defaults.yml} apply only
  * when Peekaboot resolves enabled in a servlet web application - everything that would read
  * them (the dashboard, the filters, the trace store) is servlet-only.
  * {@code peekaboot-dev-toolbar-defaults.yml} applies only when the dev toolbar resolves on;
@@ -57,10 +59,12 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
     private static final String PROPERTY_SOURCE_NAME = "peekabootDefaults";
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
+    private static final String OFF_PROPERTY_SOURCE_NAME = "peekabootOffDefaults";
     private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
     private static final String WEB_APPLICATION_TYPE_PROPERTY = "spring.main.web-application-type";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
+    private static final String OFF_DEFAULTS_RESOURCE = "peekaboot-off-defaults.yml";
     private static final String DEV_TOOLBAR_DEFAULTS_RESOURCE = "peekaboot-dev-toolbar-defaults.yml";
 
     // ProperLogger: deliberately an instance field - post-processors run before the
@@ -109,6 +113,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
         if (!enabled) {
             log.debug("Peekaboot is disabled - skipping peekaboot defaults");
+            applyDefaults(environment, OFF_PROPERTY_SOURCE_NAME, OFF_DEFAULTS_RESOURCE);
             return;
         }
 
