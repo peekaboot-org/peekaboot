@@ -118,14 +118,18 @@ public final class InsightsCollector {
                             e);
                     // stop() holds the monitor while it joins this thread
                     if (running) {
-                        replaceLevelThread(level);
+                        replaceLevelThread(level, thread);
                     }
                 })
                 .start(() -> runLevel(level));
     }
 
-    private synchronized void replaceLevelThread(int level) {
-        if (running) {
+    /**
+     * Starts the level again unless a newer thread already runs it: a stop() and a start()
+     * can get in before {@code dead} has the monitor.
+     */
+    private synchronized void replaceLevelThread(int level, Thread dead) {
+        if (running && threads.get(level).equals(dead)) {
             threads.set(level, startLevelThread(level));
         }
     }
