@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
@@ -76,7 +77,10 @@ public final class LifecycleEventLog {
         }
         Thread.ofVirtual().name("peekaboot-lifecycle-load").start(() -> {
             try {
-                List<LifecycleEvent> persisted = file.read();
+                // insertionIndex counts on time order, and a file two instances wrote may not have it.
+                List<LifecycleEvent> persisted = file.read().stream()
+                        .sorted(Comparator.comparingLong(LifecycleEvent::epochMs))
+                        .toList();
                 synchronized (events) {
                     events.addAll(0, persisted);
                     trim();

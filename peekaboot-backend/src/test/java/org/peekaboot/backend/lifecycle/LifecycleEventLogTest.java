@@ -293,6 +293,17 @@ class LifecycleEventLogTest {
     }
 
     @Test
+    void aFileOutOfTimeOrderIsLoadedOldestFirst() throws IOException {
+        LifecycleEventFile file = file();
+        file.write(List.of(
+                start(3_000).build(),
+                LifecycleEvent.stop(2_000, 4711),
+                start(1_000).build()));
+
+        assertThat(loaded(file).events()).extracting(LifecycleEvent::epochMs).containsExactly(1_000L, 2_000L, 3_000L);
+    }
+
+    @Test
     void withStorageEnabledTheLogIsBackedByItsFile() {
         StorageDirectory storage = storage(true);
         LifecycleEventLog log = LifecycleEventLog.create(storage);
