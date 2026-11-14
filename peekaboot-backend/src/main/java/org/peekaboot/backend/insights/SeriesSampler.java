@@ -22,8 +22,9 @@ import org.slf4j.event.Level;
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
  * re-resolved on every call: Micrometer registers meters lazily and new tag
- * combinations (e.g. new URIs) can appear at any time. Rates divide by the time that
- * really elapsed since the previous sample, not by the nominal tick interval.
+ * combinations (e.g. new URIs) can appear at any time. A rate divides by the elapsed
+ * time its caller passes. The collector passes the time since level 0's last stamped
+ * boundary, and the nominal interval for the first sample.
  *
  * <p>Every value is served in the unit its series declares. A time gauge reads in
  * milliseconds. A percent series reads a ratio from 0 to 1, as Micrometer's CPU and GC
@@ -63,8 +64,8 @@ final class SeriesSampler {
 
     private final SeriesDef def;
     private final MeterRegistry registry;
-    private double previousCount = Double.NaN;
-    private double previousTotal = Double.NaN;
+    private final MeterBaselines counts = new MeterBaselines();
+    private final MeterBaselines totals = new MeterBaselines();
     private final Outage meterOutage;
     private final Outage subtractMeterOutage;
     private boolean readFailureReported;
@@ -99,8 +100,8 @@ final class SeriesSampler {
             return value;
         } catch (RuntimeException e) {
             // the next rate would divide what several intervals counted by one interval
-            previousCount = Double.NaN;
-            previousTotal = Double.NaN;
+            counts.forget();
+            totals.forget();
             reportReadFailure(e);
             return Double.NaN;
         }
@@ -212,67 +213,34 @@ final class SeriesSampler {
     }
 
     private double sampleRate(List<Meter> meters, long elapsedMillis) {
-        double current = cumulativeCount(meters);
-        double previous = previousCount;
-        previousCount = baseline(meters, current);
-        if (Double.isNaN(current) || Double.isNaN(previous) || current < previous) {
-            return Double.NaN;
-        }
-        return (current - previous) * 1000.0 / elapsedMillis;
+        return counts.advance(meters, SeriesSampler::cumulativeCount) * 1000.0 / elapsedMillis;
     }
 
-    /**
-     * The reading the next sample measures from. A counter or timer registered after this sample
-     * counts from 0, so a name that matched nothing is a known 0. The first sample has no baseline,
-     * as the counts before it are unknown.
-     */
-    private static double baseline(List<Meter> meters, double reading) {
-        return meters.isEmpty() ? 0 : reading;
-    }
-
-    private static double cumulativeCount(List<Meter> meters) {
-        return sum(meters, meter -> switch (meter) {
+    private static double cumulativeCount(Meter meter) {
+        return switch (meter) {
             case Counter counter -> counter.count();
             case FunctionCounter counter -> counter.count();
             case Timer timer -> timer.count();
             case FunctionTimer timer -> timer.count();
             case DistributionSummary summary -> summary.count();
             default -> Double.NaN;
-        });
+        };
     }
 
     private double sampleAvg(List<Meter> meters) {
-        double currentCount = cumulativeCount(meters);
-        double currentTotal = totalTime(meters);
-        double previousCountBaseline = previousCount;
-        double previousTotalBaseline = previousTotal;
-        previousCount = baseline(meters, currentCount);
-        previousTotal = baseline(meters, currentTotal);
-
-        if (Double.isNaN(currentCount) || Double.isNaN(currentTotal)) {
-            return Double.NaN;
-        }
-        if (Double.isNaN(previousCountBaseline) || Double.isNaN(previousTotalBaseline)) {
-            return Double.NaN;
-        }
-
-        double deltaCount = currentCount - previousCountBaseline;
-        if (deltaCount <= 0) {
-            // nothing new, or a meter re-registered behind the baseline: the next
-            // sample averages from the baselines just taken
-            return Double.NaN;
-        }
-        double deltaTotal = currentTotal - previousTotalBaseline;
-        return deltaTotal / deltaCount;
+        double addedCount = counts.advance(meters, SeriesSampler::cumulativeCount);
+        double addedTotal = totals.advance(meters, SeriesSampler::totalTime);
+        // no average without a recording; an unknown count is NaN and fails the comparison too
+        return addedCount > 0 ? addedTotal / addedCount : Double.NaN;
     }
 
-    private static double totalTime(List<Meter> meters) {
-        return sum(meters, meter -> switch (meter) {
+    private static double totalTime(Meter meter) {
+        return switch (meter) {
             case Timer timer -> timer.totalTime(TimeUnit.MILLISECONDS);
             case FunctionTimer timer -> timer.totalTime(TimeUnit.MILLISECONDS);
             case DistributionSummary summary -> summary.totalAmount();
             default -> Double.NaN;
-        });
+        };
     }
 
     private double sampleMax(List<Meter> meters) {

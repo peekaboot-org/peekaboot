@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.within;
 import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.FunctionTimer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.TimeGauge;
@@ -36,6 +37,10 @@ class SeriesSamplerTest {
     private final AtomicBoolean failing = new AtomicBoolean();
     // a field, since Micrometer holds a function meter's state weakly
     private final AtomicLong total = new AtomicLong();
+    private final Calls calls = new Calls(new AtomicLong(), new AtomicLong());
+
+    /** What a function timer reads: the calls so far and the time they took. */
+    private record Calls(AtomicLong count, AtomicLong millis) {}
 
     @BeforeEach
     void setUp() {
@@ -432,6 +437,85 @@ class SeriesSamplerTest {
         assertThat(sampler.sample(10_000)).isCloseTo(50.0, within(1e-9)); // one call of 50 ms since the rebase
     }
 
+    /** A function may have counted long before its meter was registered, so its first reading starts no rate. */
+    @Test
+    void aFunctionCounterRegisteredLateOverAnExistingTotalStartsFromItsFirstReading() {
+        SeriesSampler sampler =
+                new SeriesSampler(def("jobs", Map.of(), Stat.RATE), registry, UnresolvedMeterReport.WARN);
+        assertThat(sampler.sample(10_000)).isNaN(); // nothing to count yet
+        total.set(5_000);
+        FunctionCounter.builder("jobs", total, AtomicLong::get).register(registry);
+        assertThat(sampler.sample(10_000)).isNaN(); // the 5000 were counted before it was registered
+        total.set(5_030);
+        assertThat(sampler.sample(10_000)).isEqualTo(3.0); // 30 in 10s
+    }
+
+    @Test
+    void aFunctionTimerRegisteredLateAveragesOnlyWhatItRecordsAfterItsFirstReading() {
+        SeriesSampler sampler =
+                new SeriesSampler(def("calls", Map.of(), Stat.AVG), registry, UnresolvedMeterReport.WARN);
+        assertThat(sampler.sample(10_000)).isNaN(); // nothing to average yet
+        calls.count().set(10);
+        calls.millis().set(5_000);
+        FunctionTimer.builder(
+                        "calls",
+                        calls,
+                        made -> made.count().get(),
+                        made -> made.millis().get(),
+                        TimeUnit.MILLISECONDS)
+                .register(registry);
+        assertThat(sampler.sample(10_000)).isNaN(); // the 10 calls were made before it was registered
+        calls.count().set(12);
+        calls.millis().set(5_300);
+        assertThat(sampler.sample(10_000)).isEqualTo(150.0); // 2 calls in 300 ms
+    }
+
+    @Test
+    void aFunctionCounterJoiningCountersAlreadySampledAddsNoSpike() {
+        Counter a = Counter.builder("jobs").tag("queue", "a").register(registry);
+        SeriesSampler sampler =
+                new SeriesSampler(def("jobs", Map.of(), Stat.RATE), registry, UnresolvedMeterReport.WARN);
+        sampler.sample(10_000); // baseline of a
+        a.increment(10);
+        total.set(1_000);
+        FunctionCounter.builder("jobs", total, AtomicLong::get)
+                .tag("queue", "b")
+                .register(registry);
+        assertThat(sampler.sample(10_000)).isEqualTo(1.0); // the 10 of a in 10s
+        total.set(1_020);
+        assertThat(sampler.sample(10_000)).isEqualTo(2.0); // the 20 of b in 10s
+    }
+
+    /** The other tag combinations kept counting, so a sum that fell with the departed one is no reset. */
+    @Test
+    void aMeterThatLeavesTheMatchIsNotReadAsAReset() {
+        Counter a = Counter.builder("jobs").tag("queue", "a").register(registry);
+        Counter b = Counter.builder("jobs").tag("queue", "b").register(registry);
+        a.increment(100);
+        b.increment(50);
+        SeriesSampler sampler =
+                new SeriesSampler(def("jobs", Map.of(), Stat.RATE), registry, UnresolvedMeterReport.WARN);
+        sampler.sample(10_000); // baselines 100 and 50
+        registry.remove(b);
+        a.increment(10);
+        assertThat(sampler.sample(10_000)).isEqualTo(1.0); // the 10 of a in 10s
+    }
+
+    /** A re-registered meter counts from 0 again, also while other tag combinations stayed. */
+    @Test
+    void aMeterBackAfterItLeftTheMatchCountsFromZero() {
+        Counter.builder("jobs").tag("queue", "a").register(registry);
+        Counter b = Counter.builder("jobs").tag("queue", "b").register(registry);
+        b.increment(50);
+        SeriesSampler sampler =
+                new SeriesSampler(def("jobs", Map.of(), Stat.RATE), registry, UnresolvedMeterReport.WARN);
+        sampler.sample(10_000); // baseline of b: 50
+        registry.remove(b);
+        sampler.sample(10_000); // b is gone
+        Counter.builder("jobs").tag("queue", "b").register(registry).increment(20);
+        assertThat(sampler.sample(10_000)).isEqualTo(2.0); // 20 in 10s, not a count behind 50
+    }
+
     /** Micrometer runs an application's own function on every read, and one that throws must not reach the tick. */
     @Test
     void aMeterWhoseFunctionThrowsReadsAsAGap() {
@@ -486,6 +570,27 @@ class SeriesSamplerTest {
             total.set(70);
             assertThat(sampler.sample(10_000)).isNaN(); // no baseline again: the 60 took two intervals
             total.set(100);
+            assertThat(sampler.sample(10_000)).isEqualTo(3.0); // 30 in 10s
+
+            assertThat(capture.appender().list).hasSize(1);
+        }
+    }
+
+    /** A counter beside the failed meter kept counting through the gap, so its count has no known start either. */
+    @Test
+    void aCounterBesideAMeterWhoseReadFailedStartsFromAFreshBaselineToo() {
+        SeriesSampler sampler = rateOverBrokenCounter();
+        Counter beside = Counter.builder("broken").tag("kind", "counted").register(registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            beside.increment(100);
+            assertThat(sampler.sample(10_000)).isNaN(); // first sample: no baseline
+            failing.set(true);
+            assertThat(sampler.sample(10_000)).isNaN(); // the read failed
+            failing.set(false);
+            beside.increment(60);
+            assertThat(sampler.sample(10_000)).isNaN(); // no baseline again: the 60 took two intervals
+            beside.increment(30);
             assertThat(sampler.sample(10_000)).isEqualTo(3.0); // 30 in 10s
 
             assertThat(capture.appender().list).hasSize(1);
