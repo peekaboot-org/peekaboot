@@ -30,6 +30,10 @@ final class MaskingRules {
             "pwd",
             "passphrase",
             "passphrases",
+            "pass",
+            "pw",
+            "passcode",
+            "passcodes",
             "secret",
             "secrets",
             "client-secret",
@@ -57,6 +61,12 @@ final class MaskingRules {
             "signing-keys",
             "encryption-key",
             "encryption-keys",
+            "account-key",
+            "account-keys",
+            "master-key",
+            "master-keys",
+            // A Sentry DSN carries the project's key as its userinfo.
+            "dsn",
             "authorization",
             "auth",
             "session-id",
@@ -85,9 +95,18 @@ final class MaskingRules {
      * (server.servlet.session.cookie.same-site and siblings), which is not a secret and is
      * exactly what someone opens the Environment tab to check. The two attribute names are
      * the OpenTelemetry header-capture spellings of the same headers on a span.
+     * "encrypt.key" is Spring Cloud's symmetric key; as tokens anywhere it would mask
+     * encrypt.key-store.location, a path. "jwt" as a token anywhere would mask all of
+     * spring.security.oauth2.resourceserver.jwt.* (issuer, audiences, algorithms); a JWT
+     * under any other key is still caught by its shape.
      */
-    static final List<String> WHOLE_KEY_NAME_RULES =
-            List.of("cookie", "set-cookie", "http.request.header.cookie", "http.response.header.set-cookie");
+    static final List<String> WHOLE_KEY_NAME_RULES = List.of(
+            "cookie",
+            "set-cookie",
+            "http.request.header.cookie",
+            "http.response.header.set-cookie",
+            "encrypt.key",
+            "jwt");
 
     /**
      * Whole keys that would otherwise match a {@link #KEY_NAME_RULES} entry but are
@@ -119,11 +138,12 @@ final class MaskingRules {
      * High-precision, provider-prefixed patterns that catch a credential sitting inside a
      * value under an innocuous key (a JDBC URL's password, a bearer token in a header, a
      * key pasted into SQL text). Deliberately no entropy-based detection: a git SHA, a UUID
-     * or a base64-encoded asset would trip it, and those must stay readable. Two of the
+     * or a base64-encoded asset would trip it, and those must stay readable. Three of the
      * patterns are key/value pairs embedded in a value - a URL's query parameters, a
-     * command line's {@code -Dname=value} options - and carry no vocabulary of their own:
-     * {@link MaskingEngine} judges the captured key with the key-name rules above, so a
-     * name that masks as a property masks as a query parameter too.
+     * command line's {@code -Dname=value} options, a quoted {@code name="value"} option -
+     * and carry no vocabulary of their own: {@link MaskingEngine} judges the captured key
+     * with the key-name rules above, so a name that masks as a property masks as a query
+     * parameter too.
      */
     static final List<ValuePattern> VALUE_PATTERNS = List.of(
             new ValuePattern(
@@ -182,7 +202,14 @@ final class MaskingRules {
                     "Credentials in a command-line option",
                     1,
                     2,
-                    Pattern.compile("(?<=\\s|^)(?:-D|--)([\\w.-]+)=(\\S+)")));
+                    Pattern.compile("(?<=\\s|^)(?:-D|--)([\\w.-]+)=(\\S+)")),
+            // A quoted name="value" option, as sasl.jaas.config carries password="...". The
+            // value ends at the first quote no backslash escapes.
+            ValuePattern.keyed(
+                    "Credentials in a quoted option",
+                    1,
+                    2,
+                    Pattern.compile("(?<=\\s|^)([\\w.-]+)=\"(.*?)(?<!\\\\)\"")));
 
     private MaskingRules() {}
 

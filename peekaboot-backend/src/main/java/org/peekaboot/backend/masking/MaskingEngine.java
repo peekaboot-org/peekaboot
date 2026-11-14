@@ -60,7 +60,7 @@ public final class MaskingEngine {
      * case-insensitively on whole tokens, never substrings, so "passwordless" stays
      * distinct from "password". The key is tokenized twice (see {@link #tokenize}):
      * camelCase-aware for "clientSecret", separator-only for an inconsistently cased
-     * "PassWord". Order: exact-spelling exceptions ({@link MaskingRules#KEY_NAME_EXCEPTIONS},
+     * "CredenTials". Order: exact-spelling exceptions ({@link MaskingRules#KEY_NAME_EXCEPTIONS},
      * "PWD"), then {@link MaskingRules#KEY_NAME_RULES} tokens anywhere in the key, then
      * {@link MaskingRules#WHOLE_KEY_NAME_RULES} as the entire key ("cookie"), then
      * {@link MaskingRules#SPRING_SANITIZER_KEY_PATTERNS}. A key ending in
@@ -249,8 +249,9 @@ public final class MaskingEngine {
      * boundary is also inserted at a camelCase transition (a lowercase letter or digit
      * followed by an uppercase letter) before lowercasing, so a genuine no-separator
      * compound like "clientSecret" splits into ["client", "secret"]. When false, no such
-     * boundary is inserted, so a single word spelled with inconsistent casing - "PassWord"
-     * - stays one token, "password", instead of being mis-split into ["pass", "word"].
+     * boundary is inserted, so a single word spelled with inconsistent casing -
+     * "CredenTials" - stays one token, "credentials", instead of being mis-split into
+     * ["creden", "tials"].
      */
     private static List<String> tokenize(String text, boolean splitCamelCaseBoundaries) {
         String normalized =

@@ -94,6 +94,36 @@ class MaskingEngineTest {
         void isSensitiveKey_shouldMatchTheSensitiveAdjacentEnvironmentVariables(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "DB_PASS",
+                    "smtp.pass",
+                    "db.pw",
+                    "app.passcode",
+                    "app.passcodes",
+                    "spring.cloud.azure.storage.account-key",
+                    "AccountKey",
+                    "app.account-keys",
+                    "app.master-key",
+                    "MASTER_KEYS",
+                    "sentry.dsn",
+                    "SENTRY_DSN",
+                    "encrypt.key",
+                    "ENCRYPT_KEY",
+                    "jwt",
+                    "JWT",
+                })
+        void isSensitiveKey_shouldMatchTheAbbreviatedAndProviderKeyNames(String key) {
+            assertThat(engine.isSensitiveKey(key)).isTrue();
+        }
+
+        // The accepted cost of bare "pass", like max-tokens above: it also names a pass-through.
+        @Test
+        void isSensitiveKey_shouldMatchPassWhereItNamesNoPassword() {
+            assertThat(engine.isSensitiveKey("app.pass-through.enabled")).isTrue();
+        }
     }
 
     @Nested
@@ -180,6 +210,23 @@ class MaskingEngineTest {
         void isSensitiveKey_shouldNotMatchAuthAsASubstringOfOauth2() {
             assertThat(engine.isSensitiveKey("spring.security.oauth2.client.registration.google.client-id"))
                     .isFalse();
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "compass.heading",
+                    "app.bypass-proxy",
+                    "app.passport-number",
+                    "pwm.frequency",
+                    "app.dsname",
+                    "spring.security.oauth2.resourceserver.jwt.audiences",
+                    "app.jwt.clock-skew",
+                    "encrypt.key-store.location",
+                    "encrypt.key-store.alias",
+                })
+        void isSensitiveKey_shouldNotMatchWordsAndGroupsAroundTheNewRules(String key) {
+            assertThat(engine.isSensitiveKey(key)).isFalse();
         }
     }
 
@@ -274,13 +321,13 @@ class MaskingEngineTest {
     @Nested
     class MixedCaseSpellings {
 
-        // A camelCase-boundary tokenizer alone would mis-split these: "PassWord" becomes
-        // ["pass", "word"], neither of which is the rule token "password". Spring's relaxed
+        // A camelCase-boundary tokenizer alone would mis-split these: "CredenTials" becomes
+        // ["creden", "tials"], neither of which is the rule token "credentials". Spring's relaxed
         // binding means the caller does not control how an external property source spells
         // a key, so a rule word with a stray internal capital must still match.
         @Test
-        void isSensitiveKey_shouldMatchAMixedCaseSpellingOfPassword() {
-            assertThat(engine.isSensitiveKey("spring.datasource.PassWord")).isTrue();
+        void isSensitiveKey_shouldMatchAMixedCaseSpellingOfCredentials() {
+            assertThat(engine.isSensitiveKey("spring.datasource.CredenTials")).isTrue();
         }
 
         @Test
@@ -637,6 +684,67 @@ class MaskingEngineTest {
             assertThat(engine.maskValue("Server=db;UID=sa;PWD=hunter2")).isEqualTo("Server=db;UID=sa;PWD=******");
             assertThat(engine.maskValue("https://example.com/login?PWD=hunter2"))
                     .isEqualTo("https://example.com/login?PWD=******");
+        }
+
+        @Test
+        void maskValue_shouldMaskAnAzureStorageAccountKeyInAConnectionString() {
+            String value =
+                    "DefaultEndpointsProtocol=https;AccountName=acme;AccountKey=abc123==;EndpointSuffix=core.windows.net";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result)
+                    .isEqualTo(
+                            "DefaultEndpointsProtocol=https;AccountName=acme;AccountKey=******;EndpointSuffix=core.windows.net");
+        }
+
+        @Test
+        void mask_shouldMaskAQuotedPasswordInAJaasConfig() {
+            String value = "org.apache.kafka.common.security.plain.PlainLoginModule required"
+                    + " username=\"alice\" password=\"alice-secret\";";
+
+            String result = engine.mask("spring.kafka.properties.sasl.jaas.config", value);
+
+            assertThat(result)
+                    .isEqualTo("org.apache.kafka.common.security.plain.PlainLoginModule required"
+                            + " username=\"alice\" password=\"******\";");
+        }
+
+        @Test
+        void maskValue_shouldMaskAQuotedValueThroughAnEscapedQuote() {
+            String value = "x required password=\"ab\\\"cd\" mechanism=\"PLAIN\";";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("x required password=\"******\" mechanism=\"PLAIN\";");
+        }
+
+        @Test
+        void maskValue_shouldLeaveAQuotedOptionWithAnInnocuousNameAlone() {
+            String value = "x required username=\"alice\" mechanism=\"PLAIN\";";
+
+            assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "ASIA" + "IOSFODNN7EXAMPLE",
+                    "ABIA" + "IOSFODNN7EXAMPLE",
+                    "ACCA" + "IOSFODNN7EXAMPLE",
+                    "A3TX" + "IOSFODNN7EXAMPLE",
+                    "gho" + "_16C7e42F292c6912E7710c838347Ae178B4a",
+                    "ghu" + "_16C7e42F292c6912E7710c838347Ae178B4a",
+                    "ghs" + "_16C7e42F292c6912E7710c838347Ae178B4a",
+                    "ghr" + "_16C7e42F292c6912E7710c838347Ae178B4a",
+                    "xoxa" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx",
+                    "xoxp" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx",
+                    "xoxr" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx",
+                    "xoxs" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx",
+                    "rk_live" + "_4eC39HqLyjWDarjtT1zdp7dcEXAMPLE",
+                })
+        void maskValue_shouldMaskEveryProviderPrefixTheRulesName(String value) {
+            assertThat(engine.maskValue(value)).isEqualTo("******");
         }
     }
 
