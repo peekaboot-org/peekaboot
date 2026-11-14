@@ -1,16 +1,20 @@
 package org.peekaboot.backend.tracing.bridge.otel;
 
+import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
@@ -20,11 +24,15 @@ import org.springframework.context.ApplicationEventPublisher;
  */
 public class OtelSpanExporter implements SpanExporter {
 
+    private static final Logger log = LoggerFactory.getLogger(OtelSpanExporter.class);
+
     private final ApplicationEventPublisher eventPublisher;
     private final PeekabootPaths paths;
 
     /** Numbers spans in export order; per-trace sorting only ever compares orders minted here. */
     private final AtomicLong creationOrder = new AtomicLong();
+
+    private final AtomicBoolean warned = new AtomicBoolean();
 
     public OtelSpanExporter(ApplicationEventPublisher eventPublisher, PeekabootPaths paths) {
         this.eventPublisher = eventPublisher;
@@ -34,24 +42,39 @@ public class OtelSpanExporter implements SpanExporter {
     @Override
     public CompletableResultCode export(Collection<SpanData> spans) {
         for (SpanData otelSpan : spans) {
-            Map<String, String> tags = OtelSpanConverter.tags(otelSpan);
-            if (shouldSkipSpan(otelSpan, tags)) {
-                // A skipped root ends an excluded request's trace. The discard assumes
-                // nothing more arrives under that id: the excluded prefixes serve no endpoint
-                // that outlives its response, so the children exported alongside the root and
-                // the logs arrived synchronously. A later event would rebuild the id as an
-                // empty, rootless bundle.
-                if (!otelSpan.getParentSpanContext().isValid()) {
-                    eventPublisher.publishEvent(
-                            new TraceDiscardedEvent(otelSpan.getSpanContext().getTraceId()));
+            try {
+                Map<String, String> tags = OtelSpanConverter.tags(otelSpan);
+                if (shouldSkipSpan(otelSpan, tags)) {
+                    // A skipped root ends an excluded request's trace. The discard assumes
+                    // nothing more arrives under that id: the excluded prefixes serve no endpoint
+                    // that outlives its response, so the children exported alongside the root and
+                    // the logs arrived synchronously. A later event would rebuild the id as an
+                    // empty, rootless bundle.
+                    if (!otelSpan.getParentSpanContext().isValid()) {
+                        eventPublisher.publishEvent(new TraceDiscardedEvent(
+                                otelSpan.getSpanContext().getTraceId()));
+                    }
+                    continue;
                 }
-                continue;
+                org.peekaboot.backend.tracing.event.SpanData spanData =
+                        OtelSpanConverter.convert(otelSpan, tags, creationOrder.incrementAndGet());
+                eventPublisher.publishEvent(new SpanDataEvent(spanData));
+            } catch (RuntimeException e) {
+                // A span that fails, usually in a listener, never costs the rest of its batch.
+                warnOnce(otelSpan.getSpanContext(), e);
             }
-            org.peekaboot.backend.tracing.event.SpanData spanData =
-                    OtelSpanConverter.convert(otelSpan, tags, creationOrder.incrementAndGet());
-            eventPublisher.publishEvent(new SpanDataEvent(spanData));
         }
         return CompletableResultCode.ofSuccess();
+    }
+
+    private void warnOnce(SpanContext span, RuntimeException e) {
+        if (warned.compareAndSet(false, true)) {
+            log.warn(
+                    "Peekaboot traces: could not store span {} of trace {} ({}); later failures are not logged",
+                    span.getSpanId(),
+                    span.getTraceId(),
+                    e.toString());
+        }
     }
 
     /**

@@ -2,6 +2,8 @@ package org.peekaboot.backend.tracing.bridge.otel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.SpanContext;
@@ -32,6 +34,7 @@ import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationEventPublisher;
 
 class OtelSpanExporterTest {
@@ -48,12 +51,18 @@ class OtelSpanExporterTest {
     private ApplicationEventPublisher eventPublisher;
     private OtelSpanExporter exporter;
 
+    /** The span whose listener throws; null while every listener works. */
+    private String failingSpanId;
+
     @BeforeEach
     void setUp() {
         storage = TraceStores.withDefaults();
         publishedEvents = new ArrayList<>();
         eventPublisher = event -> {
             if (event instanceof SpanDataEvent spanDataEvent) {
+                if (spanDataEvent.spanData().spanId().equals(failingSpanId)) {
+                    throw new IllegalStateException("listener failed");
+                }
                 publishedEvents.add(spanDataEvent);
                 storage.addSpan(spanDataEvent.spanData());
             } else if (event instanceof TraceDiscardedEvent discarded) {
@@ -114,6 +123,53 @@ class OtelSpanExporterTest {
         assertThat(storedSpans(traceId2))
                 .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
                 .containsExactly("aaaa000000000003");
+    }
+
+    @Test
+    void aSpanWhoseListenerThrowsDoesNotCostTheRestOfItsBatch() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        failingSpanId = "0000000000000002";
+        try (LogCapture capture = LogCapture.attach(OtelSpanExporter.class)) {
+            CompletableResultCode result = exporter.export(List.of(
+                    createTestSpan(traceId, "0000000000000001", "first", SpanKind.SERVER),
+                    createTestSpan(traceId, failingSpanId, "second", SpanKind.CLIENT),
+                    createTestSpan(traceId, "0000000000000003", "third", SpanKind.CLIENT)));
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(storedSpans(traceId))
+                    .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
+                    .containsExactly("0000000000000001", "0000000000000003");
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot traces: could not store span 0000000000000002 of trace " + traceId
+                                + " (java.lang.IllegalStateException: listener failed); later failures are not logged");
+            });
+        }
+    }
+
+    @Test
+    void warnsOnceHoweverManySpansFail() {
+        String firstTraceId = "0123456789abcdef0123456789abcdef";
+        String secondTraceId = "fedcba9876543210fedcba9876543210";
+        failingSpanId = "0000000000000002";
+        try (LogCapture capture = LogCapture.attach(OtelSpanExporter.class)) {
+            exporter.export(List.of(
+                    createTestSpan(firstTraceId, failingSpanId, "failing", SpanKind.SERVER),
+                    createTestSpan(firstTraceId, "0000000000000003", "stored", SpanKind.CLIENT)));
+            exporter.export(List.of(
+                    createTestSpan(secondTraceId, failingSpanId, "failing", SpanKind.SERVER),
+                    createTestSpan(secondTraceId, "0000000000000003", "stored", SpanKind.CLIENT)));
+
+            assertThat(storedSpans(secondTraceId))
+                    .extracting(org.peekaboot.backend.tracing.event.SpanData::spanId)
+                    .containsExactly("0000000000000003");
+            assertThat(capture.appender().list)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .isEqualTo("Peekaboot traces: could not store span 0000000000000002 of trace " + firstTraceId
+                            + " (java.lang.IllegalStateException: listener failed); later failures are not logged");
+        }
     }
 
     /**
