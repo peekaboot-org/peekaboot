@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,6 +58,23 @@ class InsightsSnapshotStoreTest {
                 NOW,
                 List.of(new InsightsSnapshot.Level(10_000, 90, 30_000, 1)),
                 Map.of("cpu.process", List.<double[][]>of(new double[][] {{value}})));
+    }
+
+    /** Three samples announced, two carried: the codec refuses it mid-write. */
+    private static InsightsSnapshot contradictsItsOwnHeader() {
+        return new InsightsSnapshot(
+                NOW,
+                List.of(new InsightsSnapshot.Level(10_000, 90, 20_000, 3)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}})));
+    }
+
+    private static InsightsSnapshot neverSampled() {
+        return new InsightsSnapshot(NOW, List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0)), Map.of());
+    }
+
+    private String cannotWriteWarning() {
+        return "Peekaboot insights: cannot write " + directory.resolve(InsightsSnapshotStore.FILE_NAME)
+                + "; history will not survive this restart";
     }
 
     private Optional<InsightsSnapshot> loadWith(InsightsSnapshotStore store) {
@@ -166,9 +184,7 @@ class InsightsSnapshotStoreTest {
         long size = Files.size(directory.resolve(InsightsSnapshotStore.FILE_NAME));
 
         InsightsSnapshotStore empty = store(Duration.ofDays(30));
-        empty.start(
-                () -> new InsightsSnapshot(NOW, List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0)), Map.of()),
-                () -> false);
+        empty.start(InsightsSnapshotStoreTest::neverSampled, () -> false);
         empty.stop();
 
         assertThat(Files.size(directory.resolve(InsightsSnapshotStore.FILE_NAME)))
@@ -225,26 +241,64 @@ class InsightsSnapshotStoreTest {
     @Test
     void aWriteThatFailsLeavesNoPartialFileBehind() {
         InsightsSnapshotStore store = store(Duration.ofDays(30));
-        // a snapshot that contradicts its own header: the codec refuses it mid-write
-        store.start(
-                () -> new InsightsSnapshot(
-                        NOW,
-                        List.of(new InsightsSnapshot.Level(10_000, 90, 20_000, 3)),
-                        Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}}))),
-                () -> false);
+        store.start(InsightsSnapshotStoreTest::contradictsItsOwnHeader, () -> false);
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
             store.stop();
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage())
-                        .isEqualTo(
-                                "Peekaboot insights: cannot write " + directory.resolve(InsightsSnapshotStore.FILE_NAME)
-                                        + "; history will not survive this restart");
+                assertThat(event.getFormattedMessage()).isEqualTo(cannotWriteWarning());
             });
         }
         assertThat(directory).isEmptyDirectory();
+    }
+
+    /** A disk that fills up twice in one run is reported twice. */
+    @Test
+    void aSecondWriteOutageIsReportedAfterAWriteSucceededInBetween() {
+        Iterator<InsightsSnapshot> captures = List.of(
+                        contradictsItsOwnHeader(),
+                        snapshot(NOW, 10_000, 90),
+                        contradictsItsOwnHeader(),
+                        snapshot(NOW, 10_000, 90))
+                .iterator();
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        store.start(captures::next, () -> false);
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.writeNow();
+            store.writeNow();
+            store.writeNow();
+            store.stop();
+
+            assertThat(capture.appender().list).hasSize(2).allSatisfy(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo(cannotWriteWarning());
+            });
+        }
+    }
+
+    /** A write skipped for having nothing to save proves nothing about the disk. */
+    @Test
+    void aSkippedWriteDoesNotEndAWriteOutage() {
+        Iterator<InsightsSnapshot> captures = List.of(
+                        contradictsItsOwnHeader(), neverSampled(), contradictsItsOwnHeader(), neverSampled())
+                .iterator();
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        store.start(captures::next, () -> false);
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.writeNow();
+            store.writeNow();
+            store.writeNow();
+            store.stop();
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo(cannotWriteWarning());
+            });
+        }
     }
 
     /**

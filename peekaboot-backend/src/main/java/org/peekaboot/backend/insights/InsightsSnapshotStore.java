@@ -17,6 +17,7 @@ import java.util.function.Supplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.peekaboot.backend.storage.StorageDirectory;
+import org.peekaboot.backend.storage.WriteOutage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +54,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
     private volatile Supplier<InsightsSnapshot> capture;
     private volatile BooleanSupplier historyRestored = () -> false;
     private volatile Thread writer;
-    private volatile boolean writeFailureLogged;
+    private final WriteOutage writeOutage = new WriteOutage();
     private volatile boolean unclaimedHistory;
 
     InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
@@ -209,13 +210,12 @@ final class InsightsSnapshotStore implements SnapshotStore {
                 InsightsSnapshotCodec.write(out, snapshot);
             }
         });
+        writeOutage.succeeded();
     }
 
     private void reportWriteFailure(IOException e) {
-        if (!writeFailureLogged) {
-            writeFailureLogged = true;
-            log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", file, e);
-        }
+        writeOutage.failed(
+                () -> log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", file, e));
     }
 
     /**
@@ -252,8 +252,8 @@ final class InsightsSnapshotStore implements SnapshotStore {
         // for still knows there is history on disk it never took over.
         unclaimedHistory = true;
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
-            InsightsSnapshotCodec.Header header = InsightsSnapshotCodec.readHeader(in);
-            if (isImplausiblyDated(header)) {
+            var header = InsightsSnapshotCodec.readHeader(in);
+            if (isImplausiblyDated(header.writtenAtEpochMs())) {
                 log.info(
                         "Peekaboot insights: {} is not dated within the last {}; starting with empty history",
                         file,
@@ -261,7 +261,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
                 discard();
                 return Optional.empty();
             }
-            if (!matchesConfiguredGeometry(header)) {
+            if (!matchesConfiguredGeometry(header.levels())) {
                 log.info("Peekaboot insights: {} was written for other ring levels; starting with empty history", file);
                 discard();
                 return Optional.empty();
@@ -282,19 +282,18 @@ final class InsightsSnapshotStore implements SnapshotStore {
      * file - it would roll every level's {@code endEpochMs} into the future, so no gap is
      * ever filled and the newest samples keep timestamps that never arrive.
      */
-    private boolean isImplausiblyDated(InsightsSnapshotCodec.Header header) {
+    private boolean isImplausiblyDated(long writtenAtEpochMs) {
         long now = schedule.now();
-        return header.writtenAtEpochMs() < now - maxAge.toMillis()
-                || header.writtenAtEpochMs() > now + CLOCK_SKEW.toMillis();
+        return writtenAtEpochMs < now - maxAge.toMillis() || writtenAtEpochMs > now + CLOCK_SKEW.toMillis();
     }
 
     /** Only shape matters here; how full the rings were and where they ended does not. */
-    private boolean matchesConfiguredGeometry(InsightsSnapshotCodec.Header header) {
-        if (header.levels().size() != geometry.size()) {
+    private boolean matchesConfiguredGeometry(List<InsightsSnapshot.Level> persistedLevels) {
+        if (persistedLevels.size() != geometry.size()) {
             return false;
         }
         for (int level = 0; level < geometry.size(); level++) {
-            InsightsSnapshot.Level persisted = header.levels().get(level);
+            InsightsSnapshot.Level persisted = persistedLevels.get(level);
             InsightsSnapshot.Level configured = geometry.get(level);
             if (persisted.intervalMs() != configured.intervalMs() || persisted.size() != configured.size()) {
                 return false;

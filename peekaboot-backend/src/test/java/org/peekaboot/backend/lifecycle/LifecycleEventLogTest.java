@@ -23,6 +23,7 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.storage.StorageDirectories;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.testsupport.LogCapture;
+import org.springframework.util.FileSystemUtils;
 
 class LifecycleEventLogTest {
 
@@ -198,6 +199,32 @@ class LifecycleEventLogTest {
             log.recordAndPersist(start(2_000).build());
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot lifecycle: cannot write the event log; this run will not be remembered");
+            });
+        }
+    }
+
+    @Test
+    void aSecondWriteOutageIsReportedAgain() throws IOException {
+        Path sub = Files.createFile(directory.resolve("sub"));
+        LifecycleEventFile file = new LifecycleEventFile(sub.resolve(LifecycleEventFile.FILE_NAME));
+        LifecycleEventLog log = loaded(file);
+
+        try (LogCapture capture = LogCapture.attach(LifecycleEventLog.class)) {
+            log.recordAndPersist(start(1_000).build());
+            assertThat(capture.appender().list).hasSize(1);
+
+            Files.delete(sub);
+            log.recordAndPersist(start(2_000).build());
+            assertThat(file.read()).extracting(LifecycleEvent::epochMs).containsExactly(1_000L, 2_000L);
+
+            FileSystemUtils.deleteRecursively(sub);
+            Files.createFile(sub);
+            log.recordAndPersist(start(3_000).build());
+
+            assertThat(capture.appender().list).hasSize(2).allSatisfy(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Peekaboot lifecycle: cannot write the event log; this run will not be remembered");

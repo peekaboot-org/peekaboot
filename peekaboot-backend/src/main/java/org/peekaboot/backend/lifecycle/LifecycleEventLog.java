@@ -8,6 +8,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.peekaboot.backend.storage.StorageDirectory;
+import org.peekaboot.backend.storage.WriteOutage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -37,7 +38,7 @@ public final class LifecycleEventLog {
     private final Executor recordWhenLoadedExecutor;
     private final List<LifecycleEvent> events = new ArrayList<>();
     private final CountDownLatch loaded = new CountDownLatch(1);
-    private volatile boolean writeFailureLogged;
+    private final WriteOutage writeOutage = new WriteOutage();
 
     LifecycleEventLog(LifecycleEventFile file) {
         this(file, LOAD_WAIT);
@@ -151,15 +152,14 @@ public final class LifecycleEventLog {
         }
         try {
             file.write(snapshot);
+            writeOutage.succeeded();
         } catch (IOException | JacksonException e) {
             // JacksonException extends RuntimeException, not IOException, so a
             // serialization failure inside file.write() needs its own catch to keep the
             // same promise IOException already gets here: no failure to write this file
             // reaches the application embedding Peekaboot.
-            if (!writeFailureLogged) {
-                writeFailureLogged = true;
-                log.warn("Peekaboot lifecycle: cannot write the event log; this run will not be remembered", e);
-            }
+            writeOutage.failed(() ->
+                    log.warn("Peekaboot lifecycle: cannot write the event log; this run will not be remembered", e));
         }
     }
 
