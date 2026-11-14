@@ -1,5 +1,6 @@
 package org.peekaboot.backend.insights;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -7,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLongArray;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 
 /**
@@ -17,9 +19,9 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
  * <p>Written by one collector thread per level, and once by {@link #restore} ahead of their
  * first write; read by the API and the snapshot writer. A tick or roll-up lands as one write
  * under one lock: its gap fill, every series' sample and the stamp that dates them. A restore
- * holds the same lock, and {@link #levelData(int)}, {@link #capture(long)} and the roll-up window
- * reads run under it, so a reader sees whole ticks only. Meters are sampled before the write, so
- * the lock covers in-memory appends and nothing slower.
+ * holds the same lock, and {@link #levelData(int, Instant)}, {@link #capture(long)} and the
+ * roll-up window reads run under it, so a reader sees whole ticks only. Meters are sampled before
+ * the write, so the lock covers in-memory appends and nothing slower.
  */
 final class SeriesRings {
 
@@ -191,43 +193,64 @@ final class SeriesRings {
     }
 
     /**
-     * Point-in-time copy of one level's ring contents, read under the same lock as
-     * {@link #appendTick} so it holds whole ticks only: every series carries {@code count}
-     * samples and {@code endEpochMs} dates the newest. The chart dates each sample from those
-     * two, so a partial tick would misdate every sample and repeat the next live event.
+     * Point-in-time copy of one level's entries dated at or after {@code since}, every one where
+     * it is null. Read under the same lock as {@link #appendTick} so it holds whole ticks only:
+     * every series carries {@code count} samples and {@code endEpochMs} dates the newest. The
+     * chart dates each sample from those two, so a partial tick would misdate every sample and
+     * repeat the next live event.
      */
-    LevelData levelData(int level) {
+    LevelData levelData(int level, @Nullable Instant since) {
         synchronized (lock) {
             long intervalMs = intervalMillis[level];
             long endEpochMs = levelEndEpochMs.get(level);
+            int count = entriesSince(level, since);
             if (level == 0) {
-                Map<String, double[]> tickValues = new LinkedHashMap<>();
-                int count = 0;
-                for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
-                    double[] values = entry.getValue().toArray();
-                    tickValues.put(entry.getKey(), values);
-                    count = values.length;
-                }
-                return new LevelData(0, intervalMs, endEpochMs, count, tickValues, Map.of(), Map.of());
+                Map<String, double[]> values = new LinkedHashMap<>();
+                level0Rings.forEach((id, ring) -> values.put(id, ring.last(count)));
+                return new TickLevelData(intervalMs, endEpochMs, count, values);
             }
-            Map<String, Map<String, double[]>> statValues = new LinkedHashMap<>();
-            Map<String, double[]> statSamples = new LinkedHashMap<>();
-            int count = 0;
-            for (Map.Entry<String, StatsRing[]> entry : statsRings.entrySet()) {
-                StatsRing ring = entry.getValue()[level];
-                statValues.put(entry.getKey(), ring.toArrays());
-                statSamples.put(entry.getKey(), ring.samples());
-                count = ring.size();
-            }
-            return new LevelData(level, intervalMs, endEpochMs, count, Map.of(), statValues, statSamples);
+            Map<String, Map<WindowStatistic, double[]>> statistics = new LinkedHashMap<>();
+            Map<String, double[]> samples = new LinkedHashMap<>();
+            statsRings.forEach((id, rings) -> {
+                statistics.put(id, rings[level].statistics(count));
+                samples.put(id, rings[level].samples(count));
+            });
+            return new WindowLevelData(level, intervalMs, endEpochMs, count, statistics, samples);
         }
+    }
+
+    /** How many of a level's entries, counted back from its newest, are dated at or after {@code since}. */
+    private int entriesSince(int level, @Nullable Instant since) {
+        int size = size(level);
+        if (since == null) {
+            return size;
+        }
+        long endEpochMs = levelEndEpochMs.get(level);
+        long intervalMs = intervalMillis[level];
+        int kept = 0;
+        // compared as instants, since an ISO instant can lie past the epoch-millisecond range
+        while (kept < size
+                && !Instant.ofEpochMilli(endEpochMs - kept * intervalMs).isBefore(since)) {
+            kept++;
+        }
+        return kept;
+    }
+
+    /** The entries a level holds, the same for every series; 0 without a series. */
+    private int size(int level) {
+        if (level0Rings.isEmpty()) {
+            return 0;
+        }
+        return level == 0
+                ? level0Rings.values().iterator().next().size()
+                : statsRings.values().iterator().next()[level].size();
     }
 
     /**
      * Everything persistence needs: every level of every series, the {@code samples} column
-     * included. Read under the same lock as {@link #appendTick}, like {@link #levelData(int)},
-     * so every level holds whole ticks only, one sample count for every series, and its
-     * {@code endEpochMs} dates the newest of them.
+     * included. Read under the same lock as {@link #appendTick}, like
+     * {@link #levelData(int, Instant)}, so every level holds whole ticks only, one sample count
+     * for every series, and its {@code endEpochMs} dates the newest of them.
      */
     InsightsSnapshot capture(long writtenAtEpochMs) {
         synchronized (lock) {

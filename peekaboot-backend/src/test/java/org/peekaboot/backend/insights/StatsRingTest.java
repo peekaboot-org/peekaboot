@@ -16,9 +16,9 @@ class StatsRingTest {
         ring.add(entry(1));
         ring.add(entry(2));
         assertThat(ring.size()).isEqualTo(2);
-        assertThat(ring.toArrays().get("avg")).containsExactly(1.0, 2.0);
-        assertThat(ring.toArrays().get("min")).containsExactly(1.0, 2.0);
-        assertThat(ring.toArrays()).containsOnlyKeys("min", "max", "avg", "median", "p90", "p95", "p99");
+        assertThat(ring.statistics(2).get(WindowStatistic.AVG)).containsExactly(1.0, 2.0);
+        assertThat(ring.statistics(2).get(WindowStatistic.MIN)).containsExactly(1.0, 2.0);
+        assertThat(ring.statistics(2)).containsOnlyKeys(WindowStatistic.values());
     }
 
     @Test
@@ -27,7 +27,7 @@ class StatsRingTest {
         ring.add(entry(1));
         ring.add(entry(2));
         ring.add(entry(3));
-        assertThat(ring.toArrays().get("avg")).containsExactly(2.0, 3.0);
+        assertThat(ring.statistics(2).get(WindowStatistic.AVG)).containsExactly(2.0, 3.0);
     }
 
     @Test

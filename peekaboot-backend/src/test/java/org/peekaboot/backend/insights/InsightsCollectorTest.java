@@ -3,6 +3,8 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.insights.InsightsCollectorBuilder.collector;
+import static org.peekaboot.backend.insights.InsightsCollectors.ticks;
+import static org.peekaboot.backend.insights.InsightsCollectors.windows;
 import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
@@ -80,10 +82,10 @@ class InsightsCollectorTest {
         collector.tick(10_000);
         gaugeValue.set(7);
         collector.tick(20_000);
-        LevelData data = collector.levelData(0);
+        TickLevelData data = ticks(collector);
         assertThat(data.count()).isEqualTo(2);
         assertThat(data.endEpochMs()).isEqualTo(20_000);
-        assertThat(data.tickValues().get("g")).containsExactly(5.0, 7.0);
+        assertThat(data.values().get("g")).containsExactly(5.0, 7.0);
         assertThat(events).containsExactly("tick:5.0", "tick:7.0");
     }
 
@@ -94,11 +96,11 @@ class InsightsCollectorTest {
             collector.tick(i * 10_000L);
         }
         collector.rollUp(1, 60_000);
-        LevelData data = collector.levelData(1);
+        WindowLevelData data = windows(collector, 1);
         assertThat(data.count()).isEqualTo(1);
-        assertThat(data.statValues().get("g").get("min")).containsExactly(10.0);
-        assertThat(data.statValues().get("g").get("max")).containsExactly(60.0);
-        assertThat(data.statValues().get("g").get("avg")).containsExactly(35.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MIN)).containsExactly(10.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MAX)).containsExactly(60.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.AVG)).containsExactly(35.0);
         assertThat(events).contains("rollup:1:35.0");
     }
 
@@ -113,11 +115,11 @@ class InsightsCollectorTest {
             collector.rollUp(1, (window + 1) * 60_000L);
         }
         collector.rollUp(2, 120_000);
-        LevelData data = collector.levelData(2);
+        WindowLevelData data = windows(collector, 2);
         assertThat(data.count()).isEqualTo(1);
-        assertThat(data.statValues().get("g").get("min")).containsExactly(100.0);
-        assertThat(data.statValues().get("g").get("max")).containsExactly(200.0);
-        assertThat(data.statValues().get("g").get("avg")).containsExactly(150.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MIN)).containsExactly(100.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MAX)).containsExactly(200.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.AVG)).containsExactly(150.0);
     }
 
     @Test
@@ -127,10 +129,10 @@ class InsightsCollectorTest {
         gaugeValue.set(9);
         collector.tick(40_000); // three intervals later: two boundaries were missed
 
-        LevelData data = collector.levelData(0);
+        TickLevelData data = ticks(collector);
         assertThat(data.count()).isEqualTo(4);
         assertThat(data.endEpochMs()).isEqualTo(40_000);
-        double[] values = data.tickValues().get("g");
+        double[] values = data.values().get("g");
         assertThat(values[0]).isEqualTo(5.0);
         assertThat(values[1]).isNaN();
         assertThat(values[2]).isNaN();
@@ -144,10 +146,10 @@ class InsightsCollectorTest {
         collector.tick(10_000);
         collector.tick(10_000 + 100 * 10_000L); // a suspend far longer than the 6-slot ring
 
-        LevelData data = collector.levelData(0);
+        TickLevelData data = ticks(collector);
         assertThat(data.count()).isEqualTo(6);
-        assertThat(data.tickValues().get("g")[4]).isNaN();
-        assertThat(data.tickValues().get("g")[5]).isEqualTo(0.0);
+        assertThat(data.values().get("g")[4]).isNaN();
+        assertThat(data.values().get("g")[5]).isEqualTo(0.0);
     }
 
     @Test
@@ -159,7 +161,7 @@ class InsightsCollectorTest {
         counter.increment(30);
         rateCollector.tick(40_000); // 30 counts over the real 30s, not over one nominal interval
 
-        double[] values = rateCollector.levelData(0).tickValues().get("r");
+        double[] values = ticks(rateCollector).values().get("r");
         assertThat(values[3]).isEqualTo(1.0);
     }
 
@@ -178,9 +180,9 @@ class InsightsCollectorTest {
         counter.increment(10);
         rateCollector.tick(15_000);
 
-        LevelData data = rateCollector.levelData(0);
+        TickLevelData data = ticks(rateCollector);
         assertThat(data.count()).as("no gap for a boundary in the past").isEqualTo(3);
-        assertThat(data.tickValues().get("r")[2])
+        assertThat(data.values().get("r")[2])
                 .as("10 counts over the nominal 10s, not over -5s")
                 .isEqualTo(1.0);
     }
@@ -194,10 +196,10 @@ class InsightsCollectorTest {
         collector.rollUp(1, 60_000);
         collector.rollUp(1, 240_000); // three intervals later: two boundaries were missed
 
-        LevelData data = collector.levelData(1);
+        WindowLevelData data = windows(collector, 1);
         assertThat(data.count()).isEqualTo(4);
         assertThat(data.endEpochMs()).isEqualTo(240_000);
-        double[] avgs = data.statValues().get("g").get("avg");
+        double[] avgs = data.statistics().get("g").get(WindowStatistic.AVG);
         assertThat(avgs[0]).isEqualTo(10.0);
         assertThat(avgs[1]).isNaN();
         assertThat(avgs[2]).isNaN();
@@ -210,9 +212,9 @@ class InsightsCollectorTest {
         collector.rollUp(1, 60_000);
         collector.rollUp(1, 120_000);
 
-        LevelData data = collector.levelData(1);
-        assertThat(data.statValues().get("g").get("avg")).containsExactly(10.0, Double.NaN);
-        assertThat(data.statSamples().get("g")).containsExactly(6, 0);
+        WindowLevelData data = windows(collector, 1);
+        assertThat(data.statistics().get("g").get(WindowStatistic.AVG)).containsExactly(10.0, Double.NaN);
+        assertThat(data.samples().get("g")).containsExactly(6, 0);
     }
 
     /** The tick on the boundary is late, so the window holds five ticks and borrows no sixth from the last one. */
@@ -223,10 +225,10 @@ class InsightsCollectorTest {
         tickEveryTenSeconds(7, 11, 1);
         collector.rollUp(1, 120_000);
 
-        LevelData data = collector.levelData(1);
-        assertThat(data.statValues().get("g").get("avg")).containsExactly(100.0, 1.0);
-        assertThat(data.statValues().get("g").get("max")).containsExactly(100.0, 1.0);
-        assertThat(data.statSamples().get("g")).containsExactly(6, 5);
+        WindowLevelData data = windows(collector, 1);
+        assertThat(data.statistics().get("g").get(WindowStatistic.AVG)).containsExactly(100.0, 1.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MAX)).containsExactly(100.0, 1.0);
+        assertThat(data.samples().get("g")).containsExactly(6, 5);
     }
 
     /** A roll-up thread that wakes late finds the next window's first tick already in the ring. */
@@ -245,10 +247,10 @@ class InsightsCollectorTest {
         }
         late.rollUp(1, 60_000);
 
-        LevelData data = late.levelData(1);
-        assertThat(data.statValues().get("g").get("min")).containsExactly(10.0);
-        assertThat(data.statValues().get("g").get("max")).containsExactly(60.0);
-        assertThat(data.statSamples().get("g")).containsExactly(6);
+        WindowLevelData data = windows(late, 1);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MIN)).containsExactly(10.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MAX)).containsExactly(60.0);
+        assertThat(data.samples().get("g")).containsExactly(6);
     }
 
     @Test
@@ -260,8 +262,8 @@ class InsightsCollectorTest {
         collector.rollUp(2, 120_000);
         collector.rollUp(2, 240_000);
 
-        LevelData data = collector.levelData(2);
-        assertThat(data.statValues().get("g").get("avg")).containsExactly(150.0, Double.NaN);
+        WindowLevelData data = windows(collector, 2);
+        assertThat(data.statistics().get("g").get(WindowStatistic.AVG)).containsExactly(150.0, Double.NaN);
     }
 
     @Test
@@ -272,9 +274,9 @@ class InsightsCollectorTest {
         }
         collector.rollUp(2, 120_000);
 
-        LevelData data = collector.levelData(2);
-        assertThat(data.statValues().get("g").get("min")).containsExactly(100.0);
-        assertThat(data.statValues().get("g").get("max")).containsExactly(200.0);
+        WindowLevelData data = windows(collector, 2);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MIN)).containsExactly(100.0);
+        assertThat(data.statistics().get("g").get(WindowStatistic.MAX)).containsExactly(200.0);
     }
 
     @Test
@@ -317,11 +319,11 @@ class InsightsCollectorTest {
             gaugeValue.set(7);
             isolating.tick(20_000);
 
-            LevelData data = isolating.levelData(0);
+            TickLevelData data = ticks(isolating);
             assertThat(data.count()).isEqualTo(2);
             assertThat(data.endEpochMs()).isEqualTo(20_000);
-            assertThat(data.tickValues().get("g")).containsExactly(5.0, 7.0);
-            assertThat(data.tickValues().get("f")).containsExactly(Double.NaN, Double.NaN);
+            assertThat(data.values().get("g")).containsExactly(5.0, 7.0);
+            assertThat(data.values().get("f")).containsExactly(Double.NaN, Double.NaN);
             assertThat(events).containsExactly("tick:5.0", "tick:7.0");
             assertThat(capture.appender().list)
                     .extracting(event -> event.getLevel(), event -> event.getFormattedMessage())
@@ -406,7 +408,7 @@ class InsightsCollectorTest {
         int rollUpsWhileTicking = 0;
         while (ticker.isAlive()) {
             boolean ticking = tickNumber.get() > 0;
-            long boundary = racing.levelData(0).endEpochMs();
+            long boundary = ticks(racing).endEpochMs();
             if (boundary > 0) {
                 racing.rollUp(1, boundary);
             }
@@ -437,9 +439,8 @@ class InsightsCollectorTest {
         int torn = 0;
         while (ticker.isAlive()) {
             boolean ticking = tickNumber.get() > 0;
-            LevelData data = racing.levelData(0);
-            if (!holdsWholeTicks(
-                    data.endEpochMs(), data.count(), data.tickValues().values())) {
+            TickLevelData data = ticks(racing);
+            if (!holdsWholeTicks(data.endEpochMs(), data.count(), data.values().values())) {
                 torn++;
             }
             if (ticking && ticker.isAlive()) {
@@ -530,16 +531,16 @@ class InsightsCollectorTest {
     @Test
     void levelDataReadMidTickSeesOnlyWholeTicks() throws Exception {
         MidTick midTick = parkTickInsideSampling();
-        LevelData data;
+        TickLevelData data;
         try {
-            data = midTick.collector().levelData(0);
+            data = ticks(midTick.collector());
         } finally {
             midTick.finish();
         }
 
         assertThat(data.count()).isEqualTo(1);
         assertThat(data.endEpochMs()).isEqualTo(10_000);
-        assertThat(data.tickValues())
+        assertThat(data.values())
                 .allSatisfy((id, values) -> assertThat(values).as(id).hasSize(data.count()));
     }
 

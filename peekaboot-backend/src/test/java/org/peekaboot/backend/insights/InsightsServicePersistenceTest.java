@@ -148,7 +148,7 @@ class InsightsServicePersistenceTest {
         await().atMost(Duration.ofSeconds(5))
                 .pollInterval(Duration.ofMillis(20))
                 // a tick has landed, so there was something to write
-                .until(() -> service.collector().levelData(0).count() >= 1);
+                .until(() -> InsightsCollectors.ticks(service.collector()).count() >= 1);
         service.stop();
 
         try (var files = Files.list(directory)) {

@@ -88,7 +88,7 @@ class InsightsServiceTest {
     void theCpuPanelServesItsRatioMetersAsPercentages() {
         service.collector().tick(10_000);
 
-        assertThat(service.collector().levelData(0).tickValues().get("cpu.process"))
+        assertThat(InsightsCollectors.ticks(service.collector()).values().get("cpu.process"))
                 .containsExactly(100.0);
     }
 

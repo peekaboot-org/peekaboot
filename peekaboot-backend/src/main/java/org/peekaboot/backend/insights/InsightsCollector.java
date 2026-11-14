@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.LongSupplier;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.insights.SeriesSampler.UnresolvedMeterReport;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
@@ -213,9 +215,9 @@ public final class InsightsCollector {
         listener.onRollUp(level, epochMs, entries);
     }
 
-    /** One level's rings as the API reads them; see {@link SeriesRings#levelData(int)}. */
-    LevelData levelData(int level) {
-        return rings.levelData(level);
+    /** One level's rings as the API reads them; see {@link SeriesRings#levelData(int, Instant)}. */
+    LevelData levelData(int level, @Nullable Instant since) {
+        return rings.levelData(level, since);
     }
 
     /** The rings as persistence writes them, dated by the collector's clock; see {@link SeriesRings#capture(long)}. */

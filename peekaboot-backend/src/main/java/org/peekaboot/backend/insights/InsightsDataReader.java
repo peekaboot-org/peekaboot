@@ -31,7 +31,7 @@ public final class InsightsDataReader {
      */
     public InsightsDataResponse read(InsightsDataParameters parameters) {
         InsightsDataQuery query = InsightsDataQuery.of(parameters, levelCount);
-        LevelData data = collector.levelData(query.level()).since(query.since());
+        LevelData data = collector.levelData(query.level(), query.since());
         return data.toResponse(query.view(), query.seriesAmong(data.seriesIds()), problems.of(data));
     }
 }

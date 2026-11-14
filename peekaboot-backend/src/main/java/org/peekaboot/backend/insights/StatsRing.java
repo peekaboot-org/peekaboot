@@ -2,7 +2,6 @@ package org.peekaboot.backend.insights;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,21 +32,21 @@ final class StatsRing {
         return samples.size();
     }
 
-    /** Column arrays for the API - the internal samples column is deliberately excluded. */
-    Map<String, double[]> toArrays() {
-        Map<String, double[]> columns = new LinkedHashMap<>();
-        stats.forEach((statistic, ring) -> columns.put(statistic.wireName(), ring.toArray()));
+    /** Each statistic's column over the newest {@code n} windows, oldest first, without the samples column. */
+    Map<WindowStatistic, double[]> statistics(int n) {
+        Map<WindowStatistic, double[]> columns = new EnumMap<>(WindowStatistic.class);
+        stats.forEach((statistic, ring) -> columns.put(statistic, ring.last(n)));
         return columns;
     }
 
-    /** The level-0 samples behind each window, oldest first. */
-    double[] samples() {
-        return samples.toArray();
+    /** The level-0 samples behind each of the newest {@code n} windows, oldest first. */
+    double[] samples(int n) {
+        return samples.last(n);
     }
 
     /**
-     * Every column, including the {@code samples} column {@link #toArrays()} withholds
-     * from the API - persistence needs it, because the next roll-up weights its average
+     * Every column, including the {@code samples} column {@link #statistics(int)} leaves
+     * out - persistence needs it, because the next roll-up weights its average
      * by it. Order matches {@link InsightsSnapshot#STAT_COLUMNS}.
      */
     double[][] toColumns() {
@@ -76,9 +75,8 @@ final class StatsRing {
     }
 
     List<AggregateStats> last(int n) {
-        Map<WindowStatistic, double[]> statColumns = new EnumMap<>(WindowStatistic.class);
-        stats.forEach((statistic, ring) -> statColumns.put(statistic, ring.last(n)));
-        double[] counts = samples.last(n);
+        Map<WindowStatistic, double[]> statColumns = statistics(n);
+        double[] counts = samples(n);
         List<AggregateStats> result = new ArrayList<>(counts.length);
         for (int i = 0; i < counts.length; i++) {
             result.add(AggregateStats.fromRow(statColumns, i, (int) counts[i]));

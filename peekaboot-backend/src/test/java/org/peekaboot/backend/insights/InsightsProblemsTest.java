@@ -3,6 +3,7 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,15 +25,15 @@ class InsightsProblemsTest {
     private static LevelData ticks(Map<String, double[]> series) {
         int count =
                 series.values().stream().mapToInt(values -> values.length).max().orElse(0);
-        return new LevelData(0, TICK_MS, count * TICK_MS, count, series, Map.of(), Map.of());
+        return new TickLevelData(TICK_MS, count * TICK_MS, count, series);
     }
 
     /** Level 1 holding one-minute windows of {@code id}, six samples behind each. */
-    private static LevelData windows(String id, Map<String, double[]> stats) {
-        int count = stats.get("avg").length;
+    private static LevelData windows(String id, Map<WindowStatistic, double[]> stats) {
+        int count = stats.get(WindowStatistic.AVG).length;
         double[] samples = new double[count];
         Arrays.fill(samples, 6);
-        return new LevelData(1, 60_000, count * 60_000L, count, Map.of(), Map.of(id, stats), Map.of(id, samples));
+        return new WindowLevelData(1, 60_000, count * 60_000L, count, Map.of(id, stats), Map.of(id, samples));
     }
 
     private static Map<String, double[]> series(String id, double... values) {
@@ -212,8 +213,10 @@ class InsightsProblemsTest {
     /** Above level 0 each window's average rate covers its samples, each one tick long. */
     @Test
     void anAggregatedLevelCountsTheErrorLinesEveryWindowCovers() {
-        Map<String, double[]> stats = new LinkedHashMap<>();
-        AggregateStats.STAT_NAMES.forEach(name -> stats.put(name, new double[] {0.05}));
+        Map<WindowStatistic, double[]> stats = new EnumMap<>(WindowStatistic.class);
+        for (WindowStatistic statistic : WindowStatistic.values()) {
+            stats.put(statistic, new double[] {0.05});
+        }
 
         assertThat(problems.of(windows("log-events.errors", stats)))
                 .singleElement()
@@ -223,14 +226,14 @@ class InsightsProblemsTest {
     /** Two windows averaging 300 ms, well below the threshold, whose own p95 is the 1.2 s each one holds. */
     @Test
     void anAggregatedLevelJudgesTheLatencyByItsWindowsOwnP95() {
-        Map<String, double[]> stats = new LinkedHashMap<>();
-        stats.put("min", new double[] {100, 100});
-        stats.put("max", new double[] {1200, 1200});
-        stats.put("avg", new double[] {300, 300});
-        stats.put("median", new double[] {100, 100});
-        stats.put("p90", new double[] {1200, 1200});
-        stats.put("p95", new double[] {1200, 1200});
-        stats.put("p99", new double[] {1200, 1200});
+        Map<WindowStatistic, double[]> stats = new EnumMap<>(WindowStatistic.class);
+        stats.put(WindowStatistic.MIN, new double[] {100, 100});
+        stats.put(WindowStatistic.MAX, new double[] {1200, 1200});
+        stats.put(WindowStatistic.AVG, new double[] {300, 300});
+        stats.put(WindowStatistic.MEDIAN, new double[] {100, 100});
+        stats.put(WindowStatistic.P90, new double[] {1200, 1200});
+        stats.put(WindowStatistic.P95, new double[] {1200, 1200});
+        stats.put(WindowStatistic.P99, new double[] {1200, 1200});
 
         assertThat(problems.of(windows("http-latency.avg", stats)))
                 .singleElement()
