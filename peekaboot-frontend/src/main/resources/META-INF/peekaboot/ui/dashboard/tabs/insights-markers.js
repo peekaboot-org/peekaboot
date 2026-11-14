@@ -8,6 +8,9 @@
  * still had to cluster them. The cursor hook clusters instead, so a dense stretch of
  * restarts lists in a single tooltip.
  *
+ * A canvas mark cannot take focus, so the plot does. Left and Right bring up the same
+ * tooltip one cluster at a time, and Escape or leaving the plot hides it.
+ *
  * Markers are chrome, not data: they are drawn in --pk-text-muted, the token the axes
  * already use, because every one of the six series strokes is a real series colour on
  * some panel.
@@ -66,7 +69,8 @@ function downtimes(events) {
 
 /**
  * Draws restart markers on a chart. `dateOptions()` supplies the dashboard's current
- * {locale, timeZone} for the tooltip's timestamps. `intervalMs` is the charted level's own sample
+ * {locale, timeZone} for the tooltip's timestamps. `label` names the chart in the plot's
+ * accessible name. `intervalMs` is the charted level's own sample
  * interval, in milliseconds - it is never derived from the chart's x data, because a
  * chart with a single sample (a freshly started application, which has exactly one
  * sample and only its own start marker to show in the first place) has no second
@@ -75,13 +79,14 @@ function downtimes(events) {
  * interval is fixed for a chart's lifetime - a level change rebuilds the chart - so
  * taking it once, at construction, is sound.
  */
-export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
+export function createMarkerLayer({intervalMs, dateOptions = () => ({}), label}) {
     const intervalSeconds = intervalMs / 1000;
     const colors = ink();
     let events = [];
     let visible = true;
     let tooltip = null;
-    let placed = [];                      // {left, event} in CSS px, refreshed on every draw
+    let placed = [];                      // {left, event} in CSS px and x order, refreshed on every draw
+    let held = null;                      // {left, pointer} while the keys own the tooltip
 
     function panelOf(u) {
         return u.root.closest('.pk-insight-panel');
@@ -193,31 +198,75 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
             details ? `<dl>${details}</dl>` : ''}${unclean}`;
     }
 
-    function setCursor(u) {
-        if (!tooltip) return;
-        const cursorLeft = u.cursor.left;
-        if (!visible || cursorLeft == null || cursorLeft < 0) {
-            tooltip.hidden = true;
-            return;
-        }
-        const hits = placed.filter(marker => Math.abs(marker.left - cursorLeft) <= HIT_RADIUS);
+    function hide() {
+        held = null;
+        tooltip.hidden = true;
+    }
+
+    /** Lists the markers within reach of `left`, a CSS-px position in the plot, beside it. */
+    function showAt(u, left) {
+        const hits = placed.filter(marker => Math.abs(marker.left - left) <= HIT_RADIUS);
         if (hits.length === 0) {
             tooltip.hidden = true;
             return;
         }
         tooltip.innerHTML = hits.map(describe).join('<hr>');
         tooltip.hidden = false;
-        // flip to the cursor's left rather than overflow the plot
-        const overflows = cursorLeft + tooltip.offsetWidth + 12 > u.over.clientWidth;
-        tooltip.style.left = `${Math.max(overflows ? cursorLeft - tooltip.offsetWidth - 8 : cursorLeft + 8, 0)}px`;
+        // flip to the left of the position rather than overflow the plot
+        const overflows = left + tooltip.offsetWidth + 12 > u.over.clientWidth;
+        tooltip.style.left = `${Math.max(overflows ? left - tooltip.offsetWidth - 8 : left + 8, 0)}px`;
+    }
+
+    function setCursor(u) {
+        if (!tooltip) return;
+        const cursorLeft = u.cursor.left;
+        // uPlot runs this hook on every redraw under a resting pointer too, and only a
+        // pointer that moved since the key takes the tooltip back
+        if (held && held.pointer === cursorLeft) return;
+        held = null;
+        if (!visible || cursorLeft == null || cursorLeft < 0) {
+            tooltip.hidden = true;
+            return;
+        }
+        showAt(u, cursorLeft);
+    }
+
+    /**
+     * Left and Right bring up the nearest marker beyond the ones the tooltip already lists,
+     * so a dense stretch of restarts costs one press and not one per restart. The first
+     * press starts at the edge the key points away from. An arrow pressed with a modifier
+     * stays the browser's, where Alt+Left goes back a page.
+     */
+    function stepWithKeys(u, event) {
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        if (event.key === 'Escape') {
+            hide();
+            return;
+        }
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        event.preventDefault();
+        const forward = event.key === 'ArrowRight';
+        const from = held?.left ?? (forward ? -Infinity : Infinity);
+        const next = forward
+            ? placed.find(marker => marker.left > from + HIT_RADIUS)
+            : placed.filter(marker => marker.left < from - HIT_RADIUS).pop();
+        if (!next) return;
+        held = {left: next.left, pointer: u.cursor.left};
+        showAt(u, next.left);
     }
 
     return {
         plugin: {
             hooks: {
                 init: u => {
-                    tooltip = el('div', {className: 'pk-insight-marker-tip', attrs: {hidden: ''}});
+                    tooltip = el('div', {className: 'pk-insight-marker-tip', attrs: {hidden: '', role: 'status'}});
                     u.over.appendChild(tooltip);
+                    u.over.tabIndex = 0;
+                    u.over.setAttribute('role', 'group');
+                    u.over.setAttribute('aria-label',
+                        `${label}. Left and Right arrows step through the restart markers.`);
+                    u.over.addEventListener('keydown', event => stepWithKeys(u, event));
+                    u.over.addEventListener('blur', hide);
                 },
                 draw,
                 setCursor
@@ -228,7 +277,7 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
         },
         setVisible(next) {
             visible = next;
-            if (!next && tooltip) tooltip.hidden = true;
+            if (!next && tooltip) hide();
         }
     };
 }

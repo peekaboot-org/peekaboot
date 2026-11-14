@@ -142,7 +142,7 @@ export function createChart({
     const percentileIndices = [];
     let secondaryUnit = null;
 
-    const markers = createMarkerLayer({intervalMs: snapshot.intervalMs, dateOptions});
+    const markers = createMarkerLayer({intervalMs: snapshot.intervalMs, dateOptions, label: panel.title});
     markers.setEvents(events);
     markers.setVisible(showMarkers);
 
