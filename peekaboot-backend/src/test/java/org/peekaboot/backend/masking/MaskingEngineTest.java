@@ -499,9 +499,9 @@ class MaskingEngineTest {
 
         /**
          * Two different rules claiming overlapping spans: the userinfo rule wants
-         * {@code ci:ghp_...} and the GitHub rule wants the token inside it. The
-         * earlier-starting span wins and the inner one is skipped, so the value masks once
-         * rather than stacking two masks or leaving a fragment of the token behind.
+         * {@code ci:ghp_...} and the GitHub rule wants the token inside it. The inner span
+         * is merged into the outer one, so the value masks once rather than stacking two
+         * masks or leaving a fragment of the token behind.
          */
         @Test
         void maskValue_shouldMaskAnOverlappingSpanOnceWhenTwoRulesClaimIt() {
@@ -511,6 +511,37 @@ class MaskingEngineTest {
             String result = engine.maskValue(value);
 
             assertThat(result).isEqualTo("https://******@github.example.com/org/repo.git");
+        }
+
+        // The query rule's value span ends inside the PEM header, and the PEM span runs on past it.
+        @Test
+        void maskValue_shouldMaskAPartialOverlapThroughToTheLaterSpansEnd() {
+            String value = "https://h/x?secret=abc-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY----- tail";
+
+            assertThat(engine.maskValue(value)).isEqualTo("https://h/x?secret=****** tail");
+        }
+
+        // The quoted-option span holds the URL's userinfo span, which ends earlier: the outer end stands.
+        @Test
+        void maskValue_shouldKeepTheOuterSpanWhereALaterOneEndsInsideIt() {
+            assertThat(engine.maskValue("password=\"https://u:p@h/x\" ok")).isEqualTo("password=\"******\" ok");
+        }
+
+        // The GitHub rule's span and the query rule's start together; the query value runs on past the token.
+        @Test
+        void maskValue_shouldMaskToTheLongerOfTwoSpansThatStartTogether() {
+            String token = "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a";
+
+            assertThat(engine.maskValue("https://h/x?token=" + token + ".rest&ok=1"))
+                    .isEqualTo("https://h/x?token=******&ok=1");
+        }
+
+        // The second key starts where the first one ends: nothing overlaps, so each has its own mask.
+        @Test
+        void maskValue_shouldMaskTwoSpansThatOnlyTouchSeparately() {
+            String key = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----";
+
+            assertThat(engine.maskValue(key + key)).isEqualTo("************");
         }
 
         @Test

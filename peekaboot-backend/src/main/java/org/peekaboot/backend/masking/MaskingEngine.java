@@ -210,12 +210,7 @@ public final class MaskingEngine {
         spans.sort(Comparator.comparingInt(span -> span[0]));
         StringBuilder result = new StringBuilder();
         int cursor = 0;
-        for (int[] span : spans) {
-            if (span[0] < cursor) {
-                // spans are sorted by start offset, so the earliest-starting span wins; rule
-                // order only breaks ties between spans that start at the same offset
-                continue;
-            }
+        for (int[] span : merged(spans)) {
             result.append(value, cursor, span[0]).append(MASK_LITERAL);
             cursor = span[1];
         }
@@ -223,7 +218,28 @@ public final class MaskingEngine {
         return result.toString();
     }
 
-    /** Every [start, end) span of {@code value} some value rule wants masked, unmerged. */
+    /**
+     * {@code sortedSpans} with every span that starts before the previous one ends folded
+     * into it, so a partial overlap masks through to the later end. Spans that only touch
+     * stay apart.
+     */
+    private static List<int[]> merged(List<int[]> sortedSpans) {
+        List<int[]> merged = new ArrayList<>();
+        for (int[] span : sortedSpans) {
+            if (!merged.isEmpty() && span[0] < merged.getLast()[1]) {
+                int[] previous = merged.removeLast();
+                merged.add(new int[] {previous[0], Math.max(previous[1], span[1])});
+            } else {
+                merged.add(span);
+            }
+        }
+        return merged;
+    }
+
+    /**
+     * Every [start, end) span of {@code value} some value rule wants masked. Spans of
+     * different rules may overlap; {@link #merged(List)} folds them.
+     */
     private List<int[]> sensitiveSpans(String value) {
         List<int[]> spans = new ArrayList<>();
         for (MaskingRules.ValuePattern rule : MaskingRules.VALUE_PATTERNS) {
