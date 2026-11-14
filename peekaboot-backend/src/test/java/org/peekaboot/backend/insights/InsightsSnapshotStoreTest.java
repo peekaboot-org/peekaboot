@@ -113,7 +113,7 @@ class InsightsSnapshotStoreTest {
     }
 
     @Test
-    void whatOneRunWritesTheNextRunReads() {
+    void whatOneRunWritesTheNextRunReads() throws IOException {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
         writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
@@ -121,7 +121,9 @@ class InsightsSnapshotStoreTest {
         InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
 
         assertThat(restored.series().get("cpu.process").get(0)[0]).containsExactly(1.0, 2.0);
-        assertThat(directory.resolve("insights.snapshot.tmp")).doesNotExist();
+        try (Stream<Path> entries = Files.list(directory)) {
+            assertThat(entries).containsExactly(directory.resolve(InsightsSnapshotStore.FILE_NAME));
+        }
     }
 
     @Test
@@ -210,8 +212,7 @@ class InsightsSnapshotStoreTest {
                                         + "; history will not survive this restart");
             });
         }
-        assertThat(directory.resolve("insights.snapshot.tmp")).doesNotExist();
-        assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+        assertThat(directory).isEmptyDirectory();
     }
 
     /**
@@ -322,7 +323,7 @@ class InsightsSnapshotStoreTest {
     }
 
     @Test
-    void aSymlinkPlantedAtTheTemporaryPathIsReplacedNotFollowed() throws IOException {
+    void aSymlinkPlantedAtTheFormerTemporaryPathIsNeverWrittenThrough() throws IOException {
         PosixPermissions.assumeSupported();
         Path victim = directory.resolve("victim");
         Files.writeString(victim, "untouched");

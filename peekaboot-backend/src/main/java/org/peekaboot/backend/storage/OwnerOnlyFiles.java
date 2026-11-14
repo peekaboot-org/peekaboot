@@ -4,14 +4,20 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.DirectoryIteratorException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -20,9 +26,9 @@ import java.util.Set;
  * <p>The snapshot and the lifecycle log describe the host application's runtime, and
  * {@code peekaboot.storage.dir} may point anywhere, so the process umask is not left to
  * decide who else can read them. On a file system without POSIX permissions (Windows) the
- * platform defaults apply. A file is always created fresh: whatever sits at its path - a
- * symlink planted there included - is removed first, never followed or written through,
- * so a temporary that is later moved into place cannot become a write somewhere else.
+ * platform defaults apply. A write never follows a symlink planted at its path. A file
+ * opened for writing replaces whatever sat there, and a temporary is created under a name
+ * nothing else has.
  */
 public final class OwnerOnlyFiles {
 
@@ -33,6 +39,8 @@ public final class OwnerOnlyFiles {
     }
 
     private static final String TEMP_SUFFIX = ".tmp";
+    // longer than any write takes, so a temporary this much older than a finished write has no writer
+    private static final Duration LEFT_BEHIND_AFTER = Duration.ofHours(1);
 
     private static final FileAttribute<Set<PosixFilePermission>> OWNER_ONLY_DIRECTORY =
             PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"));
@@ -47,15 +55,18 @@ public final class OwnerOnlyFiles {
      * step, so a reader sees either the previous file or the whole new one. Creates the
      * parent directory as needed; a temporary a failed write leaves behind is removed, and
      * the failure rethrown.
+     *
+     * <p>Each call writes a temporary of its own, so two processes that replace one file never
+     * move each other's unfinished write into place. A temporary a process died on is removed
+     * by a write of the same file more than an hour later.
      */
     public static void replaceAtomically(Path file, Content content) throws IOException {
-        Path parent = file.getParent();
-        if (parent != null) {
-            createDirectories(parent);
-        }
-        Path temp = file.resolveSibling(file.getFileName() + TEMP_SUFFIX);
+        Path directory = Objects.requireNonNull(file.toAbsolutePath().getParent(), "file has no directory");
+        createDirectories(directory);
+        String temporaryPrefix = file.getFileName() + ".";
+        Path temp = createTemporary(directory, temporaryPrefix);
         try {
-            try (OutputStream out = newOutputStream(temp)) {
+            try (OutputStream out = Files.newOutputStream(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 content.writeTo(out);
             }
             move(temp, file);
@@ -67,6 +78,35 @@ public final class OwnerOnlyFiles {
             }
             throw e;
         }
+        removeTemporariesLeftBehind(directory, temporaryPrefix, file);
+    }
+
+    private static Path createTemporary(Path directory, String prefix) throws IOException {
+        try {
+            return Files.createTempFile(directory, prefix, TEMP_SUFFIX, OWNER_ONLY_FILE);
+        } catch (UnsupportedOperationException e) {
+            return Files.createTempFile(directory, prefix, TEMP_SUFFIX);
+        }
+    }
+
+    private static void removeTemporariesLeftBehind(Path directory, String prefix, Path written) {
+        try (DirectoryStream<Path> temporaries =
+                Files.newDirectoryStream(directory, entry -> isTemporary(entry, prefix))) {
+            FileTime leftBehindBefore =
+                    FileTime.from(Files.getLastModifiedTime(written).toInstant().minus(LEFT_BEHIND_AFTER));
+            for (Path temporary : temporaries) {
+                if (Files.getLastModifiedTime(temporary).compareTo(leftBehindBefore) < 0) {
+                    Files.deleteIfExists(temporary);
+                }
+            }
+        } catch (IOException | DirectoryIteratorException ignored) {
+            // the file is written; the next write sweeps again
+        }
+    }
+
+    private static boolean isTemporary(Path entry, String prefix) {
+        String name = String.valueOf(entry.getFileName());
+        return name.startsWith(prefix) && name.substring(prefix.length()).endsWith(TEMP_SUFFIX);
     }
 
     private static void move(Path temp, Path file) throws IOException {

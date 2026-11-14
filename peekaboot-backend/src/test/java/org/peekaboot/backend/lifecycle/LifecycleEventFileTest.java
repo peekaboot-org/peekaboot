@@ -107,7 +107,7 @@ class LifecycleEventFileTest {
     }
 
     @Test
-    void aSymlinkPlantedAtTheTemporaryPathIsReplacedNotFollowed() throws IOException {
+    void aSymlinkPlantedAtTheFormerTemporaryPathIsNeverWrittenThrough() throws IOException {
         PosixPermissions.assumeSupported();
         Path victim = directory.resolve("victim");
         Files.writeString(victim, "untouched");
@@ -127,6 +127,8 @@ class LifecycleEventFileTest {
         LifecycleEventFile file = new LifecycleEventFile(target);
 
         assertThatThrownBy(() -> file.write(List.of(start(1_000).build()))).isInstanceOf(IOException.class);
-        assertThat(directory.resolve("lifecycle.jsonl.tmp")).doesNotExist();
+        try (var files = Files.list(directory)) {
+            assertThat(files).containsExactly(target);
+        }
     }
 }
