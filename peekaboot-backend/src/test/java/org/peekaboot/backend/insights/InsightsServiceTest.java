@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.Level;
@@ -156,6 +157,15 @@ class InsightsServiceTest {
                 assertThat(event.getThrowableProxy().getMessage()).contains("series id 'a.b.c'");
             });
         }
+    }
+
+    /** A location the operator set and that names nothing is a mistake in the property; the fallback would hide it. */
+    @Test
+    void aConfigLocationThatDoesNotExistStopsTheStartNamingIt() {
+        assertThatIllegalStateException()
+                .isThrownBy(() -> withUserPanels("classpath:insights/no-such-panels.yml"))
+                .withMessage("Insights panel config class path resource [insights/no-such-panels.yml] does not exist."
+                        + " Check peekaboot.insights.config-location.");
     }
 
     /**

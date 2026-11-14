@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.PanelConfigLoader;
@@ -54,9 +55,7 @@ public final class InsightsService implements SmartLifecycle {
         this.properties = properties;
 
         Resource defaults = resourceLoader.getResource(CLASSPATH_PREFIX + DEFAULTS_LOCATION);
-        Resource userOverride = properties.getConfigLocation() != null
-                ? resourceLoader.getResource(properties.getConfigLocation())
-                : resourceLoader.getResource(CLASSPATH_PREFIX + USER_LOCATION);
+        Resource userOverride = userOverride(resourceLoader, properties.getConfigLocation());
         int levelCount = properties.getLevels().size();
         PanelsFile bundled = withKnownLevels(PanelConfigLoader.load(defaults), levelCount);
         PanelsFile file = withUserOverride(bundled, userOverride, levelCount);
@@ -80,6 +79,23 @@ public final class InsightsService implements SmartLifecycle {
                 registry,
                 listener,
                 store);
+    }
+
+    /**
+     * The operator's panel file. The one on the classpath root is optional. A location the
+     * operator set and that names nothing is a mistake in the property, and serving the bundled
+     * panels would hide it.
+     */
+    private static Resource userOverride(ResourceLoader resourceLoader, @Nullable String configLocation) {
+        if (configLocation == null) {
+            return resourceLoader.getResource(CLASSPATH_PREFIX + USER_LOCATION);
+        }
+        Resource configured = resourceLoader.getResource(configLocation);
+        if (!configured.exists()) {
+            throw new IllegalStateException("Insights panel config " + configured
+                    + " does not exist. Check peekaboot.insights.config-location.");
+        }
+        return configured;
     }
 
     /**

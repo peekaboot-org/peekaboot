@@ -29,7 +29,10 @@ public class InsightsProperties {
      */
     private List<Level> levels = defaultLevels();
 
-    /** A Spring resource location for the panel file, replacing the default lookup of peekaboot-insights.yml on the classpath root. */
+    /**
+     * A Spring resource location for the panel file, replacing the default lookup of
+     * peekaboot-insights.yml on the classpath root. A location that names nothing stops startup.
+     */
     private String configLocation;
 
     private Persistence persistence = new Persistence();
