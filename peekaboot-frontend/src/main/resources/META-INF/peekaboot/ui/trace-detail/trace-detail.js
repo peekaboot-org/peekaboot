@@ -107,10 +107,11 @@ export function shownTraceTarget() {
  * timeZone stays dashboard-only and falls back to the browser's own time zone.
  */
 export function openTraceDetail(traceId, options = {}) {
-    // Captured before closeTraceDetail() below, which restores focus to whatever a prior
+    // Captured before removeOverlay() below, which restores focus to whatever a prior
     // open() left behind - that would otherwise clobber the element we want to return to.
     const invokingElement = deepActiveElement();
-    closeTraceDetail();
+    // Not closeTraceDetail(): its onClose would rewrite the URL the caller wrote for this target.
+    removeOverlay();
 
     shownTarget = {traceId, subview: options.urlState?.initial?.subview ?? null, params: options.urlState?.initial?.params ?? {}};
     previouslyFocusedElement = invokingElement;
@@ -166,6 +167,16 @@ export function openTraceDetail(traceId, options = {}) {
 }
 
 export function closeTraceDetail() {
+    removeOverlay();
+    if (onCloseCallback) {
+        const callback = onCloseCallback;
+        onCloseCallback = null;
+        callback();
+    }
+}
+
+/** Takes the overlay off the page and gives focus back, without telling its opener. */
+function removeOverlay() {
     // Invalidates any fetchAndRender() still in flight from the overlay just removed, so
     // it cannot re-render into a detached node.
     currentSession += 1;
@@ -189,11 +200,6 @@ export function closeTraceDetail() {
         previouslyFocusedElement.focus();
     }
     previouslyFocusedElement = null;
-    if (onCloseCallback) {
-        const callback = onCloseCallback;
-        onCloseCallback = null;
-        callback();
-    }
 }
 
 async function fetchAndRender(content, traceId, {basePath, session, styleReady, urlState, display}) {

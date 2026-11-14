@@ -385,9 +385,9 @@ unguarded (`` `${basePath}/ui/assets/${name}` ``), so pass it without a trailing
 the URL gets a double slash and 404s. And `attachSharedStyles` must be called exactly once
 per shadow root: it does not guard against re-entry, and a second call appends a second set
 of `<link>` elements. Its one remaining call site is safe by construction, since
-`trace-detail.js`'s `openTraceDetail()` always calls `closeTraceDetail()` (which removes
-the whole host element) before creating a new host and shadow root. A future call site
-needs the same discipline.
+`trace-detail.js`'s `openTraceDetail()` always removes the open overlay's whole host
+element before creating a new host and shadow root. A future call site needs the same
+discipline.
 
 ## Theme resolution
 

@@ -192,6 +192,24 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     }
 
     /**
+     * A hash that names another view of the open trace reopens the overlay on it. The
+     * overlay it replaces was not closed by the reader, so its onClose must stay silent:
+     * run, it pushes "#traces" over the hash just navigated to and adds a Back stop.
+     */
+    @Test
+    void navigatingToAnotherViewOfTheOpenTraceKeepsItsHash() {
+        String traceId = seedAnHttpTrace();
+        openTraceDeepLink(traceId);
+        int before = (int) page.evaluate("() => history.length");
+
+        page.evaluate("id => { location.hash = '#traces/' + id + '/logs'; }", traceId);
+        overlay.waitFor(".pk-tab[data-tab=\"logs\"][aria-selected=\"true\"]");
+
+        assertThat(page.url()).endsWith("#traces/" + traceId + "/logs");
+        assertThat(page.evaluate("() => history.length")).isEqualTo(before + 1);
+    }
+
+    /**
      * logs.js renders its controls from a `state` object: the span filter chip forces a
      * full re-render off container.innerHTML, and were the text/level inputs' values kept
      * only in the DOM, that re-render would silently wipe whatever the user had typed.
