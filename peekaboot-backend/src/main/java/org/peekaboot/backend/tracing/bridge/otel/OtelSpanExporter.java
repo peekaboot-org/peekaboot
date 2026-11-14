@@ -1,25 +1,13 @@
 package org.peekaboot.backend.tracing.bridge.otel;
 
-import io.micrometer.tracing.Span;
-import io.opentelemetry.api.common.AttributeKey;
-import io.opentelemetry.api.common.Attributes;
-import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.sdk.common.CompletableResultCode;
-import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
-import java.time.Instant;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.stacktrace.CapturedStackTraces;
-import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
@@ -31,13 +19,6 @@ import org.springframework.context.ApplicationEventPublisher;
  * whatever other exporter the application has configured, never instead of it.
  */
 public class OtelSpanExporter implements SpanExporter {
-
-    /** The event Micrometer's bridge records a thrown exception as, with the OTel semantic-convention attributes. */
-    private static final String EXCEPTION_EVENT = "exception";
-
-    private static final AttributeKey<String> EXCEPTION_TYPE = AttributeKey.stringKey("exception.type");
-    private static final AttributeKey<String> EXCEPTION_MESSAGE = AttributeKey.stringKey("exception.message");
-    private static final AttributeKey<String> EXCEPTION_STACKTRACE = AttributeKey.stringKey("exception.stacktrace");
 
     private final ApplicationEventPublisher eventPublisher;
     private final PeekabootPaths paths;
@@ -53,7 +34,7 @@ public class OtelSpanExporter implements SpanExporter {
     @Override
     public CompletableResultCode export(Collection<SpanData> spans) {
         for (SpanData otelSpan : spans) {
-            Map<String, String> tags = extractAttributes(otelSpan);
+            Map<String, String> tags = OtelSpanConverter.tags(otelSpan);
             if (shouldSkipSpan(otelSpan, tags)) {
                 // A skipped root ends an excluded request's trace. The discard assumes
                 // nothing more arrives under that id: the excluded prefixes serve no endpoint
@@ -66,7 +47,8 @@ public class OtelSpanExporter implements SpanExporter {
                 }
                 continue;
             }
-            org.peekaboot.backend.tracing.event.SpanData spanData = convertToSpanData(otelSpan, tags);
+            org.peekaboot.backend.tracing.event.SpanData spanData =
+                    OtelSpanConverter.convert(otelSpan, tags, creationOrder.incrementAndGet());
             eventPublisher.publishEvent(new SpanDataEvent(spanData));
         }
         return CompletableResultCode.ofSuccess();
@@ -96,103 +78,5 @@ public class OtelSpanExporter implements SpanExporter {
     @Override
     public CompletableResultCode shutdown() {
         return CompletableResultCode.ofSuccess();
-    }
-
-    private org.peekaboot.backend.tracing.event.SpanData convertToSpanData(
-            SpanData otelSpan, Map<String, String> tags) {
-        Instant startTime = nanosToInstant(otelSpan.getStartEpochNanos());
-        Instant endTime = nanosToInstant(otelSpan.getEndEpochNanos());
-
-        List<org.peekaboot.backend.tracing.event.SpanData.Event> events = extractEvents(otelSpan);
-
-        SpanContext parent = otelSpan.getParentSpanContext();
-        String parentId = parent.isValid() ? parent.getSpanId() : null;
-        boolean remoteParent = parent.isValid() && parent.isRemote();
-
-        CapturedExceptionInfo exception = capturedException(otelSpan);
-
-        return new org.peekaboot.backend.tracing.event.SpanData(
-                otelSpan.getSpanContext().getTraceId(),
-                otelSpan.getSpanContext().getSpanId(),
-                parentId,
-                remoteParent,
-                otelSpan.getName(),
-                mapKind(otelSpan.getKind()),
-                startTime,
-                endTime,
-                tags,
-                events,
-                exception,
-                creationOrder.incrementAndGet());
-    }
-
-    private Instant nanosToInstant(long nanos) {
-        return Instant.ofEpochSecond(nanos / 1_000_000_000, nanos % 1_000_000_000);
-    }
-
-    private Map<String, String> extractAttributes(SpanData otelSpan) {
-        Map<String, String> tags = new HashMap<>();
-        otelSpan.getAttributes().forEach((key, value) -> {
-            if (value != null) {
-                tags.put(key.getKey(), String.valueOf(value));
-            }
-        });
-        return tags;
-    }
-
-    /**
-     * The SDK writes the class, message and full stack trace onto the exception event; the status
-     * description only fills in the message of a span that recorded no exception, or one without
-     * a message. Only an ERROR status counts: an application may record an exception it handled.
-     */
-    private static @Nullable CapturedExceptionInfo capturedException(SpanData otelSpan) {
-        if (otelSpan.getStatus().getStatusCode() != StatusCode.ERROR) {
-            return null;
-        }
-        String description = otelSpan.getStatus().getDescription();
-        String statusMessage = description.isEmpty() ? null : description;
-        EventData event = lastExceptionEvent(otelSpan);
-        if (event == null) {
-            return new CapturedExceptionInfo(null, statusMessage, null);
-        }
-        Attributes attributes = event.getAttributes();
-        String message = attributes.get(EXCEPTION_MESSAGE);
-        String stackTrace = attributes.get(EXCEPTION_STACKTRACE);
-        return new CapturedExceptionInfo(
-                attributes.get(EXCEPTION_TYPE),
-                message != null ? message : statusMessage,
-                stackTrace != null ? CapturedStackTraces.capLines(stackTrace) : null);
-    }
-
-    private static EventData lastExceptionEvent(SpanData otelSpan) {
-        EventData last = null;
-        for (EventData event : otelSpan.getEvents()) {
-            if (EXCEPTION_EVENT.equals(event.getName())) {
-                last = event;
-            }
-        }
-        return last;
-    }
-
-    private List<org.peekaboot.backend.tracing.event.SpanData.Event> extractEvents(SpanData otelSpan) {
-        return otelSpan.getEvents().stream().map(this::convertEvent).toList();
-    }
-
-    private org.peekaboot.backend.tracing.event.SpanData.Event convertEvent(EventData event) {
-        return new org.peekaboot.backend.tracing.event.SpanData.Event(
-                event.getName(), nanosToInstant(event.getEpochNanos()));
-    }
-
-    private Span.Kind mapKind(SpanKind kind) {
-        if (kind == null) {
-            return null;
-        }
-        return switch (kind) {
-            case CLIENT -> Span.Kind.CLIENT;
-            case SERVER -> Span.Kind.SERVER;
-            case PRODUCER -> Span.Kind.PRODUCER;
-            case CONSUMER -> Span.Kind.CONSUMER;
-            case INTERNAL -> null;
-        };
     }
 }
