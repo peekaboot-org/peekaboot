@@ -193,12 +193,12 @@ class InsightsPropertiesTest {
                 .hasMessageContaining("peekaboot.insights.levels must contain at least one level");
     }
 
-    /** A crash costs at most a minute of history; the age limit still spans the coarsest level. */
+    /** A crash costs at most five minutes of history; the age limit still spans the coarsest level. */
     @Test
-    void persistenceWritesEveryMinuteAndKeepsTheCoarsestLevelsSpan() {
+    void persistenceWritesEveryFiveMinutesAndKeepsTheCoarsestLevelsSpan() {
         InsightsProperties properties = new InsightsProperties();
 
-        assertThat(properties.getPersistence().getInterval()).isEqualTo(Duration.ofMinutes(1));
+        assertThat(properties.getPersistence().getInterval()).isEqualTo(Duration.ofMinutes(5));
         assertThat(properties.resolvePersistenceMaxAge()).isEqualTo(Duration.ofDays(30)); // 720 one-hour slots
     }
 
