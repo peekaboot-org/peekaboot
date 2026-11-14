@@ -29,6 +29,10 @@ import org.slf4j.LoggerFactory;
  * A write or fold that fails, checked or unchecked, warns once and ends writing for the run. The
  * writer keeps draining the queue so nothing else is logged, and the store, which the inputs
  * reached first, keeps going in memory.
+ *
+ * <p>A {@link VirtualMachineError} in any step, as a fold's second store running out of memory raises,
+ * ends writing the same way with a WARN of its own, where it would end the thread without a word and
+ * leave the queue to fill. A restore that died of one leaves the journal off from the start.
  */
 final class JournalWriter {
 
@@ -60,7 +64,7 @@ final class JournalWriter {
 
     /**
      * {@code onFlush} runs on the writer thread after each flush and once more at the stop, before the last
-     * fold, whether or not the journal still writes.
+     * fold, whether or not the journal still writes. Only a restore that died keeps it from running.
      */
     JournalWriter(
             JournalFiles files,
@@ -101,15 +105,34 @@ final class JournalWriter {
 
     /** The writer thread's body. Returns once {@link #stop} was called and the queue is empty, or on an interrupt. */
     void run() {
+        run(null);
+    }
+
+    /**
+     * The writer thread's body after a restore that ended as {@code diedRestoring} says, null where it
+     * returned. After one that died the writer says so, folds and writes nothing and only takes what it is
+     * offered until the stop. It leaves {@code onFlush} alone, since the digest may not have been restored
+     * and its write would replace the stored one.
+     */
+    void run(@Nullable VirtualMachineError diedRestoring) {
         Appending appending = new Appending(files, folding, drops);
-        appending.start();
+        if (diedRestoring == null) {
+            appending.attempt(appending::start);
+            runUntilStopped(appending, onFlush);
+        } else {
+            appending.died(diedRestoring);
+            runUntilStopped(appending, () -> {});
+        }
+    }
+
+    private void runUntilStopped(Appending appending, Runnable besideTheFlush) {
         boolean interrupted = false;
         Instant nextFlush = clock.instant().plus(flushInterval);
         while (!stopping || !queue.isEmpty()) {
             try {
                 TraceInput input = queue.poll(millisUntil(nextFlush), TimeUnit.MILLISECONDS);
                 if (input != null && !STOP.equals(input)) {
-                    appending.write(input);
+                    appending.attempt(() -> appending.write(input));
                 }
             } catch (InterruptedException e) {
                 // an interrupt ends the writer as a stop does; the flag goes back once the last fold is done
@@ -118,17 +141,21 @@ final class JournalWriter {
             }
             Instant now = clock.instant();
             if (!now.isBefore(nextFlush)) {
-                appending.flush(now);
-                onFlush.run();
+                appending.attempt(() -> {
+                    appending.flush(now);
+                    besideTheFlush.run();
+                });
                 nextFlush = now.plus(flushInterval);
             } else if (nextFlush.isAfter(now.plus(flushInterval))) {
                 // the clock stepped back; waiting for the old instant would keep the lines in memory that long
                 nextFlush = now.plus(flushInterval);
             }
-            appending.foldPast(maxJournalChars);
+            appending.attempt(() -> appending.foldPast(maxJournalChars));
         }
-        onFlush.run();
-        appending.finish();
+        appending.attempt(() -> {
+            besideTheFlush.run();
+            appending.finish();
+        });
         if (interrupted) {
             Thread.currentThread().interrupt();
         }
@@ -159,6 +186,15 @@ final class JournalWriter {
             this.files = files;
             this.folding = folding;
             this.drops = drops;
+        }
+
+        /** Runs one step of the writer. A {@link VirtualMachineError} in it ends writing where it would end the thread. */
+        void attempt(Runnable step) {
+            try {
+                step.run();
+            } catch (VirtualMachineError death) {
+                died(death);
+            }
         }
 
         /** The fold at the writer's start, which opens the run's first journal. */
@@ -276,20 +312,40 @@ final class JournalWriter {
             }
         }
 
-        /** Ends writing for the run with one WARN. The broken journal is closed to release its file; a failure to close is suppressed. */
+        /** Ends writing for the run with one WARN. */
         private void failed(Exception e) {
+            endWriting(e);
+            log.warn(
+                    "Peekaboot traces: cannot write to {} ({}); traces from here on will not survive a restart",
+                    files.directory(),
+                    e.toString());
+        }
+
+        /**
+         * Ends writing for the run with one WARN, and the thread goes on to drain. Once writing has ended,
+         * the WARN that ended it already says nothing more survives a restart.
+         */
+        void died(VirtualMachineError death) {
+            if (ended) {
+                return;
+            }
+            endWriting(death);
+            log.warn(
+                    "Peekaboot traces: the journal in {} stopped ({}); traces from here on will not survive a restart",
+                    files.directory(),
+                    death.toString());
+        }
+
+        /** The broken journal is closed to release its file; a failure to close is suppressed. */
+        private void endWriting(Throwable cause) {
             ended = true;
             if (journal != null) {
                 try (OpenJournal _ = journal) {
                     journal = null;
                 } catch (IOException closing) {
-                    e.addSuppressed(closing);
+                    cause.addSuppressed(closing);
                 }
             }
-            log.warn(
-                    "Peekaboot traces: cannot write to {} ({}); traces from here on will not survive a restart",
-                    files.directory(),
-                    e.toString());
         }
     }
 }

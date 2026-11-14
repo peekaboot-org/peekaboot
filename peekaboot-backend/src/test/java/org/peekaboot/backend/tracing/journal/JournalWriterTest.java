@@ -1,6 +1,7 @@
 package org.peekaboot.backend.tracing.journal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.tracing.store.TraceInput;
@@ -75,6 +77,37 @@ class JournalWriterTest {
     private static boolean journalHolds(JournalFiles files, TraceInput input) {
         return Files.exists(files.journal())
                 && JournalTexts.lines(files.journal()).contains(line(input));
+    }
+
+    /** A writer whose first fold starts a journal and whose every later one runs out of memory. */
+    private static JournalWriter writerWhoseLaterFoldsDie(JournalFiles files, long maxJournalChars) {
+        AtomicInteger folds = new AtomicInteger();
+        return new JournalWriter(
+                files,
+                () -> {
+                    if (folds.getAndIncrement() > 0) {
+                        throw new OutOfMemoryError("fold");
+                    }
+                    return files.startJournal();
+                },
+                FAST,
+                maxJournalChars,
+                Clock.systemUTC(),
+                () -> {});
+    }
+
+    /** The one WARN of a writer that {@code death} ended, as the capture lists it. */
+    private Tuple stopped(String death) {
+        return tuple(
+                Level.WARN,
+                "Peekaboot traces: the journal in " + dir + " stopped (" + death
+                        + "); traces from here on will not survive a restart");
+    }
+
+    private static List<Tuple> warnings(LogCapture capture) {
+        return capture.appender().list.stream()
+                .map(event -> tuple(event.getLevel(), event.getFormattedMessage()))
+                .toList();
     }
 
     private static void runToTheEnd(JournalWriter writer) throws InterruptedException {
@@ -429,7 +462,9 @@ class JournalWriterTest {
     /** A write that fails unchecked warns once, and the broken journal is closed so its file is released. */
     @Test
     void anUncheckedWriteFailureClosesTheJournal() {
-        FailingWriter out = new FailingWriter();
+        FailingWriter out = new FailingWriter(() -> {
+            throw new IllegalStateException("cannot encode");
+        });
         JournalWriter writer = new JournalWriter(
                 new JournalFiles(dir), () -> new OpenJournal(out), FAST, Long.MAX_VALUE, Clock.systemUTC(), () -> {});
         writer.offer(new TraceInput.RunStarted(STARTED));
@@ -445,6 +480,134 @@ class JournalWriterTest {
                     .contains("java.lang.IllegalStateException: cannot encode");
         }
         assertThat(out.closed).isTrue();
+    }
+
+    /**
+     * An error of the JVM's own, as a fold's second store running out of memory raises, ends writing where
+     * it would end the thread: the writer says so once and runs on to its stop.
+     */
+    @Test
+    void anErrorInAFoldEndsWritingWithOneWarn() {
+        JournalWriter writer = new JournalWriter(
+                new JournalFiles(dir),
+                () -> {
+                    throw new OutOfMemoryError("fold");
+                },
+                FAST,
+                Long.MAX_VALUE,
+                Clock.systemUTC(),
+                () -> {});
+        writer.offer(new TraceInput.RunStarted(STARTED));
+        writer.offer(logged("lost"));
+        writer.stop();
+
+        try (LogCapture capture = LogCapture.attach(JournalWriter.class)) {
+            assertThatCode(writer::run).doesNotThrowAnyException();
+
+            assertThat(warnings(capture)).containsExactly(stopped("java.lang.OutOfMemoryError: fold"));
+        }
+    }
+
+    /** An error while a line is written closes the journal it broke, so its file is released. */
+    @Test
+    void anErrorWhileWritingClosesTheJournal() {
+        FailingWriter out = new FailingWriter(() -> {
+            throw new StackOverflowError("encode");
+        });
+        JournalWriter writer = new JournalWriter(
+                new JournalFiles(dir), () -> new OpenJournal(out), FAST, Long.MAX_VALUE, Clock.systemUTC(), () -> {});
+        writer.offer(new TraceInput.RunStarted(STARTED));
+        writer.stop();
+
+        try (LogCapture capture = LogCapture.attach(JournalWriter.class)) {
+            assertThatCode(writer::run).doesNotThrowAnyException();
+
+            assertThat(warnings(capture)).containsExactly(stopped("java.lang.StackOverflowError: encode"));
+        }
+        assertThat(out.closed).isTrue();
+    }
+
+    /** A fold past the size limit that dies leaves the journal off, with the lines before it in the file and none after. */
+    @Test
+    void anErrorInAFoldPastTheSizeLimitEndsWriting() {
+        JournalFiles files = new JournalFiles(dir);
+        JournalWriter writer = writerWhoseLaterFoldsDie(files, 0);
+        TraceInput lost = logged("lost");
+        writer.offer(new TraceInput.RunStarted(STARTED));
+        writer.offer(lost);
+        writer.stop();
+
+        try (LogCapture capture = LogCapture.attach(JournalWriter.class)) {
+            assertThatCode(writer::run).doesNotThrowAnyException();
+
+            assertThat(warnings(capture)).containsExactly(stopped("java.lang.OutOfMemoryError: fold"));
+        }
+        assertThat(JournalTexts.lines(files.journal()))
+                .endsWith(runLine(STARTED))
+                .doesNotContain(line(lost));
+    }
+
+    /** The stop's fold can die as any other, and the writer still returns to the close that waits for it. */
+    @Test
+    void anErrorInTheLastFoldLetsTheWriterEnd() {
+        JournalFiles files = new JournalFiles(dir);
+        JournalWriter writer = writerWhoseLaterFoldsDie(files, Long.MAX_VALUE);
+        TraceInput written = logged("written");
+        writer.offer(new TraceInput.RunStarted(STARTED));
+        writer.offer(written);
+        writer.stop();
+
+        try (LogCapture capture = LogCapture.attach(JournalWriter.class)) {
+            assertThatCode(writer::run).doesNotThrowAnyException();
+
+            assertThat(warnings(capture)).containsExactly(stopped("java.lang.OutOfMemoryError: fold"));
+        }
+        assertThat(JournalTexts.lines(files.journal())).endsWith(runLine(STARTED), line(written));
+    }
+
+    /**
+     * An error that repeats is said once. A zero cadence on a fixed clock makes the one pass before the stop
+     * a due flush, so the step beside it dies there and again at the stop.
+     */
+    @Test
+    void anErrorThatRepeatsWarnsOnce() {
+        JournalFiles files = new JournalFiles(dir);
+        AtomicInteger deaths = new AtomicInteger();
+        JournalWriter writer = new JournalWriter(
+                files, files::startJournal, Duration.ZERO, Long.MAX_VALUE, Clock.fixed(STARTED, ZoneOffset.UTC), () -> {
+                    deaths.incrementAndGet();
+                    throw new OutOfMemoryError("digest");
+                });
+        writer.stop();
+
+        try (LogCapture capture = LogCapture.attach(JournalWriter.class)) {
+            assertThatCode(writer::run).doesNotThrowAnyException();
+
+            assertThat(warnings(capture)).containsExactly(stopped("java.lang.OutOfMemoryError: digest"));
+        }
+        assertThat(deaths).as("the due flush's and the stop's").hasValue(2);
+    }
+
+    /**
+     * After a restore that died the journal is off from the start: the writer folds and writes nothing, and
+     * leaves the step beside the flush alone, since a digest that was not restored would replace the stored
+     * one. The zero cadence would run that step on every pass.
+     */
+    @Test
+    void aWriterWhoseRestoreDiedFoldsAndWritesNothing() {
+        JournalFiles files = new JournalFiles(dir);
+        JournalWriter writer = writer(files, Long.MAX_VALUE, Duration.ZERO, Clock.fixed(STARTED, ZoneOffset.UTC));
+        writer.offer(new TraceInput.RunStarted(STARTED));
+        writer.offer(logged("lost"));
+        writer.stop();
+
+        try (LogCapture capture = LogCapture.attach(JournalWriter.class)) {
+            writer.run(new OutOfMemoryError("restore"));
+
+            assertThat(warnings(capture)).containsExactly(stopped("java.lang.OutOfMemoryError: restore"));
+        }
+        assertThat(files.journal()).doesNotExist();
+        assertThat(flushesAlongside).hasValue(0);
     }
 
     /** The stop runs the step beside the flush once more, so what the digest took last reaches its file. */
@@ -493,14 +656,19 @@ class JournalWriterTest {
         assertThat(flushesAlongside).as("the due flush's and the stop's").hasValue(2);
     }
 
-    /** Every write fails unchecked, as an encoding failure would; it records whether it was closed. */
+    /** Every write fails as {@code failure} throws, unchecked, as an encoding failure would; it records whether it was closed. */
     private static final class FailingWriter extends Writer {
 
+        private final Runnable failure;
         private boolean closed;
+
+        FailingWriter(Runnable failure) {
+            this.failure = failure;
+        }
 
         @Override
         public void write(char[] buffer, int offset, int length) {
-            throw new IllegalStateException("cannot encode");
+            failure.run();
         }
 
         @Override

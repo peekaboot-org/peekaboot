@@ -22,6 +22,10 @@ import org.slf4j.LoggerFactory;
  * folds once more. The journal holds the inputs as the store takes them. Headers, the query string and
  * parameters arrive masked from capture; span attributes, SQL with its bind parameters, log messages and
  * stack traces are written raw and masked when read.
+ *
+ * <p>A {@link VirtualMachineError} on that thread, in the restore or in a later fold or write, turns the
+ * journal off for the run with one WARN. The thread lives on to take what it is handed, and live inputs
+ * keep reaching the store.
  */
 public final class TraceJournal implements TraceInputs, AutoCloseable {
 
@@ -91,11 +95,17 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
         return journal;
     }
 
-    /** The gate opens however the restore ended, or every live input would wait for good. */
+    /**
+     * The gate opens however the restore ended, or every live input would wait for good. A restore that died
+     * is handed to the writer, which then leaves the files as they are.
+     */
     private void run(JournalFiles files) {
+        VirtualMachineError diedRestoring = null;
         try {
             TraceReplay.restore(files, store);
             digestFile.restore();
+        } catch (VirtualMachineError death) {
+            diedRestoring = death;
         } finally {
             gate.open(live);
         }
@@ -112,7 +122,7 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
                     gate.failed(),
                     failure.toString());
         }
-        writer.run();
+        writer.run(diedRestoring);
     }
 
     /** An input the gate drops reaches neither the store nor the writer; the restore's end reports the count. */

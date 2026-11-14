@@ -1,6 +1,7 @@
 package org.peekaboot.backend.tracing.journal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Logs.untraced;
@@ -278,6 +279,41 @@ class TraceJournalTest {
                     .extracting(ILoggingEvent::getLevel)
                     .isEqualTo(Level.WARN);
         }
+    }
+
+    /**
+     * An error of the JVM's own in the restore, as a store running out of memory raises, turns the journal
+     * off for the run, and the writer says so once. The gate opens all the same, so live inputs keep
+     * reaching the store.
+     */
+    @Test
+    void anErrorInTheRestoreEndsTheJournalAndLiveInputsStillReachTheStore() {
+        InMemoryTraceStore store = new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            public void beginRun(@Nullable Instant startedAt) {
+                throw new OutOfMemoryError("restore");
+            }
+        };
+
+        try (LogCapture capture = LogCapture.attach(JournalWriter.class)) {
+            try (TraceJournal journal = start(store, dir, Long.MAX_VALUE)) {
+                journal.accept(logged("t1", "live"));
+
+                // Awaitility would rethrow a dead journal thread's OutOfMemoryError here, which ends the test JVM
+                await().dontCatchUncaughtExceptions()
+                        .atMost(Duration.ofSeconds(5))
+                        .until(() -> store.getTrace("t1").isPresent()
+                                && messages(store, "t1").contains("live"));
+            }
+            assertThat(capture.appender().list)
+                    .extracting(ILoggingEvent::getLevel, ILoggingEvent::getFormattedMessage)
+                    .containsExactly(tuple(
+                            Level.WARN,
+                            "Peekaboot traces: the journal in " + dir
+                                    + " stopped (java.lang.OutOfMemoryError: restore);"
+                                    + " traces from here on will not survive a restart"));
+        }
+        assertThat(new JournalFiles(dir).journal()).doesNotExist();
     }
 
     /** A close folds what the journal took into the snapshot and leaves a journal holding only its header. */
