@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class MaskingEngineTest {
@@ -541,6 +542,38 @@ class MaskingEngineTest {
             String result = engine.maskValue(value);
 
             assertThat(result).isEqualTo("redis://******@cache.example.com:6379/0");
+        }
+
+        @ParameterizedTest
+        @CsvSource(
+                delimiter = '|',
+                value = {
+                    "redis://user:pa:ss@cache.example.com:6379/0        | redis://******@cache.example.com:6379/0",
+                    "amqp://user:pa/ss@mq.example.com:5672/vhost         | amqp://******@mq.example.com:5672/vhost",
+                    "https://user:p@ss@host.example.com/path             | https://******@host.example.com/path",
+                    "smtp://bob@example.com:S3cr3t@smtp.example.com:587  | smtp://******@smtp.example.com:587",
+                    "http://user:pass@[::1]:8080/x                       | http://******@[::1]:8080/x",
+                    "https://user:pass@host/path?email=bob@example.com   | https://******@host/path?email=bob@example.com",
+                    "https://user:pa?ss@host.example.com/path            | https://******@host.example.com/path",
+                    "postgres://app:pa#ss@db.example.com:5432/app        | postgres://******@db.example.com:5432/app"
+                })
+        void maskValue_shouldMaskUserinfoWhosePasswordHoldsUrlDelimiters(String value, String masked) {
+            assertThat(engine.maskValue(value)).isEqualTo(masked);
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "https://example.com:8080/users/bob@example.com",
+                    "http://[::1]:8080/users/bob@example.com",
+                    "ssh://git@github.com:22/a@b",
+                    "mongodb://h1:27017,h2:27017/db?appName=a@b",
+                    "{\"url\":\"http://host:8080\",\"email\":\"bob@example.com\"}",
+                    "{\"homepage\":\"https://example.com\",\"contact\":\"bob@example.com\"}",
+                    "{\"u\":\"http://h\",\"t\":\"12:30\",\"e\":\"a@b\"}"
+                })
+        void maskValue_shouldLeaveAUrlWithoutUserinfoAloneWhateverFollowsIt(String value) {
+            assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
         /**

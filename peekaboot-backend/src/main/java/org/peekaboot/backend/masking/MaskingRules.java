@@ -176,23 +176,38 @@ final class MaskingRules {
             // and are caught by their own rules above.
             new ValuePattern("Legacy OpenAI key", Pattern.compile("\\bsk-[A-Za-z0-9]{20,}\\b")),
             // Group 1 is the userinfo, so MaskingEngine masks it alone and leaves
-            // scheme://host:port/path intact. The user may be empty: redis://:secret@host is
-            // the common Redis shape. The scheme is case-insensitive (RFC 3986), so an
-            // upper-cased JDBC:POSTGRESQL:// still counts.
+            // scheme://host:port/path intact. The scheme is a one-character lookbehind, since
+            // consuming it makes a long alphanumeric run quadratic. It is case-insensitive
+            // (RFC 3986), so an upper-cased JDBC:POSTGRESQL:// still counts. The user may be
+            // empty (redis://:secret@host) or hold "@" (an e-mail user), and stops at ":", "/",
+            // "[" (an IPv6 host) and a double quote (compact JSON). Digits followed by a URL
+            // delimiter after the colon are a port, so there is no userinfo. The first
+            // alternative is the authority up to its last "@", where a browser ends userinfo.
+            // The second covers a raw "/", "?" or "#" in the password, up to the first "@" and
+            // at most 512 characters, the bound that keeps a run of "x://a:" linear. A password
+            // of digits followed by "/" reads as a port, and a password holding "@" before "/"
+            // is masked only up to that "@".
             new ValuePattern(
-                    "Credentials in a URL", 1, Pattern.compile("(?i)[a-z][a-z0-9+.-]*://([^/\\s:@]*:[^/\\s:@]+)@")),
+                    "Credentials in a URL",
+                    1,
+                    Pattern.compile("(?i)(?<=[a-z0-9+.-])://([^/?#\\s:\\[\"]*+:(?!\\d{1,5}+(?:[/?#,;\\s\"'<>)\\]}]|$))"
+                            + "(?:[^/?#\\s]*|[^\\s@]{0,512}+))@")),
             // Oracle's thin URL (jdbc:oracle:thin:user/password@host) has no "://" ahead of
-            // the credentials, so the rule above never sees it. Group 2 is the password.
+            // the credentials, so the rule above never sees it. Group 2 is the password. The
+            // user cannot hold ":" and the password is bounded at 1,024 characters, which
+            // keeps a run of the prefix linear.
             new ValuePattern(
                     "Credentials in an Oracle thin URL",
                     2,
-                    Pattern.compile("(?i)jdbc:oracle:thin:([^/@\\s]+/)([^@\\s]+)@")),
+                    Pattern.compile("(?i)jdbc:oracle:thin:([^/@\\s:]++/)([^@\\s]{1,1024}+)@")),
             // Distinct from "Credentials in a URL" above and not subsumed by it: this is the
             // query-parameter shape (scheme://host/db?password=...), the more common of the
             // two for JDBC; ";" covers SQL Server's property separator. Every pair is a
             // candidate - group 1 is judged by the key-name rules, and only group 2 (the
             // value) is masked, leaving the parameter name and the rest of the URL intact.
-            ValuePattern.keyed("Credentials in a URL query", 1, 2, Pattern.compile("[?&;]([^=&;\\s]+)=([^&;\\s]+)")),
+            // The key cannot hold "?", so a run of JDBC placeholders is not rescanned from
+            // every "?".
+            ValuePattern.keyed("Credentials in a URL query", 1, 2, Pattern.compile("[?&;]([^=&;?\\s]++)=([^&;\\s]+)")),
             // The value of a -Dname=value / --name=value option, as JAVA_TOOL_OPTIONS,
             // JDK_JAVA_OPTIONS and their kin carry it: the property spring.datasource.password
             // is masked by its own key, but not the option string it was set from unless
