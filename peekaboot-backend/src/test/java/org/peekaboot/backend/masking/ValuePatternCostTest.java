@@ -35,6 +35,7 @@ class ValuePatternCostTest {
             "\"",
             "\\\"",
             "x://a:",
+            "x://a:1,",
             "jdbc:oracle:thin:",
             "jdbc:oracle:thin:a/",
             " a=\"",

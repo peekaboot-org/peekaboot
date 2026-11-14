@@ -561,10 +561,22 @@ class MaskingEngineTest {
             assertThat(engine.maskValue(value)).isEqualTo(masked);
         }
 
+        /** Digits and a delimiter are a port only when no '@' follows before the next '/', ':' or space. */
+        @ParameterizedTest
+        @ValueSource(chars = {'?', '#', ',', ';', '"', '\'', '<', '>', ')', ']', '}'})
+        void maskValue_shouldMaskAPasswordThatStartsWithDigitsAndADelimiter(char delimiter) {
+            String value = "amqp://user:5672" + delimiter + "S3cr3t@mq.example.com:5672/vhost";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("amqp://******@mq.example.com:5672/vhost");
+        }
+
         @ParameterizedTest
         @ValueSource(
                 strings = {
                     "https://example.com:8080/users/bob@example.com",
+                    "https://example.com:8080?next=/users/bob@example.com",
                     "http://[::1]:8080/users/bob@example.com",
                     "ssh://git@github.com:22/a@b",
                     "mongodb://h1:27017,h2:27017/db?appName=a@b",
