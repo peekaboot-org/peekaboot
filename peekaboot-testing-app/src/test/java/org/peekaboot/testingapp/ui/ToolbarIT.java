@@ -326,6 +326,65 @@ class ToolbarIT extends PlaywrightTestBase {
     }
 
     /**
+     * The bar wraps the host page's fetch, so the host has to get back the very promise the
+     * fetch below the bar returned. A promise derived from it would settle a tick later and
+     * carry whatever the bar's own reading threw. The init script is that fetch below the bar.
+     */
+    @Test
+    void theHostGetsItsOwnFetchPromiseBack() {
+        page.addInitScript("{ const nativeFetch = window.fetch;"
+                + " window.fetch = function() { return (window.__pkNative = nativeFetch.apply(this, arguments)); }; }");
+        openSwaggerUi();
+
+        assertThat(page.evaluate("async () => { const promise = fetch('/api/person/all');"
+                        + " const same = promise === window.__pkNative; await promise; return same; }"))
+                .isEqualTo(true);
+    }
+
+    /**
+     * Without its status pill the bar cannot show the request and throws while it tries. The
+     * host's fetch still answers, and the bar says what happened in a warning of its own. The
+     * warning is waited for: it is the proof that the bar's reading did throw.
+     */
+    @Test
+    void aThrowInTheBarsOwnWorkDoesNotRejectTheHostsFetch() {
+        openSwaggerUi();
+        toolbar.evaluate("root => root.getElementById('pk-status').remove()");
+
+        page.waitForConsoleMessage(
+                new Page.WaitForConsoleMessageOptions()
+                        .setPredicate(msg -> msg.text().startsWith("Peekaboot: could not read a response")),
+                () -> assertThat(page.evaluate("async () => (await fetch('/api/person/all')).status"))
+                        .isEqualTo(200));
+    }
+
+    /**
+     * A fetch the host sees fail and handles is rejected once, for the host. The bar's own
+     * branch of that promise must not reject a second time with nobody listening. Rejections
+     * are reported in the order they happened, so the probe rejected after the fetch arrives
+     * last, and waiting for it leaves no earlier one unreported. A macrotask is too short a
+     * wait: Chromium and Firefox report a rejection after the timer. Nothing listens on port 1.
+     */
+    @Test
+    void aHostFetchThatFailsRaisesNoSecondRejection() {
+        openSwaggerUi();
+
+        assertThat(page.evaluate("async () => {"
+                        + " const rejections = [];"
+                        + " const probeSeen = new Promise(resolve => window.addEventListener('unhandledrejection', event => {"
+                        + "   event.preventDefault();"
+                        + "   rejections.push(String(event.reason));"
+                        + "   if (event.reason === 'probe') resolve();"
+                        + " }));"
+                        + " const outcome = await fetch('http://127.0.0.1:1/').catch(() => 'failed');"
+                        + " Promise.reject('probe');"
+                        + " await probeSeen;"
+                        + " return [outcome, ...rejections];"
+                        + " }"))
+                .isEqualTo(List.of("failed", "probe"));
+    }
+
+    /**
      * The bar colours a trace's duration by its SLOW reason, as the list and the overlay header
      * do. The report sleeps past the default one-second slow-trace threshold, and Swagger UI's
      * idle bar picks up its trace from the fetch. ToolbarConfiguredThresholdsIT holds the
@@ -335,8 +394,7 @@ class ToolbarIT extends PlaywrightTestBase {
     void theBarColoursASlowTracesDuration() {
         CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-SLOW-BAR");
         try {
-            page.navigate(baseUrl + "/swagger-ui/index.html");
-            page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
+            openSwaggerUi();
             page.evaluate("id => fetch('/api/orders/' + id + '/report')", String.valueOf(order.getId()));
             toolbar.awaitMetrics("span");
 
@@ -359,8 +417,7 @@ class ToolbarIT extends PlaywrightTestBase {
         page.addInitScript("localStorage.setItem('peekaboot-locale', 'de-DE')");
         CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-SLOW-LOCALE");
         try {
-            page.navigate(baseUrl + "/swagger-ui/index.html");
-            page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
+            openSwaggerUi();
             page.evaluate("id => fetch('/api/orders/' + id + '/report')", String.valueOf(order.getId()));
             toolbar.awaitMetrics("span");
 
@@ -408,5 +465,11 @@ class ToolbarIT extends PlaywrightTestBase {
         assertThat(everythingFits)
                 .as("no part of the bar reaches past the 375px viewport")
                 .isTrue();
+    }
+
+    /** Swagger UI has no request of its own, so its bar starts idle and wraps fetch. */
+    private void openSwaggerUi() {
+        page.navigate(baseUrl + "/swagger-ui/index.html");
+        page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
     }
 }

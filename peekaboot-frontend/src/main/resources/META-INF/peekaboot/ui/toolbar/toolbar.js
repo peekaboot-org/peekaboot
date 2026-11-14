@@ -194,27 +194,26 @@ function pollTrace(client, traceId, {stillCurrent, onTrace, onNothingArrived}) {
  * Idle mode (Swagger UI): the page has no request of its own, so window.fetch is wrapped
  * and the trace id is picked up from the Server-Timing header of every API response,
  * reported as onRequest(traceId, method, path, status). Swagger UI's own calls, under
- * ignoredPathPrefixes, are skipped.
+ * ignoredPathPrefixes, are skipped. The page gets back the promise its fetch returned, and
+ * nothing the bar does with the answer can reject it.
  */
 function installServerTimingInterceptor(ignoredPathPrefixes, onRequest) {
     const originalFetch = window.fetch;
 
-    window.fetch = function(input, init) {
-        const request = input instanceof Request ? input : null;
-        const url = request ? request.url : String(input);
-        const method = (init?.method ?? request?.method ?? 'GET').toUpperCase();
-
-        let path;
+    function reportRequest(input, init, response) {
         try {
-            path = new URL(url, window.location.origin).pathname;
-        } catch {
-            path = url;
-        }
+            const request = input instanceof Request ? input : null;
+            const url = request ? request.url : String(input);
+            const method = (init?.method ?? request?.method ?? 'GET').toUpperCase();
 
-        const skip = ignoredPathPrefixes.some(prefix => path.startsWith(prefix));
+            let path;
+            try {
+                path = new URL(url, window.location.origin).pathname;
+            } catch {
+                path = url;
+            }
 
-        return originalFetch.apply(this, arguments).then(response => {
-            if (skip) return response;
+            if (ignoredPathPrefixes.some(prefix => path.startsWith(prefix))) return;
 
             const serverTiming = response.headers.get('Server-Timing');
             if (serverTiming) {
@@ -223,7 +222,15 @@ function installServerTimingInterceptor(ignoredPathPrefixes, onRequest) {
                     onRequest(match[1], method, path, response.status);
                 }
             }
-            return response;
-        });
+        } catch (error) {
+            console.warn('Peekaboot: could not read a response', error);
+        }
+    }
+
+    window.fetch = function(input, init) {
+        const answer = originalFetch.apply(this, arguments);
+        // Read on a branch that swallows a failed fetch, which is the page's to handle and would reject here unheard.
+        answer.then(response => reportRequest(input, init, response), () => {});
+        return answer;
     };
 }
