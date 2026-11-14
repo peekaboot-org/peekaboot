@@ -1,11 +1,13 @@
 {
   "name": "peekaboot-frontend",
   "private": true,
-  "description": "Lint toolchain for the embedded web UI. No build step: nothing here produces the jar's contents.",
+  "type": "module",
+  "description": "Lint and test toolchain for the embedded web UI. No build step: nothing here produces the jar's contents.",
   "scripts": {
-    "lint:js": "eslint \"src/main/resources/META-INF/peekaboot/ui/**/*.js\"",
+    "lint:js": "eslint \"src/main/resources/META-INF/peekaboot/ui/**/*.js\" \"src/test/js/**/*.mjs\"",
     "lint:css": "stylelint \"src/main/resources/META-INF/peekaboot/ui/**/*.css\"",
-    "lint:html": "html-validate \"src/main/resources/META-INF/peekaboot/ui/**/*.html\""
+    "lint:html": "html-validate \"src/main/resources/META-INF/peekaboot/ui/**/*.html\"",
+    "test:js": "node --test \"src/test/js/**/*.test.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

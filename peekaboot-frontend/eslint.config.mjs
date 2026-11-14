@@ -34,4 +34,9 @@ export default [
         ],
         languageOptions: { sourceType: 'script' },
     },
+
+    {
+        files: ['src/test/js/**/*.mjs'],
+        languageOptions: { globals: globals.node },
+    },
 ];

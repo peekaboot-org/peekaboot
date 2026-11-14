@@ -44,8 +44,8 @@ tasks.npmInstall {
     }
 }
 
-// A lint run that passes logs its output at INFO; one that fails prints everything npm and the
-// linter wrote, since npm's own errors (a missing script, a broken package.json) come only on
+// A run that passes logs its output at INFO; one that fails prints everything npm and the
+// tool wrote, since npm's own errors (a missing script, a broken package.json) come only on
 // its output.
 fun NpmTask.logOutputAtInfoUnlessItFails() {
     val output = ByteArrayOutputStream()
@@ -64,8 +64,8 @@ fun NpmTask.logOutputAtInfoUnlessItFails() {
     }
 }
 
-// One task per tool, mirroring the pom's lint-js / lint-css / lint-html executions and
-// running the same three npm scripts. No declared outputs, so each always runs: a gate an
+// One task per tool, mirroring the pom's lint-js / lint-css / lint-html / test-js executions
+// and running the same four npm scripts. No declared outputs, so each always runs: a gate an
 // up-to-date marker can skip is not a gate.
 val lintJs = tasks.register<NpmTask>("lintJs") {
     group = "verification"
@@ -93,6 +93,15 @@ val lintHtml = tasks.register<NpmTask>("lintHtml") {
     logOutputAtInfoUnlessItFails()
 }
 
+val testJs = tasks.register<NpmTask>("testJs") {
+    group = "verification"
+    description = "Runs the frontend's unit tests on Node."
+    dependsOn(tasks.npmInstall)
+    shouldRunAfter(lintHtml)
+    npmCommand = listOf("run", "test:js")
+    logOutputAtInfoUnlessItFails()
+}
+
 tasks.check {
-    dependsOn(lintJs, lintCss, lintHtml)
+    dependsOn(lintJs, lintCss, lintHtml, testJs)
 }
