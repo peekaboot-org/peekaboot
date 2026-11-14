@@ -584,6 +584,14 @@ class RequestCaptureFilterTest {
         assertThat(captured).doesNotContain("ghp_").endsWith("... 46 characters omitted");
     }
 
+    /** Cut inside a quoted secret that holds whitespace, the closing quote is gone and the rest is masked. */
+    @Test
+    void aQuotedSecretStraddlingTheCapNeverShowsItsHead() throws Exception {
+        String captured = capturedHeaderValue("x ".repeat(2035) + "password=\"correct horse battery staple\" tail");
+
+        assertThat(captured).isEqualTo("x ".repeat(2035) + "password=\"******");
+    }
+
     @Test
     void aValueAtTheCapIsKeptWhole() throws Exception {
         String atTheCap = "a".repeat(RequestDetails.MAX_VALUE_LENGTH);

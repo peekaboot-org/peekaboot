@@ -792,6 +792,33 @@ class MaskingEngineTest {
         }
 
         @Test
+        void maskValue_shouldMaskAQuotedValueWithNoClosingQuoteToTheEnd() {
+            String value = "x required username=\"alice\" password=\"correct horse";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("x required username=\"alice\" password=\"******");
+        }
+
+        @Test
+        void maskValue_shouldMaskAnUnclosedQuotedValueThroughAnEscapedQuoteAtItsEnd() {
+            String value = "x required password=\"correct horse\\\"";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("x required password=\"******");
+        }
+
+        @Test
+        void maskValue_shouldMaskAnUnclosedQuotedValueThatEndsInABackslash() {
+            String value = "x required password=\"correct horse\\";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("x required password=\"******");
+        }
+
+        @Test
         void maskValue_shouldLeaveAQuotedOptionWithAnInnocuousNameAlone() {
             String value = "x required username=\"alice\" mechanism=\"PLAIN\";";
 

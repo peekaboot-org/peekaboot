@@ -222,13 +222,14 @@ final class MaskingRules {
                     2,
                     Pattern.compile("(?<=\\s|^)(?:-D|--)([\\w.-]+)=(\\S+)")),
             // A quoted name="value" option, as sasl.jaas.config carries password="...". The
-            // value ends at the first quote no backslash escapes: one after an even run of
-            // backslashes, each pair being an escaped backslash.
+            // value ends before the first quote no backslash escapes: one after an even run of
+            // backslashes, each pair being an escaped backslash. A value whose closing quote is
+            // missing (a value cut short) masks to the end of the text, as a PEM block does.
             ValuePattern.keyed(
                     "Credentials in a quoted option",
                     1,
                     2,
-                    Pattern.compile("(?<=\\s|^)([\\w.-]+)=\"(.*?(?<!\\\\)(?:\\\\\\\\)*)\"")));
+                    Pattern.compile("(?<=\\s|^)([\\w.-]+)=\"(.*?(?:(?<!\\\\)(?:\\\\\\\\)*(?=\")|\\z))")));
 
     private MaskingRules() {}
 
