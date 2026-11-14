@@ -6,6 +6,7 @@ import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -104,6 +105,25 @@ class OwnerOnlyFilesTest {
                 .isSameAs(diskFull);
 
         assertThat(Files.readString(file)).isEqualTo("first");
+        assertThat(namesIn(directory)).containsExactly("state");
+    }
+
+    /** A store that stops interrupts its writer thread, and a write caught in flight must end there. */
+    @Test
+    void anInterruptEndsAWriteInFlightAndKeepsThePreviousFile() throws Exception {
+        Path file = directory.resolve("state");
+        replace(file, "first");
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread interrupted = writer(file, failure, out -> {
+            Thread.currentThread().interrupt();
+            out.write(bytes("second"));
+        });
+
+        interrupted.start();
+        interrupted.join();
+
+        assertThat(failure.get()).isInstanceOf(ClosedByInterruptException.class);
+        assertThat(file).hasContent("first");
         assertThat(namesIn(directory)).containsExactly("state");
     }
 

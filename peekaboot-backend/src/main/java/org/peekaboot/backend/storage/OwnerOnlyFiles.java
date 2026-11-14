@@ -66,7 +66,9 @@ public final class OwnerOnlyFiles {
         String temporaryPrefix = file.getFileName() + ".";
         Path temp = createTemporary(directory, temporaryPrefix);
         try {
-            try (OutputStream out = Files.newOutputStream(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            // a channel, since Files.newOutputStream ignores the interrupt a stopping store ends its write with
+            try (OutputStream out = Channels.newOutputStream(
+                    Files.newByteChannel(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS))) {
                 content.writeTo(out);
             }
             move(temp, file);
