@@ -2,17 +2,24 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Mouse;
+import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.BoundingBox;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -28,6 +35,7 @@ import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 class TracesTabIT extends PlaywrightTestBase {
 
@@ -48,8 +56,13 @@ class TracesTabIT extends PlaywrightTestBase {
 
     private static final Pattern TRACES_PAGE_SIZE_PARAM = Pattern.compile("[?&]limit=(\\d+)");
 
-    /** Mirrors the limit traces.js sends with every listing request. */
+    /** Mirrors PAGE_SIZE in traces.js: the limit of a listing's first request, and what Load more adds to it. */
     private static final int TRACES_PAGE_SIZE = 50;
+
+    /** Mirrors MAX_DEPTH in traces.js, which is the most rows the listing endpoint serves in one answer. */
+    private static final int TRACES_MAX_DEPTH = 10_000;
+
+    private static final String LOAD_MORE = "#traces-load-more";
 
     /** OrderService.listOrders' deliberate N+1: findByOrderId, countByOrderId, existsById. */
     private static final int QUERIES_PER_ORDER = 3;
@@ -62,6 +75,41 @@ class TracesTabIT extends PlaywrightTestBase {
 
     /** A duration as format.js renders it: a number and its unit ("850ms", "1.23s", "1.50m"). */
     private static final Pattern RENDERED_DURATION = Pattern.compile("([0-9.]+)(ms|s|m)$");
+
+    /** The traces {@link #storePagingProbes} wrote, which leave the shared store with the test. */
+    private final List<String> pagingProbeTraceIds = new ArrayList<>();
+
+    @AfterEach
+    void discardPagingProbes() {
+        pagingProbeTraceIds.forEach(traceStore::discard);
+    }
+
+    /**
+     * Writes {@code count} one-span traces to the store and returns the hash that lists exactly
+     * those: every root span carries one fresh name, and the {@code op} filter matches part of it.
+     * The roots read as Redis upkeep, which makes them Maintenance traces. The default view every
+     * other class lists leaves those out, so a burst of new rows pushes nobody's trace off its
+     * first page. The hash lifts that exclusion.
+     */
+    private String storePagingProbes(int count) {
+        String probe = "paging-probe-" + UUID.randomUUID();
+        for (int i = 0; i < count; i++) {
+            String traceId = probe + "-" + i;
+            traceStore.addSpan(TestSpans.span(traceId, "root")
+                    .named(probe)
+                    .kind(Span.Kind.CLIENT)
+                    .tag("db.system", "redis")
+                    .tag("db.operation", "PING")
+                    .build());
+            pagingProbeTraceIds.add(traceId);
+        }
+        return "#traces?op=" + probe + "&excluded=none";
+    }
+
+    private void awaitListedRows(int count) {
+        page.waitForFunction(
+                "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected", count);
+    }
 
     /**
      * Puts a failed SCHEDULED_JOB trace in the store by running the sample app's failing
@@ -188,6 +236,105 @@ class TracesTabIT extends PlaywrightTestBase {
     }
 
     /**
+     * The list starts at one page. While the answer says older rows exist, the list says how many
+     * rows it shows and offers the next page, and the rows already on screen stay the elements
+     * they were. The depth belongs to the filter: a bucket change starts over at one page.
+     */
+    @Test
+    void olderRowsLoadOnRequestAndTheListSaysHowManyItShows() {
+        openDashboard(storePagingProbes(60), Dashboard.TRACE_ITEM);
+
+        assertThat(page.locator(Dashboard.TRACE_ITEM).count()).isEqualTo(TRACES_PAGE_SIZE);
+        assertThat(page.locator("#traces-list .pk-trace-item__icon[aria-label='Maintenance']")
+                        .count())
+                .as("the probes are Maintenance rows, which the default view leaves out")
+                .isEqualTo(TRACES_PAGE_SIZE);
+        assertThat(page.textContent("#traces-shown")).isEqualTo("Showing the 50 newest rows");
+        page.evaluate("() => { document.querySelector('#traces-list .pk-trace-item').dataset.probe = '1'; }");
+        page.click(LOAD_MORE);
+        awaitListedRows(60);
+        assertThat(page.isHidden("#traces-more")).isTrue();
+        assertThat(page.getAttribute("#traces-list .pk-trace-item", "data-probe"))
+                .as("the first row is the element it was before the older rows came")
+                .isEqualTo("1");
+
+        page.click("#traces-bucket .pk-btn[data-bucket='errors']");
+        page.waitForSelector("#no-traces:not(.hidden)");
+        assertThat(page.isHidden("#traces-more")).isTrue();
+        page.click("#traces-bucket .pk-btn[data-bucket='all']");
+        page.waitForSelector(Dashboard.TRACE_ITEM);
+
+        assertThat(page.locator(Dashboard.TRACE_ITEM).count()).isEqualTo(TRACES_PAGE_SIZE);
+        assertThat(page.textContent("#traces-shown")).isEqualTo("Showing the 50 newest rows");
+    }
+
+    /**
+     * The last page takes the button away. A reader who pressed it from the keyboard was at the end
+     * of the list, and focus stays there instead of falling back to the top of the page.
+     */
+    @Test
+    void theLastPageLoadedFromTheKeyboardLeavesFocusOnTheLastRow() {
+        openDashboard(storePagingProbes(60), Dashboard.TRACE_ITEM);
+
+        page.focus(LOAD_MORE);
+        page.keyboard().press("Enter");
+        awaitListedRows(60);
+
+        assertThat(page.evaluate("() => document.activeElement === document.querySelector("
+                        + "'#traces-list .pk-trace-item:last-child .pk-trace-item__open')"))
+                .as("focus is on the last row's open button")
+                .isEqualTo(true);
+    }
+
+    /**
+     * A filter that arrives through the URL, a link from another tab or Back, starts at one page
+     * like one a control set.
+     */
+    @Test
+    void aFilterChangeThroughTheUrlListsOnePageAgain() {
+        String probes = storePagingProbes(60);
+        openDashboard(probes, Dashboard.TRACE_ITEM);
+        page.click(LOAD_MORE);
+        awaitListedRows(60);
+
+        Response errors = page.waitForResponse(
+                response -> response.url().contains("/api/traces?")
+                        && response.url().contains("bucket=errors"),
+                () -> page.evaluate("hash => { location.hash = hash; }", probes + "&bucket=errors"));
+
+        assertThat(pageSizeOf(errors)).isEqualTo(TRACES_PAGE_SIZE);
+    }
+
+    /**
+     * The listing endpoint serves no more than its bound in one answer, so that is as deep as the
+     * tab goes: the button leaves and the hint says how to reach what is older. The store holds
+     * fewer rows than the bound, so the answers here are the real ones with a {@code next} put in.
+     */
+    @Test
+    void atTheListingsBoundTheButtonLeavesAndTheListSaysToNarrowTheFilter() {
+        page.route("**/peekaboot/api/traces?*", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode listing = (ObjectNode) readJson(response.text());
+            listing.put("next", "older-rows-exist");
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(listing.toString()));
+        });
+        openDashboard(storePagingProbes(1), Dashboard.TRACE_ITEM);
+
+        int clicksToTheBound = (TRACES_MAX_DEPTH - TRACES_PAGE_SIZE) / TRACES_PAGE_SIZE;
+        for (int click = 1; click < clicksToTheBound; click++) {
+            page.waitForResponse("**/peekaboot/api/traces?*", () -> page.click(LOAD_MORE));
+        }
+        // Twice before an answer can hide the button: the second click asks for no more than the bound.
+        page.evaluate(
+                "() => { const more = document.getElementById('traces-load-more'); more.click(); more.click(); }");
+        page.waitForSelector(LOAD_MORE, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+
+        assertThat(page.textContent("#traces-shown"))
+                .isEqualTo("Showing the 1 newest rows. Narrow the filter to reach older ones.");
+        assertThat(page.isVisible("#traces-more")).isTrue();
+    }
+
+    /**
      * tabStrip()'s {silent: true} option exists for this:
      * handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
      * so that syncing the strip's visual selection on a hash-driven boot doesn't also
@@ -252,9 +399,7 @@ class TracesTabIT extends PlaywrightTestBase {
                 .as("mirrors the page size traces.js is written with")
                 .isEqualTo(TRACES_PAGE_SIZE);
         assertThat(listedCount).isEqualTo(Math.min(errorsCount, TRACES_PAGE_SIZE));
-        page.waitForFunction(
-                "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
-                listedCount);
+        awaitListedRows(listedCount);
     }
 
     /**

@@ -358,6 +358,8 @@
 .pk-trace-item__stats { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pk-space-md); row-gap: var(--pk-space-xs); margin-top: var(--pk-space-xs); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-trace-item__stats .pk-stat { white-space: nowrap; }
 .pk-trace-item__stat-separator { color: var(--pk-text-muted); opacity: 0.6; }
+/* Under a list that shows only its newest rows: how many those are, and the button that lists more. */
+.pk-list-more { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--pk-space-sm); margin-top: var(--pk-space-md); font-size: var(--pk-text-sm); }
 
 /* Scheduled task item */
 .pk-task { padding: var(--pk-space-md); border-bottom: 1px solid var(--pk-border); }

@@ -29,6 +29,10 @@ const SELECTABLE_TYPES = ROOT_ACTION_TYPES.filter(type => type !== EXCLUDABLE_TY
 const TYPE_CHIPS = '#traces-filter input[name="type"]';
 const EXCLUSION_LIFTED = 'none';
 
+const PAGE_SIZE = 50;
+// The listing's own bound on one answer (PageLimit.MAX).
+const MAX_DEPTH = 10000;
+
 // What a row's click shortcut leaves alone; the open button itself is one, so its own click is not repeated.
 const INTERACTIVE_ELEMENTS = 'a, button, input, select, textarea, label, summary, [tabindex]';
 
@@ -49,6 +53,8 @@ export function create(container) {
     let maintenanceExcluded = true;
     let currentRootOperationFilter = null;
     let currentBucket = 'all';
+    // The rows the listing asks for: one page, and one more with every "Load more" on this filter.
+    let depth = PAGE_SIZE;
 
     const tab = selfFetchingTab({
         fetch: context => context.client.get('/api/traces', {params: requestParams()}),
@@ -62,6 +68,7 @@ export function create(container) {
         renderResult: (panel, result, context) => {
             updateBucketCounts(result.bucketCounts, result.filteredBucketCounts, context.locale);
             renderList(result, context);
+            renderLoadMore(result, context.locale);
             container.querySelector('#traces-loading').classList.add('hidden');
         },
         renderError: (panel, error) => {
@@ -119,6 +126,7 @@ export function create(container) {
         selectedRootActionTypes = new Set(filter.types);
         currentRootOperationFilter = filter.rootOperation;
         maintenanceExcluded = filter.maintenanceExcluded;
+        depth = PAGE_SIZE;
 
         syncBucketButtons();
         syncFilterCheckboxes();
@@ -155,7 +163,7 @@ export function create(container) {
 
     /** The listing request's query, from the same state the URL params are written from. */
     function requestParams() {
-        const params = {limit: 50};
+        const params = {limit: depth};
         if (currentBucket !== 'all') params.bucket = currentBucket;
         const rootActionType = requestedRootActionType();
         if (rootActionType) params.rootActionType = rootActionType;
@@ -180,8 +188,7 @@ export function create(container) {
                 if (btn.dataset.bucket === currentBucket) return;
                 currentBucket = btn.dataset.bucket;
                 syncBucketButtons();
-                filterState.save(tab.context());
-                tab.refetch();
+                listChangedFilter();
             });
         });
 
@@ -189,6 +196,19 @@ export function create(container) {
 
         const clearBtn = container.querySelector('#traces-filter-clear');
         if (clearBtn) clearBtn.addEventListener('click', resetFilter);
+
+        container.querySelector('#traces-load-more').addEventListener('click', () => {
+            // capped here as well as by hiding the button, which a second click can beat
+            depth = Math.min(depth + PAGE_SIZE, MAX_DEPTH);
+            tab.refetch();
+        });
+    }
+
+    /** For a control that just changed the filter: the URL follows, and the list starts over at one page. */
+    function listChangedFilter() {
+        depth = PAGE_SIZE;
+        filterState.save(tab.context());
+        tab.refetch();
     }
 
     /**
@@ -225,8 +245,7 @@ export function create(container) {
         const checkbox = el('input', {attrs: {type: 'checkbox', value: type}});
         checkbox.addEventListener('change', () => {
             applyChange();
-            filterState.save(tab.context());
-            tab.refetch();
+            listChangedFilter();
         });
 
         // The label wraps the checkbox, which is how the caller reaches it (parentElement).
@@ -241,8 +260,7 @@ export function create(container) {
         currentRootOperationFilter = null;
         maintenanceExcluded = true;
         syncFilterCheckboxes();
-        filterState.save(tab.context());
-        tab.refetch();
+        listChangedFilter();
     }
 
     /**
@@ -297,6 +315,31 @@ export function create(container) {
             signature: row => JSON.stringify([row.summary, context.locale, context.timeZone]),
             build: row => renderTraceItem(row.summary, context)
         });
+    }
+
+    /**
+     * Shown under the list while the answer says older rows exist: how many rows are listed, and
+     * the button that lists a page more. It gives no total, because the bucket counts are traces
+     * and an async task lists as a row of its own.
+     */
+    function renderLoadMore(result, locale) {
+        const loadMoreBtn = container.querySelector('#traces-load-more');
+        const olderRowsExist = result.next != null;
+        const atMaxDepth = depth >= MAX_DEPTH;
+        const buttonHadFocus = document.activeElement === loadMoreBtn;
+
+        container.querySelector('#traces-more').classList.toggle('hidden', !olderRowsExist);
+        loadMoreBtn.classList.toggle('hidden', atMaxDepth);
+        if (olderRowsExist) {
+            const shown = `Showing the ${formatNumber(result.traces.length, {locale})} newest rows`;
+            container.querySelector('#traces-shown').textContent = atMaxDepth
+                ? `${shown}. Narrow the filter to reach older ones.`
+                : shown;
+        }
+        // A button that hides drops focus to the top of the page. The reader was at the end of the list.
+        if (buttonHadFocus && (!olderRowsExist || atMaxDepth)) {
+            container.querySelector('#traces-list .pk-trace-item:last-child .pk-trace-item__open')?.focus();
+        }
     }
 
     function updateFilterIndicator() {
