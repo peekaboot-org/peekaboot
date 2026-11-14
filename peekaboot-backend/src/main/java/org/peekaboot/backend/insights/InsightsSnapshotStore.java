@@ -182,8 +182,8 @@ final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     @Override
-    public String startupNote() {
-        return ", persisted across restarts";
+    public boolean persists() {
+        return true;
     }
 
     void writeNow() {

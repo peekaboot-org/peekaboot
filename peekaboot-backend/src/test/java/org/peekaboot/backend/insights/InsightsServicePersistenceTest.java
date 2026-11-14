@@ -77,13 +77,14 @@ class InsightsServicePersistenceTest {
     }
 
     /** start()'s one INFO summary line is deliberate; pin it here rather than let it reach the console. */
-    private static void start(InsightsService service) {
+    private static String start(InsightsService service) {
         try (LogCapture capture = LogCapture.attach(InsightsService.class, Level.INFO)) {
             service.start();
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.INFO);
                 assertThat(event.getFormattedMessage()).startsWith("Peekaboot insights:");
             });
+            return capture.appender().list.get(0).getFormattedMessage();
         }
     }
 
@@ -139,6 +140,20 @@ class InsightsServicePersistenceTest {
         } finally {
             second.stop();
         }
+    }
+
+    /** The store says only whether it persists; the words in the start-up line are the service's. */
+    @Test
+    void theStartUpLineNamesPersistenceOnlyWhileStorageIsOn() {
+        InsightsService persisting = service(true);
+        String withStorage = start(persisting);
+        persisting.stop();
+        InsightsService inMemory = service(false);
+        String withoutStorage = start(inMemory);
+        inMemory.stop();
+
+        assertThat(withStorage).endsWith(", persisted across restarts");
+        assertThat(withoutStorage).doesNotContain("persisted");
     }
 
     @Test

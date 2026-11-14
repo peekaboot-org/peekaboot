@@ -31,8 +31,8 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
         }
 
         @Override
-        public String startupNote() {
-            return "";
+        public boolean persists() {
+            return false;
         }
     };
 
@@ -49,6 +49,6 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
     /** Stops the writer and takes the final snapshot; called after the collector has stopped. */
     void stop();
 
-    /** What the service's start-up summary says about persistence; empty while storage is off. */
-    String startupNote();
+    /** Whether the rings outlive this run; false while storage is off. */
+    boolean persists();
 }

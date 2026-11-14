@@ -1,7 +1,13 @@
 package org.peekaboot.backend.insights;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.insights.config.Chart;
+import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.insights.config.PanelDef;
+import org.peekaboot.backend.insights.config.TileDef;
 import org.peekaboot.backend.insights.config.TileFormat;
 import org.peekaboot.backend.insights.config.Unit;
 
@@ -10,6 +16,40 @@ import org.peekaboot.backend.insights.config.Unit;
  * namespaced as {@code <panelId>.<seriesId>}), and tiles with current values.
  */
 public record InsightsConfigResponse(List<Level> levels, List<Panel> panels, List<Tile> tiles) {
+
+    /** {@code tileValues} holds each tile's current reading by tile id; a tile without one answers null. */
+    static InsightsConfigResponse of(
+            List<InsightsProperties.Level> levels,
+            List<PanelDef> panels,
+            List<TileDef> tiles,
+            Map<String, Double> tileValues) {
+        List<Level> levelResponses = new ArrayList<>();
+        for (int index = 0; index < levels.size(); index++) {
+            InsightsProperties.Level level = levels.get(index);
+            levelResponses.add(new Level(index, level.intervalMillis(), level.getSize()));
+        }
+
+        List<Panel> panelResponses =
+                panels.stream().map(InsightsConfigResponse::toPanel).toList();
+
+        List<Tile> tileResponses = tiles.stream()
+                .map(tile -> new Tile(
+                        tile.id(),
+                        tile.label(),
+                        tile.format(),
+                        tile.live(),
+                        PeekabootJson.nanToNull(tileValues.get(tile.id()))))
+                .toList();
+
+        return new InsightsConfigResponse(levelResponses, panelResponses, tileResponses);
+    }
+
+    private static Panel toPanel(PanelDef panel) {
+        List<Series> seriesResponses = panel.series().stream()
+                .map(series -> new Series(panel.seriesId(series), series.label(), series.unit()))
+                .toList();
+        return new Panel(panel.id(), panel.title(), panel.chart(), panel.unit(), panel.level(), seriesResponses);
+    }
 
     public record Level(int index, long intervalMs, int size) {}
 
