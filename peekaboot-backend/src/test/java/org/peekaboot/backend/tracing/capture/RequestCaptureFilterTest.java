@@ -9,11 +9,13 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.peekaboot.backend.testsupport.Requests.get;
 
 import ch.qos.logback.classic.Level;
 import io.micrometer.tracing.Tracer;
+import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
@@ -33,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.function.ThrowingConsumer;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -746,11 +749,7 @@ class RequestCaptureFilterTest {
 
             assertThat(requestGivenToTheChain().getRequest()).isSameAs(request);
             verify(eventPublisher, never()).publishEvent(any());
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).isEqualTo("Failed to capture request details");
-                assertThat(event.getThrowableProxy().getMessage()).isEqualTo("boom");
-            });
+            assertWarnedOnceThatTheCaptureFailed(capture, "boom");
         }
     }
 
@@ -863,10 +862,51 @@ class RequestCaptureFilterTest {
         assertThat(publishedEvent().status()).isEqualTo(500);
     }
 
+    /** The listener is registered in a finally block, where an exception would replace the one in flight. */
+    @ParameterizedTest
+    @EnumSource(AsyncCall.class)
+    void aListenerTheContainerRefusesDoesNotReplaceTheHandlersException(AsyncCall refused) throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request = new RefusingAsyncRequest(refused);
+        doThrow(new ServletException("handler failed")).when(chain).doFilter(any(), any());
+
+        try (LogCapture capture = LogCapture.attach(RequestCaptureFilter.class)) {
+            assertThatThrownBy(() -> filter.doFilter(request, response, chain))
+                    .isInstanceOf(ServletException.class)
+                    .hasMessage("handler failed");
+
+            assertWarnedOnceThatTheCaptureFailed(capture, "async cycle already completed");
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(AsyncCall.class)
+    void aListenerTheContainerRefusesIsLoggedAndTheRequestGoesOn(AsyncCall refused) throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request = new RefusingAsyncRequest(refused);
+
+        try (LogCapture capture = LogCapture.attach(RequestCaptureFilter.class)) {
+            filter.doFilter(request, response, chain);
+
+            assertWarnedOnceThatTheCaptureFailed(capture, "async cycle already completed");
+        }
+
+        assertThat(requestGivenToTheChain().getRequest()).isSameAs(request);
+        verifyNoInteractions(eventPublisher);
+    }
+
     private RequestCompletedEvent publishedEvent() {
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         return captor.getValue();
+    }
+
+    private static void assertWarnedOnceThatTheCaptureFailed(LogCapture capture, String cause) {
+        assertThat(capture.appender().list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).isEqualTo("Failed to capture request details");
+            assertThat(event.getThrowableProxy().getMessage()).isEqualTo(cause);
+        });
     }
 
     private String capturedHeaderValue(String sent) throws Exception {
@@ -947,6 +987,48 @@ class RequestCaptureFilterTest {
 
         private static AssertionError parsed() {
             return new AssertionError("the capture parsed the body");
+        }
+    }
+
+    /** The calls the filter makes to register its listener. */
+    enum AsyncCall {
+        IS_ASYNC_STARTED,
+        GET_ASYNC_CONTEXT,
+        ADD_LISTENER
+    }
+
+    /** A request in async mode whose cycle is over: the container refuses one of the calls that register a listener. */
+    private static final class RefusingAsyncRequest extends MockHttpServletRequest {
+
+        private final AsyncCall refused;
+
+        private RefusingAsyncRequest(AsyncCall refused) {
+            super("GET", "/api/users");
+            setServletPath("/api/users");
+            this.refused = refused;
+        }
+
+        @Override
+        public boolean isAsyncStarted() {
+            refuse(AsyncCall.IS_ASYNC_STARTED);
+            return true;
+        }
+
+        @Override
+        public AsyncContext getAsyncContext() {
+            refuse(AsyncCall.GET_ASYNC_CONTEXT);
+            return new MockAsyncContext(this, null) {
+                @Override
+                public void addListener(AsyncListener listener) {
+                    refuse(AsyncCall.ADD_LISTENER);
+                }
+            };
+        }
+
+        private void refuse(AsyncCall call) {
+            if (call == refused) {
+                throw new IllegalStateException("async cycle already completed");
+            }
         }
     }
 

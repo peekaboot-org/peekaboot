@@ -32,6 +32,7 @@ import org.springframework.web.servlet.HandlerMapping;
 public class RequestCaptureFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
+    private static final String CAPTURE_FAILED = "Failed to capture request details";
 
     private final MaskingEngine maskingEngine;
     private final RequestDetails requestDetails;
@@ -100,14 +101,24 @@ public class RequestCaptureFilter implements Filter {
                     response.isCommitted() ? response.getStatus() : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
             throw failure;
         } finally {
+            captureNowOrOnCompletion(request, response, traceId, statusOnFailure);
+        }
+    }
+
+    /** Runs in a finally block: an exception from here would replace the handler's. */
+    private void captureNowOrOnCompletion(
+            ParameterReads request, HttpServletResponse response, String traceId, int statusOnFailure) {
+        try {
             if (request.isAsyncStarted()) {
                 // a DeferredResult/Callable/SseEmitter handler has only handed off: its status
                 // is not known until the async cycle completes
                 request.getAsyncContext().addListener(new CaptureOnCompletion(request, response, traceId));
             } else {
                 int status = statusOnFailure != 0 ? statusOnFailure : response.getStatus();
-                capture(request, response, traceId, status);
+                captureRequest(request, response, traceId, status);
             }
+        } catch (RuntimeException e) {
+            log.warn(CAPTURE_FAILED, e);
         }
     }
 
@@ -115,7 +126,7 @@ public class RequestCaptureFilter implements Filter {
         try {
             captureRequest(request, response, traceId, status);
         } catch (Exception e) {
-            log.warn("Failed to capture request details", e);
+            log.warn(CAPTURE_FAILED, e);
         }
     }
 
