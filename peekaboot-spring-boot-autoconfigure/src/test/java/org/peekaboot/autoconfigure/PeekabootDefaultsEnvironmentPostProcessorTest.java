@@ -3,7 +3,9 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -56,6 +58,12 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         SpringApplication application = new SpringApplication();
         application.setWebApplicationType(webApplicationType);
         return application;
+    }
+
+    private static EnumerablePropertySource<?> detection(ConfigurableEnvironment environment) {
+        return (EnumerablePropertySource<?>) environment
+                .getPropertySources()
+                .get(PeekabootDefaultsEnvironmentPostProcessor.DETECTION_PROPERTY_SOURCE_NAME);
     }
 
     private static void setIfGiven(MockEnvironment environment, String key, Boolean value) {
@@ -291,9 +299,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
-        EnumerablePropertySource<?> detection =
-                (EnumerablePropertySource<?>) environment.getPropertySources().get("peekabootDetection");
-        assertThat(detection.getPropertyNames())
+        assertThat(detection(environment).getPropertyNames())
                 .containsExactlyInAnyOrder(
                         PeekabootPropertyKeys.ENABLED,
                         PeekabootPropertyKeys.DEV_TOOLBAR_ENABLED,
@@ -304,6 +310,23 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isNull();
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
                 .isNull();
+    }
+
+    /**
+     * A switch nothing sets reads as what the detection put in the environment or as its entry
+     * in {@code UNSET_SWITCH_DEFAULTS}. A switch in both has two answers, one in neither has none.
+     */
+    @Test
+    void theDetectionAndTheUnsetDefaultsCoverEverySwitchExactlyOnce() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(LocalDevDetector.LaunchKind.TEST).postProcessEnvironment(environment, servletApplication());
+
+        List<String> detected = List.of(detection(environment).getPropertyNames());
+        Set<String> defaultedWhenUnset = PeekabootPropertyKeys.UNSET_SWITCH_DEFAULTS.keySet();
+        assertThat(detected).doesNotContainAnyElementsOf(defaultedWhenUnset);
+        assertThat(Stream.concat(detected.stream(), defaultedWhenUnset.stream()))
+                .containsExactlyInAnyOrderElementsOf(PeekabootPropertyKeys.BOOLEAN_SWITCHES);
     }
 
     @Test

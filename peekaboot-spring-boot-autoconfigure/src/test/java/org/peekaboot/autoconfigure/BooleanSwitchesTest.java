@@ -8,9 +8,11 @@ import java.lang.reflect.AnnotatedElement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -19,7 +21,11 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.diagnostics.FailureAnalysis;
@@ -49,6 +55,12 @@ class BooleanSwitchesTest {
 
     /** Both read these as false, except where a condition also matches only {@code false}. */
     private static final List<String> READ_AS_FALSE_LENIENTLY = List.of("no", "OFF", "0", " false", "false ");
+
+    /** The beans the switches bind to, the longest prefix first: a key belongs to the first it starts with. */
+    private static final List<Class<?>> PROPERTY_BEANS =
+            List.of(PeekabootTracingProperties.class, InsightsProperties.class, PeekabootProperties.class);
+
+    private static final Pattern HYPHEN_AND_LETTER = Pattern.compile("-(\\p{Lower})");
 
     @ParameterizedTest(name = "{0}=''{1}''")
     @MethodSource("everySwitchWithEveryRefusedValue")
@@ -259,6 +271,38 @@ class BooleanSwitchesTest {
         assertThat(PeekabootPropertyKeys.UNSET_SWITCH_DEFAULTS).isEqualTo(matchedWhenUnset);
     }
 
+    /**
+     * The Config tab shows the bound value, so the value a property bean starts with has to be
+     * the one the conditions match when nothing sets the switch. A detected switch is always in
+     * the environment, and its bean starts off.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("everySwitch")
+    void aSwitchIsBoundWithTheValueItReadsAsWhenUnset(String key) {
+        String readWhenUnset = PeekabootPropertyKeys.UNSET_SWITCH_DEFAULTS.getOrDefault(key, "false");
+
+        assertThat(valueOfAFreshPropertyBean(key)).isEqualTo(Boolean.valueOf(readWhenUnset));
+    }
+
+    private static Object valueOfAFreshPropertyBean(String key) {
+        Class<?> propertyBean = PROPERTY_BEANS.stream()
+                .filter(type -> key.startsWith(prefix(type)))
+                .findFirst()
+                .orElseThrow();
+        String kebabCasePath = key.substring(prefix(propertyBean).length());
+        String propertyPath = HYPHEN_AND_LETTER
+                .matcher(kebabCasePath)
+                .replaceAll(match -> match.group(1).toUpperCase(Locale.ROOT));
+        return new BeanWrapperImpl(propertyBean).getPropertyValue(propertyPath);
+    }
+
+    private static String prefix(Class<?> propertyBean) {
+        return MergedAnnotations.from(propertyBean)
+                        .get(ConfigurationProperties.class)
+                        .getString("prefix")
+                + ".";
+    }
+
     /** One {@code @ConditionalOnBooleanProperty} on one {@code peekaboot.*} key. */
     private record Gate(String key, ConditionalOnBooleanProperty condition) {}
 
@@ -293,6 +337,10 @@ class BooleanSwitchesTest {
         String[] names = condition.name().length > 0 ? condition.name() : condition.value();
         String prefix = StringUtils.hasText(condition.prefix()) ? condition.prefix() + "." : "";
         return Arrays.stream(names).map(name -> prefix + name);
+    }
+
+    static Stream<String> everySwitch() {
+        return PeekabootPropertyKeys.BOOLEAN_SWITCHES.stream();
     }
 
     static Stream<Arguments> everySwitchWithEveryRefusedValue() {
