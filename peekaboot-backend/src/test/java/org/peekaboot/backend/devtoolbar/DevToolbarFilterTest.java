@@ -21,6 +21,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,7 @@ import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 @ExtendWith(MockitoExtension.class)
 class DevToolbarFilterTest {
@@ -405,6 +407,18 @@ class DevToolbarFilterTest {
     @Test
     void anEofExceptionInAForeignPackageIsAClientAbortToo() throws Exception {
         assertHandledAsClientAbort(new EofException());
+    }
+
+    /** Spring reports a response it can no longer write to with a type of its own, in its own words. */
+    @Test
+    void aResponseSpringCallsUnusableIsAClientAbortToo() throws Exception {
+        assertHandledAsClientAbort(new AsyncRequestNotUsableException("response not usable"));
+    }
+
+    /** The JDK words a reset without the "by peer" Spring looks for. */
+    @Test
+    void aConnectionResetInTheJdksWordsIsAClientAbortToo() throws Exception {
+        assertHandledAsClientAbort(new SocketException("Connection reset"));
     }
 
     /** Windows words the hang-up its own way; the JDK passes that wording through. */

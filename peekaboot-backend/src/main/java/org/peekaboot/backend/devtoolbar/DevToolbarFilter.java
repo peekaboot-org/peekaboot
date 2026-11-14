@@ -19,6 +19,7 @@ import java.util.stream.Stream;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 public class DevToolbarFilter implements Filter {
 
@@ -30,9 +31,6 @@ public class DevToolbarFilter implements Filter {
     // actually failed; this is where that request's identity is stashed for the bar to find.
     private static final String ORIGINAL_REQUEST_ATTRIBUTE = DevToolbarFilter.class.getName() + ".originalRequest";
 
-    // Recognised by simple name: this module depends on no container, and shaded or
-    // repackaged copies move the classes around.
-    private static final Set<String> CLIENT_ABORT_EXCEPTION_NAMES = Set.of("ClientAbortException", "EofException");
     private static final Set<String> EXCLUDED_EXTENSIONS =
             Set.of(".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot");
 
@@ -173,31 +171,33 @@ public class DevToolbarFilter implements Filter {
 
     /**
      * Whether the write failed because the client hung up - a browser navigating away
-     * mid-response - rather than because of anything on this side. Tomcat wraps that in
-     * its own ClientAbortException, Jetty throws its EofException; other containers
-     * surface the socket error itself.
+     * mid-response - rather than because of anything on this side. No portable type says so:
+     * Tomcat wraps it in its own ClientAbortException, Jetty throws its EofException, other
+     * containers surface the socket error itself. Spring keeps the list of those names and
+     * wordings, so it is asked first.
      */
     private static boolean isClientAbort(Throwable failure) {
+        if (DisconnectedClientHelper.isClientDisconnectedException(failure)) {
+            return true;
+        }
         for (Throwable t = failure; t != null; t = t.getCause()) {
-            if (t instanceof IOException
-                    && (CLIENT_ABORT_EXCEPTION_NAMES.contains(t.getClass().getSimpleName())
-                            || saysClientWentAway(t.getMessage()))) {
+            if (t instanceof IOException && saysClientWentAway(t.getMessage())) {
                 return true;
             }
         }
         return false;
     }
 
+    /** The two wordings Spring's list lacks. */
     private static boolean saysClientWentAway(String message) {
         if (message == null) {
             return false;
         }
         String lower = message.toLowerCase(Locale.ROOT);
-        // "connection was aborted": Windows' "An established connection was aborted by
-        // the software in your host machine", passed through by the JDK
-        return lower.contains("broken pipe")
-                || lower.contains("connection reset")
-                || lower.contains("connection was aborted");
+        // "connection reset": the JDK's own SocketException text, which Spring reads only
+        // with "by peer". "connection was aborted": Windows' "An established connection was
+        // aborted by the software in your host machine", passed through by the JDK
+        return lower.contains("connection reset") || lower.contains("connection was aborted");
     }
 
     private boolean shouldSkip(HttpServletRequest request) {
