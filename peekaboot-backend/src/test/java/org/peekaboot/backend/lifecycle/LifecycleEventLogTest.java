@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootProperties;
+import org.peekaboot.backend.storage.StorageDirectories;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.testsupport.LogCapture;
 
@@ -259,6 +260,26 @@ class LifecycleEventLogTest {
         assertThat(log.events()).extracting(LifecycleEvent::epochMs).containsExactly(3_000L);
         try (Stream<Path> written = Files.list(directory)) {
             assertThat(written).isEmpty();
+        }
+    }
+
+    @Test
+    void aSecondInstanceKeepsItsRunInMemoryAndLeavesTheFirstInstancesHistoryAlone() {
+        LifecycleEventLog first = LifecycleEventLog.create(StorageDirectories.writer(directory));
+        first.beginLoad();
+
+        try (LogCapture capture = LogCapture.attach(StorageDirectory.class)) {
+            LifecycleEventLog second = LifecycleEventLog.create(StorageDirectories.secondInstance(directory));
+            second.beginLoad();
+
+            first.recordAndPersist(start(1_000).build());
+            second.recordAndPersist(start(2_000).build());
+
+            assertThat(file().read()).extracting(LifecycleEvent::epochMs).containsExactly(1_000L);
+            assertThat(second.events()).extracting(LifecycleEvent::epochMs).containsExactly(2_000L);
+            assertThat(capture.appender().list)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getLevel()).isEqualTo(Level.WARN));
         }
     }
 }

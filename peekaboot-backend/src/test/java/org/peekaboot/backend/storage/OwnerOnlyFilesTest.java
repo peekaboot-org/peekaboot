@@ -218,6 +218,38 @@ class OwnerOnlyFilesTest {
         assertThat(underAnHour).hasContent("half");
     }
 
+    @Test
+    void aLockFileIsCreatedWithItsDirectoryReadableByTheOwnerAlone() throws IOException {
+        Path file = directory.resolve("storage").resolve(".lock");
+
+        OwnerOnlyFiles.openLockFile(file).close();
+
+        assertThat(PosixPermissions.of(file)).isEqualTo("rw-------");
+        assertThat(PosixPermissions.of(file.getParent())).isEqualTo("rwx------");
+    }
+
+    /** A lock is held on the file itself, so a lock file replaced by a new one would lock nothing. */
+    @Test
+    void openingALockFileKeepsTheFileThatIsThere() throws IOException {
+        Path file = directory.resolve(".lock");
+        Files.writeString(file, "held");
+
+        OwnerOnlyFiles.openLockFile(file).close();
+
+        assertThat(Files.readString(file)).isEqualTo("held");
+    }
+
+    @Test
+    void aSymlinkPlantedAtTheLockPathIsNotFollowed() throws IOException {
+        Path victim = directory.resolve("victim");
+        Path file = directory.resolve(".lock");
+        Files.createSymbolicLink(file, victim);
+
+        assertThatThrownBy(() -> OwnerOnlyFiles.openLockFile(file)).isInstanceOf(IOException.class);
+
+        assertThat(victim).doesNotExist();
+    }
+
     private Path temporary(String name, Instant lastModified) throws IOException {
         Path temporary = Files.writeString(directory.resolve(name), "half");
         return Files.setLastModifiedTime(temporary, FileTime.from(lastModified));

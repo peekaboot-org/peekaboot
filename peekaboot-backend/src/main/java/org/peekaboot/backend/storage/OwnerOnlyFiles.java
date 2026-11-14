@@ -3,6 +3,7 @@ package org.peekaboot.backend.storage;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
@@ -26,9 +27,9 @@ import java.util.Set;
  * <p>The snapshot and the lifecycle log describe the host application's runtime, and
  * {@code peekaboot.storage.dir} may point anywhere, so the process umask is not left to
  * decide who else can read them. On a file system without POSIX permissions (Windows) the
- * platform defaults apply. A write never follows a symlink planted at its path. A file
- * opened for writing replaces whatever sat there, and a temporary is created under a name
- * nothing else has.
+ * platform defaults apply. A write never follows a symlink planted at its path. A state file
+ * opened for writing replaces whatever sat there, a temporary is created under a name nothing
+ * else has, and a lock file is refused while a link sits at its path.
  */
 public final class OwnerOnlyFiles {
 
@@ -47,6 +48,8 @@ public final class OwnerOnlyFiles {
     private static final FileAttribute<Set<PosixFilePermission>> OWNER_ONLY_FILE =
             PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
     private static final Set<OpenOption> CREATE_FRESH = Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+    private static final Set<OpenOption> CREATE_MISSING =
+            Set.of(StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
 
     private OwnerOnlyFiles() {}
 
@@ -135,6 +138,19 @@ public final class OwnerOnlyFiles {
             return Channels.newOutputStream(Files.newByteChannel(file, CREATE_FRESH, OWNER_ONLY_FILE));
         } catch (UnsupportedOperationException e) {
             return Files.newOutputStream(file, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        }
+    }
+
+    /**
+     * Opens {@code file} to take a lock on it, creating it and its directory as needed. A file
+     * that is already there is kept as it is, since a lock holds on the file, not on its path.
+     */
+    public static FileChannel openLockFile(Path file) throws IOException {
+        createDirectories(Objects.requireNonNull(file.toAbsolutePath().getParent(), "file has no directory"));
+        try {
+            return FileChannel.open(file, CREATE_MISSING, OWNER_ONLY_FILE);
+        } catch (UnsupportedOperationException e) {
+            return FileChannel.open(file, CREATE_MISSING);
         }
     }
 }
