@@ -130,6 +130,23 @@ class InsightsSnapshotStoreTest {
         }
     }
 
+    /** Shutdown interrupts a restore that is still parked; that is no late history and is not announced as one. */
+    @Test
+    void aWaitCutShortByAnInterruptIsNotAnnouncedAsLateHistory() {
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        Thread.currentThread().interrupt();
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
+            Optional<InsightsSnapshot> restored = store.awaitSnapshot(Duration.ofSeconds(5));
+            // Reads the flag and clears it, so it does not reach the next test.
+            boolean flagKept = Thread.interrupted();
+
+            assertThat(restored).isEmpty();
+            assertThat(flagKept).isTrue();
+            assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
     @Test
     void whatOneRunWritesTheNextRunReads() throws IOException {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));

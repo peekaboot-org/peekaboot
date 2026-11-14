@@ -10,11 +10,10 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.storage.BackgroundLoad;
 import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.backend.storage.WriteOutage;
@@ -42,8 +41,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
     private final Duration interval;
     private final Duration maxAge;
     private final IntervalBoundary schedule;
-    /** Released once the load has ended, however it ended. */
-    private final CountDownLatch loaded = new CountDownLatch(1);
+    private final BackgroundLoad historyLoad = new BackgroundLoad();
 
     private final Object persistedLock = new Object();
     /** What the load found, until {@link #awaitSnapshot} takes it; guarded by {@link #persistedLock}. */
@@ -101,26 +99,22 @@ final class InsightsSnapshotStore implements SnapshotStore {
 
     @Override
     public void beginLoad() {
-        Thread.ofVirtual().name("peekaboot-insights-restore").start(() -> completeLoaded(this::load));
+        historyLoad.begin("peekaboot-insights-restore", () -> publish(load()));
     }
 
     /**
-     * Runs {@code source}, publishes what it returns and releases the waiters however it
-     * ends. An Error {@code load()} does not catch - an OutOfMemoryError from a
-     * pathological file, say - would otherwise leave every waiter parked for the full
-     * {@link #awaitSnapshot} timeout, on a collector level thread the host application is
-     * paying for. Package-private so a test can hand in a source that throws.
+     * Runs {@code source} on the caller's thread and publishes what it returns, releasing the
+     * waiters however it ends. Package-private so a test can hand in a source that throws.
      */
     void completeLoaded(Supplier<Optional<InsightsSnapshot>> source) {
-        try {
-            Optional<InsightsSnapshot> found = source.get();
-            synchronized (persistedLock) {
-                if (!waitEnded) {
-                    persisted = found;
-                }
+        historyLoad.run(() -> publish(source.get()));
+    }
+
+    private void publish(Optional<InsightsSnapshot> found) {
+        synchronized (persistedLock) {
+            if (!waitEnded) {
+                persisted = found;
             }
-        } finally {
-            loaded.countDown();
         }
     }
 
@@ -136,14 +130,9 @@ final class InsightsSnapshotStore implements SnapshotStore {
      */
     @Override
     public Optional<InsightsSnapshot> awaitSnapshot(Duration timeout) {
-        boolean arrived = false;
-        try {
-            arrived = loaded.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            if (!arrived) {
-                log.info("Peekaboot insights: persisted history did not arrive in time; starting empty");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        boolean arrived = historyLoad.await(timeout);
+        if (!arrived && !Thread.currentThread().isInterrupted()) {
+            log.info("Peekaboot insights: persisted history did not arrive in time; starting empty");
         }
         Optional<InsightsSnapshot> handedOver = takePersisted();
         return arrived ? handedOver : Optional.empty();

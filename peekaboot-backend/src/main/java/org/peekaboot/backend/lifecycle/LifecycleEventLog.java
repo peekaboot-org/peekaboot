@@ -5,9 +5,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
+import org.peekaboot.backend.storage.BackgroundLoad;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.backend.storage.WriteOutage;
 import org.slf4j.Logger;
@@ -39,7 +38,7 @@ public final class LifecycleEventLog {
     private final Duration loadWait;
     private final Executor recordWhenLoadedExecutor;
     private final List<LifecycleEvent> events = new ArrayList<>();
-    private final CountDownLatch loaded = new CountDownLatch(1);
+    private final BackgroundLoad historyLoad = new BackgroundLoad();
     private final WriteOutage writeOutage = new WriteOutage();
 
     LifecycleEventLog(LifecycleEventFile file) {
@@ -72,24 +71,17 @@ public final class LifecycleEventLog {
     /** Submits the read; returns immediately. Without a file the log is loaded by definition. */
     public void beginLoad() {
         if (file == null) {
-            loaded.countDown();
+            historyLoad.markLoaded();
             return;
         }
-        Thread.ofVirtual().name("peekaboot-lifecycle-load").start(() -> {
-            try {
-                // insertionIndex counts on time order, and a file two instances wrote may not have it.
-                List<LifecycleEvent> persisted = file.read().stream()
-                        .sorted(Comparator.comparingLong(LifecycleEvent::epochMs))
-                        .toList();
-                synchronized (events) {
-                    events.addAll(0, persisted);
-                    trim();
-                }
-            } finally {
-                // However the read ended, the waiters have to be released: a latch never
-                // released costs every later API request the full wait, on a thread the
-                // host application owns, and the same again at shutdown.
-                loaded.countDown();
+        historyLoad.begin("peekaboot-lifecycle-load", () -> {
+            // insertionIndex counts on time order, and a file two instances wrote may not have it.
+            List<LifecycleEvent> persisted = file.read().stream()
+                    .sorted(Comparator.comparingLong(LifecycleEvent::epochMs))
+                    .toList();
+            synchronized (events) {
+                events.addAll(0, persisted);
+                trim();
             }
         });
     }
@@ -99,17 +91,17 @@ public final class LifecycleEventLog {
      * so the caller never waits.
      */
     public void recordWhenLoaded(LifecycleEvent event) {
-        recordWhenLoadedExecutor.execute(() -> appendIfLoaded(awaitLoadWithoutLimit(), event));
+        recordWhenLoadedExecutor.execute(() -> appendIfLoaded(historyLoad.await(), event));
     }
 
     /** Appends and persists before returning; drops the event if the history never arrived. */
     public void recordAndPersist(LifecycleEvent event) {
-        appendIfLoaded(awaitLoad(), event);
+        appendIfLoaded(historyLoad.await(loadWait), event);
     }
 
     /** The history, oldest first. */
     public List<LifecycleEvent> events() {
-        awaitLoad();
+        historyLoad.await(loadWait);
         synchronized (events) {
             return List.copyOf(events);
         }
@@ -175,25 +167,6 @@ public final class LifecycleEventLog {
     private void trim() {
         while (events.size() > MAX_EVENTS) {
             events.remove(0);
-        }
-    }
-
-    private boolean awaitLoad() {
-        try {
-            return loaded.await(loadWait.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-    }
-
-    private boolean awaitLoadWithoutLimit() {
-        try {
-            loaded.await();
-            return true;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
         }
     }
 }
