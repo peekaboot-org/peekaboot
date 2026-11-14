@@ -71,6 +71,50 @@ class ActuatorTabsIT extends PlaywrightTestBase {
                 .contains("ROOT");
     }
 
+    /** The checkbox is URL state beside the text filter: each is written when it changes and left out at its default. */
+    @Test
+    void theLoggersFilterAndCheckboxAreWrittenToTheUrl() {
+        openDashboard();
+        dashboard.openTab("loggers");
+
+        page.check("#loggers-configured-only");
+        assertThat(hash()).isEqualTo("#loggers?configured=1");
+
+        page.fill("#loggers-filter", "org.peekaboot");
+        assertThat(hash()).isEqualTo("#loggers?q=org.peekaboot&configured=1");
+
+        page.uncheck("#loggers-configured-only");
+        page.fill("#loggers-filter", "");
+        assertThat(hash()).isEqualTo("#loggers");
+    }
+
+    @Test
+    void aLoggersDeepLinkRestoresTheFilterAndTheCheckbox() {
+        openDashboard("#loggers?q=org.peekaboot&configured=1", Dashboard.tabReadySelector("loggers"));
+
+        assertThat(page.inputValue("#loggers-filter")).isEqualTo("org.peekaboot");
+        assertThat(page.isChecked("#loggers-configured-only")).isTrue();
+        assertThat(page.locator("#loggers-list .pk-kv__key").allTextContents()).contains("org.peekaboot");
+        assertThat(page.locator("#loggers-list .pk-kv__key:not(.pk-kv__key--configured)")
+                        .count())
+                .as("listed loggers that only inherit their level")
+                .isZero();
+    }
+
+    /** A click on the tab strip pushes a bare hash, which must not untick the checkbox: its state is written back. */
+    @Test
+    void theLoggersCheckboxSurvivesSwitchingTabsAwayAndBack() {
+        openDashboard();
+        dashboard.openTab("loggers");
+        page.check("#loggers-configured-only");
+
+        dashboard.openTab("environment");
+        dashboard.openTab("loggers");
+
+        assertThat(page.isChecked("#loggers-configured-only")).isTrue();
+        assertThat(hash()).isEqualTo("#loggers?configured=1");
+    }
+
     /** Logger packages take the strong name variant and metric names the mono one; property groups keep the plain one. */
     @Test
     void eachGroupTabNamesItsGroupsInItsOwnVariant() {
@@ -78,6 +122,10 @@ class ActuatorTabsIT extends PlaywrightTestBase {
         assertThat(groupNameClasses("loggers", "#loggers-list")).containsOnly("pk-group__name pk-group__name--strong");
         assertThat(groupNameClasses("meters", "#meters-list")).containsOnly("pk-group__name pk-group__name--mono");
         assertThat(groupNameClasses("environment", "#property-sources")).containsOnly("pk-group__name");
+    }
+
+    private String hash() {
+        return (String) page.evaluate("() => window.location.hash");
     }
 
     private List<String> groupNameClasses(String tab, String list) {

@@ -14,7 +14,7 @@
 import {badge, cardTable, cell, emptyState} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
 import {formatDateTime, formatLongDuration, formatNumber} from '../../shared/format.js';
-import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
+import {urlState} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'lifecycle';
@@ -27,7 +27,7 @@ let currentPage = 0;    // 0-indexed, survives across render() calls - see doc c
 
 const tab = selfFetchingTab({
     fetch: context => context.client.get('/api/lifecycle/runs'),
-    reconcile: (container, context) => reconcileWithUrl(context),
+    reconcile: (container, context) => pageState.reconcile(context),
     renderResult: (container, result, context) => {
         runs = result.runs || [];
         renderTable(container, context);
@@ -57,28 +57,19 @@ export function pageFromUrl(params) {
 }
 
 /**
- * Reconciles the pager's page with the URL - the same two-direction rule every filter
- * tab applies (see shared/url-filter.js's doc comment), with page one as the default
- * that stays out of the URL. The seeded page may still overshoot the run list (a stale
- * link) - renderTable's clamp corrects both the page and the URL once the list is known.
+ * The pager's page as URL state (see shared/url-filter.js): 1-based in the URL, matching
+ * the readout, and left out on page one so the default yields a clean "#lifecycle" hash.
+ * A page read from the URL may still overshoot the run list (a stale link) - renderTable's
+ * clamp corrects both the page and the URL once the list is known.
  */
-function reconcileWithUrl(context) {
-    reconcileFilterWithUrl(context, ['page'], {
-        seed: params => {
-            currentPage = pageFromUrl(params);
-        },
-        hasNonDefaultState: () => currentPage !== 0,
-        writeBack: writePageParam
-    });
-}
-
-/**
- * Writes the current page to the URL (1-based, matching the readout), omitting it on
- * page one so the default yields a clean "#lifecycle" hash. A replace, never a push.
- */
-function writePageParam() {
-    tab.context().setUrlParams(currentPage === 0 ? {} : {page: String(currentPage + 1)});
-}
+const pageState = urlState({
+    keys: ['page'],
+    read: pageFromUrl,
+    apply: page => {
+        currentPage = page;
+    },
+    params: () => (currentPage === 0 ? {} : {page: String(currentPage + 1)})
+});
 
 function renderTable(container, context) {
     const target = container.querySelector('#lifecycle-runs');
@@ -95,7 +86,7 @@ function renderTable(container, context) {
     if (clamped !== currentPage) {
         currentPage = clamped;
         // the URL must name the page actually shown, not the out-of-range one it asked for
-        writePageParam();
+        pageState.save(context);
     }
 
     const start = currentPage * PAGE_SIZE;
@@ -181,7 +172,7 @@ function createPager() {
         const btn = button({className: 'pk-btn pk-btn--small', text: label});
         btn.addEventListener('click', () => {
             currentPage += delta;
-            writePageParam();
+            pageState.save(tab.context());
             renderTable(tab.container(), tab.context());
         });
         return btn;

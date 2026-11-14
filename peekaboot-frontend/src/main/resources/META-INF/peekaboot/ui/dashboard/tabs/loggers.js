@@ -8,7 +8,7 @@ import {formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {highlightText} from '../../shared/markup.js';
 import {logLevelVariant} from '../../shared/severity.js';
-import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
+import {urlState} from '../../shared/url-filter.js';
 
 export const id = 'loggers';
 
@@ -35,11 +35,11 @@ const tab = filteredGroupTab({
     ], context.locale),
     emptyMessage: 'No loggers available',
     noMatchMessage: () => 'No loggers matching criteria',
-    urlFilter: {reconcile: reconcileWithUrl, write: writeUrlParams}
+    filterState
 });
 
 // The checkbox is this tab's own second filter control: wired once here, its state
-// read by matches() below and written to the URL beside the text filter's "q".
+// read by matches() below and kept in the URL beside the text filter's "q".
 let configuredOnly = false;
 
 export function isAvailable(data) {
@@ -47,56 +47,44 @@ export function isAvailable(data) {
 }
 
 export function render(container, data, context) {
-    wireCheckbox(container, context);
+    wireCheckbox(container);
     tab.render(container, data, context);
 }
 
-function wireCheckbox(container, context) {
+function wireCheckbox(container) {
     const checkbox = container.querySelector('#loggers-configured-only');
     if (!checkbox || checkbox.dataset.wired) return;
     checkbox.dataset.wired = 'true';
     checkbox.addEventListener('change', () => {
         configuredOnly = checkbox.checked;
-        writeUrlParams(container.querySelector('#loggers-filter'), container, context);
         tab.refresh(container);
     });
 }
 
 /**
- * Reconciles the filter input and configured-only checkbox with the URL - composes
- * shared/url-filter.js's reconcileFilterWithUrl (see its own doc comment for the
- * URL-authoritative / bare-hash direction logic every tab like this one shares) with this
- * tab's own two-field seed/write, since a single flat "q" wouldn't capture the checkbox.
- * A param that's absent from an otherwise non-bare URL means "at its default" -
- * writeUrlParams always decides both keys together, so their presence/absence is never
- * ambiguous.
+ * The filter input and the configured-only checkbox as one URL state (see
+ * shared/url-filter.js), since a single "q" would not carry the checkbox. Both keys are
+ * written together, so a param missing from a URL that names the other is at its default.
  */
-function reconcileWithUrl(input, container, context) {
+function filterState(input, container) {
     const checkbox = container.querySelector('#loggers-configured-only');
 
-    reconcileFilterWithUrl(context, ['q', 'configured'], {
-        seed: params => {
-            const urlQuery = params.q || '';
-            const urlConfiguredOnly = params.configured === '1';
-            if (input && urlQuery !== input.value.trim()) input.value = urlQuery;
-            if (checkbox && urlConfiguredOnly !== checkbox.checked) checkbox.checked = urlConfiguredOnly;
-            configuredOnly = urlConfiguredOnly;
+    return urlState({
+        keys: ['q', 'configured'],
+        read: urlParams => ({query: urlParams.q || '', configuredOnly: urlParams.configured === '1'}),
+        apply: state => {
+            if (state.query !== input.value.trim()) input.value = state.query;
+            if (checkbox) checkbox.checked = state.configuredOnly;
+            configuredOnly = state.configuredOnly;
         },
-        hasNonDefaultState: () => Boolean(input?.value.trim() || configuredOnly),
-        writeBack: () => writeUrlParams(input, container, context)
+        params: () => {
+            const params = {};
+            const query = input.value.trim();
+            if (query) params.q = query;
+            if (configuredOnly) params.configured = '1';
+            return params;
+        }
     });
-}
-
-/**
- * Writes the current filter/configured-only state back to the URL, omitting each key
- * that's at its default so a clean filter yields a clean "#loggers" hash.
- */
-function writeUrlParams(input, container, context) {
-    const params = {};
-    const value = input?.value.trim();
-    if (value) params.q = value;
-    if (configuredOnly) params.configured = '1';
-    context.setUrlParams(params);
 }
 
 /** A logger with an explicitly configured level, as opposed to one merely inheriting its parent's. */

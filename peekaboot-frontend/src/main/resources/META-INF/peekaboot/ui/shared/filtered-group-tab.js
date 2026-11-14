@@ -16,9 +16,10 @@
  *   extraTop(data, context)     -> optional element rendered above the groups, or null
  *   emptyMessage                -> shown when the payload has no groups at all
  *   noMatchMessage(query)       -> shown when the filter narrows everything away
- *   urlFilter                   -> optional {reconcile(input, container, context),
- *                                  write(input, container, context)} for a tab whose URL
- *                                  state is more than the single "q" the default handles
+ *   filterState(input, container)
+ *                               -> optional: the filter's URL state {reconcile, save} (see
+ *                                  url-filter.js) for a tab that keeps more in the URL
+ *                                  than the single "q" of the default, textFilterState
  *   afterRender(container, {groups, filtered, query, context})
  *                               -> optional hook run after every (re-)render, the empty
  *                                  states included - meters.js's match-count readout
@@ -31,18 +32,18 @@
  *   fetchErrorMessage(error)    -> shown when fetchData() rejects
  *
  * The returned tab exposes render(container, data, context) - the tab-module contract - and
- * refresh(container), which re-renders with the current filter for a control the tab wires
- * itself (loggers.js's checkbox).
+ * refresh(container), which writes the filter to the URL and re-renders with it, for a
+ * control the tab wires itself (loggers.js's checkbox).
  */
 import {groupList, emptyState, loadingBlock, kvRow} from './components.js';
 import {formatCount, formatPlainValue} from './format.js';
-import {reconcileTextFilter, writeTextFilter} from './url-filter.js';
+import {textFilterState} from './url-filter.js';
 import {selfFetchingTab} from './self-fetching-tab.js';
 import {renderUnmaskControl} from './unmask-control.js';
 
 export function filteredGroupTab({
     inputId, listId, select, filterGroup, key, header, items, extraTop,
-    emptyMessage, noMatchMessage, urlFilter, afterRender,
+    emptyMessage, noMatchMessage, filterState = textFilterState, afterRender,
     fetchData, loadingMessage = 'Loading...', fetchErrorMessage = error => `Failed to load: ${error.message}`
 }) {
     let currentData = null;
@@ -51,12 +52,9 @@ export function filteredGroupTab({
     // timeZone instead of whatever was current the first time this tab was rendered.
     let currentContext = null;
 
-    const reconcile = urlFilter?.reconcile ?? ((input, container, context) => reconcileTextFilter(input, context));
-    const write = urlFilter?.write ?? ((input, container, context) => writeTextFilter(input, context));
-
     const fetcher = fetchData && selfFetchingTab({
         fetch: fetchData,
-        reconcile: (container, context) => reconcile(input(container), container, context),
+        reconcile: (container, context) => filterUrlState(container)?.reconcile(context),
         // Only before the very first data arrives - a background refresh of an
         // already-populated, currently visible list must not blank it for the round
         // trip's duration (renderGroups replaces the content once the response is in).
@@ -78,11 +76,12 @@ export function filteredGroupTab({
             return;
         }
         currentData = data;
-        if (context.active) reconcile(input(container), container, context);
+        if (context.active) filterUrlState(container)?.reconcile(context);
         renderGroups(container);
     }
 
     function refresh(container) {
+        filterUrlState(container)?.save(currentContext);
         renderGroups(container);
     }
 
@@ -94,6 +93,12 @@ export function filteredGroupTab({
         return inputId ? container.querySelector(`#${inputId}`) : null;
     }
 
+    /** The filter's URL state, or nothing for a tab without a filter input. */
+    function filterUrlState(container) {
+        const filterInput = input(container);
+        return filterInput ? filterState(filterInput, container) : null;
+    }
+
     function currentQuery(container) {
         return input(container)?.value.trim() || '';
     }
@@ -102,10 +107,7 @@ export function filteredGroupTab({
         const filterInput = input(container);
         if (!filterInput || filterInput.dataset.wired) return;
         filterInput.dataset.wired = 'true';
-        filterInput.addEventListener('input', () => {
-            write(filterInput, container, currentContext);
-            renderGroups(container);
-        });
+        filterInput.addEventListener('input', () => refresh(container));
     }
 
     function renderGroups(container) {

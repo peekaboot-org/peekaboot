@@ -54,7 +54,7 @@ class TraceFiltersIT extends PlaywrightTestBase {
      * Every URL-sourced filter value traces.js reads is validated, "bucket" included: seeding
      * currentBucket='bogus' verbatim from "#traces?bucket=bogus" would hit the backend with it
      * and (on an empty result) render BUCKET_EMPTY_MESSAGES's literal "undefined" as the
-     * empty-state text, since no such key exists. seedFromUrl falls back to 'all' for
+     * empty-state text, since no such key exists. filterFromUrl falls back to 'all' for
      * anything not in BUCKET_EMPTY_MESSAGES's own key set - proven here
      * by the bucket strip itself: an unvalidated 'bogus' would match none of the three real
      * bucket buttons, leaving all three unpressed, where the fallback leaves "All" pressed.

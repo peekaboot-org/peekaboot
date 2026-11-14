@@ -16,7 +16,7 @@ import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/r
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {interruptedBadge, isSlowTrace, slowBadge, traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
 import {parseAppHash, buildAppHash} from '../../shared/url-state.js';
-import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
+import {urlState} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'traces';
@@ -89,56 +89,60 @@ function showWhyNoTracesCanAppear(container) {
         child.classList.toggle('hidden', child.id !== 'traces-unavailable'));
 }
 
+/** Bucket, types, root operation and the exclusion as URL state (see shared/url-filter.js). */
+const filterState = urlState({
+    keys: ['bucket', 'type', 'op', 'excluded'],
+    read: filterFromUrl,
+    apply: applyFilter,
+    params: filterParams
+});
+
 /**
- * Reconciles bucket/type/op with the URL by the shared two-direction rule (see
- * url-filter.js). A detail segment in the hash means the overlay owns the params slot:
- * no seed, no write (main.js's setUrlParams drops the write side of the same rule) -
- * the overlay's own level/q params are not this tab's bucket/type/op.
+ * A detail segment in the hash means the overlay owns the params slot: no seed, no write
+ * (main.js's setUrlParams drops the write side of the same rule) - the overlay's own
+ * level/q params are not this tab's bucket/type/op.
  */
 function reconcileWithUrl(container, context) {
     if (parseAppHash().detail) return;
-
-    reconcileFilterWithUrl(context, ['bucket', 'type', 'op', 'excluded'], {
-        seed: params => {
-            seedFromUrl(container, params);
-            // corrects a bogus or non-canonical value in the URL to the state that actually restored
-            writeUrlParams();
-        },
-        hasNonDefaultState: () => currentBucket !== 'all' || isUserFiltered(),
-        writeBack: writeUrlParams
-    });
+    filterState.reconcile(context);
 }
 
-/**
- * Restores bucket/type/op state from the URL. Compares against the current state
- * rather than unconditionally overwriting it, so this is a no-op once the URL already
- * matches (the steady state on every render while this tab's own filter is active).
- */
-function seedFromUrl(container, params) {
+/** The filter the URL params name, a missing or unrecognized value at its default. */
+function filterFromUrl(urlParams) {
     // Validated against the canonical lists, since the backend refuses an unrecognized bucket
     // or type (a typo, a stale link) and the list would fail to load.
     // The case fold mirrors the backend's own.
-    const urlBucket = Object.keys(BUCKET_EMPTY_MESSAGES).includes(params.bucket) ? params.bucket : 'all';
-    const urlTypes = (params.type ? params.type.split(',') : [])
-        .map(type => type.toUpperCase())
-        .filter(type => SELECTABLE_TYPES.includes(type));
-    const urlOp = params.op || null;
-    const urlMaintenanceExcluded = params.excluded !== EXCLUSION_LIFTED;
+    return {
+        bucket: Object.keys(BUCKET_EMPTY_MESSAGES).includes(urlParams.bucket) ? urlParams.bucket : 'all',
+        types: (urlParams.type ? urlParams.type.split(',') : [])
+            .map(type => type.toUpperCase())
+            .filter(type => SELECTABLE_TYPES.includes(type)),
+        rootOperation: urlParams.op || null,
+        maintenanceExcluded: urlParams.excluded !== EXCLUSION_LIFTED
+    };
+}
 
+/**
+ * Makes the given filter the current one and shows it on the controls. Compares against
+ * the current state rather than unconditionally overwriting it, so this is a no-op once
+ * the URL already matches (the steady state on every render while a filter is active).
+ */
+function applyFilter(filter) {
     const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
-    const urlTypesJoined = [...urlTypes].sort().join(',');
-    if (urlBucket === currentBucket && urlTypesJoined === currentTypesJoined && urlOp === currentRootOperationFilter
-        && urlMaintenanceExcluded === maintenanceExcluded) {
+    const typesJoined = [...filter.types].sort().join(',');
+    if (filter.bucket === currentBucket && typesJoined === currentTypesJoined
+        && filter.rootOperation === currentRootOperationFilter
+        && filter.maintenanceExcluded === maintenanceExcluded) {
         return;
     }
 
-    currentBucket = urlBucket;
-    selectedRootActionTypes = new Set(urlTypes);
-    currentRootOperationFilter = urlOp;
-    maintenanceExcluded = urlMaintenanceExcluded;
+    currentBucket = filter.bucket;
+    selectedRootActionTypes = new Set(filter.types);
+    currentRootOperationFilter = filter.rootOperation;
+    maintenanceExcluded = filter.maintenanceExcluded;
 
-    syncBucketButtons(container);
-    syncFilterCheckboxes(container);
+    syncBucketButtons(tab.container());
+    syncFilterCheckboxes(tab.container());
 }
 
 function syncBucketButtons(container) {
@@ -158,16 +162,16 @@ function isUserFiltered() {
 }
 
 /**
- * Writes the current bucket/type/op filter state back to the URL, omitting each key
- * that's at its default so a clean filter yields a clean "#traces" hash.
+ * The current filter as URL params, omitting each key that's at its default so a clean
+ * filter yields a clean "#traces" hash.
  */
-function writeUrlParams() {
+function filterParams() {
     const params = {};
     if (currentBucket !== 'all') params.bucket = currentBucket;
     if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
     if (currentRootOperationFilter) params.op = currentRootOperationFilter;
     if (!maintenanceExcluded) params.excluded = EXCLUSION_LIFTED;
-    tab.context().setUrlParams(params);
+    return params;
 }
 
 /** The listing request's query, from the same state the URL params are written from. */
@@ -200,7 +204,7 @@ function wireControls(container) {
             if (btn.dataset.bucket === currentBucket) return;
             currentBucket = btn.dataset.bucket;
             syncBucketButtons(container);
-            writeUrlParams();
+            filterState.save(tab.context());
             tab.refetch();
         });
     });
@@ -245,7 +249,7 @@ function filterCheckbox(type, applyChange) {
     const checkbox = el('input', {attrs: {type: 'checkbox', value: type}});
     checkbox.addEventListener('change', () => {
         applyChange();
-        writeUrlParams();
+        filterState.save(tab.context());
         tab.refetch();
     });
 
@@ -261,7 +265,7 @@ function resetFilter() {
     currentRootOperationFilter = null;
     maintenanceExcluded = true;
     syncFilterCheckboxes(tab.container());
-    writeUrlParams();
+    filterState.save(tab.context());
     tab.refetch();
 }
 

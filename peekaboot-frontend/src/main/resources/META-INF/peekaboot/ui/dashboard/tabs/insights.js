@@ -14,13 +14,13 @@
  * render() is called again on every 30s dashboard refresh and must not rebuild any of
  * this.
  */
-import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
+import {urlState} from '../../shared/url-filter.js';
 import {createInsightsStream} from './insights-stream.js';
 import {createInsightsPanels, levelButtonsHtml, updateLevelButtons, RESET_ICON} from './insights-panels.js';
 
 export const id = 'insights';
 
-/** Every param this tab owns in the URL (see reconcileUrlState / writeUrlParams). */
+/** Every param this tab owns in the URL (see viewState). */
 const URL_KEYS = ['level', 'percentiles', 'restarts', 'panels'];
 
 let initialized = false;
@@ -45,7 +45,7 @@ export function render(container, data, context) {
     if (initialized) {
         // SSE keeps this tab live; the 30s cycle must not rebuild it. Only the
         // URL-owned state is reconciled (active-tab guard, see main.js's renderTab).
-        if (config && context.active) reconcileUrlState(context);
+        if (config && context.active) viewState.reconcile(context);
         // ...and a stream the browser gave up on is given another go each cycle - the
         // endpoint may be back, and nothing else would ever try again
         stream?.reconnectIfClosed();
@@ -85,24 +85,16 @@ export function panelOverridesFromUrl(params, {panels: configured, levels}) {
 }
 
 /**
- * Reconciles everything this tab keeps in the URL - the global aggregation level, the
- * percentiles/restarts checkboxes and the per-panel level overrides - with the same
- * two-direction rule every filter tab applies (see shared/url-filter.js's doc comment).
- * Seeding ends with a write-back, so a bogus or non-canonical value is corrected in the
- * URL to the state that actually restored.
+ * Everything this tab keeps in the URL - the global aggregation level, the
+ * percentiles/restarts checkboxes and the per-panel level overrides - as URL state (see
+ * shared/url-filter.js). Only usable once the config has arrived and the panels exist.
  */
-function reconcileUrlState(context) {
-    reconcileFilterWithUrl(context, URL_KEYS, {
-        seed: params => {
-            seedFromUrl(params);
-            writeUrlParams();
-        },
-        hasNonDefaultState: () => panels.globalLevel() !== config.levels[0].index
-                || panels.percentiles() || !panels.markers()
-                || Object.keys(panels.overrides()).length > 0,
-        writeBack: writeUrlParams
-    });
-}
+const viewState = urlState({
+    keys: URL_KEYS,
+    read: stateFromUrl,
+    apply: applyState,
+    params: stateParams
+});
 
 /**
  * Every URL-owned piece of state as the given params name it, each validated (see
@@ -117,9 +109,8 @@ function stateFromUrl(params) {
     };
 }
 
-/** Restores every URL-owned piece of state from the given params. */
-function seedFromUrl(params) {
-    const state = stateFromUrl(params);
+/** Makes the given state the current one, on the panels and on the toolbar. */
+function applyState(state) {
     setGlobalLevel(state.globalLevel);
     setShowPercentiles(state.showPercentiles);
     setShowMarkers(state.showMarkers);
@@ -127,18 +118,23 @@ function seedFromUrl(params) {
 }
 
 /**
- * Writes this tab's URL params, omitting every default - the first configured level,
+ * The current state as URL params, omitting every default - the first configured level,
  * percentiles off, restarts on, panels following the global level - so a clean state
- * yields a clean "#insights" hash. A replace, never a push - see url-state.js.
+ * yields a clean "#insights" hash.
  */
-function writeUrlParams() {
+function stateParams() {
     const params = {};
     if (panels.globalLevel() !== config.levels[0].index) params.level = String(panels.globalLevel());
     if (panels.percentiles()) params.percentiles = '1';
     if (!panels.markers()) params.restarts = '0';
     const overridden = Object.entries(panels.overrides()).map(([panelId, level]) => `${panelId}:${level}`).join(',');
     if (overridden) params.panels = overridden;
-    currentContext.setUrlParams(params);
+    return params;
+}
+
+/** Called by every control that changes the state. */
+function saveViewState() {
+    viewState.save(currentContext);
 }
 
 async function init(container, context) {
@@ -164,12 +160,12 @@ async function init(container, context) {
             initial: stateFromUrl(context.urlParams),
             // read at hover time, so a timezone toggle reaches a chart that is not rebuilt for it
             dateOptions: () => ({locale: currentContext.locale, timeZone: currentContext.timeZone}),
-            onPanelLevelChange: writeUrlParams,
+            onPanelLevelChange: saveViewState,
             onZoomChange: zoomed => zoomResetButton.classList.toggle('hidden', !zoomed)
         });
         renderToolbar(container);
         // correct a bogus or non-canonical deep link to the state that actually restored
-        if (URL_KEYS.some(key => key in context.urlParams)) writeUrlParams();
+        if (URL_KEYS.some(key => key in context.urlParams)) saveViewState();
         // the stream is opened before the first snapshot is fetched: the panel
         // readouts then go live with the next tick instead of waiting on a
         // request that carries every series' whole ring. A tick arriving before
@@ -221,7 +217,7 @@ function renderToolbar(container) {
         const button = event.target.closest('.pk-insight-level');
         if (!button) return;
         setGlobalLevel(Number(button.dataset.level));
-        writeUrlParams();
+        saveViewState();
     });
 
     zoomResetButton = toolbar.querySelector('#insights-zoom-reset');
@@ -230,13 +226,13 @@ function renderToolbar(container) {
     percentilesCheckbox = toolbar.querySelector('#insights-percentiles');
     percentilesCheckbox.addEventListener('change', event => {
         setShowPercentiles(event.target.checked);
-        writeUrlParams();
+        saveViewState();
     });
 
     markersCheckbox = toolbar.querySelector('#insights-markers');
     markersCheckbox.addEventListener('change', event => {
         setShowMarkers(event.target.checked);
-        writeUrlParams();
+        saveViewState();
     });
 }
 
