@@ -155,10 +155,12 @@ class InsightsSsePublisherTest {
      * A sender inside an ordinary socket write at the instant stop() runs is a healthy
      * peer, not a wedged one: refusing it would leave its async request open until the
      * container gives up. stop() waits a short grace for that write to finish and then
-     * completes the stream.
+     * completes the stream. The grace here outlasts the test, so stop() can only return
+     * because the write did.
      */
     @Test
     void stopCompletesAPeerWhoseWriteFinishesWithinTheGrace() throws Exception {
+        InsightsSsePublisher publisher = tracked(new InsightsSsePublisher(new ObjectMapper(), Duration.ofSeconds(30)));
         CountDownLatch writeStarted = new CountDownLatch(1);
         Semaphore releaseWrite = new Semaphore(0);
         SseEmitter emitter = publisher.subscribe();
@@ -170,10 +172,7 @@ class InsightsSsePublisherTest {
                     .isTrue();
 
             Thread stopping = Thread.ofPlatform().name("stop-under-test").start(publisher::stop);
-            // polled tightly so the release lands well inside the grace, load or no load
             await().atMost(Duration.ofSeconds(3))
-                    .pollDelay(Duration.ZERO)
-                    .pollInterval(Duration.ofMillis(5))
                     .alias("stop() waits for the write instead of giving the peer up")
                     .until(() -> stopping.getState() == Thread.State.TIMED_WAITING);
             releaseWrite.release();

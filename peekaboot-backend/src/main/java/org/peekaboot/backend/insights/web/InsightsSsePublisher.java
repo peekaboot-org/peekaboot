@@ -67,6 +67,7 @@ public final class InsightsSsePublisher implements InsightsCollector.Listener, S
     static final Duration STOP_GRACE = Duration.ofMillis(200);
 
     private final InsightsEventJson eventJson;
+    private final Duration stopGrace;
     private final List<Subscriber> subscribers = new CopyOnWriteArrayList<>();
     private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
 
@@ -99,7 +100,13 @@ public final class InsightsSsePublisher implements InsightsCollector.Listener, S
     private volatile boolean running = true;
 
     public InsightsSsePublisher(ObjectMapper objectMapper) {
+        this(objectMapper, STOP_GRACE);
+    }
+
+    /** Takes the grace of {@link #stop()}, so a test need not race {@link #STOP_GRACE} in real time. */
+    InsightsSsePublisher(ObjectMapper objectMapper, Duration stopGrace) {
         this.eventJson = new InsightsEventJson(objectMapper);
+        this.stopGrace = stopGrace;
     }
 
     @Override
@@ -133,7 +140,7 @@ public final class InsightsSsePublisher implements InsightsCollector.Listener, S
         for (Subscriber subscriber : open) {
             subscriber.interruptSender();
             try {
-                subscriber.emitter().completeUnlessSendingWithin(STOP_GRACE);
+                subscriber.emitter().completeUnlessSendingWithin(stopGrace);
             } catch (RuntimeException e) {
                 log.debug("Failed to complete an insights SSE subscriber on shutdown", e);
             }
