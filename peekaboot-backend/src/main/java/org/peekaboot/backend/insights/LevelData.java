@@ -68,7 +68,10 @@ record LevelData(
         return timestamps;
     }
 
-    /** {@code seriesId}'s statistics over the window. */
+    /**
+     * {@code seriesId}'s statistics over the window. Above level 0 the median and the p95 are taken
+     * over the windows' own median and p95, each window weighted by its samples.
+     */
     SeriesSummary summaryOf(String seriesId) {
         if (level == 0) {
             double[] values = tickValues.get(seriesId);

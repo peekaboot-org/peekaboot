@@ -54,15 +54,16 @@ class LevelDataTest {
     }
 
     /**
-     * Above level 0 the median and the p95 are taken over the windows' averages, nearest rank, so
-     * a spike inside a window is averaged away; min and max stay the exact extremes, and the average
-     * weighs each window by its samples.
+     * Above level 0 the median and the p95 are taken over the windows' own median and p95, nearest
+     * rank with each window counted as often as it has samples. Of eight samples the fourth lies in
+     * the first window and the eighth in the second, whose p95 holds its spike. Min and max stay the
+     * exact extremes, and the average weighs each window by its samples.
      */
     @Test
     void anAggregatedLevelSummarisesFromItsWindows() {
         SeriesSummary summary = twoWindows().summaryOf("g");
 
-        assertThat(summary).isEqualTo(new SeriesSummary(1.0, 5.75, 20.0, 5.0, 8.0, 8.0, 8));
+        assertThat(summary).isEqualTo(new SeriesSummary(1.0, 5.75, 20.0, 5.0, 20.0, 8.0, 8));
     }
 
     @Test
@@ -71,7 +72,7 @@ class LevelDataTest {
 
         assertThat(newest.count()).isEqualTo(1);
         assertThat(newest.timestamps()).containsExactly(120_000L);
-        assertThat(newest.summaryOf("g")).isEqualTo(new SeriesSummary(2.0, 8.0, 20.0, 8.0, 8.0, 8.0, 2));
+        assertThat(newest.summaryOf("g")).isEqualTo(new SeriesSummary(2.0, 8.0, 20.0, 8.0, 20.0, 8.0, 2));
     }
 
     /** An ISO instant can lie past the epoch-millisecond range; it still keeps no sample, or every one. */

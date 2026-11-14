@@ -27,6 +27,14 @@ class InsightsProblemsTest {
         return new LevelData(0, TICK_MS, count * TICK_MS, count, series, Map.of(), Map.of());
     }
 
+    /** Level 1 holding one-minute windows of {@code id}, six samples behind each. */
+    private static LevelData windows(String id, Map<String, double[]> stats) {
+        int count = stats.get("avg").length;
+        double[] samples = new double[count];
+        Arrays.fill(samples, 6);
+        return new LevelData(1, 60_000, count * 60_000L, count, Map.of(), Map.of(id, stats), Map.of(id, samples));
+    }
+
     private static Map<String, double[]> series(String id, double... values) {
         Map<String, double[]> series = new LinkedHashMap<>();
         series.put(id, values);
@@ -206,18 +214,30 @@ class InsightsProblemsTest {
     void anAggregatedLevelCountsTheErrorLinesEveryWindowCovers() {
         Map<String, double[]> stats = new LinkedHashMap<>();
         AggregateStats.STAT_NAMES.forEach(name -> stats.put(name, new double[] {0.05}));
-        LevelData window = new LevelData(
-                1,
-                60_000,
-                60_000,
-                1,
-                Map.of(),
-                Map.of("log-events.errors", stats),
-                Map.of("log-events.errors", new double[] {6}));
 
-        assertThat(problems.of(window))
+        assertThat(problems.of(windows("log-events.errors", stats)))
                 .singleElement()
                 .satisfies(problem -> assertThat(problem.value()).isEqualTo(3.0));
+    }
+
+    /** Two windows averaging 300 ms, well below the threshold, whose own p95 is the 1.2 s each one holds. */
+    @Test
+    void anAggregatedLevelJudgesTheLatencyByItsWindowsOwnP95() {
+        Map<String, double[]> stats = new LinkedHashMap<>();
+        stats.put("min", new double[] {100, 100});
+        stats.put("max", new double[] {1200, 1200});
+        stats.put("avg", new double[] {300, 300});
+        stats.put("median", new double[] {100, 100});
+        stats.put("p90", new double[] {1200, 1200});
+        stats.put("p95", new double[] {1200, 1200});
+        stats.put("p99", new double[] {1200, 1200});
+
+        assertThat(problems.of(windows("http-latency.avg", stats)))
+                .singleElement()
+                .satisfies(problem -> {
+                    assertThat(problem.rule()).isEqualTo(ProblemRule.SLOW_HTTP);
+                    assertThat(problem.value()).isEqualTo(1200.0);
+                });
     }
 
     @Test

@@ -11,8 +11,9 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
 
 /**
  * Checks a level's window against the {@link ProblemRule}s. Every rule reads the window the
- * request selected, so a level above 0 judges the windows' averages where it takes a median or a
- * percentile, and the exact extremes where it takes a maximum or a minimum.
+ * request selected. Above level 0 a series' median or p95 is taken over the windows' own median
+ * or p95, weighted by samples, and a maximum or a minimum is the exact extreme. The heap
+ * share alone pairs the windows' averages.
  */
 final class InsightsProblems {
 

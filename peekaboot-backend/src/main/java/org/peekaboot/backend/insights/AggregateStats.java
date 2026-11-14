@@ -1,14 +1,16 @@
 package org.peekaboot.backend.insights;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
 /**
- * One aggregated window. Percentiles use nearest-rank over the ascending sort;
- * ofAggregates() computes percentiles over the finer entries' avg values -
- * a deliberate approximation (Micrometer keeps no raw samples).
+ * One aggregated window, its percentiles by nearest rank. {@link #of} ranks the samples.
+ * {@link #ofAggregates} ranks the finer windows' value of the same name, each counted as often as
+ * the window has samples, since a window keeps none to rank.
  */
 public record AggregateStats(
         double min, double max, double avg, double median, double p90, double p95, double p99, int samples) {
@@ -40,35 +42,31 @@ public record AggregateStats(
     public static AggregateStats ofAggregates(List<AggregateStats> window) {
         double min = Double.NaN;
         double max = Double.NaN;
+        double leastAvg = Double.NaN;
         double weightedSum = 0;
         int totalSamples = 0;
-        int usable = 0;
-        double[] usableAvgs = new double[window.size()];
         for (AggregateStats entry : window) {
             if (Double.isNaN(entry.avg)) {
                 continue;
             }
-            usableAvgs[usable] = entry.avg;
-            usable++;
             min = Double.isNaN(min) ? entry.min : Math.min(min, entry.min);
             max = Double.isNaN(max) ? entry.max : Math.max(max, entry.max);
+            leastAvg = Double.isNaN(leastAvg) ? entry.avg : Math.min(leastAvg, entry.avg);
             weightedSum += entry.avg * entry.samples;
             totalSamples += entry.samples;
         }
-        if (usable == 0) {
+        if (Double.isNaN(leastAvg)) {
             return EMPTY;
         }
-        double[] sortedAvgs = Arrays.copyOf(usableAvgs, usable);
-        Arrays.sort(sortedAvgs);
-        double avg = totalSamples > 0 ? weightedSum / totalSamples : sortedAvgs[0];
+        double avg = totalSamples > 0 ? weightedSum / totalSamples : leastAvg;
         return new AggregateStats(
                 min,
                 max,
                 avg,
-                percentile(sortedAvgs, 0.50),
-                percentile(sortedAvgs, 0.90),
-                percentile(sortedAvgs, 0.95),
-                percentile(sortedAvgs, 0.99),
+                weightedPercentile(window, AggregateStats::median, 0.50),
+                weightedPercentile(window, AggregateStats::p90, 0.90),
+                weightedPercentile(window, AggregateStats::p95, 0.95),
+                weightedPercentile(window, AggregateStats::p99, 0.99),
                 totalSamples);
     }
 
@@ -104,5 +102,24 @@ public record AggregateStats(
     private static double percentile(double[] sorted, double quantile) {
         int rank = (int) Math.ceil(quantile * sorted.length);
         return sorted[Math.max(0, rank - 1)];
+    }
+
+    /** Nearest rank over the windows' {@code statistic}, each counted once per sample; NaN where none has both. */
+    private static double weightedPercentile(
+            List<AggregateStats> window, ToDoubleFunction<AggregateStats> statistic, double quantile) {
+        List<AggregateStats> ranked = window.stream()
+                .filter(entry -> entry.samples > 0 && !Double.isNaN(statistic.applyAsDouble(entry)))
+                .sorted(Comparator.comparingDouble(statistic))
+                .toList();
+        int rank = (int) Math.ceil(
+                quantile * ranked.stream().mapToInt(AggregateStats::samples).sum());
+        int reached = 0;
+        for (AggregateStats entry : ranked) {
+            reached += entry.samples;
+            if (reached >= rank) {
+                return statistic.applyAsDouble(entry);
+            }
+        }
+        return Double.NaN;
     }
 }

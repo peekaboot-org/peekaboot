@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.within;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class AggregateStatsTest {
@@ -68,28 +71,93 @@ class AggregateStatsTest {
 
     @Test
     void aggregatesFinerEntries() {
-        // two 1m entries: (min 1, max 9, avg 4, 6 samples) and (min 2, max 20, avg 8, 2 samples)
-        AggregateStats stats = AggregateStats.ofAggregates(List.of(finer(1, 9, 4, 6), finer(2, 20, 8, 2)));
+        // two 1m entries: (min 1, max 9, avg 4, median 3, 6 samples) and (min 2, max 20, avg 8, median 7, 2 samples)
+        AggregateStats stats =
+                AggregateStats.ofAggregates(List.of(finer(1, 9, 4, 3, 9, 9, 9, 6), finer(2, 20, 8, 7, 20, 20, 20, 2)));
         assertThat(stats.min()).isEqualTo(1);
         assertThat(stats.max()).isEqualTo(20);
         // weighted avg: (4*6 + 8*2) / 8 = 5.0
         assertThat(stats.avg()).isCloseTo(5.0, within(1e-9));
-        // percentiles over the avg values [4, 8]
-        assertThat(stats.median()).isEqualTo(4);
-        assertThat(stats.p99()).isEqualTo(8);
+        // the 4th of 8 samples lies in the first entry, the 8th in the second
+        assertThat(stats.median()).isEqualTo(3);
+        assertThat(stats.p99()).isEqualTo(20);
         assertThat(stats.samples()).isEqualTo(8);
     }
 
     @Test
     void aggregatesSkipNaNEntries() {
-        AggregateStats stats = AggregateStats.ofAggregates(List.of(AggregateStats.EMPTY, finer(2, 4, 3, 5)));
+        AggregateStats stats =
+                AggregateStats.ofAggregates(List.of(AggregateStats.EMPTY, finer(2, 4, 3, 3, 4, 4, 4, 5)));
         assertThat(stats.min()).isEqualTo(2);
         assertThat(stats.avg()).isEqualTo(3);
         assertThat(stats.samples()).isEqualTo(5);
     }
 
-    /** A finer level's entry; its percentiles play no part in a roll-up, which ranks the averages. */
-    private static AggregateStats finer(double min, double max, double avg, int samples) {
-        return new AggregateStats(min, max, avg, Double.NaN, Double.NaN, Double.NaN, Double.NaN, samples);
+    @Test
+    void aCoarserWindowTakesEachPercentileFromTheFinerWindowsSamePercentile() {
+        AggregateStats stats = AggregateStats.ofAggregates(List.of(
+                finer(1, 1, 1, 1, 10, 10, 10, 6),
+                finer(1, 1, 1, 2, 20, 20, 20, 6),
+                finer(1, 1, 1, 3, 30, 30, 30, 6),
+                finer(1, 1, 1, 4, 40, 40, 40, 6)));
+
+        // of 24 samples the 12th lies in the second entry, the 22nd, 23rd and 24th in the fourth
+        assertThat(stats.median()).isEqualTo(2.0);
+        assertThat(stats.p90()).isEqualTo(40.0);
+        assertThat(stats.p95()).isEqualTo(40.0);
+        assertThat(stats.p99()).isEqualTo(40.0);
+    }
+
+    @Test
+    void aCoarserPercentileWeighsEachFinerWindowByItsSamples() {
+        AggregateStats stats = AggregateStats.ofAggregates(
+                List.of(finer(1, 1, 1, 1, 1, 1, 1, 1), finer(1, 100, 1, 100, 100, 100, 100, 9)));
+
+        assertThat(stats.median()).isEqualTo(100.0);
+    }
+
+    @Test
+    void aFinerWindowWithoutAPercentileIsLeftOutOfIt() {
+        AggregateStats without = finer(1, 9, 4, 3, 9, Double.NaN, 9, 6);
+        AggregateStats with = finer(2, 20, 8, 7, 20, 15, 20, 2);
+
+        assertThat(AggregateStats.ofAggregates(List.of(without, with)).p95()).isEqualTo(15.0);
+        assertThat(AggregateStats.ofAggregates(List.of(without, without)).p95()).isNaN();
+    }
+
+    /** A window that counts no sample has no rank to give, so its percentile stands for nothing. */
+    @Test
+    void finerWindowsWithoutSamplesGiveNoPercentile() {
+        AggregateStats stats =
+                AggregateStats.ofAggregates(List.of(finer(1, 9, 4, 3, 9, 9, 9, 0), finer(2, 20, 8, 7, 20, 20, 20, 0)));
+
+        assertThat(stats.median()).isNaN();
+        assertThat(stats.p99()).isNaN();
+    }
+
+    /**
+     * Six samples a window is the default first roll-up. Its p90, p95 and p99 are its maximum, so a
+     * coarser tail ranks maxima and cannot fall below the tail of the samples themselves.
+     */
+    @Test
+    void atTheDefaultLevelsACoarserTailIsNeverBelowTheTrueOne() {
+        Random random = new Random(42);
+        double[] all = random.doubles(60 * 6).toArray();
+        List<AggregateStats> level1 = IntStream.range(0, 60)
+                .mapToObj(window -> AggregateStats.of(Arrays.copyOfRange(all, window * 6, window * 6 + 6)))
+                .toList();
+
+        AggregateStats coarse = AggregateStats.ofAggregates(level1);
+
+        AggregateStats truth = AggregateStats.of(all);
+        assertThat(coarse.p90()).isGreaterThanOrEqualTo(truth.p90());
+        assertThat(coarse.p95()).isGreaterThanOrEqualTo(truth.p95());
+        assertThat(coarse.p99()).isGreaterThanOrEqualTo(truth.p99()).isLessThanOrEqualTo(coarse.max());
+        assertThat(coarse.median()).isBetween(truth.min(), truth.max());
+    }
+
+    private static AggregateStats finer(
+            double min, double max, double avg, double median, double p90, double p95, double p99, int samples) {
+        return new AggregateStats(min, max, avg, median, p90, p95, p99, samples);
     }
 }

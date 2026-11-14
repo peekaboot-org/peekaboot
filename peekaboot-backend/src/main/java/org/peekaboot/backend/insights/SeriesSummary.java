@@ -5,8 +5,9 @@ import org.peekaboot.backend.config.PeekabootJson;
 
 /**
  * One series over a level's window, so a reader needs no samples to judge it. Above level 0,
- * {@code median} and {@code p95} come from the windows' averages, so a short spike is averaged
- * away; {@code min} and {@code max} stay exact. Each is null where the window holds no sample.
+ * {@code median} and {@code p95} are taken over the windows' own median and p95, weighted by
+ * samples. {@code min}, {@code max} and {@code avg} stay exact. Each is null where the window
+ * holds no sample.
  *
  * @param latest the newest sample, or the newest window's average above level 0
  * @param samples the level-0 samples the summary covers; 0 for an empty window
