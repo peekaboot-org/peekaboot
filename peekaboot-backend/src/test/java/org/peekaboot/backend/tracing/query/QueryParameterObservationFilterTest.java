@@ -5,14 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import javax.sql.DataSource;
 import net.ttddyy.dsproxy.QueryInfo;
 import net.ttddyy.dsproxy.proxy.ParameterSetOperation;
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.testsupport.RecordingObservations;
 import org.peekaboot.backend.tracing.tags.QueryParameterTags;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -108,6 +113,71 @@ class QueryParameterObservationFilterTest {
                 .hasSize(QueryParameterObservationFilter.MAX_PARAMETER_SETS);
         assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
                 .isNull();
+    }
+
+    /** A set of one such string is 1,002 characters: fifteen fit the budget, the sixteenth does not. */
+    @Test
+    void aBatchPastTheCharacterBudgetLeavesOutItsLaterSets() throws SQLException {
+        List<String> names = names(1, 1_000);
+        deleteBatchOf(40, names);
+
+        assertThat(parameterSets()).hasSize(15).containsOnly(literals(names));
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
+                .extracting(KeyValue::getValue)
+                .isEqualTo("25");
+    }
+
+    /** Sixteen sets of 1,000 characters each are the 16,000 exactly. */
+    @Test
+    void aBatchThatFillsTheCharacterBudgetExactlyKeepsEverySet() throws SQLException {
+        deleteBatchOf(16, names(1, 998));
+
+        assertThat(parameterSets()).hasSize(16);
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
+                .isNull();
+    }
+
+    /** Dropping the only set would leave the statement no parameter at all, so it keeps the ones that fit. */
+    @Test
+    void aSingleSetPastTheBudgetIsCutAndCountsWhatItLeftOut() throws SQLException {
+        List<String> names = names(20, 1_000);
+        deleteBatchOf(1, names);
+
+        List<String> kept = new ArrayList<>(literals(names).subList(0, 15));
+        kept.add("/* 5 parameters omitted */");
+        assertThat(parameterSets()).containsExactly(kept);
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
+                .isNull();
+    }
+
+    @Test
+    void setsAfterACutSetAreCountedAsOmitted() throws SQLException {
+        deleteBatchOf(3, names(20, 1_000));
+
+        assertThat(parameterSets())
+                .singleElement()
+                .satisfies(set -> assertThat(set).hasSize(16).last().isEqualTo("/* 5 parameters omitted */"));
+        assertThat(queryContext().getHighCardinalityKeyValue(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG))
+                .extracting(KeyValue::getValue)
+                .isEqualTo("2");
+    }
+
+    /** A number is rendered whole, so one can outgrow the budget on its own: 1 and 16,000 zeros. */
+    @Test
+    void aParameterPastTheBudgetOnItsOwnIsLeftOut() throws NoSuchMethodException {
+        Method byIndex = PreparedStatement.class.getMethod("setBigDecimal", int.class, BigDecimal.class);
+        QueryInfo query = new QueryInfo("SELECT ?");
+        query.getParametersList().add(List.of(new ParameterSetOperation(byIndex, new Object[] {
+            1, new BigDecimal("1E+16000")
+        })));
+        QueryContext context = new QueryContext();
+        context.setQueryInfoList(List.of(query));
+
+        new QueryParameterObservationFilter().map(context);
+
+        assertThat(context.getHighCardinalityKeyValue(QueryParameterTags.PARAMETERS_TAG))
+                .extracting(KeyValue::getValue)
+                .isEqualTo("[[\"/* 1 parameter omitted */\"]]");
     }
 
     /** setNull's second argument is the SQL type, not a value. */
@@ -215,6 +285,10 @@ class QueryParameterObservationFilterTest {
         return tag.getValue();
     }
 
+    private List<List<String>> parameterSets() {
+        return PeekabootJson.MAPPER.readValue(parametersTag(), new TypeReference<>() {});
+    }
+
     private QueryContext queryContext() {
         List<QueryContext> queries = observations.stopped().stream()
                 .filter(QueryContext.class::isInstance)
@@ -236,5 +310,32 @@ class QueryParameterObservationFilterTest {
             }
             insert.executeBatch();
         }
+    }
+
+    /** A DELETE run as a batch of {@code sets} entries, each binding the same {@code names}. */
+    private void deleteBatchOf(int sets, List<String> names) throws SQLException {
+        String placeholders = String.join(", ", Collections.nCopies(names.size(), "?"));
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement delete =
+                        connection.prepareStatement("DELETE FROM person WHERE name IN (" + placeholders + ")")) {
+            for (int set = 0; set < sets; set++) {
+                for (int index = 0; index < names.size(); index++) {
+                    delete.setString(index + 1, names.get(index));
+                }
+                delete.addBatch();
+            }
+            delete.executeBatch();
+        }
+    }
+
+    /** {@code count} strings of {@code length} characters, each of its own letter so their order shows. */
+    private static List<String> names(int count, int length) {
+        return IntStream.range(0, count)
+                .mapToObj(index -> String.valueOf((char) ('a' + index)).repeat(length))
+                .toList();
+    }
+
+    private static List<String> literals(List<String> names) {
+        return names.stream().map(name -> "'" + name + "'").toList();
     }
 }

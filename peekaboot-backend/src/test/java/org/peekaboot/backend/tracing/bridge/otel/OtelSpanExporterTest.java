@@ -31,9 +31,11 @@ import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.stacktrace.CapturedStackTraces;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
+import org.peekaboot.backend.tracing.event.CapturedText;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -493,6 +495,29 @@ class OtelSpanExporterTest {
         assertThat(exception.message()).isEqualTo("described by the app");
     }
 
+    @Test
+    void capsAnExceptionMessage() {
+        String message = "x".repeat(CapturedText.MAX_LENGTH + 7);
+        String traceId = exportThroughTheSdk(span -> {
+            span.recordException(new IllegalStateException(message));
+            span.setStatus(StatusCode.ERROR, "described by the app");
+        });
+
+        assertThat(storedSpan(traceId).exception().message())
+                .isEqualTo(CapturedText.cap(message))
+                .endsWith("x... 7 characters omitted");
+    }
+
+    @Test
+    void capsAStatusDescriptionThatStandsInForTheMessage() {
+        String description = "x".repeat(CapturedText.MAX_LENGTH + 7);
+        String traceId = exportThroughTheSdk(span -> span.setStatus(StatusCode.ERROR, description));
+
+        assertThat(storedSpan(traceId).exception().message())
+                .isEqualTo(CapturedText.cap(description))
+                .endsWith("x... 7 characters omitted");
+    }
+
     /** A handled exception an application records for the record does not fail the span. */
     @Test
     void anExceptionRecordedOnASpanThatDidNotFailIsNotItsError() {
@@ -564,6 +589,35 @@ class OtelSpanExporterTest {
 
         org.peekaboot.backend.tracing.event.SpanData stored = storedSpan(traceId);
         assertThat(stored.tags()).containsEntry("db.system", "postgresql");
+    }
+
+    @Test
+    void capsATagValue() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String value = "x".repeat(CapturedText.MAX_LENGTH + 7);
+        SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
+                .setAttributes(Attributes.of(AttributeKey.stringKey("http.response.body"), value))
+                .build();
+
+        exporter.export(List.of(span));
+
+        assertThat(storedSpan(traceId).tags().get("http.response.body"))
+                .isEqualTo(CapturedText.cap(value))
+                .endsWith("x... 7 characters omitted");
+    }
+
+    /** The tag is JSON that its writer bounds; a cut would cost the statement every parameter. */
+    @Test
+    void leavesTheBindParametersTagUncut() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String parameters = "[[\"'" + "x".repeat(20_000 - 8) + "'\"]]";
+        SpanData span = testSpanBuilder(traceId, "0000000000000001", "query", SpanKind.CLIENT)
+                .setAttributes(Attributes.of(AttributeKey.stringKey(QueryParameterTags.PARAMETERS_TAG), parameters))
+                .build();
+
+        exporter.export(List.of(span));
+
+        assertThat(storedSpan(traceId).tags()).containsEntry(QueryParameterTags.PARAMETERS_TAG, parameters);
     }
 
     @Test

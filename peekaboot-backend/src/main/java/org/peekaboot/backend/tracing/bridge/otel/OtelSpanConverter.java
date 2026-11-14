@@ -15,6 +15,8 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.stacktrace.CapturedStackTraces;
 import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
+import org.peekaboot.backend.tracing.event.CapturedText;
+import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 
 /**
  * Turns a span of the OpenTelemetry SDK into the
@@ -35,10 +37,15 @@ final class OtelSpanConverter {
         Map<String, String> tags = new HashMap<>();
         otelSpan.getAttributes().forEach((key, value) -> {
             if (value != null) {
-                tags.put(key.getKey(), String.valueOf(value));
+                tags.put(key.getKey(), tagValue(key.getKey(), String.valueOf(value)));
             }
         });
         return tags;
+    }
+
+    /** The bind parameters pass whole: their writer bounds them, and a cut would break their JSON. */
+    private static String tagValue(String key, String value) {
+        return QueryParameterTags.PARAMETERS_TAG.equals(key) ? value : CapturedText.cap(value);
     }
 
     static org.peekaboot.backend.tracing.event.SpanData convert(
@@ -83,7 +90,7 @@ final class OtelSpanConverter {
             return null;
         }
         String description = otelSpan.getStatus().getDescription();
-        String statusMessage = description.isEmpty() ? null : description;
+        String statusMessage = description.isEmpty() ? null : CapturedText.cap(description);
         EventData event = lastExceptionEvent(otelSpan);
         if (event == null) {
             return new CapturedExceptionInfo(null, statusMessage, null);
@@ -93,7 +100,7 @@ final class OtelSpanConverter {
         String stackTrace = attributes.get(EXCEPTION_STACKTRACE);
         return new CapturedExceptionInfo(
                 attributes.get(EXCEPTION_TYPE),
-                message != null ? message : statusMessage,
+                message != null ? CapturedText.cap(message) : statusMessage,
                 stackTrace != null ? CapturedStackTraces.capLines(stackTrace) : null);
     }
 

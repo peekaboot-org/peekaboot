@@ -10,6 +10,7 @@ import org.jspecify.annotations.Nullable;
  * @param spanId the span frozen in the event's MDC; null outside a span
  * @param logger the name of the logger it was written to
  * @param thread the name of the thread that wrote it
+ * @param message the formatted message, capped at {@link CapturedText#MAX_LENGTH}
  * @param stackTrace {@code ThrowableProxyUtil.asString}'s rendering of the logged throwable, or
  *     null where there was none. Close to but not identical to {@code Throwable.printStackTrace}'s
  *     own output: an elided run reads "... N common frames omitted" rather than "... N more".

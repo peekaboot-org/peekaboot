@@ -10,6 +10,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.backend.stacktrace.CapturedStackTraces;
+import org.peekaboot.backend.tracing.event.CapturedText;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -23,7 +24,8 @@ import org.springframework.context.ApplicationEventPublisher;
  * it hangs off the root logger, so the levels configured under {@code logging.level.*} have
  * already decided what arrives, and a second floor here would only make the Logs tab disagree
  * with the log file. Per-trace volume stays bounded by
- * {@code peekaboot.tracing.max-logs-per-trace}. A line written outside any trace is captured too,
+ * {@code peekaboot.tracing.max-logs-per-trace}, and a line's message by
+ * {@link CapturedText#MAX_LENGTH}. A line written outside any trace is captured too,
  * without a trace id, and the store keeps the newest {@code peekaboot.tracing.max-untraced-logs} of
  * them.
  */
@@ -50,7 +52,7 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
         Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
         String level = event.getLevel().toString();
         // Logback formats a null pattern as a null message; every captured line carries one.
-        String message = Objects.requireNonNullElse(event.getFormattedMessage(), "");
+        String message = CapturedText.cap(Objects.requireNonNullElse(event.getFormattedMessage(), ""));
         IThrowableProxy throwable = event.getThrowableProxy();
         String stackTrace =
                 throwable == null ? null : CapturedStackTraces.capLines(ThrowableProxyUtil.asString(throwable));

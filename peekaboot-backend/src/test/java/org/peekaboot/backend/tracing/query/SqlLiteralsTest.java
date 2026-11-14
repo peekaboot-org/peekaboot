@@ -83,6 +83,15 @@ class SqlLiteralsTest {
         assertThat(literal).endsWith("' /* 1 character omitted */");
     }
 
+    /** The emoji is two chars, the last within the cap and the first past it; both go, and both are counted. */
+    @Test
+    void aCutNeverSplitsASurrogatePair() {
+        String literal = SqlLiterals.render("x".repeat(SqlLiterals.MAX_LITERAL_LENGTH - 1) + "😀");
+
+        assertThat(literal)
+                .isEqualTo("'" + "x".repeat(SqlLiterals.MAX_LITERAL_LENGTH - 1) + "' /* 2 characters omitted */");
+    }
+
     @Test
     void countsASingleDroppedByteInTheSingular() {
         String literal = SqlLiterals.render(new byte[SqlLiterals.MAX_LITERAL_LENGTH + 1]);

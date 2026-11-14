@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.security.SecurityPostureListener;
+import org.peekaboot.backend.tracing.event.CapturedText;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -203,6 +204,20 @@ class PeekabootLogbackAppenderTest {
         logger.info((String) null, "x");
 
         assertThat(captured).extracting(LogCapturedEvent::message).containsExactly("", "");
+    }
+
+    @Test
+    @DisplayName("caps an over-long message and says how many characters were dropped")
+    void capsALogMessage() {
+        String message = "x".repeat(CapturedText.MAX_LENGTH + 7);
+
+        logger.info(message);
+
+        assertThat(captured)
+                .singleElement()
+                .satisfies(event -> assertThat(event.message())
+                        .isEqualTo(CapturedText.cap(message))
+                        .endsWith("x... 7 characters omitted"));
     }
 
     @Test

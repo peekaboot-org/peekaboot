@@ -3,6 +3,7 @@ package org.peekaboot.backend.tracing.query;
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationFilter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import net.ttddyy.dsproxy.proxy.ParameterSetOperation;
@@ -17,6 +18,11 @@ import org.slf4j.LoggerFactory;
  * OpenTelemetry query convention tags none, and datasource-micrometer's own
  * {@code jdbc.params[N]} is one comma-joined string that a value containing a comma breaks.
  *
+ * <p>One statement records at most {@link #MAX_PARAMETER_SETS} parameter sets and
+ * {@link #MAX_PARAMETER_CHARACTERS} characters of literals. A batch past either limit keeps its
+ * leading sets and counts the rest as {@link QueryParameterTags#OMITTED_PARAMETER_SETS_TAG}. A
+ * first set past the character limit keeps its leading literals and a comment counting the rest.
+ *
  * <p>A filter rather than a handler: {@code Observation.stop()} runs every filter before any
  * handler's {@code onStop}, which is where the tracing handler copies the key values onto the
  * span and ends it.
@@ -30,6 +36,13 @@ public final class QueryParameterObservationFilter implements ObservationFilter 
      */
     static final int MAX_PARAMETER_SETS = 100;
 
+    /**
+     * The literals of one statement share this many characters. {@link SqlLiterals} bounds one
+     * literal and {@link #MAX_PARAMETER_SETS} the sets of a batch, and neither bounds the
+     * parameters of a set: an IN list of thousands of long strings would put megabytes on one span.
+     */
+    static final int MAX_PARAMETER_CHARACTERS = 16_000;
+
     private static final Logger log = LoggerFactory.getLogger(QueryParameterObservationFilter.class);
 
     @Override
@@ -39,10 +52,7 @@ public final class QueryParameterObservationFilter implements ObservationFilter 
                 List<List<ParameterSetOperation>> batch = query.getQueryInfoList().stream()
                         .flatMap(info -> info.getParametersList().stream())
                         .toList();
-                List<List<String>> parameterSets = batch.stream()
-                        .limit(MAX_PARAMETER_SETS)
-                        .map(QueryParameterObservationFilter::literals)
-                        .toList();
+                List<List<String>> parameterSets = withinTheLimits(batch);
                 if (parameterSets.stream().anyMatch(set -> !set.isEmpty())) {
                     context.addHighCardinalityKeyValue(KeyValue.of(
                             QueryParameterTags.PARAMETERS_TAG, PeekabootJson.MAPPER.writeValueAsString(parameterSets)));
@@ -58,6 +68,46 @@ public final class QueryParameterObservationFilter implements ObservationFilter 
             }
         }
         return context;
+    }
+
+    /**
+     * The leading sets that fit both limits. A first set past the character limit is cut:
+     * dropped whole, it would leave the statement no parameter at all.
+     */
+    private static List<List<String>> withinTheLimits(List<List<ParameterSetOperation>> batch) {
+        List<List<String>> kept = new ArrayList<>();
+        long remaining = MAX_PARAMETER_CHARACTERS;
+        for (List<ParameterSetOperation> operations : batch) {
+            if (kept.size() == MAX_PARAMETER_SETS) {
+                break;
+            }
+            List<String> literals = literals(operations);
+            long length = literals.stream().mapToLong(String::length).sum();
+            if (length > remaining) {
+                if (kept.isEmpty()) {
+                    kept.add(cut(literals));
+                }
+                break;
+            }
+            kept.add(literals);
+            remaining -= length;
+        }
+        return kept;
+    }
+
+    /** The leading literals that fit the character limit, then a comment counting the parameters left out. */
+    private static List<String> cut(List<String> literals) {
+        List<String> kept = new ArrayList<>();
+        long remaining = MAX_PARAMETER_CHARACTERS;
+        for (String literal : literals) {
+            if (literal.length() > remaining) {
+                break;
+            }
+            kept.add(literal);
+            remaining -= literal.length();
+        }
+        kept.add(SqlLiterals.omitted(literals.size() - kept.size(), "parameter"));
+        return kept;
     }
 
     /** Index-bound values only: a name says nothing about which placeholder it fills. */

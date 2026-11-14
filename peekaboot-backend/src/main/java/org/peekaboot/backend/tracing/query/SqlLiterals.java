@@ -6,6 +6,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.HexFormat;
 import org.peekaboot.backend.text.CountFormat;
+import org.peekaboot.backend.tracing.event.CapturedText;
 
 /**
  * A JDBC bind value as the SQL literal a reader would type for it. Display only: the
@@ -39,7 +40,7 @@ final class SqlLiterals {
     }
 
     /** The SQL block comment a cap leaves behind, counting the units it dropped. */
-    private static String omitted(int count, String unit) {
+    static String omitted(int count, String unit) {
         return "/* " + CountFormat.of(count, unit) + " omitted */";
     }
 
@@ -63,8 +64,8 @@ final class SqlLiterals {
         if (text.length() <= MAX_LITERAL_LENGTH) {
             return "'" + text.replace("'", "''") + "'";
         }
-        String kept = text.substring(0, MAX_LITERAL_LENGTH).replace("'", "''");
-        return "'" + kept + "' " + omitted(text.length() - MAX_LITERAL_LENGTH, "character");
+        String kept = CapturedText.head(text, MAX_LITERAL_LENGTH);
+        return "'" + kept.replace("'", "''") + "' " + omitted(text.length() - kept.length(), "character");
     }
 
     /**
