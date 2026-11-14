@@ -14,7 +14,8 @@ public final class CapturedText {
 
     /**
      * How far a cut backs off to end before whitespace, a quote or a comma: past a provider's
-     * token or a URL's credentials. A text with none of them that close keeps its full head.
+     * token or a URL's credentials. A text with none of them that close keeps its full head,
+     * and so does one with an {@code @} between its last quote or comma and the limit.
      */
     static final int MAX_BACK_OFF = 1_024;
 
@@ -28,7 +29,8 @@ public final class CapturedText {
      * characters were left out. Masking runs on read, and a cut inside a credential would leave
      * a head no pattern recognises any more. So the head ends before the last whitespace within
      * {@link #MAX_BACK_OFF} of the limit. A quote or a comma ends it only where that reach holds
-     * no whitespace, since a URL's password may hold either. With none of them it ends at the limit.
+     * no whitespace and no {@code @} follows before the limit, since a URL's password may hold
+     * either and is masked by the {@code @} behind it. Otherwise the head ends at the limit.
      */
     public static String cap(String text) {
         if (text.length() <= MAX_LENGTH) {
@@ -39,11 +41,18 @@ public final class CapturedText {
     }
 
     private static String headOfWholeWords(String text) {
-        int end = lastWithinReach(text, Character::isWhitespace);
-        if (end < 0) {
-            end = lastWithinReach(text, character -> VALUE_DELIMITERS.indexOf(character) >= 0);
+        int whitespace = lastWithinReach(text, Character::isWhitespace);
+        if (whitespace >= 0) {
+            return text.substring(0, whitespace);
         }
-        return end < 0 ? head(text, MAX_LENGTH) : text.substring(0, end);
+        int delimiter = lastWithinReach(text, character -> VALUE_DELIMITERS.indexOf(character) >= 0);
+        boolean endsAValue = delimiter >= 0 && !mayLieInAUrlsCredentials(text, delimiter);
+        return endsAValue ? text.substring(0, delimiter) : head(text, MAX_LENGTH);
+    }
+
+    /** A cut ahead of an {@code @} that the full head would keep costs a URL's password its mask. */
+    private static boolean mayLieInAUrlsCredentials(String text, int delimiter) {
+        return text.lastIndexOf('@', MAX_LENGTH - 1) > delimiter;
     }
 
     private static int lastWithinReach(String text, IntPredicate boundary) {

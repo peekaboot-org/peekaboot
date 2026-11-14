@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class CapturedTextTest {
+
+    private final MaskingEngine masking = new MaskingEngine();
 
     @Test
     void aTextWithinTheCapIsKeptAsItIs() {
@@ -101,5 +104,49 @@ class CapturedTextTest {
                 + "y".repeat(CapturedText.MAX_BACK_OFF);
 
         assertThat(CapturedText.cap(head + "y".repeat(7))).isEqualTo(head + "... 7 characters omitted");
+    }
+
+    /** Cut before the password's delimiter, the head would lose the "@" the password is masked by. */
+    @ParameterizedTest
+    @ValueSource(chars = {'"', '\'', ','})
+    void aUrlWhosePasswordHoldsAQuoteOrCommaKeepsItsFullHead(char delimiter) {
+        String url = "postgres://u:99" + delimiter + "SECRETPASSWORD@db.internal/app?application_name=";
+        String kept = "x".repeat(15_900) + "=" + url + "a".repeat(35);
+
+        String capped = CapturedText.cap(kept + "a".repeat(165));
+
+        assertThat(capped).isEqualTo(kept + "... 165 characters omitted");
+        assertThat(masking.maskValue(capped))
+                .contains("=postgres://******@db.internal/app")
+                .doesNotContain("SECRETPASSWORD");
+    }
+
+    @Test
+    void anOracleThinUrlWhosePasswordHoldsACommaKeepsItsFullHead() {
+        String kept = "x".repeat(15_900) + "=jdbc:oracle:thin:scott/ti,ger@//db.internal:1521/" + "a".repeat(50);
+
+        String capped = CapturedText.cap(kept + "a".repeat(165));
+
+        assertThat(capped).isEqualTo(kept + "... 165 characters omitted");
+        assertThat(masking.maskValue(capped)).contains("=jdbc:oracle:thin:scott/******@//db.internal:1521/");
+    }
+
+    /** The "@" is the first character past the cap, so no head holds it and the shorter one shows less. */
+    @Test
+    void aUrlPasswordThatEndsAtTheCapIsCutBeforeItsComma() {
+        String kept = "x".repeat(15_969) + "=postgres://u:99";
+
+        assertThat(CapturedText.cap(kept + ",SECRETPASSWORD@db.internal/app"))
+                .isEqualTo(kept + "... 31 characters omitted");
+    }
+
+    /** The e-mail address's "@" lies ahead of the last quote, so it keeps no token's head in. */
+    @Test
+    void aCredentialAfterAnEmailAddressInCompactJsonNeverShowsItsHead() {
+        String token = "ghp" + "_16C7e42F292c6912E7710c838347Ae178B4a";
+        String kept = "{\"payload\":\"" + "x".repeat(15_934) + "\",\"email\":\"dev@example.org\",\"apiKey\":";
+
+        assertThat(CapturedText.cap(kept + "\"" + token + "\",\"next\":1}"))
+                .isEqualTo(kept + "... 52 characters omitted");
     }
 }
