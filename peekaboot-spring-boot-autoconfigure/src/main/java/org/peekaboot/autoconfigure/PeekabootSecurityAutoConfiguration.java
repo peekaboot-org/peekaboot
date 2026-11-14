@@ -35,11 +35,13 @@ import org.springframework.util.StringUtils;
 
 /**
  * The guard's credentials, the filter that enforces them and the startup report that explains
- * both.
+ * both. {@link DashboardAccessConfiguration}, imported here, asks for them again at Peekaboot's
+ * handlers, and on a local run without the guard admits this machine only.
  *
  * <p>The posture listener is registered whenever Peekaboot is enabled, not only while the guard
  * is armed: an operator who switched it off on a deployment launch still gets told their own
- * security must cover {@code /peekaboot/**}.
+ * security must cover {@code /peekaboot/**}, and a developer who opened a local run with
+ * {@code peekaboot.remote-access.enabled} that anyone who reaches the port reads the dashboard.
  */
 @AutoConfiguration(after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class})
 @ConditionalOnPeekabootServlet

@@ -36,9 +36,10 @@ import org.springframework.core.NativeDetector;
  * {@code restartedMain} thread under DevTools' {@code RestartClassLoader}
  * before the environment is built. DevTools only reaches that relaunch after
  * its own gate ({@code RestartApplicationListener}, {@code DefaultRestartInitializer})
- * has required a thread named {@code main}, an {@code AppClassLoader} and a
- * stack free of the same frames this class skips - so the restart branch does
- * not repeat those three. Its class-path signal is not equivalent, though:
+ * has required a thread named {@code main}, a loader whose class name contains
+ * {@code AppClassLoader} and a stack free of the same frames this class skips -
+ * so the restart branch does not repeat those three. Its class-path signal is
+ * not equivalent, though:
  * DevTools' {@code ChangeableUrls} treats every directory URL on the class
  * path as reloadable, not just a build tool's output directory, so it says yes
  * for a Jib image or an extracted layout too - the exact shapes the build-output

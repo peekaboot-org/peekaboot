@@ -21,6 +21,10 @@ import java.io.IOException;
  * {@code DashboardAuthenticationFilter} bean does not back it off and is auto-registered by Boot
  * at {@code /*} on top of it, putting HTTP Basic in front of the whole application instead of
  * standing the guard down.
+ *
+ * <p>The filter covers the dashboard's own path. {@link DashboardAccessInterceptor} asks
+ * {@link #access()} again at each of Peekaboot's handlers, wherever the host serves them. With
+ * a registration of the application's own, it asks that registration's filter.
  */
 public class DashboardAuthenticationFilter implements Filter {
 
