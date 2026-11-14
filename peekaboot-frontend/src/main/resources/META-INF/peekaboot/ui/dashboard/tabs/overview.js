@@ -8,7 +8,7 @@ import {el, button} from '../../shared/dom.js';
 import {keyedChildren, renderIfChanged} from '../../shared/keyed.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
-import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatNumber, formatPlainValue, formatTileValue} from '../../shared/format.js';
+import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatMetricValue, formatNumber, formatPlainValue, formatTileValue} from '../../shared/format.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'overview';
@@ -35,7 +35,7 @@ export function create(container) {
         renderDataSourcesInfo(container, dataSources, nextParamsId);
         renderMemoryInfo(container, runtime, formats);
         renderHealthBanner(container, health, locale);
-        renderHealthComponents(container, health?.components);
+        renderHealthComponents(container, health?.components, locale);
     }
 
     return {show: render, update: render, hide: tileRow.stop};
@@ -204,8 +204,8 @@ function renderMachineInfo(container, runtime, formats) {
     fillCard(container, '#machine-info', facts, 'No machine info available', formats, body => {
         if (machine.cpuCount) body.appendChild(kvRow('CPU Cores', cpuCoresValue(machine, formats.locale)));
         if (machine.cpuModel) body.appendChild(kvRow('CPU Model', machine.cpuModel));
-        if (machine.totalMemory) body.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
-        if (heapMax) body.appendChild(kvRow('Max Heap', formatBytes(heapMax)));
+        if (machine.totalMemory) body.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory, formats)));
+        if (heapMax) body.appendChild(kvRow('Max Heap', formatBytes(heapMax, formats)));
         body.appendChild(kvRow('Container', machine.container || 'none'));
 
         renderNetworkAddresses(body, machine.networkAddresses ?? [], previousFamily);
@@ -362,18 +362,18 @@ function renderMemoryInfo(container, runtime, formats) {
         if (memory) {
             const heapPercent = memory.heapUsedPercent;
             body.appendChild(usageSection('Heap',
-                `${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapMax)} (${heapPercent.toFixed(1)}%)`,
+                `${formatBytes(memory.heapUsed, formats)} / ${formatBytes(memory.heapMax, formats)} (${formatMetricValue(heapPercent, 'percent', formats)})`,
                 heapPercent));
 
             if (memory.nonHeapUsed) {
-                body.appendChild(kvRow('Non-Heap', formatBytes(memory.nonHeapUsed), {tight: true}));
+                body.appendChild(kvRow('Non-Heap', formatBytes(memory.nonHeapUsed, formats), {tight: true}));
             }
         }
 
         storage.forEach(s => {
             const used = s.total - s.free;
             body.appendChild(usageSection(s.path,
-                `${formatBytes(used)} used / ${formatBytes(s.total)} total (${formatBytes(s.free)} free)`,
+                `${formatBytes(used, formats)} used / ${formatBytes(s.total, formats)} total (${formatBytes(s.free, formats)} free)`,
                 s.usedPercent));
         });
     });
@@ -427,7 +427,7 @@ function renderHealthBanner(container, health, locale) {
         : '';
 }
 
-function renderHealthComponents(container, components) {
+function renderHealthComponents(container, components, locale) {
     const grid = container.querySelector('#components-grid');
     grid.innerHTML = '';
 
@@ -443,7 +443,7 @@ function renderHealthComponents(container, components) {
         const detailsText = Object.entries(component.details || {})
             .filter(([, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
             .map(([k, v]) => {
-                if (k === 'total' || k === 'free' || k === 'threshold') return `${k}: ${formatBytes(v)}`;
+                if (k === 'total' || k === 'free' || k === 'threshold') return `${k}: ${formatBytes(v, {locale})}`;
                 return `${k}: ${formatDetailValue(v)}`;
             })
             .join('\n');

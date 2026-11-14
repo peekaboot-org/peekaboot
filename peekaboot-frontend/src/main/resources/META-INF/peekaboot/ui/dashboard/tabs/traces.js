@@ -405,7 +405,7 @@ function renderTraceItem(trace, context) {
     // its siblings, not its children: the stats carry the traceId's copy control, and a
     // button cannot contain interactive content (see ToolbarShell for the same shape).
     const openBtn = button({className: 'pk-unbutton pk-trace-item__open'},
-        renderMainLine(trace, actionType, hasErrors, rootOperation));
+        renderMainLine(trace, actionType, hasErrors, rootOperation, context.locale));
 
     const header = el('div', {className: 'pk-trace-item__header'},
         el('div', {className: 'pk-trace-item__body'}, openBtn, renderStats(trace, context)),
@@ -441,7 +441,7 @@ function forwardRowClicks(row, openBtn) {
     });
 }
 
-function renderMainLine(trace, actionType, hasErrors, rootOperation) {
+function renderMainLine(trace, actionType, hasErrors, rootOperation, locale) {
     const actionLabel = rootActionLabel(actionType);
     const path = rootOperation
         ? el('span', {className: 'pk-trace-item__path', text: rootOperation, title: rootOperation})
@@ -463,7 +463,7 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
             attrs: {role: 'img', 'aria-label': actionLabel}
         }),
         path,
-        el('span', {className: 'pk-trace-item__duration', text: formatDurationMs(trace.durationMs)}),
+        el('span', {className: 'pk-trace-item__duration', text: formatDurationMs(trace.durationMs, {locale})}),
         verdict,
         // the overlay header's wording, so the row and the detail agree
         trace.outcome === 'INTERRUPTED' ? interruptedBadge() : null,

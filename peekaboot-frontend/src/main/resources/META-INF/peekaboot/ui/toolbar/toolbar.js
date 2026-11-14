@@ -18,7 +18,8 @@
  * The bar never fetches /api/features: the blob's `features` carries the effective
  * thresholds under the same names, for the bar's query total and the overlay it opens. The
  * trace's own duration is coloured by its SLOW reason, as the overlay header does. Its
- * counts group in the dashboard's chosen locale, read through storage.js's readLocaleSetting().
+ * counts and durations are written in the dashboard's chosen locale, read through
+ * storage.js's readLocaleSetting().
  */
 import {createClient} from '../shared/api.js';
 import {badge} from '../shared/components.js';
@@ -111,8 +112,9 @@ function initToolbar(host, data) {
         }
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
-        const duration = durationStat(clock, trace.summary.durationMs, isSlowTrace(trace.summary) ? 'slow' : '');
-        metricsEl.replaceChildren(duration, ...traceStatParts(trace.summary, {features: data.features, locale: readLocaleSetting()}));
+        const locale = readLocaleSetting();
+        const duration = durationStat(clock, trace.summary.durationMs, isSlowTrace(trace.summary) ? 'slow' : '', {locale});
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace.summary, {features: data.features, locale}));
     }
 
     // Nothing ever arrived: replace "loading" with the stat line's own words, its counts

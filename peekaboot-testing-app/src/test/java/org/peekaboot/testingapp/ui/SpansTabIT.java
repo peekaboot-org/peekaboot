@@ -1425,6 +1425,34 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .isEqualTo(List.of("300ms · 50%", "300ms · 50% · self 120ms", "300ms · 50%"));
     }
 
+    /** From a second up a duration is a decimal figure: the axis, a row's duration and self time, a hotspot. */
+    @Test
+    void theSpansTabWritesItsDurationsInTheDashboardLocale() {
+        Object texts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {
+                    summary: {durationMs: 1500, startTime: '1970-01-01T00:00:00Z',
+                        hotspots: [{spanId: 'a', name: 'GET /slow', selfMs: 1250}]},
+                    data: {rootSpan: {spanId: 'a', name: 'GET /slow', durationMs: 1500, selfMs: 1250,
+                        children: [{spanId: 'b', name: 'work', durationMs: 250}]}}
+                }, {locale: 'de-DE', goToSpan: () => {}});
+                const textsOf = selector => Array.from(container.querySelectorAll(selector), el => el.textContent);
+                return {
+                    ticks: textsOf('.pk-gantt-header__timeline span'),
+                    durations: textsOf('.pk-gantt-duration'),
+                    hotspots: textsOf('.pk-gantt-hotspot__self')
+                };
+            })()
+            """);
+
+        assertThat(texts)
+                .isEqualTo(Map.of(
+                        "ticks", List.of("0s", "0,38s", "0,75s", "1,13s", "1,50s"),
+                        "durations", List.of("1,50s · 100% · self 1,25s", "250ms · 17%"),
+                        "hotspots", List.of("1,25s")));
+    }
+
     /**
      * A duration colour carries only issues in milliseconds, so every other issue gets a badge on
      * its row, a type the frontend has never heard of included. A type gets one badge, titled with

@@ -150,4 +150,27 @@ class FlywayTabIT extends PlaywrightTestBase {
 
         assertThat((List<String>) installed).hasSize(3).doesNotHaveDuplicates();
     }
+
+    /** From a second up an execution time is a decimal figure, so a locale switch rewrites it. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aMigrationsExecutionTimeIsWrittenInTheDashboardLocale() {
+        Object executionTimes = importModule("dashboard/tabs/flyway.js", """
+            (() => {
+                const container = document.createElement('div');
+                container.innerHTML = '<div id="flyway-timeline"></div>';
+                const tab = m.create(container);
+                const executionTimeFor = display => {
+                    tab.show({flyway: {migrations: [{version: '1', description: 'init',
+                        script: 'V1__init.sql', type: 'SQL', executionTimeMs: 1500,
+                        installedOn: '2026-01-15T12:00:00Z', state: 'SUCCESS'}]}}, display);
+                    return container.querySelector('tbody tr td:nth-child(5)').textContent;
+                };
+                return [executionTimeFor({locale: 'en-US', timeZone: 'UTC'}),
+                    executionTimeFor({locale: 'de-DE', timeZone: 'UTC'})];
+            })()
+            """);
+
+        assertThat((List<String>) executionTimes).containsExactly("1.50s", "1,50s");
+    }
 }

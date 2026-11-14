@@ -37,7 +37,7 @@ function renderRow(migration, {locale, timeZone}) {
         textCell(migration.description, 'pk-flyway-row__description'),
         textCell(migration.script, 'pk-table__mono pk-flyway-row__script'),
         textCell(migration.type, 'pk-table__shrink'),
-        durationCell(migration.executionTimeMs),
+        durationCell(migration.executionTimeMs, locale),
         textCell(formatDateTime(migration.installedOn, {locale, timeZone}), 'pk-table__shrink'),
         cell({className: 'pk-table__shrink'}, badge(migration.state, migrationStateVariant(migration.state))));
 }
@@ -51,6 +51,6 @@ function versionLabel(version) {
  * Uncoloured on purpose: the span thresholds describe request spans, and a migration
  * that takes seconds is doing its job, not misbehaving.
  */
-function durationCell(executionTimeMs) {
-    return cell({className: 'pk-table__num pk-table__shrink'}, executionTimeMs == null ? '' : formatDurationMs(executionTimeMs));
+function durationCell(executionTimeMs, locale) {
+    return cell({className: 'pk-table__num pk-table__shrink'}, executionTimeMs == null ? '' : formatDurationMs(executionTimeMs, {locale}));
 }

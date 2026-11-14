@@ -223,4 +223,20 @@ class QueriesTabIT extends TraceOverlayTestBase {
 
         assertThat(labels).isEqualTo(List.of("1. POSTGRESQL · orders-db", "2. H2", "3. INVENTORY-DB", "4. H2"));
     }
+
+    /** From a second up a query's duration is a decimal figure, so it takes the dashboard's decimal mark. */
+    @Test
+    void queriesTabWritesAQuerysDurationInTheDashboardLocale() {
+        Object duration = importModule("trace-detail/tabs/queries.js", """
+            (() => {
+                const statement = {text: 'SELECT 1', formatted: null, parameters: []};
+                const container = document.createElement('div');
+                m.render(container, {data: {queries: [{durationMs: 1500, dbSystem: 'h2', spanId: 's1', statement}]}},
+                    {locale: 'de-DE'});
+                return container.querySelector('.pk-query__duration').textContent;
+            })()
+            """);
+
+        assertThat(duration).isEqualTo("1,50s");
+    }
 }

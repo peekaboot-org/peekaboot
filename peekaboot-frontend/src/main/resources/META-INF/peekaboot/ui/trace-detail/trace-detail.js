@@ -231,7 +231,7 @@ function render(content, trace, urlState, display) {
         className: 'pk-overlay',
         attrs: {role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pk-overlay-title', tabindex: '-1'}
     }, el('div', {className: 'pk-overlay__container'},
-        header(trace, spanId => goToSpan(spanId)),
+        header(trace, spanId => goToSpan(spanId), display.locale),
         el('div', {className: 'pk-tabs'}),
         // In the tab order: it scrolls, and a tab such as Request has no control for the keyboard to scroll it by.
         el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content', tabindex: '0'}})));
@@ -249,7 +249,7 @@ function render(content, trace, urlState, display) {
     container.focus();
 }
 
-function header(trace, goToSpan) {
+function header(trace, goToSpan, locale) {
     const {summary, data} = trace;
     const rootSpan = data.rootSpan || {};
     const httpExchange = data.httpExchange || {};
@@ -275,7 +275,7 @@ function header(trace, goToSpan) {
     const meta = el('div', {className: 'pk-overlay__meta'},
         el('span', {
             className: 'pk-overlay__duration' + (slow ? ` ${severityClass('slow')}` : ''),
-            text: formatDurationMs(summary.durationMs)
+            text: formatDurationMs(summary.durationMs, {locale})
         }),
         badge(statusLabel(status), statusVariant(status)),
         completionBadge(summary),

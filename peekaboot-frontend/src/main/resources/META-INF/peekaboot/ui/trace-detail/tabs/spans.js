@@ -41,12 +41,12 @@ export function render(container, trace, context = {}) {
     // the 1 keeps a zero-length trace from dividing by zero in every position below
     const totalDuration = (scopedRoot ? subtreeWindowMs(scopedRoot) : trace.summary.durationMs) || 1;
     const traceStart = startMs(scopedRoot || trace.summary);
-    const ticks = formatTimelineTicks(totalDuration);
+    const ticks = formatTimelineTicks(totalDuration, {locale: context.locale});
 
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
     const allDetailsToggle = button({className: 'pk-btn pk-btn--small pk-gantt-all-details', text: 'Show all details'});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
-        hotspotList(trace.summary.hotspots, context.goToSpan),
+        hotspotList(trace.summary.hotspots, context.goToSpan, context.locale),
         el('div', {className: 'pk-gantt-toolbar'}, kindLegend(tops), allDetailsToggle),
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
@@ -224,18 +224,18 @@ function kindDot() {
 }
 
 /** The spans with the most self time, largest first, as the summary names them; nothing without them. */
-function hotspotList(hotspots, goToSpan) {
+function hotspotList(hotspots, goToSpan, locale) {
     if (!hotspots?.length) return null;
     return el('div', {className: 'pk-gantt-hotspots'},
         el('span', {className: 'pk-label', text: 'Most self time'}),
         el('ol', {className: 'pk-gantt-hotspots__list'},
-            ...hotspots.map(hotspot => el('li', {}, hotspotButton(hotspot, goToSpan)))));
+            ...hotspots.map(hotspot => el('li', {}, hotspotButton(hotspot, goToSpan, locale)))));
 }
 
-function hotspotButton(hotspot, goToSpan) {
+function hotspotButton(hotspot, goToSpan, locale) {
     const jump = button({className: 'pk-unbutton pk-gantt-hotspot', title: hotspot.name, attrs: {'data-span-id': hotspot.spanId}},
         el('span', {className: 'pk-gantt-hotspot__name', text: hotspot.name}),
-        el('span', {className: 'pk-gantt-hotspot__self', text: formatDurationMs(hotspot.selfMs)}));
+        el('span', {className: 'pk-gantt-hotspot__self', text: formatDurationMs(hotspot.selfMs, {locale})}));
     // fresh elements on every render, so per-element listeners cannot pile up
     jump.addEventListener('click', () => goToSpan(hotspot.spanId));
     return jump;
@@ -261,7 +261,7 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration, di
     row.append(
         nameCell(span, kind, attrsId, queryId, logsId, hasError, display),
         track(span, traceStart, totalDuration, hasError),
-        durationCell(span, totalDuration));
+        durationCell(span, totalDuration, display.locale));
     entry.append(row);
     PANEL_BUILDERS.set(entry, {
         [attrsId]: () => attrsPanel(span, kind, attrsId),
@@ -367,13 +367,13 @@ function eventMarker(event, traceStart, totalDuration) {
     return marker;
 }
 
-function durationCell(span, totalDuration) {
+function durationCell(span, totalDuration, locale) {
     // the backend's own verdict on this span's latency, where it raised an issue
     const severity = issueSeverity(span.issues);
 
     return el('span', {
         className: 'pk-gantt-duration' + (severity ? ` ${severityClass(severity)}` : ''),
-        text: durationText(span, totalDuration)
+        text: durationText(span, totalDuration, {locale})
     });
 }
 
@@ -381,11 +381,11 @@ function durationCell(span, totalDuration) {
  * A span's duration, its share of the chart and, where its children covered part of it, its self
  * time. SLOW and VERY_SLOW judge the self time, so the colour follows it.
  */
-export function durationText(span, totalDuration) {
+export function durationText(span, totalDuration, {locale} = {}) {
     const pct = Math.min(100, Math.round(((span.durationMs || 0) / totalDuration) * 100));
-    const text = `${formatDurationMs(span.durationMs)} · ${pct}%`;
+    const text = `${formatDurationMs(span.durationMs, {locale})} · ${pct}%`;
     return span.selfMs != null && span.selfMs < (span.durationMs || 0)
-        ? `${text} · self ${formatDurationMs(span.selfMs)}`
+        ? `${text} · self ${formatDurationMs(span.selfMs, {locale})}`
         : text;
 }
 

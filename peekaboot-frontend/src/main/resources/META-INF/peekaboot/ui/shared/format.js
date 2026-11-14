@@ -18,9 +18,21 @@ function isAmount(value) {
     return Number.isFinite(value) && value >= 0;
 }
 
-/** toFixed's rounding as a number: the figure a unit is chosen by is then the figure shown. */
+/**
+ * toFixed's rounding as a number. Intl rounds 59.995 up where toFixed rounds it down, and
+ * the figure a unit is chosen by has to be the figure shown.
+ */
 function rounded(value, decimals) {
     return Number(value.toFixed(decimals));
+}
+
+/** `value` with `decimals` decimals behind `locale`'s decimal mark, ungrouped: a unit follows it. */
+function formatDecimal(value, decimals, locale) {
+    return rounded(value, decimals).toLocaleString(locale, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+        useGrouping: false
+    });
 }
 
 /**
@@ -40,11 +52,11 @@ function onLadder(value, ladder, decimalsOf = (amount, step) => step.decimals) {
     }
 }
 
-export function formatDurationMs(ms) {
+export function formatDurationMs(ms, {locale} = {}) {
     if (!isAmount(ms)) return '-';
     if (ms < 1) return '<1ms';
     const {unit, amount, decimals} = onLadder(ms, DURATION_UNITS);
-    return amount.toFixed(decimals) + unit;
+    return formatDecimal(amount, decimals, locale) + unit;
 }
 
 /**
@@ -52,12 +64,12 @@ export function formatDurationMs(ms) {
  * unit formatDurationMs would give totalMs, with as many decimals as keep neighbours apart:
  * rounding each quarter on its own turns a 3ms trace's 2.25ms into "2ms", next to 1.5ms's.
  */
-export function formatTimelineTicks(totalMs) {
+export function formatTimelineTicks(totalMs, {locale} = {}) {
     const {unit, size, decimals: minDecimals} = onLadder(totalMs, DURATION_UNITS);
     const step = totalMs / size / 4;
     let decimals = minDecimals;
     while (step > 0 && step < 10 ** -decimals) decimals++;
-    return [0, 1, 2, 3, 4].map(quarter => (quarter === 0 ? '0' : (step * quarter).toFixed(decimals)) + unit);
+    return [0, 1, 2, 3, 4].map(quarter => (quarter === 0 ? '0' : formatDecimal(step * quarter, decimals, locale)) + unit);
 }
 
 /**
@@ -104,11 +116,11 @@ function sizeDecimals(amount) {
     return 0;
 }
 
-export function formatBytes(bytes) {
+export function formatBytes(bytes, {locale} = {}) {
     if (!isAmount(bytes)) return '-';
     if (bytes === 0) return '0 B';
     const {unit, amount, decimals} = onLadder(bytes, BYTE_UNITS, sizeDecimals);
-    return amount.toFixed(decimals) + ' ' + unit;
+    return formatDecimal(amount, decimals, locale) + ' ' + unit;
 }
 
 /** Formats API host objects ({hostname, port}) as "hostname:port, ...". */
@@ -163,10 +175,9 @@ export function formatDateTimeWith(value, options, {locale, timeZone} = {}) {
     }
 }
 
-/** value.toPrecision(digits), stripped back to a plain number string (no trailing zeros/exponent for typical magnitudes). */
-function toSignificant(value, digits) {
-    if (value === 0) return '0';
-    return Number(value.toPrecision(digits)).toString();
+/** `value` to `digits` significant digits in `locale`, ungrouped, with no trailing zeros and no exponent. */
+function toSignificant(value, digits, locale) {
+    return value.toLocaleString(locale, {maximumSignificantDigits: digits, useGrouping: false});
 }
 
 function formatMetricCount(value, locale) {
@@ -217,18 +228,18 @@ export const TILE_FORMATS = Object.freeze(['duration', 'datetime', 'bytes', 'cou
  * Formats one insights series/measurement value per its configured unit (see
  * InsightsConfigResponse.Series/Panel.unit): bytes/millis reuse the existing
  * byte/duration formatters, percent arrives as 0..100 and gains its sign, persec/
- * bytes-persec append a rate suffix, count falls back to formatMetricCount(), grouped in
- * `locale`.
+ * bytes-persec append a rate suffix, count falls back to formatMetricCount(). Every figure
+ * is written in `locale`, and only a count is grouped.
  */
 export function formatMetricValue(value, unit, {locale} = {}) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
     switch (unit) {
-        case 'bytes': return formatBytes(value);
-        case 'percent': return value.toFixed(1) + '%';
-        case 'millis': return formatDurationMs(value);
-        case 'persec': return toSignificant(value, 2) + '/s';
-        case 'bytes-persec': return formatBytes(value) + '/s';
+        case 'bytes': return formatBytes(value, {locale});
+        case 'percent': return formatDecimal(value, 1, locale) + '%';
+        case 'millis': return formatDurationMs(value, {locale});
+        case 'persec': return toSignificant(value, 2, locale) + '/s';
+        case 'bytes-persec': return formatBytes(value, {locale}) + '/s';
         case 'count':
         default: return formatMetricCount(value, locale);
     }
@@ -242,11 +253,11 @@ export function formatMetricValue(value, unit, {locale} = {}) {
 export function formatMeasurementValue(value, baseUnit, {locale} = {}) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
-    if (baseUnit === 'bytes') return formatBytes(value);
+    if (baseUnit === 'bytes') return formatBytes(value, {locale});
 
     if (baseUnit === 'seconds') {
         const {unit, amount, decimals} = onLadder(Math.abs(value) * 1000000, TIMER_UNITS);
-        return `${value < 0 ? '-' : ''}${amount.toFixed(decimals)} ${unit}`;
+        return `${value < 0 ? '-' : ''}${formatDecimal(amount, decimals, locale)} ${unit}`;
     }
 
     if (Math.abs(value) >= 1000) return value.toLocaleString(locale, {maximumFractionDigits: 2});

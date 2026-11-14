@@ -76,12 +76,12 @@ class TracesTabIT extends PlaywrightTestBase {
     /** A duration as format.js renders it: a number and its unit ("850ms", "1.23s", "1.50m"). */
     private static final Pattern RENDERED_DURATION = Pattern.compile("([0-9.]+)(ms|s|m)$");
 
-    /** The traces {@link #storePagingProbes} wrote, which leave the shared store with the test. */
-    private final List<String> pagingProbeTraceIds = new ArrayList<>();
+    /** The traces a test wrote for itself alone, which leave the shared store with the test. */
+    private final List<String> probeTraceIds = new ArrayList<>();
 
     @AfterEach
-    void discardPagingProbes() {
-        pagingProbeTraceIds.forEach(traceStore::discard);
+    void discardProbes() {
+        probeTraceIds.forEach(traceStore::discard);
     }
 
     /**
@@ -101,7 +101,7 @@ class TracesTabIT extends PlaywrightTestBase {
                     .tag("db.system", "redis")
                     .tag("db.operation", "PING")
                     .build());
-            pagingProbeTraceIds.add(traceId);
+            probeTraceIds.add(traceId);
         }
         return "#traces?op=" + probe + "&excluded=none";
     }
@@ -884,5 +884,34 @@ class TracesTabIT extends PlaywrightTestBase {
         dashboard.openListedTrace(traceId);
 
         assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn")).isEqualTo("TRUNCATED");
+    }
+
+    /**
+     * From a second up a duration is a decimal figure. The row writes it in the dashboard's
+     * locale, a switch rewrites it, and the header of the overlay opened from the row agrees.
+     * Written straight to the store, as Redis upkeep like the paging probes: no demo endpoint
+     * takes exactly a second and a half.
+     */
+    @Test
+    void aTracesDurationIsWrittenInTheDashboardLocale() {
+        String traceId = "duration-probe-" + UUID.randomUUID();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named(traceId)
+                .kind(Span.Kind.CLIENT)
+                .at(0, 1500)
+                .tag("db.system", "redis")
+                .tag("db.operation", "PING")
+                .build());
+        probeTraceIds.add(traceId);
+        openDashboard("#traces?op=" + traceId + "&excluded=none", Dashboard.traceItem(traceId));
+        Locator duration = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__duration");
+        assertThat(duration.textContent()).isEqualTo("1.50s");
+
+        page.selectOption("#locale-select", "de-DE");
+        page.waitForCondition(() -> !duration.textContent().equals("1.50s"));
+
+        assertThat(duration.textContent()).isEqualTo("1,50s");
+        dashboard.openListedTrace(traceId);
+        assertThat(overlay.text(".pk-overlay__duration")).isEqualTo("1,50s");
     }
 }

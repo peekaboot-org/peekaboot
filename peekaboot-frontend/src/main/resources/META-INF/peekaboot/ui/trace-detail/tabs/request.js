@@ -35,7 +35,7 @@ export function render(container, trace, view = {}) {
     }
 
     container.replaceChildren(...[
-        renderRequestDetails(req, res, trace),
+        renderRequestDetails(req, res, trace, view.locale),
         renderController(req),
         renderParams('Query Parameters', req?.params?.query),
         renderParams('Form Parameters', req?.params?.form),
@@ -44,13 +44,13 @@ export function render(container, trace, view = {}) {
     ].filter(Boolean));
 }
 
-function renderRequestDetails(req, res, trace) {
+function renderRequestDetails(req, res, trace, locale) {
     const rows = [
         tableRow('Method', req?.method || '-'),
         tableRow('Path', req?.path || '-'),
         ...(req?.query ? [tableRow('Query String', req.query)] : []),
         tableRow('Status', badge(statusLabel(res?.status), statusVariant(res?.status))),
-        tableRow('Duration', formatDurationMs(trace.summary.durationMs))
+        tableRow('Duration', formatDurationMs(trace.summary.durationMs, {locale}))
     ];
     return section('Request', kvTable(rows));
 }

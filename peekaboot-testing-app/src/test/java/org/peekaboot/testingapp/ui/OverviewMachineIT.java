@@ -33,10 +33,15 @@ class OverviewMachineIT extends PlaywrightTestBase {
 
     /** Serves every insights answer with its {@code runtime} node changed by {@code rewrite}. */
     private void serveRuntimeRewrittenBy(Consumer<ObjectNode> rewrite) {
+        serveInsightsRewrittenBy(insights -> rewrite.accept((ObjectNode) insights.path("runtime")));
+    }
+
+    /** Serves every insights answer changed by {@code rewrite}. */
+    private void serveInsightsRewrittenBy(Consumer<ObjectNode> rewrite) {
         page.route("**/peekaboot/api/actuator/all/insights**", route -> {
             APIResponse response = route.fetch();
             ObjectNode insights = (ObjectNode) readJson(response.text());
-            rewrite.accept((ObjectNode) insights.path("runtime"));
+            rewrite.accept(insights);
             route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(insights.toString()));
         });
     }
@@ -355,5 +360,61 @@ class OverviewMachineIT extends PlaywrightTestBase {
         assertThat(page.locator(DATASOURCE_PARAMS).first().isVisible())
                 .as("the connection params the reader opened")
                 .isTrue();
+    }
+
+    /**
+     * Sizes and the heap percentage are decimal figures. Served with values that have decimals,
+     * the Machine card, the Memory card and a health component's details write them with the
+     * decimal mark of the locale the reader chose.
+     */
+    @Test
+    void sizesAndTheHeapPercentageAreWrittenInTheChosenLocale() {
+        long kib = 1024L;
+        long mib = kib * kib;
+        long gib = mib * kib;
+        serveInsightsRewrittenBy(insights -> {
+            ObjectNode runtime = (ObjectNode) insights.path("runtime");
+            ((ObjectNode) runtime.path("machine")).put("totalMemory", 1536 * gib);
+            ((ObjectNode) runtime.path("memory"))
+                    .put("heapUsed", 1536 * mib)
+                    .put("heapMax", 12 * gib + 512 * mib)
+                    .put("heapUsedPercent", 37.5)
+                    .put("nonHeapUsed", 1536 * kib);
+            runtime.putArray("storage")
+                    .addObject()
+                    .put("path", "/data")
+                    .put("total", 3 * gib)
+                    .put("free", 1536 * mib)
+                    .put("usedPercent", 50.0);
+            ObjectNode diskSpace = ((ObjectNode) insights.path("health"))
+                    .putArray("components")
+                    .addObject()
+                    .put("name", "diskSpace")
+                    .put("status", "UP");
+            diskSpace
+                    .putObject("details")
+                    .put("total", 3 * gib)
+                    .put("free", 1536 * mib)
+                    .put("threshold", 10 * mib);
+        });
+        openDashboard();
+        page.waitForSelector("#machine-info .pk-kv");
+        assertThat(dashboard.kvValue("#machine-info", "Total Memory")).isEqualTo("1.50 TB");
+
+        page.selectOption("#locale-select", "de-DE");
+        dashboard.awaitKvValue("#machine-info", "Total Memory", "1,50 TB");
+
+        assertThat(List.of(
+                        dashboard.kvValue("#machine-info", "Max Heap"),
+                        dashboard.kvValue("#memory-info", "Heap"),
+                        dashboard.kvValue("#memory-info", "Non-Heap"),
+                        dashboard.kvValue("#memory-info", "/data"),
+                        page.textContent("#components-grid .pk-component-grid__details")))
+                .containsExactly(
+                        "12,5 GB",
+                        "1,50 GB / 12,5 GB (37,5%)",
+                        "1,50 MB",
+                        "1,50 GB used / 3,00 GB total (1,50 GB free)",
+                        "total: 3,00 GB\nfree: 1,50 GB\nthreshold: 10,0 MB");
     }
 }

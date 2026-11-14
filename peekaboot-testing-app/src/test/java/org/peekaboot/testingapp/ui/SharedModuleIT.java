@@ -696,6 +696,18 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat((String) text).contains("1.234 queries").contains("2.345 errors");
     }
 
+    /** The query time is a decimal figure from a second up, so it takes the decimal mark of the locale it is given. */
+    @Test
+    void traceStatPartsWriteTheQueryTimeInTheGivenLocale() {
+        Object texts = evalModule("trace-stats.js", """
+                [m.traceStatParts({counts: {queries: {count: 2, totalDurationMs: 1500}}}, {locale: 'de-DE'})
+                    .map(part => part.textContent).join(' | '),
+                 m.durationStat('load', 1500, '', {locale: 'de-DE'}).textContent]
+                """);
+
+        assertThat(texts).isEqualTo(List.of("2 queries 1,50s", "load 1,50s"));
+    }
+
     @Test
     void statusLabelSpellsOutTheReasonPhrase() {
         assertThat(evalModule("http-status.js", "m.statusLabel(200)")).isEqualTo("200 OK");

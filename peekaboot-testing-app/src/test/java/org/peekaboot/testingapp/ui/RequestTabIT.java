@@ -270,4 +270,19 @@ class RequestTabIT extends PlaywrightTestBase {
         assertThat(page.locator("#pk-request-test-container").textContent())
                 .contains("Request Headers", "content-type", "application/json");
     }
+
+    /** From a second up the duration is a decimal figure, so it takes the decimal mark of the locale the tab is handed. */
+    @Test
+    void theDurationRowIsWrittenInTheDashboardLocale() {
+        renderWithTrace("""
+                {"summary": {"durationMs": 1500}, "data": {"httpExchange": {
+                    "request": {"method": "GET", "path": "/api/users", "headers": {}},
+                    "response": {"status": 200, "headers": {}}
+                }}}
+                """, "{\"locale\": \"de-DE\"}");
+
+        assertThat(page.locator("#pk-request-test-container tr:has(th:text-is('Duration')) td")
+                        .textContent())
+                .isEqualTo("1,50s");
+    }
 }

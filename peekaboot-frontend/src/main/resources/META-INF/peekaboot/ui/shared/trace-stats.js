@@ -23,7 +23,8 @@ export function traceStatParts(summary, {features, locale} = {}) {
         parts.push(durationStat(
                 formatCount(queries.count, 'query', {plural: 'queries', locale}),
                 queries.totalDurationMs,
-                durationSeverity(queries.totalDurationMs, features)));
+                durationSeverity(queries.totalDurationMs, features),
+                {locale}));
     }
     if (logs.count > 0) {
         parts.push(el('span', {className: 'pk-stat', text: formatCount(logs.count, 'log', {locale})}));
@@ -70,9 +71,10 @@ export function slowBadge() {
 
 /**
  * A `.pk-stat`: `lead` (a string or an element, the count or an icon) followed by the
- * duration in monospace, coloured by `severity` (a severity.js suffix, or '').
+ * duration in monospace, written in `locale` and coloured by `severity` (a severity.js
+ * suffix, or '').
  */
-export function durationStat(lead, ms, severity) {
+export function durationStat(lead, ms, severity, {locale} = {}) {
     return el('span', {className: 'pk-stat'}, lead, ' ',
-        el('span', {className: 'pk-stat__duration' + (severity ? ` ${severityClass(severity)}` : ''), text: formatDurationMs(ms)}));
+        el('span', {className: 'pk-stat__duration' + (severity ? ` ${severityClass(severity)}` : ''), text: formatDurationMs(ms, {locale})}));
 }

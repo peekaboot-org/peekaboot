@@ -350,6 +350,29 @@ class ToolbarIT extends PlaywrightTestBase {
     }
 
     /**
+     * A trace of over a second shows a decimal figure. The bar writes it in the dashboard's
+     * stored locale and hands that locale to the overlay it opens. The report is the slow
+     * request of {@link #theBarColoursASlowTracesDuration}.
+     */
+    @Test
+    void theBarAndItsOverlayWriteTheDurationInTheDashboardsStoredLocale() {
+        page.addInitScript("localStorage.setItem('peekaboot-locale', 'de-DE')");
+        CustomerOrder order = OrderFixtures.seedOrder(orderRepository, orderLineRepository, 1L, "WIDGET-SLOW-LOCALE");
+        try {
+            page.navigate(baseUrl + "/swagger-ui/index.html");
+            page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
+            page.evaluate("id => fetch('/api/orders/' + id + '/report')", String.valueOf(order.getId()));
+            toolbar.awaitMetrics("span");
+
+            assertThat(toolbar.text("#pk-metrics .pk-stat__duration")).matches("\\d,\\d{2}s");
+            toolbar.openOverlay();
+            assertThat(overlay.text(".pk-overlay__duration")).matches("\\d,\\d{2}s");
+        } finally {
+            OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
+        }
+    }
+
+    /**
      * The bar lives inside pages Peekaboot does not own, and rem resolves against the
      * host document's root font size - the common html{font-size:62.5%} reset would
      * shrink a rem-scaled bar to 7.5px. The :host block in tokens.css pins the type scale

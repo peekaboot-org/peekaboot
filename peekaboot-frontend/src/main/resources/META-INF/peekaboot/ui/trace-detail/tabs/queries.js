@@ -32,7 +32,7 @@ function queryItem(query, index, view) {
     const meta = el('span', {className: 'pk-query-meta'},
         el('span', {
             className: 'pk-query__duration' + (durationClass ? ` ${severityClass(durationClass)}` : ''),
-            text: formatDurationMs(duration)
+            text: formatDurationMs(duration, {locale: view.locale})
         }),
         durationClass ? slowBadge() : null);
     if (query.rowCount != null) {

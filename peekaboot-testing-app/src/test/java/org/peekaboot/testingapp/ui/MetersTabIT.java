@@ -181,4 +181,24 @@ class MetersTabIT extends PlaywrightTestBase {
         page.waitForSelector("#meters-list .pk-empty");
         assertThat(page.textContent("#meters-list .pk-empty")).startsWith("Failed to load metrics");
     }
+
+    /**
+     * A statistic in seconds is a decimal figure, so it takes the decimal mark of the locale the
+     * reader chose. The process's uptime is one that has been above a second since long before
+     * the test opened the page.
+     */
+    @Test
+    void aStatisticInSecondsIsWrittenInTheChosenLocale() {
+        String group = "#meters-list .pk-group[data-group-key='process.uptime']";
+        openDashboard();
+        dashboard.openTab("meters");
+        page.click(group + " .pk-group__header");
+        Locator uptime = page.locator(group + " .pk-metric__stat-value");
+        assertThat(uptime.textContent()).matches("\\d+\\.\\d{3} s");
+
+        page.selectOption("#locale-select", "de-DE");
+        page.waitForCondition(() -> !uptime.textContent().contains("."));
+
+        assertThat(uptime.textContent()).matches("\\d+,\\d{3} s");
+    }
 }
