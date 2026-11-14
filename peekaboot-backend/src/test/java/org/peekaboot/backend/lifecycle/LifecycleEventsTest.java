@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 class LifecycleEventsTest {
 
     private static LifecycleEventsResponse served(List<LifecycleEvent> events) {
-        LifecycleEventLog log = new LifecycleEventLog(null);
+        LifecycleEventLog log =
+                new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, LifecycleEventLog.RECORD_ON_VIRTUAL_THREAD);
         log.beginLoad();
         events.forEach(log::recordAndPersist);
         return new LifecycleEvents(log).events();

@@ -53,7 +53,8 @@ class LifecycleEventLogTest {
     }
 
     private static LifecycleEventLog loaded(LifecycleEventFile file) {
-        LifecycleEventLog log = new LifecycleEventLog(file);
+        LifecycleEventLog log =
+                new LifecycleEventLog(file, LifecycleEventLog.LOAD_WAIT, LifecycleEventLog.RECORD_ON_VIRTUAL_THREAD);
         log.beginLoad();
         return log;
     }
@@ -89,7 +90,8 @@ class LifecycleEventLogTest {
      */
     @Test
     void theStartIsAppendedWithoutTheCallerWaitingForTheLoad() {
-        LifecycleEventLog log = new LifecycleEventLog(file());
+        LifecycleEventLog log =
+                new LifecycleEventLog(file(), LifecycleEventLog.LOAD_WAIT, LifecycleEventLog.RECORD_ON_VIRTUAL_THREAD);
         log.recordWhenLoaded(start(1_000).build());
 
         log.beginLoad();
@@ -252,7 +254,8 @@ class LifecycleEventLogTest {
         file.write(List.of(start(1_000).build(), start(2_000).build()));
 
         // beginLoad() deliberately not called; the wait is shortened so the test does not sit out the production 5s
-        LifecycleEventLog log = new LifecycleEventLog(file, Duration.ofMillis(50));
+        LifecycleEventLog log =
+                new LifecycleEventLog(file, Duration.ofMillis(50), LifecycleEventLog.RECORD_ON_VIRTUAL_THREAD);
         log.recordAndPersist(LifecycleEvent.stop(3_000, 4711));
 
         assertThat(file.read()).hasSize(2);

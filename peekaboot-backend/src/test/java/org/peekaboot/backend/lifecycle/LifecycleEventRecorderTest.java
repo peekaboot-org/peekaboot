@@ -52,7 +52,8 @@ class LifecycleEventRecorderTest {
     }
 
     private static LifecycleEventLog log() {
-        LifecycleEventLog log = new LifecycleEventLog(null);
+        LifecycleEventLog log =
+                new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, LifecycleEventLog.RECORD_ON_VIRTUAL_THREAD);
         log.beginLoad();
         return log;
     }
@@ -135,7 +136,8 @@ class LifecycleEventRecorderTest {
         git.setProperty("branch", "dev");
         git.setProperty("remote.origin.url", "https://xar:ghp_secrettoken@github.com/acme/orders.git");
         Path path = directory.resolve(LifecycleEventFile.FILE_NAME);
-        LifecycleEventLog log = new LifecycleEventLog(new LifecycleEventFile(path));
+        LifecycleEventLog log = new LifecycleEventLog(
+                new LifecycleEventFile(path), LifecycleEventLog.LOAD_WAIT, LifecycleEventLog.RECORD_ON_VIRTUAL_THREAD);
         log.beginLoad();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         LifecycleEventRecorder recorder = new LifecycleEventRecorder(
@@ -198,7 +200,7 @@ class LifecycleEventRecorderTest {
     void theGitFactsAreRecordedWhenTheReadyListenerRunsBeforeTheStartedOne(@TempDir Path resources) throws IOException {
         Files.writeString(resources.resolve("git.properties"), "git.branch=main\n");
         // records on the calling thread, so the start is in the log once the held listeners have run
-        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        LifecycleEventLog log = new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, Runnable::run);
         log.beginLoad();
         NewestFirstExecutor executor = new NewestFirstExecutor();
         try (URLClassLoader classpath =
@@ -223,7 +225,7 @@ class LifecycleEventRecorderTest {
     @Test
     void anotherContextsReadyIsNotRecorded() {
         // records on the calling thread, so every start the recorder accepted is in the log once onReady returns
-        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        LifecycleEventLog log = new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, Runnable::run);
         log.beginLoad();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         LifecycleEventRecorder recorder =
@@ -238,7 +240,7 @@ class LifecycleEventRecorderTest {
     @Test
     void aClosingContextIsRecordedAsAStopAtTheClocksInstant() {
         // records on the calling thread, so the start is in the log before the context closes
-        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        LifecycleEventLog log = new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, Runnable::run);
         log.beginLoad();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         Clock clock = Clock.fixed(Instant.parse("2026-09-11T08:00:00Z"), ZoneOffset.UTC);
@@ -270,7 +272,7 @@ class LifecycleEventRecorderTest {
     /** An async multicaster would run the close listener after the context destroyed it, or after the JVM exited. */
     @Test
     void theStopIsRecordedBeforeTheContextHasClosed() {
-        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        LifecycleEventLog log = new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, Runnable::run);
         log.beginLoad();
         NewestFirstExecutor executor = new NewestFirstExecutor();
         AnnotationConfigApplicationContext context = asyncContext(executor, log);
@@ -292,7 +294,7 @@ class LifecycleEventRecorderTest {
     @Test
     void anotherContextsCloseIsNotRecorded() {
         // records on the calling thread, so the start that lets a stop through is in the log first
-        LifecycleEventLog log = new LifecycleEventLog(null, Runnable::run);
+        LifecycleEventLog log = new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, Runnable::run);
         log.beginLoad();
         ConfigurableApplicationContext context = mock(ConfigurableApplicationContext.class);
         LifecycleEventRecorder recorder =

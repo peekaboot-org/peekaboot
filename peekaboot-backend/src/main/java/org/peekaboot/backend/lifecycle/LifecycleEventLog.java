@@ -30,8 +30,8 @@ public final class LifecycleEventLog {
     private static final Logger log = LoggerFactory.getLogger(LifecycleEventLog.class);
 
     public static final int MAX_EVENTS = 1000;
-    private static final Duration LOAD_WAIT = Duration.ofSeconds(5);
-    private static final Executor RECORD_ON_VIRTUAL_THREAD =
+    static final Duration LOAD_WAIT = Duration.ofSeconds(5);
+    static final Executor RECORD_ON_VIRTUAL_THREAD =
             append -> Thread.ofVirtual().name("peekaboot-lifecycle-record").start(append);
 
     private final LifecycleEventFile file;
@@ -41,20 +41,10 @@ public final class LifecycleEventLog {
     private final BackgroundLoad historyLoad = new BackgroundLoad();
     private final WriteOutage writeOutage = new WriteOutage();
 
-    LifecycleEventLog(LifecycleEventFile file) {
-        this(file, LOAD_WAIT);
-    }
-
-    /** {@code loadWait} bounds how long a stop or a reader waits for the history; tests shorten it. */
-    LifecycleEventLog(LifecycleEventFile file, Duration loadWait) {
-        this(file, loadWait, RECORD_ON_VIRTUAL_THREAD);
-    }
-
-    /** {@code recordWhenLoadedExecutor} runs {@link #recordWhenLoaded}'s append; tests run it inline. */
-    LifecycleEventLog(LifecycleEventFile file, Executor recordWhenLoadedExecutor) {
-        this(file, LOAD_WAIT, recordWhenLoadedExecutor);
-    }
-
+    /**
+     * {@code loadWait} bounds how long a stop or a reader waits for the history; tests shorten it.
+     * {@code recordWhenLoadedExecutor} runs {@link #recordWhenLoaded}'s append; tests run it inline.
+     */
     LifecycleEventLog(LifecycleEventFile file, Duration loadWait, Executor recordWhenLoadedExecutor) {
         this.file = file;
         this.loadWait = loadWait;
@@ -63,9 +53,12 @@ public final class LifecycleEventLog {
 
     /** The log for {@code storage}: backed by its lifecycle file, or in memory alone while storage is off. */
     public static LifecycleEventLog create(StorageDirectory storage) {
-        return new LifecycleEventLog(storage.file(LifecycleEventFile.FILE_NAME)
-                .map(LifecycleEventFile::new)
-                .orElse(null));
+        return new LifecycleEventLog(
+                storage.file(LifecycleEventFile.FILE_NAME)
+                        .map(LifecycleEventFile::new)
+                        .orElse(null),
+                LOAD_WAIT,
+                RECORD_ON_VIRTUAL_THREAD);
     }
 
     /** Submits the read; returns immediately. Without a file the log is loaded by definition. */

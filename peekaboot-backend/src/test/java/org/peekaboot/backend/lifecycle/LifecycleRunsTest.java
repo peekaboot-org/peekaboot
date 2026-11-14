@@ -26,7 +26,8 @@ class LifecycleRunsTest {
     }
 
     private static LifecycleRunsResponse runsFor(List<LifecycleEvent> events, long nowEpochMs, RunningProcess process) {
-        LifecycleEventLog log = new LifecycleEventLog(null);
+        LifecycleEventLog log =
+                new LifecycleEventLog(null, LifecycleEventLog.LOAD_WAIT, LifecycleEventLog.RECORD_ON_VIRTUAL_THREAD);
         log.beginLoad();
         events.forEach(log::recordAndPersist);
         return new LifecycleRuns(log, Clock.fixed(Instant.ofEpochMilli(nowEpochMs), ZoneOffset.UTC), process).runs();
