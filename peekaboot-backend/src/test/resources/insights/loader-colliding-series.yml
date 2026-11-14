@@ -1,0 +1,12 @@
+# Panel id and series id are joined by a dot, so both panels spell the series id a.b.c.
+panels:
+  - id: a
+    title: A
+    series:
+      - id: b.c
+        meter: first.meter
+  - id: a.b
+    title: A B
+    series:
+      - id: c
+        meter: second.meter

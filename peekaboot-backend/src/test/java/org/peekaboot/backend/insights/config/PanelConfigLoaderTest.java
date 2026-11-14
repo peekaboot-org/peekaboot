@@ -163,6 +163,27 @@ class PanelConfigLoaderTest {
                 .hasMessageContaining("panel 'heap': duplicate series id 'used'");
     }
 
+    /** A dot in a panel id or a series id lets two panels spell one series id, and the rings hold one series per id. */
+    @Test
+    void rejectsTwoPanelsWhoseSeriesShareAnIdOnceNamespaced() {
+        assertThatThrownBy(() -> PanelConfigLoader.load(new ClassPathResource("insights/loader-colliding-series.yml")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(
+                        "series id 'a.b.c' is produced by panel 'a' (series 'b.c') and panel 'a.b' (series 'c')");
+    }
+
+    /** Each file is fine alone; only the merged panels collide. */
+    @Test
+    void rejectsAnOverrideWhoseSeriesCollidesWithOneOfTheBase() {
+        PanelsFile base = PanelConfigLoader.load(new ClassPathResource("insights/loader-colliding-base.yml"));
+
+        assertThatThrownBy(() ->
+                        PanelConfigLoader.merge(base, new ClassPathResource("insights/override-colliding-series.yml")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(
+                        "series id 'a.b.c' is produced by panel 'a' (series 'b.c') and panel 'a.b' (series 'c')");
+    }
+
     /** The binder rejects the word; the message still has to say where and what, since it is what the operator reads. */
     @Test
     void rejectsInvalidStatNamingThePropertyAndTheWord() {

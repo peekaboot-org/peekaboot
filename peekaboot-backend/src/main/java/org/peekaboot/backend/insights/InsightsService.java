@@ -122,9 +122,7 @@ public final class InsightsService implements SmartLifecycle {
         Set<String> shipped = new HashSet<>();
         for (PanelDef panel : panels) {
             List<SeriesDef> candidates = bundledSeries.getOrDefault(panel.id(), List.of());
-            panel.series().stream()
-                    .filter(candidates::contains)
-                    .forEach(series -> shipped.add(namespacedId(panel.id(), series.id())));
+            panel.series().stream().filter(candidates::contains).forEach(series -> shipped.add(panel.seriesId(series)));
         }
         return shipped;
     }
@@ -132,18 +130,13 @@ public final class InsightsService implements SmartLifecycle {
     /** The sampler scales by the unit the series is charted in, so the series carries the panel's where it names none. */
     private static SeriesDef namespaced(PanelDef panel, SeriesDef series) {
         return new SeriesDef(
-                namespacedId(panel.id(), series.id()),
+                panel.seriesId(series),
                 series.label(),
                 series.meter(),
                 series.tags(),
                 series.stat(),
                 series.subtractMeter(),
                 series.unit() != null ? series.unit() : panel.unit());
-    }
-
-    /** Series ids are unique within a panel; the panel id makes them unique across the collector. */
-    private static String namespacedId(String panelId, String seriesId) {
-        return panelId + "." + seriesId;
     }
 
     @Override
@@ -201,8 +194,7 @@ public final class InsightsService implements SmartLifecycle {
 
     private InsightsConfigResponse.Panel toPanel(PanelDef panel) {
         List<InsightsConfigResponse.Series> seriesResponses = panel.series().stream()
-                .map(series -> new InsightsConfigResponse.Series(
-                        namespacedId(panel.id(), series.id()), series.label(), series.unit()))
+                .map(series -> new InsightsConfigResponse.Series(panel.seriesId(series), series.label(), series.unit()))
                 .toList();
         return new InsightsConfigResponse.Panel(
                 panel.id(), panel.title(), panel.chart(), panel.unit(), panel.level(), seriesResponses);

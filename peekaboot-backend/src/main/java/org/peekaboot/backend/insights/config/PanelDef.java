@@ -22,4 +22,9 @@ public record PanelDef(
     public PanelDef {
         series = series == null ? List.of() : series;
     }
+
+    /** The id {@code series} goes by outside this panel: in the collector, in the API and in a problem rule. */
+    public String seriesId(SeriesDef series) {
+        return id + "." + series.id();
+    }
 }

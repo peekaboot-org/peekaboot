@@ -1,0 +1,7 @@
+# Merged onto loader-colliding-base.yml, whose panel a holds the series b.c.
+panels:
+  - id: a.b
+    title: A B
+    series:
+      - id: c
+        meter: second.meter

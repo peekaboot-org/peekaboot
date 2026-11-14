@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights.config;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,7 +51,21 @@ public final class PanelConfigLoader {
 
     private static PanelsFile complete(PanelsFile file) {
         file.panels().forEach(PanelConfigLoader::requireTitle);
+        requireDistinctSeriesIds(file.panels());
         return sorted(file);
+    }
+
+    /** A dot in a panel id or a series id lets two panels spell one series id, and the rings hold one series per id. */
+    private static void requireDistinctSeriesIds(List<PanelDef> panels) {
+        Map<String, String> producers = new HashMap<>();
+        for (PanelDef panel : panels) {
+            for (SeriesDef series : panel.series()) {
+                String id = panel.seriesId(series);
+                String producer = "panel '" + panel.id() + "' (series '" + series.id() + "')";
+                String earlier = producers.putIfAbsent(id, producer);
+                require(earlier == null, "series id '" + id + "' is produced by " + earlier + " and " + producer);
+            }
+        }
     }
 
     /** Defaults go on before validation, so the rules below never meet a null stat, chart or unit. */

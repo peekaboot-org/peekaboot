@@ -1,0 +1,6 @@
+panels:
+  - id: a
+    title: A
+    series:
+      - id: b.c
+        meter: first.meter

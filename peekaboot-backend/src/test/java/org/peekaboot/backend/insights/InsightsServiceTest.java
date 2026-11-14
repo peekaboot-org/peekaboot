@@ -140,6 +140,24 @@ class InsightsServiceTest {
         }
     }
 
+    /** The loader refuses two panels that spell one series id, and the service treats that like any other broken file. */
+    @Test
+    void aCollidingUserPanelCostsOnlyTheCustomisation() {
+        try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
+            InsightsService fallback = withUserPanels("classpath:insights/loader-colliding-series.yml");
+
+            assertThat(fallback.config().panels())
+                    .extracting(InsightsConfigResponse.Panel::id)
+                    .contains("cpu")
+                    .doesNotContain("a", "a.b");
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+                assertThat(event.getFormattedMessage()).contains("loader-colliding-series.yml");
+                assertThat(event.getThrowableProxy().getMessage()).contains("series id 'a.b.c'");
+            });
+        }
+    }
+
     /**
      * The bundled panels reach the service through the injected {@link ResourceLoader},
      * not through a classloader of its own choosing: a host application that supplies its
