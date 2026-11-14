@@ -3,6 +3,8 @@ package org.peekaboot.backend.tracing.event;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class CapturedTextTest {
 
@@ -59,6 +61,43 @@ class CapturedTextTest {
     void whitespaceBeyondTheReachOfACutLeavesItAtTheCap() {
         String head = "x".repeat(CapturedText.MAX_LENGTH - CapturedText.MAX_BACK_OFF - 1)
                 + " "
+                + "y".repeat(CapturedText.MAX_BACK_OFF);
+
+        assertThat(CapturedText.cap(head + "y".repeat(7))).isEqualTo(head + "... 7 characters omitted");
+    }
+
+    /** Compact JSON has no whitespace to back off to, so the head ends before the token's opening quote. */
+    @Test
+    void aCredentialInCompactJsonAcrossTheCapNeverShowsItsHead() {
+        String token = "ghp" + "_16C7e42F292c6912E7710c838347Ae178B4a";
+        String kept = "{\"payload\":\"" + "x".repeat(15_960) + "\",\"apiKey\":";
+
+        assertThat(CapturedText.cap(kept + "\"" + token + "\",\"next\":1}"))
+                .isEqualTo(kept + "... 52 characters omitted");
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = {'"', '\'', ','})
+    void withNoWhitespaceInReachTheHeadEndsBeforeTheLastQuoteOrComma(char delimiter) {
+        String kept = "x".repeat(15_900) + delimiter + "x".repeat(89);
+
+        assertThat(CapturedText.cap(kept + delimiter + "y".repeat(20))).isEqualTo(kept + "... 21 characters omitted");
+    }
+
+    /** A URL's password may hold a comma, and a cut there would leave its head with no "@" to mask it by. */
+    @Test
+    void whitespaceInReachWinsOverALaterComma() {
+        String kept = "x".repeat(15_980);
+
+        assertThat(CapturedText.cap(kept + " postgres://u:99," + "p".repeat(20) + "@host/db tail"))
+                .isEqualTo(kept + "... 50 characters omitted");
+    }
+
+    /** One character further back, the comma is out of reach and the text keeps its full head. */
+    @Test
+    void aCommaBeyondTheReachOfACutLeavesItAtTheCap() {
+        String head = "x".repeat(CapturedText.MAX_LENGTH - CapturedText.MAX_BACK_OFF - 1)
+                + ","
                 + "y".repeat(CapturedText.MAX_BACK_OFF);
 
         assertThat(CapturedText.cap(head + "y".repeat(7))).isEqualTo(head + "... 7 characters omitted");

@@ -1,5 +1,6 @@
 package org.peekaboot.backend.tracing.event;
 
+import java.util.function.IntPredicate;
 import org.peekaboot.backend.text.CountFormat;
 
 /** The one bound on a text Peekaboot captures whole: a span's tag value, an exception's message, a log line's message. */
@@ -12,10 +13,13 @@ public final class CapturedText {
     public static final int MAX_LENGTH = 16_000;
 
     /**
-     * How far a cut backs off to end before whitespace: past a provider's token or a URL's
-     * credentials. A text with no whitespace that close keeps its full head.
+     * How far a cut backs off to end before whitespace, a quote or a comma: past a provider's
+     * token or a URL's credentials. A text with none of them that close keeps its full head.
      */
     static final int MAX_BACK_OFF = 1_024;
+
+    /** What a value sits between in text without whitespace, compact JSON above all. */
+    private static final String VALUE_DELIMITERS = "\"',";
 
     private CapturedText() {}
 
@@ -23,7 +27,8 @@ public final class CapturedText {
      * {@code text} itself within {@link #MAX_LENGTH}, else its head and a note saying how many
      * characters were left out. Masking runs on read, and a cut inside a credential would leave
      * a head no pattern recognises any more. So the head ends before the last whitespace within
-     * {@link #MAX_BACK_OFF} of the limit, and at the limit where there is none.
+     * {@link #MAX_BACK_OFF} of the limit. A quote or a comma ends it only where that reach holds
+     * no whitespace, since a URL's password may hold either. With none of them it ends at the limit.
      */
     public static String cap(String text) {
         if (text.length() <= MAX_LENGTH) {
@@ -34,12 +39,20 @@ public final class CapturedText {
     }
 
     private static String headOfWholeWords(String text) {
-        for (int end = MAX_LENGTH; end >= MAX_LENGTH - MAX_BACK_OFF; end--) {
-            if (Character.isWhitespace(text.charAt(end))) {
-                return text.substring(0, end);
+        int end = lastWithinReach(text, Character::isWhitespace);
+        if (end < 0) {
+            end = lastWithinReach(text, character -> VALUE_DELIMITERS.indexOf(character) >= 0);
+        }
+        return end < 0 ? head(text, MAX_LENGTH) : text.substring(0, end);
+    }
+
+    private static int lastWithinReach(String text, IntPredicate boundary) {
+        for (int index = MAX_LENGTH; index >= MAX_LENGTH - MAX_BACK_OFF; index--) {
+            if (boundary.test(text.charAt(index))) {
+                return index;
             }
         }
-        return head(text, MAX_LENGTH);
+        return -1;
     }
 
     /** The first {@code maxLength} characters, one fewer where the last would be half of a surrogate pair. */
