@@ -96,16 +96,31 @@ class AggregateStatsTest {
     @Test
     void aCoarserWindowTakesEachPercentileFromTheFinerWindowsSamePercentile() {
         AggregateStats stats = AggregateStats.ofAggregates(List.of(
-                finer(1, 1, 1, 1, 10, 10, 10, 6),
-                finer(1, 1, 1, 2, 20, 20, 20, 6),
-                finer(1, 1, 1, 3, 30, 30, 30, 6),
-                finer(1, 1, 1, 4, 40, 40, 40, 6)));
+                finer(1, 1, 1, 1, 10, 11, 12, 6),
+                finer(1, 1, 1, 2, 20, 21, 22, 6),
+                finer(1, 1, 1, 3, 30, 31, 32, 6),
+                finer(1, 1, 1, 4, 40, 41, 42, 6)));
 
         // of 24 samples the 12th lies in the second entry, the 22nd, 23rd and 24th in the fourth
         assertThat(stats.median()).isEqualTo(2.0);
         assertThat(stats.p90()).isEqualTo(40.0);
-        assertThat(stats.p95()).isEqualTo(40.0);
-        assertThat(stats.p99()).isEqualTo(40.0);
+        assertThat(stats.p95()).isEqualTo(41.0);
+        assertThat(stats.p99()).isEqualTo(42.0);
+    }
+
+    @Test
+    void aCoarserWindowRanksEachPercentileAtItsOwnQuantile() {
+        List<AggregateStats> oneSampleEach = IntStream.rangeClosed(1, 20)
+                .mapToObj(value -> AggregateStats.of(new double[] {value}))
+                .toList();
+
+        AggregateStats stats = AggregateStats.ofAggregates(oneSampleEach);
+
+        // of 20 samples: ceil(0.5*20)=10th, ceil(0.9*20)=18th, ceil(0.95*20)=19th, ceil(0.99*20)=20th
+        assertThat(stats.median()).isEqualTo(10.0);
+        assertThat(stats.p90()).isEqualTo(18.0);
+        assertThat(stats.p95()).isEqualTo(19.0);
+        assertThat(stats.p99()).isEqualTo(20.0);
     }
 
     @Test
