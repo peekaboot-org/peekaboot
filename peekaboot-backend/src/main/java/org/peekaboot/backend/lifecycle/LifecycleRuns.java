@@ -20,15 +20,20 @@ public class LifecycleRuns {
 
     private final LifecycleEventLog eventLog;
     private final Clock clock;
+    private final RunningProcess process;
 
     public LifecycleRuns(LifecycleEventLog eventLog) {
-        this(eventLog, Clock.systemUTC());
+        this(eventLog, Clock.systemUTC(), RunningProcess.current());
     }
 
-    /** {@code clock} supplies the instant a still-running run is measured up to; tests fix it. */
-    LifecycleRuns(LifecycleEventLog eventLog, Clock clock) {
+    /**
+     * {@code clock} supplies the instant a still-running run is measured up to, {@code process}
+     * the one whose start may still be running; tests fix both.
+     */
+    LifecycleRuns(LifecycleEventLog eventLog, Clock clock, RunningProcess process) {
         this.eventLog = eventLog;
         this.clock = clock;
+        this.process = process;
     }
 
     public LifecycleRunsResponse runs() {
@@ -72,14 +77,14 @@ public class LifecycleRuns {
         }
     }
 
-    private static LifecycleRunsResponse.Run toRun(
+    private LifecycleRunsResponse.Run toRun(
             LifecycleEvent start,
             LifecycleEvent previous,
             LifecycleEvent next,
             BuildFacts effective,
             List<String> changed,
             long nowEpochMs) {
-        Timing timing = Timing.of(start, next, nowEpochMs);
+        Timing timing = Timing.of(start, next, nowEpochMs, process);
         Long downForMs = downForMs(start, previous);
         return new LifecycleRunsResponse.Run(
                 Instant.ofEpochMilli(start.epochMs()),
@@ -109,15 +114,19 @@ public class LifecycleRuns {
         return start.epochMs() - previous.epochMs();
     }
 
-    /** How a run ended (or hasn't), derived from the event that follows its start. */
+    /**
+     * How a run ended (or hasn't), derived from the event that follows its start. A last start
+     * is running only if this process recorded it. One a killed process left behind ended
+     * without a stop, like a start followed by a start.
+     */
     private record Timing(Instant stoppedAt, Long ranForMs, boolean running, boolean uncleanExit) {
 
-        private static Timing of(LifecycleEvent start, LifecycleEvent next, long nowEpochMs) {
-            if (next == null) {
+        private static Timing of(LifecycleEvent start, LifecycleEvent next, long nowEpochMs, RunningProcess process) {
+            if (next == null && process.recorded(start)) {
                 long ranForMs = Math.max(0, nowEpochMs - start.epochMs());
                 return new Timing(null, ranForMs, true, false);
             }
-            if (next.type() == LifecycleEvent.Type.STOP) {
+            if (next != null && next.type() == LifecycleEvent.Type.STOP) {
                 return new Timing(Instant.ofEpochMilli(next.epochMs()), next.epochMs() - start.epochMs(), false, false);
             }
             return new Timing(null, null, false, true);

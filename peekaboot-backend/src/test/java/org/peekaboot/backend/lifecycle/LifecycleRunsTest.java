@@ -14,15 +14,29 @@ class LifecycleRunsTest {
 
     private static final long NOW = 100_000;
 
+    /** The process every start of {@code LifecycleStarts} names unless told otherwise, begun before any of them. */
+    private static final RunningProcess PROCESS = new RunningProcess(1, 0);
+
     private static LifecycleRunsResponse runsFor(List<LifecycleEvent> events) {
         return runsFor(events, NOW);
     }
 
     private static LifecycleRunsResponse runsFor(List<LifecycleEvent> events, long nowEpochMs) {
+        return runsFor(events, nowEpochMs, PROCESS);
+    }
+
+    private static LifecycleRunsResponse runsFor(List<LifecycleEvent> events, long nowEpochMs, RunningProcess process) {
         LifecycleEventLog log = new LifecycleEventLog(null);
         log.beginLoad();
         events.forEach(log::recordAndPersist);
-        return new LifecycleRuns(log, Clock.fixed(Instant.ofEpochMilli(nowEpochMs), ZoneOffset.UTC)).runs();
+        return new LifecycleRuns(log, Clock.fixed(Instant.ofEpochMilli(nowEpochMs), ZoneOffset.UTC), process).runs();
+    }
+
+    private static void assertEndedWithoutAStop(Run run) {
+        assertThat(run.running()).isFalse();
+        assertThat(run.uncleanExit()).isTrue();
+        assertThat(run.ranForMs()).isNull();
+        assertThat(run.stoppedAt()).isNull();
     }
 
     @Test
@@ -44,6 +58,22 @@ class LifecycleRunsTest {
         assertThat(run.ranForMs()).isEqualTo(5_000);
         assertThat(run.downForMs()).isNull();
         assertThat(run.changed()).isEmpty();
+    }
+
+    /** A killed process leaves its start last in the file, and the next process to read it is not that run. */
+    @Test
+    void aLastStartAnotherProcessWroteIsAnUncleanExit() {
+        LifecycleRunsResponse response = runsFor(List.of(start(1_000).pid(7).build()));
+
+        assertEndedWithoutAStop(response.runs().get(0));
+    }
+
+    /** A container's process is always pid 1, so the pid alone cannot tell this process from the last one. */
+    @Test
+    void aLastStartFromBeforeThisProcessBeganIsAnUncleanExit() {
+        LifecycleRunsResponse response = runsFor(List.of(start(1_000).build()), NOW, new RunningProcess(1, 5_000));
+
+        assertEndedWithoutAStop(response.runs().get(0));
     }
 
     @Test
