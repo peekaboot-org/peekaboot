@@ -720,6 +720,33 @@ class MaskingEngineTest {
         }
 
         @Test
+        void maskValue_shouldMaskAQuotedValueThatEndsInAnEscapedBackslash() {
+            String value = "x required username=\"alice\" password=\"abc\\\\\";";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("x required username=\"alice\" password=\"******\";");
+        }
+
+        @Test
+        void maskValue_shouldEndAQuotedValueAtTheQuoteAfterAnEscapedBackslash() {
+            String value = "x required password=\"abc\\\\\" user=\"u\";";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("x required password=\"******\" user=\"u\";");
+        }
+
+        @Test
+        void maskValue_shouldMaskAQuotedValueThroughAnEscapedBackslashAndAnEscapedQuote() {
+            String value = "x required password=\"ab\\\\\\\"cd\" mechanism=\"PLAIN\";";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("x required password=\"******\" mechanism=\"PLAIN\";");
+        }
+
+        @Test
         void maskValue_shouldLeaveAQuotedOptionWithAnInnocuousNameAlone() {
             String value = "x required username=\"alice\" mechanism=\"PLAIN\";";
 
