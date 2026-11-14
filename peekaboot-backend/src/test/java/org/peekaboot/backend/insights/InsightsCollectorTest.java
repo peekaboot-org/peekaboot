@@ -1,11 +1,14 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.insights.InsightsCollectorBuilder.collector;
 import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
 import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
+import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.DataOutputStream;
@@ -26,6 +29,7 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.insights.config.TileDef;
 import org.peekaboot.backend.insights.config.TileFormat;
+import org.peekaboot.testsupport.LogCapture;
 
 class InsightsCollectorTest {
 
@@ -37,7 +41,10 @@ class InsightsCollectorTest {
     private SimpleMeterRegistry registry;
     private AtomicLong gaugeValue;
     private List<String> events;
+    private InsightsCollector.Listener listener;
     private InsightsCollector collector;
+    // a field, since Micrometer holds a function meter's state weakly
+    private final AtomicLong throwingTotal = new AtomicLong();
 
     @BeforeEach
     void setUp() {
@@ -48,7 +55,7 @@ class InsightsCollectorTest {
         TileDef staticTile = new TileDef("startup", "Startup", "app.start", Map.of(), TileFormat.DURATION, false);
         TileDef liveTile = new TileDef("uptime", "Uptime", "app.uptime", Map.of(), TileFormat.DURATION, true);
         events = new ArrayList<>();
-        InsightsCollector.Listener listener = new InsightsCollector.Listener() {
+        listener = new InsightsCollector.Listener() {
             @Override
             public void onTick(long epochMs, Map<String, Double> values) {
                 events.add("tick:" + values.get("g"));
@@ -217,6 +224,57 @@ class InsightsCollectorTest {
         uptime.set(11);
         collector.tick(20_000);
         assertThat(collector.tileValues().get("uptime")).isEqualTo(11.0);
+    }
+
+    /** A tick that one meter aborted would blank every chart, and every tick after it. */
+    @Test
+    void aSeriesWhoseMeterThrowsLeavesTheOtherSeriesSampled() {
+        throwingCounter("test.throwing");
+        SeriesDef throwing = new SeriesDef("f", "F", "test.throwing", Map.of(), Stat.RATE, null, null);
+        InsightsCollector isolating = collector(registry)
+                .levels(levels)
+                .series(value("g", "test.gauge"), throwing)
+                .listener(listener)
+                .build();
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            gaugeValue.set(5);
+            isolating.tick(10_000);
+            gaugeValue.set(7);
+            isolating.tick(20_000);
+
+            LevelData data = isolating.levelData(0);
+            assertThat(data.count()).isEqualTo(2);
+            assertThat(data.endEpochMs()).isEqualTo(20_000);
+            assertThat(data.tickValues().get("g")).containsExactly(5.0, 7.0);
+            assertThat(data.tickValues().get("f")).containsExactly(Double.NaN, Double.NaN);
+            assertThat(events).containsExactly("tick:5.0", "tick:7.0");
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getLevel(), event -> event.getFormattedMessage())
+                    .containsExactly(tuple(
+                            Level.WARN,
+                            "Peekaboot insights: series 'f': reading meter 'test.throwing' failed;"
+                                    + " recording a gap until it reads again"));
+        }
+    }
+
+    /** The Overview reads its tiles on the request thread, where a throwing meter would fail the whole answer. */
+    @Test
+    void aTileWhoseMeterThrowsReadsAsUnresolved() {
+        throwingCounter("test.throwing");
+        TileDef broken = new TileDef("broken", "Broken", "test.throwing", Map.of(), TileFormat.COUNT, true);
+        InsightsCollector tiled = collector(registry).tiles(broken).build();
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(tiled.tileValues().get("broken")).isNaN();
+
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getLevel(), event -> event.getFormattedMessage())
+                    .containsExactly(tuple(
+                            Level.WARN,
+                            "Peekaboot insights: series 'broken': reading meter 'test.throwing' failed;"
+                                    + " recording a gap until it reads again"));
+        }
     }
 
     /**
@@ -500,6 +558,14 @@ class InsightsCollectorTest {
                     .as("parked tick finished")
                     .isTrue();
         }
+    }
+
+    /** Registers a function counter whose every read throws. */
+    private void throwingCounter(String name) {
+        FunctionCounter.builder(name, throwingTotal, total -> {
+                    throw new IllegalStateException("meter broke");
+                })
+                .register(registry);
     }
 
     /** One rate series over {@code test.counter}, on the same registry and levels as the fixture collector. */

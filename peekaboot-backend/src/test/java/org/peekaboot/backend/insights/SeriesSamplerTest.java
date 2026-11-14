@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.within;
 
 import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.TimeGauge;
@@ -14,6 +15,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,11 +29,37 @@ import org.peekaboot.testsupport.LogCapture;
 
 class SeriesSamplerTest {
 
+    private static final String FAILED_READ_OF_BROKEN =
+            "Peekaboot insights: series 'r': reading meter 'broken' failed; recording a gap until it reads again";
+
     private SimpleMeterRegistry registry;
+    private final AtomicBoolean failing = new AtomicBoolean();
+    // a field, since Micrometer holds a function meter's state weakly
+    private final AtomicLong total = new AtomicLong();
 
     @BeforeEach
     void setUp() {
         registry = new SimpleMeterRegistry();
+    }
+
+    /** Registers a function counter over {@link #total} whose read throws while {@link #failing} is set. */
+    private void brokenCounter(String name) {
+        FunctionCounter.builder(name, total, t -> {
+                    if (failing.get()) {
+                        throw new IllegalStateException("meter broke");
+                    }
+                    return t.get();
+                })
+                .register(registry);
+    }
+
+    /** The rate series {@code r} over {@link #brokenCounter} {@code broken}. */
+    private SeriesSampler rateOverBrokenCounter() {
+        brokenCounter("broken");
+        return new SeriesSampler(
+                new SeriesDef("r", "R", "broken", Map.of(), Stat.RATE, null, null),
+                registry,
+                UnresolvedMeterReport.WARN);
     }
 
     private static SeriesDef def(String meter, Map<String, String> tags, Stat stat) {
@@ -401,5 +430,65 @@ class SeriesSamplerTest {
         assertThat(sampler.sample(10_000)).isNaN(); // -4 calls, -470 ms: nothing to average
         fresh.record(Duration.ofMillis(50));
         assertThat(sampler.sample(10_000)).isCloseTo(50.0, within(1e-9)); // one call of 50 ms since the rebase
+    }
+
+    /** Micrometer runs an application's own function on every read, and one that throws must not reach the tick. */
+    @Test
+    void aMeterWhoseFunctionThrowsReadsAsAGap() {
+        SeriesSampler sampler = rateOverBrokenCounter();
+        failing.set(true);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(sampler.sample(10_000)).isNaN();
+
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getLevel(), event -> event.getFormattedMessage())
+                    .containsExactly(tuple(Level.WARN, FAILED_READ_OF_BROKEN));
+        }
+    }
+
+    /** Each outage is its own problem: a meter that read in between is reported again when it fails again. */
+    @Test
+    void aFailingMeterIsReportedOncePerOutage() {
+        SeriesSampler sampler = rateOverBrokenCounter();
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            failing.set(true);
+            for (int tick = 0; tick < 3; tick++) {
+                sampler.sample(10_000);
+            }
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo(FAILED_READ_OF_BROKEN);
+                assertThat(event.getThrowableProxy().getClassName()).isEqualTo(IllegalStateException.class.getName());
+            });
+
+            failing.set(false);
+            sampler.sample(10_000);
+            failing.set(true);
+            sampler.sample(10_000);
+
+            assertThat(capture.appender().list).hasSize(2);
+        }
+    }
+
+    /** A rate measured across a failed read would divide the counts of two intervals by one. */
+    @Test
+    void aRateAfterAFailedReadStartsFromAFreshBaseline() {
+        SeriesSampler sampler = rateOverBrokenCounter();
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            total.set(10);
+            assertThat(sampler.sample(10_000)).isNaN(); // first sample: no baseline
+            failing.set(true);
+            assertThat(sampler.sample(10_000)).isNaN(); // the read failed
+            failing.set(false);
+            total.set(70);
+            assertThat(sampler.sample(10_000)).isNaN(); // no baseline again: the 60 took two intervals
+            total.set(100);
+            assertThat(sampler.sample(10_000)).isEqualTo(3.0); // 30 in 10s
+
+            assertThat(capture.appender().list).hasSize(1);
+        }
     }
 }

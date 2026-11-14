@@ -67,6 +67,7 @@ final class SeriesSampler {
     private double previousTotal = Double.NaN;
     private final Outage meterOutage;
     private final Outage subtractMeterOutage;
+    private boolean readFailureReported;
 
     SeriesSampler(SeriesDef def, MeterRegistry registry, UnresolvedMeterReport report) {
         this.def = def;
@@ -87,7 +88,37 @@ final class SeriesSampler {
                 UNRESOLVED_METER_REPORT_TICKS);
     }
 
+    /**
+     * The series' value over the last {@code elapsedMillis}, NaN when it has none. A meter whose
+     * read throws is a NaN as well, reported once per outage, so it costs only this series.
+     */
     double sample(long elapsedMillis) {
+        try {
+            double value = read(elapsedMillis);
+            readFailureReported = false;
+            return value;
+        } catch (RuntimeException e) {
+            // the next rate would divide what several intervals counted by one interval
+            previousCount = Double.NaN;
+            previousTotal = Double.NaN;
+            reportReadFailure(e);
+            return Double.NaN;
+        }
+    }
+
+    private void reportReadFailure(RuntimeException failure) {
+        if (readFailureReported) {
+            return;
+        }
+        log.warn(
+                "Peekaboot insights: series '{}': reading meter '{}' failed; recording a gap until it reads again",
+                def.id(),
+                def.meter(),
+                failure);
+        readFailureReported = true;
+    }
+
+    private double read(long elapsedMillis) {
         List<Meter> meters = matching(def.meter());
         meterOutage.track(meters.isEmpty());
         double value =
