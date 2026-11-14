@@ -14,7 +14,6 @@ import org.springframework.boot.actuate.endpoint.SanitizingFunction;
 import org.springframework.boot.actuate.endpoint.Show;
 import org.springframework.boot.actuate.env.EnvironmentEndpoint;
 import org.springframework.boot.actuate.info.InfoContributor;
-import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.boot.actuate.logging.LoggersEndpoint;
 import org.springframework.boot.actuate.scheduling.ScheduledTasksEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -29,6 +28,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.SpringVersion;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
@@ -42,6 +42,11 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
  * decides whether their values arrive real or as {@code ******}. What the dashboard then
  * shows is {@code MaskingEngine}'s decision alone. Enabling Peekaboot correspondingly
  * changes nothing about the application's own {@code /actuator/*}.
+ *
+ * <p>The {@code info} source reads the application's {@link InfoContributor} beans and adds
+ * four of its own (env, java, os, process), which Spring Boot leaves off and the Overview
+ * reads. {@link InfoReading} builds them per read and they are never beans, so the
+ * application's {@code /actuator/info} never sees them.
  *
  * <p>The endpoint objects are deliberately not beans: a second bean carrying
  * {@code @Endpoint(id = "env")} makes the application's own {@code EndpointDiscoverer} fail
@@ -90,10 +95,12 @@ public class ActuatorSourcesAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "peekabootInfoInsightsSource")
-    public InsightsSource peekabootInfoInsightsSource(ObjectProvider<InfoContributor> infoContributors) {
+    public InsightsSource peekabootInfoInsightsSource(
+            ConfigurableEnvironment environment, ObjectProvider<InfoContributor> infoContributors) {
         return new InsightsSource(
                 ActuatorParsedData.INFO,
-                () -> new InfoEndpoint(infoContributors.orderedStream().toList()).info());
+                () -> InfoReading.read(
+                        environment, infoContributors.orderedStream().toList()));
     }
 
     @Bean

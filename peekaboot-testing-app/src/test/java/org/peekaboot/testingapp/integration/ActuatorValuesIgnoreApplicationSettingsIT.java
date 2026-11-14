@@ -26,7 +26,9 @@ import tools.jackson.databind.JsonNode;
  * the dashboard reads the same data either way, and what it masks is {@code MaskingEngine}'s
  * decision alone - {@code server.port} readable, the datasource password not. Health is turned
  * down the same way: {@code show-details=never} is Spring's own default, and the setting under
- * which the dashboard's answer and the application's have to differ.
+ * which the dashboard's answer and the application's have to differ. The four info
+ * contributors the Overview reads are switched off as well, since Peekaboot builds its own
+ * (see {@code InfoReading}).
  *
  * <p>A separate Spring context from the rest of this package's masking tests, which is what
  * the property overrides here buy; {@code ActuatorMaskingIT} covers the same masking rules
@@ -41,7 +43,11 @@ import tools.jackson.databind.JsonNode;
             "management.endpoints.web.exposure.exclude=*",
             "management.endpoint.env.access=none",
             "management.endpoint.configprops.access=none",
-            "management.endpoint.health.show-details=never"
+            "management.endpoint.health.show-details=never",
+            "management.info.env.enabled=false",
+            "management.info.java.enabled=false",
+            "management.info.os.enabled=false",
+            "management.info.process.enabled=false"
         })
 class ActuatorValuesIgnoreApplicationSettingsIT extends TestingAppITBase {
 
@@ -84,6 +90,16 @@ class ActuatorValuesIgnoreApplicationSettingsIT extends TestingAppITBase {
                 .as("the nested-fixture bean is bound in application-test.yml")
                 .isNotNull();
         assertThat(clientSecret.path("value").asString()).isEqualTo("******");
+    }
+
+    @Test
+    void theOverviewCarriesJavaSystemAndMemoryWhateverTheApplicationsInfoSettings() {
+        JsonNode insights = api.getJson("/peekaboot/api/actuator/all/insights");
+
+        assertThat(insights.path("application").path("javaVersion").asString()).isNotBlank();
+        assertThat(insights.path("runtime").path("os").path("name").asString()).isNotBlank();
+        assertThat(insights.path("runtime").path("memory").path("heapUsed").asLong())
+                .isPositive();
     }
 
     /**

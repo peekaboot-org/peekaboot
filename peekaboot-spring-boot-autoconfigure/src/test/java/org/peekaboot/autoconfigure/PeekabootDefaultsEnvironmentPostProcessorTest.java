@@ -164,7 +164,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         assertThat(environment.getPropertySources().contains("peekabootDefaults"))
                 .isEqualTo(expectDefaults);
-        assertThat(environment.getProperty("management.info.java.enabled") != null)
+        assertThat(environment.getProperty("management.tracing.sampling.probability") != null)
                 .isEqualTo(expectDefaults);
     }
 
@@ -205,7 +205,6 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
-        assertThat(environment.getProperty("management.info.java.enabled")).isEqualTo("true");
         assertThat(environment.getProperty("management.tracing.sampling.probability"))
                 .isEqualTo("1.0");
     }
@@ -520,16 +519,32 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         .noneMatch(name -> name.startsWith("spring.web.error")));
     }
 
+    /** /actuator/info is the application's: Peekaboot builds the contributors it reads. */
+    @ParameterizedTest
+    @EnumSource(LocalDevDetector.LaunchKind.class)
+    void contributesNoManagementInfoProperty(LocalDevDetector.LaunchKind launchKind) {
+        MockEnvironment environment = new MockEnvironment();
+        postProcessor(launchKind).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getPropertySources())
+                .filteredOn(source -> source.getName().startsWith("peekaboot"))
+                // the launch source answers no property at all
+                .filteredOn(source -> !(source instanceof DetectedLaunch))
+                .allSatisfy(source -> assertThat(((EnumerablePropertySource<?>) source).getPropertyNames())
+                        .noneMatch(name -> name.startsWith("management.info")));
+    }
+
     @Test
     void appPropertiesOverrideDefaults() {
         ConfigurableEnvironment environment = new MockEnvironment();
         MapPropertySource appProperties =
-                new MapPropertySource("appProperties", Map.of("management.info.java.enabled", "false"));
+                new MapPropertySource("appProperties", Map.of("management.tracing.sampling.probability", "0.5"));
         environment.getPropertySources().addFirst(appProperties);
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
-        assertThat(environment.getProperty("management.info.java.enabled")).isEqualTo("false");
+        assertThat(environment.getProperty("management.tracing.sampling.probability"))
+                .isEqualTo("0.5");
     }
 
     @Test

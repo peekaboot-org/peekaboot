@@ -57,8 +57,8 @@ springdoc:
   swagger-ui:
     enabled: true
 
-# observability settings (info contributors, trace sampling,
-# observation annotations, OTLP export off) come from peekaboot's defaults;
+# observability settings (trace sampling, observation annotations,
+# OTLP export off) come from peekaboot's defaults;
 # actuator endpoints are invoked in-process, so no web exposure is needed
 
 app:

@@ -17,26 +17,6 @@ management:
   # show-details, show-values, exposure, access - decides what the dashboard sees, and
   # Peekaboot has no reason to change any of them. MaskingEngine is what masks a value.
 
-  info:
-    env:
-      # Publishes info.* properties (e.g. info.app.* from application.yml) in
-      # /actuator/info - not OS/system environment variables, which the dashboard's
-      # Environment tab already covers through its own env source.
-      # Spring default: false | We enable for environment visibility in dashboard
-      enabled: true
-    java:
-      # Exposes JVM vendor, version, runtime info
-      # Spring default: false | We enable for Java runtime details in dashboard
-      enabled: true
-    os:
-      # Exposes OS name, version, architecture
-      # Spring default: false | We enable for system info in dashboard
-      enabled: true
-    process:
-      # Exposes PID, uptime, CPU count, memory usage
-      # Spring default: false | We enable for process metrics in dashboard
-      enabled: true
-
   tracing:
     sampling:
       # Percentage of requests to trace (0.0 to 1.0)

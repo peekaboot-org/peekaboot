@@ -10,6 +10,8 @@ import javax.sql.DataSource;
 import liquibase.UpdateSummaryOutputEnum;
 import liquibase.integration.spring.SpringLiquibase;
 import liquibase.ui.UIServiceEnum;
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.assertj.core.api.MapAssert;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -17,10 +19,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.actuator.InsightsSource;
+import org.springframework.boot.actuate.autoconfigure.info.InfoContributorAutoConfiguration;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesBeanDescriptor;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesDescriptor;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.env.EnvironmentEndpoint.EnvironmentDescriptor;
+import org.springframework.boot.actuate.info.InfoContributor;
+import org.springframework.boot.actuate.info.JavaInfoContributor;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -216,6 +221,43 @@ class ActuatorSourcesAutoConfigurationTest {
         contextRunner.run(context -> assertThat(read(context, "flyway")).isNull());
     }
 
+    @Test
+    void infoSourceCarriesJavaSystemAndProcessWithNoManagementInfoSetting() {
+        contextRunner.run(context -> info(context).containsKeys("java", "os", "process"));
+    }
+
+    @Test
+    void infoSourceCarriesTheApplicationsInfoProperties() {
+        contextRunner
+                .withPropertyValues("info.build.version=1.2.3")
+                .run(context -> info(context).extractingByKey("build").isEqualTo(Map.of("version", "1.2.3")));
+    }
+
+    @Test
+    void anApplicationContributorWinsOverAnInfoProperty() {
+        contextRunner
+                .withUserConfiguration(BuildContributorConfig.class)
+                .withPropertyValues("info.build.version=from-property")
+                .run(context -> info(context).extractingByKey("build").isEqualTo(Map.of("version", "from-bean")));
+    }
+
+    @Test
+    void infoSourceReadsBesideTheApplicationsOwnJavaContributor() {
+        contextRunner
+                .withConfiguration(AutoConfigurations.of(InfoContributorAutoConfiguration.class))
+                .withPropertyValues("management.info.java.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(JavaInfoContributor.class);
+                    info(context).containsKeys("java", "os", "process");
+                });
+    }
+
+    /** A contributor bean would reach the application's own InfoEndpoint. */
+    @Test
+    void registersNoInfoContributorBean() {
+        contextRunner.run(context -> assertThat(context).doesNotHaveBean(InfoContributor.class));
+    }
+
     /** The sources with no visibility gate of their own: present, and reading something. */
     @ParameterizedTest
     @ValueSource(strings = {"spring", "info", "scheduledtasks"})
@@ -237,6 +279,15 @@ class ActuatorSourcesAutoConfigurationTest {
     @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties(FixtureProperties.class)
     static class FixturePropertiesConfig {}
+
+    @Configuration(proxyBeanMethods = false)
+    static class BuildContributorConfig {
+
+        @Bean
+        InfoContributor buildContributor() {
+            return builder -> builder.withDetail("build", Map.of("version", "from-bean"));
+        }
+    }
 
     @Configuration(proxyBeanMethods = false)
     static class LiquibaseConfig {
@@ -342,6 +393,11 @@ class ActuatorSourcesAutoConfigurationTest {
         public AdditionalHealthEndpointPath getAdditionalPath() {
             return null;
         }
+    }
+
+    private static MapAssert<String, Object> info(ApplicationContext context) {
+        return assertThat(read(context, "info"))
+                .asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class));
     }
 
     private static Object read(ApplicationContext context, String id) {
