@@ -13,18 +13,9 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,14 +26,15 @@ import org.springframework.web.servlet.HandlerMapping;
 /**
  * Filter that captures HTTP request/response details and publishes them via Spring events.
  * This enables the Request tab in the trace detail view. It also sets the Server-Timing header
- * the toolbar's idle mode reads a trace id from.
+ * the toolbar's idle mode reads a trace id from. It never asks the container for parameters
+ * the application did not read.
  */
 public class RequestCaptureFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
 
     private final MaskingEngine maskingEngine;
-    private final TagMasker tagMasker;
+    private final RequestDetails requestDetails;
 
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
@@ -56,7 +48,7 @@ public class RequestCaptureFilter implements Filter {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
         this.maskingEngine = maskingEngine;
-        this.tagMasker = new TagMasker(maskingEngine);
+        this.requestDetails = new RequestDetails(maskingEngine);
         this.paths = paths;
     }
 
@@ -80,6 +72,20 @@ public class RequestCaptureFilter implements Filter {
         Span currentSpan = tracer.currentSpan();
         setServerTimingHeader(httpResponse, currentSpan);
 
+        String traceId = currentSpan == null ? null : currentSpan.context().traceId();
+        if (traceId == null) {
+            log.trace("No current trace, skipping request capture");
+            chain.doFilter(request, response);
+            return;
+        }
+
+        filterAndCapture(new ParameterReads(httpRequest), httpResponse, chain, traceId);
+    }
+
+    /** The chain runs on the wrapper, so the capture knows afterwards whether parameters were read. */
+    private void filterAndCapture(
+            ParameterReads request, HttpServletResponse response, FilterChain chain, String traceId)
+            throws IOException, ServletException {
         int statusOnFailure = 0;
         try {
             chain.doFilter(request, response);
@@ -90,26 +96,22 @@ public class RequestCaptureFilter implements Filter {
             // ignored and the client, and the server span, keep whatever status was already
             // flushed. Reading it back here instead of assuming 500 keeps this exchange on
             // the same number.
-            statusOnFailure = httpResponse.isCommitted()
-                    ? httpResponse.getStatus()
-                    : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
+            statusOnFailure =
+                    response.isCommitted() ? response.getStatus() : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
             throw failure;
         } finally {
-            String traceId = currentSpan == null ? null : currentSpan.context().traceId();
-            if (traceId == null) {
-                log.trace("No current trace, skipping request capture");
-            } else if (httpRequest.isAsyncStarted()) {
+            if (request.isAsyncStarted()) {
                 // a DeferredResult/Callable/SseEmitter handler has only handed off: its status
                 // is not known until the async cycle completes
-                httpRequest.getAsyncContext().addListener(new CaptureOnCompletion(httpRequest, httpResponse, traceId));
+                request.getAsyncContext().addListener(new CaptureOnCompletion(request, response, traceId));
             } else {
-                int status = statusOnFailure != 0 ? statusOnFailure : httpResponse.getStatus();
-                capture(httpRequest, httpResponse, traceId, status);
+                int status = statusOnFailure != 0 ? statusOnFailure : response.getStatus();
+                capture(request, response, traceId, status);
             }
         }
     }
 
-    private void capture(HttpServletRequest request, HttpServletResponse response, String traceId, int status) {
+    private void capture(ParameterReads request, HttpServletResponse response, String traceId, int status) {
         try {
             captureRequest(request, response, traceId, status);
         } catch (Exception e) {
@@ -120,11 +122,11 @@ public class RequestCaptureFilter implements Filter {
     /** Captures once the async cycle has run its course, whichever way it ended. */
     private final class CaptureOnCompletion implements AsyncListener {
 
-        private final HttpServletRequest request;
+        private final ParameterReads request;
         private final HttpServletResponse response;
         private final String traceId;
 
-        private CaptureOnCompletion(HttpServletRequest request, HttpServletResponse response, String traceId) {
+        private CaptureOnCompletion(ParameterReads request, HttpServletResponse response, String traceId) {
             this.request = request;
             this.response = response;
             this.traceId = traceId;
@@ -166,13 +168,10 @@ public class RequestCaptureFilter implements Filter {
         response.setHeader("Server-Timing", "trace;desc=\"00-" + traceId + "-" + spanId + "-" + traceFlags + "\"");
     }
 
-    private void captureRequest(HttpServletRequest request, HttpServletResponse response, String traceId, int status) {
-        Map<String, String> requestHeaders = maskedRequestHeaders(request);
-        Map<String, String> responseHeaders = maskedResponseHeaders(response);
-
-        Map<String, List<String>> queryParams = new HashMap<>();
-        Map<String, List<String>> formParams = new HashMap<>();
-        splitParameters(request, queryParams, formParams);
+    private void captureRequest(ParameterReads request, HttpServletResponse response, String traceId, int status) {
+        Map<String, String> requestHeaders = requestDetails.requestHeaders(request);
+        Map<String, String> responseHeaders = requestDetails.responseHeaders(response);
+        var parameters = requestDetails.parameters(request);
 
         String controllerClass = null;
         String controllerMethod = null;
@@ -190,75 +189,12 @@ public class RequestCaptureFilter implements Filter {
                 requestHeaders,
                 controllerClass,
                 controllerMethod,
-                queryParams,
-                formParams,
+                parameters.query(),
+                parameters.form(),
                 status,
                 responseHeaders);
 
         eventPublisher.publishEvent(event);
         log.trace("Published RequestCompletedEvent for trace {}", traceId);
-    }
-
-    private Map<String, String> maskedRequestHeaders(HttpServletRequest request) {
-        Map<String, String> headers = new HashMap<>();
-        Collections.list(request.getHeaderNames())
-                .forEach(name -> headers.put(name, String.join(", ", Collections.list(request.getHeaders(name)))));
-        return tagMasker.mask(headers);
-    }
-
-    /** A header sent more than once (Set-Cookie, typically) is captured as one comma-joined value. */
-    private Map<String, String> maskedResponseHeaders(HttpServletResponse response) {
-        Map<String, String> headers = new HashMap<>();
-        response.getHeaderNames().forEach(name -> headers.put(name, String.join(", ", response.getHeaders(name))));
-        return tagMasker.mask(headers);
-    }
-
-    /**
-     * getParameterMap() merges query-string and body parameters (form-encoded and
-     * multipart alike); a parameter the query string does not carry came from the body.
-     */
-    private void splitParameters(
-            HttpServletRequest request, Map<String, List<String>> queryParams, Map<String, List<String>> formParams) {
-        Set<String> queryStringKeys = parseQueryStringKeys(request.getQueryString());
-        request.getParameterMap().forEach((key, values) -> {
-            if (values == null || values.length == 0) {
-                return;
-            }
-            List<String> maskedValues =
-                    Arrays.stream(values).map(v -> maskingEngine.mask(key, v)).toList();
-            if (queryStringKeys.contains(key)) {
-                queryParams.put(key, maskedValues);
-            } else {
-                formParams.put(key, maskedValues);
-            }
-        });
-    }
-
-    private Set<String> parseQueryStringKeys(String queryString) {
-        if (queryString == null || queryString.isBlank()) {
-            return Set.of();
-        }
-        Set<String> keys = new HashSet<>();
-        for (String pair : queryString.split("&", -1)) {
-            int equalsIndex = pair.indexOf('=');
-            String key = equalsIndex >= 0 ? pair.substring(0, equalsIndex) : pair;
-            if (!key.isBlank()) {
-                keys.add(decodedOrRaw(key));
-            }
-        }
-        return keys;
-    }
-
-    /**
-     * A key whose percent-encoding is malformed decodes to nothing at all; keeping it raw
-     * costs at most a mismatch against one parameter name, where the decoder's
-     * {@code IllegalArgumentException} would cost the whole capture.
-     */
-    private static String decodedOrRaw(String key) {
-        try {
-            return URLDecoder.decode(key, StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException malformedEncoding) {
-            return key;
-        }
     }
 }

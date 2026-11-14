@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,12 +17,22 @@ import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.Part;
+import java.util.Collection;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.function.ThrowingConsumer;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -89,7 +100,7 @@ class RequestCaptureFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        verify(chain).doFilter(request, response);
+        assertThat(requestGivenToTheChain().getRequest()).isSameAs(request);
         RequestCompletedEvent event = publishedEvent();
         assertThat(event.traceId()).isEqualTo("abc123");
         assertThat(event.method()).isEqualTo("GET");
@@ -106,7 +117,7 @@ class RequestCaptureFilterTest {
     @Test
     void aThrownExceptionIsCapturedAsAServerError() throws Exception {
         CurrentSpans.stub(tracer, "trace1");
-        doThrow(new ServletException("handler failed")).when(chain).doFilter(request, response);
+        doThrow(new ServletException("handler failed")).when(chain).doFilter(any(), any());
 
         assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(ServletException.class);
 
@@ -124,7 +135,7 @@ class RequestCaptureFilterTest {
         CurrentSpans.stub(tracer, "trace1");
         response.setStatus(200);
         response.flushBuffer();
-        doThrow(new ServletException("handler failed")).when(chain).doFilter(request, response);
+        doThrow(new ServletException("handler failed")).when(chain).doFilter(any(), any());
 
         assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(ServletException.class);
 
@@ -248,6 +259,7 @@ class RequestCaptureFilterTest {
         request.setContentType("application/x-www-form-urlencoded");
         request.setParameter("username", "alice");
         request.setParameter("password", "hunter2");
+        applicationReads(HttpServletRequest::getParameterMap);
 
         filter.doFilter(request, response, chain);
 
@@ -264,6 +276,7 @@ class RequestCaptureFilterTest {
         request.setMethod("POST");
         request.setContentType("multipart/form-data; boundary=----peekaboot");
         request.setParameter("title", "Quarterly report");
+        applicationReads(HttpServletRequest::getParameterMap);
 
         filter.doFilter(request, response, chain);
 
@@ -279,6 +292,7 @@ class RequestCaptureFilterTest {
         request.setMethod("PATCH");
         request.setContentType("application/x-www-form-urlencoded");
         request.setParameter("firstName", "Bob");
+        applicationReads(HttpServletRequest::getParameterMap);
 
         filter.doFilter(request, response, chain);
 
@@ -343,6 +357,7 @@ class RequestCaptureFilterTest {
         request.setParameter("page", "1");
         request.setParameter("firstName", "Bob");
         response.setStatus(201);
+        applicationReads(HttpServletRequest::getParameterMap);
 
         filter.doFilter(request, response, chain);
 
@@ -350,6 +365,158 @@ class RequestCaptureFilterTest {
         assertThat(event.queryParams()).containsOnlyKeys("page");
         assertThat(event.formParams()).containsOnlyKeys("firstName");
         assertThat(event.formParams()).containsEntry("firstName", List.of("Bob"));
+    }
+
+    /**
+     * The container parses a form body on the first read of a parameter or a part. A capture
+     * that asked would parse the body of a request the application rejected unread.
+     */
+    @Test
+    void aFormBodyTheApplicationNeverReadIsNotParsed() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request = new UnparsedFormRequest("POST", "/login");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setQueryString("next=%2Fhome");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.formParams()).isEmpty();
+        assertThat(event.queryParams()).containsEntry("next", List.of("/home"));
+    }
+
+    @Test
+    void formParametersAreCapturedOnceTheApplicationReadThem() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request = get("/login");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setParameter("username", "alice");
+        request.setParameter("password", "hunter2");
+        applicationReads(read -> read.getParameter("username"));
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.formParams()).containsEntry("username", List.of("alice"));
+        assertThat(event.formParams()).containsEntry("password", List.of("******"));
+    }
+
+    @Test
+    void aMultipartFormIsCapturedOnceTheApplicationReadItsParts() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request = get("/upload");
+        request.setMethod("POST");
+        request.setContentType("multipart/form-data; boundary=----peekaboot");
+        request.setParameter("title", "Quarterly report");
+        applicationReads(HttpServletRequest::getParts);
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().formParams()).containsEntry("title", List.of("Quarterly report"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("otherParameterReads")
+    void everyOtherWayOfReadingParametersCountsAsARead(ThrowingConsumer<HttpServletRequest> read) throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request = get("/login");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setParameter("username", "alice");
+        applicationReads(read);
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().formParams()).containsEntry("username", List.of("alice"));
+    }
+
+    /** A handler that hands off may read its parameters only on the thread that finishes the async cycle. */
+    @Test
+    void capturesFormParametersReadDuringTheAsyncCycle() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setParameter("username", "alice");
+        MockAsyncContext asyncContext = startAsync();
+
+        filter.doFilter(request, response, chain);
+        requestGivenToTheChain().getParameter("username");
+        asyncContext.complete();
+
+        assertThat(publishedEvent().formParams()).containsKey("username");
+    }
+
+    @Test
+    void aRepeatedQueryKeyKeepsEveryValueInOrder() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setQueryString("tag=a&tag=b&tag=");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().queryParams()).containsEntry("tag", List.of("a", "b", ""));
+    }
+
+    @Test
+    void decodesPlusAndPercentEscapesInQueryParameters() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setQueryString("q=red+shoes&path=%2Fhome%3Fx");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.queryParams()).containsEntry("q", List.of("red shoes"));
+        assertThat(event.queryParams()).containsEntry("path", List.of("/home?x"));
+    }
+
+    @Test
+    void aBareQueryKeyHasAnEmptyValue() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setQueryString("debug&q=widgets");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().queryParams()).containsEntry("debug", List.of(""));
+    }
+
+    @Test
+    void skipsAQueryPairWithoutAKey() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setQueryString("=1&&q=widgets&");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().queryParams()).isEqualTo(Map.of("q", List.of("widgets")));
+    }
+
+    /** A value that cannot be decoded cannot be judged either, so it is masked, as the raw query string masks it. */
+    @Test
+    void aQueryPairThatCannotBeDecodedIsMaskedWhole() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setQueryString("bad=%zz&q=widgets");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.queryParams()).containsEntry("bad", List.of("******"));
+        assertThat(event.queryParams()).containsEntry("q", List.of("widgets"));
+    }
+
+    /** The container merges both sources under one key and cannot say which value came from where. */
+    @Test
+    void aKeyInBothQueryStringAndBodyListsItsQueryValuesOnly() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setQueryString("page=1");
+        request.setParameter("page", "1", "7");
+        applicationReads(HttpServletRequest::getParameterMap);
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.queryParams()).containsEntry("page", List.of("1"));
+        assertThat(event.formParams()).doesNotContainKey("page");
     }
 
     @Test
@@ -434,7 +601,7 @@ class RequestCaptureFilterTest {
         try (LogCapture capture = LogCapture.attach(RequestCaptureFilter.class)) {
             filter.doFilter(request, response, chain);
 
-            verify(chain).doFilter(request, response);
+            assertThat(requestGivenToTheChain().getRequest()).isSameAs(request);
             verify(eventPublisher, never()).publishEvent(any());
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
@@ -559,10 +726,76 @@ class RequestCaptureFilterTest {
         return captor.getValue();
     }
 
+    private ParameterReads requestGivenToTheChain() throws Exception {
+        ArgumentCaptor<ServletRequest> captor = ArgumentCaptor.forClass(ServletRequest.class);
+        verify(chain).doFilter(captor.capture(), any());
+        assertThat(captor.getValue()).isInstanceOf(ParameterReads.class);
+        return (ParameterReads) captor.getValue();
+    }
+
+    /** Stands in for the application: runs {@code read} on the request the chain was given. */
+    private void applicationReads(ThrowingConsumer<HttpServletRequest> read) throws Exception {
+        doAnswer(invocation -> {
+                    read.accept(invocation.getArgument(0));
+                    return null;
+                })
+                .when(chain)
+                .doFilter(any(), any());
+    }
+
+    static Stream<Arguments> otherParameterReads() {
+        return Stream.of(
+                parameterRead("getParameterNames", HttpServletRequest::getParameterNames),
+                parameterRead("getParameterValues", read -> read.getParameterValues("username")),
+                parameterRead("getPart", read -> read.getPart("username")));
+    }
+
+    private static Arguments parameterRead(String name, ThrowingConsumer<HttpServletRequest> read) {
+        return Arguments.of(Named.of(name, read));
+    }
+
     /** Puts the request into the state a handler leaves it in after handing off asynchronously. */
     private MockAsyncContext startAsync() {
         request.setAsyncSupported(true);
         return (MockAsyncContext) request.startAsync(request, response);
+    }
+
+    /** A request whose form body the container has not parsed: asking for a parameter or a part would parse it. */
+    private static final class UnparsedFormRequest extends MockHttpServletRequest {
+
+        private UnparsedFormRequest(String method, String path) {
+            super(method, path);
+            setServletPath(path);
+        }
+
+        @Override
+        public String getParameter(String name) {
+            throw parsed();
+        }
+
+        @Override
+        public Map<String, String[]> getParameterMap() {
+            throw parsed();
+        }
+
+        @Override
+        public Enumeration<String> getParameterNames() {
+            throw parsed();
+        }
+
+        @Override
+        public String[] getParameterValues(String name) {
+            throw parsed();
+        }
+
+        @Override
+        public Collection<Part> getParts() {
+            throw parsed();
+        }
+
+        private static AssertionError parsed() {
+            return new AssertionError("the capture parsed the body");
+        }
     }
 
     public static class TestController {
