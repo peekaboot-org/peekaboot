@@ -174,7 +174,7 @@
 .pk-gantt-event-marker::after { content: ''; position: absolute; top: -3px; left: -3px; width: 8px; height: 8px; background: var(--pk-success); border-radius: 50%; border: 1px solid var(--pk-bg); }
 .pk-gantt-event-marker:hover::after { transform: scale(1.3); }
 .pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: var(--pk-space-xs) var(--pk-space-sm); font-size: var(--pk-text-xs); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--pk-transition); z-index: 10; }
-.pk-gantt-event-marker:hover .pk-gantt-event-tooltip { opacity: 1; }
+.pk-gantt-event-marker:hover .pk-gantt-event-tooltip, .pk-gantt-event-marker:focus-visible .pk-gantt-event-tooltip { opacity: 1; }
 
 /* Shared box model for the span tree's and the Queries tab's small text chips; each sets
    its own fill/ink below. */

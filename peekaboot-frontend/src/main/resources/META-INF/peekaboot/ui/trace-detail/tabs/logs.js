@@ -94,7 +94,9 @@ export function render(container, trace, view = {}) {
         const dateOptions = {locale: view.locale, timeZone: view.timeZone};
         const list = el('div', {attrs: {id: 'pk-logs-list'}},
             ...logs.map(log => logRow(log, spanNames, dateOptions, view, filterToSpan)));
-        container.replaceChildren(filterBar(state, spanNames), list);
+        const noMatch = emptyState('No logs match the filters');
+        noMatch.id = 'pk-logs-empty';
+        container.replaceChildren(filterBar(state, spanNames), list, noMatch);
 
         // Establishes the initial visibility (filters restored from the URL, or a span
         // filter set before this render) before any control has fired an event.
@@ -165,4 +167,5 @@ function applyFilters(container, state) {
         const matchSpan = !state.span || item.dataset.spanId === state.span;
         item.classList.toggle('pk-log--hidden', !(matchText && matchLevel && matchSpan));
     });
+    container.querySelector('#pk-logs-empty').hidden = Boolean(container.querySelector('.pk-log:not(.pk-log--hidden)'));
 }

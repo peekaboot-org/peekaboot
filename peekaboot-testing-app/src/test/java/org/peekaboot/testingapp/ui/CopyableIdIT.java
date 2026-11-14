@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,30 @@ class CopyableIdIT extends PlaywrightTestBase {
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
+    }
+
+    /**
+     * Waits for the feedback on {@code control} and returns the result it should announce, the
+     * text of every live region on the surface, how many regions sit inside a copy control and
+     * how many sit in a dialog. One poll reads them all, so the control's reset cannot fall
+     * between the reads.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> awaitCopyFeedback(ShadowHost surface, String control) {
+        return (Map<String, Object>) surface.waitUntil("""
+                (root, control) => {
+                    const copy = root.querySelector(control);
+                    const result = copy.classList.contains('pk-copy--copied') ? 'Copied'
+                        : copy.classList.contains('pk-copy--failed') ? 'Copy failed' : null;
+                    return result && {
+                        result,
+                        announced: [...root.querySelectorAll('.pk-copy__status[role=status]')]
+                            .map(region => region.textContent),
+                        regionsInAControl: root.querySelectorAll('.pk-copy [role=status]').length,
+                        regionsInADialog: root.querySelectorAll('[role=dialog] > .pk-copy__status').length
+                    };
+                }
+                """, control);
     }
 
     @Test
@@ -179,12 +204,38 @@ class CopyableIdIT extends PlaywrightTestBase {
 
         toolbar.click("#pk-trace .pk-copy");
 
-        String state = (String) toolbar.waitUntil("root => { const copy ="
-                + " root.querySelector('#pk-trace .pk-copy');"
-                + " return copy.classList.contains('pk-copy--copied') ? 'copied'"
-                + "      : copy.classList.contains('pk-copy--failed') ? 'failed' : null; }");
-        assertThat(state).isIn("copied", "failed");
-        assertThat(toolbar.text("#pk-trace .pk-copy__status"))
-                .isEqualTo("copied".equals(state) ? "Copied" : "Copy failed");
+        Map<String, Object> feedback = awaitCopyFeedback(toolbar, "#pk-trace .pk-copy");
+        assertThat(feedback.get("announced")).isEqualTo(List.of(feedback.get("result")));
+    }
+
+    /**
+     * A button's children are presentational, so a status inside one is never read out. The
+     * result goes to the one live region of the surface the control sits on.
+     */
+    @Test
+    void theCopyResultIsAnnouncedOutsideTheButton() {
+        openPageWithToolbar();
+
+        toolbar.click("#pk-trace .pk-copy");
+
+        Map<String, Object> feedback = awaitCopyFeedback(toolbar, "#pk-trace .pk-copy");
+        assertThat(feedback.get("regionsInAControl")).isEqualTo(0);
+        assertThat(feedback.get("announced")).isEqualTo(List.of(feedback.get("result")));
+    }
+
+    /**
+     * The overlay is a modal dialog, and what lies outside one is hidden from a screen reader
+     * while it is open. Its live region is therefore a child of the dialog, one for all its ids.
+     */
+    @Test
+    void aCopyInTheOverlayIsAnnouncedInsideItsDialog() {
+        openLogsTabWithAtLeastOneLogRow();
+
+        overlay.click(".pk-log__span-cell .pk-copy");
+
+        Map<String, Object> feedback = awaitCopyFeedback(overlay, ".pk-log__span-cell .pk-copy");
+        assertThat(feedback.get("regionsInAControl")).isEqualTo(0);
+        assertThat(feedback.get("announced")).isEqualTo(List.of(feedback.get("result")));
+        assertThat(feedback.get("regionsInADialog")).isEqualTo(1);
     }
 }

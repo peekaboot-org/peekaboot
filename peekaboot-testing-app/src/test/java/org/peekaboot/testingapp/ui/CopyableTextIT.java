@@ -12,6 +12,9 @@ import org.junit.jupiter.api.Test;
  */
 class CopyableTextIT extends PlaywrightTestBase {
 
+    /** The live region of the document the controls are bound to. */
+    private static final String STATUS_REGION = "body > .pk-copy__status";
+
     private static final String BUILD_CONTROL = """
             (() => {
                 window.shownText = 'select 1';
@@ -32,7 +35,7 @@ class CopyableTextIT extends PlaywrightTestBase {
         page.click(".pk-copy");
 
         page.waitForSelector(".pk-copy.pk-copy--copied");
-        assertThat(page.textContent(".pk-copy__status")).isEqualTo("Copied");
+        assertThat(page.textContent(STATUS_REGION)).isEqualTo("Copied");
         assertThat((String) page.evaluate("() => navigator.clipboard.readText()"))
                 .isEqualTo("select 2");
     }
@@ -53,7 +56,72 @@ class CopyableTextIT extends PlaywrightTestBase {
 
         page.waitForSelector(".pk-copy.pk-copy--copied, .pk-copy.pk-copy--failed");
         String state = page.isVisible(".pk-copy--copied") ? "Copied" : "Copy failed";
-        assertThat(page.textContent(".pk-copy__status")).isEqualTo(state);
+        assertThat(page.textContent(STATUS_REGION)).isEqualTo(state);
+    }
+
+    /** A region that arrives together with its text can go unannounced, so binding puts it there empty. */
+    @Test
+    void theRegionIsInPlaceBeforeTheFirstCopy() {
+        importModule("shared/copyable.js", BUILD_CONTROL);
+
+        assertThat(page.locator(STATUS_REGION).allTextContents()).containsExactly("");
+    }
+
+    /** A root that replaces its children takes the region out with them, and the next copy puts one back. */
+    @Test
+    void aRootThatReplacedItsChildrenGetsItsRegionBack() {
+        importModule("shared/copyable.js", BUILD_CONTROL);
+        holdFeedback();
+        page.evaluate("() => document.body.replaceChildren(document.querySelector('.pk-copy'))");
+
+        String result = copyAndAwaitFeedback(".pk-copy");
+
+        assertThat(page.locator(STATUS_REGION).allTextContents()).containsExactly(result);
+    }
+
+    /**
+     * Two copies inside one feedback period share the region. The first control's reset comes
+     * due before the second's and leaves the second's announcement standing.
+     */
+    @Test
+    void anEarlierControlsResetLeavesALaterAnnouncementStanding() {
+        importModule("shared/copyable.js", """
+                (() => {
+                    m.bindCopyables(document);
+                    for (const id of ['first', 'second']) {
+                        const control = m.copyableText(() => id, {label: id});
+                        control.id = id;
+                        document.body.append(control);
+                    }
+                })()
+                """);
+        holdFeedback();
+
+        copyAndAwaitFeedback("#first");
+        page.clock().runFor(1000);
+        String secondResult = copyAndAwaitFeedback("#second");
+        page.clock().runFor(1000);
+
+        assertThat(page.getAttribute("#first", "class")).isEqualTo("pk-copy");
+        assertThat(page.textContent(STATUS_REGION)).isEqualTo(secondResult);
+
+        page.clock().runFor(1000);
+
+        assertThat(page.getAttribute("#second", "class")).isEqualTo("pk-copy");
+        assertThat(page.textContent(STATUS_REGION)).isEmpty();
+    }
+
+    /** Stops the page's timers, so feedback stays up until the test runs the clock on. */
+    private void holdFeedback() {
+        page.clock().install();
+        page.clock().pauseAt(System.currentTimeMillis() + 60_000);
+    }
+
+    /** Clicks the control, waits for its feedback and returns what the region should then read. */
+    private String copyAndAwaitFeedback(String control) {
+        page.evaluate("control => document.querySelector(control).click()", control);
+        page.waitForSelector(control + ".pk-copy--copied, " + control + ".pk-copy--failed");
+        return page.isVisible(control + ".pk-copy--copied") ? "Copied" : "Copy failed";
     }
 
     /**

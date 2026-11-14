@@ -51,7 +51,7 @@ class SqlStatementViewIT extends SeededPersonTestBase {
 
         overlay.waitUntil(
                 "(root, sel) => root.querySelector(sel).classList.contains('pk-copy--copied')", scope + " .pk-copy");
-        assertThat(overlay.text(scope + " .pk-copy__status")).isEqualTo("Copied");
+        assertThat(overlay.text(".pk-copy__status")).isEqualTo("Copied");
         assertThat((String) page.evaluate("() => navigator.clipboard.readText()"))
                 .isEqualTo(overlay.text(scope + " .pk-sql__code"))
                 .endsWith("=" + person.getId());

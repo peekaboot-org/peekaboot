@@ -225,9 +225,6 @@ async function fetchAndRender(content, traceId, {basePath, session, styleReady, 
 }
 
 function render(content, trace, urlState, display) {
-    // delegated once on the container, which outlives every re-render below
-    bindCopyables(content);
-
     // The header's cause link jumps through the tabs, which are wired after the header is built.
     let goToSpan = () => {};
     const container = el('div', {
@@ -239,6 +236,8 @@ function render(content, trace, urlState, display) {
         // In the tab order: it scrolls, and a tab such as Request has no control for the keyboard to scroll it by.
         el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content', tabindex: '0'}})));
     content.replaceChildren(container);
+    // On the dialog, which outlives every re-render below: aria-modal hides a live region outside it from a screen reader.
+    bindCopyables(container);
 
     container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
 

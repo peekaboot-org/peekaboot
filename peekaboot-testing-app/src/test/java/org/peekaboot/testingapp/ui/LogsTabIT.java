@@ -338,6 +338,37 @@ class LogsTabIT extends TraceOverlayTestBase {
     }
 
     /**
+     * Filters that leave no row say so under the filter bar. Without that the reader sees a
+     * blank tab on a trace that does carry logs.
+     */
+    @Test
+    void aFilterThatMatchesNoLogSaysSo() {
+        openPageThatLogsAnError();
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.waitFor(".pk-log");
+        int allLogs = visibleLogRows();
+        Locator noMatch = page.locator("#pk-logs-empty");
+        assertThat(noMatch.isVisible())
+                .as("rows show, so there is nothing to say")
+                .isFalse();
+
+        page.locator("#pk-log-filter").fill("a text no log holds");
+
+        assertThat(visibleLogRows()).isZero();
+        assertThat(noMatch.isVisible()).isTrue();
+        assertThat(noMatch.textContent()).isEqualTo("No logs match the filters");
+        assertThat(overlay.evaluate("root => root.querySelector('#pk-logs-list').nextElementSibling.id"))
+                .as("the message stands where the rows stood")
+                .isEqualTo("pk-logs-empty");
+
+        page.locator("#pk-log-filter").fill("");
+
+        assertThat(noMatch.isVisible()).isFalse();
+        assertThat(visibleLogRows()).isEqualTo(allLogs);
+    }
+
+    /**
      * A level filter that matches no row leaves the list rendered but empty rather than
      * dropping back to "no logs recorded": the trace does carry logs, the filter is simply
      * hiding them, and clearing it has to bring them back.

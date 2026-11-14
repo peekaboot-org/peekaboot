@@ -16,7 +16,7 @@ function kvTable(rows) {
 function tableRow(key, value, valueClass) {
     const cell = el('td', {className: valueClass || undefined});
     cell.append(value);
-    return el('tr', {}, el('td', {text: key}), cell);
+    return el('tr', {}, el('th', {text: key, attrs: {scope: 'row'}}), cell);
 }
 
 function section(title, body) {

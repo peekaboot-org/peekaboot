@@ -281,8 +281,8 @@
 }
 
 /* Data table: one row per record, for tabs that list uniform items. Shared so any
-   such tab reads the same. --kv is the two-column, header-less key/value form the
-   trace-detail overlay's Request tab uses. */
+   such tab reads the same. --kv is the two-column key/value form the trace-detail
+   overlay's Request tab uses: no header row, each key the header cell of its row. */
 .pk-table { width: 100%; border-collapse: collapse; font-size: var(--pk-text-xs); }
 /* A header cell is a .pk-label (components.js's table()), which carries its type and ink. */
 .pk-table th {
@@ -297,7 +297,8 @@
 /* Numeric columns line up on the decimal, so scanning a column does not jitter. */
 .pk-table__num { text-align: right; font-family: var(--pk-font-mono); font-variant-numeric: tabular-nums; }
 .pk-table__shrink { width: 1%; white-space: nowrap; }
-.pk-table--kv td:first-child { width: 200px; color: var(--pk-text-muted); }
+/* A key is set like the value beside it, where a column header is bold and kept on one line. */
+.pk-table--kv th { width: 200px; color: var(--pk-text-muted); font-weight: normal; white-space: normal; }
 .pk-table--kv td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
 /* A table that is a card of its own (Flyway's migrations, Liquibase's change sets,
    Lifecycle's runs). The stripe modifiers go on a row: a state moves to a row-leading border

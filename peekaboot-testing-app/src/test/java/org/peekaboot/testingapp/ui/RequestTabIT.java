@@ -182,6 +182,45 @@ class RequestTabIT extends PlaywrightTestBase {
         assertThat(rowKeys).containsSubsequence("B-cache", "a-token");
     }
 
+    /** A key names its row, so it is that row's header cell and is read out with the value. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void everyKeyCellIsARowHeader() {
+        renderWithTrace("""
+                {"summary": {"durationMs": 12}, "data": {"httpExchange": {
+                    "request": {"method": "POST", "path": "/api/users", "query": "page=2",
+                        "params": {"query": {"page": ["2"]}, "form": {"name": "Ada"}},
+                        "headers": {"accept": "application/json"}},
+                    "response": {"status": 200, "headers": {"content-type": "application/json"}}
+                }}}
+                """);
+
+        Object keyCells = page.evaluate("() => [...document.querySelectorAll('#pk-request-test-container"
+                + " .pk-table--kv tr')].filter(row => row.cells.length === 2)"
+                + ".map(row => row.cells[0].tagName + ' ' + row.cells[0].getAttribute('scope'))");
+
+        assertThat((List<String>) keyCells)
+                .as("five request rows, a query and a form parameter, a header each way")
+                .hasSize(9)
+                .containsOnly("TH row");
+    }
+
+    /**
+     * Read in the overlay, where components.css applies. A header cell is bold and kept on one
+     * line unless told otherwise, and a key was neither while it was a data cell.
+     */
+    @Test
+    void aKeyCellLooksLikeTheDataCellItWas() {
+        openPersonsPage();
+        toolbar.openOverlay();
+        overlay.openTab("request");
+        overlay.waitFor(".pk-table--kv th");
+
+        assertThat(overlay.evaluate("root => { const style = getComputedStyle(root.querySelector('.pk-table--kv th'));"
+                        + " return [style.fontWeight, style.textAlign, style.whiteSpace].join(' | '); }"))
+                .isEqualTo("400 | left | normal");
+    }
+
     @Test
     void theStatusRowSpellsOutTheReasonPhrase() {
         renderWithStatus(404);

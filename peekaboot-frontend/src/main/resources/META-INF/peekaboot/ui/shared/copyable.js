@@ -4,7 +4,9 @@
  *
  * Ids appear on three surfaces - the dashboard document, the toolbar's shadow root and
  * the overlay's shadow root - and the click is handled by a single delegated listener per
- * root: content re-renders freely without leaking listeners or needing to re-bind.
+ * root: content re-renders freely without leaking listeners or needing to re-bind. The
+ * result of a copy is announced by the root's one live region. A button's children are
+ * presentational, so a status inside the control itself would never be read out.
  */
 import {el, button} from './dom.js';
 
@@ -13,7 +15,9 @@ const COPIED_ICON = '✓';
 const COPIED_FEEDBACK_MS = 1500;
 
 const boundRoots = new WeakSet();
-/** The feedback timer of each control, keyed by the element so the DOM carries no expando. */
+/** The live region of each bound root. */
+const statusRegions = new WeakMap();
+/** The feedback timer of each control and each live region, keyed by the element so the DOM carries no expando. */
 const feedbackTimers = new WeakMap();
 
 /** The text source of each copyableText control, called on click so it copies what is shown then. */
@@ -35,8 +39,7 @@ export function copyableId(value, {label, truncate = false} = {}) {
     },
     label ? el('span', {className: 'pk-copy__label', text: label}) : null,
     el('span', {className: 'pk-copy__value', text: id}),
-    el('span', {className: 'pk-copy__icon', text: COPY_ICON, attrs: {'aria-hidden': 'true'}}),
-    el('span', {className: 'pk-copy__status', attrs: {role: 'status'}}));
+    el('span', {className: 'pk-copy__icon', text: COPY_ICON, attrs: {'aria-hidden': 'true'}}));
 }
 
 /**
@@ -51,22 +54,23 @@ export function copyableText(textSource, {label}) {
         attrs: {'aria-label': `Copy ${label}`}
     },
     el('span', {className: 'pk-copy__label', text: `Copy ${label}`}),
-    el('span', {className: 'pk-copy__icon', text: COPY_ICON, attrs: {'aria-hidden': 'true'}}),
-    el('span', {className: 'pk-copy__status', attrs: {role: 'status'}}));
+    el('span', {className: 'pk-copy__icon', text: COPY_ICON, attrs: {'aria-hidden': 'true'}}));
     textSources.set(control, textSource);
     return control;
 }
 
 /**
- * Attaches the one delegated click listener a root needs. Safe to call repeatedly -
- * a root is only ever bound once. Pass the document for the dashboard, or the shadow
- * root for the toolbar and the overlay.
+ * Attaches the one delegated click listener a root needs and gives it the live region its
+ * copies are announced in. Safe to call repeatedly - a root is only ever bound once. Pass
+ * a document, a shadow root or an element that outlives the re-renders of its controls.
  */
 export function bindCopyables(root) {
     if (!root || boundRoots.has(root)) {
         return;
     }
     boundRoots.add(root);
+    // In place before the first copy: a region that arrives together with its text can go unannounced.
+    statusRegion(root);
     // Capture, not bubble. The clickable things an id sits inside - the toolbar bar, a
     // trace row - listen on elements *below* this root, so a bubbling listener here would
     // run after them and stopPropagation would come too late to stop the overlay opening.
@@ -80,7 +84,7 @@ export function bindCopyables(root) {
         // copying an id is not a request to also open or filter whatever contains it
         event.stopPropagation();
         event.preventDefault();
-        copyText(value).then(ok => showResult(button, ok));
+        copyText(value).then(ok => showResult(button, statusRegion(root), ok));
     }, true);
 }
 
@@ -89,20 +93,38 @@ function copyValue(control) {
     return textSources.has(control) ? textSources.get(control)() : control.dataset.pkCopy;
 }
 
-function showResult(button, ok) {
+/** The root's live region, appended again when a re-render of the root took it out. */
+function statusRegion(root) {
+    const parent = root.body ?? root;
+    let region = statusRegions.get(root);
+    if (region?.parentNode !== parent) {
+        region = parent.appendChild(el('span', {className: 'pk-copy__status', attrs: {role: 'status'}}));
+        statusRegions.set(root, region);
+    }
+    return region;
+}
+
+function showResult(button, status, ok) {
     const icon = button.querySelector('.pk-copy__icon');
-    const status = button.querySelector('.pk-copy__status');
     if (icon) icon.textContent = ok ? COPIED_ICON : COPY_ICON;
-    if (status) status.textContent = ok ? 'Copied' : 'Copy failed';
+    status.textContent = ok ? 'Copied' : 'Copy failed';
     button.classList.toggle('pk-copy--copied', ok);
     button.classList.toggle('pk-copy--failed', !ok);
 
-    clearTimeout(feedbackTimers.get(button));
-    feedbackTimers.set(button, setTimeout(() => {
+    resetAfterFeedback(button, () => {
         if (icon) icon.textContent = COPY_ICON;
-        if (status) status.textContent = '';
         button.classList.remove('pk-copy--copied', 'pk-copy--failed');
-    }, COPIED_FEEDBACK_MS));
+    });
+    // On its own timer: the region is shared, and a control's reset must not cut short a later copy's result.
+    resetAfterFeedback(status, () => {
+        status.textContent = '';
+    });
+}
+
+/** Runs `reset` once the feedback period is over, in place of a reset `element` still has pending. */
+function resetAfterFeedback(element, reset) {
+    clearTimeout(feedbackTimers.get(element));
+    feedbackTimers.set(element, setTimeout(reset, COPIED_FEEDBACK_MS));
 }
 
 /**

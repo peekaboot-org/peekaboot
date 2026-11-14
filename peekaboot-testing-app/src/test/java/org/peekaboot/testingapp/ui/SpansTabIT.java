@@ -1153,6 +1153,34 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void aSpanEventIsMarkedOnItsTrackWithItsName() {
+        openTraceDeepLink(storeATraceWithASpanEvent());
+        overlay.waitFor("#pk-gantt-rows");
+
+        assertThat(overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').getAttribute('aria-label')"))
+                .isEqualTo("Event: exception");
+        assertThat(overlay.text(".pk-gantt-event-tooltip")).isEqualTo("exception");
+    }
+
+    /**
+     * The tooltip that names an event shows for the keyboard as it does for the pointer. Tab
+     * comes first, so the engine takes the focus that follows for keyboard focus.
+     */
+    @Test
+    void anEventMarkersTooltipShowsOnKeyboardFocus() {
+        String tooltipOpacity = "root => getComputedStyle(root.querySelector('.pk-gantt-event-tooltip')).opacity";
+        openTraceDeepLink(storeATraceWithASpanEvent());
+        overlay.waitFor(".pk-gantt-event-marker");
+        assertThat(overlay.evaluate(tooltipOpacity)).isEqualTo("0");
+        page.keyboard().press("Tab");
+
+        overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').focus()");
+
+        assertThat(overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').matches(':focus-visible')"))
+                .isEqualTo(true);
+        overlay.waitUntil("root => (" + tooltipOpacity + ")(root) === '1'");
+    }
+
+    private String storeATraceWithASpanEvent() {
         String traceId = "overlay-event-" + System.nanoTime();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("GET /events-fixture")
@@ -1162,13 +1190,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .tag("url.path", "/events-fixture")
                 .event("exception", 20)
                 .build());
-
-        openTraceDeepLink(traceId);
-        overlay.waitFor("#pk-gantt-rows");
-
-        assertThat(overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').getAttribute('aria-label')"))
-                .isEqualTo("Event: exception");
-        assertThat(overlay.text(".pk-gantt-event-tooltip")).isEqualTo("exception");
+        return traceId;
     }
 
     /**

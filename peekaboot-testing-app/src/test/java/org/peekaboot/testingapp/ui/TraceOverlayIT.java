@@ -405,7 +405,8 @@ class TraceOverlayIT extends TraceOverlayTestBase {
         tabRoot.forEach((tab, root) -> {
             overlay.openTab(tab);
             overlay.waitFor(root);
-            assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-tab-content .pk-empty')"))
+            assertThat((Boolean)
+                            overlay.evaluate("root => !!root.querySelector('#pk-tab-content .pk-empty:not([hidden])')"))
                     .as("tab %s fell back to its empty state", tab)
                     .isFalse();
         });
