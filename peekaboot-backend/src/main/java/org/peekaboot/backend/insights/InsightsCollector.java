@@ -97,12 +97,34 @@ public final class InsightsCollector {
             return;
         }
         running = true;
-        List<String> names = threadNames();
         for (int level = 0; level < rings.levelCount(); level++) {
-            int boundLevel = level;
-            Thread thread = Thread.ofVirtual().name(names.get(level)).unstarted(() -> runLevel(boundLevel));
-            threads.add(thread);
-            thread.start();
+            threads.add(startLevelThread(level));
+        }
+    }
+
+    /**
+     * Starts the thread of {@code level}. {@link #runLevel} catches a {@link RuntimeException}.
+     * A thread that anything else ends logs it and is replaced, so the level keeps running.
+     */
+    private Thread startLevelThread(int level) {
+        return Thread.ofVirtual()
+                .name(threadName(level))
+                .uncaughtExceptionHandler((thread, e) -> {
+                    log.error(
+                            "Peekaboot insights: the {} thread ended on an error; starting it again",
+                            thread.getName(),
+                            e);
+                    // stop() holds the monitor while it joins this thread
+                    if (running) {
+                        replaceLevelThread(level);
+                    }
+                })
+                .start(() -> runLevel(level));
+    }
+
+    private synchronized void replaceLevelThread(int level) {
+        if (running) {
+            threads.set(level, startLevelThread(level));
         }
     }
 
@@ -117,15 +139,10 @@ public final class InsightsCollector {
         return running;
     }
 
-    /** Names the level threads would run under, without starting anything. */
-    private List<String> threadNames() {
-        List<String> names = new ArrayList<>(rings.levelCount());
-        names.add("peekaboot-insights-tick");
-        for (int level = 1; level < rings.levelCount(); level++) {
-            names.add("peekaboot-insights-agg-"
-                    + IntervalFormat.humanize(Duration.ofMillis(rings.intervalMillis(level))));
-        }
-        return names;
+    private String threadName(int level) {
+        return level == 0
+                ? "peekaboot-insights-tick"
+                : "peekaboot-insights-agg-" + IntervalFormat.humanize(Duration.ofMillis(rings.intervalMillis(level)));
     }
 
     /**
