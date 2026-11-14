@@ -16,6 +16,8 @@ export const id = 'overview';
 export function create(container) {
     const tileRow = insightTileRow();
     wireHealthBanner(container);
+    let paramsSequence = 0;
+    const nextParamsId = () => `datasource-params-${++paramsSequence}`;
 
     function render(data, context = {}) {
         const {locale, timeZone} = context;
@@ -30,7 +32,7 @@ export function create(container) {
         renderOsInfo(container, runtime, formats);
         renderMachineInfo(container, runtime, formats);
         renderJvmDefaults(container, data.server, formats);
-        renderDataSourcesInfo(container, dataSources);
+        renderDataSourcesInfo(container, dataSources, nextParamsId);
         renderMemoryInfo(container, runtime, formats);
         renderHealthBanner(container, health, locale);
         renderHealthComponents(container, health?.components);
@@ -296,14 +298,14 @@ function renderJvmDefaults(container, server, formats) {
  * grid order. Their parent takes no box of its own (pk-contents), and is there for the
  * cards to be keyed in: one whose datasource did not change keeps its open params.
  */
-function renderDataSourcesInfo(container, dataSources) {
+function renderDataSourcesInfo(container, dataSources, nextParamsId) {
     keyedChildren(container.querySelector('#datasource-cards'), dataSources ?? [], {
         key: ds => ds.name || 'DataSource',
-        build: renderDataSourceCard
+        build: ds => renderDataSourceCard(ds, nextParamsId)
     });
 }
 
-function renderDataSourceCard(ds) {
+function renderDataSourceCard(ds, nextParamsId) {
     const name = ds.name || 'DataSource';
     const header = el('div', {className: 'pk-card__header pk-label'},
         el('span', {className: 'pk-card__icon', text: '\u{1F5C2}', attrs: {'aria-hidden': 'true'}}),
@@ -323,17 +325,23 @@ function renderDataSourceCard(ds) {
     if (params.length > 0) {
         // The backend (MaskingEngine) already masked sensitive connection params -
         // this just renders whatever value it sent, same as every other tab.
-        const paramsEl = el('div', {className: 'pk-datasources__params', attrs: {hidden: ''}},
+        const paramsId = nextParamsId();
+        const paramsEl = el('div', {className: 'pk-datasources__params', attrs: {id: paramsId, hidden: ''}},
             el('div', {className: 'pk-datasources__params-list'},
                 ...params.map(([key, value]) => kvRow(key, value, {tight: true, mono: true}))));
 
-        const toggleBtn = button({className: 'pk-btn pk-btn--small', text: 'Show Connection Params'});
+        const toggleBtn = button({
+            className: 'pk-btn pk-btn--small pk-btn--expand',
+            text: 'Connection Params',
+            attrs: {'aria-expanded': 'false', 'aria-controls': paramsId}
+        });
         body.appendChild(el('div', {className: 'pk-datasources__toggle'}, toggleBtn));
         card.appendChild(paramsEl);
 
         toggleBtn.addEventListener('click', () => {
-            paramsEl.hidden = !paramsEl.hidden;
-            toggleBtn.textContent = paramsEl.hidden ? 'Show Connection Params' : 'Hide Connection Params';
+            const willExpand = toggleBtn.getAttribute('aria-expanded') !== 'true';
+            toggleBtn.setAttribute('aria-expanded', String(willExpand));
+            paramsEl.hidden = !willExpand;
         });
     }
 
@@ -429,7 +437,8 @@ function renderHealthComponents(container, components) {
     }
 
     components.forEach(component => {
-        const modifier = healthModifier(healthSeverity(component.status || 'UNKNOWN'));
+        const status = component.status || 'UNKNOWN';
+        const modifier = healthModifier(healthSeverity(status));
         const dotClass = 'pk-status-dot' + (modifier ? ` pk-status-dot--${modifier}` : '');
         const detailsText = Object.entries(component.details || {})
             .filter(([, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
@@ -442,7 +451,9 @@ function renderHealthComponents(container, components) {
         grid.appendChild(el('div', {className: 'pk-component-grid__card'},
             el('div', {className: 'pk-component-grid__header'},
                 el('span', {className: 'pk-component-grid__name', text: component.name}),
-                el('span', {className: dotClass})),
+                el('span', {className: 'pk-component-grid__status'},
+                    el('span', {className: dotClass, attrs: {'aria-hidden': 'true'}}),
+                    status)),
             detailsText ? el('div', {className: 'pk-component-grid__details', text: detailsText}) : null));
     });
 }

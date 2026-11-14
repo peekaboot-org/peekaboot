@@ -246,8 +246,11 @@
     .pk-component-grid { grid-template-columns: repeat(4, 1fr); }
 }
 .pk-component-grid__card { padding: var(--pk-space-md); background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
-.pk-component-grid__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--pk-space-xs); }
+/* Wraps, so a long name pushes the status onto a second line instead of out of the card. */
+.pk-component-grid__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 var(--pk-space-sm); margin-bottom: var(--pk-space-xs); }
 .pk-component-grid__name { font-weight: 600; font-size: var(--pk-text-sm); color: var(--pk-text-strong); }
+/* The dot with its status word beside it, so colour is never the only cue. */
+.pk-component-grid__status { display: inline-flex; align-items: center; gap: var(--pk-space-xs); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-component-grid__details { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); overflow-wrap: anywhere; white-space: pre-line; }
 
 /* DataSources */

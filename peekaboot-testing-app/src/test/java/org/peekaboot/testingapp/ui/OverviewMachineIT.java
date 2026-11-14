@@ -293,7 +293,8 @@ class OverviewMachineIT extends PlaywrightTestBase {
     /**
      * The datasource card keeps its connection parameters behind a toggle: a JDBC URL's query
      * string carries whatever the deployment put there, so it is not on screen by default.
-     * The control has to say which way it switches, or a reader cannot tell it is a toggle.
+     * The label never changes: aria-expanded alone says which way the toggle stands, and
+     * aria-controls names the params it opens.
      */
     @Test
     void theDatasourceCardHidesItsConnectionParamsBehindAToggle() {
@@ -302,19 +303,41 @@ class OverviewMachineIT extends PlaywrightTestBase {
 
         Locator toggle = page.locator(DATASOURCE_TOGGLE).first();
         Locator params = page.locator(DATASOURCE_PARAMS).first();
-        assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
-        assertThat(params.isHidden()).isTrue();
+        assertThat(toggle.getAttribute("aria-controls")).isNotBlank().isEqualTo(params.getAttribute("id"));
+        assertConnectionParams(toggle, params, false);
 
         toggle.click();
 
-        assertThat(toggle.textContent()).isEqualTo("Hide Connection Params");
-        assertThat(params.isVisible()).isTrue();
+        assertConnectionParams(toggle, params, true);
         assertThat(params.textContent()).isNotBlank();
 
         toggle.click();
 
-        assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
-        assertThat(params.isHidden()).isTrue();
+        assertConnectionParams(toggle, params, false);
+    }
+
+    private static void assertConnectionParams(Locator toggle, Locator params, boolean open) {
+        assertThat(toggle.textContent()).isEqualTo("Connection Params");
+        assertThat(toggle.getAttribute("aria-expanded")).isEqualTo(String.valueOf(open));
+        assertThat(params.isVisible()).isEqualTo(open);
+    }
+
+    /**
+     * The testing app has two datasources, so a params id that repeats would point the
+     * second card's toggle at the first card's params.
+     */
+    @Test
+    void everyConnectionParamsToggleNamesTheParamsOfItsOwnCard() {
+        openDashboard();
+        page.waitForSelector(DATASOURCE_TOGGLE);
+
+        @SuppressWarnings("unchecked")
+        List<Boolean> namesItsOwnParams = (List<Boolean>) page.evalOnSelectorAll(DATASOURCE_TOGGLE, """
+                toggles => toggles.map(toggle => document.getElementById(toggle.getAttribute('aria-controls'))
+                        === toggle.closest('.pk-card').querySelector('.pk-datasources__params'))
+                """);
+
+        assertThat(namesItsOwnParams).hasSizeGreaterThan(1).containsOnly(true);
     }
 
     /**

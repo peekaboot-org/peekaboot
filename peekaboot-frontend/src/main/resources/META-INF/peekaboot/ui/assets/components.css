@@ -228,6 +228,10 @@
 /* min-height, not more padding: 2px padding measured 20px tall, under WCAG 2.2's
    24px target floor, and the extra height must not push the label off-centre. */
 .pk-btn--small { padding: 2px var(--pk-space-sm); min-height: 24px; font-size: var(--pk-text-xs); }
+/* The toggle of the region its aria-controls names. Its trailing chevron (the glyph
+   .pk-group__header draws) points down and flips up while the region is open. */
+.pk-btn--expand::after { content: '\25BE'; transition: transform var(--pk-transition); }
+.pk-btn--expand[aria-expanded="true"]::after { transform: rotate(180deg); }
 /* Primary bucket/segment selector - a top-level filter, so it carries more weight
    and a comfortable hit area rather than the compact --small treatment. */
 .pk-btn--bucket { padding: var(--pk-space-sm) var(--pk-space-md); font-size: var(--pk-text-sm); font-weight: 600; }

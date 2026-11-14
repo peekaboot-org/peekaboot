@@ -87,8 +87,36 @@ class OverviewTabIT extends PlaywrightTestBase {
         assertThat(dotStyle("#health-dot")).isEqualTo(List.of(success, "12px", "pk-pulse"));
         page.click("#health-banner");
         page.waitForSelector("#components-grid .pk-component-grid__header");
-        List<String> componentDot = dotStyle("#components-grid .pk-component-grid__header > span:last-child");
+        List<String> componentDot = dotStyle("#components-grid .pk-component-grid__status .pk-status-dot");
         assertThat(componentDot).isEqualTo(List.of(success, "8px", "none"));
+    }
+
+    /**
+     * The dot tells the states apart by colour alone, so each component names its status
+     * beside it, and the dot stays out of what a screen reader announces.
+     */
+    @Test
+    void everyHealthComponentSaysItsStatusInText() {
+        openDashboard();
+        page.waitForFunction("() => document.querySelector('#health-status-text').textContent.trim() === 'UP'");
+        page.click("#health-banner");
+        page.waitForSelector("#components-grid .pk-component-grid__card");
+
+        @SuppressWarnings("unchecked")
+        List<List<String>> components =
+                (List<List<String>>) page.evalOnSelectorAll("#components-grid .pk-component-grid__card", """
+                cards => cards.map(card => {
+                    const status = card.querySelector('.pk-component-grid__header > .pk-component-grid__status:last-child');
+                    const dot = status?.querySelector('.pk-status-dot');
+                    return [status?.textContent.trim() ?? '', dot?.getAttribute('aria-hidden') ?? ''];
+                })
+                """);
+
+        assertThat(components).isNotEmpty().allSatisfy(component -> {
+            assertThat(component.get(0)).as("the status word").isIn("UP", "DOWN", "OUT_OF_SERVICE", "UNKNOWN");
+            assertThat(component.get(1)).as("the dot's aria-hidden").isEqualTo("true");
+        });
+        assertThat(components).extracting(component -> component.get(0)).contains("UP");
     }
 
     @SuppressWarnings("unchecked")
