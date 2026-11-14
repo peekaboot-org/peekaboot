@@ -19,10 +19,11 @@ import tools.jackson.core.JacksonException;
  *
  * <p>The file is read on a virtual thread, never on the startup path - an application
  * embedding Peekaboot must not boot one millisecond slower for a dev tool's history.
- * Recording a start therefore queues behind that load instead of waiting for it, while
- * recording a stop, where there is no later to defer to, waits and writes. A stop that
- * cannot see the loaded history is dropped: rewriting the file from a log that never
- * read itself would erase what it holds.
+ * Recording a start therefore queues behind that load, however long it takes, instead of
+ * making its caller wait: a slow disk must not cost the run its start. Recording a stop,
+ * where there is no later to defer to, waits a bounded time and writes. A stop that
+ * cannot see the loaded history by then is dropped: rewriting the file from a log that
+ * never read itself would erase what it holds.
  */
 public final class LifecycleEventLog {
 
@@ -44,7 +45,7 @@ public final class LifecycleEventLog {
         this(file, LOAD_WAIT);
     }
 
-    /** {@code loadWait} bounds how long a recorder waits for the history; tests shorten it. */
+    /** {@code loadWait} bounds how long a stop or a reader waits for the history; tests shorten it. */
     LifecycleEventLog(LifecycleEventFile file, Duration loadWait) {
         this(file, loadWait, RECORD_ON_VIRTUAL_THREAD);
     }
@@ -54,7 +55,7 @@ public final class LifecycleEventLog {
         this(file, LOAD_WAIT, recordWhenLoadedExecutor);
     }
 
-    private LifecycleEventLog(LifecycleEventFile file, Duration loadWait, Executor recordWhenLoadedExecutor) {
+    LifecycleEventLog(LifecycleEventFile file, Duration loadWait, Executor recordWhenLoadedExecutor) {
         this.file = file;
         this.loadWait = loadWait;
         this.recordWhenLoadedExecutor = recordWhenLoadedExecutor;
@@ -89,14 +90,17 @@ public final class LifecycleEventLog {
         });
     }
 
-    /** Appends as soon as the history is in memory, on a virtual thread so the caller never waits. */
+    /**
+     * Appends once the history is in memory, however long that takes, on a virtual thread
+     * so the caller never waits.
+     */
     public void recordWhenLoaded(LifecycleEvent event) {
-        recordWhenLoadedExecutor.execute(() -> appendOnceLoaded(event));
+        recordWhenLoadedExecutor.execute(() -> appendIfLoaded(awaitLoadWithoutLimit(), event));
     }
 
     /** Appends and persists before returning; drops the event if the history never arrived. */
     public void recordAndPersist(LifecycleEvent event) {
-        appendOnceLoaded(event);
+        appendIfLoaded(awaitLoad(), event);
     }
 
     /** The history, oldest first. */
@@ -107,8 +111,8 @@ public final class LifecycleEventLog {
         }
     }
 
-    private void appendOnceLoaded(LifecycleEvent event) {
-        if (!awaitLoad()) {
+    private void appendIfLoaded(boolean historyLoaded, LifecycleEvent event) {
+        if (!historyLoaded) {
             log.debug("Peekaboot lifecycle: history not loaded, dropping {} event", event.type());
             return;
         }
@@ -173,6 +177,16 @@ public final class LifecycleEventLog {
     private boolean awaitLoad() {
         try {
             return loaded.await(loadWait.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private boolean awaitLoadWithoutLimit() {
+        try {
+            loaded.await();
+            return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;

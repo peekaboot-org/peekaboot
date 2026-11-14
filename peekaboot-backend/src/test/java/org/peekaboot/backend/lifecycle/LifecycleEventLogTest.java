@@ -16,6 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,6 +31,8 @@ class LifecycleEventLogTest {
 
     @TempDir
     Path directory;
+
+    private final AtomicReference<Thread> recorder = new AtomicReference<>();
 
     private LifecycleEventFile file() {
         return new LifecycleEventFile(directory.resolve(LifecycleEventFile.FILE_NAME));
@@ -54,6 +58,16 @@ class LifecycleEventLogTest {
         return log;
     }
 
+    /** Runs {@code recordWhenLoaded}'s append on a platform thread the test can watch and interrupt. */
+    private Executor onAWatchedThread() {
+        return task ->
+                recorder.set(Thread.ofPlatform().name("recorder-under-test").start(task));
+    }
+
+    private void awaitTheRecorderWaiting() {
+        await().atMost(Duration.ofSeconds(2)).until(() -> recorder.get().getState() == Thread.State.WAITING);
+    }
+
     private StorageDirectory storage(boolean enabled) {
         PeekabootProperties.Storage storage = new PeekabootProperties.Storage();
         storage.setEnabled(enabled);
@@ -70,8 +84,8 @@ class LifecycleEventLogTest {
     }
 
     /**
-     * Recorded before the load has even been submitted: a caller that waited would sit out
-     * the full load wait here and drop the start, and the history would end up empty.
+     * Recorded before the load has even been submitted: a caller that waited would never
+     * come back to submit it.
      */
     @Test
     void theStartIsAppendedWithoutTheCallerWaitingForTheLoad() {
@@ -244,22 +258,38 @@ class LifecycleEventLogTest {
         assertThat(file.read()).hasSize(2);
     }
 
-    /** The start is dropped for the same reason as the stop above, and says so the same way. */
+    /** A start has a later to defer to, so no limit on the load costs the run its start. */
     @Test
-    void aStartThatNeverSeesTheHistoryIsDroppedAndSaysSo() {
-        LifecycleEventLog log = new LifecycleEventLog(file(), Duration.ofMillis(50));
+    void aStartWaitsForTheHistoryHoweverLongItTakes() {
+        LifecycleEventLog log = new LifecycleEventLog(file(), Duration.ZERO, onAWatchedThread());
+        log.recordWhenLoaded(start(1_000).build());
+        awaitTheRecorderWaiting();
+
+        log.beginLoad();
+
+        await().untilAsserted(() ->
+                assertThat(file().read()).extracting(LifecycleEvent::epochMs).containsExactly(1_000L));
+    }
+
+    /** Only an interrupt ends a start's wait, and it says so the way a dropped stop does. */
+    @Test
+    void aStartInterruptedWhileItWaitsIsDroppedAndSaysSo() throws InterruptedException {
+        LifecycleEventLog log = new LifecycleEventLog(file(), Duration.ZERO, onAWatchedThread());
 
         try (LogCapture capture = LogCapture.attach(LifecycleEventLog.class, Level.DEBUG)) {
             log.recordWhenLoaded(start(1_000).build());
+            awaitTheRecorderWaiting();
 
-            await().atMost(Duration.ofSeconds(5))
-                    .until(() -> !capture.appender().list.isEmpty());
+            recorder.get().interrupt();
+
+            assertThat(recorder.get().join(Duration.ofSeconds(5))).isTrue();
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Peekaboot lifecycle: history not loaded, dropping START event");
             });
         }
+        assertThat(file().read()).isEmpty();
     }
 
     @Test
