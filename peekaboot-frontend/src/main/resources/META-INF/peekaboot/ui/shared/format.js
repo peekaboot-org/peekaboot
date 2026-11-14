@@ -1,19 +1,51 @@
-const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+const DURATION_UNITS = [
+    {unit: 'ms', size: 1, decimals: 0},
+    {unit: 's', size: 1000, decimals: 2},
+    {unit: 'm', size: 60000, decimals: 2},
+    {unit: 'h', size: 3600000, decimals: 2},
+    {unit: 'd', size: 86400000, decimals: 2}
+];
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'].map((unit, exponent) => ({unit, size: 1024 ** exponent}));
+// A meter's seconds, counted in microseconds.
+const TIMER_UNITS = [
+    {unit: 'µs', size: 1, decimals: 0},
+    {unit: 'ms', size: 1000, decimals: 2},
+    {unit: 's', size: 1000000, decimals: 3}
+];
 
-export function formatDurationMs(ms) {
-    if (ms == null || ms < 0) return '-';
-    if (ms < 1) return '<1ms';
-    if (ms < 1000) return Math.round(ms) + 'ms';
-    if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
-    return (ms / 60000).toFixed(2) + 'm';
+/** A duration or a size: a finite number from zero up. */
+function isAmount(value) {
+    return Number.isFinite(value) && value >= 0;
 }
 
-// formatDurationMs's units, each with the fewest decimals it shows.
-const TIMELINE_UNITS = [
-    {below: 1000, unit: 'ms', scale: 1, decimals: 0},
-    {below: 60000, unit: 's', scale: 1000, decimals: 2},
-    {below: Infinity, unit: 'm', scale: 60000, decimals: 2}
-];
+/** toFixed's rounding as a number: the figure a unit is chosen by is then the figure shown. */
+function rounded(value, decimals) {
+    return Number(value.toFixed(decimals));
+}
+
+/**
+ * `value` in the smallest unit of `ladder` in which it, rounded to the decimals it is shown
+ * with, stays below one of the next unit: 999.6ms is 1.00s, where choosing the unit before
+ * rounding gives "1000ms". `decimalsOf` is for a ladder whose decimals follow the figure.
+ */
+function onLadder(value, ladder, decimalsOf = (amount, step) => step.decimals) {
+    const last = ladder.length - 1;
+    for (let index = 0; ; index++) {
+        const {unit, size} = ladder[index];
+        const amount = value / size;
+        const decimals = decimalsOf(amount, ladder[index]);
+        if (index === last || rounded(amount, decimals) < ladder[index + 1].size / size) {
+            return {unit, size, amount, decimals};
+        }
+    }
+}
+
+export function formatDurationMs(ms) {
+    if (!isAmount(ms)) return '-';
+    if (ms < 1) return '<1ms';
+    const {unit, amount, decimals} = onLadder(ms, DURATION_UNITS);
+    return amount.toFixed(decimals) + unit;
+}
 
 /**
  * The five labels of a timeline axis from 0 to totalMs, one per quarter. All five share the
@@ -21,17 +53,17 @@ const TIMELINE_UNITS = [
  * rounding each quarter on its own turns a 3ms trace's 2.25ms into "2ms", next to 1.5ms's.
  */
 export function formatTimelineTicks(totalMs) {
-    const {unit, scale, decimals: minDecimals} = TIMELINE_UNITS.find(candidate => totalMs < candidate.below);
-    const step = totalMs / scale / 4;
+    const {unit, size, decimals: minDecimals} = onLadder(totalMs, DURATION_UNITS);
+    const step = totalMs / size / 4;
     let decimals = minDecimals;
     while (step > 0 && step < 10 ** -decimals) decimals++;
     return [0, 1, 2, 3, 4].map(quarter => (quarter === 0 ? '0' : (step * quarter).toFixed(decimals)) + unit);
 }
 
 /**
- * Sibling of formatDurationMs for spans too long for it to say anything useful (two days
- * would render as "2880.00m") - the three largest non-zero units ("1 day, 2 hours, 3
- * minutes"), plain seconds below a minute. Mirrors the backend's UptimeFormat.humanize
+ * Sibling of formatDurationMs for a span read in words, where one figure ("1.09d") says
+ * too little - the three largest non-zero units ("1 day, 2 hours, 3 minutes"), plain
+ * seconds below a minute. Mirrors the backend's UptimeFormat.humanize
  * unit-by-unit so a run's duration reads identically in the log banner and this
  * dashboard; null and negative input differ, falling back to this module's own '-'
  * convention instead of the backend's "0 seconds", as does a run past 999 days, which is
@@ -65,17 +97,18 @@ export function formatInterval(ms) {
     return `${short(ms / 86400000)}d`;
 }
 
+/** Two below 10, one below 100, none from there, judged on the figure as shown: 99.96 is "100", not "100.0". */
+function sizeDecimals(amount) {
+    if (rounded(amount, 2) < 10) return 2;
+    if (rounded(amount, 1) < 100) return 1;
+    return 0;
+}
+
 export function formatBytes(bytes) {
-    if (bytes == null || bytes < 0) return '-';
+    if (!isAmount(bytes)) return '-';
     if (bytes === 0) return '0 B';
-
-    const exponent = bytes < 1
-        ? 0
-        : Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), BYTE_UNITS.length - 1);
-    const value = bytes / Math.pow(1024, exponent);
-    const decimals = value >= 100 ? 0 : (value >= 10 ? 1 : 2);
-
-    return value.toFixed(decimals) + ' ' + BYTE_UNITS[exponent];
+    const {unit, amount, decimals} = onLadder(bytes, BYTE_UNITS, sizeDecimals);
+    return amount.toFixed(decimals) + ' ' + unit;
 }
 
 /** Formats API host objects ({hostname, port}) as "hostname:port, ...". */
@@ -199,6 +232,26 @@ export function formatMetricValue(value, unit, {locale} = {}) {
         case 'count':
         default: return formatMetricCount(value, locale);
     }
+}
+
+/**
+ * One statistic of a meter by the meter's base unit: bytes as a size, seconds by magnitude
+ * with the sign kept, anything else as a number. Apart from formatMetricValue's rule on
+ * purpose: a raw statistic needs a small value's precision, which a chart axis has no room for.
+ */
+export function formatMeasurementValue(value, baseUnit, {locale} = {}) {
+    if (value === null || value === undefined || Number.isNaN(value)) return '-';
+
+    if (baseUnit === 'bytes') return formatBytes(value);
+
+    if (baseUnit === 'seconds') {
+        const {unit, amount, decimals} = onLadder(Math.abs(value) * 1000000, TIMER_UNITS);
+        return `${value < 0 ? '-' : ''}${amount.toFixed(decimals)} ${unit}`;
+    }
+
+    if (Math.abs(value) >= 1000) return value.toLocaleString(locale, {maximumFractionDigits: 2});
+    if (value !== 0 && Math.abs(value) < 0.01) return value.toExponential(2);
+    return value.toLocaleString(locale, {maximumFractionDigits: 4});
 }
 
 /**

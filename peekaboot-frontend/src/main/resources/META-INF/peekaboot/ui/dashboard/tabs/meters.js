@@ -7,7 +7,7 @@
 import {badge} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
 import {highlightText} from '../../shared/markup.js';
-import {formatBytes, formatCount, formatNumber} from '../../shared/format.js';
+import {formatCount, formatMeasurementValue, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'meters';
@@ -87,23 +87,7 @@ function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
     const statsEl = el('div', {className: 'pk-metric__stats'},
         ...(measurement.statistics || []).map(stat => el('span', {className: 'pk-metric__stat'},
             el('span', {className: 'pk-metric__stat-name', text: stat.name}),
-            el('span', {className: 'pk-metric__stat-value', text: formatMeasurementValue(stat.value, baseUnit, locale)}))));
+            el('span', {className: 'pk-metric__stat-value', text: formatMeasurementValue(stat.value, baseUnit, {locale})}))));
 
     return el('div', {className: 'pk-kv'}, tagsEl, statsEl);
-}
-
-function formatMeasurementValue(value, unit, locale) {
-    if (value === null || value === undefined || Number.isNaN(value)) return '-';
-
-    if (unit === 'bytes') return formatBytes(value);
-
-    if (unit === 'seconds') {
-        if (value < 0.001) return `${(value * 1000000).toFixed(0)} µs`;
-        if (value < 1) return `${(value * 1000).toFixed(2)} ms`;
-        return `${value.toFixed(3)} s`;
-    }
-
-    if (Math.abs(value) >= 1000) return value.toLocaleString(locale, {maximumFractionDigits: 2});
-    if (value !== 0 && Math.abs(value) < 0.01) return value.toExponential(2);
-    return value.toLocaleString(locale, {maximumFractionDigits: 4});
 }
