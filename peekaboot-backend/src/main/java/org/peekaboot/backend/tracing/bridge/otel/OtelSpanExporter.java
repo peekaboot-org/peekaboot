@@ -45,15 +45,12 @@ public class OtelSpanExporter implements SpanExporter {
             try {
                 Map<String, String> tags = OtelSpanConverter.tags(otelSpan);
                 if (shouldSkipSpan(otelSpan, tags)) {
-                    // A skipped root ends an excluded request's trace. The discard assumes
-                    // nothing more arrives under that id: the excluded prefixes serve no endpoint
-                    // that outlives its response, so the children exported alongside the root and
-                    // the logs arrived synchronously. A later event would rebuild the id as an
-                    // empty, rootless bundle.
-                    if (!otelSpan.getParentSpanContext().isValid()) {
-                        eventPublisher.publishEvent(new TraceDiscardedEvent(
-                                otelSpan.getSpanContext().getTraceId()));
-                    }
+                    // A skipped span ends an excluded request. The discard assumes nothing more
+                    // arrives for that request: the excluded prefixes serve no endpoint that
+                    // outlives its response, so its children were exported before it and its logs
+                    // arrived synchronously. A later event would rebuild the id as an empty,
+                    // rootless bundle.
+                    discardWhatItStored(otelSpan);
                     continue;
                 }
                 org.peekaboot.backend.tracing.event.SpanData spanData =
@@ -65,6 +62,22 @@ public class OtelSpanExporter implements SpanExporter {
             }
         }
         return CompletableResultCode.ofSuccess();
+    }
+
+    /**
+     * A span without a parent began its trace, which goes whole. One continuing a remote caller
+     * ends a probe that sent a {@code traceparent} header, or a call this application made to its
+     * own excluded path, so the discard names the span and the store's listener tells the two
+     * apart. Under a local parent the trace belongs to the request around it, and stays.
+     */
+    private void discardWhatItStored(SpanData skipped) {
+        SpanContext span = skipped.getSpanContext();
+        SpanContext parent = skipped.getParentSpanContext();
+        if (!parent.isValid()) {
+            eventPublisher.publishEvent(new TraceDiscardedEvent(span.getTraceId(), null));
+        } else if (parent.isRemote()) {
+            eventPublisher.publishEvent(new TraceDiscardedEvent(span.getTraceId(), span.getSpanId()));
+        }
     }
 
     private void warnOnce(SpanContext span, RuntimeException e) {
@@ -83,7 +96,7 @@ public class OtelSpanExporter implements SpanExporter {
      * context-stripping check. Only SERVER spans are judged: the exclusions describe inbound
      * requests, and an outbound call to a remote {@code /actuator/health} is part of its trace.
      * Judged per span: the children of such a request carry no path and are stored, which is
-     * what the discard in {@link #export} undoes once their root arrives.
+     * what {@link #discardWhatItStored} undoes once the request's own span arrives.
      */
     private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
         if (span.getKind() != SpanKind.SERVER) {

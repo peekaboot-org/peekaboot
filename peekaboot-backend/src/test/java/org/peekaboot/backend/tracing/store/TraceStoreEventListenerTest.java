@@ -31,14 +31,14 @@ class TraceStoreEventListenerTest {
     void setUp() {
         store = TraceStores.withDefaults();
         ownContext = new StaticApplicationContext();
-        listener = new TraceStoreEventListener(TraceInputs.into(store), ownContext);
+        listener = new TraceStoreEventListener(TraceInputs.into(store), store, ownContext);
     }
 
     /** The ready event goes the same way, so the trace journal's restore gate holds it back like any input. */
     @Test
     void handsEveryEventOnAsAnInput() {
         List<TraceInput> handedOn = new ArrayList<>();
-        TraceStoreEventListener recording = new TraceStoreEventListener(handedOn::add, ownContext);
+        TraceStoreEventListener recording = new TraceStoreEventListener(handedOn::add, store, ownContext);
         SpanData spanData = span("span1").build();
         LogCapturedEvent logged = log("trace1").build();
         RequestCompletedEvent request = RequestCompletedEvents.minimal("trace1");
@@ -48,7 +48,7 @@ class TraceStoreEventListenerTest {
         recording.onSpanData(new SpanDataEvent(spanData));
         recording.onLogCaptured(logged);
         recording.onRequestCompleted(request);
-        recording.onTraceDiscarded(new TraceDiscardedEvent("trace1"));
+        recording.onTraceDiscarded(new TraceDiscardedEvent("trace1", null));
         recording.onApplicationReady(ready);
 
         assertThat(handedOn)
@@ -87,9 +87,42 @@ class TraceStoreEventListenerTest {
     void onTraceDiscarded_removesTheTraceFromTheStore() {
         listener.onSpanData(new SpanDataEvent(span("span1").build()));
 
-        listener.onTraceDiscarded(new TraceDiscardedEvent("trace1"));
+        listener.onTraceDiscarded(new TraceDiscardedEvent("trace1", null));
 
         assertThat(store.getTrace("trace1")).isEmpty();
+    }
+
+    /** A parentless excluded root began the trace itself, so nothing under its id is another request's. */
+    @Test
+    void aTraceAnExcludedRootBeganIsDiscardedWhateverItHolds() {
+        listener.onSpanData(
+                new SpanDataEvent(span("foreign").parent("elsewhere").build()));
+
+        listener.onTraceDiscarded(new TraceDiscardedEvent("trace1", null));
+
+        assertThat(store.getTrace("trace1")).isEmpty();
+    }
+
+    /** {@code S} is the probe's skipped server span: what the health check stored hangs from it and goes with it. */
+    @Test
+    void aProbeContinuingARemoteCallerIsDiscarded() {
+        listener.onSpanData(new SpanDataEvent(span("child").parent("S").build()));
+
+        listener.onTraceDiscarded(new TraceDiscardedEvent("trace1", "S"));
+
+        assertThat(store.getTrace("trace1")).isEmpty();
+    }
+
+    /** Its inner server span continues a remote caller as a probe's does, and the caller is the request itself. */
+    @Test
+    void aRequestThatCalledItsOwnExcludedPathKeepsItsTrace() {
+        listener.onSpanData(new SpanDataEvent(span("child").parent("S").build()));
+        listener.onLogCaptured(log("trace1").inSpan("outer-handler").at("ERROR").build());
+
+        listener.onTraceDiscarded(new TraceDiscardedEvent("trace1", "S"));
+
+        assertThat(store.getTrace("trace1")).isPresent();
+        assertThat(store.bucketsOf("trace1")).contains(TraceBucket.ERRORS);
     }
 
     /** The run starts at the ready event's own timestamp, the instant the lifecycle log stamps it with. */

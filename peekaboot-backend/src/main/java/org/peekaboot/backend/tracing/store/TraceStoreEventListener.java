@@ -13,15 +13,19 @@ import org.springframework.context.event.EventListener;
 /**
  * The store's single write entry point: one {@code @EventListener} per event type the capture side
  * publishes, and the run's ready event, each handed on as a {@link TraceInput} to the trace journal
- * where one runs, else straight into the store.
+ * where one runs, else straight into the store. A discard is handed on only for a trace that holds
+ * the excluded request and nothing else.
  */
 public class TraceStoreEventListener {
 
     private final TraceInputs inputs;
+    private final TraceStore store;
     private final ApplicationContext ownContext;
 
-    public TraceStoreEventListener(TraceInputs inputs, ApplicationContext ownContext) {
+    /** @param store the store {@code inputs} end up in, read to judge a discard */
+    public TraceStoreEventListener(TraceInputs inputs, TraceStore store, ApplicationContext ownContext) {
         this.inputs = inputs;
+        this.store = store;
         this.ownContext = ownContext;
     }
 
@@ -42,7 +46,21 @@ public class TraceStoreEventListener {
 
     @EventListener
     public void onTraceDiscarded(TraceDiscardedEvent event) {
-        inputs.accept(new TraceInput.TraceDiscarded(event.traceId()));
+        if (holdsOnlyTheExcludedRequest(event)) {
+            inputs.accept(new TraceInput.TraceDiscarded(event.traceId()));
+        }
+    }
+
+    /**
+     * A trace the excluded span began holds nothing else. One it continued from a remote caller may
+     * be a request of this application that called its own excluded path, and keeps what it stored.
+     */
+    private boolean holdsOnlyTheExcludedRequest(TraceDiscardedEvent event) {
+        String continuingSpanId = event.continuingSpanId();
+        return continuingSpanId == null
+                || store.getTrace(event.traceId())
+                        .filter(bundle -> bundle.liesUnder(continuingSpanId))
+                        .isPresent();
     }
 
     /** The run starts at the ready event's own timestamp, the instant the lifecycle log stamps the run with. */

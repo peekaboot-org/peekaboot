@@ -48,6 +48,7 @@ class OtelSpanExporterTest {
 
     private InMemoryTraceStore storage;
     private List<SpanDataEvent> publishedEvents;
+    private List<TraceDiscardedEvent> publishedDiscards;
     private ApplicationEventPublisher eventPublisher;
     private OtelSpanExporter exporter;
 
@@ -58,6 +59,7 @@ class OtelSpanExporterTest {
     void setUp() {
         storage = TraceStores.withDefaults();
         publishedEvents = new ArrayList<>();
+        publishedDiscards = new ArrayList<>();
         eventPublisher = event -> {
             if (event instanceof SpanDataEvent spanDataEvent) {
                 if (spanDataEvent.spanData().spanId().equals(failingSpanId)) {
@@ -66,6 +68,7 @@ class OtelSpanExporterTest {
                 publishedEvents.add(spanDataEvent);
                 storage.addSpan(spanDataEvent.spanData());
             } else if (event instanceof TraceDiscardedEvent discarded) {
+                publishedDiscards.add(discarded);
                 storage.discard(discarded.traceId());
             }
         };
@@ -232,7 +235,42 @@ class OtelSpanExporterTest {
         assertThat(storage.getTrace(traceId)).isPresent();
         exporter.export(List.of(root));
 
+        assertThat(publishedDiscards).containsExactly(new TraceDiscardedEvent(traceId, null));
         assertThat(storage.getTrace(traceId)).isEmpty();
+    }
+
+    /**
+     * A probe that sends a {@code traceparent} header: its server span is no root, and the same
+     * span ends a request that called its own excluded path. The discard names the span, and
+     * the store's listener tells the two apart.
+     */
+    @Test
+    void skippingAServerSpanThatContinuesARemoteCallerNamesItForTheDiscard() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String spanId = "0000000000000001";
+        SpanContext caller = SpanContext.createFromRemoteParent(
+                traceId, "aaaaaaaaaaaaaaaa", TraceFlags.getSampled(), TraceState.getDefault());
+
+        exporter.export(List.of(
+                healthCheck(traceId, spanId).setParentSpanContext(caller).build()));
+
+        assertThat(publishedEvents).isEmpty();
+        assertThat(publishedDiscards).containsExactly(new TraceDiscardedEvent(traceId, spanId));
+    }
+
+    /** A parent in this process is exported and stored, so the trace is its request's to keep. */
+    @Test
+    void skippingAServerSpanUnderALocalParentDiscardsNothing() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        SpanContext localParent =
+                SpanContext.create(traceId, "aaaaaaaaaaaaaaaa", TraceFlags.getSampled(), TraceState.getDefault());
+
+        exporter.export(List.of(healthCheck(traceId, "0000000000000001")
+                .setParentSpanContext(localParent)
+                .build()));
+
+        assertThat(publishedEvents).isEmpty();
+        assertThat(publishedDiscards).isEmpty();
     }
 
     /**
@@ -578,6 +616,12 @@ class OtelSpanExporterTest {
 
     private static SpanData createTestSpan(String traceId, String spanId, String name, SpanKind kind) {
         return testSpanBuilder(traceId, spanId, name, kind).build();
+    }
+
+    /** The server span of a request on an excluded prefix; a test sets its parent. */
+    private static TestSpanData.Builder healthCheck(String traceId, String spanId) {
+        return testSpanBuilder(traceId, spanId, "GET /actuator/health", SpanKind.SERVER)
+                .setAttributes(Attributes.of(URL_PATH_KEY, "/actuator/health"));
     }
 
     /** A finished one-second span from {@code test-service}, started 2026-01-01T00:00:00Z; a test sets what it asserts on. */

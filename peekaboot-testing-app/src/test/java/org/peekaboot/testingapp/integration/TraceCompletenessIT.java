@@ -75,6 +75,30 @@ class TraceCompletenessIT extends TestingAppITBase {
                 .isEqualTo("SERVER");
     }
 
+    /**
+     * A probe that sends a traceparent stores its health check's spans under the caller's id, and its
+     * skipped server span takes them along.
+     */
+    @Test
+    void anExcludedRequestContinuingACallersTraceLeavesNoTrace() {
+        String callerTraceId = HexFormat.of().formatHex(randomBytes(16));
+        String callerSpanId = HexFormat.of().formatHex(randomBytes(8));
+
+        api.restClient()
+                .get()
+                .uri("/actuator/health")
+                .header("traceparent", "00-" + callerTraceId + "-" + callerSpanId + "-01")
+                .retrieve()
+                .toBodilessEntity();
+
+        // the marker's root ends after the probe's server span, and the exporter hands spans over in end order
+        String marker = traces.get("/persons");
+        traces.awaitTrace(marker, TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        assertThat(api.statusOf("/peekaboot/api/traces/" + callerTraceId).value())
+                .isEqualTo(404);
+    }
+
     private static byte[] randomBytes(int length) {
         byte[] bytes = new byte[length];
         ThreadLocalRandom.current().nextBytes(bytes);

@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.Monitors;
+import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
@@ -891,6 +892,59 @@ class TraceDataBundleTest {
 
         assertThat(captured.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
         assertThat(captured.droppedLogs()).isEqualTo(2);
+    }
+
+    /** {@code S} is the skipped server span of an excluded request: never stored, and what the request stored hangs from it. */
+    @Test
+    void whatAnExcludedRequestStoredLiesUnderItsServerSpan() {
+        TraceDataBundle bundle = bundle("trace1", 10, NO_CAP);
+        bundle.addSpan(plainSpan("grandchild", "child", 0, 1), UNFILED);
+        bundle.addSpan(plainSpan("child", "S", 0, 2), UNFILED);
+        bundle.addLog(log("trace1").inSpan("child").build(), UNFILED);
+        bundle.addLog(log("trace1").inSpan("S").build(), UNFILED);
+
+        assertThat(bundle.liesUnder("S")).isTrue();
+    }
+
+    /** A span and a log that name a folded-away duplicate hang from the span it folded into. */
+    @Test
+    void whatHangsFromAFoldedDuplicateLiesUnderTheSpanItsSurvivorHangsFrom() {
+        TraceDataBundle bundle = bundle("trace1", 10, NO_CAP);
+        bundle.addSpan(plainSpan("leaf", "dup", 0, 1), UNFILED);
+        bundle.addSpan(jdbcDuplicate("dup", "real", SQL).build(), UNFILED);
+        bundle.addSpan(jdbcQuery("real", SQL).parent("S").build(), UNFILED);
+        bundle.addLog(log("trace1").inSpan("dup").build(), UNFILED);
+
+        assertThat(bundle.liesUnder("S")).isTrue();
+    }
+
+    @Test
+    void aSpanOfAnotherRequestDoesNotLieUnderIt() {
+        TraceDataBundle bundle = bundle("trace1", 10, NO_CAP);
+        bundle.addSpan(plainSpan("child", "S", 0, 1), UNFILED);
+        bundle.addSpan(plainSpan("outer-query", "outer", 0, 1), UNFILED);
+
+        assertThat(bundle.liesUnder("S")).isFalse();
+    }
+
+    /** A log is captured as it is written, so the calling request's line is there before any of its spans. */
+    @Test
+    void aLogOfAnotherRequestDoesNotLieUnderIt() {
+        TraceDataBundle bundle = bundle("trace1", 10, NO_CAP);
+        bundle.addSpan(plainSpan("child", "S", 0, 1), UNFILED);
+        bundle.addLog(log("trace1").inSpan("outer-handler").build(), UNFILED);
+
+        assertThat(bundle.liesUnder("S")).isFalse();
+    }
+
+    /** An excluded request is never captured, so a stored request is another's. */
+    @Test
+    void aStoredRequestDoesNotLieUnderIt() {
+        TraceDataBundle bundle = bundle("trace1", 10, NO_CAP);
+        bundle.addSpan(plainSpan("child", "S", 0, 1), UNFILED);
+        bundle.setRequest(RequestCompletedEvents.minimal("trace1"));
+
+        assertThat(bundle.liesUnder("S")).isFalse();
     }
 
     /**

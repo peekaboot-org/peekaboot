@@ -383,6 +383,40 @@ public class TraceDataBundle {
     }
 
     /**
+     * Whether everything stored hangs from {@code spanId}, a span that is not stored itself: every
+     * span descends from it, every log names it or a stored span, and no request is stored. That is
+     * what an excluded request leaves under its skipped server span; anything else is another
+     * request's. The log trim's lock and the span lock are taken one after the other, as in
+     * {@link #remnant()}.
+     */
+    public boolean liesUnder(String spanId) {
+        List<LogCapturedEvent> kept = capturedLogs().logs();
+        synchronized (spansLock) {
+            return request == null
+                    && spansById.values().stream().allMatch(span -> descendsFrom(span, spanId))
+                    && kept.stream().allMatch(log -> isWrittenUnder(log, spanId));
+        }
+    }
+
+    /** Follows the resolved parents through the stored spans; must run under {@code spansLock}. */
+    private boolean descendsFrom(SpanData span, String ancestorId) {
+        SpanData current = span;
+        while (current != null) {
+            String parentId = resolve(current.parentId());
+            if (ancestorId.equals(parentId)) {
+                return true;
+            }
+            current = spansById.get(parentId);
+        }
+        return false;
+    }
+
+    /** Whether {@code log} names {@code spanId} or a stored span; must run under {@code spansLock}. */
+    private boolean isWrittenUnder(LogCapturedEvent log, String spanId) {
+        return spanId.equals(log.spanId()) || spansById.containsKey(resolve(log.spanId()));
+    }
+
+    /**
      * Seeds what a fold carried for the inputs it did not write; the replay calls it before the trace's
      * kept inputs. It files the trace in no bucket: the snapshot's bucket lines set them all.
      */

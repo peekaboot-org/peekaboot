@@ -69,10 +69,11 @@ public class PeekabootTracingAutoConfiguration {
     public TraceStoreEventListener peekabootTraceStoreEventListener(
             ErrorDigestRecorder errorDigestRecorder,
             ObjectProvider<TraceJournal> traceJournal,
+            TraceStore traceStore,
             ApplicationContext applicationContext) {
         TraceJournal journal = traceJournal.getIfAvailable();
         return new TraceStoreEventListener(
-                journal != null ? journal : errorDigestRecorder.liveInputs(), applicationContext);
+                journal != null ? journal : errorDigestRecorder.liveInputs(), traceStore, applicationContext);
     }
 
     /** Storage on, and traces not switched off on their own; nested, since each element keeps one boolean-property condition. */
