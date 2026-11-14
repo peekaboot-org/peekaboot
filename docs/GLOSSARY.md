@@ -209,9 +209,11 @@ The Insights tab's history is ring buffers, not a time-series database. Per seri
 `SeriesRings` holds one `DoubleRing` of raw samples for level 0 and one `StatsRing` per coarser
 level. `AggregateStats` is one aggregated window: `min, max, avg, median, p90, p95, p99` plus a
 `samples` count. The SSE events and the full view's `stats` carry the seven. `samples` is what
-the next roll-up weights its average by, and what a series summary's `samples` totals. A missing
-tick is stored as `NaN` (level 0) or `AggregateStats.EMPTY` (higher levels) and serialises as
-JSON `null`, so a gap stays a gap.
+the next roll-up weights its average by, and what a series summary's `samples` totals. Above
+level 1, `median`, `p90`, `p95` and `p99` are each the sample-weighted nearest-rank percentile
+of the finer windows' value of the same name. `WindowStatistic` names the seven in wire order. A
+missing tick is stored as `NaN` (level 0) or `AggregateStats.EMPTY` (higher levels) and
+serialises as JSON `null`, so a gap stays a gap.
 
 Every sample is in its series' declared unit: `SeriesSampler` serves a `percent` series' ratio
 meter from 0 to 100 and reads a time gauge in milliseconds, so the rings, the snapshot, the SSE
@@ -220,10 +222,13 @@ events and the API agree.
 `SeriesSampler` looks its meters up in the registry on every tick, not once at startup, because
 Micrometer registers meters lazily. `http.server.requests` does not exist before the first
 request, and a new URI adds a tag combination later still. A series whose meters never resolve
-still costs a lookup per tick.
+still costs a lookup per tick. A meter whose function throws costs its own series a gap and one
+WARN per outage. Rates are measured per meter (`MeterBaselines`): a function counter or function
+timer first seen after the first sample starts from its first reading, a counter or timer that
+counts its own events from 0.
 Once a meter or subtract-meter has stayed unresolved for three ticks, `SeriesSampler` logs it,
 once per outage: at WARN for a series the operator's panel file wrote, at DEBUG for one exactly
-as shipped, since an application may lack a shipped meter. Tiles log nothing.
+as shipped, since an application may lack a shipped meter. Tiles log no unresolved meter.
 
 Overview's stat tiles bypass all of it. `TileTracker` holds one `volatile double` per tile and
 samples on read.
