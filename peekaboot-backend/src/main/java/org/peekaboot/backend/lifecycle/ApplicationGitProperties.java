@@ -83,7 +83,8 @@ public final class ApplicationGitProperties {
                     return load(candidate);
                 }
             }
-        } catch (IOException ex) {
+        } catch (IOException | IllegalArgumentException ex) {
+            // Properties.load refuses a malformed unicode escape with an IllegalArgumentException
             log.warn("Peekaboot could not read the application's {}: {}", LOCATION, ex.toString());
         }
         return null;

@@ -127,6 +127,23 @@ class ApplicationGitPropertiesTest {
         }
     }
 
+    /** {@code Properties.load} refuses a bad escape with an unchecked exception, and a ready listener that throws stops the application. */
+    @Test
+    void aGitPropertiesWithAMalformedUnicodeEscapeIsSkippedWithAWarning() throws Exception {
+        try (URLClassLoader classpath =
+                        classpath(directory("resources", false, Map.of("git.properties", "git.branch=\\u12zz")));
+                LogCapture logs = LogCapture.attach(ApplicationGitProperties.class)) {
+            assertThat(read(classpath, false)).isNull();
+
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .startsWith(
+                                "Peekaboot could not read the application's git.properties: java.lang.IllegalArgumentException: ");
+            });
+        }
+    }
+
     @Test
     void theApplicationsOwnIsReadOnceItHasStarted() throws Exception {
         StaticApplicationContext context = new StaticApplicationContext();
