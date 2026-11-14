@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
@@ -456,6 +457,150 @@ class InsightsSsePublisherTest {
     }
 
     /**
+     * A dropped peer whose stream stays open shows a frozen chart until the emitter times
+     * out. The drop cannot end the stream while the wedged send holds the write lock, so
+     * the sender ends it once that send returns, and the browser reconnects.
+     */
+    @Test
+    void aPeerDroppedOnLaneOverflowHasItsStreamCompletedOnceItsWriteReturns() throws Exception {
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        Semaphore releaseWrite = new Semaphore(0);
+        DispatchedStream stream =
+                new DispatchedStream(publisher.subscribe(), wedgingOnTheFirstWrite(writeStarted, releaseWrite));
+        try (LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
+            publisher.onTick(0, Map.of("a", 1.0));
+            assertThat(writeStarted.await(3, TimeUnit.SECONDS))
+                    .as("the sender is wedged inside send()")
+                    .isTrue();
+            // the wedged send holds one event, so the rest of the LANE_CAPACITY + 2 overflow the lane
+            for (int i = 1; i < Subscriber.LANE_CAPACITY + 2; i++) {
+                publisher.onTick(i, Map.of("a", 1.0));
+            }
+            await().atMost(Duration.ofSeconds(3))
+                    .alias("the wedged peer is dropped on lane overflow")
+                    .until(() -> publisher.subscriberCount() == 0);
+
+            releaseWrite.release();
+
+            await().atMost(Duration.ofSeconds(3))
+                    .alias("the stream is completed once the write returns")
+                    .until(() -> stream.result() == null);
+            assertThat(logs.appender().list)
+                    .as("the drop, and nothing about ending the stream")
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                        assertThat(event.getFormattedMessage()).contains("stopped reading");
+                    });
+        } finally {
+            releaseWrite.release();
+        }
+    }
+
+    /**
+     * The sender ends a dropped peer's stream from its own thread, where a container that
+     * has already let the peer go refuses the completion. That is as routine there as after
+     * a failed send, and must not come out of the thread as an uncaught exception.
+     */
+    @Test
+    void aDroppedPeerWhoseCompletionTheContainerRefusesGoesQuietly() throws Exception {
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        Semaphore releaseWrite = new Semaphore(0);
+        DispatchedStream stream =
+                new DispatchedStream(publisher.subscribe(), wedgingOnTheFirstWrite(writeStarted, releaseWrite));
+        stream.refusesDispatchWith(new IllegalStateException(
+                "expected refusal from aDroppedPeerWhoseCompletionTheContainerRefusesGoesQuietly"));
+
+        try (UncaughtExceptions uncaught = new UncaughtExceptions();
+                LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
+            publisher.heartbeat();
+            assertThat(writeStarted.await(3, TimeUnit.SECONDS))
+                    .as("the sender is wedged inside send()")
+                    .isTrue();
+            // Fanned out on this thread, so the drop has run in full, its own attempt at the
+            // completion included, before the write is released.
+            for (int i = 0; i <= Subscriber.LANE_CAPACITY; i++) {
+                publisher.heartbeat();
+            }
+            assertThat(publisher.subscriberCount())
+                    .as("the wedged peer is dropped on lane overflow")
+                    .isZero();
+
+            releaseWrite.release();
+
+            await().dontCatchUncaughtExceptions()
+                    .atMost(Duration.ofSeconds(3))
+                    .alias("the sender thread finished")
+                    .until(() -> !uncaught.fromTheSenderThread().isEmpty()
+                            || !alreadyGone(logs).isEmpty());
+            assertThat(uncaught.fromTheSenderThread())
+                    .as("nothing escapes the sender thread")
+                    .isEmpty();
+            assertThat(logs.appender().list)
+                    .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+                    .as("a refused completion is no louder than the drop that led to it")
+                    .isEmpty();
+            assertThat(alreadyGone(logs)).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getThrowableProxy())
+                        .as("one line, not the container's stack trace")
+                        .isNull();
+            });
+        } finally {
+            releaseWrite.release();
+        }
+    }
+
+    /**
+     * A lane can overflow between two sends of a peer that is only slow. No send holds the
+     * write lock then, so the drop ends the stream itself and at once.
+     */
+    @Test
+    void aPeerDroppedWhileNoSendIsInFlightHasItsStreamCompletedByTheDrop() throws Exception {
+        InsightsSsePublisher.SubscriberEmitter emitter = publisher.new SubscriberEmitter();
+        DispatchedStream stream = new DispatchedStream(emitter, new MockHttpServletResponse());
+        Subscriber subscriber = withoutASendInFlight(emitter);
+
+        try (LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
+            overflowTheLaneOf(subscriber);
+
+            assertThat(stream.result()).as("a completed stream").isNull();
+            assertThat(logs.appender().list)
+                    .as("the drop, and nothing about ending the stream")
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage()).contains("stopped reading"));
+        }
+    }
+
+    /**
+     * The drop runs inside the fan-out, on the dispatch thread. A refused completion that
+     * left it as an exception would cost every subscriber after this one the event.
+     */
+    @Test
+    void aCompletionTheContainerRefusesOnADropStaysOutOfTheFanOut() throws Exception {
+        InsightsSsePublisher.SubscriberEmitter emitter = publisher.new SubscriberEmitter();
+        DispatchedStream stream = new DispatchedStream(emitter, new MockHttpServletResponse());
+        stream.refusesDispatchWith(new IllegalStateException(
+                "expected refusal from aCompletionTheContainerRefusesOnADropStaysOutOfTheFanOut"));
+        Subscriber subscriber = withoutASendInFlight(emitter);
+
+        try (LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
+            assertThatCode(() -> overflowTheLaneOf(subscriber)).doesNotThrowAnyException();
+
+            assertThat(logs.appender().list)
+                    .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+                    .as("a refused completion is no louder than the drop that led to it")
+                    .isEmpty();
+            assertThat(alreadyGone(logs)).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getThrowableProxy())
+                        .as("one line, not the container's stack trace")
+                        .isNull();
+            });
+        }
+    }
+
+    /**
      * A peer that went away is routine, not an incident: the reason is logged at DEBUG as
      * one line, without the stack trace of the servlet container's broken pipe.
      */
@@ -512,15 +657,12 @@ class InsightsSsePublisherTest {
                     .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
                     .as("a refused completion is no louder than the send failure that led to it")
                     .isEmpty();
-            assertThat(logs.appender().list)
-                    .filteredOn(event -> event.getFormattedMessage().contains("had already gone"))
-                    .singleElement()
-                    .satisfies(event -> {
-                        assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
-                        assertThat(event.getThrowableProxy())
-                                .as("one line, not the container's stack trace")
-                                .isNull();
-                    });
+            assertThat(alreadyGone(logs)).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getThrowableProxy())
+                        .as("one line, not the container's stack trace")
+                        .isNull();
+            });
         }
         assertThat(publisher.subscriberCount())
                 .as("the peer is detached even though its stream could not be ended")
@@ -646,6 +788,24 @@ class InsightsSsePublisherTest {
     private InsightsSsePublisher tracked(InsightsSsePublisher publisher) {
         publishers.add(publisher);
         return publisher;
+    }
+
+    /** A subscriber whose sender never starts: nothing drains its lane and no send ever holds the write lock. */
+    private static Subscriber withoutASendInFlight(InsightsSsePublisher.SubscriberEmitter emitter) {
+        return new Subscriber(emitter, () -> {});
+    }
+
+    /** One event more than the lane holds, offered the way a fan-out offers them. */
+    private static void overflowTheLaneOf(Subscriber subscriber) {
+        for (int i = 0; i <= Subscriber.LANE_CAPACITY; i++) {
+            subscriber.offerOrDrop(Subscriber.OutboundEvent.heartbeat());
+        }
+    }
+
+    private static List<ILoggingEvent> alreadyGone(LogCapture logs) {
+        return logs.appender().list.stream()
+                .filter(event -> event.getFormattedMessage().contains("had already gone"))
+                .toList();
     }
 
     /**

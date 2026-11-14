@@ -346,6 +346,8 @@ public final class InsightsSsePublisher implements InsightsCollector.Listener, S
      * while the write lock is free: a sender wedged in send() holds it, and waiting behind
      * that send on the container's thread is what the per-subscriber lanes exist to
      * prevent. Such a peer is only detached, and Spring's own timeout handling ends it.
+     * A drop on lane overflow completes under the same guard, on the dispatch thread, and
+     * leaves a stream it could not complete to the sender (see {@link Subscriber}).
      * {@link #stop()} completes emitters under the same guard, but grants a send in
      * flight {@link #STOP_GRACE} to finish first: it runs on the context's thread, where
      * a bounded wait costs less than an async request left open for the container.
@@ -369,7 +371,7 @@ public final class InsightsSsePublisher implements InsightsCollector.Listener, S
             removeSubscriber(this);
         }
 
-        private void completeUnlessSending() {
+        void completeUnlessSending() {
             completeUnlessSendingWithin(Duration.ZERO);
         }
 
