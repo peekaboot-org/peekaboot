@@ -174,9 +174,10 @@ public final class InsightsCollector {
     }
 
     /**
-     * Aggregates the last {@code levels[level].interval / levels[level-1].interval}
-     * entries of the finer level into one {@link AggregateStats} per series, appends
-     * it to this level's ring, and notifies the listener.
+     * Aggregates the finer level's entries dated in the interval of {@code level} that ends at
+     * {@code epochMs} into one {@link AggregateStats} per series, appends it to this level's
+     * ring, and notifies the listener. Entries the finer level never wrote are left out, so a
+     * window without any is a gap.
      */
     void rollUp(int level, long epochMs) {
         if (level < 1 || level >= rings.levelCount()) {
@@ -185,9 +186,9 @@ public final class InsightsCollector {
         int n = (int) (rings.intervalMillis(level) / rings.intervalMillis(level - 1));
         Map<String, AggregateStats> entries = new LinkedHashMap<>();
         if (level == 1) {
-            rings.tickWindows(n).forEach((id, window) -> entries.put(id, AggregateStats.of(window)));
+            rings.tickWindows(n, epochMs).forEach((id, window) -> entries.put(id, AggregateStats.of(window)));
         } else {
-            rings.statsWindows(level - 1, n)
+            rings.statsWindows(level - 1, n, epochMs)
                     .forEach((id, window) -> entries.put(id, AggregateStats.ofAggregates(window)));
         }
         rings.appendStats(level, epochMs, entries);

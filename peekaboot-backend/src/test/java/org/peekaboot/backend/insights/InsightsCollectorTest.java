@@ -203,6 +203,80 @@ class InsightsCollectorTest {
         assertThat(avgs[2]).isNaN();
     }
 
+    /** A stalled level 0 leaves the last window's ticks newest in the ring, and they belong to that window only. */
+    @Test
+    void aRollUpWhoseTicksNeverArrivedRecordsAGap() {
+        tickEveryTenSeconds(1, 6, 10);
+        collector.rollUp(1, 60_000);
+        collector.rollUp(1, 120_000);
+
+        LevelData data = collector.levelData(1);
+        assertThat(data.statValues().get("g").get("avg")).containsExactly(10.0, Double.NaN);
+        assertThat(data.statSamples().get("g")).containsExactly(6, 0);
+    }
+
+    /** The tick on the boundary is late, so the window holds five ticks and borrows no sixth from the last one. */
+    @Test
+    void aRollUpAheadOfALateTickAggregatesOnlyTheTicksThatLanded() {
+        tickEveryTenSeconds(1, 6, 100);
+        collector.rollUp(1, 60_000);
+        tickEveryTenSeconds(7, 11, 1);
+        collector.rollUp(1, 120_000);
+
+        LevelData data = collector.levelData(1);
+        assertThat(data.statValues().get("g").get("avg")).containsExactly(100.0, 1.0);
+        assertThat(data.statValues().get("g").get("max")).containsExactly(100.0, 1.0);
+        assertThat(data.statSamples().get("g")).containsExactly(6, 5);
+    }
+
+    /** A roll-up thread that wakes late finds the next window's first tick already in the ring. */
+    @Test
+    void aRollUpThatRunsLateLeavesOutTheTicksPastItsBoundary() {
+        // level 0 keeps two windows, so the tick past the boundary evicts none of the window's own
+        InsightsCollector late = collector(registry)
+                .levels(
+                        InsightsProperties.Level.of(Duration.ofSeconds(10), 12),
+                        InsightsProperties.Level.of(Duration.ofMinutes(1), 10))
+                .series(value("g", "test.gauge"))
+                .build();
+        for (int i = 1; i <= 7; i++) {
+            gaugeValue.set(i * 10L);
+            late.tick(i * 10_000L);
+        }
+        late.rollUp(1, 60_000);
+
+        LevelData data = late.levelData(1);
+        assertThat(data.statValues().get("g").get("min")).containsExactly(10.0);
+        assertThat(data.statValues().get("g").get("max")).containsExactly(60.0);
+        assertThat(data.statSamples().get("g")).containsExactly(6);
+    }
+
+    @Test
+    void aLevelTwoRollUpWithoutNewFinerWindowsRecordsAGap() {
+        tickEveryTenSeconds(1, 6, 100);
+        collector.rollUp(1, 60_000);
+        tickEveryTenSeconds(7, 12, 200);
+        collector.rollUp(1, 120_000);
+        collector.rollUp(2, 120_000);
+        collector.rollUp(2, 240_000);
+
+        LevelData data = collector.levelData(2);
+        assertThat(data.statValues().get("g").get("avg")).containsExactly(150.0, Double.NaN);
+    }
+
+    @Test
+    void aLevelTwoRollUpThatRunsLateLeavesOutTheWindowsPastItsBoundary() {
+        for (int window = 1; window <= 3; window++) {
+            tickEveryTenSeconds(window * 6 - 5, window * 6, window * 100L);
+            collector.rollUp(1, window * 60_000L);
+        }
+        collector.rollUp(2, 120_000);
+
+        LevelData data = collector.levelData(2);
+        assertThat(data.statValues().get("g").get("min")).containsExactly(100.0);
+        assertThat(data.statValues().get("g").get("max")).containsExactly(200.0);
+    }
+
     @Test
     void staticTileFreezesAfterFirstResolution() {
         collector.tick(10_000); // app.start not registered yet -> NaN
@@ -302,10 +376,11 @@ class InsightsCollectorTest {
      * A roll-up fires half a tick after its boundary, but a late one meets the next tick. Every
      * series must then aggregate the same ticks, or the level-1 entries offset one series
      * against the others by a sample. Each tick stamps every series with its own number, so a
-     * roll-up that read its windows across a tick sees two different newest values. The test
-     * races rather than parks because a window read has no seam to park in; 64 series widen
-     * the read enough that an unlocked one straddles a tick several times per run. It can
-     * only fail on a broken lock, never on a correct one.
+     * roll-up that read its windows across a tick sees two different newest values. Each
+     * roll-up takes the boundary level 0 just stamped, since a window anywhere else is empty
+     * and has nothing to straddle. The test races rather than parks because a window read has
+     * no seam to park in; 64 series widen the read enough that an unlocked one straddles a tick
+     * several times per run. It can only fail on a broken lock, never on a correct one.
      */
     @Test
     void rollUpRacingATickAggregatesTheSameTicksForEverySeries() throws Exception {
@@ -329,11 +404,12 @@ class InsightsCollectorTest {
         // a window read is short beside a tick's sampling, so this race needs the longest run
         Thread ticker = startTicker(racing, tickNumber, 2_000);
         int rollUpsWhileTicking = 0;
-        long epochMs = 60_000;
         while (ticker.isAlive()) {
             boolean ticking = tickNumber.get() > 0;
-            racing.rollUp(1, epochMs);
-            epochMs += 60_000;
+            long boundary = racing.levelData(0).endEpochMs();
+            if (boundary > 0) {
+                racing.rollUp(1, boundary);
+            }
             if (ticking && ticker.isAlive()) {
                 rollUpsWhileTicking++;
             }
@@ -557,6 +633,14 @@ class InsightsCollectorTest {
             assertThat(tick.join(Duration.ofSeconds(5)))
                     .as("parked tick finished")
                     .isTrue();
+        }
+    }
+
+    /** Ticks the fixture collector with the gauge at {@code value}, tick {@code n} dated {@code n * 10_000}. */
+    private void tickEveryTenSeconds(int firstTick, int lastTick, long value) {
+        gaugeValue.set(value);
+        for (int i = firstTick; i <= lastTick; i++) {
+            collector.tick(i * 10_000L);
         }
     }
 

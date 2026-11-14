@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,27 +92,67 @@ final class SeriesRings {
     }
 
     /**
-     * Per series, its last {@code n} level-0 samples, oldest first. Read under the same lock
-     * as {@link #appendTick}, so every window ends at the same tick.
+     * Per series, its level-0 samples dated in the {@code n} intervals that end at
+     * {@code boundaryEpochMs}, oldest first: fewer than {@code n} where ticks are missing, and
+     * none dated past the boundary. Read under the same lock as {@link #appendTick}, so every
+     * window ends at the same tick.
      */
-    Map<String, double[]> tickWindows(int n) {
+    Map<String, double[]> tickWindows(int n, long boundaryEpochMs) {
         synchronized (lock) {
+            WindowReach reach = windowReach(0, n, boundaryEpochMs);
             Map<String, double[]> windows = new LinkedHashMap<>();
-            level0Rings.forEach((id, ring) -> windows.put(id, ring.last(n)));
+            level0Rings.forEach((id, ring) -> {
+                double[] newest = ring.last(reach.entries());
+                windows.put(id, Arrays.copyOf(newest, reach.upToBoundary(newest.length)));
+            });
             return windows;
         }
     }
 
     /**
-     * Per series, its last {@code n} aggregated windows at {@code level}, oldest first. Read
-     * under the same lock as {@link #appendStats}, so every window ends at the same roll-up.
+     * Per series, its aggregated windows at {@code level} dated in the {@code n} intervals that
+     * end at {@code boundaryEpochMs}, oldest first, cut like {@link #tickWindows}. Read under the
+     * same lock as {@link #appendStats}, so every window ends at the same roll-up.
      */
-    Map<String, List<AggregateStats>> statsWindows(int level, int n) {
+    Map<String, List<AggregateStats>> statsWindows(int level, int n, long boundaryEpochMs) {
         synchronized (lock) {
+            WindowReach reach = windowReach(level, n, boundaryEpochMs);
             Map<String, List<AggregateStats>> windows = new LinkedHashMap<>();
-            statsRings.forEach((id, rings) -> windows.put(id, rings[level].last(n)));
+            statsRings.forEach((id, rings) -> {
+                List<AggregateStats> newest = rings[level].last(reach.entries());
+                windows.put(id, newest.subList(0, reach.upToBoundary(newest.size())));
+            });
             return windows;
         }
+    }
+
+    /**
+     * How far back from a level's newest entry a roll-up window reaches, and how many of those
+     * entries are dated past its boundary.
+     */
+    private record WindowReach(int entries, int pastBoundary) {
+
+        /** Of the {@code read} newest entries, oldest first, how many lead up to the boundary. */
+        int upToBoundary(int read) {
+            return Math.max(0, read - pastBoundary);
+        }
+    }
+
+    /**
+     * A level's newest entry is dated {@link #endEpochMs} and every older one an interval
+     * earlier, so the window's place in the ring follows from the distance between that stamp
+     * and the boundary. A level that is behind the boundary has not written the window's
+     * newest entries, and the ones before the window must not stand in for them.
+     */
+    private WindowReach windowReach(int level, int n, long boundaryEpochMs) {
+        long end = levelEndEpochMs.get(level);
+        if (end == 0) {
+            return new WindowReach(0, 0);
+        }
+        long behind = Math.max(0, (boundaryEpochMs - end) / intervalMillis[level]);
+        long ahead = Math.max(0, (end - boundaryEpochMs) / intervalMillis[level]);
+        int pastBoundary = (int) Math.min(ahead, levelSizes[level]);
+        return new WindowReach((int) Math.max(0, n - behind) + pastBoundary, pastBoundary);
     }
 
     /** The boundary this level's newest sample is dated with; 0 before the level's first write. */
