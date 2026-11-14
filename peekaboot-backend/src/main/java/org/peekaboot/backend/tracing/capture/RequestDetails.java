@@ -13,12 +13,19 @@ import java.util.Map;
 import java.util.Set;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
+import org.peekaboot.backend.text.CountFormat;
 
-/** The headers and parameters of a request as a trace carries them, masked. */
+/** The headers and parameters of a request as a trace carries them, each name and value capped and then masked. */
 final class RequestDetails {
 
     /** A key sent in both the query string and the body lists its query values and is absent from {@code form}. */
     record Parameters(Map<String, List<String>> query, Map<String, List<String>> form) {}
+
+    /**
+     * Holds a Content-Security-Policy or a Referer whole. The masking patterns run on the
+     * request thread, so a header or parameter reaches them no longer than this.
+     */
+    static final int MAX_VALUE_LENGTH = 4_096;
 
     private final MaskingEngine maskingEngine;
     private final TagMasker tagMasker;
@@ -31,14 +38,14 @@ final class RequestDetails {
     Map<String, String> requestHeaders(HttpServletRequest request) {
         Map<String, String> headers = new HashMap<>();
         Collections.list(request.getHeaderNames())
-                .forEach(name -> headers.put(name, String.join(", ", Collections.list(request.getHeaders(name)))));
+                .forEach(name -> headers.put(capped(name), cappedHeader(Collections.list(request.getHeaders(name)))));
         return tagMasker.mask(headers);
     }
 
     /** A header sent more than once (Set-Cookie, typically) is captured as one comma-joined value. */
     Map<String, String> responseHeaders(HttpServletResponse response) {
         Map<String, String> headers = new HashMap<>();
-        response.getHeaderNames().forEach(name -> headers.put(name, String.join(", ", response.getHeaders(name))));
+        response.getHeaderNames().forEach(name -> headers.put(capped(name), cappedHeader(response.getHeaders(name))));
         return tagMasker.mask(headers);
     }
 
@@ -73,11 +80,11 @@ final class RequestDetails {
         String key;
         String value;
         try {
-            key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
-            value = maskingEngine.mask(key, URLDecoder.decode(rawValue, StandardCharsets.UTF_8));
+            key = capped(URLDecoder.decode(rawKey, StandardCharsets.UTF_8));
+            value = maskingEngine.mask(key, capped(URLDecoder.decode(rawValue, StandardCharsets.UTF_8)));
         } catch (IllegalArgumentException malformedEncoding) {
             // cannot be judged, so it is masked under its raw key, as maskQueryString masks it
-            key = rawKey;
+            key = capped(rawKey);
             value = MaskingEngine.MASK_LITERAL;
         }
         parameters.computeIfAbsent(key, absent -> new ArrayList<>()).add(value);
@@ -89,14 +96,37 @@ final class RequestDetails {
      */
     private Map<String, List<String>> formParameters(HttpServletRequest request, Set<String> queryKeys) {
         Map<String, List<String>> parameters = new HashMap<>();
-        request.getParameterMap().forEach((key, values) -> {
+        request.getParameterMap().forEach((name, values) -> {
+            String key = capped(name);
             if (values == null || values.length == 0 || queryKeys.contains(key)) {
                 return;
             }
-            List<String> maskedValues =
-                    Arrays.stream(values).map(v -> maskingEngine.mask(key, v)).toList();
+            List<String> maskedValues = Arrays.stream(values)
+                    .map(v -> maskingEngine.mask(key, capped(v)))
+                    .toList();
             parameters.put(key, maskedValues);
         });
         return parameters;
+    }
+
+    /** A repeated header is captured as one value, so its values are joined before the cut. */
+    private static String cappedHeader(Iterable<String> values) {
+        return capped(String.join(", ", values));
+    }
+
+    /**
+     * A cut inside a token would show the head of a credential no pattern recognises any more.
+     * So the text ends before its last whitespace within the limit, and is dropped whole
+     * where it has none.
+     */
+    private static String capped(String text) {
+        if (text == null || text.length() <= MAX_VALUE_LENGTH) {
+            return text;
+        }
+        int end = MAX_VALUE_LENGTH;
+        while (end > 0 && !Character.isWhitespace(text.charAt(end))) {
+            end--;
+        }
+        return text.substring(0, end) + "... " + CountFormat.of(text.length() - end, "character") + " omitted";
     }
 }

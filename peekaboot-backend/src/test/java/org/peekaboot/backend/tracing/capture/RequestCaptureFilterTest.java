@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.capture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.STRING;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
@@ -560,6 +561,140 @@ class RequestCaptureFilterTest {
     }
 
     @Test
+    void aValueOverTheCapIsCutAtItsLastWhitespaceAndCounted() throws Exception {
+        String captured = capturedHeaderValue("word ".repeat(1000));
+
+        assertThat(captured)
+                .hasSize(4094 + "... 906 characters omitted".length())
+                .endsWith("word... 906 characters omitted");
+    }
+
+    @Test
+    void aValueOverTheCapWithNoWhitespaceIsNotShownInPart() throws Exception {
+        assertThat(capturedHeaderValue("a".repeat(5000))).isEqualTo("... 5000 characters omitted");
+    }
+
+    /** Cut at the cap itself, the token's first 16 characters would be left where no pattern recognises them. */
+    @Test
+    void aCredentialStraddlingTheCapNeverShowsItsHead() throws Exception {
+        String token = "ghp" + "_16C7e42F292c6912E7710c838347Ae178B4a";
+
+        String captured = capturedHeaderValue("x ".repeat(2040) + token + " tail");
+
+        assertThat(captured).doesNotContain("ghp_").endsWith("... 46 characters omitted");
+    }
+
+    @Test
+    void aValueAtTheCapIsKeptWhole() throws Exception {
+        String atTheCap = "a".repeat(RequestDetails.MAX_VALUE_LENGTH);
+
+        assertThat(capturedHeaderValue(atTheCap)).isEqualTo(atTheCap);
+    }
+
+    @Test
+    void aTokenThatEndsAtTheCapIsKept() throws Exception {
+        String endsAtTheCap = "a".repeat(RequestDetails.MAX_VALUE_LENGTH);
+
+        assertThat(capturedHeaderValue(endsAtTheCap + " tail")).isEqualTo(endsAtTheCap + "... 5 characters omitted");
+    }
+
+    /** A repeated header is captured as one value, so that value is what the cap measures. */
+    @Test
+    void aRepeatedHeaderIsCappedAsItsJoinedValue() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.addHeader("X-Notes", "word ".repeat(500));
+        request.addHeader("X-Notes", "word ".repeat(500));
+        response.addHeader("X-Notes", "word ".repeat(500));
+        response.addHeader("X-Notes", "word ".repeat(500));
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.requestHeaders().get("X-Notes")).endsWith("word... 906 characters omitted");
+        assertThat(event.responseHeaders().get("X-Notes")).endsWith("word... 906 characters omitted");
+    }
+
+    @Test
+    void capsQueryAndFormParameterValuesAndResponseHeaders() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setQueryString("q=" + "word+".repeat(1000));
+        request.setParameter("comment", "word ".repeat(1000));
+        response.addHeader("X-Notes", "word ".repeat(1000));
+        applicationReads(HttpServletRequest::getParameterMap);
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.queryParams().get("q")).singleElement(STRING).endsWith("word... 906 characters omitted");
+        assertThat(event.formParams().get("comment")).singleElement(STRING).endsWith("word... 906 characters omitted");
+        assertThat(event.responseHeaders().get("X-Notes")).endsWith("word... 906 characters omitted");
+    }
+
+    @Test
+    void capsAnOverlongParameterName() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setQueryString("q".repeat(5000) + "=1");
+        request.setParameter("f".repeat(6000), "2");
+        applicationReads(HttpServletRequest::getParameterMap);
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.queryParams()).containsOnlyKeys("... 5000 characters omitted");
+        assertThat(event.formParams()).containsOnlyKeys("... 6000 characters omitted");
+    }
+
+    @Test
+    void capsAnOverlongQueryKeyThatCannotBeDecoded() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setQueryString("%zz" + "q".repeat(5000) + "=1");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().queryParams()).isEqualTo(Map.of("... 5003 characters omitted", List.of("******")));
+    }
+
+    @Test
+    void capsAnOverlongHeaderName() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.addHeader("q".repeat(5000), "1");
+        response.addHeader("s".repeat(6000), "2");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.requestHeaders()).containsOnlyKeys("... 5000 characters omitted");
+        assertThat(event.responseHeaders()).containsKey("... 6000 characters omitted");
+    }
+
+    @Test
+    void aFormParameterWithANullValueIsCapturedAsNull() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setParameter("flag", (String) null);
+        applicationReads(HttpServletRequest::getParameterMap);
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().formParams().get("flag")).containsExactly((String) null);
+    }
+
+    @Test
+    void aSensitiveNameStillMasksAnOverlongValueWhole() throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.addHeader("Authorization", "Bearer " + "a".repeat(5000));
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(publishedEvent().requestHeaders()).containsEntry("Authorization", "******");
+    }
+
+    @Test
     void setsServerTimingHeader() throws Exception {
         CurrentSpans.stub(tracer, "0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331", true);
 
@@ -724,6 +859,15 @@ class RequestCaptureFilterTest {
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         return captor.getValue();
+    }
+
+    private String capturedHeaderValue(String sent) throws Exception {
+        CurrentSpans.stub(tracer, "trace1");
+        request.addHeader("X-Notes", sent);
+
+        filter.doFilter(request, response, chain);
+
+        return publishedEvent().requestHeaders().get("X-Notes");
     }
 
     private ParameterReads requestGivenToTheChain() throws Exception {
