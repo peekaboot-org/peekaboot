@@ -18,8 +18,10 @@ public record AggregateStats(
     public static final AggregateStats EMPTY =
             new AggregateStats(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0);
 
-    /** The statistic names, in {@link #byName()} order - the order the API, the SSE events and the file use. */
-    public static final List<String> STAT_NAMES = List.copyOf(EMPTY.byName().keySet());
+    /** The statistics' wire names, in {@link WindowStatistic} order. */
+    public static final List<String> STAT_NAMES = Arrays.stream(WindowStatistic.values())
+            .map(WindowStatistic::wireName)
+            .toList();
 
     public static AggregateStats of(double[] values) {
         double[] usable = Arrays.stream(values).filter(v -> !Double.isNaN(v)).toArray();
@@ -76,26 +78,22 @@ public record AggregateStats(
      */
     public Map<String, Double> byName() {
         Map<String, Double> stats = new LinkedHashMap<>();
-        stats.put("min", min);
-        stats.put("max", max);
-        stats.put("avg", avg);
-        stats.put("median", median);
-        stats.put("p90", p90);
-        stats.put("p95", p95);
-        stats.put("p99", p99);
+        for (WindowStatistic statistic : WindowStatistic.values()) {
+            stats.put(statistic.wireName(), statistic.of(this));
+        }
         return stats;
     }
 
-    /** The inverse of {@link #byName()}: row {@code row} of columns laid out in {@link #STAT_NAMES} order. */
-    static AggregateStats fromRow(double[][] statColumns, int row, int samples) {
+    /** The window in row {@code row} of {@code columns}, which holds one column per statistic. */
+    static AggregateStats fromRow(Map<WindowStatistic, double[]> columns, int row, int samples) {
         return new AggregateStats(
-                statColumns[0][row],
-                statColumns[1][row],
-                statColumns[2][row],
-                statColumns[3][row],
-                statColumns[4][row],
-                statColumns[5][row],
-                statColumns[6][row],
+                columns.get(WindowStatistic.MIN)[row],
+                columns.get(WindowStatistic.MAX)[row],
+                columns.get(WindowStatistic.AVG)[row],
+                columns.get(WindowStatistic.MEDIAN)[row],
+                columns.get(WindowStatistic.P90)[row],
+                columns.get(WindowStatistic.P95)[row],
+                columns.get(WindowStatistic.P99)[row],
                 samples);
     }
 

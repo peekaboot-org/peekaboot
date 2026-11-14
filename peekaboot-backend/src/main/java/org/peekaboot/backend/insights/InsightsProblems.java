@@ -91,8 +91,8 @@ final class InsightsProblems {
             if (!carriesAll(data, rule)) {
                 return OptionalDouble.empty();
             }
-            double[] used = data.column(rule.series().get(0), "avg");
-            double[] max = data.column(rule.series().get(1), "avg");
+            double[] used = data.column(rule.series().get(0), WindowStatistic.AVG);
+            double[] max = data.column(rule.series().get(1), WindowStatistic.AVG);
             double[] shares = IntStream.range(0, used.length)
                     .filter(i -> max[i] > 0)
                     .mapToDouble(i -> used[i] / max[i] * PERCENT)
@@ -110,7 +110,7 @@ final class InsightsProblems {
             if (!carriesAll(data, rule)) {
                 return OptionalDouble.empty();
             }
-            double[] minima = data.column(rule.series().getFirst(), "min");
+            double[] minima = data.column(rule.series().getFirst(), WindowStatistic.MIN);
             int quarter = minima.length / QUARTERS;
             if (quarter == 0) {
                 return OptionalDouble.empty();

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,10 @@ record LevelData(
     /** {@code seriesId}'s aggregated windows, oldest first; only for a level above 0. */
     List<AggregateStats> windowsOf(String seriesId) {
         Map<String, double[]> stats = statValues.get(seriesId);
-        double[][] columns = AggregateStats.STAT_NAMES.stream().map(stats::get).toArray(double[][]::new);
+        Map<WindowStatistic, double[]> columns = new EnumMap<>(WindowStatistic.class);
+        for (WindowStatistic statistic : WindowStatistic.values()) {
+            columns.put(statistic, stats.get(statistic.wireName()));
+        }
         double[] samples = statSamples.get(seriesId);
         List<AggregateStats> windows = new ArrayList<>(samples.length);
         for (int row = 0; row < samples.length; row++) {
@@ -95,9 +99,9 @@ record LevelData(
         return windows;
     }
 
-    /** {@code seriesId}'s value per sample: the sample itself at level 0, the window's {@code stat} above it. */
-    double[] column(String seriesId, String stat) {
-        return level == 0 ? tickValues.get(seriesId) : statValues.get(seriesId).get(stat);
+    /** {@code seriesId}'s value per sample: the sample itself at level 0, the window's {@code statistic} above it. */
+    double[] column(String seriesId, WindowStatistic statistic) {
+        return level == 0 ? tickValues.get(seriesId) : statValues.get(seriesId).get(statistic.wireName());
     }
 
     private static double newest(double[] values) {

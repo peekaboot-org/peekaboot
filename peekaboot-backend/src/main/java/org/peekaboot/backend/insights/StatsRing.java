@@ -1,7 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,20 +12,20 @@ import java.util.Map;
  */
 final class StatsRing {
 
-    /** One column per statistic, keyed and ordered like {@link AggregateStats#byName()}. */
-    private final Map<String, DoubleRing> stats = new LinkedHashMap<>();
+    /** One column per statistic, in {@link WindowStatistic} order. */
+    private final Map<WindowStatistic, DoubleRing> stats = new EnumMap<>(WindowStatistic.class);
 
     private final DoubleRing samples;
 
     StatsRing(int capacity) {
-        for (String name : AggregateStats.STAT_NAMES) {
-            stats.put(name, new DoubleRing(capacity));
+        for (WindowStatistic statistic : WindowStatistic.values()) {
+            stats.put(statistic, new DoubleRing(capacity));
         }
         samples = new DoubleRing(capacity);
     }
 
     void add(AggregateStats entry) {
-        entry.byName().forEach((name, value) -> stats.get(name).add(value));
+        stats.forEach((statistic, ring) -> ring.add(statistic.of(entry)));
         samples.add(entry.samples());
     }
 
@@ -36,7 +36,7 @@ final class StatsRing {
     /** Column arrays for the API - the internal samples column is deliberately excluded. */
     Map<String, double[]> toArrays() {
         Map<String, double[]> columns = new LinkedHashMap<>();
-        stats.forEach((name, ring) -> columns.put(name, ring.toArray()));
+        stats.forEach((statistic, ring) -> columns.put(statistic.wireName(), ring.toArray()));
         return columns;
     }
 
@@ -63,16 +63,21 @@ final class StatsRing {
 
     /** Refills an empty ring from {@link #toColumns()} output, oldest entry first. */
     void restore(double[][] columns) {
-        int statCount = AggregateStats.STAT_NAMES.size();
-        double[][] statColumns = Arrays.copyOf(columns, statCount);
-        for (int i = 0; i < columns[0].length; i++) {
-            add(AggregateStats.fromRow(statColumns, i, (int) columns[statCount][i]));
+        Map<WindowStatistic, double[]> statColumns = new EnumMap<>(WindowStatistic.class);
+        int column = 0;
+        for (WindowStatistic statistic : stats.keySet()) {
+            statColumns.put(statistic, columns[column]);
+            column++;
+        }
+        double[] counts = columns[column];
+        for (int i = 0; i < counts.length; i++) {
+            add(AggregateStats.fromRow(statColumns, i, (int) counts[i]));
         }
     }
 
     List<AggregateStats> last(int n) {
-        double[][] statColumns =
-                stats.values().stream().map(ring -> ring.last(n)).toArray(double[][]::new);
+        Map<WindowStatistic, double[]> statColumns = new EnumMap<>(WindowStatistic.class);
+        stats.forEach((statistic, ring) -> statColumns.put(statistic, ring.last(n)));
         double[] counts = samples.last(n);
         List<AggregateStats> result = new ArrayList<>(counts.length);
         for (int i = 0; i < counts.length; i++) {
