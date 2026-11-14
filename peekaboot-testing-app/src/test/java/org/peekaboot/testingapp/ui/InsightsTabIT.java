@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
 import com.microsoft.playwright.Route;
@@ -62,7 +63,8 @@ class InsightsTabIT extends PlaywrightTestBase {
 
     /**
      * A left-to-right drag across the middle of a chart's plotting area - uPlot's
-     * drag-select gesture.
+     * drag-select gesture. Takes {@code [panelSelector, release]}: without the release the
+     * button stays down, and the selection stays drawn.
      *
      * <p>Dispatched rather than driven through {@code page.mouse()}: uPlot ignores a
      * mousemove that reports no movement at all while a drag is in progress (its guard
@@ -76,7 +78,7 @@ class InsightsTabIT extends PlaywrightTestBase {
      * 0, so any non-zero width selects.
      */
     private static final String DRAG_SELECT = """
-            panelSelector => {
+            ([panelSelector, release]) => {
                 const over = document.querySelector(panelSelector + ' .u-over');
                 const box = over.getBoundingClientRect();
                 const y = box.top + box.height / 2;
@@ -92,12 +94,39 @@ class InsightsTabIT extends PlaywrightTestBase {
                 for (let i = 1; i <= steps; i++) {
                     fire(over, 'mousemove', from + step * i, step, 1);
                 }
-                fire(document, 'mouseup', to, 0, 0);
+                if (release) fire(document, 'mouseup', to, 0, 0);
             }
             """;
 
     private void dragZoomOnChart(String panelSelector) {
-        page.evaluate(DRAG_SELECT, panelSelector);
+        page.evaluate(DRAG_SELECT, List.of(panelSelector, true));
+    }
+
+    /**
+     * Opens Insights in {@code theme}, drags across the CPU chart without letting go, and
+     * returns what the selection is drawn with: the width and colour of its left and of its
+     * right edge, then its fill.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> dragSelectionStyleIn(String theme) {
+        setStoredTheme(theme);
+        openInsights();
+        page.waitForSelector(CPU_PANEL + " canvas");
+        assertThat(page.getAttribute("html", "data-theme")).isEqualTo(theme);
+
+        page.evaluate(DRAG_SELECT, List.of(CPU_PANEL, false));
+
+        Locator selection = page.locator(CPU_PANEL + " .u-select");
+        assertThat(selection.boundingBox().width)
+                .as("the drag has selected a stretch of the plot")
+                .isGreaterThan(page.locator(CPU_PANEL + " .u-over").boundingBox().width / 4);
+        return (List<String>) selection.evaluate("""
+            selection => {
+                const style = getComputedStyle(selection);
+                return [style.borderLeftWidth, style.borderLeftColor,
+                    style.borderRightWidth, style.borderRightColor, style.backgroundColor];
+            }
+            """);
     }
 
     /** The width of the x window a panel is charting, off its own setScale readback. */
@@ -362,6 +391,43 @@ class InsightsTabIT extends PlaywrightTestBase {
         assertThat(page.getAttribute(load, "data-zoom-min")).isEqualTo(cpuMin);
         assertThat(page.getAttribute(load, "data-zoom-max")).isEqualTo(cpuMax);
         assertThat(page.isVisible("#insights-zoom-reset")).isTrue();
+    }
+
+    /**
+     * uPlot's own selection is a 7% black wash with no edge, which a dark card swallows. The
+     * chart draws it from the theme instead: a wash of the theme's ink between two edges in
+     * the axis colour.
+     */
+    @Test
+    void theDragSelectionIsDrawnInTheThemesOwnColours() {
+        List<String> drawnWith = dragSelectionStyleIn("dark");
+
+        String edge = resolvedVar(null, "--pk-text-muted");
+        assertThat(drawnWith).containsExactly("1px", edge, "1px", edge, "rgba(230, 237, 243, 0.16)");
+    }
+
+    @Test
+    void theDragSelectionHasItsOwnWashInTheLightTheme() {
+        List<String> drawnWith = dragSelectionStyleIn("light");
+
+        String edge = resolvedVar(null, "--pk-text-muted");
+        assertThat(drawnWith).containsExactly("1px", edge, "1px", edge, "rgba(13, 17, 23, 0.1)");
+    }
+
+    /** The selection's edges are borders, and a border is drawn however narrow its box: at rest the box has no height. */
+    @Test
+    void noSelectionIsDrawnWhileNothingIsDragged() {
+        openInsights();
+        page.waitForSelector(CPU_PANEL + " canvas");
+        Locator selection = page.locator(CPU_PANEL + " .u-select");
+        String height = "selection => selection.getBoundingClientRect().height";
+        assertThat(selection.evaluate(height)).as("before any drag").isEqualTo(0);
+
+        double spanBefore = chartedSpan(CPU_PANEL);
+        dragZoomOnChart(CPU_PANEL);
+        waitForZoomIn(CPU_PANEL, spanBefore);
+
+        assertThat(selection.evaluate(height)).as("after a drag").isEqualTo(0);
     }
 
     /**

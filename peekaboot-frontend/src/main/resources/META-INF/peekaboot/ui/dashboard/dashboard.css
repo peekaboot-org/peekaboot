@@ -427,7 +427,8 @@
 
 /* Insights tab: toolbar and panel cards. uPlot mounts into .pk-insight-chart and
    brings its own stylesheet (vendor/uplot/uplot.min.css, lazy-loaded with the
-   library); only the legend is re-tuned here to sit in the card's type scale.
+   library); the legend is re-tuned here to sit in the card's type scale, and the
+   drag selection is drawn from the theme.
    .pk-blink is retriggered on every panel readout an SSE tick actually changed. */
 #insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
 /* The text-tuned amber: a warning drawn on the page background, not a fill. */
@@ -468,6 +469,8 @@
 /* min/max band edges and percentile hairlines take their panel series' colour and
    would otherwise repeat every label five times over (see insights-chart.js) */
 .pk-insight-chart .u-legend tr.pk-insight-legend-muted { display: none; }
+/* uPlot's own selection is a 7% black wash with no edge, which a dark card swallows */
+.pk-insight-chart .u-select { background: var(--pk-select-wash); border-inline: 1px solid var(--pk-text-muted); }
 
 /* Restart markers: the lines are painted on the canvas (see insights-markers.js);
    only their tooltip is a DOM node, and it must never eat the cursor uPlot tracks. */

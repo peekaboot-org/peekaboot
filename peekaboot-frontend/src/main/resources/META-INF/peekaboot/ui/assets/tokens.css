@@ -71,6 +71,7 @@
     --pk-warning-text: #9a5e06; /* 5.28:1 on --pk-bg, 4.96:1 on --pk-bg-alt, 4.70:1 on --pk-bg-hover */
     --pk-danger-tint: rgba(210, 31, 31, 0.04); /* --pk-danger at 4%: the error banner's wash */
     --pk-on-primary-wash: rgba(13, 17, 23, 0.15); /* --pk-on-primary at 15%: a hover wash that reads on the primary fill */
+    --pk-select-wash: rgba(13, 17, 23, 0.1);    /* the drag selection on an Insights chart: a dark wash here, a light one on the dark surface */
     --pk-mark-bg: #fef08a;      /* the search highlight; 15.2:1 under --pk-on-mark */
     --pk-on-mark: #111827;
     /* SQL highlighting (trace-detail.css), drawn on the code block's --pk-bg. Each borrows a
@@ -151,6 +152,7 @@
     --pk-success-text: #3fb950; /* 7.45:1 on --pk-bg */
     --pk-warning-text: #d29922; /* 7.50:1 on dark --pk-bg */
     --pk-danger-tint: rgba(248, 81, 73, 0.04);
+    --pk-select-wash: rgba(230, 237, 243, 0.16);
     --pk-mark-bg: #854d0e;      /* 6.4:1 under --pk-on-mark */
     --pk-on-mark: #fef9c3;
     --pk-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
