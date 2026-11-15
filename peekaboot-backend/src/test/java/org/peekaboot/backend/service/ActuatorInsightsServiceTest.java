@@ -1,6 +1,7 @@
 package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
@@ -12,9 +13,13 @@ import java.util.Properties;
 import net.osslabz.jdbc.DatabaseProduct;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
+import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.actuator.ActuatorInsightsResponse;
@@ -26,12 +31,30 @@ import org.peekaboot.backend.domain.liquibase.ChangeSetInfo;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.support.StaticApplicationContext;
 
 class ActuatorInsightsServiceTest {
+
+    private static final Map<String, Object> PASSWORD_IN_THE_ENVIRONMENT = Map.of(
+            "env",
+            Map.of(
+                    "propertySources",
+                    List.of(Map.of(
+                            "name",
+                            "application.yml",
+                            "properties",
+                            Map.of("db.password", Map.of("value", "hunter2"))))));
+
+    private static final Map<String, Object> HOURLY_CRON_TASK = Map.of(
+            "scheduledtasks",
+            Map.of(
+                    "cron",
+                    List.of(Map.of(
+                            "expression", "0 0 * * * *", "runnable", Map.of("target", "com.example.Task.run")))));
 
     @Test
     void getInsights_shouldMapAllSections() {
@@ -164,39 +187,16 @@ class ActuatorInsightsServiceTest {
     /** The mappers are built inside the service, so the engine it is handed is the one that masks. */
     @Test
     void getInsights_shouldMaskThroughTheEngineItWasGiven() {
-        ActuatorInsightsService service = service(Map.of(
-                "env",
-                Map.of(
-                        "propertySources",
-                        List.of(Map.of(
-                                "name",
-                                "application.yml",
-                                "properties",
-                                Map.of("db.password", Map.of("value", "hunter2")))))));
+        ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT);
 
-        ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
-
-        assertThat(response.environment()
-                        .propertySources()
-                        .getFirst()
-                        .properties()
-                        .getFirst()
-                        .value())
-                .isEqualTo("******");
+        assertThat(servedPassword(service.getInsights(Locale.ENGLISH, false))).isEqualTo("******");
     }
 
     @Test
     void getInsights_shouldDescribeSchedulesInTheRequestLocale() {
-        ActuatorInsightsService service = service(Map.of(
-                "scheduledtasks",
-                Map.of(
-                        "cron",
-                        List.of(Map.of(
-                                "expression", "0 0 * * * *", "runnable", Map.of("target", "com.example.Task.run"))))));
+        ActuatorInsightsService service = service(HOURLY_CRON_TASK);
 
-        ActuatorInsightsResponse response = service.getInsights(Locale.GERMAN, false);
-
-        assertThat(response.scheduledTasks().tasks().getFirst().scheduleDescription())
+        assertThat(scheduleDescription(service.getInsights(Locale.GERMAN, false)))
                 .containsIgnoringCase("Stunde");
     }
 
@@ -233,6 +233,76 @@ class ActuatorInsightsServiceTest {
         }
     }
 
+    /** The request's unmask is never a bypass on its own: while the property is off, every request reads masked. */
+    @Test
+    void insightsFor_shouldStayMaskedWhateverTheRequestAsksWhileUnmaskingIsOff() {
+        ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT, new PeekabootProperties());
+
+        assertThat(servedPassword(service.insightsFor(null, true))).isEqualTo("******");
+    }
+
+    @Test
+    void insightsFor_shouldUnmaskOnlyWhenThePropertyAndTheRequestBothSaySo() {
+        ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT, unmaskingEnabled());
+
+        assertThat(servedPassword(service.insightsFor(null, true))).isEqualTo("hunter2");
+    }
+
+    @Test
+    void insightsFor_shouldStayMaskedWhenOnlyThePropertyIsSet() {
+        ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT, unmaskingEnabled());
+
+        assertThat(servedPassword(service.insightsFor(null, false))).isEqualTo("******");
+    }
+
+    @Test
+    void insightsFor_shouldDescribeACronTaskInTheRequestedLanguage() {
+        ActuatorInsightsService service = service(HOURLY_CRON_TASK);
+
+        assertThat(scheduleDescription(service.insightsFor("de", false)))
+                .isEqualTo(scheduleDescription(service.getInsights(Locale.GERMAN, false)))
+                .isNotEqualTo(scheduleDescription(service.getInsights(Locale.ENGLISH, false)));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = "  ")
+    void insightsFor_shouldDescribeACronTaskInEnglishWhereNoLocaleIsNamed(String locale) {
+        ActuatorInsightsService service = service(HOURLY_CRON_TASK);
+
+        assertThat(scheduleDescription(service.insightsFor(locale, false)))
+                .isEqualTo(scheduleDescription(service.getInsights(Locale.ENGLISH, false)));
+    }
+
+    @Test
+    void insightsFor_shouldRefuseAnIllFormedLocale() {
+        ActuatorInsightsService service = service(Map.of());
+
+        assertThatThrownBy(() -> service.insightsFor("!!", false))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().parameter()).isEqualTo("locale"));
+    }
+
+    private static String servedPassword(ActuatorInsightsResponse response) {
+        return response.environment()
+                .propertySources()
+                .getFirst()
+                .properties()
+                .getFirst()
+                .value();
+    }
+
+    private static String scheduleDescription(ActuatorInsightsResponse response) {
+        return response.scheduledTasks().tasks().getFirst().scheduleDescription();
+    }
+
+    private static PeekabootProperties unmaskingEnabled() {
+        PeekabootProperties properties = new PeekabootProperties();
+        properties.getUnmasking().setEnabled(true);
+        return properties;
+    }
+
     /** The real actuator service over inline sources, one per section the test supplies, and no DataSource bean. */
     private static ActuatorInsightsService service(Map<String, Object> sections) {
         return service(sections, new StaticListableBeanFactory());
@@ -244,16 +314,28 @@ class ActuatorInsightsServiceTest {
         return service(sections, beanFactory);
     }
 
-    /** An application that has not started yet, so it shows no git facts. */
+    private static ActuatorInsightsService service(Map<String, Object> sections, PeekabootProperties properties) {
+        return service(sections, new StaticListableBeanFactory(), notStartedYet(), properties);
+    }
+
     private static ActuatorInsightsService service(
             Map<String, Object> sections, StaticListableBeanFactory beanFactory) {
-        return service(sections, beanFactory, new ApplicationGitProperties(null, new StaticApplicationContext()));
+        return service(sections, beanFactory, notStartedYet());
+    }
+
+    /** Unmasking at its default, off. */
+    private static ActuatorInsightsService service(
+            Map<String, Object> sections,
+            StaticListableBeanFactory beanFactory,
+            ApplicationGitProperties applicationGitProperties) {
+        return service(sections, beanFactory, applicationGitProperties, new PeekabootProperties());
     }
 
     private static ActuatorInsightsService service(
             Map<String, Object> sections,
             StaticListableBeanFactory beanFactory,
-            ApplicationGitProperties applicationGitProperties) {
+            ApplicationGitProperties applicationGitProperties,
+            PeekabootProperties properties) {
         List<InsightsSource> sources = sections.entrySet().stream()
                 .map(section -> new InsightsSource(section.getKey(), section::getValue))
                 .toList();
@@ -262,6 +344,12 @@ class ActuatorInsightsServiceTest {
                 new ActuatorResponseParser(),
                 new MaskingEngine(),
                 beanFactory.getBeanProvider(DataSourceMetadataList.class),
-                applicationGitProperties);
+                applicationGitProperties,
+                properties);
+    }
+
+    /** An application that has not started yet, so it shows no git facts. */
+    private static ApplicationGitProperties notStartedYet() {
+        return new ApplicationGitProperties(null, new StaticApplicationContext());
     }
 }

@@ -14,6 +14,7 @@ import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.controller.TraceController;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.api.ApiDocument;
+import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
@@ -94,13 +95,15 @@ public class PeekabootAutoConfiguration {
             MaskingEngine maskingEngine,
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataList,
             ApplicationGitProperties applicationGitProperties,
-            ObjectProvider<OverviewGitConfiguration> infoGitContributorOn) {
+            ObjectProvider<OverviewGitConfiguration> infoGitContributorOn,
+            PeekabootProperties properties) {
         return new ActuatorInsightsService(
                 actuatorReadings,
                 actuatorResponseParser,
                 maskingEngine,
                 dataSourceMetadataList,
-                infoGitContributorOn.getIfAvailable() != null ? applicationGitProperties : null);
+                infoGitContributorOn.getIfAvailable() != null ? applicationGitProperties : null,
+                properties);
     }
 
     /** Present exactly where Boot's git info contributor is on, since a host that turns it off keeps git off the Overview too. */
@@ -133,6 +136,7 @@ public class PeekabootAutoConfiguration {
                 stackTraceRules);
     }
 
+    /** The features are read once: every input is settled by the time the context has built this bean. */
     @Bean
     @ConditionalOnMissingBean
     public PeekabootController peekabootController(
@@ -144,15 +148,18 @@ public class PeekabootAutoConfiguration {
             ObjectProvider<InsightsService> insightsService,
             ObjectProvider<OtelSpanExporter> otelSpanExporter,
             ObjectProvider<LifecycleController> lifecycleController) {
-        return new PeekabootController(
-                actuatorInsightsService,
-                traceInsightsService,
-                metricsService,
-                properties,
-                tracingProperties,
-                insightsService.getIfAvailable(),
+        Features features = new Features(
+                traceInsightsService.isTracingAvailable(),
                 otelSpanExporter.getIfAvailable() != null,
-                lifecycleController.getIfAvailable() != null);
+                metricsService.isAvailable(),
+                properties.getUnmasking().isEnabled(),
+                insightsService.getIfAvailable() != null,
+                lifecycleController.getIfAvailable() != null,
+                tracingProperties.getSlowSpanThresholdMs(),
+                tracingProperties.getVerySlowSpanThresholdMs(),
+                tracingProperties.getSlowQueryThresholdMs(),
+                MaskingEngine.MASK_LITERAL);
+        return new PeekabootController(actuatorInsightsService, metricsService, features);
     }
 
     @Bean

@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.io.IOException;
 import java.net.URLClassLoader;
@@ -50,6 +51,7 @@ import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.info.GitProperties;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -135,6 +137,68 @@ class PeekabootAutoConfigurationTest {
                                 .getFeatures()
                                 .unmaskingEnabled())
                         .isTrue());
+    }
+
+    @Test
+    void publishesUnmaskingAsOffByDefault() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .unmaskingEnabled())
+                        .isFalse());
+    }
+
+    @Test
+    void publishesWhetherAMeterRegistryIsPresent() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .metrics())
+                        .isFalse());
+        contextRunner
+                .withBean(SimpleMeterRegistry.class)
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .metrics())
+                        .isTrue());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, true", "false, false"})
+    void publishesWhetherInsightsAreServed(boolean insightsEnabled, boolean published) {
+        contextRunner
+                .withConfiguration(
+                        AutoConfigurations.of(InsightsAutoConfiguration.class, JacksonAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class)
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.insights.enabled=" + insightsEnabled)
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .insights())
+                        .isEqualTo(published));
+    }
+
+    @Test
+    void publishesTracingAsOffWithoutATraceStore() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .tracing())
+                        .isFalse());
+    }
+
+    /** The Request tab highlights masked headers by comparing against this exact literal. */
+    @Test
+    void publishesTheMaskLiteral() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> assertThat(context.getBean(PeekabootController.class)
+                                .getFeatures()
+                                .maskLiteral())
+                        .isEqualTo(MaskingEngine.MASK_LITERAL));
     }
 
     /** Bound without the trace store too: the issue detector and /api/features need them while tracing is off. */
