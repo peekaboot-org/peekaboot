@@ -8,6 +8,7 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceResource;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.domain.trace.TraceView;
+import org.peekaboot.backend.mapper.trace.SpanContents.ServedSpans;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.CapturedLogs;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -40,18 +41,20 @@ final class TraceRows {
     TraceResource of(
             TraceDataBundle bundle, @Nullable String subtreeRootSpanId, Set<TraceBucket> buckets, TraceView view) {
         TraceData traceData = bundle.snapshot();
-        TraceQueries queries = traceTreeMapper.queriesOf(traceData);
+        boolean full = view == TraceView.FULL;
+        // a summary serves no span, so its tree pays for no tag masked and no statement laid out
+        @Nullable ServedSpans served = full ? traceTreeMapper.served(traceData) : null;
+        SpanContent content = served != null ? served : traceTreeMapper.forSummary();
         TraceTree tree = issueDetector.detectIssues(
                 subtreeRootSpanId == null
-                        ? traceTreeMapper.map(traceData, queries)
-                        : traceTreeMapper.mapSubtree(traceData, subtreeRootSpanId, queries));
+                        ? traceTreeMapper.map(traceData, content)
+                        : traceTreeMapper.mapSubtree(traceData, subtreeRootSpanId, content));
         boolean whole = tree.subtree() == null;
         // an @Async task may log meanwhile, so the counts and the list come from one read
         CapturedLogs captured = bundle.capturedLogs();
         UnaryOperator<String> spanOf = TraceLogMapper.resolvingOnce(bundle);
         List<LogCapturedEvent> logs =
                 whole ? captured.logs() : TraceLogMapper.logsWithin(tree.rootSpan(), spanOf, captured.logs());
-        boolean full = view == TraceView.FULL;
         List<TraceLog> mapped = traceLogMapper.map(
                 spanOf,
                 full ? logs : logs.stream().filter(LogCapturedEvent::isError).toList());
@@ -65,6 +68,6 @@ final class TraceRows {
                 captured.droppedLogs());
         return new TraceResource(
                 traceSummaries.of(tree, facts),
-                full ? traceDetails.of(bundle, traceData, queries, tree, mapped) : null);
+                served != null ? traceDetails.of(bundle, traceData, served, tree, mapped) : null);
     }
 }

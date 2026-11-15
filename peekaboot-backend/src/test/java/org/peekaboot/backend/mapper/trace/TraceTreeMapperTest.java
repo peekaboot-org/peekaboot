@@ -27,6 +27,7 @@ import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
+import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
@@ -52,11 +53,11 @@ class TraceTreeMapperTest {
     }
 
     private static TraceTree map(TraceTreeMapper treeMapper, TraceData traceData) {
-        return treeMapper.map(traceData, treeMapper.queriesOf(traceData));
+        return treeMapper.map(traceData, treeMapper.served(traceData));
     }
 
     private static TraceTree mapSubtree(TraceTreeMapper treeMapper, TraceData traceData, String subtreeRootSpanId) {
-        return treeMapper.mapSubtree(traceData, subtreeRootSpanId, treeMapper.queriesOf(traceData));
+        return treeMapper.mapSubtree(traceData, subtreeRootSpanId, treeMapper.served(traceData));
     }
 
     /** child2 is created before child1 but starts after it, so only the start-time sort puts child1 first. */
@@ -510,7 +511,7 @@ class TraceTreeMapperTest {
 
         TraceTree result = map(mapper, traceData);
         int queriesListed = new QueryExtractor()
-                .extract(traceData, mapper.queriesOf(traceData))
+                .extract(traceData, mapper.served(traceData).queries())
                 .size();
         long queryNodes =
                 result.rootSpan().children().stream().filter(DbSpans::isQuery).count();
@@ -764,26 +765,30 @@ class TraceTreeMapperTest {
     /** A failed span's message and trace can echo a credential, and the dashboard folds them as it folds a log's. */
     @Test
     void servesAFailedSpansExceptionMaskedAndFolded() {
-        String stackTrace = """
-                java.lang.IllegalStateException: GET https://api.x/v1?api_key=SECRET failed
-                \tat org.peekaboot.app.OrderController.boom(OrderController.java:42)
-                \tat org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:1)
-                \tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:2)""";
-        var root = span("root")
-                .named("GET /boom")
-                .kind(Span.Kind.SERVER)
-                .at(0, 100)
-                .exception("java.lang.IllegalStateException", "GET https://api.x/v1?api_key=SECRET failed", stackTrace)
-                .build();
-
-        SpanExceptionInfo exception =
-                map(foldingMapper, TraceDatas.of("trace1", root)).rootSpan().exception();
+        SpanExceptionInfo exception = map(foldingMapper, TraceDatas.of("trace1", aRootThatFailedEchoingACredential()))
+                .rootSpan()
+                .exception();
 
         assertThat(exception.type()).isEqualTo("java.lang.IllegalStateException");
         assertThat(exception.message()).doesNotContain("SECRET").contains("api_key=******");
         assertThat(exception.stackTrace()).doesNotContain("SECRET").startsWith("java.lang.IllegalStateException");
         assertThat(exception.applicationFrames()).containsExactly(new Range(1, 2));
         assertThat(exception.hiddenFrames()).containsExactly(new Range(2, 4));
+    }
+
+    /** A summary's reasons and cause serve the message and the application frame, so the exception stays whole. */
+    @Test
+    void aSummaryMappingStillMasksAndFoldsAFailedSpansException() {
+        TraceData traceData = TraceDatas.of("trace1", aRootThatFailedEchoingACredential());
+
+        SpanExceptionInfo exception = foldingMapper
+                .map(traceData, foldingMapper.forSummary())
+                .rootSpan()
+                .exception();
+
+        assertThat(exception)
+                .isNotNull()
+                .isEqualTo(map(foldingMapper, traceData).rootSpan().exception());
     }
 
     /** String.lines() splits on a lone \r where the browser's split('\n') does not; the ranges must index what the wire carries. */
@@ -1398,6 +1403,47 @@ class TraceTreeMapperTest {
         assertThat(node.statement().omittedParameterSets()).isEqualTo(3);
     }
 
+    /** A summary serves no tag, so its mapping copies and masks none. */
+    @Test
+    void aSummaryMappingLeavesTagsAsStored() {
+        var root = span("root")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tag("http.url", "/reset;token=abc123")
+                .build();
+        TraceData traceData = TraceDatas.of("trace1", root);
+
+        SpanNode node = mapper.map(traceData, mapper.forSummary()).rootSpan();
+
+        assertThat(node.tags()).isSameAs(traceData.rootSpan().tags());
+    }
+
+    /** A summary serves a statement only as a repeated query's text, so it lays none out and reads no parameter. */
+    @Test
+    void aSummaryMappingCarriesTheMaskedStatementTextAlone() {
+        TraceTreeMapper formattingMapper =
+                mapperWith(new HibernateSqlFormatter(), new StackTraceRules(List.of(), List.of()));
+        var root = span("root").kind(Span.Kind.SERVER).at(0, 100).build();
+        var query = jdbcQuery("q1", "SELECT 1 /* ;token=abc123 */")
+                .parent("root")
+                .at(10, 20)
+                .tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\"]]")
+                .tag(QueryParameterTags.OMITTED_PARAMETER_SETS_TAG, "3")
+                .build();
+
+        SqlStatement statement = formattingMapper
+                .map(TraceDatas.of("trace1", root, query), formattingMapper.forSummary())
+                .rootSpan()
+                .children()
+                .getFirst()
+                .statement();
+
+        assertThat(statement.text()).contains("******").doesNotContain("abc123");
+        assertThat(statement.formatted()).isNull();
+        assertThat(statement.parameters()).isEmpty();
+        assertThat(statement.omittedParameterSets()).isZero();
+    }
+
     /**
      * The row count belongs to the query a reader is looking at, not to the {@code result-set}
      * span datasource-proxy records it on. The pairing is {@link RowCounts}', the one the
@@ -1445,6 +1491,20 @@ class TraceTreeMapperTest {
     private static void collectIds(SpanNode node, List<String> ids) {
         ids.add(node.spanId());
         node.children().forEach(child -> collectIds(child, ids));
+    }
+
+    private static SpanData aRootThatFailedEchoingACredential() {
+        String stackTrace = """
+                java.lang.IllegalStateException: GET https://api.x/v1?api_key=SECRET failed
+                \tat org.peekaboot.app.OrderController.boom(OrderController.java:42)
+                \tat org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:1)
+                \tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:2)""";
+        return span("root")
+                .named("GET /boom")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .exception("java.lang.IllegalStateException", "GET https://api.x/v1?api_key=SECRET failed", stackTrace)
+                .build();
     }
 
     private static String statementText(SpanNode node) {

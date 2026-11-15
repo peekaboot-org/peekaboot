@@ -15,8 +15,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.TraceDetail;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceOutcome;
 import org.peekaboot.backend.domain.trace.TraceReason;
@@ -55,6 +58,64 @@ class TraceResourcesTest {
                         store.bucketsOf(traceId),
                         TraceView.SUMMARY)
                 .summary();
+    }
+
+    private static TraceResources recordingInto(List<String> formatted) {
+        return new TraceResources(
+                new MaskingEngine(),
+                sql -> {
+                    formatted.add(sql);
+                    return sql;
+                },
+                new PeekabootTracingProperties(),
+                new StackTraceRules(List.of(), List.of()));
+    }
+
+    /**
+     * Trace {@code t1}, which raises every issue type and every reason kind, with {@code abc123} planted
+     * in a tag, in the exception and in the repeated statement.
+     */
+    private void addATraceRaisingEveryVerdict() {
+        String failure = "GET /reset;token=abc123 failed";
+        store.addLog(
+                log("t1").inSpan("root").at("ERROR").saying("payment declined").build());
+        store.addSpan(span("work").in("t1").parent("root").at(0, 600).order(1).build());
+        for (int i = 0; i < 5; i++) {
+            store.addSpan(jdbcQuery("query" + i, "SELECT 1 /* ;token=abc123 */")
+                    .in("t1")
+                    .parent("loop")
+                    .at(600 + i * 60, 60)
+                    .order(2 + i)
+                    .build());
+        }
+        store.addSpan(span("loop").in("t1").parent("root").at(600, 400).order(7).build());
+        store.addSpan(span("failed")
+                .in("t1")
+                .parent("root")
+                .at(1_000, 50)
+                .exception(
+                        "java.lang.IllegalStateException",
+                        failure,
+                        "java.lang.IllegalStateException: " + failure
+                                + "\n\tat org.peekaboot.app.OrderController.boom(OrderController.java:42)")
+                .order(8)
+                .build());
+        store.addSpan(span("selfCall")
+                .in("t1")
+                .parent("root")
+                .kind(Span.Kind.SERVER)
+                .at(1_050, 50)
+                .tag("status", "500")
+                .tag("http.url", "/reset;token=abc123")
+                .order(9)
+                .build());
+        store.addSpan(span("root")
+                .in("t1")
+                .kind(Span.Kind.SERVER)
+                .at(0, 1_200)
+                .tag("status", "404")
+                .order(10)
+                .build());
     }
 
     @Test
@@ -305,14 +366,7 @@ class TraceResourcesTest {
     @Test
     void aSubtreeRowFormatsOnlyItsOwnStatements() {
         List<String> formatted = new ArrayList<>();
-        TraceResources recording = new TraceResources(
-                new MaskingEngine(),
-                sql -> {
-                    formatted.add(sql);
-                    return sql;
-                },
-                new PeekabootTracingProperties(),
-                new StackTraceRules(List.of(), List.of()));
+        TraceResources recording = recordingInto(formatted);
         store.addSpan(
                 jdbcQuery("inTask", "SELECT 2").in("t1").parent("task").order(1).build());
         store.addSpan(
@@ -328,6 +382,56 @@ class TraceResourcesTest {
         recording.row(store.getTrace("t1").orElseThrow(), "task", Set.of(), TraceView.FULL);
 
         assertThat(formatted).containsExactly("SELECT 2");
+    }
+
+    /** A summary serves no statement laid out, so a page of summaries pays for no formatting. */
+    @Test
+    void aSummaryRowFormatsNoStatement() {
+        List<String> formatted = new ArrayList<>();
+        TraceResources recording = recordingInto(formatted);
+        store.addSpan(
+                jdbcQuery("query", "SELECT 1").in("t1").parent("root").order(1).build());
+        store.addSpan(
+                span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).order(2).build());
+        TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
+
+        recording.row(bundle, null, Set.of(), TraceView.SUMMARY);
+
+        assertThat(formatted).isEmpty();
+
+        recording.row(bundle, null, Set.of(), TraceView.FULL);
+
+        assertThat(formatted).containsExactly("SELECT 1");
+    }
+
+    /** A summary row is mapped with less span content than a full one, and judged the same. */
+    @Test
+    void bothViewsServeTheSameSummary() {
+        addATraceRaisingEveryVerdict();
+        TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
+
+        TraceSummary summary = resources
+                .row(bundle, null, store.bucketsOf("t1"), TraceView.SUMMARY)
+                .summary();
+
+        assertThat(summary.issues()).extracting(TraceIssue::type).contains(IssueType.values());
+        assertThat(summary.reasons()).extracting(TraceReason::kind).contains(TraceReason.Kind.values());
+        assertThat(summary.cause()).isNotNull();
+        assertThat(summary)
+                .isEqualTo(resources
+                        .row(bundle, null, store.bucketsOf("t1"), TraceView.FULL)
+                        .summary());
+    }
+
+    /** The tree behind a summary holds its tags as stored, so the row is where they must not come out. */
+    @Test
+    void aSummaryRowServesNothingUnmasked() {
+        addATraceRaisingEveryVerdict();
+
+        String served = PeekabootJson.MAPPER.writeValueAsString(
+                resources.row(store.getTrace("t1").orElseThrow(), null, store.bucketsOf("t1"), TraceView.SUMMARY));
+
+        assertThat(served).contains("token=******").doesNotContain("abc123");
     }
 
     /** The counts name what the caps dropped, which no other count includes. */

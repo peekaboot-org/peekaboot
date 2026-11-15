@@ -206,7 +206,7 @@ class TraceLogMapperTest {
                 new StackTraceRules(List.of(), List.of()),
                 new TraceRequests(maskingEngine));
         TraceData snapshot = bundle.snapshot();
-        TraceTree subtree = treeMapper.mapSubtree(snapshot, "async", treeMapper.queriesOf(snapshot));
+        TraceTree subtree = treeMapper.mapSubtree(snapshot, "async", treeMapper.served(snapshot));
 
         assertThat(TraceLogMapper.logsWithin(
                         subtree.rootSpan(),

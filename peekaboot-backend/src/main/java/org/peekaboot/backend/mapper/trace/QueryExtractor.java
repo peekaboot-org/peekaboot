@@ -7,7 +7,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
 
 public class QueryExtractor {
 
-    /** {@code queries} comes from {@link TraceTreeMapper#queriesOf} for the same {@code traceData}. */
+    /** {@code queries} comes from {@link TraceTreeMapper#served} for the same {@code traceData}. */
     public List<QueryInfo> extract(TraceData traceData, TraceQueries queries) {
         return extract(traceData.spans(), queries);
     }

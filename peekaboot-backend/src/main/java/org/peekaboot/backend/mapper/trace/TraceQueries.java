@@ -11,7 +11,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
  * and the Queries tab ({@link QueryExtractor}) both read both, so a trace detail pairs result sets
  * to their queries once. A statement is built the first time it is read and kept, so a subtree pays
  * only for its own queries and a detail formats each SQL once. Built by
- * {@link TraceTreeMapper#queriesOf}, for the one snapshot it was built from.
+ * {@link TraceTreeMapper#served}, for the one snapshot it was built from.
  */
 public final class TraceQueries {
 

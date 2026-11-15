@@ -2,7 +2,6 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,17 +13,15 @@ import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.SubtreeView;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.mapper.trace.SpanContents.ServedSpans;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 public class TraceTreeMapper {
 
-    private final TagMasker tagMasker;
-    private final SqlStatements sqlStatements;
-    private final SpanExceptions spanExceptions;
+    private final SpanContents spanContents;
     private final TraceRequests traceRequests;
 
     /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
@@ -33,18 +30,21 @@ public class TraceTreeMapper {
             SqlFormatter sqlFormatter,
             StackTraceRules stackTraceRules,
             TraceRequests traceRequests) {
-        this.tagMasker = new TagMasker(maskingEngine);
-        this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
-        this.spanExceptions = new SpanExceptions(maskingEngine, stackTraceRules);
+        this.spanContents = new SpanContents(maskingEngine, sqlFormatter, stackTraceRules);
         this.traceRequests = traceRequests;
     }
 
-    /** The statements and row counts of {@code traceData}'s query spans, to share with {@link QueryExtractor}. */
-    TraceQueries queriesOf(TraceData traceData) {
-        return new TraceQueries(traceData, sqlStatements);
+    /** See {@link SpanContents#served}. */
+    ServedSpans served(TraceData traceData) {
+        return spanContents.served(traceData);
     }
 
-    TraceTree map(TraceData traceData, TraceQueries queries) {
+    /** See {@link SpanContents#forSummary}. */
+    SpanContent forSummary() {
+        return spanContents.forSummary();
+    }
+
+    TraceTree map(TraceData traceData, SpanContent content) {
         if (traceData.spans().isEmpty()) {
             return new TraceTree(
                     traceData.traceId(),
@@ -75,9 +75,9 @@ public class TraceTreeMapper {
             // Re-parent orphan subtrees (parent not in this trace, e.g. not yet
             // exported) under the root so they don't silently vanish from the tree
             attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
-            rootSpan = buildSpanTree(rootSpanData, childrenByParentId, queries, traceData.asyncSpanIds(), false);
+            rootSpan = buildSpanTree(rootSpanData, childrenByParentId, content, traceData.asyncSpanIds(), false);
         } else {
-            orphans = mapOrphans(spans, spanById, childrenByParentId, queries, traceData.asyncSpanIds());
+            orphans = mapOrphans(spans, spanById, childrenByParentId, content, traceData.asyncSpanIds());
         }
 
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
@@ -118,16 +118,16 @@ public class TraceTreeMapper {
      * descendants, timed by their window rather than the trace's, classified from that span and
      * counted over those spans alone. What the listing's async rows render. A span no longer
      * stored maps as the whole trace: the cap can evict an entry between listing and mapping.
-     * {@code queries} comes from {@link #queriesOf} for the same {@code traceData}.
+     * A {@link ServedSpans} comes from {@link #served} for the same {@code traceData}.
      */
-    TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId, TraceQueries queries) {
+    TraceTree mapSubtree(TraceData traceData, String subtreeRootSpanId, SpanContent content) {
         List<SpanData> spans = traceData.spans();
         SpanData subtreeRootData = spans.stream()
                 .filter(span -> subtreeRootSpanId.equals(span.spanId()))
                 .findFirst()
                 .orElse(null);
         if (subtreeRootData == null) {
-            return map(traceData, queries);
+            return map(traceData, content);
         }
         Map<String, List<SpanData>> childrenByParentId = childrenByParentId(spans);
         String parentId = subtreeRootData.parentId();
@@ -139,7 +139,7 @@ public class TraceTreeMapper {
         }
         Set<String> asyncSpanIds = traceData.asyncSpanIds();
         boolean parentIsAsync = parentId != null && asyncSpanIds.contains(parentId);
-        SpanNode subtreeRoot = buildSpanTree(subtreeRootData, childrenByParentId, queries, asyncSpanIds, parentIsAsync);
+        SpanNode subtreeRoot = buildSpanTree(subtreeRootData, childrenByParentId, content, asyncSpanIds, parentIsAsync);
         SubtreeTotals totals = new SubtreeTotals();
         accumulateSubtree(subtreeRoot, totals);
         return new TraceTree(
@@ -248,7 +248,7 @@ public class TraceTreeMapper {
             List<SpanData> spans,
             Map<String, SpanData> spanById,
             Map<String, List<SpanData>> childrenByParentId,
-            TraceQueries queries,
+            SpanContent content,
             Set<String> asyncSpanIds) {
         List<SpanData> heads = spans.stream()
                 .filter(span -> span.parentId() == null || !spanById.containsKey(span.parentId()))
@@ -260,14 +260,14 @@ public class TraceTreeMapper {
         }
         return heads.stream()
                 .sorted(Comparator.comparing(SpanData::startTime, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(head -> buildSpanTree(head, childrenByParentId, queries, asyncSpanIds, false))
+                .map(head -> buildSpanTree(head, childrenByParentId, content, asyncSpanIds, false))
                 .toList();
     }
 
     private SpanNode buildSpanTree(
             SpanData spanData,
             Map<String, List<SpanData>> childrenByParentId,
-            TraceQueries queries,
+            SpanContent content,
             Set<String> asyncSpanIds,
             boolean parentIsAsync) {
         if (spanData == null) {
@@ -278,7 +278,7 @@ public class TraceTreeMapper {
         List<SpanData> childSpans = childrenByParentId.getOrDefault(spanData.spanId(), List.of());
         List<SpanNode> children = childSpans.stream()
                 .sorted(Comparator.comparing(SpanData::startTime, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(child -> buildSpanTree(child, childrenByParentId, queries, asyncSpanIds, isAsync))
+                .map(child -> buildSpanTree(child, childrenByParentId, content, asyncSpanIds, isAsync))
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
@@ -292,35 +292,13 @@ public class TraceTreeMapper {
                 SelfTimes.selfMs(spanData, childSpans),
                 status,
                 children,
-                maskedTags(spanData),
+                content.tags(spanData),
                 mapEvents(spanData),
                 List.of(), // issues added by IssueDetector
-                spanExceptions.of(spanData.exception()),
-                queries.statement(spanData),
-                queries.rowCount(spanData.spanId()),
+                content.exception(spanData),
+                content.statement(spanData),
+                content.rowCount(spanData.spanId()),
                 isAsync && !parentIsAsync);
-    }
-
-    /**
-     * Every tag stays on its own span, masked - http.url etc. may carry a credential the
-     * key name alone can't catch. A span's exception message and query text are masked the same
-     * way: an exception message can echo back the failing request's URL. The statement
-     * tags and the parameter tags are the exception: they are served once, masked, as the
-     * span's {@code statement}, and shipping the raw tag beside it would say it twice. That
-     * holds only on a query span, the one shape {@code statement} is populated for.
-     */
-    private Map<String, String> maskedTags(SpanData spanData) {
-        if (spanData.tags() == null) {
-            return Map.of();
-        }
-        boolean servedAsQuery = DbSpans.isQuery(spanData);
-        Map<String, String> kept = new LinkedHashMap<>();
-        spanData.tags().forEach((key, value) -> {
-            if (!servedAsQuery || !DbSpans.isStatementTag(key)) {
-                kept.put(key, value);
-            }
-        });
-        return tagMasker.mask(kept);
     }
 
     private static List<SpanEvent> mapEvents(SpanData spanData) {

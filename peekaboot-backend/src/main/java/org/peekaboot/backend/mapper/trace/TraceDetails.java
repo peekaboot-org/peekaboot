@@ -9,6 +9,7 @@ import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceDetail;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.mapper.trace.SpanContents.ServedSpans;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
@@ -25,11 +26,13 @@ final class TraceDetails {
     }
 
     /**
-     * {@code logs} are the row's logs already mapped. A subtree row's data is its own work, so it
-     * lists only the queries inside it and carries no request.
+     * {@code served} is the content {@code tree} was mapped with and {@code logs} are the row's logs
+     * already mapped. A subtree row's data is its own work, so it lists only the queries inside it and
+     * carries no request.
      */
     TraceDetail of(
-            TraceDataBundle bundle, TraceData traceData, TraceQueries queries, TraceTree tree, List<TraceLog> logs) {
+            TraceDataBundle bundle, TraceData traceData, ServedSpans served, TraceTree tree, List<TraceLog> logs) {
+        TraceQueries queries = served.queries();
         List<QueryInfo> ownQueries;
         HttpExchange httpExchange;
         if (tree.subtree() == null) {

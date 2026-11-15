@@ -1030,6 +1030,7 @@ class TraceInsightsServiceTest {
                 .listTraces(listing()
                         .rootActionType("async_task")
                         .minDurationMs("0")
+                        .view("full")
                         .build())
                 .traces();
 

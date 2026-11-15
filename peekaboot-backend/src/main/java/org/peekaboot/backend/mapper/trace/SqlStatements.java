@@ -32,7 +32,7 @@ final class SqlStatements {
 
     /** The statement {@code span} carries; null for a span that is no query or recorded no SQL. */
     SqlStatement of(SpanData span) {
-        String sql = DbSpans.isQuery(span) ? DbSpans.sql(span) : null;
+        String sql = sqlOf(span);
         if (sql == null) {
             return null;
         }
@@ -41,6 +41,16 @@ final class SqlStatements {
                 maskingEngine.maskValue(formatted(sql)),
                 maskedParameters(span.tags()),
                 omittedParameterSets(span.tags()));
+    }
+
+    /** {@link #of} without the layout and the parameters, for a reader of the masked text alone. */
+    SqlStatement textOnly(SpanData span) {
+        String sql = sqlOf(span);
+        return sql == null ? null : new SqlStatement(maskingEngine.maskValue(sql), null, List.of(), 0);
+    }
+
+    private static @Nullable String sqlOf(SpanData span) {
+        return DbSpans.isQuery(span) ? DbSpans.sql(span) : null;
     }
 
     private @Nullable String formatted(String sql) {

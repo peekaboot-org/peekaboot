@@ -51,7 +51,7 @@ final class DbSpans {
     }
 
     /**
-     * The mapped twin. {@link TraceTreeMapper} drops the statement tags (see
+     * The mapped twin. {@link SpanContents} drops the statement tags (see
      * {@link #isStatementTag}) once the statement is served as {@link SpanNode#statement}, so a
      * datasource-proxy query span, whose only qualifying tag was {@code jdbc.query[0]}, is
      * recognised by that field instead.
