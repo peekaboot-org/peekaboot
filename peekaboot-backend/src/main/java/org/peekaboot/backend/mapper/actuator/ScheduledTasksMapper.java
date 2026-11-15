@@ -73,7 +73,7 @@ public class ScheduledTasksMapper {
     }
 
     private String extractTarget(ScheduledTasksResponse.RunnableTarget runnable) {
-        return runnable != null ? runnable.target() : "unknown";
+        return runnable != null && runnable.target() != null ? runnable.target() : "unknown";
     }
 
     private Instant timeOf(ScheduledTasksResponse.TaskExecution execution) {

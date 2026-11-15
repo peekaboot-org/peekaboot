@@ -202,6 +202,17 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks()).extracting(ScheduledTaskInfo::target).containsExactly("unknown");
     }
 
+    /** Two rows of one type are ordered by target, so a target the runnable leaves out would end the sort. */
+    @Test
+    void map_shouldNameAnUnknownTargetWhenTheRunnableNamesNone() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+                List.of(), List.of(createFixedTask(1000L, null), createFixedTask(2000L, null)), List.of());
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::target).containsExactly("unknown", "unknown");
+    }
+
     /** An exception reported with only one of its two halves is rendered as that half, with no dangling separator. */
     @Test
     void map_shouldRenderAnExceptionCarryingOnlyAMessageOrOnlyAType() {
