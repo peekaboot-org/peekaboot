@@ -30,6 +30,10 @@ as what keeps it stable. `peekaboot.security.credentials-file` is the one way ar
 an explicit path is written and read regardless of `peekaboot.storage.enabled`, the same way an
 explicit property beats a detected default everywhere else in this codebase.
 
+`CredentialsFile` does not read a file its group or others can access, and `PasswordHash` parses
+only the iteration count it writes. Either case is a regeneration with a WARN, and the rewrite is
+owner-only.
+
 The subdirectory is named from the application's build coordinates rather than its
 `spring.application.name`, so two applications sharing a name, or having none, still keep their
 history apart. `ApplicationIdentity`, built once by `ApplicationIdentityConfiguration`, holds that
@@ -315,8 +319,8 @@ Everything runs inside the host application's own process and on its own event b
 org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
-├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on /peekaboot/api/**), QueryParameterBinding, PeekabootApiController (the OpenAPI document and the API's index)
+├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on the API's handlers; UiSecurityHeadersInterceptor: a Content-Security-Policy, X-Frame-Options: DENY and nosniff on the UI's resource handlers; PeekabootHandlers tells Peekaboot's controllers and UI resource handlers from the host's), PeekabootJson (+ its message converter), PeekabootPaths
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on the API's handlers), QueryParameterBinding, PeekabootApiController (the OpenAPI document and the API's index)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
@@ -343,8 +347,14 @@ org.peekaboot.backend/
 ├── masking/                # MaskingEngine (one bean, from MaskingConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── problem/                # ApiProblem, ApiProblemException, ApiProblemHandler, RequestParameters: the RFC 9457 errors of /peekaboot/api/**
-├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
-│                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
+├── security/               # DashboardAccess (the one question the enforcement points ask, and whether a page outside the
+│                           # dashboard may show debug detail), CredentialsAccess (the HTTP Basic check and the 401),
+│                           # LoopbackOnlyAccess (a local run without the guard answers this machine only), Refusals (the
+│                           # problem answer the 401 and the 403 share), DashboardAuthenticationFilter (asks for
+│                           # /peekaboot/*), DashboardAccessInterceptor (asks again at every Peekaboot handler, whatever
+│                           # path served it), DerivationGate (at most two PBKDF2 runs at once, one per header), and the
+│                           # credential they check: PasswordHash (PBKDF2), CredentialsFile, DashboardCredentialsResolver,
+│                           # CredentialCache, SecurityPosture
 ├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, ErrorDigestService, TraceReads, ...
 ├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page, the Logs tab and a span's details panel fold a stack trace
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
@@ -376,7 +386,7 @@ org.peekaboot.backend/
 
 1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`. A span failed when its status is ERROR. `DispatcherServlet.processDispatchResult` clears the error request attributes after an error view renders, before `ServerHttpObservationFilter` reads them, so an exception a view renders never reaches the server span that way. Where `peekaboot.error-page.override` answers an exception with a 5xx page, `ServerRequestFailure` fails the server span with that exception itself. Through `TracingHandlerInterceptor.failHandler` it also fails the handler span of the dispatch that threw, so the trace's cause names the handler span, as it does where the exception escapes. A 4xx the page answers leaves the server span OK. So does a page rendered on the ERROR dispatch, which runs after the server span has ended, and so does an application's own view. Their 5xx still fails the trace through its HTTP status
 2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and hands each event on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else `ErrorDigestRecorder.liveInputs()`, which applies it to the store and then records the trace in the error digest where the input made it complete and failed. The journal hands its live inputs to the same recorder, and replays its files into the store directly, so a restored trace never counts again. The store (`InMemoryTraceStore`) is three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
-3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event. One without a `traceId` goes to the store's untraced ring instead of a trace
+3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event but those of the `SecurityPostureListener` logger (see *Log Capture*). One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request and the page reuses. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)
 6. **Thresholds**: `IssueDetector` raises SLOW and VERY_SLOW on a span's self time (`SpanNode.selfMs`, its duration minus what its children cover, from `SelfTimes`) and SLOW_QUERY on a query's whole duration, at `PeekabootTracingProperties`' thresholds. REPEATED_QUERY sits on the span that ran the same normalised statement at least `repeated-query-threshold` times (default 5) as its direct children (`RepeatedQueries`). CLIENT_ERROR, a warning, sits on a server root that answered 4xx (`HttpSpanTags.clientErrorStatus`) and leaves the outcome and Errors alone. `PeekabootAutoConfiguration` binds the thresholds whether or not tracing is on. Failing raises no issue of its own, since a failed span's `status` and error fields already say so. The threshold issues apply to a failed span as to any other. `TraceReasons` derives a trace's reasons from the store's admission rules; `outcome` is `ERROR` once complete when the store's sticky failure flag (`TraceData.failed`) is set or one of its reasons is a failure, or for a subtree row once its own reasons hold a failure. The SLOW badge follows the `SLOW` reason. `GET /peekaboot/api/features` publishes the time thresholds (`Features`), so the frontend colours by the same numbers instead of keeping a copy
@@ -386,7 +396,7 @@ org.peekaboot.backend/
 | Filter | Order | Registered when | Purpose |
 |--------|-------|-----------------|---------|
 | `RequestCaptureFilter` | `HIGHEST_PRECEDENCE + 100` | a `Tracer` **and** a `TraceStore` bean exist | Captures request/response metadata for traces, and sets the `Server-Timing` header |
-| `DevToolbarFilter` | `LOWEST_PRECEDENCE` | a `Tracer` bean exists | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it. Registered for `REQUEST` and `ERROR`: the `REQUEST` dispatch stashes the failing request's method, URI and trace id on a request attribute, and the `ERROR` dispatch reads it back so the error page's bar reports the request that failed, not the `/error` dispatch that renders it |
+| `DevToolbarFilter` | `LOWEST_PRECEDENCE` | a `Tracer` bean exists | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it. Registered for `REQUEST` and `ERROR`: the `REQUEST` dispatch stashes the failing request's method, URI and trace id on a request attribute, and the `ERROR` dispatch reads it back so the error page's bar reports the request that failed, not the `/error` dispatch that renders it. Skips a request the access rule refuses (`DashboardAccess.permitsDebugDetail`), on both dispatches, so a loopback-only local run puts no bar on a page it serves to another machine. A `206` response is passed through as written |
 | `DashboardAuthenticationFilter` | `0` | `peekaboot.enabled` **and** `peekaboot.security.enabled` | Challenges every `/peekaboot/**` request with Peekaboot's credentials, whatever else authenticated it |
 
 Both `RequestCaptureFilter` and `DevToolbarFilter` map `/*`. `RequestCaptureFilter`'s order is
@@ -411,6 +421,17 @@ credentials or is challenged, whatever the application's security decided first.
 they lock each other out, so an application that secures `/peekaboot/**` itself sets
 `peekaboot.security.enabled=false`.
 
+The filter is the container's mapping, and a host can serve Peekaboot's handlers outside it.
+`DashboardAccessInterceptor`, registered with no path pattern at `Ordered.HIGHEST_PRECEDENCE` by
+`DashboardAccessConfiguration`, asks the same `DashboardAccess` again for every Peekaboot
+controller and UI resource handler, so a path prefix, a case-insensitive matcher or a second
+`DispatcherServlet` cannot serve them past the guard.
+
+On a local run no guard filter is registered. `DashboardAccessConfiguration` hands the
+interceptor a `LoopbackOnlyAccess` there, so the handler-level check is the only enforcement point
+of the loopback rule. Without Spring MVC there is no handler to check, and the interceptor's
+registration backs off.
+
 A contributed `SecurityFilterChain` could not do this job. `FilterChainProxy` is
 first-match-wins: a chain ordered above the application's would shadow working security, and
 one ordered below has nowhere to go, since an unordered application chain already sits at
@@ -425,6 +446,9 @@ consumer reaching for it wants: it does not stop Peekaboot's own `FilterRegistra
 Boot auto-registers the bare bean as a second filter at `/*`, putting HTTP Basic in front of the
 whole application. `peekaboot.security.enabled=false` is the other escape hatch, for a consumer
 who wants no guard at all rather than a replacement one.
+
+The handler-level check asks the replaced registration's filter (`access()`), never Peekaboot's
+generated credentials. A registration that holds no `DashboardAuthenticationFilter` fails startup.
 
 Tomcat 11 suspends a wrapped response after a `RequestDispatcher.forward`
 (`suspendWrappedResponseAfterForward`, default `true` since 11.0.0-M18), so the toolbar's write
@@ -572,7 +596,8 @@ The advice's scope, `org.peekaboot.backend`, leaves the application's controller
 error handling, and it is ordered first so an application-wide `@RestControllerAdvice` cannot
 reshape Peekaboot's errors (`ApiProblemHandlerTest`).
 
-The guard's 401 from `DashboardAuthenticationFilter` carries the same body. An include into the
+The guard's 401 (`CredentialsAccess`) and the loopback rule's 403 (`LoopbackOnlyAccess`) carry the
+same body, both written by `Refusals`. An include into the
 dashboard gets nothing from the guard. An include cannot set the status, so the including
 response keeps its own, and a body would land inside the including page.
 
@@ -584,9 +609,10 @@ with the wrong list.
 
 A parameter an endpoint does not take is refused before its handler runs, so a misspelled
 `buckett` is a 400 naming it with the names the endpoint takes, and so is any parameter sent more
-than once, such as `limit=1&limit=2`. `QueryParameterGuard`, an interceptor on `/peekaboot/api/**`
-registered after the security headers, reads what an endpoint takes off its handler method: a
-named `@RequestParam`, the components of a `@ModelAttribute` record. Spring Security's `continue`,
+than once, such as `limit=1&limit=2`. `QueryParameterGuard`, an interceptor bound to the API's
+handlers (`PeekabootHandlers.isApi`) and registered after the security headers, reads what an
+endpoint takes off its handler method: a named `@RequestParam`, the components of a
+`@ModelAttribute` record. Spring Security's `continue`,
 which its request cache adds to the URL a login sends a browser back to, is let through on every
 endpoint. A handler argument of any other kind fails the request, since the guard cannot tell what
 it reads, and `ApiProblemIT` sends an unknown parameter to every endpoint the application maps.
@@ -793,11 +819,16 @@ bean for these, with every `Include` switched on, so the application's own
 *response* a client receives carries, and this is a page rendered for a developer looking at the
 browser.
 
+The bean reaches the view wrapped in `GatedErrorAttributes`. `ErrorPageAutoConfiguration.errorView`
+is the one place all three paths get their view, so each asks `DashboardAccess.permitsDebugDetail`
+first: a request the rule refuses is answered with `ErrorAttributeOptions.defaults()`, and the page
+shows it the status, the reason and the path and no exception, message or trace.
+
 `peekaboot.error-page.enabled` gates all three paths, defaulted from the same launch-context
 detection as `peekaboot.enabled` and the dev toolbar: on for a detected local run, off otherwise,
 with an explicit setting winning either way (see *Conditional Loading*). Switched on for a
 deployment launch, the page serves full stack traces outside the guard, so `SecurityPosture`
-adds a WARN to the startup report. It carries the dev
+adds a WARN to the startup report. For a request the access rule permits, it carries the dev
 toolbar the same way any other HTML response does, because `DevToolbarFilter` is registered for
 the `ERROR` dispatch as well as `REQUEST` (see *Servlet Filters*). The bar reports the request
 that failed, never the dispatch that rendered the page.
@@ -907,12 +938,12 @@ hooks that run before or outside the application context are registered in
 |-------|----------------|---------|
 | `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
-| `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration and the `TomcatForwardResponseCustomizer` bean |
+| `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration, which asks the access rule whether a request may see the bar, and the `TomcatForwardResponseCustomizer` bean |
 | `TraceCaptureAutoConfiguration` | `.imports` | Request capture filter registration and the `LogbackAppenderRegistrar` bean, both feeding the trace store |
 | `ErrorPageAutoConfiguration` | `.imports` | Peekaboot's error page, registered in the fallback slot or, where `peekaboot.error-page.override` is set, in the two places that outrank an application's own (see *Error Page*) |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
-| `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |
+| `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` and Spring MVC |
 | `HibernateStatisticsMetricsAutoConfiguration` | `.imports` | `HibernateStatisticsMeterBinder`: the four `hibernate.*` meters the insights panels read, bound from each session factory's statistics with hibernate-micrometer's names and tags; steps aside where `org.hibernate.orm.micrometer.HibernateMetrics` is present, since Boot then binds them |
 | `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
@@ -922,8 +953,8 @@ hooks that run before or outside the application context are registered in
 | `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootObservationAutoConfiguration` | `.imports` | The `ObservationPredicate` that takes the dashboard's own requests out of the request metrics and the traces; independent of `peekaboot.tracing.enabled` |
-| `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`; deployment detection for `peekaboot.security.enabled` and `peekaboot.security.deployment-detected`; the default property values; the `peekabootBlankSwitches` source, where `BooleanSwitches.treatBlanksAsUnset` makes a blank switch read as unset; and the check that no switch holds a value the conditions and the binder read differently (see *Conditional Loading*, *Default Properties* and *Automatic Dashboard Security*) |
+| `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration, the handler-level check and its choice between the guard, the loopback rule and no check (`DashboardAccessConfiguration`), and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`; deployment detection for `peekaboot.security.enabled`; the `peekabootDetectedLaunch` source (`DetectedLaunch`), which carries the launch kind itself; the default property values; the `peekabootBlankSwitches` source, where `BooleanSwitches.treatBlanksAsUnset` makes a blank switch read as unset; and the check that no switch holds a value the conditions and the binder read differently (see *Conditional Loading*, *Default Properties* and *Automatic Dashboard Security*) |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
@@ -978,22 +1009,27 @@ through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the 
 @interface ConditionalOnPeekabootServlet {}
 ```
 
-Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
-the `HealthEndpoint` class, `PeekabootObservationAutoConfiguration` the `ObservationPredicate`
-and `ServerRequestObservationContext` classes, `DevToolbarAutoConfiguration`
-`peekaboot.dev-toolbar.enabled`, `TracingInterceptorAutoConfiguration` an `ObservationRegistry`
-bean, `AsyncInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
-`peekaboot.tracing.async`, `EventListenerInstrumentationAutoConfiguration` an
-`ObservationRegistry` bean and
-`peekaboot.tracing.event-listeners`, `InsightsAutoConfiguration`
-a `MeterRegistry` bean and `peekaboot.insights.enabled`,
-`HibernateStatisticsMetricsAutoConfiguration` the same plus an `EntityManagerFactory` bean and
-no hibernate-micrometer, `OtelTracingAutoConfiguration` the
+Each adds its own on top: `PeekabootAutoConfiguration` the `HealthEndpoint` and
+`WebMvcConfigurer` classes, `ActuatorSourcesAutoConfiguration` the `HealthEndpoint` class,
+`PeekabootObservationAutoConfiguration` the `ObservationPredicate` and
+`ServerRequestObservationContext` classes, `DevToolbarAutoConfiguration`
+`peekaboot.dev-toolbar.enabled`, `TracingInterceptorAutoConfiguration` the `WebMvcConfigurer`
+class and an `ObservationRegistry` bean, `AsyncInstrumentationAutoConfiguration` an
+`ObservationRegistry` bean and `peekaboot.tracing.async`,
+`EventListenerInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
+`peekaboot.tracing.event-listeners`, `InsightsAutoConfiguration` the `SseEmitter` class, a
+`MeterRegistry` bean and `peekaboot.insights.enabled`,
+`HibernateStatisticsMetricsAutoConfiguration` that bean and that switch plus an
+`EntityManagerFactory` bean and no hibernate-micrometer, `OtelTracingAutoConfiguration` the
 OpenTelemetry SDK's `SpanExporter` class, and `QueryParameterAutoConfiguration`
-datasource-micrometer's `QueryContext` class. Class-level conditions guard only what the
-starter's closure leaves optional: `spring-boot-health`, the OpenTelemetry SDK and
-datasource-micrometer's tracing observation support, which the starter brings but a host can
-exclude. HikariCP, Logback, Flyway, Liquibase and Hibernate are optional too, each guarded a level down
+datasource-micrometer's `QueryContext` class.
+
+Class-level conditions guard only what the starter's closure leaves optional: `spring-boot-health`,
+the OpenTelemetry SDK and datasource-micrometer's tracing observation support, which the starter
+brings but a host can exclude. Spring MVC is the other case. The starter does not bring it, and
+the configurations whose beans name its types carry a class condition, so a servlet application
+without it still starts.
+HikariCP, Logback, Flyway, Liquibase and Hibernate are optional too, each guarded a level down
 on a nested `@Configuration`, except that `HibernateStatisticsMetricsAutoConfiguration` guards
 Hibernate at class level, having nothing to bind without it. `InfoEndpoint` and `ObservationRegistry` arrive with hard
 dependencies of this module and the backend, so no consumer of the starter can be without
@@ -1003,12 +1039,23 @@ them.
 controllers, services and actuator wiring, all as explicit `@Bean` methods.
 `ServerUrlResolver`'s dashboard check looks for the bean named `peekabootWebConfig`. It needs
 the servlet guard because `PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type.
+It carries `@ConditionalOnClass(WebMvcConfigurer.class)` for the same type: without that condition
+Spring cannot introspect the configuration class in an application that has no Spring MVC on its
+class path, and the context does not start. `SpringMvcAbsentTest` pins that it starts.
+
 `PeekabootWebConfig` is also the only thing that serves the UI bundle. The bundle lives at
 `classpath:/META-INF/peekaboot/ui/`, outside every static location Boot serves by default,
 and its resource handler exists only while `peekaboot.enabled` is `true`. With Peekaboot off
 nothing under `/peekaboot/**` answers, the assets included.
 
-That guard prevents dead beans, not a crash. Without it a WebFlux or non-web application with
+`PeekabootWebConfig` binds its interceptors to Peekaboot's handlers and to no path. The UI's
+responses carry `Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'self';
+frame-ancestors 'none'; form-action 'self'`, `X-Frame-Options: DENY` and
+`X-Content-Type-Options: nosniff`, each only where the response does not carry that header yet.
+The UI has no inline script or style and loads nothing from another origin; `UiSecurityHeadersIT`
+holds it to that in a browser.
+
+The servlet guard prevents dead beans, not a crash. Without it a WebFlux or non-web application with
 `peekaboot.enabled=true` would register the controller, services and mappers with nothing
 servlet-specific ever invoking them. `ApplicationContextRunner` confirms the context still
 starts cleanly: only `WebMvcConfigurationSupport` calls back into `WebMvcConfigurer`, and it is
@@ -1059,14 +1106,17 @@ signals of its own, checked in order:
 1. A native image resolves to `false` before anything else is checked.
 2. If the context class loader is DevTools' `RestartClassLoader` (the `restartedMain` thread
    DevTools relaunches on), the thread-name, class-loader and stack-trace checks in step 3 are
-   skipped. DevTools only reaches that relaunch after its own gate has required them, the
-   stack-trace check included, over the identical set of frames. The class-path check in step 4
+   skipped. DevTools only reaches that relaunch after its own gate has required a thread named
+   `main`, a loader whose class name contains `AppClassLoader` and a stack free of the identical
+   set of frames. Its loader test is by name, so it is looser than step 3's. The class-path check
+   in step 4
    still applies: DevTools' own class-path signal accepts any directory on the class path, not
    just a build tool's output directory, so it says yes for a Jib image or an `extract` layout
    too. With the container check alongside it, a Jib image or Boot's `extract` layout that
    ships DevTools as a runtime dependency still resolves `false`.
 3. Otherwise the result is `true` only when *all* of these hold. The thread is named `main`.
-   Its context class loader is the JDK's own `AppClassLoader`, not Spring Boot's
+   Its context class loader is the JVM's system class loader, compared as an object and not by
+   its class name, not Spring Boot's
    `LaunchedClassLoader` (a packaged, executable jar) and not a servlet container's webapp
    loader (a deployed war). And the call stack carries no `org.junit.runners.`,
    `org.junit.platform.`, `org.springframework.boot.test.`, Boot AOT processor or
@@ -1074,6 +1124,7 @@ signals of its own, checked in order:
    a genuine local launch, which shares the thread name and the class loader.
 4. Those three hold for *every* exploded-classpath launch, so two more signals decide
    (`LocalDevDetector.LaunchSignals`, read from the JVM and the host, injectable in tests).
+   `LaunchSignals` also carries the system class loader that step 3 compares with.
    `java.class.path` must contain a build tool's output directory, and
    `ContainerRuntime.current()` must report `NONE`. An entry counts as an output directory
    when, with backslashes turned to slashes and a trailing slash dropped, it ends in
@@ -1094,7 +1145,9 @@ packaged artifact, a war in a servlet container, a native image, an AOT-processe
 test, a Jib image, the `extract` layout, a plain `java -cp` of jars and anything inside a
 container default to off. What is left for an explicit `peekaboot.enabled=false` is the one
 shape the signals cannot separate: a build output directory mounted into a non-container
-process that is not a developer's own launch.
+process that is not a developer's own launch. A launch read as local answers only the machine it
+runs on (see *Automatic Dashboard Security*), so a misread launch on a shared host or a CI runner
+does not serve the dashboard to the network. `peekaboot.remote-access.enabled=true` opens it.
 
 `peekaboot.lifecycle.enabled` is read by a `@ConditionalOnBooleanProperty` condition, since it
 has to be evaluated before any Peekaboot bean exists, and is also bound as
@@ -1125,7 +1178,10 @@ conversion, and throws Boot's `FailureAnalyzedException`, so startup ends
 with a failure report naming each offending property and value. Both lists are hand-kept because
 a native image has no class files to scan for the conditions at startup; `BooleanSwitchesTest`
 reads every `@ConditionalOnBooleanProperty` on a registered auto-configuration and fails when a
-`peekaboot.*` key is missing from either. A YAML file never trips the check with a bare `yes`:
+`peekaboot.*` key is missing from either. `PeekabootDefaultsEnvironmentPostProcessorTest` fails
+when a switch is in both the detection map and `UNSET_SWITCH_DEFAULTS` or in neither, and
+`BooleanSwitchesTest` when the value a property bean starts with differs from what the switch reads
+as unset. A YAML file never trips the check with a bare `yes`:
 YAML 1.1 already parses that as the boolean `true`.
 
 ### Default Properties
@@ -1175,13 +1231,14 @@ exists Peekaboot folds its entries into it, underneath the application's own, so
 `SpringApplicationBuilder.properties("peekaboot.enabled=false")` wins like any other setting.
 Where it does not, Peekaboot's four named sources are appended last, in this order:
 `peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
-`peekabootDevToolbarDefaults`. `peekabootDetection` is where all six launch-context-detected
-values land, since none of them needs a yml resource of its own (see *Conditional Loading*).
-Four follow a local run: `peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`,
-`peekaboot.storage.enabled` and `peekaboot.error-page.enabled`.
-Two follow a deployment launch: `peekaboot.security.enabled` and
-`peekaboot.security.deployment-detected` (see *Automatic Dashboard Security*).
-`PeekabootDefaultsRegistrationTest` pins both halves.
+`peekabootDevToolbarDefaults`. A fifth source, `peekabootDetectedLaunch`, sits first. It answers
+no property, so its place gives it no precedence.
+
+`peekabootDetection` is where all five launch-context-detected values land, since none of them
+needs a yml resource of its own (see *Conditional Loading*). Four follow a local run:
+`peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`, `peekaboot.storage.enabled` and
+`peekaboot.error-page.enabled`. One follows a deployment launch: `peekaboot.security.enabled`
+(see *Automatic Dashboard Security*). `PeekabootDefaultsRegistrationTest` pins both halves.
 
 ### Automatic Dashboard Security
 
@@ -1196,27 +1253,73 @@ early would otherwise fall through to `DEPLOYMENT` rather than `LOCAL_DEV`. With
 stand-alone `TEST` check, a consumer's own dashboard tests, and most of this repo's own
 integration tests, would start receiving 401s.
 
-The detected value also travels under its own key, `peekaboot.security.deployment-detected`,
-never `peekaboot.security.enabled` itself. It exists so `SecurityPosture` can tell a detected
-`true` apart from an operator's explicit one after `peekaboot.security.enabled` has already
-resolved to `true` either way, and so that answer survives the fold into Boot's `defaultProperties`
-described above, which the detection source's own name does not. It is detected-only: nothing an
-application is meant to set.
+The launch kind itself travels in a property source of its own type, `DetectedLaunch`
+(`peekabootDetectedLaunch`), never as a property. `SecurityPosture` is built from what it holds,
+so it can tell a deployment from a local or test launch after `peekaboot.security.enabled` has
+already resolved either way. The source answers no property, so no property file, environment
+variable or system property can claim or deny a launch, and it survives the fold into Boot's
+`defaultProperties` described above, which the detection source's own name does not.
+
+`DetectedLaunch` extends `PropertySource.StubPropertySource`, which Boot's binder skips, so the
+source adds nothing to a `@ConfigurationProperties` bind on a host that never switches Peekaboot
+on.
 
 `PeekabootSecurityAutoConfiguration` wires the credential resolution, the credential file (see
-*Persisted state* above) and the filter registration (*Servlet Filters*). It carries the same
-servlet-and-`peekaboot.enabled` guard as most auto-configurations
+*Persisted state* above), the filter registration and the handler-level check (*Servlet Filters*).
+It carries the same servlet-and-`peekaboot.enabled` guard as most auto-configurations
 above; `peekaboot.security.enabled` gates a nested configuration one level down rather than the
 class itself, because the startup posture report is registered whenever Peekaboot is enabled,
 not only while the guard is armed: an operator who switched it off on a deployment launch still
-gets told at startup that the application's own security must cover `/peekaboot/**`.
+gets told at startup that the application's own security must cover `/peekaboot/**`. A developer
+who opened a local run with `peekaboot.remote-access.enabled=true` is told that anyone who reaches
+the port reads the dashboard.
 
-There is no throttle on failed authentication attempts. Each wrong password still costs a full
-210,000-iteration PBKDF2 derivation, roughly 100ms, and `CredentialCache` remembers only
-successful verifications, so an attacker who can reach `/peekaboot/**` can burn CPU at that rate
-indefinitely. This is accepted rather than fixed: a real throttle needs per-client state,
-eviction and forwarded-header handling of its own, which is a subsystem and not a stop-gap, and
-rate limiting for a deployed application belongs at the proxy in front of it.
+The banner is logged and not captured: `PeekabootLogbackAppender` drops the listener's logger, so
+the plain-text password exists in the application's log and nowhere in Peekaboot's own data.
+
+Without a registered guard, `peekabootDashboardAccess` depends on the detected launch. On
+`LOCAL_DEV` it is a `LoopbackOnlyAccess`, which admits a request only when all four hold:
+
+- The client address is a loopback literal, parsed with `InetAddress.ofLiteral` and never resolved.
+- There is no `Forwarded` header and every `X-Forwarded-For` entry is a loopback literal.
+- The `Host` header, or the `:authority` of an HTTP/2 request, names `localhost`, a `.localhost`
+  name or a loopback literal.
+- `Origin` is absent or names such a host, and `Sec-Fetch-Site` is absent, `same-origin`,
+  `same-site` or `none`, or `cross-site` on a GET navigation to a document (a followed link).
+
+Every other request gets a 403 problem from `Refusals`. The rule judges the container's own
+request, reached beneath every `ServletRequestWrapper`, so Spring's `ForwardedHeaderFilter`
+(`server.forward-headers-strategy=framework`) cannot vouch for another machine. What the container
+rewrote itself is out of reach: with `server.forward-headers-strategy=native` Tomcat's
+`RemoteIpValve` has replaced the client address and removed `X-Forwarded-For` before the servlet
+API hands the request out, and a client in its internal-proxy ranges passes with
+`X-Forwarded-For: 127.0.0.1` and `Host: localhost`. The site documents that limit; nothing warns of
+it at startup.
+
+`peekaboot.remote-access.enabled=true` swaps the rule for `DashboardAccess.open()`, and
+`SecurityPosture.remoteAccessOnALocalRun` says so in one WARN line at startup. On `TEST` and
+`DEPLOYMENT` there is no rule: a test drives the application with whatever client it likes, and a
+deployment with the guard off is the application's own security's to cover. The switch is read
+from the bound `PeekabootProperties.RemoteAccess` and gates no condition, so it is not in
+`PeekabootPropertyKeys.BOOLEAN_SWITCHES`.
+
+The same rule answers `permitsDebugDetail`. `DevToolbarAutoConfiguration` and
+`ErrorPageAutoConfiguration` read it through `DashboardAccessConfiguration.debugDetailPermitted`,
+so the bar and the error page's exception detail go only where the dashboard goes. Without a
+`DashboardAccess` bean, where the application excluded `PeekabootSecurityAutoConfiguration`, both
+permit.
+
+Failed authentication attempts are bounded, not throttled. A wrong password with the right
+username still costs a full 210,000-iteration PBKDF2 derivation, roughly 100ms, and
+`CredentialCache` remembers only successful verifications. `DerivationGate` lets two derivations
+run at once. A sign-in that arrives while both slots are taken is answered `401` at once and
+unchecked, and `CredentialsAccess` logs one WARN the first time.
+
+Checks of the same `Authorization` header share one run, so the dashboard's parallel requests cost
+one derivation after the cache's five minutes and none of them is shed. A wrong username is
+answered before the gate and takes no slot. There is no per-client state: whoever keeps both slots
+busy makes other sign-ins fail until a slot is free, and rate limiting for a deployed application
+still belongs at the proxy in front of it.
 
 ## Tracing Integration
 
@@ -1501,7 +1604,12 @@ no header-injection code anywhere in the repo.
 `PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event;
 `TraceStoreEventListener` hands it on, through the trace journal while storage is on, to
 `TraceStore`, which stores by traceId, and `TraceLogMapper` maps them into the trace's flat log
-list on read (see *Trace Assembly and Enrichment*). The appender is attached by the
+list on read (see *Trace Assembly and Enrichment*). One logger is left out:
+`SecurityPostureListener`'s, which writes the startup security report and with it the generated
+dashboard password. `append` returns for it before anything is read, so the line reaches the
+application's log and never the store, `/peekaboot/api/logs` or the trace journal.
+
+The appender is attached by the
 `LogbackAppenderRegistrar` bean, which `TraceCaptureAutoConfiguration` registers while tracing
 is on, whatever the toolbar switch says. Capture stops at `ContextClosedEvent`, before the
 context destroys any bean, because a line reaching the store's listener after that would make

@@ -30,9 +30,10 @@ internals show up on a local run. Deploy the same jar and Peekaboot stays off.
 ```
 
 Run your app the way you already do. Peekaboot detects a local run, turns itself on and
-serves the dashboard at `http://localhost:8080/peekaboot/`. The Gradle coordinate is in the
-[quick start](https://www.peekaboot.org/docs/quick-start/); what counts as a local run and
-how to override the detection are in
+serves the dashboard at `http://localhost:8080/peekaboot/`. On a local run it answers this
+machine only; `peekaboot.remote-access.enabled=true` opens it to others. The Gradle coordinate
+is in the [quick start](https://www.peekaboot.org/docs/quick-start/); what counts as a local
+run and how to override the detection are in
 [Configuration](https://www.peekaboot.org/docs/configuration/#local-run).
 
 ![The Peekaboot dashboard](docs/images/dashboard.png)
