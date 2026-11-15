@@ -20,18 +20,18 @@ import org.peekaboot.backend.tracing.store.TraceData;
 public record TraceTree(
         String traceId,
         @Nullable Instant run,
-        Instant startTime,
+        @Nullable Instant startTime,
         long durationMs,
         boolean complete,
         boolean interrupted,
         RootActionType rootActionType,
         String rootOperation,
-        TraceSummary.Request request,
+        TraceSummary.@Nullable Request request,
         SpanNode rootSpan,
         List<SpanNode> orphans,
         int spanCount,
         TraceSummary.QueryCounts queries,
-        SubtreeView subtree) {
+        @Nullable SubtreeView subtree) {
 
     /** The span tree and the orphans replaced, once their issues are judged. */
     public TraceTree withSpans(SpanNode newRootSpan, List<SpanNode> newOrphans) {

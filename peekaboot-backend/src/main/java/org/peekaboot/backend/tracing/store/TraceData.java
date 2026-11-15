@@ -37,7 +37,7 @@ import org.peekaboot.backend.tracing.event.SpanData;
 public record TraceData(
         String traceId,
         @Nullable Instant run,
-        Instant startTime,
+        @Nullable Instant startTime,
         Duration duration,
         @Nullable SpanData rootSpan,
         boolean complete,

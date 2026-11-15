@@ -16,10 +16,10 @@ import org.jspecify.annotations.Nullable;
 public record SpanData(
         String traceId,
         String spanId,
-        String parentId,
+        @Nullable String parentId,
         boolean remoteParent,
         String name,
-        Span.Kind kind,
+        Span.@Nullable Kind kind,
         Instant startTime,
         Instant endTime,
         Map<String, String> tags,
@@ -34,7 +34,7 @@ public record SpanData(
     }
 
     /** Null while either end is unknown. */
-    public Duration duration() {
+    public @Nullable Duration duration() {
         return startTime == null || endTime == null ? null : Duration.between(startTime, endTime);
     }
 
