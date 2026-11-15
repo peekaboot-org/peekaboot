@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -91,12 +92,15 @@ class TraceCompletenessIT extends TestingAppITBase {
                 .retrieve()
                 .toBodilessEntity();
 
-        // the marker's root ends after the probe's server span, and the exporter hands spans over in end order
+        // the health check's spans ended before the marker began, so they are stored once the marker's root is
         String marker = traces.get("/persons");
         traces.awaitTrace(marker, TraceApiClient.ROOT_SPAN_EXPORTED);
 
-        assertThat(api.statusOf("/peekaboot/api/traces/" + callerTraceId).value())
-                .isEqualTo(404);
+        // awaited: the probe has its answer before its server span ends, so that span may follow the marker's root
+        await().atMost(Duration.ofSeconds(15))
+                .untilAsserted(() -> assertThat(api.statusOf("/peekaboot/api/traces/" + callerTraceId)
+                                .value())
+                        .isEqualTo(404));
     }
 
     private static byte[] randomBytes(int length) {
