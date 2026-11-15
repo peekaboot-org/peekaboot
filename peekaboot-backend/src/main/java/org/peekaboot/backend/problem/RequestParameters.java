@@ -22,6 +22,22 @@ public final class RequestParameters {
         return value == null || value.isBlank() ? null : value;
     }
 
+    /**
+     * {@code value} as a route pattern, as written; null where it is absent or blank. Every route a
+     * trace names starts with a slash, so a value without one would match nothing and is refused.
+     */
+    @Nullable
+    public static String routePattern(String parameter, @Nullable String value) {
+        String present = text(value);
+        if (present != null && !present.startsWith("/")) {
+            throw ApiProblemException.badParameter(
+                    parameter,
+                    parameter + " must be a route pattern that starts with /, such as /persons/{id}, got '" + value
+                            + "'.");
+        }
+        return present;
+    }
+
     /** {@code value} as an integer from {@code min} to {@code max}; null where it is absent or blank. */
     @Nullable
     public static Integer integer(String parameter, @Nullable String value, int min, int max) {

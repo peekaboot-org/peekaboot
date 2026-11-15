@@ -86,7 +86,7 @@
           {
             "name": "route",
             "in": "query",
-            "description": "The request's route pattern, such as `/persons/{id}`, matched exactly.",
+            "description": "The request's route pattern, such as `/persons/{id}`, matched exactly. A value that does not start with `/` is refused.",
             "schema": {"type": "string"}
           },
           {
@@ -248,7 +248,7 @@
           {
             "name": "route",
             "in": "query",
-            "description": "A route pattern, such as `/orders/{id}`, matched exactly.",
+            "description": "A route pattern, such as `/orders/{id}`, matched exactly. A value that does not start with `/` is refused.",
             "schema": {"type": "string"}
           }
         ],

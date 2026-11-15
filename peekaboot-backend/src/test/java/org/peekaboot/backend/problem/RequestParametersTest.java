@@ -75,6 +75,30 @@ class RequestParametersTest {
     }
 
     @Test
+    void readsARoutePatternAsWritten() {
+        assertThat(RequestParameters.routePattern("route", "/persons/{id} ")).isEqualTo("/persons/{id} ");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "  "})
+    void readsAnAbsentRouteAsNothing(String value) {
+        assertThat(RequestParameters.routePattern("route", value)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"orders", " /orders"})
+    void refusesARouteThatDoesNotStartWithASlash(String value) {
+        assertThatThrownBy(() -> RequestParameters.routePattern("route", value))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("route");
+                    assertThat(e.problem().detail())
+                            .isEqualTo("route must be a route pattern that starts with /, such as /persons/{id}, got '"
+                                    + value + "'.");
+                });
+    }
+
+    @Test
     void readsAnInstantWithAnOffset() {
         assertThat(RequestParameters.instant("since", "2026-11-01T10:00:00+01:00"))
                 .isEqualTo(Instant.parse("2026-11-01T09:00:00Z"));

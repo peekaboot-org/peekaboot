@@ -1119,6 +1119,7 @@ class TraceInsightsServiceTest {
     @CsvSource(
             delimiter = '|',
             value = {
+                "route | orders",
                 "statusCode | abc",
                 "statusCode | 99",
                 "statusCode | 600",

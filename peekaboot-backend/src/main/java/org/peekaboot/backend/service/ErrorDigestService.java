@@ -35,7 +35,7 @@ public class ErrorDigestService {
      */
     public ErrorDigestResponse list(ErrorDigestParameters parameters) {
         Instant since = RequestParameters.instant("since", parameters.since());
-        String route = RequestParameters.text(parameters.route());
+        String route = RequestParameters.routePattern("route", parameters.route());
         if (digest == null || traceStore == null) {
             return new ErrorDigestResponse(List.of());
         }

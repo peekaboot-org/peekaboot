@@ -74,7 +74,7 @@ record TraceFilter(
         return new TraceFilter(
                 actionTypesOf(parameters.rootActionType()),
                 RequestParameters.text(parameters.rootOperation()),
-                RequestParameters.text(parameters.route()),
+                RequestParameters.routePattern("route", parameters.route()),
                 RequestParameters.text(parameters.path()),
                 RequestParameters.integer("statusCode", parameters.statusCode(), LOWEST_STATUS, HIGHEST_STATUS),
                 outcome == null ? null : RequestParameters.enumValue("outcome", TraceOutcome.class, outcome),

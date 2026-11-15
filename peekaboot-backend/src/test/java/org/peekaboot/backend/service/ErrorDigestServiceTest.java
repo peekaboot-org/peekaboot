@@ -86,6 +86,16 @@ class ErrorDigestServiceTest {
     }
 
     @Test
+    void refusesARouteThatIsNoPattern() {
+        ErrorDigestService tracingOff = new ErrorDigestService(null, null);
+
+        assertThatThrownBy(() -> tracingOff.list(new ErrorDigestParameters(null, "orders")))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().parameter()).isEqualTo("route"));
+    }
+
+    @Test
     void withTracingOffTheDigestListsNothing() {
         assertThat(new ErrorDigestService(null, null)
                         .list(new ErrorDigestParameters(null, null))
