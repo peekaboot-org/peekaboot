@@ -888,6 +888,40 @@ class InMemoryTraceStoreTest {
                 .containsExactly(1L);
     }
 
+    /** A cap of 0 on Errors or Slow lists no trace there; the trace is stored in All and still says it failed. */
+    @Test
+    void aBucketCappedAtZeroListsNothing() {
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setMaxErrorTraces(0);
+            p.setMaxSlowTraces(0);
+        });
+
+        store.addSpan(span("root")
+                .in("t1")
+                .at(START, Duration.ofSeconds(2))
+                .exception("java.lang.RuntimeException", "boom")
+                .build());
+
+        assertThat(store.getTraceCount(TraceBucket.ERRORS)).isZero();
+        assertThat(store.getTraceCount(TraceBucket.SLOW)).isZero();
+        assertThat(store.bucketsOf("t1")).isEmpty();
+        assertThat(store.getTrace("t1").orElseThrow().snapshot().failed()).isTrue();
+    }
+
+    /** A log cap of 0 trims every line as it arrives, and an ERROR line still files its trace in Errors. */
+    @Test
+    void aLogCapOfZeroKeepsNoLineAndStillFailsTheTrace() {
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxLogsPerTrace(0));
+
+        store.addSpan(spanIn("t1", "s1"));
+        store.addLog(log("t1").at("ERROR").saying("boom").build());
+
+        CapturedLogs captured = store.getTrace("t1").orElseThrow().capturedLogs();
+        assertThat(captured.logs()).isEmpty();
+        assertThat(captured.droppedLogs()).isEqualTo(1);
+        assertThat(store.bucketsOf("t1")).contains(TraceBucket.ERRORS);
+    }
+
     /** The ids {@code store} lists in {@code bucket}, in listing order. */
     private static List<String> listedTraceIds(InMemoryTraceStore store, TraceBucket bucket, int limit) {
         return store.getTraces(bucket, limit).stream()

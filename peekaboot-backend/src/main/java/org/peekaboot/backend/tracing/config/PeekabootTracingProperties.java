@@ -14,16 +14,16 @@ public class PeekabootTracingProperties {
     /** Whether Peekaboot observes the application's @EventListener methods; on unless set to false. */
     private boolean eventListeners = true;
 
-    /** Maximum number of traces held in the All bucket, oldest evicted first. */
+    /** Maximum number of traces held in the All bucket, oldest evicted first; at least 1. */
     private int maxTraces = 1000;
 
-    /** Maximum deduplicated spans retained per trace. */
+    /** Maximum deduplicated spans retained per trace; at least 1. */
     private int maxSpansPerTrace = 500;
 
-    /** Maximum traces held in the Errors bucket. */
+    /** Maximum traces held in the Errors bucket; 0 keeps none. */
     private int maxErrorTraces = 100;
 
-    /** Maximum traces held in the Slow bucket. */
+    /** Maximum traces held in the Slow bucket; 0 keeps none. */
     private int maxSlowTraces = 100;
 
     /** Duration in milliseconds, background async work excluded, at or above which a trace enters the Slow bucket. */
@@ -41,7 +41,7 @@ public class PeekabootTracingProperties {
     /** Identical statements, literals ignored, among a span's direct children that give the span the REPEATED_QUERY issue; at least 2. */
     private int repeatedQueryThreshold = 5;
 
-    /** Maximum correlated log entries retained per trace. */
+    /** Maximum correlated log entries retained per trace; 0 keeps none. */
     private int maxLogsPerTrace = 500;
 
     /** Log lines written outside any trace that are kept for the log search, oldest dropped first; 0 keeps none. */
@@ -75,32 +75,36 @@ public class PeekabootTracingProperties {
         return maxTraces;
     }
 
+    /** Rejected below 1 while binding, because at 0 the All bucket evicts every trace as it is opened. */
     public void setMaxTraces(int maxTraces) {
-        this.maxTraces = maxTraces;
+        this.maxTraces = atLeast(1, "max-traces", maxTraces);
     }
 
     public int getMaxSpansPerTrace() {
         return maxSpansPerTrace;
     }
 
+    /** Rejected below 1 while binding, because at 0 a trace evicts every span as it arrives. */
     public void setMaxSpansPerTrace(int maxSpansPerTrace) {
-        this.maxSpansPerTrace = maxSpansPerTrace;
+        this.maxSpansPerTrace = atLeast(1, "max-spans-per-trace", maxSpansPerTrace);
     }
 
     public int getMaxErrorTraces() {
         return maxErrorTraces;
     }
 
+    /** Rejected below 0 while binding; at 0 the Errors bucket lists no trace. */
     public void setMaxErrorTraces(int maxErrorTraces) {
-        this.maxErrorTraces = maxErrorTraces;
+        this.maxErrorTraces = atLeast(0, "max-error-traces", maxErrorTraces);
     }
 
     public int getMaxSlowTraces() {
         return maxSlowTraces;
     }
 
+    /** Rejected below 0 while binding; at 0 the Slow bucket lists no trace. */
     public void setMaxSlowTraces(int maxSlowTraces) {
-        this.maxSlowTraces = maxSlowTraces;
+        this.maxSlowTraces = atLeast(0, "max-slow-traces", maxSlowTraces);
     }
 
     public long getSlowTraceThresholdMs() {
@@ -141,19 +145,16 @@ public class PeekabootTracingProperties {
 
     /** Rejected below 2 while binding, because at 1 every span that ran a query would report it as repeated. */
     public void setRepeatedQueryThreshold(int repeatedQueryThreshold) {
-        if (repeatedQueryThreshold < 2) {
-            throw new IllegalArgumentException("peekaboot.tracing.repeated-query-threshold must be at least 2 ("
-                    + repeatedQueryThreshold + " configured)");
-        }
-        this.repeatedQueryThreshold = repeatedQueryThreshold;
+        this.repeatedQueryThreshold = atLeast(2, "repeated-query-threshold", repeatedQueryThreshold);
     }
 
     public int getMaxLogsPerTrace() {
         return maxLogsPerTrace;
     }
 
+    /** Rejected below 0 while binding; at 0 a trace keeps no line. */
     public void setMaxLogsPerTrace(int maxLogsPerTrace) {
-        this.maxLogsPerTrace = maxLogsPerTrace;
+        this.maxLogsPerTrace = atLeast(0, "max-logs-per-trace", maxLogsPerTrace);
     }
 
     public int getMaxUntracedLogs() {
@@ -162,10 +163,15 @@ public class PeekabootTracingProperties {
 
     /** Rejected below 0 while binding, since a negative ring size names nothing. */
     public void setMaxUntracedLogs(int maxUntracedLogs) {
-        if (maxUntracedLogs < 0) {
+        this.maxUntracedLogs = atLeast(0, "max-untraced-logs", maxUntracedLogs);
+    }
+
+    /** A value below {@code floor} fails the binding with the key and the value it was given. */
+    private static int atLeast(int floor, String key, int value) {
+        if (value < floor) {
             throw new IllegalArgumentException(
-                    "peekaboot.tracing.max-untraced-logs must be at least 0 (" + maxUntracedLogs + " configured)");
+                    "peekaboot.tracing." + key + " must be at least " + floor + " (" + value + " configured)");
         }
-        this.maxUntracedLogs = maxUntracedLogs;
+        return value;
     }
 }
