@@ -1,7 +1,9 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
@@ -593,6 +595,20 @@ class TraceDataBundleTest {
 
         assertThat(snapshot.rootSpan()).isNull();
         assertThat(snapshot.complete()).isFalse();
+    }
+
+    /** Such a span would fold into itself and its redirect would never resolve; taken, it hangs, hence the timeout. */
+    @Test
+    void aSpanNamingItselfAsItsParentIsRefused() {
+        TraceDataBundle bundle = bundle("trace1", 100, NO_CAP);
+        SpanData selfParented = jdbcQuery("s1", SQL).parent("s1").build();
+
+        assertTimeoutPreemptively(
+                Duration.ofSeconds(5),
+                () -> assertThatIllegalArgumentException()
+                        .isThrownBy(() -> bundle.addSpan(selfParented, UNFILED))
+                        .withMessage("span s1 names itself as its parent"));
+        assertThat(bundle.snapshot().spans()).isEmpty();
     }
 
     @Test

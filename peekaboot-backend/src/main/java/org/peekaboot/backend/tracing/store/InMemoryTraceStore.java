@@ -82,6 +82,8 @@ public class InMemoryTraceStore implements TraceStore {
 
     @Override
     public void addSpan(SpanData span) {
+        // before the span takes a number or its trace a bundle, so a refused span leaves nothing behind
+        TraceDataBundle.refuseOwnParent(span);
         SpanData numbered = span.numberedAfter(spanOrderBase);
         newestSpanOrder.accumulateAndGet(numbered.creationOrder(), Math::max);
         TraceDataBundle bundle = resolveBundle(numbered.traceId());

@@ -105,8 +105,11 @@ public class TraceDataBundle {
      * <p>{@code fileInBuckets} runs before the span lock is released, so no reader sees the span
      * without the buckets it files the trace in. It may take a bucket's monitor; nothing that holds
      * one waits for this lock (see {@link InMemoryTraceStore}).
+     *
+     * @throws IllegalArgumentException if {@code span} names itself as its parent
      */
     public void addSpan(SpanData span, Consumer<TraceDataBundle> fileInBuckets) {
+        refuseOwnParent(span);
         synchronized (spansLock) {
             if (!isDuplicateOfStoredParent(span)) {
                 store(span);
@@ -119,6 +122,13 @@ public class TraceDataBundle {
                 evictOldest(excess);
             }
             fileInBuckets.accept(this);
+        }
+    }
+
+    /** A span that is its own parent would fold into itself, and {@link #resolve} would never leave its redirect. */
+    static void refuseOwnParent(SpanData span) {
+        if (span.spanId().equals(span.parentId())) {
+            throw new IllegalArgumentException("span " + span.spanId() + " names itself as its parent");
         }
     }
 

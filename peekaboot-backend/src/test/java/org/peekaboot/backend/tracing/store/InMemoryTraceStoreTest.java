@@ -1,7 +1,9 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Logs.untraced;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
@@ -864,6 +866,26 @@ class InMemoryTraceStoreTest {
                 .creationOrder();
         assertThat(earlier).isEqualTo(50);
         assertThat(live).isEqualTo(51);
+    }
+
+    /** Refused before the trace gets a bundle or the span a number; taken, it hangs, hence the timeout. */
+    @Test
+    void aSpanNamingItselfAsItsParentIsRefusedAndLeavesNothing() {
+        SpanData selfParented =
+                jdbcQuery("s1", "SELECT 1").in("refused").parent("s1").order(50).build();
+
+        assertTimeoutPreemptively(
+                Duration.ofSeconds(5),
+                () -> assertThatIllegalArgumentException()
+                        .isThrownBy(() -> storage.addSpan(selfParented))
+                        .withMessage("span s1 names itself as its parent"));
+
+        assertThat(storage.getTrace("refused")).isEmpty();
+        storage.beginRun(null);
+        storage.addSpan(span("live1").in("live").order(1).build());
+        assertThat(storage.getTrace("live").orElseThrow().snapshot().spans())
+                .extracting(SpanData::creationOrder)
+                .containsExactly(1L);
     }
 
     /** The ids {@code store} lists in {@code bucket}, in listing order. */

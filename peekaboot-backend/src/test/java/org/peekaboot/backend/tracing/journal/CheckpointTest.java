@@ -1,8 +1,10 @@
 package org.peekaboot.backend.tracing.journal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.bucketLine;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.journalHeader;
@@ -720,6 +722,34 @@ class CheckpointTest {
 
         assertThat(body(files.snapshot()))
                 .containsExactly(runLine(T2), line(untracedLine("two")), line(untracedLine("three")));
+    }
+
+    /**
+     * A span that is its own parent is refused before its trace gets a bundle, so the trace's next line begins
+     * it and the remnant stands there. Taken, the span hangs the fold, hence the timeout.
+     */
+    @Test
+    void aRefusedSpanAheadOfItsTracesOtherLinesCostsNoneOfThem() throws IOException {
+        JournalFiles files = new JournalFiles(dir);
+        TraceInput selfParented = new TraceInput.SpanArrived(
+                jdbcQuery("s1", "SELECT 1").in("t1").parent("s1").build());
+        TraceInput two = logged("t1", "two");
+        TraceInput three = logged("t1", "three");
+        writeJournal(files, List.of(selfParented, logged("t1", "one"), two, three));
+
+        assertTimeoutPreemptively(
+                Duration.ofSeconds(5),
+                () -> checkpoint(files, properties -> properties.setMaxLogsPerTrace(2))
+                        .fold()
+                        .close());
+
+        TraceRemnant oneLogDropped = new TraceRemnant(0, 1, false, false, null, null, null, null, List.of());
+        assertThat(body(files.snapshot()))
+                .containsExactly(
+                        runLine(T2),
+                        JournalCodec.encode(new JournalLine.RemnantLine("t1", oneLogDropped)),
+                        line(two),
+                        line(three));
     }
 
     @Test

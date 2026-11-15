@@ -2,7 +2,9 @@ package org.peekaboot.backend.tracing.journal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.peekaboot.backend.testsupport.Logs.log;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.bucketLine;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.journalHeader;
@@ -30,6 +32,7 @@ import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
@@ -340,6 +343,36 @@ class TraceReplayTest {
         assertThat(store.getTrace("t1").orElseThrow().capturedLogs().logs())
                 .extracting(LogCapturedEvent::message)
                 .containsExactly("kept");
+    }
+
+    /** The store refuses a span that is its own parent; taken, it hangs the replay, hence the timeout. */
+    @Test
+    void aSpanLineNamingItselfAsItsParentIsRefusedAndTheRestRestored() {
+        JournalFiles files = new JournalFiles(dir);
+        TraceInput selfParented = new TraceInput.SpanArrived(jdbcQuery("a1", "SELECT * FROM person")
+                .in("a")
+                .parent("a1")
+                .order(1)
+                .build());
+        JournalTexts.write(
+                files.journal(), journalHeader("j1"), runLine(T2), line(selfParented), line(spanned("b", "b0", 2)));
+        InMemoryTraceStore store = TraceStores.withDefaults();
+
+        try (LogCapture capture = LogCapture.attach(TraceReplay.class, Level.INFO)) {
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> TraceReplay.restore(files, store));
+
+            assertThat(capture.appender().list)
+                    .extracting(ILoggingEvent::getLevel, ILoggingEvent::getFormattedMessage)
+                    .containsExactly(tuple(
+                            Level.INFO,
+                            "Peekaboot traces: skipped 0 unreadable lines and 1 the store refused"
+                                    + " (java.lang.IllegalArgumentException: span a1 names itself as its parent) in "
+                                    + dir + "; restored the rest"));
+        }
+        assertThat(RestoredStores.idsIn(store, TraceBucket.ALL)).containsExactly("b");
+        assertThat(store.getTrace("b").orElseThrow().snapshot().spans())
+                .extracting(SpanData::spanId)
+                .containsExactly("b0");
     }
 
     /** A run that never reported ready has no start to tell it by, so each of its run lines begins a run. */
