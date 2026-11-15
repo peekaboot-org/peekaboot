@@ -118,14 +118,13 @@ class TraceJournalTest {
 
         InMemoryTraceStore second = TraceStores.withDefaults();
         try (TraceJournal journal = start(second, dir, Long.MAX_VALUE)) {
-            await().atMost(Duration.ofSeconds(5))
-                    .until(() -> second.getTrace("cut-off").isPresent());
+            awaitRestored(journal, second);
 
             TraceData cutOff = second.getTrace("cut-off").orElseThrow().snapshot();
             assertThat(messages(second, "done")).containsExactly("finished");
             assertThat(second.untracedLogs())
                     .extracting(LogCapturedEvent::message)
-                    .containsExactly("startup");
+                    .containsExactly("startup", "live");
             assertThat(cutOff.interrupted()).isTrue();
             assertThat(cutOff.run()).isEqualTo(STARTED);
         }
@@ -267,8 +266,7 @@ class TraceJournalTest {
 
         InMemoryTraceStore second = TraceStores.withDefaults();
         try (TraceJournal journal = start(second, dir, Long.MAX_VALUE)) {
-            await().atMost(Duration.ofSeconds(5))
-                    .until(() -> second.getTrace("t1").isPresent());
+            awaitRestored(journal, second);
 
             assertThat(messages(second, "t1")).hasSize(20).startsWith("line 0").endsWith("line 19");
         }
