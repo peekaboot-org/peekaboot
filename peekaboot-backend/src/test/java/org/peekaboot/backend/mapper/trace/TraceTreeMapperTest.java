@@ -1202,6 +1202,29 @@ class TraceTreeMapperTest {
         assertThat(statement.omittedParameterSets()).isZero();
     }
 
+    /** Only a set of issue types leaves this mapping, so it masks no tag and no statement and maps no exception. */
+    @Test
+    void anIssueMappingCarriesTagsAndStatementsAsStoredAndNoException() {
+        var root = span("root")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tag("http.url", "/reset;token=abc123")
+                .build();
+        var query = jdbcQuery("q1", "SELECT 1 /* ;token=abc123 */")
+                .parent("root")
+                .at(10, 20)
+                .exception("java.sql.SQLException", "refused for ;token=abc123")
+                .build();
+        TraceData traceData = TraceDatas.of("trace1", root, query);
+
+        SpanNode mappedRoot = mapper.map(traceData, mapper.forIssues()).rootSpan();
+        SpanNode mappedQuery = mappedRoot.children().getFirst();
+
+        assertThat(mappedRoot.tags()).isSameAs(traceData.rootSpan().tags());
+        assertThat(mappedQuery.statement().text()).isEqualTo("SELECT 1 /* ;token=abc123 */");
+        assertThat(mappedQuery.exception()).isNull();
+    }
+
     /**
      * The row count belongs to the query a reader is looking at, not to the {@code result-set}
      * span datasource-proxy records it on. The pairing is {@link RowCounts}', the one the
