@@ -23,6 +23,10 @@ import org.slf4j.LoggerFactory;
  * parameters arrive masked from capture; span attributes, SQL with its bind parameters, log messages and
  * stack traces are written raw and masked when read.
  *
+ * <p>The writer thread is a platform thread, since the restore and each fold are CPU-bound and would hold a
+ * virtual thread's carrier for as long as they take. It is a daemon, so a fold still running when
+ * {@link #close()} has waited its time does not keep the JVM from exiting.
+ *
  * <p>A {@link VirtualMachineError} on that thread, in the restore or in a later fold or write, turns the
  * journal off for the run with one WARN. The thread lives on to take what it is handed, and live inputs
  * keep reaching the store.
@@ -47,7 +51,8 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
         this.live = live;
         this.digestFile = digestFile;
         this.writer = writer;
-        this.thread = Thread.ofVirtual().name("peekaboot-trace-journal").unstarted(() -> run(files));
+        this.thread =
+                Thread.ofPlatform().daemon().name("peekaboot-trace-journal").unstarted(() -> run(files));
     }
 
     /**

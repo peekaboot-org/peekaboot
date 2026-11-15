@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -326,6 +327,42 @@ class TraceJournalTest {
                                     + " traces from here on will not survive a restart"));
         }
         assertThat(new JournalFiles(dir).journal()).doesNotExist();
+    }
+
+    /**
+     * The restore and each fold are CPU-bound, and on a virtual thread they would hold its carrier for as long
+     * as they take. The fold's store is built on the writer's thread, which is the one that restored.
+     */
+    @Test
+    void theRestoreAndTheWriterRunOnAPlatformDaemonThread() {
+        AtomicReference<Thread> restoring = new AtomicReference<>();
+        AtomicReference<Thread> folding = new AtomicReference<>();
+        InMemoryTraceStore store = new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            public void beginRun(@Nullable Instant startedAt) {
+                restoring.set(Thread.currentThread());
+                super.beginRun(startedAt);
+            }
+        };
+        try (TraceJournal journal = TraceJournal.start(
+                store,
+                TraceInputs.into(store),
+                new ErrorDigestFile(dir, new ErrorDigest()),
+                dir,
+                FAST,
+                Long.MAX_VALUE,
+                () -> {
+                    folding.set(Thread.currentThread());
+                    return TraceStores.withDefaults();
+                })) {
+            awaitRestored(journal, store);
+        }
+
+        Thread thread = restoring.get();
+        assertThat(thread.isVirtual()).isFalse();
+        assertThat(thread.isDaemon()).isTrue();
+        assertThat(thread.getName()).isEqualTo("peekaboot-trace-journal");
+        assertThat(folding.get()).isSameAs(thread);
     }
 
     /** A close folds what the journal took into the snapshot and leaves a journal holding only its header. */
