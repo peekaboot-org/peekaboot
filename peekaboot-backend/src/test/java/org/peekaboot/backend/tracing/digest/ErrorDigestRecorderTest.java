@@ -197,14 +197,8 @@ class ErrorDigestRecorderTest {
     @Test
     void anInputThatCanNeitherCompleteNorFailATraceLooksNothingUp() {
         AtomicInteger lookups = new AtomicInteger();
-        InMemoryTraceStore counting = new InMemoryTraceStore(new PeekabootTracingProperties()) {
-            @Override
-            public Optional<TraceDataBundle> getTrace(String traceId) {
-                lookups.incrementAndGet();
-                return super.getTrace(traceId);
-            }
-        };
-        TraceInputs countingLive = FailedTraces.recorder(counting, digest).liveInputs();
+        TraceInputs countingLive =
+                FailedTraces.recorder(countingLookups(lookups), digest).liveInputs();
 
         countingLive.accept(new TraceInput.SpanArrived(span("query")
                 .in("t1")
@@ -217,6 +211,36 @@ class ErrorDigestRecorderTest {
                 untraced().at("ERROR").saying("startup failed").build()));
 
         assertThat(lookups).hasValue(0);
+    }
+
+    /** The bundle found before the input is the one the input lands in, so it is read again without a second lookup. */
+    @Test
+    void aDecisiveInputLooksItsStoredTraceUpOnce() {
+        AtomicInteger lookups = new AtomicInteger();
+        TraceInputs countingLive =
+                FailedTraces.recorder(countingLookups(lookups), digest).liveInputs();
+        countingLive.accept(new TraceInput.SpanArrived(span("query")
+                .in("t1")
+                .parent("root")
+                .at(START, Duration.ofMillis(1))
+                .build()));
+
+        countingLive.accept(new TraceInput.SpanArrived(FailedTraces.root("t1", START, 500)));
+
+        assertThat(lookups).hasValue(1);
+        assertThat(digest.entries())
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.lastTraceId()).isEqualTo("t1"));
+    }
+
+    private static InMemoryTraceStore countingLookups(AtomicInteger lookups) {
+        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            public Optional<TraceDataBundle> getTrace(String traceId) {
+                lookups.incrementAndGet();
+                return super.getTrace(traceId);
+            }
+        };
     }
 
     /**

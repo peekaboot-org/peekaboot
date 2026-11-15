@@ -519,6 +519,13 @@ public class TraceDataBundle {
         }
     }
 
+    /** The failure is read first, so a trace that did not fail scans no span. */
+    public boolean completeAndFailed() {
+        synchronized (spansLock) {
+            return failed() && isComplete(rootOf(spansById.values()));
+        }
+    }
+
     private boolean isComplete(@Nullable SpanData root) {
         return parentlessSpanStored || root != null;
     }

@@ -566,6 +566,37 @@ class TraceDataBundleTest {
         assertThat(done.durationMs()).isEqualTo(100);
     }
 
+    /** The error digest asks on every input that can complete or fail a trace, in either arrival order. */
+    @Test
+    void aBundleIsCompleteAndFailedOnceItsRootAndAFailureAreStored() {
+        TraceDataBundle failedFirst = bundle("trace1", NO_CAP, NO_CAP);
+        failedFirst.addSpan(failedChild(), UNFILED);
+        TraceDataBundle rootFirst = bundle("trace2", NO_CAP, NO_CAP);
+        rootFirst.addSpan(span("root").build(), UNFILED);
+
+        assertThat(failedFirst.completeAndFailed()).as("a failed child alone").isFalse();
+        assertThat(rootFirst.completeAndFailed())
+                .as("a root that did not fail alone")
+                .isFalse();
+
+        failedFirst.addSpan(span("root").build(), UNFILED);
+        rootFirst.addSpan(failedChild(), UNFILED);
+
+        assertThat(failedFirst.completeAndFailed())
+                .as("the root after the failure")
+                .isTrue();
+        assertThat(rootFirst.completeAndFailed())
+                .as("the failure after the root")
+                .isTrue();
+    }
+
+    private static SpanData failedChild() {
+        return span("child")
+                .parent("root")
+                .exception("java.lang.IllegalStateException", "boom")
+                .build();
+    }
+
     @Test
     void aBundleWithoutAsyncSpansListsNoAsyncEntries() {
         TraceDataBundle bundle = bundle("trace1", 500, NO_CAP);

@@ -1,12 +1,12 @@
 package org.peekaboot.backend.tracing.digest;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.mapper.trace.TraceResources;
 import org.peekaboot.backend.tracing.event.SpanData;
-import org.peekaboot.backend.tracing.store.ListingRoots;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceInput;
 import org.peekaboot.backend.tracing.store.TraceInputs;
@@ -46,12 +46,17 @@ public final class ErrorDigestRecorder {
     public TraceInputs liveInputs() {
         return input -> {
             String traceId = decisiveTraceId(input);
-            boolean countedAlready = traceId == null || wasCompleteAndFailed(traceId);
+            Before before = traceId == null ? Before.COUNTED : storedBefore(traceId);
             input.applyTo(store);
-            if (!countedAlready) {
-                recordIfNowFailed(traceId);
+            if (!before.counted()) {
+                recordIfNowFailed(traceId, before.bundle());
             }
         };
+    }
+
+    /** What the store held for a trace before an input: its bundle, if any, and whether the digest counted it. */
+    private record Before(Optional<TraceDataBundle> bundle, boolean counted) {
+        private static final Before COUNTED = new Before(Optional.empty(), true);
     }
 
     /**
@@ -76,22 +81,25 @@ public final class ErrorDigestRecorder {
     }
 
     /** A lookup that throws counts as already counted, so nothing is recorded for it. */
-    private boolean wasCompleteAndFailed(String traceId) {
+    private Before storedBefore(String traceId) {
         try {
-            return store.getTrace(traceId)
-                    .map(TraceDataBundle::listingRoots)
-                    .filter(facts -> facts.complete() && facts.failed())
-                    .isPresent();
+            Optional<TraceDataBundle> bundle = store.getTrace(traceId);
+            return new Before(
+                    bundle, bundle.filter(TraceDataBundle::completeAndFailed).isPresent());
         } catch (RuntimeException e) {
             warnOnce(traceId, e);
-            return true;
+            return Before.COUNTED;
         }
     }
 
-    /** A failure here costs the digest one entry, never the input its journal line or the exporter its batch. */
-    private void recordIfNowFailed(String traceId) {
+    /**
+     * The input landed in the bundle the store held before it, so only an input that opened the bundle
+     * looks the trace up again. A failure here costs the digest one entry, never the input its journal
+     * line or the exporter its batch.
+     */
+    private void recordIfNowFailed(String traceId, Optional<TraceDataBundle> before) {
         try {
-            store.getTrace(traceId).ifPresent(this::recordIfFailed);
+            before.or(() -> store.getTrace(traceId)).ifPresent(this::recordIfFailed);
         } catch (RuntimeException e) {
             warnOnce(traceId, e);
         }
@@ -99,8 +107,7 @@ public final class ErrorDigestRecorder {
 
     /** The summary is mapped once per failed trace, on the thread that applied the input. */
     private void recordIfFailed(TraceDataBundle bundle) {
-        ListingRoots facts = bundle.listingRoots();
-        if (facts.complete() && facts.failed() && digest.claim(bundle.traceId())) {
+        if (bundle.completeAndFailed() && digest.claim(bundle.traceId())) {
             digest.record(
                     resources.row(bundle, null, Set.of(), TraceView.SUMMARY).summary());
         }
