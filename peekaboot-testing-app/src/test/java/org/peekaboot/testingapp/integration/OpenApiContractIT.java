@@ -233,7 +233,7 @@ class OpenApiContractIT extends TestingAppITBase {
                 "/peekaboot/api/openapi.json | /peekaboot/api/openapi.json",
                 "/peekaboot/api/features | /peekaboot/api/features",
                 "/peekaboot/api/traces | /peekaboot/api/traces",
-                "/peekaboot/api/traces | /peekaboot/api/traces?view=full&rootActionType=*&limit=10000",
+                "/peekaboot/api/traces | /peekaboot/api/traces?view=full&rootActionType=*&limit=100",
                 "/peekaboot/api/logs | /peekaboot/api/logs?limit=10000",
                 "/peekaboot/api/routes | /peekaboot/api/routes",
                 "/peekaboot/api/errors | /peekaboot/api/errors",
@@ -251,6 +251,20 @@ class OpenApiContractIT extends TestingAppITBase {
 
         assertThat(answer.status()).isEqualTo(200);
         contract.assertMatches(pathTemplate, answer);
+    }
+
+    /** A full page holds at most a hundred rows, so the stored traces are read to the last page. */
+    @Test
+    void everyFullPageOfTheTraceListAnswersWhatTheDocumentDescribes() {
+        String firstPage = "/peekaboot/api/traces?view=full&rootActionType=*&limit=100";
+        String uri = firstPage;
+        while (uri != null) {
+            ApiContract.Exchange page = contract.fetch(uri);
+            assertThat(page.status()).as(uri).isEqualTo(200);
+            contract.assertMatches("/peekaboot/api/traces", page);
+            JsonNode next = page.json().path("next");
+            uri = next.isString() ? firstPage + "&cursor=" + next.asString() : null;
+        }
     }
 
     @Test
@@ -299,7 +313,7 @@ class OpenApiContractIT extends TestingAppITBase {
             }
             contract.assertMatches(
                     "/peekaboot/api/traces",
-                    contract.fetch("/peekaboot/api/traces?view=full&rootActionType=*&limit=10000"));
+                    contract.fetch("/peekaboot/api/traces?view=full&rootActionType=*&limit=100"));
             contract.assertMatches(
                     "/peekaboot/api/traces", contract.fetch("/peekaboot/api/traces?bucket=errors&view=full"));
             contract.assertMatches("/peekaboot/api/logs", contract.fetch("/peekaboot/api/logs?traceId=" + failed));

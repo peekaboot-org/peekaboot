@@ -257,7 +257,7 @@ class TraceSummaryIT extends TestingAppITBase {
         traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         JsonNode summaryRow = TraceApiClient.rowOf(api.getJson("/peekaboot/api/traces?limit=10000"), traceId);
-        JsonNode fullRow = TraceApiClient.rowOf(api.getJson("/peekaboot/api/traces?limit=10000&view=full"), traceId);
+        JsonNode fullRow = TraceApiClient.rowOf(api.getJson("/peekaboot/api/traces?limit=100&view=full"), traceId);
 
         assertThat(summaryRow.has("data")).as("data is null, not absent").isTrue();
         assertThat(summaryRow.path("data").isNull()).isTrue();

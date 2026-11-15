@@ -623,6 +623,28 @@ class TraceInsightsServiceTest {
     }
 
     @Test
+    void refusesAFullViewLimitAboveItsCapWhileTracingIsOff() {
+        assertThatThrownBy(() -> newService(null)
+                        .listTraces(listing().view("Full").limit(101).build()))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().parameter()).isEqualTo("limit"));
+    }
+
+    /** The default limit is a full page too, so a request that names none is served. */
+    @Test
+    void aFullViewWithoutALimitListsAHundred() {
+        for (int i = 0; i < 101; i++) {
+            addTrace("trace" + i, 10, false);
+        }
+
+        TraceListResponse response = service.listTraces(listing().view("full").build());
+
+        assertThat(response.traces()).hasSize(100);
+        assertThat(response.next()).isNotNull();
+    }
+
+    @Test
     void refusesAnUnknownCursorWhileTracingIsOff() {
         assertThatThrownBy(
                         () -> newService(null).listTraces(listing().cursor("x").build()))

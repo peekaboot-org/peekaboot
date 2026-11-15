@@ -20,13 +20,15 @@ record TraceListQuery(
 
     static TraceListQuery of(TraceListParameters parameters) {
         String bucket = RequestParameters.text(parameters.bucket());
-        String view = RequestParameters.text(parameters.view());
+        String viewName = RequestParameters.text(parameters.view());
+        TraceView view =
+                viewName == null ? TraceView.SUMMARY : RequestParameters.enumValue("view", TraceView.class, viewName);
         return new TraceListQuery(
-                PageLimit.of(parameters.limit()),
+                PageLimit.of(parameters.limit(), view),
                 Cursors.row(parameters.cursor()),
                 bucket == null ? TraceBucket.ALL : RequestParameters.enumValue("bucket", TraceBucket.class, bucket),
                 TraceFilter.of(parameters),
-                view == null ? TraceView.SUMMARY : RequestParameters.enumValue("view", TraceView.class, view));
+                view);
     }
 
     /** The row the previous page ended on; refuses a cursor another numbering handed out. */

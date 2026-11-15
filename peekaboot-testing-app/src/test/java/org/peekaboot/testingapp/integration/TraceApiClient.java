@@ -160,11 +160,17 @@ class TraceApiClient {
     /**
      * The traces the listing endpoint returns for {@code query} ({@code rootActionType=*},
      * {@code bucket=errors}), every one of them; an empty query is the dashboard's default listing.
+     * A full page holds at most a hundred rows, so the rest is read by following {@code next}.
      */
     List<JsonNode> listedTraces(String query) {
-        String uri = "/peekaboot/api/traces?view=full&limit=10000" + (query.isEmpty() ? "" : "&" + query);
+        String uri = "/peekaboot/api/traces?view=full" + (query.isEmpty() ? "" : "&" + query);
         List<JsonNode> listed = new ArrayList<>();
-        api.getJson(uri).path("traces").forEach(listed::add);
+        JsonNode page = api.getJson(uri);
+        page.path("traces").forEach(listed::add);
+        while (page.path("next").isString()) {
+            page = api.getJson(uri + "&cursor={cursor}", page.path("next").asString());
+            page.path("traces").forEach(listed::add);
+        }
         return listed;
     }
 

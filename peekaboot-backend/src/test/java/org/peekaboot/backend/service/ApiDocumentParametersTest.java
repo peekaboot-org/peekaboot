@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.api.ApiDocument;
 import org.peekaboot.backend.domain.trace.TraceOutcome;
@@ -65,6 +66,16 @@ class ApiDocumentParametersTest {
                         .map(limit -> limit.path("schema").path("maximum").asInt()))
                 .isNotEmpty()
                 .containsOnly(PageLimit.MAX);
+    }
+
+    @Test
+    void theViewParameterNamesTheFullViewCap() {
+        assertThat(parameters(DOCUMENT.path("paths").path("/peekaboot/api/traces"))
+                        .filter(parameter ->
+                                "view".equals(parameter.path("name").asString()))
+                        .map(view -> view.path("description").asString()))
+                .singleElement(InstanceOfAssertFactories.STRING)
+                .contains("at most " + PageLimit.MAX_FULL);
     }
 
     /** An operation's parameters, each reference resolved to the parameter it names. */

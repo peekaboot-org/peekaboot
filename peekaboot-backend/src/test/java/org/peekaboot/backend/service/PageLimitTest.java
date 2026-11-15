@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.problem.ApiProblemException;
 
 class PageLimitTest {
@@ -32,5 +33,28 @@ class PageLimitTest {
             assertThat(e.problem().detail())
                     .isEqualTo("limit must be an integer from 1 to 10000, got '" + limit + "'.");
         });
+    }
+
+    @Test
+    void aFullViewPageHoldsAtMostAHundredRows() {
+        assertThat(PageLimit.of("100", TraceView.FULL)).isEqualTo(100);
+        assertThat(PageLimit.of(null, TraceView.FULL)).isEqualTo(100);
+        assertThat(PageLimit.of("10000", TraceView.SUMMARY)).isEqualTo(10_000);
+        assertThatThrownBy(() -> PageLimit.of("101", TraceView.FULL))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("limit");
+                    assertThat(e.problem().detail())
+                            .isEqualTo("limit must be at most 100 with view=full, got '101'. Read on with the next"
+                                    + " value, or list with view=summary and fetch a trace by its id.");
+                });
+    }
+
+    @Test
+    void aFullViewLimitOutsideTheRangeKeepsThatRefusal() {
+        assertThatThrownBy(() -> PageLimit.of("10001", TraceView.FULL))
+                .isInstanceOfSatisfying(
+                        ApiProblemException.class,
+                        e -> assertThat(e.problem().detail())
+                                .isEqualTo("limit must be an integer from 1 to 10000, got '10001'."));
     }
 }
