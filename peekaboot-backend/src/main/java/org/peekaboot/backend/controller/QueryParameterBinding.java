@@ -12,18 +12,14 @@ import org.springframework.web.servlet.support.ExtendedServletRequestDataBinder;
 @ControllerAdvice(basePackages = "org.peekaboot.backend")
 public class QueryParameterBinding {
 
-    /** Runs for every binder of a Peekaboot controller, so an endpoint that binds a record declares none. */
-    @InitBinder
-    void queryStringOnly(WebDataBinder binder) {
-        bindFromQueryStringOnly(binder);
-    }
-
     /**
-     * Turns off Spring's fallback to a same-named request header, so a client's or proxy's header
-     * cannot set a parameter. {@link QueryParameterGuard} has refused an unknown or repeated
+     * Runs for every binder of a Peekaboot controller, so an endpoint that binds a record declares
+     * none. Turns off Spring's fallback to a same-named request header, so a client's or proxy's
+     * header cannot set a parameter. {@link QueryParameterGuard} has refused an unknown or repeated
      * parameter before binding starts.
      */
-    public static void bindFromQueryStringOnly(WebDataBinder binder) {
+    @InitBinder
+    void queryStringOnly(WebDataBinder binder) {
         if (binder instanceof ExtendedServletRequestDataBinder requestBinder) {
             requestBinder.setHeaderPredicate(name -> false);
         }

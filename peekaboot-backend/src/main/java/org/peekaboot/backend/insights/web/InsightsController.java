@@ -1,16 +1,13 @@
 package org.peekaboot.backend.insights.web;
 
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.controller.QueryParameterBinding;
 import org.peekaboot.backend.insights.InsightsConfigResponse;
 import org.peekaboot.backend.insights.InsightsDataParameters;
 import org.peekaboot.backend.insights.InsightsDataReader;
 import org.peekaboot.backend.insights.InsightsDataResponse;
 import org.peekaboot.backend.insights.InsightsService;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,15 +25,6 @@ public class InsightsController {
         this.service = service;
         this.publisher = publisher;
         this.dataReader = dataReader;
-    }
-
-    /**
-     * Binds the data request's parameters from the query string alone (see {@link QueryParameterBinding}).
-     * The name is the one Spring derives for the {@code @ModelAttribute} below.
-     */
-    @InitBinder("insightsDataParameters")
-    public void bindFromQueryStringOnly(WebDataBinder binder) {
-        QueryParameterBinding.bindFromQueryStringOnly(binder);
     }
 
     @GetMapping(value = "/config", produces = MediaType.APPLICATION_JSON_VALUE)
