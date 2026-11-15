@@ -58,8 +58,7 @@ public class LogSearchService {
         if (traceStore == null) {
             return EMPTY;
         }
-        query.checkCursorIn(traceStore.numbering());
-        NewestCandidates read = candidates(traceStore, query);
+        NewestCandidates read = candidates(traceStore, query, query.beforeIn(traceStore.numbering()));
         List<TraceLog> page = new ArrayList<>();
         long lastSequence = 0;
         for (CandidateLog candidate : read.newestFirst()) {
@@ -85,14 +84,14 @@ public class LogSearchService {
      * each bucket under its own lock, and the mapping resolves each span id under the bundle's span
      * lock.
      */
-    private static NewestCandidates candidates(TraceStore traceStore, LogQuery query) {
+    private static NewestCandidates candidates(TraceStore traceStore, LogQuery query, @Nullable Long before) {
         NewestCandidates candidates = new NewestCandidates();
         if (query.traceId() != null) {
-            traceStore.getTrace(query.traceId()).ifPresent(bundle -> addTraced(bundle, query, candidates));
+            traceStore.getTrace(query.traceId()).ifPresent(bundle -> addTraced(bundle, query, before, candidates));
         } else {
-            traceStore.storedTraces().forEach(bundle -> addTraced(bundle, query, candidates));
+            traceStore.storedTraces().forEach(bundle -> addTraced(bundle, query, before, candidates));
             for (LogCapturedEvent log : traceStore.untracedLogs()) {
-                if (query.admits(log)) {
+                if (query.admits(log, before)) {
                     candidates.add(new CandidateLog(log, UnaryOperator.identity()));
                 }
             }
@@ -101,10 +100,11 @@ public class LogSearchService {
     }
 
     /** One span resolver per bundle, so its lines agree on the span each names. */
-    private static void addTraced(TraceDataBundle bundle, LogQuery query, NewestCandidates candidates) {
+    private static void addTraced(
+            TraceDataBundle bundle, LogQuery query, @Nullable Long before, NewestCandidates candidates) {
         UnaryOperator<String> spanOf = TraceLogMapper.resolvingOnce(bundle);
         for (LogCapturedEvent log : bundle.capturedLogs().logs()) {
-            if (query.admits(log)) {
+            if (query.admits(log, before)) {
                 candidates.add(new CandidateLog(log, spanOf));
             }
         }

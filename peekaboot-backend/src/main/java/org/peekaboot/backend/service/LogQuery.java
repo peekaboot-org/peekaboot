@@ -1,7 +1,6 @@
 package org.peekaboot.backend.service;
 
 import java.util.Locale;
-import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.log.LogSearchParameters;
 import org.peekaboot.backend.domain.trace.TraceLog;
@@ -39,15 +38,18 @@ record LogQuery(
                 Cursors.log(parameters.cursor()));
     }
 
-    /** Refuses a cursor another numbering handed out; the search reads the position through {@link #admits}. */
-    void checkCursorIn(long numbering) {
-        // PMD 7.28's NonThreadSafeSingleton throws on an if that null-checks a record component
-        Optional.ofNullable(cursor).ifPresent(issued -> issued.under(numbering));
+    /** The line the previous page ended on, by its sequence; refuses a cursor another numbering handed out. */
+    @Nullable
+    Long beforeIn(long numbering) {
+        return cursor == null ? null : cursor.under(numbering);
     }
 
-    /** The filters that read a captured line as it is stored, before anything is mapped or masked. */
-    boolean admits(LogCapturedEvent log) {
-        return isAtLeastLevel(log) && isFromLogger(log) && window.contains(log.timestamp()) && isBeforeCursor(log);
+    /**
+     * The filters that read a captured line as it is stored, before anything is mapped or masked.
+     * {@code before} is the position {@link #beforeIn} answered, null on the first page.
+     */
+    boolean admits(LogCapturedEvent log, @Nullable Long before) {
+        return isAtLeastLevel(log) && isFromLogger(log) && window.contains(log.timestamp()) && isBefore(log, before);
     }
 
     /** {@code q} against what the response shows, the masked message and stack trace, so it never finds what masking hides. */
@@ -67,8 +69,8 @@ record LogQuery(
         return loggerPrefix == null || log.logger().startsWith(loggerPrefix);
     }
 
-    private boolean isBeforeCursor(LogCapturedEvent log) {
-        return cursor == null || log.sequence() < cursor.position();
+    private static boolean isBefore(LogCapturedEvent log, @Nullable Long before) {
+        return before == null || log.sequence() < before;
     }
 
     /** A literal substring in any case: {@code q} is no pattern, so {@code (} and {@code *} match themselves. */
