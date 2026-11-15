@@ -130,6 +130,11 @@ class HttpSpanTagsTest {
         assertThat(HttpSpanTags.describesHttpRequest(Map.of())).isFalse();
     }
 
+    @Test
+    void aSpanWithoutATagMapDescribesNoHttpRequest() {
+        assertThat(HttpSpanTags.describesHttpRequest(null)).isFalse();
+    }
+
     /** Only a server span's own answer counts; a client span's 5xx is a downstream failure the application may have handled. */
     @ParameterizedTest
     @CsvSource({
