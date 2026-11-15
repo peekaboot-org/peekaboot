@@ -1,25 +1,14 @@
 package org.peekaboot.backend.service;
 
 import java.util.Locale;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.actuator.ActuatorReadings;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.actuator.ActuatorInsightsResponse;
-import org.peekaboot.backend.domain.server.ServerInfo;
 import org.peekaboot.backend.lifecycle.ApplicationGitProperties;
-import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
-import org.peekaboot.backend.mapper.actuator.ConfigMapper;
-import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
-import org.peekaboot.backend.mapper.actuator.EnvironmentMapper;
-import org.peekaboot.backend.mapper.actuator.FlywayMapper;
-import org.peekaboot.backend.mapper.actuator.HealthMapper;
-import org.peekaboot.backend.mapper.actuator.LiquibaseMapper;
-import org.peekaboot.backend.mapper.actuator.LoggersMapper;
-import org.peekaboot.backend.mapper.actuator.RuntimeMapper;
-import org.peekaboot.backend.mapper.actuator.ScheduledTasksMapper;
+import org.peekaboot.backend.mapper.actuator.ActuatorInsightsMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -27,22 +16,13 @@ public final class ActuatorInsightsService {
 
     private final ActuatorReadings actuatorReadings;
     private final ActuatorResponseParser responseParser;
-    private final HealthMapper healthMapper;
-    private final RuntimeMapper runtimeMapper;
-    private final DataSourceMapper dataSourceMapper;
-    private final ApplicationMapper applicationMapper;
-    private final EnvironmentMapper environmentMapper;
-    private final LoggersMapper loggersMapper;
-    private final FlywayMapper flywayMapper;
-    private final LiquibaseMapper liquibaseMapper;
-    private final ConfigMapper configMapper;
-    private final ScheduledTasksMapper scheduledTasksMapper;
+    private final ActuatorInsightsMapper insightsMapper;
     private final DataSourceMetadataList dataSourceMetadataList;
     private final @Nullable ApplicationGitProperties applicationGitProperties;
 
     /**
-     * The mappers are built here rather than injected: each is stateless and needs at most
-     * the engine, so the service is the one place the masking policy enters the pipeline.
+     * The mapper is built here rather than injected: it is stateless and needs only the
+     * engine, so the service is the one place the masking policy enters the pipeline.
      *
      * @param applicationGitProperties null where the host turns Boot's git info contributor off, which keeps git off the Overview
      */
@@ -54,16 +34,7 @@ public final class ActuatorInsightsService {
             @Nullable ApplicationGitProperties applicationGitProperties) {
         this.actuatorReadings = actuatorReadings;
         this.responseParser = responseParser;
-        this.healthMapper = new HealthMapper(maskingEngine);
-        this.runtimeMapper = new RuntimeMapper();
-        this.dataSourceMapper = new DataSourceMapper(maskingEngine);
-        this.applicationMapper = new ApplicationMapper(maskingEngine);
-        this.environmentMapper = new EnvironmentMapper(maskingEngine);
-        this.loggersMapper = new LoggersMapper();
-        this.flywayMapper = new FlywayMapper();
-        this.liquibaseMapper = new LiquibaseMapper();
-        this.configMapper = new ConfigMapper(maskingEngine);
-        this.scheduledTasksMapper = new ScheduledTasksMapper(maskingEngine);
+        this.insightsMapper = new ActuatorInsightsMapper(maskingEngine);
         this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(() -> DataSourceMetadataList.EMPTY);
         this.applicationGitProperties = applicationGitProperties;
     }
@@ -71,28 +42,15 @@ public final class ActuatorInsightsService {
     /**
      * {@code unmask} is the caller's already-resolved decision (from
      * {@code peekaboot.unmasking.enabled} and the request's {@code unmask} parameter,
-     * combined once in PeekabootController) - threaded to every mapper here that carries
-     * property values, so none of them re-derives it.
+     * combined once in PeekabootController).
      */
     public ActuatorInsightsResponse getInsights(Locale locale, boolean unmask) {
-        Map<String, Object> rawData = actuatorReadings.readAll();
-        ActuatorParsedData typed = responseParser.parse(rawData);
-
-        return new ActuatorInsightsResponse(
-                applicationMapper.map(
-                        typed.info(),
-                        applicationGitProperties != null ? applicationGitProperties.get() : null,
-                        typed.spring(),
-                        unmask),
-                runtimeMapper.map(typed.info(), typed.health()),
-                dataSourceMapper.map(dataSourceMetadataList.entries(), typed.health(), unmask),
-                healthMapper.map(typed.health(), unmask),
-                environmentMapper.map(typed.env(), unmask),
-                loggersMapper.map(typed.loggers()),
-                flywayMapper.map(typed.flyway()),
-                liquibaseMapper.map(typed.liquibase()),
-                configMapper.map(typed.configprops(), unmask),
-                scheduledTasksMapper.map(typed.scheduledtasks(), locale),
-                ServerInfo.current(locale));
+        ActuatorParsedData typed = responseParser.parse(actuatorReadings.readAll());
+        return insightsMapper.map(
+                typed,
+                dataSourceMetadataList.entries(),
+                applicationGitProperties != null ? applicationGitProperties.get() : null,
+                locale,
+                unmask);
     }
 }
