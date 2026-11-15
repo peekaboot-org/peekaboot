@@ -126,8 +126,11 @@ and `CLIENT_ERROR`; `IssueSeverity` has two, and it and `IssueUnit` serialise lo
 `@JsonValue`. The UI colours a span's duration by `severity` alone (`severity.js`'s
 `issueSeverity`), never by `type`, and only for issues with `unit: ms`.
 
-Detection is `IssueDetector`, called from `TraceResources`. `TraceTreeMapper` leaves
-`issues` empty on every node it builds. SLOW and VERY_SLOW judge `selfMs`, so a slow child
+Detection is `IssueDetector`, called from `TraceRows`. `TraceTreeMapper` leaves
+`issues` empty on every node it builds. A summary row (`TraceView.SUMMARY`) serves no span, so
+the tree it is judged on is mapped without masking tags or formatting SQL (`SpanContent`). A
+`RepeatedQueryIssue.statement` is masked there too.
+SLOW and VERY_SLOW judge `selfMs`, so a slow child
 marks only itself. `selfMs` reads high on a trace whose span cap dropped some children, since
 a dropped child covers nothing. REPEATED_QUERY compares statements after `SqlNormalizer` and
 groups queries by their direct parent span. datasource-micrometer records a JDBC connection
@@ -237,7 +240,8 @@ samples on read.
 
 ### Target (scheduled tasks)
 `ScheduledTaskInfo.target` is the fully qualified method name of a `@Scheduled` method
-(`net.example.TaskService.processItems`), read from Actuator's `scheduledtasks` endpoint. The
+(`net.example.TaskService.processItems`), or the runnable's own `toString()` for a task
+registered in code, read from Actuator's `scheduledtasks` endpoint. The
 Scheduled Tasks tab shows the last two dot-segments and puts the full value in the `title`.
 
 A task's `target` does not equal its traces' `rootOperation`. `rootOperation` is the root span's
@@ -276,7 +280,10 @@ The listing is a `TraceListResponse(traces, bucketCounts, filteredBucketCounts, 
 The deepest failing span with a stack trace wins, then the first ERROR log with one, then the
 deepest failing span that names its exception's type or message, then the first ERROR log, then
 the first SERVER span answering 5xx. It is null where the trace did not fail, where the caps
-evicted what failed it, or where its only failure is a span that names nothing.
+evicted what failed it, or where its only failure is a span that names nothing. A summary row
+serves no span, so the tree its `cause`, `issues` and `hotspots` are read off is mapped without
+masking tags or formatting SQL (`SpanContent`). The message and frame a cause quotes are masked
+on every row.
 
 `hotspots` lists up to three `TraceSummary.Hotspot(spanId, name, selfMs)` from `Hotspots`, the
 spans with the most self time above zero, largest first. Of equal self times the span earlier
@@ -293,14 +300,17 @@ defaults: [peekaboot.insights](https://www.peekaboot.org/docs/configuration/#pee
 ### Bucket Counts
 `BucketCounts(all, errors, slow)`. Every listing response carries it twice: `bucketCounts` for
 the whole store and `filteredBucketCounts` for the traces matching every filter this request
-names. The second is null only when the request filtered nothing at all, which
-a request naming no type does not, since it still gets the default view's filter. The pair is
+names. The second is null when the request filtered nothing at all, which
+a request naming no type does not, since it still gets the default view's filter, and while
+tracing is off. The pair is
 what lets the bucket chips show `filtered / total`.
 
 ### Cursor
 The opaque `cursor` a listing endpoint reads and hands out as `next` (`Cursors`, base64url
-text). It carries the store's `numbering` first. A log search cursor names the last served line's
-store `sequence`. A trace listing cursor names the last served row's `RowPosition`; the next page
+text). It carries the store's `numbering` first. A log search cursor names a line by its store
+`sequence`, the last one served or, where the search ran through its 10000 lines
+(`LogSearchService.MAX_LINES_READ`) first, the oldest one read.
+A trace listing cursor names the last served row's `RowPosition`; the next page
 lists what sorts after it as the store stands then, so no older row repeats or goes missing. A
 request whose root ends while a client pages lists where its trace entered the bucket, which can
 be below a page already served. A cursor carries no filter: sent with other filters, it pages
@@ -324,7 +334,7 @@ by `HttpExchangeMapper` and carried on `TraceDetail.httpExchange`. `HttpResponse
 
 | Field on the wire | Contents |
 |---|---|
-| `method`, `path` | Verb and request URI. |
+| `method`, `path` | Verb and request path, the path masked by value shape. |
 | `query` | The query string, values masked. |
 | `headers` | Request headers, values masked. |
 | `controller.class`, `controller.method` | The resolved `HandlerMethod`. |
