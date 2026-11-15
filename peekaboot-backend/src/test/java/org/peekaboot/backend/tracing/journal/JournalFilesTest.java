@@ -12,6 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 
 class JournalFilesTest {
 
@@ -32,6 +33,11 @@ class JournalFilesTest {
 
     private JournalFiles.Contents read() throws IOException {
         return files.read((text, line) -> visited.add(text));
+    }
+
+    /** The files of a directory that is not there yet: one that exists keeps the mode it has. */
+    private JournalFiles inANewDirectory() {
+        return new JournalFiles(dir.resolve("state"));
     }
 
     @Test
@@ -144,5 +150,27 @@ class JournalFilesTest {
 
         assertThat(Files.exists(files.snapshot())).isFalse();
         assertThat(Files.exists(files.journal())).isFalse();
+    }
+
+    /** The journal holds requests, statements and log lines verbatim; the umask does not decide who reads them. */
+    @Test
+    void theJournalAndItsDirectoryAreOwnerOnly() throws IOException {
+        PosixPermissions.assumeSupported();
+        JournalFiles created = inANewDirectory();
+
+        created.startJournal().close();
+
+        assertThat(PosixPermissions.of(created.directory())).isEqualTo("rwx------");
+        assertThat(PosixPermissions.of(created.journal())).isEqualTo("rw-------");
+    }
+
+    @Test
+    void theSnapshotIsOwnerOnly() throws IOException {
+        PosixPermissions.assumeSupported();
+        JournalFiles created = inANewDirectory();
+
+        created.replaceSnapshot(out -> out.write('x'));
+
+        assertThat(PosixPermissions.of(created.snapshot())).isEqualTo("rw-------");
     }
 }

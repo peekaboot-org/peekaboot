@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
 
 class ErrorDigestFileTest {
@@ -219,6 +220,20 @@ class ErrorDigestFileTest {
                             "Peekaboot errors: skipped 1 unreadable lines in " + file() + "; restored the rest");
         }
         assertThat(digest.entries()).isEmpty();
+    }
+
+    /** The digest names routes, exception messages and frames; the umask does not decide who reads them. */
+    @Test
+    void theDigestFileIsOwnerOnly() throws IOException {
+        PosixPermissions.assumeSupported();
+        Path state = dir.resolve("state");
+        ErrorDigest digest = new ErrorDigest();
+        digest.record(FailedSummaries.failed("t1").build());
+
+        new ErrorDigestFile(state, digest).flush();
+
+        assertThat(PosixPermissions.of(state.resolve(ErrorDigestFile.FILE_NAME)))
+                .isEqualTo("rw-------");
     }
 
     @Test
