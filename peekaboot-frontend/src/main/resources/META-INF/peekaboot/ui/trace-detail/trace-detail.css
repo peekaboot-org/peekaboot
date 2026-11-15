@@ -146,7 +146,7 @@
 .pk-gantt-toggle:hover { color: var(--pk-text); }
 /* .pk-gantt-name clips overflow for the ellipsis below, which crops a positive-offset ring
    off a control flush against its edge; the inset offset keeps the whole ring inside instead. */
-.pk-gantt-toggle:focus-visible, .pk-gantt-name__toggle:focus-visible, .pk-gantt-name .pk-span-action:focus-visible { outline-offset: -2px; }
+.pk-gantt-toggle:focus-visible, .pk-gantt-name__toggle:focus-visible, .pk-gantt-name .pk-btn:focus-visible { outline-offset: -2px; }
 /* Holds the toggle's column on a row with no children, so sibling names line up. */
 .pk-gantt-toggle-spacer { flex: none; width: var(--pk-gantt-toggle); }
 
@@ -190,21 +190,12 @@
    error chip with a muted token instead of the danger one. */
 .pk-span-async-chip { border: 1px solid var(--pk-border); color: var(--pk-text-muted); }
 
-/* One small-button treatment for the row's query/logs toggles; each keeps its own class
-   only as the JS hook. */
-.pk-span-action { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-family: inherit; font-size: var(--pk-text-xs); cursor: pointer; user-select: none; transition: background-color var(--pk-transition), color var(--pk-transition), border-color var(--pk-transition); }
-.pk-span-action:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
-.pk-span-action:active { background: var(--pk-bg-alt); }
 /* Neither gives when the name cell runs out of room: a shrunk badge wraps onto a second
    line and makes its row taller than every other one. The span name ellipses instead. */
-.pk-span-row-count, .pk-span-action, .pk-span-error-chip, .pk-span-async-chip, .pk-gantt-name .pk-badge { flex: none; white-space: nowrap; }
-
-/* The row's query/logs toggles: a trailing chevron (the same glyph and transition
-   components.css's .pk-group__header draws for its own collapsible groups) that starts
-   pointing down and flips to point up once the panel it names is open. */
-.pk-span-action--expand { gap: var(--pk-space-xs); }
-.pk-span-action--expand::after { content: '\25BE'; transition: transform var(--pk-transition); }
-.pk-span-action--expand[aria-expanded="true"]::after { transform: rotate(180deg); }
+.pk-span-row-count, .pk-gantt-name .pk-btn, .pk-span-error-chip, .pk-span-async-chip, .pk-gantt-name .pk-badge { flex: none; white-space: nowrap; }
+/* The chips' side padding: the name column is capped, and the small button's 8px a side
+   costs a deep row with both toggles the last pixels of its name. */
+.pk-gantt-name .pk-btn { padding-left: 6px; padding-right: 6px; }
 
 /* One of a span's three panels - attributes, query or logs - each indented to sit under its
    span's name (past its ancestors' indent and its own toggle column) and lightly set apart

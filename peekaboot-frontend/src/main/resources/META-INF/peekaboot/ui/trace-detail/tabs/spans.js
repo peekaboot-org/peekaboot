@@ -330,10 +330,10 @@ function queryToggleLabel(span, locale) {
     return span.rowCount == null ? query : `${query}, ${formatCount(span.rowCount, 'result row', {locale})}`;
 }
 
-/** A row's toggle for its query or logs panel: the label plus a chevron (trace-detail.css) that flips when the panel opens. */
+/** A row's toggle for its query or logs panel: the label plus a chevron (components.css's .pk-btn--expand) that flips when the panel opens. */
 function panelToggleButton(className, panelId, label) {
     return button({
-        className: `pk-span-action pk-span-action--expand ${className}`,
+        className: `pk-btn pk-btn--small pk-btn--expand ${className}`,
         text: label,
         attrs: {'aria-expanded': 'false', 'aria-controls': panelId, 'aria-label': `${label} for this span`}
     });

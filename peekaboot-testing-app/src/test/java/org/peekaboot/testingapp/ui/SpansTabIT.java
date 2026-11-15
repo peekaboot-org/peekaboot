@@ -1147,6 +1147,31 @@ class SpansTabIT extends TraceOverlayTestBase {
     }
 
     /**
+     * A query or logs toggle is the small expand button every surface shares (components.css's
+     * .pk-btn--expand): a chevron follows its label and turns over while the panel is open.
+     * The turn is a transition, so its end is what is waited for.
+     */
+    @Test
+    void aPanelTogglesChevronTurnsOverWhileItsPanelIsOpen() {
+        String chevron = "getComputedStyle(root.querySelector('.pk-span-query-toggle'), '::after')";
+        openPersonsPage();
+        awaitTrace(toolbar.traceId(), "trace => (trace.data.queries || []).length > 0");
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-span-query-toggle");
+
+        assertThat(overlay.evaluate("root => " + chevron + ".content")).isEqualTo("\"▾\"");
+        assertThat(overlay.evaluate("root => " + chevron + ".transform")).isEqualTo("none");
+
+        overlay.click(".pk-span-query-toggle");
+
+        overlay.waitUntil("root => new DOMMatrix(" + chevron + ".transform).a < -0.99");
+
+        overlay.click(".pk-span-query-toggle");
+
+        overlay.waitUntil("root => " + chevron + ".transform === 'none'");
+    }
+
+    /**
      * A span event is drawn on that span's own track, named, so a reader spots an exception or
      * a checkpoint without opening anything. Written straight to the store: the sample app's
      * instrumentation records no events, and one that started to would not do it on request.
