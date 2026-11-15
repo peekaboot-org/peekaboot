@@ -17,12 +17,14 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.peekaboot.backend.testsupport.Latches;
 import org.peekaboot.backend.testsupport.Monitors;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
@@ -738,70 +740,71 @@ class InMemoryTraceStoreTest {
 
     /**
      * One step: a reader that comes in between storing a failing root and filing its trace in Errors
-     * waits for the filing. The test holds Errors' monitor, so the writer stops exactly at that step.
+     * waits for the filing. The store pauses the writer before it files in Errors, so the writer stops
+     * exactly at that step.
      */
     @Test
     void aReadWaitsForTheBucketsItsSpanFiledItIn() throws InterruptedException {
+        CountDownLatch reached = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        InMemoryTraceStore store = pausingBeforeItFilesIn(TraceBucket.ERRORS, reached, release);
         // loads every class the read path touches, so no class-loading lock stands in for the span lock below
-        storage.addSpan(spanIn("warm-up", "s0"));
-        storage.getTrace("warm-up").orElseThrow().snapshot();
-        // stored first, so the writer finds t1 in All and never looks it up in Errors while the test holds it
-        storage.addSpan(span("child")
-                .in("t1")
-                .parent("root")
-                .at(START, Duration.ofMillis(10))
-                .build());
+        store.addSpan(spanIn("warm-up", "s0"));
+        store.getTrace("warm-up").orElseThrow().snapshot();
         CompletableFuture<TraceData> read = new CompletableFuture<>();
-        Thread writer;
+        Thread writer = Thread.ofPlatform()
+                .start(() -> store.addSpan(span("root")
+                        .in("t1")
+                        .at(START, Duration.ofMillis(100))
+                        .exception("IllegalStateException", "boom")
+                        .build()));
         Thread reader;
-        synchronized (storage.bucketLockForTesting(TraceBucket.ERRORS)) {
-            Thread test = Thread.currentThread();
-            writer = Thread.ofPlatform()
-                    .start(() -> storage.addSpan(span("root")
-                            .in("t1")
-                            .at(START, Duration.ofMillis(100))
-                            .exception("IllegalStateException", "boom")
-                            .build()));
-            await().until(() -> Monitors.isWaitingFor(writer, test));
+        try {
+            Latches.awaitQuietly(reached);
             reader = Thread.ofPlatform()
                     .start(() ->
-                            read.complete(storage.getTrace("t1").orElseThrow().snapshot()));
+                            read.complete(store.getTrace("t1").orElseThrow().snapshot()));
             await().until(() -> read.isDone() || Monitors.isWaitingFor(reader, writer));
 
             assertThat(read).as("read while the writer waits to file the trace").isNotDone();
+        } finally {
+            release.countDown();
         }
         assertThat(writer.join(Duration.ofSeconds(10))).as("writer finished").isTrue();
         assertThat(reader.join(Duration.ofSeconds(10))).as("reader finished").isTrue();
 
         assertThat(read.orTimeout(10, TimeUnit.SECONDS).join().failed()).isTrue();
-        assertThat(storage.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
+        assertThat(store.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
     }
 
     /** The same for an ERROR line on a trace already complete: the flag and the filing are one step. */
     @Test
     void aReadWaitsForTheErrorsBucketAnErrorLineFiledItIn() throws InterruptedException {
-        storage.addSpan(spanIn("t1", "root"));
-        storage.getTrace("t1").orElseThrow().snapshot();
+        CountDownLatch reached = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        InMemoryTraceStore store = pausingBeforeItFilesIn(TraceBucket.ERRORS, reached, release);
+        store.addSpan(spanIn("t1", "root"));
+        store.getTrace("t1").orElseThrow().snapshot();
         CompletableFuture<TraceData> read = new CompletableFuture<>();
-        Thread writer;
+        Thread writer = Thread.ofPlatform()
+                .start(() -> store.addLog(log("t1").at("ERROR").build()));
         Thread reader;
-        synchronized (storage.bucketLockForTesting(TraceBucket.ERRORS)) {
-            Thread test = Thread.currentThread();
-            writer = Thread.ofPlatform()
-                    .start(() -> storage.addLog(log("t1").at("ERROR").build()));
-            await().until(() -> Monitors.isWaitingFor(writer, test));
+        try {
+            Latches.awaitQuietly(reached);
             reader = Thread.ofPlatform()
                     .start(() ->
-                            read.complete(storage.getTrace("t1").orElseThrow().snapshot()));
+                            read.complete(store.getTrace("t1").orElseThrow().snapshot()));
             await().until(() -> read.isDone() || Monitors.isWaitingFor(reader, writer));
 
             assertThat(read).as("read while the writer waits to file the trace").isNotDone();
+        } finally {
+            release.countDown();
         }
         assertThat(writer.join(Duration.ofSeconds(10))).as("writer finished").isTrue();
         assertThat(reader.join(Duration.ofSeconds(10))).as("reader finished").isTrue();
 
         assertThat(read.orTimeout(10, TimeUnit.SECONDS).join().failed()).isTrue();
-        assertThat(storage.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
+        assertThat(store.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
     }
 
     /**
@@ -811,37 +814,49 @@ class InMemoryTraceStoreTest {
      */
     @Test
     void nothingWaitsForABundleWhileHoldingABucket() throws InterruptedException {
-        storage.addSpan(spanIn("warm-up", "s0"));
-        storage.addLog(log("warm-up").at("ERROR").build());
-        // stored first, so neither thread looks t1 up in Slow while the test holds it
-        storage.addSpan(span("child")
-                .in("t1")
-                .parent("root")
-                .at(START, Duration.ofMillis(10))
-                .build());
+        CountDownLatch reached = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        InMemoryTraceStore store = pausingBeforeItFilesIn(TraceBucket.SLOW, reached, release);
+        store.addSpan(spanIn("warm-up", "s0"));
+        store.addLog(log("warm-up").at("ERROR").build());
         long slowMs = new PeekabootTracingProperties().getSlowTraceThresholdMs();
-        Thread writer;
+        Thread writer = Thread.ofPlatform()
+                .start(() -> store.addSpan(span("root")
+                        .in("t1")
+                        .at(START, Duration.ofMillis(slowMs))
+                        .build()));
         Thread logger;
-        synchronized (storage.bucketLockForTesting(TraceBucket.SLOW)) {
-            Thread test = Thread.currentThread();
-            writer = Thread.ofPlatform()
-                    .start(() -> storage.addSpan(span("root")
-                            .in("t1")
-                            .at(START, Duration.ofMillis(slowMs))
-                            .build()));
-            await().until(() -> Monitors.isWaitingFor(writer, test));
+        try {
+            Latches.awaitQuietly(reached);
             logger = Thread.ofPlatform()
-                    .start(() -> storage.addLog(log("t1").at("ERROR").build()));
+                    .start(() -> store.addLog(log("t1").at("ERROR").build()));
             await().until(() -> Monitors.isWaitingFor(logger, writer));
 
             assertThat(Monitors.heldBy(logger))
                     .as("monitors the waiting logger holds")
                     .isEmpty();
+        } finally {
+            release.countDown();
         }
         assertThat(writer.join(Duration.ofSeconds(10))).as("writer finished").isTrue();
         assertThat(logger.join(Duration.ofSeconds(10))).as("logger finished").isTrue();
 
-        assertThat(storage.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
+        assertThat(store.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
+    }
+
+    /** A store whose writer, about to file a trace in {@code bucket}, reports it and waits for {@code release}. */
+    private static InMemoryTraceStore pausingBeforeItFilesIn(
+            TraceBucket bucket, CountDownLatch reached, CountDownLatch release) {
+        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            void file(TraceBucket filedIn, TraceDataBundle bundle) {
+                if (filedIn == bucket) {
+                    reached.countDown();
+                    Latches.awaitQuietly(release);
+                }
+                super.file(filedIn, bundle);
+            }
+        };
     }
 
     private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {

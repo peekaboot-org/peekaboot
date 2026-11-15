@@ -683,7 +683,7 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("root", null, 0, 50), UNFILED);
         bundle.addSpan(plainSpan("child", "root", 10, 20), UNFILED);
 
-        assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
+        assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
         assertThat(bundle.snapshot().asyncSpanIds()).isEmpty();
     }
 
@@ -697,7 +697,6 @@ class TraceDataBundleTest {
         bundle.addSpan(plainSpan("root", null, 0, 50), UNFILED);
         bundle.addSpan(asyncSpan("async", "root", 40, 240_000), UNFILED);
 
-        assertThat(bundle.spanWindow()).isEqualTo(Duration.ofMillis(240_040));
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(50));
     }
 
@@ -806,7 +805,6 @@ class TraceDataBundleTest {
 
         assertThat(bundle.snapshot().droppedSpans()).isPositive();
         assertThat(bundle.synchronousWindow()).isEqualTo(Duration.ofMillis(1_500));
-        assertThat(bundle.synchronousWindow()).isEqualTo(bundle.spanWindow());
     }
 
     /**

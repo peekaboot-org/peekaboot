@@ -31,10 +31,11 @@ import org.peekaboot.backend.tracing.event.SpanData;
  *
  * <p>A trace is filed in its buckets under its bundle's span lock, in the same step that stores the
  * span or the ERROR line that files it, so a reader that maps a trace and then reads its buckets
- * finds every bucket the mapped spans put it in. The locks nest in one order: a bundle's span lock,
- * then All's monitor, then Errors' or Slow's. Nothing holds a bucket's monitor while it waits for a
- * bundle, and nothing holds Errors' or Slow's while it waits for All's, so the nesting cannot
- * deadlock.
+ * finds every bucket the mapped spans put it in. Locks nest in two orders: a bundle's span lock,
+ * then Errors' or Slow's monitor ({@code classify}, {@code addLog}); and All's monitor, then Errors'
+ * or Slow's ({@code resolveBundle} looks the trace up in them inside All's {@code computeIfAbsent}).
+ * Nothing waits for anything while it holds Errors' or Slow's, and nothing takes All's monitor under
+ * a span lock, so the nesting cannot deadlock.
  */
 public class InMemoryTraceStore implements RestorableTraceStore {
 
@@ -289,10 +290,5 @@ public class InMemoryTraceStore implements RestorableTraceStore {
     private boolean isSlow(TraceDataBundle bundle) {
         Duration window = bundle.synchronousWindow();
         return window != null && window.toMillis() >= slowTraceThresholdMs;
-    }
-
-    /** Test-only: the monitor a bucket's reads and writes synchronize on, so a test can hold a writer at its bucket step. */
-    Object bucketLockForTesting(TraceBucket bucket) {
-        return buckets.get(bucket);
     }
 }

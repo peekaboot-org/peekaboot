@@ -476,20 +476,13 @@ public class TraceDataBundle {
         return hasErrorSpan || hasServerErrorSpan || hasErrorLog || droppedInputFailed;
     }
 
-    /** The window every span stored so far has covered, async ones included; null before a timed span. */
-    Duration spanWindow() {
-        synchronized (spansLock) {
-            return fullWindow.duration();
-        }
-    }
-
     /**
      * The window the trace's non-async spans have covered - the duration the listing, the
      * detail header and the Slow classification all read, so background work a caller never
-     * waited for does not lengthen the work that triggered it. Falls back to
-     * {@link #spanWindow()} for a bundle whose every span is async, where that work is the
-     * whole trace and its own duration is the honest answer. What may lower it is in "Async
-     * Subtree Timing" in docs/ARCHITECTURE.md.
+     * waited for does not lengthen the work that triggered it. Falls back to the full window
+     * for a bundle whose every span is async, where that work is the whole trace and its own
+     * duration is the honest answer. What may lower it is in "Async Subtree Timing" in
+     * docs/ARCHITECTURE.md.
      */
     public Duration synchronousWindow() {
         synchronized (spansLock) {
