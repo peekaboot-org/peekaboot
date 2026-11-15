@@ -9,10 +9,11 @@ import org.peekaboot.backend.problem.ApiProblemException;
 /**
  * The {@code next} values the listing endpoints hand out and read back as {@code cursor}. A cursor
  * names the last row a page served by its position in the listing, so rows that arrive or leave
- * between two pages shift no other row. A log search cursor names the last line a page served by
- * the store's {@code sequence} for it. Both carry the store's numbering first: a restart numbers
- * every row and line anew, so a cursor from before it is refused. On the wire it is base64url of a
- * kind letter and numbers, opaque to clients.
+ * between two pages shift no other row. A log search cursor names the last line a page served, or
+ * the oldest line its search read where older ones were left unread, by the store's
+ * {@code sequence} for it. Both carry the store's numbering first: a restart numbers every row and
+ * line anew, so a cursor from before it is refused. On the wire it is base64url of a kind letter
+ * and numbers, opaque to clients.
  */
 final class Cursors {
 

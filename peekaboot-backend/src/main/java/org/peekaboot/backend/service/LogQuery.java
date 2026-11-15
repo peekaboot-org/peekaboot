@@ -14,7 +14,7 @@ import org.peekaboot.backend.tracing.event.LogCapturedEvent;
  * @param text {@code q} in lower case; null matches every line
  * @param loggerPrefix kept where the logger's name starts with it, as written
  * @param traceId the one trace searched; null searches every trace and the untraced logs
- * @param cursor the cursor of the last line the previous page served; null for the first page
+ * @param cursor the position the previous page handed out; null for the first page
  */
 record LogQuery(
         @Nullable LogLevel level,
@@ -38,7 +38,7 @@ record LogQuery(
                 Cursors.log(parameters.cursor()));
     }
 
-    /** The line the previous page ended on, by its sequence; refuses a cursor another numbering handed out. */
+    /** The line the previous page's {@code next} named, by its sequence; refuses one another numbering handed out. */
     @Nullable
     Long beforeIn(long numbering) {
         return cursor == null ? null : cursor.under(numbering);
