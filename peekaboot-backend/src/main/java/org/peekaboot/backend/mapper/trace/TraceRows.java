@@ -3,7 +3,10 @@ package org.peekaboot.backend.mapper.trace;
 import java.util.List;
 import java.util.Set;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.domain.trace.IssueType;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceResource;
 import org.peekaboot.backend.domain.trace.TraceTree;
@@ -15,7 +18,7 @@ import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 
-/** Assembles one row from a stored bundle with the mappers {@link TraceResources} built. */
+/** Maps a stored bundle with the mappers {@link TraceResources} built, to one row or to its issue types alone. */
 final class TraceRows {
 
     private final TraceTreeMapper traceTreeMapper;
@@ -69,5 +72,12 @@ final class TraceRows {
         return new TraceResource(
                 traceSummaries.of(tree, facts),
                 served != null ? traceDetails.of(bundle, traceData, served, tree, mapped) : null);
+    }
+
+    /** See {@link TraceResources#issueTypes}. */
+    Set<IssueType> issueTypes(TraceDataBundle bundle) {
+        TraceTree tree =
+                issueDetector.detectIssues(traceTreeMapper.map(bundle.snapshot(), traceTreeMapper.forIssues()));
+        return TraceSummaries.issuesOf(tree).stream().map(TraceIssue::type).collect(Collectors.toUnmodifiableSet());
     }
 }

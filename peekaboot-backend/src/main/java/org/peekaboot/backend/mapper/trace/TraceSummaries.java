@@ -41,7 +41,8 @@ final class TraceSummaries {
                 tree.subtree());
     }
 
-    private static List<TraceIssue> issuesOf(TraceTree tree) {
+    /** Every issue of the judged tree, each span's before its children's. */
+    static List<TraceIssue> issuesOf(TraceTree tree) {
         return SpanWalk.depthFirst(tree.rootSpan(), tree.orphans())
                 .flatMap(span -> span.issues().stream())
                 .toList();

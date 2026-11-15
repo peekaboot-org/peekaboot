@@ -180,8 +180,12 @@ record TraceFilter(
             return matchesVerdict(summary.outcome(), summary.durationMs());
         }
         ListingRoots roots = row.roots();
-        return matchesVerdict(
-                TraceOutcome.of(roots.complete(), roots.interrupted(), roots.failed()), roots.durationMs());
+        return matchesVerdict(outcomeOf(roots), roots.durationMs());
+    }
+
+    /** A whole trace's outcome off its listing facts, the one its summary serves. */
+    static TraceOutcome outcomeOf(ListingRoots roots) {
+        return TraceOutcome.of(roots.complete(), roots.interrupted(), roots.failed());
     }
 
     private boolean filtersVerdict() {

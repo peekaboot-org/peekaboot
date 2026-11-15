@@ -26,6 +26,7 @@ public class TraceInsightsService {
     private final TraceStore traceStore;
 
     private final TraceResources traceResources;
+    private final long slowTraceThresholdMs;
 
     public TraceInsightsService(
             @Nullable TraceStore traceStore,
@@ -35,6 +36,7 @@ public class TraceInsightsService {
             StackTraceRules stackTraceRules) {
         this.traceStore = traceStore;
         this.traceResources = new TraceResources(maskingEngine, sqlFormatter, tracingProperties, stackTraceRules);
+        this.slowTraceThresholdMs = tracingProperties.getSlowTraceThresholdMs();
     }
 
     /**
@@ -128,6 +130,6 @@ public class TraceInsightsService {
 
     /** The All bucket's complete HTTP requests per method and route; see {@link RouteAggregation}. */
     public RouteListResponse listRoutes() {
-        return RouteAggregation.over(traceStore, traceResources);
+        return RouteAggregation.over(traceStore, traceResources, slowTraceThresholdMs);
     }
 }

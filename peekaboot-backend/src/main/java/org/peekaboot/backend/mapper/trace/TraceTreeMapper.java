@@ -44,6 +44,11 @@ public class TraceTreeMapper {
         return spanContents.forSummary();
     }
 
+    /** See {@link SpanContents#forIssues}. */
+    SpanContent forIssues() {
+        return spanContents.forIssues();
+    }
+
     TraceTree map(TraceData traceData, SpanContent content) {
         if (traceData.spans().isEmpty()) {
             return new TraceTree(

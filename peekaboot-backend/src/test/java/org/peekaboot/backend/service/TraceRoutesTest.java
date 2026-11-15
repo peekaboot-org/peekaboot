@@ -139,11 +139,11 @@ class TraceRoutesTest {
     }
 
     /**
-     * A request's summary is mapped before its buckets are read, so a failing span that lands right
-     * after the bucket read does not count yet. The store below lands one there.
+     * A route counts from the listing facts, so no bucket is read. The store below lands a span right
+     * after the first bucket read, and none lands.
      */
     @Test
-    void aRequestIsMappedBeforeItsBucketsAreRead() {
+    void countsRoutesWithoutReadingABucket() {
         InMemoryTraceStore landing = TraceStores.landingAfterTheFirstBucketRead(span("late")
                 .in("t1")
                 .parent("root-t1")
@@ -156,7 +156,7 @@ class TraceRoutesTest {
         RouteStats route = newService(landing).listRoutes().routes().getFirst();
 
         assertThat(route.count()).isEqualTo(1);
-        assertThat(route.errorCount()).isZero();
+        assertThat(landing.getTrace("t1").orElseThrow().snapshot().spans()).hasSize(1);
     }
 
     /** The newest request at or above the slow threshold, the Slow bucket's rule. */

@@ -8,28 +8,28 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.RouteListResponse;
 import org.peekaboot.backend.domain.trace.RouteStats;
-import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceOutcome;
-import org.peekaboot.backend.domain.trace.TraceReason;
 import org.peekaboot.backend.domain.trace.TraceSummary;
-import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.mapper.trace.RootActionTypes;
 import org.peekaboot.backend.mapper.trace.TraceResources;
 import org.peekaboot.backend.tracing.store.ListedTrace;
 import org.peekaboot.backend.tracing.store.ListingRoots;
 import org.peekaboot.backend.tracing.store.TraceBucket;
+import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
 
 /**
- * Folds the summaries of the All bucket's complete HTTP requests, newest first, into one row per
- * method and route. Every duration is kept until the end, so the percentiles are nearest rank over
- * every request, the way {@link AggregateStats} computes the Insights ones.
+ * Folds the All bucket's complete HTTP requests, newest first, into one row per method and route.
+ * Each is counted from its listing facts, which say what its summary says, so no summary is mapped.
+ * Every duration is kept until the end, so the percentiles are nearest rank over every request, the
+ * way {@link AggregateStats} computes the Insights ones.
  */
 final class RouteAggregation {
 
@@ -52,39 +52,50 @@ final class RouteAggregation {
 
     /**
      * Reads the All bucket's entries under its lock, then per bundle its listing facts under one
-     * lock, then its summary through {@link TraceReads#row}, which reads the bundle's spans and
-     * its logs one lock each and the bucket membership after them, one bucket at a time. The facts skip
-     * what no route counts before anything is mapped. A trace still in flight at the facts read has
-     * no root yet, so it waits for the next call. What changes once a trace is complete, such as a
-     * late ERROR log or a failing async task, counts as the summary reads it.
+     * lock and, for a request a route counts, its spans under one more for the issue types. No log
+     * and no bucket is read. A trace still in flight at the facts read has no root yet, so it waits
+     * for the next call. What changes once a trace is complete, such as a late ERROR log or a
+     * failing async task, counts as the facts hold it. A span that lands between the two reads can
+     * raise an issue type the facts do not explain yet. The next call agrees.
      */
-    static RouteListResponse over(@Nullable TraceStore traceStore, TraceResources traceResources) {
+    static RouteListResponse over(
+            @Nullable TraceStore traceStore, TraceResources traceResources, long slowTraceThresholdMs) {
         RouteAggregation aggregation = new RouteAggregation();
         if (traceStore == null) {
             return aggregation.response();
         }
         for (ListedTrace listed : traceStore.getTraces(TraceBucket.ALL, Integer.MAX_VALUE)) {
-            ListingRoots roots = listed.bundle().listingRoots();
-            if (RootActionTypes.of(roots.root()) == RootActionType.HTTP_REQUEST) {
-                aggregation.add(TraceReads.row(traceStore, traceResources, listed.bundle(), null, TraceView.SUMMARY)
-                        .summary());
+            TraceDataBundle bundle = listed.bundle();
+            ListingRoots roots = bundle.listingRoots();
+            TraceSummary.Request request = requestOf(roots, traceResources);
+            if (request != null) {
+                aggregation.add(new CountedRequest(
+                        bundle.traceId(),
+                        new RouteKey(request.method(), request.route()),
+                        roots.startTime(),
+                        roots.durationMs(),
+                        TraceFilter.outcomeOf(roots) == TraceOutcome.ERROR,
+                        roots.durationMs() >= slowTraceThresholdMs,
+                        traceResources.issueTypes(bundle)));
             }
         }
         return aggregation.response();
     }
 
     /**
-     * {@code summary} is older than every summary added before it. A server root that carries no
-     * HTTP tag classifies as an HTTP request but names none, so no route counts it.
+     * Null for a trace no route counts. A server root that carries no HTTP tag classifies as an HTTP
+     * request but names none.
      */
-    private void add(TraceSummary summary) {
-        TraceSummary.Request request = summary.request();
-        if (request == null) {
-            return;
-        }
-        totals.computeIfAbsent(new RouteKey(request.method(), request.route()), key -> new RouteTotals())
-                .add(summary);
-        Instant start = summary.startTime();
+    private static TraceSummary.@Nullable Request requestOf(ListingRoots roots, TraceResources traceResources) {
+        return RootActionTypes.of(roots.root()) == RootActionType.HTTP_REQUEST
+                ? traceResources.requestOf(roots.root())
+                : null;
+    }
+
+    /** {@code request} is older than every request added before it. */
+    private void add(CountedRequest request) {
+        totals.computeIfAbsent(request.route(), key -> new RouteTotals()).add(request);
+        Instant start = request.startTime();
         if (start != null) {
             from = from == null || start.isBefore(from) ? start : from;
             to = to == null || start.isAfter(to) ? start : to;
@@ -102,6 +113,22 @@ final class RouteAggregation {
 
     private record RouteKey(
             @Nullable String method, @Nullable String route) {}
+
+    /**
+     * What a route counts of one request, as its summary says it.
+     *
+     * @param failed its outcome is {@code ERROR}
+     * @param slow it ran at or above the slow-trace threshold, the rule of the {@code SLOW} reason
+     * @param issueTypes the type of each issue it lists, once
+     */
+    private record CountedRequest(
+            String traceId,
+            RouteKey route,
+            @Nullable Instant startTime,
+            long durationMs,
+            boolean failed,
+            boolean slow,
+            Set<IssueType> issueTypes) {}
 
     private static final class RouteTotals {
 
@@ -121,22 +148,19 @@ final class RouteAggregation {
             }
         }
 
-        /** Summaries arrive newest first, so the first failed and the first slow one are the latest. */
-        void add(TraceSummary summary) {
-            durationsMs.add(summary.durationMs());
-            if (summary.outcome() == TraceOutcome.ERROR) {
+        /** Requests arrive newest first, so the first failed and the first slow one are the latest. */
+        void add(CountedRequest request) {
+            durationsMs.add(request.durationMs());
+            if (request.failed()) {
                 errorCount++;
                 if (latestErrorTraceId == null) {
-                    latestErrorTraceId = summary.traceId();
+                    latestErrorTraceId = request.traceId();
                 }
             }
-            if (latestSlowTraceId == null && isSlow(summary)) {
-                latestSlowTraceId = summary.traceId();
+            if (latestSlowTraceId == null && request.slow()) {
+                latestSlowTraceId = request.traceId();
             }
-            summary.issues().stream()
-                    .map(TraceIssue::type)
-                    .distinct()
-                    .forEach(type -> issueCounts.merge(type, 1, Integer::sum));
+            request.issueTypes().forEach(type -> issueCounts.merge(type, 1, Integer::sum));
         }
 
         RouteStats stats(RouteKey key) {
@@ -153,10 +177,6 @@ final class RouteAggregation {
                     latestErrorTraceId,
                     latestSlowTraceId,
                     Collections.unmodifiableMap(new EnumMap<>(issueCounts)));
-        }
-
-        private static boolean isSlow(TraceSummary summary) {
-            return summary.reasons().stream().anyMatch(reason -> reason.kind() == TraceReason.Kind.SLOW);
         }
     }
 }

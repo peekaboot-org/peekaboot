@@ -49,6 +49,12 @@ final class SqlStatements {
         return sql == null ? null : new SqlStatement(maskingEngine.maskValue(sql), null, List.of(), 0);
     }
 
+    /** The SQL as stored, unmasked, for a reader that compares statements and serves none. */
+    static SqlStatement asStored(SpanData span) {
+        String sql = sqlOf(span);
+        return sql == null ? null : new SqlStatement(sql, null, List.of(), 0);
+    }
+
     private static @Nullable String sqlOf(SpanData span) {
         return DbSpans.isQuery(span) ? DbSpans.sql(span) : null;
     }

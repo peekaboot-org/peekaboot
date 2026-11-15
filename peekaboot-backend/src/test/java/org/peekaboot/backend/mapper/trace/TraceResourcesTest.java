@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.IssueType;
@@ -432,6 +433,18 @@ class TraceResourcesTest {
                 resources.row(store.getTrace("t1").orElseThrow(), null, store.bucketsOf("t1"), TraceView.SUMMARY));
 
         assertThat(served).contains("token=******").doesNotContain("abc123");
+    }
+
+    /** The routes count issue types off a mapping that masks nothing, and it judges as a summary's does. */
+    @Test
+    void theIssueTypesAreTheOnesTheSummaryLists() {
+        addATraceRaisingEveryVerdict();
+
+        Set<IssueType> types = resources.issueTypes(store.getTrace("t1").orElseThrow());
+
+        assertThat(types)
+                .isNotEmpty()
+                .isEqualTo(whole("t1").issues().stream().map(TraceIssue::type).collect(Collectors.toSet()));
     }
 
     /** The counts name what the caps dropped, which no other count includes. */

@@ -36,6 +36,11 @@ final class SpanContents {
         return new SummarySpans();
     }
 
+    /** The content a trace's issues are judged on. Neither the tree it gives nor any part of it is served. */
+    SpanContent forIssues() {
+        return new IssueSpans();
+    }
+
     /**
      * Every tag stays on its own span, masked - http.url etc. may carry a credential the
      * key name alone can't catch. A span's exception message and query text are masked the same
@@ -112,6 +117,34 @@ final class SpanContents {
         @Override
         public @Nullable SqlStatement statement(SpanData span) {
             return sqlStatements.textOnly(span);
+        }
+
+        @Override
+        public @Nullable Long rowCount(String spanId) {
+            return null;
+        }
+    }
+
+    /**
+     * An issue is judged on timing, tags and which statements repeat, and only its type leaves the
+     * mapping, so nothing is masked. Statements compare as stored: two that differ only in a value
+     * the mask hides outside a literal repeat in a summary and not here.
+     */
+    private static final class IssueSpans implements SpanContent {
+
+        @Override
+        public Map<String, String> tags(SpanData span) {
+            return span.tags();
+        }
+
+        @Override
+        public @Nullable SpanExceptionInfo exception(SpanData span) {
+            return null;
+        }
+
+        @Override
+        public @Nullable SqlStatement statement(SpanData span) {
+            return SqlStatements.asStored(span);
         }
 
         @Override

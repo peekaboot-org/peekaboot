@@ -2,6 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.TraceResource;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceView;
@@ -39,6 +40,15 @@ public final class TraceResources {
     /** The request a root span answered as a summary names it, without mapping its trace. */
     public TraceSummary.@Nullable Request requestOf(@Nullable SpanData root) {
         return traceRequests.of(root);
+    }
+
+    /**
+     * The types of the issues the whole trace raises, judged as its summary's are, without mapping
+     * that summary. The spans are read once; no log is, and nothing is masked, since only the types
+     * leave.
+     */
+    public Set<IssueType> issueTypes(TraceDataBundle bundle) {
+        return traceRows.issueTypes(bundle);
     }
 
     /** The whole trace, its summary and its data. */
