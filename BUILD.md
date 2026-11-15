@@ -105,7 +105,7 @@ fraction of it.
 | `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class and therefore the configuration metadata. Its web/servlet/logback/Hikari/OTel deps are `<optional>`: the host app supplies them, and the auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only, outside every default static location, so a consumer with Peekaboot off serves none of it. Plain ES modules and CSS copied as-is: no build step, no test sources. Empty `-javadoc` jar (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration classes, `AutoConfiguration.imports` and `spring.factories` |
-| `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator, no sources. Maven logs `JAR will be empty`, which is correct. Empty `-sources` and `-javadoc` jars (below) |
+| `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator, no sources. Its jar holds the licence and the notice and nothing else. Empty `-sources` and `-javadoc` jars (below) |
 | `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
 | `peekaboot-coverage` | pom | **no** (`skipPublishing`) | No sources. Merges every module's coverage data, renders the aggregate report, enforces the floor. Builds last |
 
@@ -207,6 +207,11 @@ resource in the published jars is byte-identical. The expected differences are
 builds, and Gradle's also carries `aopalliance`, which only Gradle resolves through
 micrometer-tracing. Acceptable for an unpublished sample app, and the first thing to
 reconcile if the Gradle build is ever promoted.
+
+Both builds put `LICENSE` and `NOTICE` under `META-INF/` of each published module's main
+jar. Maven does it with the root pom's `licence-files` execution, Gradle with the `jar`
+block of the conventions plugin. `PublishedJarLicenceIT` holds the four jars to the root's
+two files, byte for byte, in whichever build runs it.
 
 Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-publish`
 and `peekaboot-release` profiles, and the CI wiring around them. Nor the dependency check, which guards a Maven
@@ -893,5 +898,7 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
   fails either way. The profile relies on native git running in the parent of
   `dotGitDirectory`, which the plugin does not document, so re-check a worktree's
   `git.properties` when Dependabot bumps the plugin.
-- The empty `peekaboot-spring-boot-starter` jar is intentional, and so are the empty
-  `-sources`/`-javadoc` jars of the starter and the frontend. Do not "fix" the warnings.
+- The starter's empty `-sources` jar is intentional, and so are the empty `-javadoc` jars of
+  the starter and the frontend. Maven logs `JAR will be empty` for each `-javadoc` jar. Do
+  not "fix" the warning. The starter's main jar holds the licence and the notice, so it
+  logs none.

@@ -8,7 +8,7 @@ description = "Peekaboot Spring Boot Starter - Dependency aggregator for easy in
 
 val datasourceMicrometerVersion = pomProperty("datasource-micrometer.version")
 
-// No sources - the jar is deliberately empty, exactly like the Maven artifact.
+// No sources - the jar holds the licence and the notice alone, exactly like the Maven artifact.
 dependencies {
     api(project(":peekaboot-spring-boot-autoconfigure"))
     api("org.springframework.boot:spring-boot-starter")

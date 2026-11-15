@@ -41,6 +41,13 @@ tasks.withType<AbstractArchiveTask>().configureEach {
     isReproducibleFileOrder = true
 }
 
+// Mirrors the pom's licence-files execution, which puts both files under META-INF/ of the main jar.
+tasks.named<Jar>("jar") {
+    metaInf {
+        from(rootProject.files("LICENSE", "NOTICE"))
+    }
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.release = pomProperty("peekaboot.java.version").toInt()
     options.encoding = "UTF-8"
