@@ -36,7 +36,7 @@ import org.peekaboot.backend.tracing.event.SpanData;
  * bundle, and nothing holds Errors' or Slow's while it waits for All's, so the nesting cannot
  * deadlock.
  */
-public class InMemoryTraceStore implements TraceStore {
+public class InMemoryTraceStore implements RestorableTraceStore {
 
     private static final List<TraceBucket> QUALIFYING_BUCKETS = List.of(TraceBucket.ERRORS, TraceBucket.SLOW);
     /** Drawn once per JVM, so the next run numbers apart from this one. */
@@ -57,7 +57,7 @@ public class InMemoryTraceStore implements TraceStore {
     private volatile long spanOrderBase;
     /** One up per store, so no two stores in one JVM share a numbering. */
     private final long numbering = NEXT_NUMBERING.getAndIncrement();
-    /** Set while a snapshot replays (see {@link TraceStore#holdAll}). */
+    /** Set while a snapshot replays (see {@link RestorableTraceStore#holdAll}). */
     private volatile boolean allHeld;
 
     public InMemoryTraceStore(PeekabootTracingProperties properties) {
@@ -116,7 +116,7 @@ public class InMemoryTraceStore implements TraceStore {
         buckets.values().forEach(bucket -> bucket.remove(traceId));
     }
 
-    /** Called before live input reaches the store, so nothing else writes meanwhile (see {@link TraceStore#beginRun}). */
+    /** Called before live input reaches the store, so nothing else writes meanwhile (see {@link RestorableTraceStore#beginRun}). */
     @Override
     public void beginRun(@Nullable Instant startedAt) {
         TraceRun ending = run;

@@ -19,12 +19,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.digest.ErrorDigest;
 import org.peekaboot.backend.tracing.digest.ErrorDigestRecorder;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.backend.tracing.journal.TraceJournal;
 import org.peekaboot.backend.tracing.store.CaptureEventPublisher;
+import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -481,6 +483,15 @@ class PeekabootTracingAutoConfigurationTest {
         });
     }
 
+    /** Peekaboot's store bean is typed as its class, so its condition has to name the interface an application supplies. */
+    @Test
+    void aUserSuppliedTraceStoreReplacesTheDefault() {
+        contextRunner.withUserConfiguration(UserTraceStoreConfig.class).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(TraceStore.class)).isSameAs(UserTraceStoreConfig.STORE);
+        });
+    }
+
     @Configuration
     static class UserInterceptorConfig {
 
@@ -507,6 +518,17 @@ class PeekabootTracingAutoConfigurationTest {
         @Bean
         PeekabootPaths peekabootPaths() {
             return PATHS;
+        }
+    }
+
+    @Configuration
+    static class UserTraceStoreConfig {
+
+        static final TraceStore STORE = new InMemoryTraceStore(new PeekabootTracingProperties());
+
+        @Bean
+        TraceStore userTraceStore() {
+            return STORE;
         }
     }
 

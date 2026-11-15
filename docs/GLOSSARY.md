@@ -149,7 +149,7 @@ One start of the application, named by its `startedAt`: the `ApplicationReadyEve
 the instant the lifecycle log stamps the run with, so `summary.run` matches a row of
 `/api/lifecycle/runs`. `InMemoryTraceStore` keeps the run in progress as a `TraceRun`; each bundle
 keeps the run it was first stored in. A trace captured before the run reported ready learns the
-start once it does. Only the trace journal's restore begins a run (`TraceStore.beginRun`).
+start once it does. Only the trace journal's restore begins a run (`RestorableTraceStore.beginRun`).
 
 ### Untraced Log
 A captured log line whose MDC carried no trace id: written at startup, on a thread outside any

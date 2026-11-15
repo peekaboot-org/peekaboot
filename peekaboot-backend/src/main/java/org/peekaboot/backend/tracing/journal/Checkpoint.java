@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.tracing.store.RestorableTraceStore;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceRemnant;
@@ -34,17 +35,17 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 final class Checkpoint implements JournalWriter.Folding {
 
     private final JournalFiles files;
-    private final Supplier<TraceStore> emptyStore;
+    private final Supplier<RestorableTraceStore> emptyStore;
 
     /** {@code emptyStore} builds a store with the live store's caps. */
-    Checkpoint(JournalFiles files, Supplier<TraceStore> emptyStore) {
+    Checkpoint(JournalFiles files, Supplier<RestorableTraceStore> emptyStore) {
         this.files = files;
         this.emptyStore = emptyStore;
     }
 
     @Override
     public OpenJournal fold() throws IOException {
-        TraceStore kept = emptyStore.get();
+        RestorableTraceStore kept = emptyStore.get();
         FoldTally tally = new FoldTally();
         TraceReplay.replay(files, kept, tally);
         String absorbed = files.journalId();

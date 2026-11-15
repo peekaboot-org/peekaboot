@@ -8,9 +8,9 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.digest.ErrorDigestFile;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import org.peekaboot.backend.tracing.store.RestorableTraceStore;
 import org.peekaboot.backend.tracing.store.TraceInput;
 import org.peekaboot.backend.tracing.store.TraceInputs;
-import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +38,7 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
     /** How long a close waits for the last fold; past it the JVM may exit with the journal as last flushed. */
     private static final Duration CLOSE_WAIT = Duration.ofSeconds(10);
 
-    private final TraceStore store;
+    private final RestorableTraceStore store;
     private final TraceInputs live;
     private final ErrorDigestFile digestFile;
     private final RestoreGate gate = new RestoreGate(JournalWriter.CAPACITY);
@@ -46,7 +46,11 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
     private final Thread thread;
 
     private TraceJournal(
-            TraceStore store, TraceInputs live, ErrorDigestFile digestFile, JournalFiles files, JournalWriter writer) {
+            RestorableTraceStore store,
+            TraceInputs live,
+            ErrorDigestFile digestFile,
+            JournalFiles files,
+            JournalWriter writer) {
         this.store = store;
         this.live = live;
         this.digestFile = digestFile;
@@ -62,7 +66,7 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
      * journal: restored before the gate opens, written on every flush.
      */
     public static TraceJournal start(
-            TraceStore store,
+            RestorableTraceStore store,
             TraceInputs live,
             ErrorDigestFile digestFile,
             Path directory,
@@ -80,13 +84,13 @@ public final class TraceJournal implements TraceInputs, AutoCloseable {
 
     /** {@code emptyStore} builds the store a fold replays into, with the live store's caps; tests shorten the cadence. */
     static TraceJournal start(
-            TraceStore store,
+            RestorableTraceStore store,
             TraceInputs live,
             ErrorDigestFile digestFile,
             Path directory,
             Duration flushInterval,
             long maxJournalChars,
-            Supplier<TraceStore> emptyStore) {
+            Supplier<RestorableTraceStore> emptyStore) {
         JournalFiles files = new JournalFiles(directory);
         JournalWriter writer = new JournalWriter(
                 files,

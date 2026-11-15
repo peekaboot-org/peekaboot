@@ -13,6 +13,7 @@ import org.peekaboot.backend.tracing.digest.ErrorDigestRecorder;
 import org.peekaboot.backend.tracing.journal.TraceJournal;
 import org.peekaboot.backend.tracing.store.CaptureEventPublisher;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import org.peekaboot.backend.tracing.store.RestorableTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.springframework.beans.factory.ObjectProvider;
@@ -37,9 +38,10 @@ import org.springframework.context.annotation.Import;
 @Import({MaskingConfiguration.class, StackTraceRulesConfiguration.class})
 public class PeekabootTracingAutoConfiguration {
 
+    /** Typed as its class, which the trace journal's parameter is matched against before the bean exists. */
     @Bean
-    @ConditionalOnMissingBean
-    public TraceStore peekabootTraceStore(PeekabootTracingProperties properties) {
+    @ConditionalOnMissingBean(TraceStore.class)
+    public InMemoryTraceStore peekabootTraceStore(PeekabootTracingProperties properties) {
         return new InMemoryTraceStore(properties);
     }
 
@@ -94,7 +96,7 @@ public class PeekabootTracingAutoConfiguration {
         @ConditionalOnMissingBean
         @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.STORAGE_TRACES_ENABLED, matchIfMissing = true)
         public TraceJournal peekabootTraceJournal(
-                TraceStore traceStore,
+                RestorableTraceStore traceStore,
                 ErrorDigestRecorder errorDigestRecorder,
                 ErrorDigest errorDigest,
                 StorageDirectory storageDirectory,

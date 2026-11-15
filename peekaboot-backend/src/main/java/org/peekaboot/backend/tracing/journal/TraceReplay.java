@@ -3,7 +3,7 @@ package org.peekaboot.backend.tracing.journal;
 import java.io.IOException;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
-import org.peekaboot.backend.tracing.store.TraceStore;
+import org.peekaboot.backend.tracing.store.RestorableTraceStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +26,7 @@ final class TraceReplay {
 
     private TraceReplay() {}
 
-    static void restore(JournalFiles files, TraceStore store) {
+    static void restore(JournalFiles files, RestorableTraceStore store) {
         try {
             Replayed replayed = replay(files, store, null);
             JournalFiles.Contents contents = replayed.contents();
@@ -66,7 +66,8 @@ final class TraceReplay {
      * no live run; a fold replays this way into a store of its own and passes its {@code tally}, which
      * counts the lines the store took and notes the ones it refused.
      */
-    static Replayed replay(JournalFiles files, TraceStore store, @Nullable FoldTally tally) throws IOException {
+    static Replayed replay(JournalFiles files, RestorableTraceStore store, @Nullable FoldTally tally)
+            throws IOException {
         Lines lines = new Lines(store, tally);
         // fewer lines evict in another order; the snapshot's bucket lines, not All's cap, decide its traces
         store.holdAll(true);
@@ -96,7 +97,7 @@ final class TraceReplay {
     /** Replays one line at a time, so a line the store refuses costs itself alone. */
     private static final class Lines {
 
-        private final TraceStore store;
+        private final RestorableTraceStore store;
         private final Runs runs;
 
         @Nullable
@@ -107,7 +108,7 @@ final class TraceReplay {
         @Nullable
         private RuntimeException firstRefusal;
 
-        Lines(TraceStore store, @Nullable FoldTally tally) {
+        Lines(RestorableTraceStore store, @Nullable FoldTally tally) {
             this.store = store;
             this.runs = new Runs(store);
             this.tally = tally;
@@ -155,13 +156,13 @@ final class TraceReplay {
     /** A run line naming the run in progress continues it, since a fold repeats the run line atop the next journal. */
     private static final class Runs {
 
-        private final TraceStore store;
+        private final RestorableTraceStore store;
         private boolean begun;
 
         @Nullable
         private Instant current;
 
-        Runs(TraceStore store) {
+        Runs(RestorableTraceStore store) {
             this.store = store;
         }
 
