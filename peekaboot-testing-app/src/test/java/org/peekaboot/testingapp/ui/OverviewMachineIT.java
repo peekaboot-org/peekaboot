@@ -417,4 +417,27 @@ class OverviewMachineIT extends PlaywrightTestBase {
                         "1,50 GB used / 3,00 GB total (1,50 GB free)",
                         "total: 3,00 GB\nfree: 1,50 GB\nthreshold: 10,0 MB");
     }
+
+    /**
+     * A health detail is whatever its indicator published. One named like a size is a byte
+     * count only when it is a number. Sent as text, it is shown as it was sent.
+     */
+    @Test
+    void aHealthDetailNamedLikeASizeAndSentAsTextIsShownAsSent() {
+        serveInsightsRewrittenBy(insights -> ((ObjectNode) insights.path("health"))
+                .putArray("components")
+                .addObject()
+                .put("name", "jobQueue")
+                .put("status", "UP")
+                .putObject("details")
+                .put("total", "12 jobs")
+                .put("free", 1536L * 1024 * 1024));
+        openDashboard();
+        page.waitForFunction("() => document.querySelector('#health-status-text').textContent.trim() === 'UP'");
+        page.click("#health-banner");
+        page.waitForSelector("#components-grid .pk-component-grid__details");
+
+        assertThat(page.textContent("#components-grid .pk-component-grid__details"))
+                .isEqualTo("total: 12 jobs\nfree: 1.50 GB");
+    }
 }

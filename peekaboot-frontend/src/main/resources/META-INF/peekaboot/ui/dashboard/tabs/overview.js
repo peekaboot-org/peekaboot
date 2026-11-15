@@ -435,8 +435,9 @@ function renderHealthComponents(container, components, locale) {
         const detailsText = Object.entries(component.details || {})
             .filter(([, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
             .map(([k, v]) => {
-                if (k === 'total' || k === 'free' || k === 'threshold') return `${k}: ${formatBytes(v, {locale})}`;
-                return `${k}: ${formatDetailValue(v)}`;
+                // Any indicator may publish a detail of these names: only a number is a byte count.
+                const isSize = typeof v === 'number' && (k === 'total' || k === 'free' || k === 'threshold');
+                return `${k}: ${isSize ? formatBytes(v, {locale}) : formatDetailValue(v)}`;
             })
             .join('\n');
 
