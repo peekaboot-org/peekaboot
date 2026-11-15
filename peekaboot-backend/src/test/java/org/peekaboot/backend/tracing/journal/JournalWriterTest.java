@@ -351,6 +351,20 @@ class JournalWriterTest {
                 .endsWith(line(logged("line " + (JournalWriter.CAPACITY - 1))));
     }
 
+    /** What wakes the writer for a stop is no input, so an input with any trace id is written. */
+    @Test
+    void noTraceIdIsReservedForTheStop() {
+        JournalWriter writer = writer(new JournalFiles(dir), Long.MAX_VALUE);
+        TraceInput discard = new TraceInput.TraceDiscarded("peekaboot-journal-stop");
+        writer.offer(new TraceInput.RunStarted(STARTED));
+        writer.offer(discard);
+        writer.stop();
+
+        writer.run();
+
+        assertThat(lastFolded()).contains(line(discard));
+    }
+
     /** An interrupt ends the writer as a stop does: what it wrote is folded, and the interrupt is kept. */
     @Test
     void anInterruptEndsTheWriterAsAStopDoes() throws InterruptedException {

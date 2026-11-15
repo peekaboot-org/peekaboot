@@ -41,8 +41,8 @@ final class JournalWriter {
     /** Bounds the queue and the inputs held back for a run line; references to events the store holds anyway. */
     static final int CAPACITY = 10_000;
 
-    /** Wakes the writer for a stop. A trace id no tracer mints (they are hex), so it never equals a real input. */
-    private static final TraceInput STOP = new TraceInput.TraceDiscarded("peekaboot-journal-stop");
+    /** Wakes the writer for a stop. No input, so it equals none. */
+    private static final Object STOP = new Object();
 
     /** Folds what the files hold into the snapshot and starts the next journal. */
     @FunctionalInterface
@@ -50,8 +50,8 @@ final class JournalWriter {
         OpenJournal fold() throws IOException;
     }
 
-    /** Unbounded so the stop pill always lands; offer() keeps the inputs to CAPACITY. */
-    private final BlockingQueue<TraceInput> queue = new LinkedBlockingQueue<>();
+    /** Unbounded so the stop marker always lands; offer() keeps the inputs to CAPACITY. */
+    private final BlockingQueue<Object> queue = new LinkedBlockingQueue<>();
 
     private final DropReport drops = new DropReport();
     private final JournalFiles files;
@@ -130,8 +130,7 @@ final class JournalWriter {
         Instant nextFlush = clock.instant().plus(flushInterval);
         while (!stopping || !queue.isEmpty()) {
             try {
-                TraceInput input = queue.poll(millisUntil(nextFlush), TimeUnit.MILLISECONDS);
-                if (input != null && !STOP.equals(input)) {
+                if (queue.poll(millisUntil(nextFlush), TimeUnit.MILLISECONDS) instanceof TraceInput input) {
                     appending.attempt(() -> appending.write(input));
                 }
             } catch (InterruptedException e) {
