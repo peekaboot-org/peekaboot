@@ -10,13 +10,15 @@ import org.peekaboot.backend.testsupport.SpanNodes;
 
 class PeekabootJsonTest {
 
-    /** JSON has no NaN, so every value headed for the wire maps NaN to null through this one helper. */
+    /** JSON has no NaN and no infinity, so every value headed for the wire passes this one helper. */
     @Test
-    void nanBecomesNullAndEverythingElsePassesThrough() {
-        assertThat(PeekabootJson.nanToNull(Double.NaN)).isNull();
-        assertThat(PeekabootJson.nanToNull(null)).isNull();
-        assertThat(PeekabootJson.nanToNull(1.5)).isEqualTo(1.5);
-        assertThat(PeekabootJson.nanToNull(0.0)).isEqualTo(0.0);
+    void aValueJsonCannotWriteBecomesNull() {
+        assertThat(PeekabootJson.finiteOrNull(Double.NaN)).isNull();
+        assertThat(PeekabootJson.finiteOrNull(Double.POSITIVE_INFINITY)).isNull();
+        assertThat(PeekabootJson.finiteOrNull(Double.NEGATIVE_INFINITY)).isNull();
+        assertThat(PeekabootJson.finiteOrNull(null)).isNull();
+        assertThat(PeekabootJson.finiteOrNull(1.5)).isEqualTo(1.5);
+        assertThat(PeekabootJson.finiteOrNull(0.0)).isEqualTo(0.0);
     }
 
     /** Each span nests two levels, itself and its children, so 300 of them pass Jackson's default of 500. */

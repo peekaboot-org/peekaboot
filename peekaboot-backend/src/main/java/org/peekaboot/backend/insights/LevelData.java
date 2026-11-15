@@ -79,7 +79,7 @@ sealed interface LevelData permits TickLevelData, WindowLevelData {
     static List<Double> boxed(double[] values) {
         List<Double> boxed = new ArrayList<>(values.length);
         for (double value : values) {
-            boxed.add(PeekabootJson.nanToNull(value));
+            boxed.add(PeekabootJson.finiteOrNull(value));
         }
         return boxed;
     }

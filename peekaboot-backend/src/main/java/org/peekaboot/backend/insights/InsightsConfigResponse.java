@@ -38,7 +38,7 @@ public record InsightsConfigResponse(List<Level> levels, List<Panel> panels, Lis
                         tile.label(),
                         tile.format(),
                         tile.live(),
-                        PeekabootJson.nanToNull(tileValues.get(tile.id()))))
+                        PeekabootJson.finiteOrNull(tileValues.get(tile.id()))))
                 .toList();
 
         return new InsightsConfigResponse(levelResponses, panelResponses, tileResponses);

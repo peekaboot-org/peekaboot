@@ -101,6 +101,19 @@ class MetricsServiceTest {
                 .containsExactly(tuple("VALUE", null));
     }
 
+    /** A ratio over a zero denominator is an infinity, and JSON has none either. */
+    @Test
+    void reportsAnInfiniteStatisticAsNull() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("ratio", () -> Double.POSITIVE_INFINITY).register(registry);
+
+        MetricMeasurement measurement = firstMeasurement(registry);
+
+        assertThat(measurement.statistics())
+                .extracting(MetricStatistic::name, MetricStatistic::value)
+                .containsExactly(tuple("VALUE", null));
+    }
+
     @Test
     void reportsACounterWithItsDescriptionTagsAndCount() {
         MeterRegistry registry = new SimpleMeterRegistry();

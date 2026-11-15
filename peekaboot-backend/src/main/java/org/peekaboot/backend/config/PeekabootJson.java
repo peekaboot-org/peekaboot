@@ -26,11 +26,11 @@ public final class PeekabootJson {
             .build();
 
     /**
-     * JSON has no NaN, so every value Peekaboot puts on the wire maps NaN to null
-     * through this one rule; a null in stays a null out.
+     * JSON has no NaN and no infinity, so every value Peekaboot puts on the wire maps them
+     * to null through this one rule; a null in stays a null out.
      */
-    public static Double nanToNull(Double value) {
-        return value == null || Double.isNaN(value) ? null : value;
+    public static Double finiteOrNull(Double value) {
+        return value == null || !Double.isFinite(value) ? null : value;
     }
 
     private PeekabootJson() {}

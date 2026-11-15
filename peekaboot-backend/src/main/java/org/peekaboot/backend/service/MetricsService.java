@@ -64,7 +64,7 @@ public class MetricsService {
                 List<MetricStatistic> statistics = StreamSupport.stream(
                                 meter.measure().spliterator(), false)
                         .map(measurement -> new MetricStatistic(
-                                measurement.getStatistic().name(), PeekabootJson.nanToNull(measurement.getValue())))
+                                measurement.getStatistic().name(), PeekabootJson.finiteOrNull(measurement.getValue())))
                         .toList();
 
                 measurements.add(new MetricMeasurement(tags, statistics));

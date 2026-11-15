@@ -43,7 +43,7 @@ final class InsightsEventJson {
     private static Map<String, Object> nullSafeMap(Map<String, Double> values) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<String, Double> entry : values.entrySet()) {
-            result.put(entry.getKey(), PeekabootJson.nanToNull(entry.getValue()));
+            result.put(entry.getKey(), PeekabootJson.finiteOrNull(entry.getValue()));
         }
         return result;
     }

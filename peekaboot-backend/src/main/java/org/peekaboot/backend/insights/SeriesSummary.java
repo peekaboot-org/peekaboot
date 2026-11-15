@@ -23,12 +23,12 @@ public record SeriesSummary(
 
     static SeriesSummary of(AggregateStats stats, double latest) {
         return new SeriesSummary(
-                PeekabootJson.nanToNull(stats.min()),
-                PeekabootJson.nanToNull(stats.avg()),
-                PeekabootJson.nanToNull(stats.max()),
-                PeekabootJson.nanToNull(stats.median()),
-                PeekabootJson.nanToNull(stats.p95()),
-                PeekabootJson.nanToNull(latest),
+                PeekabootJson.finiteOrNull(stats.min()),
+                PeekabootJson.finiteOrNull(stats.avg()),
+                PeekabootJson.finiteOrNull(stats.max()),
+                PeekabootJson.finiteOrNull(stats.median()),
+                PeekabootJson.finiteOrNull(stats.p95()),
+                PeekabootJson.finiteOrNull(latest),
                 stats.samples());
     }
 }
