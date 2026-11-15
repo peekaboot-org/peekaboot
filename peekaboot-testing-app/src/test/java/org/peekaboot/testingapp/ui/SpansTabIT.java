@@ -1,6 +1,9 @@
 package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.testingapp.ui.TracePayloads.log;
+import static org.peekaboot.testingapp.ui.TracePayloads.span;
+import static org.peekaboot.testingapp.ui.TracePayloads.trace;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Response;
@@ -13,6 +16,17 @@ import java.util.Locale;
 import java.util.Map;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.IssueSeverity;
+import org.peekaboot.backend.domain.trace.IssueType;
+import org.peekaboot.backend.domain.trace.IssueUnit;
+import org.peekaboot.backend.domain.trace.RepeatedQueryIssue;
+import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
+import org.peekaboot.backend.domain.trace.SpanIssue;
+import org.peekaboot.backend.domain.trace.SpanStatus;
+import org.peekaboot.backend.domain.trace.SqlStatement;
+import org.peekaboot.backend.domain.trace.TraceIssue;
+import org.peekaboot.backend.domain.trace.TraceSummary;
+import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.testingapp.integration.TestSpans;
 import tools.jackson.databind.JsonNode;
@@ -99,6 +113,50 @@ class SpansTabIT extends TraceOverlayTestBase {
                 .intValue();
     }
 
+    /** A statement without parameters that no formatter laid out. */
+    private static SqlStatement statement(String text) {
+        return new SqlStatement(text, null, List.of(), 0);
+    }
+
+    private static TraceIssue issue(IssueType type, IssueSeverity severity, IssueUnit unit, String message) {
+        return new SpanIssue(type, severity, "a", 0, 0, unit, message);
+    }
+
+    private static TraceIssue repeatedQuery(String message) {
+        return new RepeatedQueryIssue(
+                IssueType.REPEATED_QUERY,
+                IssueSeverity.WARNING,
+                "a",
+                0,
+                0,
+                IssueUnit.QUERIES,
+                message,
+                "select 1",
+                0,
+                0,
+                List.of());
+    }
+
+    /**
+     * A 1000ms trace that dispatched an async task 100ms in. The entry span lasts 50ms, its
+     * child runs from 120ms to 320ms, and a synchronous sibling sits beside the entry.
+     */
+    private static String asyncSubtreeTrace() {
+        return trace(span("root")
+                        .children(
+                                span("a")
+                                        .name("async task")
+                                        .asyncEntry()
+                                        .startTime(Instant.EPOCH.plusMillis(100))
+                                        .durationMs(50)
+                                        .children(span("g")
+                                                .startTime(Instant.EPOCH.plusMillis(120))
+                                                .durationMs(200)),
+                                span("s")))
+                .durationMs(1000)
+                .json();
+    }
+
     /** Whether `panelSelector` (one of a span's three `.pk-span-panel` ids) is currently the open one. */
     private boolean panelOpen(String panelSelector) {
         return (Boolean) overlay.evaluate(
@@ -129,17 +187,17 @@ class SpansTabIT extends TraceOverlayTestBase {
     /** A trace whose root has not arrived draws each arrived subtree from the left edge, in the order the backend sent them. */
     @Test
     void anInFlightTraceDrawsEachArrivedSubtreeAtTheTop() {
+        String inFlight =
+                trace(null).orphans(span("a"), span("b").children(span("c"))).json();
+
         Object rows = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 30, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: null, orphans: [
-                    {spanId: 'a', name: 'earlier', startTime: '1970-01-01T00:00:00.010Z', durationMs: 5},
-                    {spanId: 'b', name: 'later', startTime: '1970-01-01T00:00:00.020Z', durationMs: 10,
-                        children: [{spanId: 'c', name: 'child', startTime: '1970-01-01T00:00:00.021Z', durationMs: 5}]}]}});
+                m.render(container, JSON.parse(arg));
                 return Array.from(container.querySelectorAll('.pk-gantt-span'))
                     .map(entry => entry.querySelector('.pk-gantt-row').dataset.spanId + ':' + entry.dataset.depth);
             })()
-            """);
+            """, inFlight);
 
         assertThat(rows).isEqualTo(List.of("a:0", "b:0", "c:1"));
     }
@@ -151,10 +209,12 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void theAllDetailsSwitchOpensAndClosesEveryPanel() {
+        String parentAndChild = trace(span("a").children(span("b"))).json();
+
         Object states = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]}}});
+                m.render(container, JSON.parse(arg));
                 const all = container.querySelector('.pk-gantt-all-details');
                 const names = container.querySelectorAll('.pk-gantt-name__toggle');
                 const snapshot = () => [all.textContent,
@@ -174,7 +234,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 states.push(snapshot());
                 return states;
             })()
-            """);
+            """, parentAndChild);
 
         @SuppressWarnings("unchecked")
         List<String> allDetailsStates = (List<String>) states;
@@ -195,12 +255,14 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void aSpansPanelsAreBuiltWhenFirstOpenedInRowOrder() {
+        String queryWithALog = trace(span("a").tag("db.system.name", "h2").statement(statement("select 1")))
+                .logs(log("a", "from a"))
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a', tags: {'db.system.name': 'h2'},
-                        statement: {text: 'select 1', formatted: null, parameters: []}},
-                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]}});
+                m.render(container, JSON.parse(arg));
                 const entry = container.querySelector('.pk-gantt-span');
                 const panels = () => [...entry.querySelectorAll('.pk-span-panel')].map(panel => panel.id).join(',');
                 const before = panels();
@@ -211,7 +273,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 container.querySelector('.pk-gantt-all-details').click();
                 return [before, ...logsOpened, ...attrsOpened, panels()];
             })()
-            """);
+            """, queryWithALog);
 
         assertThat(facts)
                 .isEqualTo(List.of(
@@ -330,11 +392,13 @@ class SpansTabIT extends TraceOverlayTestBase {
     /** A span that wrote no log gets neither a logs panel nor a toggle to open one. */
     @Test
     void aSpanWithoutLogsHasNoLogsSection() {
+        String parentWithALog =
+                trace(span("a").children(span("b"))).logs(log("a", "from a")).json();
+
         Object sections = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]},
-                    logs: [{spanId: 'a', level: 'INFO', message: 'from a', timestamp: '2026-01-01T00:00:00Z'}]}});
+                m.render(container, JSON.parse(arg));
                 container.querySelector('.pk-gantt-all-details').click();
                 const row = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`);
                 const panel = id => container.querySelector(`#pk-span-logs-${id}`);
@@ -342,7 +406,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     panel(id)?.querySelectorAll('.pk-log').length ?? 0,
                     row(id).querySelectorAll('.pk-span-logs-toggle').length].join(':'));
             })()
-            """);
+            """, parentWithALog);
 
         assertThat(sections).isEqualTo(List.of("1:1", "0:0"));
     }
@@ -354,15 +418,16 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void aSpansLogsToggleCountsItsEntriesInTheTracesLogList() {
+        String twoLogs =
+                trace(span("a")).logs(log("a", "first"), log("a", "second")).json();
+
         Object label = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                const log = message => ({spanId: 'a', level: 'INFO', message, timestamp: '2026-01-01T00:00:00Z'});
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a'},
-                    logs: [log('first'), log('second')]}});
+                m.render(container, JSON.parse(arg));
                 return container.querySelector('.pk-span-logs-toggle')?.textContent ?? null;
             })()
-            """);
+            """, twoLogs);
 
         assertThat(label).isEqualTo("2 logs");
     }
@@ -414,12 +479,16 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void revealingARowExpandsEveryCollapsedSpanAboveIt() {
+        String twoBranches = trace(span("root")
+                        .children(
+                                span("mid").children(span("leaf")),
+                                span("sibling").children(span("cousin"))))
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
-                    {spanId: 'mid', name: 'mid', children: [{spanId: 'leaf', name: 'leaf'}]},
-                    {spanId: 'sibling', name: 'sibling', children: [{spanId: 'cousin', name: 'cousin'}]}]}}});
+                m.render(container, JSON.parse(arg));
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const toggle = id => entry(id).querySelector('.pk-gantt-toggle');
                 toggle('mid').click();
@@ -429,7 +498,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 return ['mid', 'leaf', 'sibling', 'cousin'].map(id => entry(id).style.display === 'none' ? 'hidden' : 'shown')
                     .concat(['root', 'mid', 'sibling'].map(id => toggle(id).getAttribute('aria-expanded')));
             })()
-            """);
+            """, twoBranches);
 
         assertThat(facts).isEqualTo(List.of("shown", "shown", "shown", "hidden", "true", "true", "false"));
     }
@@ -689,15 +758,17 @@ class SpansTabIT extends TraceOverlayTestBase {
     /** The query panel hands the dashboard's locale to the statement it shows. */
     @Test
     void theQueryPanelCountsOmittedParameterSetsInTheDashboardLocale() {
+        SqlStatement cappedBatch = new SqlStatement("insert 1", null, List.of(List.of("1")), 1234);
+        String cappedBatchSpan = trace(span("a").statement(cappedBatch)).json();
+
         Object note = importModule("trace-detail/tabs/spans.js", """
             (() => {
-                const statement = {text: 'insert 1', formatted: null, parameters: [['1']], omittedParameterSets: 1234};
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'INSERT t', statement}}}, {locale: 'de-DE'});
+                m.render(container, JSON.parse(arg), {locale: 'de-DE'});
                 container.querySelector('.pk-gantt-all-details').click();
                 return container.querySelector('.pk-span-panel--query .pk-sql__params-omitted').textContent;
             })()
-            """);
+            """, cappedBatchSpan);
 
         assertThat(note).isEqualTo("1.234 parameter sets omitted");
     }
@@ -715,33 +786,50 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void spansTabTrustsTheBackendsSpanFacts() {
+        SqlStatement query = statement("select * from orders");
+        Map<String, String> traces = Map.of(
+                "rows1234", trace(span("a").statement(query).rowCount(1234)).json(),
+                "row1", trace(span("g").statement(query).rowCount(1)).json(),
+                "noRowCount", trace(span("h").statement(query)).json(),
+                "resultSet", trace(span("b").tag("jdbc.row-count", "3")).json(),
+                "rows12345", trace(span("f").statement(query).rowCount(12345)).json(),
+                "failed", trace(span("c").status(SpanStatus.ERROR)).json(),
+                "okWithAnException",
+                        trace(span("d")
+                                        .status(SpanStatus.OK)
+                                        .exception(new SpanExceptionInfo(
+                                                "ignored", "ignored", null, List.of(), List.of())))
+                                .json(),
+                "tagged",
+                        trace(span("e").tag("db.system", "h2").tag("db.statement", "SELECT 1"))
+                                .json());
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
-                const rendered = (span, locale) => {
+                const rendered = (name, locale) => {
                     const container = document.createElement('div');
-                    m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: span}}, {locale});
+                    m.render(container, JSON.parse(arg[name]), {locale});
                     container.querySelector('.pk-gantt-all-details').click();
                     return container;
                 };
-                const queryButton = (span, locale) => rendered(span, locale).querySelector('.pk-span-query-toggle')?.textContent ?? null;
-                const panelRowCount = (span, locale) => rendered(span, locale).querySelector('.pk-span-panel--query .pk-span-row-count')?.textContent ?? null;
-                const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
-                const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
-                const statement = {text: 'select * from orders', formatted: null, parameters: []};
+                const queryButton = (name, locale) => rendered(name, locale).querySelector('.pk-span-query-toggle')?.textContent ?? null;
+                const panelRowCount = (name, locale) => rendered(name, locale).querySelector('.pk-span-panel--query .pk-span-row-count')?.textContent ?? null;
+                const errorBar = name => rendered(name).querySelector('.pk-gantt-bar').className.includes('--error');
+                const tagKeys = name => Array.from(rendered(name).querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
                 return [
-                    queryButton({spanId: 'a', name: 'SELECT orders', rowCount: 1234, statement}),
-                    panelRowCount({spanId: 'a', name: 'SELECT orders', rowCount: 1234, statement}),
-                    queryButton({spanId: 'g', name: 'SELECT one', rowCount: 1, statement}),
-                    queryButton({spanId: 'h', name: 'SELECT none', statement}),
-                    !!rendered({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}).querySelector('.pk-span-query-toggle'),
-                    queryButton({spanId: 'f', name: 'SELECT big', rowCount: 12345, statement}, 'de-DE'),
-                    panelRowCount({spanId: 'f', name: 'SELECT big', rowCount: 12345, statement}, 'de-DE'),
-                    errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
-                    errorBar({spanId: 'd', name: 'x', status: 'OK', exception: {type: 'ignored', message: 'ignored'}}),
-                    tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
+                    queryButton('rows1234'),
+                    panelRowCount('rows1234'),
+                    queryButton('row1'),
+                    queryButton('noRowCount'),
+                    !!rendered('resultSet').querySelector('.pk-span-query-toggle'),
+                    queryButton('rows12345', 'de-DE'),
+                    panelRowCount('rows12345', 'de-DE'),
+                    errorBar('failed'),
+                    errorBar('okWithAnException'),
+                    tagKeys('tagged').join(',')
                 ];
             })()
-            """);
+            """, traces);
 
         @SuppressWarnings("unchecked")
         List<Object> spanFacts = (List<Object>) facts;
@@ -767,15 +855,20 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void spanTagsShowTheirFullKeysInKeyOrder() {
+        String querySpan = trace(span("a")
+                        .tag("jdbc.datasource.name", "sample_app_db")
+                        .tag("db.system.name", "postgresql")
+                        .tag("db.operation.name", "SELECT"))
+                .json();
+
         Object keys = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'SELECT person',
-                    tags: {'jdbc.datasource.name': 'sample_app_db', 'db.system.name': 'postgresql', 'db.operation.name': 'SELECT'}}}});
+                m.render(container, JSON.parse(arg));
                 container.querySelector('.pk-gantt-all-details').click();
                 return Array.from(container.querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
             })()
-            """);
+            """, querySpan);
 
         @SuppressWarnings("unchecked")
         List<String> tagKeys = (List<String>) keys;
@@ -789,15 +882,18 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void spanTagsAreInCodePointOrderNotTheBrowsersCollation() {
+        String unsortedTags = trace(
+                        span("a").tag("a.token", "1").tag("B.cache", "2").tag("_internal", "3"))
+                .json();
+
         Object keys = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a',
-                    tags: {'a.token': '1', 'B.cache': '2', '_internal': '3'}}}});
+                m.render(container, JSON.parse(arg));
                 container.querySelector('.pk-gantt-all-details').click();
                 return Array.from(container.querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
             })()
-            """);
+            """, unsortedTags);
 
         @SuppressWarnings("unchecked")
         List<String> tagKeys = (List<String>) keys;
@@ -840,12 +936,14 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void spanRowTogglesKeepOneNameAndCarryTheirStateInAriaExpanded() {
+        String queryWithAChild = trace(
+                        span("a").statement(statement("select 1")).children(span("b")))
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a',
-                    statement: {text: 'select 1', formatted: null, parameters: []},
-                    children: [{spanId: 'b', name: 'b'}]}}});
+                m.render(container, JSON.parse(arg));
                 const subtree = container.querySelector('.pk-gantt-toggle');
                 const query = container.querySelector('.pk-span-query-toggle');
                 const state = control => `${control.getAttribute('aria-label')}|${control.getAttribute('aria-expanded')}`;
@@ -854,7 +952,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 query.click();
                 return [...before, state(subtree), state(query)];
             })()
-            """);
+            """, queryWithAChild);
 
         assertThat(facts)
                 .isEqualTo(List.of(
@@ -871,12 +969,13 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void collapsingASpanTakesItsDescendantsOpenDetailsWithIt() {
+        String threeLevels = trace(span("root").children(span("mid").children(span("leaf")), span("sibling")))
+                .json();
+
         Object states = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
-                    {spanId: 'mid', name: 'mid', children: [{spanId: 'leaf', name: 'leaf', tags: {'db.system.name': 'h2'}}]},
-                    {spanId: 'sibling', name: 'sibling'}]}}});
+                m.render(container, JSON.parse(arg));
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const toggle = id => entry(id).querySelector('.pk-gantt-toggle');
                 const state = id => entry(id).style.display === 'none' ? 'hidden'
@@ -894,7 +993,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 const midStillCollapsed = snapshot();
                 return [opened, rootCollapsed, rootExpanded, midStillCollapsed];
             })()
-            """);
+            """, threeLevels);
 
         @SuppressWarnings("unchecked")
         List<String> stateSnapshots = (List<String>) states;
@@ -909,11 +1008,13 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void clickingASpansTrackTogglesItsDetails() {
+        String spanWithAnEvent =
+                trace(span("a").event("exception", Instant.EPOCH.plusMillis(5))).json();
+
         Object states = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'a',
-                    events: [{name: 'exception', timestamp: '1970-01-01T00:00:00.005Z'}]}}});
+                m.render(container, JSON.parse(arg));
                 const entry = container.querySelector('.pk-gantt-span');
                 const open = () => entry.classList.contains('pk-gantt-span--open')
                     && entry.querySelector('.pk-gantt-name__toggle').getAttribute('aria-expanded') === 'true';
@@ -926,7 +1027,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                 states.push(open());
                 return states;
             })()
-            """);
+            """, spanWithAnEvent);
 
         @SuppressWarnings("unchecked")
         List<Object> trackClickStates = (List<Object>) states;
@@ -941,13 +1042,18 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void spanKindsAreColouredAndKeyedByTheLegend() {
+        String everyKind = trace(span("a")
+                        .kind(Span.Kind.SERVER)
+                        .children(span("b").name("SELECT person").kind(Span.Kind.CLIENT), span("c"), span("d")))
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'http get /orders', kind: 'SERVER', children: [
-                    {spanId: 'b', name: 'SELECT person', kind: 'CLIENT'},
-                    {spanId: 'c', name: 'spring.handler', kind: null},
-                    {spanId: 'd', name: 'odd', kind: 'SOMETHING_NEW'}]}}});
+                const trace = JSON.parse(arg);
+                // no record can hold a kind the backend has yet to learn
+                trace.data.rootSpan.children[2].kind = 'SOMETHING_NEW';
+                m.render(container, trace);
                 container.querySelector('.pk-gantt-all-details').click();
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 return [
@@ -959,7 +1065,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     container.querySelectorAll('.pk-gantt-kind').length === 0
                 ];
             })()
-            """);
+            """, everyKind);
 
         @SuppressWarnings("unchecked")
         List<Object> spanKindFacts = (List<Object>) facts;
@@ -978,18 +1084,30 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void anErrorSpansDetailsShowTheExceptionItRecorded() {
+        SpanExceptionInfo refused = new SpanExceptionInfo(
+                "org.springframework.web.client.ResourceAccessException",
+                "Connection refused",
+                """
+                org.springframework.web.client.ResourceAccessException: Connection refused
+                \tat org.peekaboot.app.Client.call(Client.java:1)
+                \tat org.springframework.web.client.RestClient.get(RestClient.java:2)
+                \tat org.springframework.web.client.RestClient.exchange(RestClient.java:3)""",
+                List.of(new Range(2, 4)),
+                List.of(new Range(1, 2)));
+
+        String failedCall = trace(span("a")
+                        .children(
+                                span("b")
+                                        .name("http get")
+                                        .status(SpanStatus.ERROR)
+                                        .exception(refused),
+                                span("c").name("ok")))
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'root', children: [
-                    {spanId: 'b', name: 'http get', status: 'ERROR', exception: {
-                        type: 'org.springframework.web.client.ResourceAccessException', message: 'Connection refused',
-                        stackTrace: 'org.springframework.web.client.ResourceAccessException: Connection refused\\n'
-                            + '\\tat org.peekaboot.app.Client.call(Client.java:1)\\n'
-                            + '\\tat org.springframework.web.client.RestClient.get(RestClient.java:2)\\n'
-                            + '\\tat org.springframework.web.client.RestClient.exchange(RestClient.java:3)',
-                        hiddenFrames: [{start: 2, endExclusive: 4}], applicationFrames: [{start: 1, endExclusive: 2}]}},
-                    {spanId: 'c', name: 'ok', status: 'OK'}]}}});
+                m.render(container, JSON.parse(arg));
                 container.querySelector('.pk-gantt-all-details').click();
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const nameToggle = id => entry(id).querySelector('.pk-gantt-name__toggle');
@@ -1013,7 +1131,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     errorChips('c').length
                 ];
             })()
-            """);
+            """, failedCall);
 
         @SuppressWarnings("unchecked")
         List<Object> errorFacts = (List<Object>) facts;
@@ -1043,13 +1161,21 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void anExceptionWithOnlyAStackTraceShowsTheTraceAlone() {
+        SpanExceptionInfo nameless = new SpanExceptionInfo(
+                null,
+                null,
+                "org.peekaboot.app.Jobs$1\n\tat org.peekaboot.app.Jobs.run(Jobs.java:1)",
+                List.of(),
+                List.of(new Range(1, 2)));
+
+        String namelessFailure = trace(
+                        span("a").children(span("b").status(SpanStatus.ERROR).exception(nameless)))
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'a', name: 'root', children: [
-                    {spanId: 'b', name: 'task', status: 'ERROR', exception: {type: null, message: null,
-                        stackTrace: 'org.peekaboot.app.Jobs$1\\n\\tat org.peekaboot.app.Jobs.run(Jobs.java:1)',
-                        hiddenFrames: [], applicationFrames: [{start: 1, endExclusive: 2}]}}]}}});
+                m.render(container, JSON.parse(arg));
                 container.querySelector('.pk-gantt-all-details').click();
                 const entry = container.querySelector('.pk-gantt-row[data-span-id="b"]').closest('.pk-gantt-span');
                 return [
@@ -1057,7 +1183,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     entry.querySelector('.pk-span-details__error') === null
                 ];
             })()
-            """);
+            """, namelessFailure);
 
         assertThat(facts).isEqualTo(List.of("\tat org.peekaboot.app.Jobs.run(Jobs.java:1)", true));
     }
@@ -1279,10 +1405,7 @@ class SpansTabIT extends TraceOverlayTestBase {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 1000, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
-                    {spanId: 'a', name: 'async task', asyncEntry: true, startTime: '1970-01-01T00:00:00.100Z', durationMs: 50, children: [
-                        {spanId: 'g', name: 'grandchild', startTime: '1970-01-01T00:00:00.120Z', durationMs: 200}]},
-                    {spanId: 's', name: 'sibling', startTime: '1970-01-01T00:00:00.600Z', durationMs: 50}]}}});
+                m.render(container, JSON.parse(arg));
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const hidden = id => entry(id).style.display === 'none';
                 const bar = id => entry(id).querySelector('.pk-gantt-bar');
@@ -1298,7 +1421,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     pct(bar('g').style.left), pct(bar('g').style.width)
                 ];
             })()
-            """);
+            """, asyncSubtreeTrace());
 
         @SuppressWarnings("unchecked")
         List<Object> subtreeFacts = (List<Object>) facts;
@@ -1323,17 +1446,26 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void readsNanosecondStartsToTheMillisecond() {
+        Instant start = Instant.parse("2026-10-23T10:00:00.000123456Z");
+        String toTheNanosecond = trace(span("root")
+                        .startTime(start)
+                        .durationMs(1000)
+                        .children(span("a")
+                                .startTime(Instant.parse("2026-10-23T10:00:00.250999999Z"))
+                                .durationMs(500)))
+                .startTime(start)
+                .durationMs(1000)
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 1000, startTime: '2026-10-23T10:00:00.000123456Z'}, data: {rootSpan: {
-                    spanId: 'root', name: 'root', startTime: '2026-10-23T10:00:00.000123456Z', durationMs: 1000, children: [
-                        {spanId: 'a', name: 'a', startTime: '2026-10-23T10:00:00.250999999Z', durationMs: 500}]}}});
+                m.render(container, JSON.parse(arg));
                 const bar = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`)
                     .closest('.pk-gantt-span').querySelector('.pk-gantt-bar');
                 return [bar('root').style.left, bar('a').style.left, bar('a').style.width];
             })()
-            """);
+            """, toTheNanosecond);
 
         assertThat(facts).isEqualTo(List.of("0%", "25%", "50%"));
     }
@@ -1349,17 +1481,13 @@ class SpansTabIT extends TraceOverlayTestBase {
     void scopingToAnAsyncEntryRendersOnlyThatSubtreeExpanded() {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
-                const trace = {summary: {durationMs: 1000, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {spanId: 'root', name: 'root', children: [
-                    {spanId: 'a', name: 'async task', asyncEntry: true, startTime: '1970-01-01T00:00:00.100Z', durationMs: 50, children: [
-                        {spanId: 'g', name: 'grandchild', startTime: '1970-01-01T00:00:00.120Z', durationMs: 200}]},
-                    {spanId: 's', name: 'sibling', startTime: '1970-01-01T00:00:00.600Z', durationMs: 50}]}}};
                 const container = document.createElement('div');
-                m.render(container, trace, {filters: {root: 'a'}});
+                m.render(container, JSON.parse(arg), {filters: {root: 'a'}});
                 const rows = [...container.querySelectorAll('.pk-gantt-row')].map(row => row.dataset.spanId);
                 const gEntry = container.querySelector('.pk-gantt-row[data-span-id="g"]').closest('.pk-gantt-span');
                 return [rows.join(','), container.querySelector('.pk-gantt-toggle').getAttribute('aria-expanded'), gEntry.style.display];
             })()
-            """);
+            """, asyncSubtreeTrace());
 
         @SuppressWarnings("unchecked")
         List<Object> scopedFacts = (List<Object>) facts;
@@ -1416,27 +1544,29 @@ class SpansTabIT extends TraceOverlayTestBase {
     /** Only what the summary names is listed, nothing at all without hotspots, and a click jumps through the overlay. */
     @Test
     void theHotspotListShowsWhatTheSummaryNamesAndJumpsThroughTheOverlay() {
+        String withAHotspot =
+                trace(span("a")).hotspots(new TraceSummary.Hotspot("a", "a", 7)).json();
+        String withoutHotspots = trace(span("a")).json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const jumps = [];
-                const rendered = hotspots => {
+                const rendered = trace => {
                     const container = document.createElement('div');
-                    m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z', hotspots},
-                            data: {rootSpan: {spanId: 'a', name: 'a'}}}, {goToSpan: spanId => jumps.push(spanId)});
+                    m.render(container, JSON.parse(trace), {goToSpan: spanId => jumps.push(spanId)});
                     return container;
                 };
-                const listed = rendered([{spanId: 'a', name: 'a', selfMs: 7}]);
+                const listed = rendered(arg[0]);
                 listed.querySelector('.pk-gantt-hotspot').click();
                 return {
-                    empty: rendered([]).querySelector('.pk-gantt-hotspots') === null,
-                    absent: rendered(undefined).querySelector('.pk-gantt-hotspots') === null,
+                    empty: rendered(arg[1]).querySelector('.pk-gantt-hotspots') === null,
                     text: listed.querySelector('.pk-gantt-hotspot').textContent,
                     jumps
                 };
             })()
-            """);
+            """, List.of(withAHotspot, withoutHotspots));
 
-        assertThat(facts).isEqualTo(Map.of("empty", true, "absent", true, "text", "a7ms", "jumps", List.of("a")));
+        assertThat(facts).isEqualTo(Map.of("empty", true, "text", "a7ms", "jumps", List.of("a")));
     }
 
     /** SLOW and VERY_SLOW judge a span's self time, so a span whose children covered part of its time shows it. */
@@ -1453,15 +1583,18 @@ class SpansTabIT extends TraceOverlayTestBase {
     /** From a second up a duration is a decimal figure: the axis, a row's duration and self time, a hotspot. */
     @Test
     void theSpansTabWritesItsDurationsInTheDashboardLocale() {
+        String slowRequest = trace(span("a")
+                        .durationMs(1500)
+                        .selfMs(1250)
+                        .children(span("b").durationMs(250).selfMs(250)))
+                .durationMs(1500)
+                .hotspots(new TraceSummary.Hotspot("a", "a", 1250))
+                .json();
+
         Object texts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {
-                    summary: {durationMs: 1500, startTime: '1970-01-01T00:00:00Z',
-                        hotspots: [{spanId: 'a', name: 'GET /slow', selfMs: 1250}]},
-                    data: {rootSpan: {spanId: 'a', name: 'GET /slow', durationMs: 1500, selfMs: 1250,
-                        children: [{spanId: 'b', name: 'work', durationMs: 250}]}}
-                }, {locale: 'de-DE', goToSpan: () => {}});
+                m.render(container, JSON.parse(arg), {locale: 'de-DE', goToSpan: () => {}});
                 const textsOf = selector => Array.from(container.querySelectorAll(selector), el => el.textContent);
                 return {
                     ticks: textsOf('.pk-gantt-header__timeline span'),
@@ -1469,7 +1602,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     hotspots: textsOf('.pk-gantt-hotspot__self')
                 };
             })()
-            """);
+            """, slowRequest);
 
         assertThat(texts)
                 .isEqualTo(Map.of(
@@ -1485,17 +1618,28 @@ class SpansTabIT extends TraceOverlayTestBase {
      */
     @Test
     void issueBadgesMarkWhatNoDurationColourCarries() {
+        String sixIssues = trace(span("a")
+                        .issues(
+                                issue(IssueType.SLOW, IssueSeverity.WARNING, IssueUnit.MS, "slow"),
+                                repeatedQuery("repeated"),
+                                issue(IssueType.CLIENT_ERROR, IssueSeverity.WARNING, IssueUnit.STATUS, "invented"),
+                                repeatedQuery("repeated again"),
+                                issue(IssueType.CLIENT_ERROR, IssueSeverity.ERROR, IssueUnit.STATUS, "invented worse"),
+                                issue(
+                                        IssueType.CLIENT_ERROR,
+                                        IssueSeverity.WARNING,
+                                        IssueUnit.STATUS,
+                                        "invented again")))
+                .json();
+
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
                 const container = document.createElement('div');
-                m.render(container, {summary: {durationMs: 10, startTime: '1970-01-01T00:00:00Z'}, data: {rootSpan: {
-                    spanId: 'a', name: 'a', durationMs: 10, selfMs: 10, issues: [
-                        {type: 'SLOW', severity: 'warning', unit: 'ms', message: 'slow'},
-                        {type: 'REPEATED_QUERY', severity: 'warning', unit: 'queries', message: 'repeated'},
-                        {type: 'NOT_YET_INVENTED', severity: 'warning', unit: 'rows', message: 'invented'},
-                        {type: 'REPEATED_QUERY', severity: 'warning', unit: 'queries', message: 'repeated again'},
-                        {type: 'NOT_YET_INVENTED', severity: 'error', unit: 'rows', message: 'invented worse'},
-                        {type: 'NOT_YET_INVENTED', severity: 'warning', unit: 'rows', message: 'invented again'}]}}});
+                const trace = JSON.parse(arg);
+                // no record can hold a type and a unit the backend has yet to invent
+                trace.data.rootSpan.issues.filter(issue => issue.type === 'CLIENT_ERROR')
+                    .forEach(issue => Object.assign(issue, {type: 'NOT_YET_INVENTED', unit: 'rows'}));
+                m.render(container, trace);
                 container.querySelector('.pk-gantt-name__toggle').click();
                 return {
                     badges: [...container.querySelectorAll('.pk-gantt-name .pk-badge')]
@@ -1503,7 +1647,7 @@ class SpansTabIT extends TraceOverlayTestBase {
                     messages: [...container.querySelectorAll('.pk-span-issues__message')].map(message => message.textContent)
                 };
             })()
-            """);
+            """, sixIssues);
 
         assertThat(facts)
                 .isEqualTo(Map.of(
