@@ -10,7 +10,8 @@ on:
 
 concurrency:
   group: build-on-push-${{ github.ref }}
-  cancel-in-progress: true
+  # A run on dev may be in its deploy, so a newer push waits for it.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' }}
 
 jobs:
   build-on-push:
@@ -32,7 +33,7 @@ jobs:
       # A new branch is checked from where it left origin/dev, which the full-history checkout
       # fetches. A forced push and a dispatched run have no meaningful range and pass.
       - name: check-commit-subjects
-        uses: osslabz/github-actions/commit-subject-check@v1
+        uses: osslabz/github-actions/commit-subject-check@e48011543099f67a7643cdd70dd80ecc3fe858f2 # v1.8.0
         with:
           default-branch: dev
 
@@ -48,9 +49,13 @@ jobs:
       # rewriting them first would miss that cache on every branch but dev. Shared with the
       # osslabz repos, which is why the integration branch is an input rather than assumed.
       - name: set-snapshot-version
-        uses: osslabz/github-actions/snapshot-version@v1
+        uses: osslabz/github-actions/snapshot-version@e48011543099f67a7643cdd70dd80ecc3fe858f2 # v1.8.0
         with:
           default-branch: dev
+
+      # This step runs the tests, Chromium, Testcontainers and npm ci, so it holds no secret.
+      - name: maven-build-verify
+        run: ./mvnw --batch-mode clean verify -P peekaboot-publish
 
       # peekaboot-publish carries central-publishing-maven-plugin, which routes a -SNAPSHOT to
       # Central's snapshot repository by itself. The signature stays behind in
@@ -60,12 +65,24 @@ jobs:
       # 401. Keyed on the secret rather than the actor, because the actor of the dispatch that
       # follows a Dependabot merge is unconfirmed: if it counts as Dependabot's, dev's snapshot
       # waits for the next push to dev.
-      - name: maven-build-publish
+      # An output, because a step's `if` cannot read secrets. The runner evaluates the
+      # expression, so this step receives true or false and never the token.
+      - name: detect-publishing-secret
+        id: central
+        env:
+          AVAILABLE: ${{ secrets.OSSRH_TOKEN != '' }}
+        run: echo "available=$AVAILABLE" >> "$GITHUB_OUTPUT"
+
+      # The tests and the gates ran in maven-build-verify; this packages what it compiled.
+      - name: maven-deploy-snapshot
+        if: steps.central.outputs.available == 'true'
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-          MAVEN_GOAL: ${{ secrets.OSSRH_TOKEN != '' && 'deploy' || 'verify' }}
-        run: ./mvnw --batch-mode clean "$MAVEN_GOAL" -P peekaboot-publish
+        run: >
+          ./mvnw --batch-mode deploy -P peekaboot-publish -DskipTests -DskipITs
+          -Djacoco.skip=true -Dspotless.check.skip=true -Dspotbugs.skip=true
+          -Dcheckstyle.skip=true -Dpmd.skip=true -Dpeekaboot.frontend.lint.skip=true
 
       - name: install-git-cliff
         uses: ./.github/actions/install-git-cliff
@@ -136,12 +153,13 @@ jobs:
       - name: shellcheck
         run: find .github -name '*.sh' -exec "$RUNNER_TEMP/shellcheck" {} +
 
-  # The parallel Gradle build, for Dependabot branches only: the Maven job never reads a
-  # build.gradle.kts, so without this a Gradle bump would merge unbuilt. Every ecosystem's
-  # branch, because a red Maven tool bump is fixed by a Gradle edit pushed onto it.
-  # dependabot-pr-auto-merge waits on the whole run, this job included.
+  # The parallel Gradle build, for dev and for Dependabot branches. dev, because nothing else
+  # builds the Gradle side of what is merged there. Dependabot branches, because the Maven
+  # job never reads a build.gradle.kts, so without this a Gradle bump would merge unbuilt.
+  # Every ecosystem's branch, because a red Maven tool bump is fixed by a Gradle edit pushed
+  # onto it. dependabot-pr-auto-merge waits on the whole run, this job included.
   gradle-build:
-    if: startsWith(github.ref_name, 'dependabot/')
+    if: startsWith(github.ref_name, 'dependabot/') || github.ref_name == 'dev'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -154,8 +172,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # These branches change the wrapper, and ./gradlew runs its jar. Fails on a jar whose
-      # checksum matches no published Gradle release.
+      # Dependabot branches change the wrapper, and ./gradlew runs its jar. Fails on a jar
+      # whose checksum matches no published Gradle release.
       - name: gradle-wrapper-validation
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
