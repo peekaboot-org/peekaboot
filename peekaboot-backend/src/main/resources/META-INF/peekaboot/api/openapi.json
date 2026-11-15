@@ -61,7 +61,7 @@
       "get": {
         "operationId": "listTraces",
         "summary": "Lists traces newest first, with filters and paging.",
-        "description": "A trace that holds some spans but not its root lists no row of its own; fetch it by id.",
+        "description": "A trace that holds some spans but not its root lists no row of its own; fetch it by id. A trace with async tasks lists one more row for each task. `limit` counts rows; `bucketCounts` and `filteredBucketCounts` count traces. With tracing off the answer is `200` with no traces and zero counts.",
         "parameters": [
           {"$ref": "#/components/parameters/Limit"},
           {"$ref": "#/components/parameters/Cursor"},
@@ -170,6 +170,7 @@
       "get": {
         "operationId": "searchLogs",
         "summary": "Searches captured log lines, inside traces and outside them, newest first.",
+        "description": "With tracing off the answer is `200` with no lines.",
         "parameters": [
           {
             "name": "level",
@@ -192,7 +193,7 @@
           {
             "name": "traceId",
             "in": "query",
-            "description": "One trace's lines only.",
+            "description": "One trace's lines only. An id the store does not hold lists nothing.",
             "schema": {"type": "string"}
           },
           {
@@ -224,6 +225,7 @@
       "get": {
         "operationId": "listRoutes",
         "summary": "Sums up requests, failures and latency per HTTP route over the traces held now.",
+        "description": "With tracing off the answer is `200` and lists nothing.",
         "responses": {
           "200": {
             "description": "One row per method and route, busiest first.",
@@ -238,6 +240,7 @@
       "get": {
         "operationId": "listErrors",
         "summary": "Lists every failure the traces showed, one entry per cause and route, kept past the traces themselves.",
+        "description": "With tracing off the answer is `200` and lists nothing.",
         "parameters": [
           {
             "name": "since",
@@ -452,7 +455,7 @@
       "Cursor": {
         "name": "cursor",
         "in": "query",
-        "description": "The `next` of an earlier response, sent back as it is with the same filters.",
+        "description": "The `next` of an earlier response, sent back as it is. It names a position and carries no filters: sent with other filters, it pages through what those match below that position.",
         "schema": {"type": "string"}
       }
     },
@@ -592,7 +595,7 @@
           "bucketCounts": {"$ref": "#/components/schemas/BucketCounts"},
           "filteredBucketCounts": {
             "anyOf": [{"$ref": "#/components/schemas/BucketCounts"}, {"type": "null"}],
-            "description": "The traces that match every filter. `null` only when the request filters nothing, as `rootActionType=*` alone does; a request naming no type still filters by the default types."
+            "description": "The traces that match every filter. `null` when the request filters nothing, as `rootActionType=*` alone does, and while tracing is off; a request naming no type still filters by the default types."
           },
           "next": {
             "type": ["string", "null"],
@@ -825,12 +828,12 @@
         "properties": {
           "rootSpan": {
             "anyOf": [{"$ref": "#/components/schemas/SpanNode"}, {"type": "null"}],
-            "description": "`null` while the trace is incomplete."
+            "description": "`null` while the trace is incomplete, and on a complete trace whose root the span cap evicted."
           },
           "orphans": {
             "type": "array",
             "items": {"$ref": "#/components/schemas/SpanNode"},
-            "description": "The stored subtrees of an incomplete trace."
+            "description": "The stored subtrees while `rootSpan` is `null`."
           },
           "logs": {"type": "array", "items": {"$ref": "#/components/schemas/TraceLog"}},
           "queries": {"type": "array", "items": {"$ref": "#/components/schemas/QueryInfo"}},
