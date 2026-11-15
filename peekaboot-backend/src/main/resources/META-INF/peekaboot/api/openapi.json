@@ -1068,7 +1068,7 @@
           "logs": {"type": "array", "items": {"$ref": "#/components/schemas/TraceLog"}},
           "next": {
             "type": ["string", "null"],
-            "description": "The `cursor` for the next page, `null` on the last."
+            "description": "The `cursor` for the next page, `null` once every line was searched. One request reads at most 10000 lines, so a page can hold fewer lines than `limit`, or none, and still carry a `next`: follow it."
           }
         }
       },

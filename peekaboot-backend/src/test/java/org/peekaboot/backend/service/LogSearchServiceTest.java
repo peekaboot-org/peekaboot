@@ -42,6 +42,17 @@ class LogSearchServiceTest {
                 .toList();
     }
 
+    /** Room for every line a test stores, so the ring drops none and only the search's own bound cuts in. */
+    private static InMemoryTraceStore storeOfManyUntracedLines() {
+        return TraceStores.with(properties -> properties.setMaxUntracedLogs(PageLimit.MAX + 2));
+    }
+
+    private static void addHay(InMemoryTraceStore store, int lines) {
+        for (int i = 0; i < lines; i++) {
+            store.addLog(untraced().saying("hay").build());
+        }
+    }
+
     /** Every line has the same timestamp, so only the store's arrival order can put them in this order. */
     @Test
     void listsTracedAndUntracedLinesNewestFirstAsTheyArrived() {
@@ -200,6 +211,73 @@ class LogSearchServiceTest {
         assertThat(page.logs()).extracting(TraceLog::message).containsExactly("match 2");
         assertThat(rest.logs()).extracting(TraceLog::message).containsExactly("match 1");
         assertThat(rest.next()).isNull();
+    }
+
+    /** The needle is one line past the ten thousand a search reads, so only the second page reaches it. */
+    @Test
+    void aSearchReadsAtMostTenThousandLinesAndSaysWhereItStopped() {
+        InMemoryTraceStore haystack = storeOfManyUntracedLines();
+        haystack.addLog(untraced().saying("needle").build());
+        addHay(haystack, PageLimit.MAX);
+        LogSearchService searching = newService(haystack);
+
+        LogSearchResponse first = searching.search(search().q("needle").limit(1).build());
+        LogSearchResponse second = searching.search(
+                search().q("needle").limit(1).cursor(first.next()).build());
+
+        assertThat(first.logs()).isEmpty();
+        assertThat(first.next()).isNotNull();
+        assertThat(second.logs()).extracting(TraceLog::message).containsExactly("needle");
+        assertThat(second.next()).isNull();
+    }
+
+    @Test
+    void pagingOnFromAShortPageRepeatsAndSkipsNothingWhileLinesArrive() {
+        InMemoryTraceStore haystack = storeOfManyUntracedLines();
+        haystack.addLog(untraced().saying("old needle").build());
+        addHay(haystack, PageLimit.MAX);
+        LogSearchService searching = newService(haystack);
+
+        LogSearchResponse first = searching.search(search().q("needle").limit(1).build());
+        haystack.addLog(untraced().saying("new needle").build());
+        LogSearchResponse second = searching.search(
+                search().q("needle").limit(1).cursor(first.next()).build());
+
+        assertThat(first.logs()).isEmpty();
+        assertThat(second.logs()).extracting(TraceLog::message).containsExactly("old needle");
+        assertThat(second.next()).isNull();
+    }
+
+    /** The needle is the ten thousandth line, the last one a search reads. */
+    @Test
+    void aSearchReadsItsTenThousandthLine() {
+        InMemoryTraceStore haystack = storeOfManyUntracedLines();
+        haystack.addLog(untraced().saying("needle").build());
+        addHay(haystack, PageLimit.MAX - 1);
+
+        LogSearchResponse page =
+                newService(haystack).search(search().q("needle").limit(1).build());
+
+        assertThat(page.logs()).extracting(TraceLog::message).containsExactly("needle");
+        assertThat(page.next()).isNull();
+    }
+
+    /** The newest line fills the page and no other line read matches, yet the older match lies past them. */
+    @Test
+    void aFullPageHasANextWhileOlderLinesWereLeftUnread() {
+        InMemoryTraceStore haystack = storeOfManyUntracedLines();
+        haystack.addLog(untraced().saying("old needle").build());
+        addHay(haystack, PageLimit.MAX - 1);
+        haystack.addLog(untraced().saying("new needle").build());
+        LogSearchService searching = newService(haystack);
+
+        LogSearchResponse first = searching.search(search().q("needle").limit(1).build());
+        LogSearchResponse second = searching.search(
+                search().q("needle").limit(1).cursor(first.next()).build());
+
+        assertThat(first.logs()).extracting(TraceLog::message).containsExactly("new needle");
+        assertThat(second.logs()).extracting(TraceLog::message).containsExactly("old needle");
+        assertThat(second.next()).isNull();
     }
 
     /** A line names the span that survived folding, as it does in its own trace. */
