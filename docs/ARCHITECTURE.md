@@ -126,10 +126,10 @@ The git entries come from the application's own `git.properties`, which `Applica
 reads at the start or at ready, whichever listener runs first, once the main class is known. The
 Overview's git card shows the same file where Boot's git info contributor is on. Boot's
 `GitProperties` reads the first one on the classpath.
-For an application without one, that is whichever library ships one. jdbc-url-parser, which the
-backend depends on, does. A `git.properties` in a classpath directory counts, since only a project
-being built puts one there and Gradle keeps resources apart from classes. One inside a jar counts
-only at the root the main application class was loaded from, `BOOT-INF/classes/` in a Boot jar.
+For an application without one, that is whichever library ships one. A `git.properties` in a
+classpath directory counts, since only a project being built puts one there and Gradle keeps
+resources apart from classes. One inside a jar counts only at the root the main application
+class was loaded from, `BOOT-INF/classes/` in a Boot jar.
 Where the host sets `spring.info.git.location`, Peekaboot takes Boot's `GitProperties` as it is.
 
 The log's in-memory half runs independently of `peekaboot.storage.enabled`. With storage off,
@@ -342,6 +342,7 @@ org.peekaboot.backend/
 │                           # TraceResources, TraceSummaries, TraceDetails, TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
 ├── masking/                # MaskingEngine (one bean, from MaskingConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
+├── problem/                # ApiProblem, ApiProblemException, ApiProblemHandler, RequestParameters: the RFC 9457 errors of /peekaboot/api/**
 ├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
 │                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
 ├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, ErrorDigestService, TraceReads, ...
@@ -889,7 +890,7 @@ inventory of every module under `META-INF/peekaboot/ui/`.
   `toolbar.js`; eager static import from `dashboard/main.js`)
 - **Theme support**: `--pk-*` custom properties resolved once in `shared/theme.js` from
   `localStorage['peekaboot-theme']`, falling back to `prefers-color-scheme`, shared across all
-  three same-origin surfaces
+  four same-origin surfaces; the error page reads the same key through `assets/theme-boot.js`
 
 `peekaboot-frontend/README.md` covers the fill/text token split and which tokens have to
 change together. Changing one without its pair is how an accessibility regression ships.
@@ -916,9 +917,11 @@ hooks that run before or outside the application context are registered in
 | `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
+| `AsyncInstrumentationAutoConfiguration` | `.imports` | The task decorator and the failure post-processor (see *Async Task Spans*) |
 | `EventListenerInstrumentationAutoConfiguration` | `.imports` | The post-processor that puts a span around the application's `@EventListener` methods (see *Event Listener Spans*) |
 | `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
+| `PeekabootObservationAutoConfiguration` | `.imports` | The `ObservationPredicate` that takes the dashboard's own requests out of the request metrics and the traces; independent of `peekaboot.tracing.enabled` |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
 | `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`; deployment detection for `peekaboot.security.enabled` and `peekaboot.security.deployment-detected`; the default property values; the `peekabootBlankSwitches` source, where `BooleanSwitches.treatBlanksAsUnset` makes a blank switch read as unset; and the check that no switch holds a value the conditions and the binder read differently (see *Conditional Loading*, *Default Properties* and *Automatic Dashboard Security*) |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
@@ -960,7 +963,8 @@ nobody overrode bought nothing but wiring. The trace mappers follow the same rul
 
 Most of the auto-configuration classes carry `@ConditionalOnPeekabootServlet`, directly or
 through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the master switch:
-`PeekabootAutoConfiguration`, `PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
+`PeekabootAutoConfiguration`, `PeekabootPathsAutoConfiguration`,
+`PeekabootObservationAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
 `DevToolbarAutoConfiguration`, `ErrorPageAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
 `AsyncInstrumentationAutoConfiguration`, `EventListenerInstrumentationAutoConfiguration`,
 `PeekabootTracingAutoConfiguration`,
@@ -975,9 +979,12 @@ through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the 
 ```
 
 Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
-the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar.enabled`,
-`TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean,
-`EventListenerInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
+the `HealthEndpoint` class, `PeekabootObservationAutoConfiguration` the `ObservationPredicate`
+and `ServerRequestObservationContext` classes, `DevToolbarAutoConfiguration`
+`peekaboot.dev-toolbar.enabled`, `TracingInterceptorAutoConfiguration` an `ObservationRegistry`
+bean, `AsyncInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
+`peekaboot.tracing.async`, `EventListenerInstrumentationAutoConfiguration` an
+`ObservationRegistry` bean and
 `peekaboot.tracing.event-listeners`, `InsightsAutoConfiguration`
 a `MeterRegistry` bean and `peekaboot.insights.enabled`,
 `HibernateStatisticsMetricsAutoConfiguration` the same plus an `EntityManagerFactory` bean and
