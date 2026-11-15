@@ -1276,17 +1276,30 @@ class TraceInsightsServiceTest {
         assertThat(response.filteredBucketCounts()).isNull();
     }
 
+    /** The Scheduled Tasks tab links to a job's runs by the target Actuator names, which no span name holds. */
+    @ParameterizedTest
+    @ValueSource(strings = {"org.peekaboot.example.Scheduler.fixedDelay", "ORG.PEEKABOOT.EXAMPLE.SCHEDULER.FIXEDDELAY"})
+    void theRootOperationFilterMatchesAScheduledJobsFullyQualifiedTarget(String target) {
+        addScheduledJobTrace(
+                "trace1", "task scheduler.fixedDelay", "org.peekaboot.example.Scheduler", "fixedDelay", 100);
+        addScheduledJobTrace("trace2", "task scheduler.fixedRate", "org.peekaboot.example.Scheduler", "fixedRate", 100);
+
+        TraceListResponse response =
+                service.listTraces(listing().limit(10).rootOperation(target).build());
+
+        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
+    }
+
     @Test
-    void theRootOperationFilterMatchesAFullyQualifiedTaskTarget() {
-        addTraceWithOperation("trace1", "task scheduler.fixedDelay", 100);
-        addTraceWithOperation("trace2", "task scheduler.fixedRate", 100);
+    void aDottedRootOperationMatchesNoSpanOnItsLastTwoSegments() {
+        addTraceWithOperation("t1", "task scheduler.fixedDelay", 100);
 
         TraceListResponse response = service.listTraces(listing()
                 .limit(10)
                 .rootOperation("org.peekaboot.example.Scheduler.fixedDelay")
                 .build());
 
-        assertThat(response.traces()).extracting(row -> row.summary().traceId()).containsExactly("trace1");
+        assertThat(response.traces()).isEmpty();
     }
 
     @Test
@@ -1769,10 +1782,19 @@ class TraceInsightsServiceTest {
     }
 
     private void addScheduledJobTrace(String traceId, long durationMs) {
-        store.addSpan(rootSpan(traceId, "task orderReconciler.reconcileOrders", null, durationMs)
-                .tags(Map.of(
-                        "code.function", "reconcileOrders",
-                        "code.namespace", "org.peekaboot.example.OrderReconciler"))
+        addScheduledJobTrace(
+                traceId,
+                "task orderReconciler.reconcileOrders",
+                "org.peekaboot.example.OrderReconciler",
+                "reconcileOrders",
+                durationMs);
+    }
+
+    /** A run as Spring's scheduler observes it: named after the bean, tagged with the target's class and method. */
+    private void addScheduledJobTrace(
+            String traceId, String operationName, String targetClass, String method, long durationMs) {
+        store.addSpan(rootSpan(traceId, operationName, null, durationMs)
+                .tags(Map.of("code.function", method, "code.namespace", targetClass))
                 .build());
     }
 

@@ -80,7 +80,7 @@
           {
             "name": "rootOperation",
             "in": "query",
-            "description": "Part of the root span's name, any case.",
+            "description": "Part of the root span's name, any case. A scheduled job also matches on part of its fully qualified target, such as `com.acme.ReportJob.run`, as `scheduledTasks.tasks[].target` names it.",
             "schema": {"type": "string"}
           },
           {

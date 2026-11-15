@@ -32,7 +32,7 @@ import org.peekaboot.backend.tracing.tags.HttpSpanTags;
  *
  * @param actionTypes the root action types listed; a request naming none gets every type but
  *     {@code MAINTENANCE}, and {@code *} every type, the empty set here
- * @param rootOperation part of the row's root span name, in any case
+ * @param rootOperation part of the row's root span name or of a scheduled job's target, in any case
  * @param route the matched route pattern, exactly
  * @param pathPrefix the start of the request path as the row's summary serves it, after masking
  * @param statusCode the response status, exactly
@@ -128,24 +128,23 @@ record TraceFilter(
      */
     private boolean matchesRoot(@Nullable SpanData root) {
         return (actionTypes.isEmpty() || actionTypes.contains(RootActionTypes.of(root)))
-                && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null));
+                && (rootOperation == null || matchesRootOperation(root));
     }
 
-    /** The chip sends a substring of the operation name, so a partial, case-insensitive match is the contract. */
-    private boolean matchesRootOperation(@Nullable String rootOperationName) {
-        if (rootOperationName == null) {
+    /**
+     * The chip sends part of the root's name. The Scheduled Tasks tab sends a job's target, which
+     * the name Spring gives the span does not hold, so the target is matched too. Any case.
+     */
+    private boolean matchesRootOperation(@Nullable SpanData root) {
+        if (root == null) {
             return false;
         }
-        String operation = rootOperationName.toLowerCase(Locale.ROOT);
         String filter = rootOperation.toLowerCase(Locale.ROOT);
-        if (operation.contains(filter)) {
-            return true;
-        }
-        // Scheduled task targets are fully qualified (package.Class.method) while span
-        // names use the bean name ("task class.method") - also match on the Class.method suffix
-        String[] segments = filter.split("\\.", -1);
-        return segments.length > 2
-                && operation.contains(segments[segments.length - 2] + "." + segments[segments.length - 1]);
+        return holds(root.name(), filter) || holds(RootActionTypes.scheduledTarget(root), filter);
+    }
+
+    private static boolean holds(@Nullable String text, String lowerCasePart) {
+        return text != null && text.toLowerCase(Locale.ROOT).contains(lowerCasePart);
     }
 
     /** The tags are empty on a row that answered no request, which no request filter admits. */

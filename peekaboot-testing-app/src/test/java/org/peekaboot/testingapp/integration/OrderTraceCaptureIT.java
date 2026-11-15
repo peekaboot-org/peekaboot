@@ -366,4 +366,27 @@ class OrderTraceCaptureIT extends TestingAppITBase {
                         + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
                 .isEqualTo("SCHEDULED_JOB");
     }
+
+    /**
+     * The Scheduled Tasks tab links to a job's runs by the target Actuator names, while Spring
+     * names the span after the bean. The listing finds the run only where the scheduled-task
+     * tags of a real run spell that target.
+     */
+    @Test
+    void aScheduledJobIsListedUnderTheTargetActuatorNames() {
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
+        traces.awaitTrace(traceId, TraceApiClient.COMPLETE);
+        String target = traces.api()
+                .getJson("/peekaboot/api/actuator/all/insights")
+                .path("scheduledTasks")
+                .path("tasks")
+                .valueStream()
+                .map(task -> task.path("target").asString(""))
+                .filter(name -> name.endsWith(".reconcileOrders"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the scheduled tasks list no reconcileOrders job"));
+
+        assertThat(traces.listedTraceIds("rootActionType=SCHEDULED_JOB&rootOperation=" + target))
+                .contains(traceId);
+    }
 }

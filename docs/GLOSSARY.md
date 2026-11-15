@@ -80,8 +80,10 @@ a different suppression from the default view.
 ### Root Operation
 `TraceSummary.rootOperation` is `rootSpanData.name()` verbatim: no reformatting, no case change.
 As a filter it is `TraceFilter.matchesRootOperation`, a case-insensitive substring
-match with a `Class.method` suffix fallback so a fully-qualified scheduled-task target still
-matches a bean-name span name.
+match on that name. A scheduled job also matches on its target,
+`RootActionTypes.scheduledTarget`: the root's `code.namespace` and `code.function` tags joined
+by a dot, so a fully qualified scheduled-task target finds the runs of a span named after the
+bean.
 
 ### Async Subtree
 A span carrying the marker tag `AsyncTaskMarker.TAG_KEY` (`peekaboot.async`), plus every
@@ -240,10 +242,15 @@ Scheduled Tasks tab shows the last two dot-segments and puts the full value in t
 
 A task's `target` does not equal its traces' `rootOperation`. `rootOperation` is the root span's
 own name, typically `task <bean>.<method>` when Spring's scheduler fired it.
-`TraceFilter.matchesRootOperation` bridges the mismatch with the `Class.method` suffix
-fallback, which is what makes the tab's "View traces" link
-(`dashboard/tabs/scheduled-tasks.js`) land on that one task's runs.
-`TraceFiltersIT.schedulerTracesLinkArrivesFiltered` is the end-to-end proof.
+`TraceFilter.matchesRootOperation` bridges the mismatch by also matching
+`RootActionTypes.scheduledTarget`, the root's `code.namespace` and `code.function` tags joined
+by a dot, which is what makes the tab's "View traces" link
+(`dashboard/tabs/scheduled-tasks.js`) land on that one task's runs. Spring writes the target
+class's canonical name there and Actuator the declaring class's binary name, so the two agree
+for a method declared on a top-level class.
+`TraceFiltersIT.schedulerTracesLinkArrivesFiltered` proves the link arrives with the filter set,
+`OrderTraceCaptureIT.aScheduledJobIsListedUnderTheTargetActuatorNames` that the filter lists a
+real run under the target Actuator names.
 
 Beware the third meaning: the Traces tab's own filter banner labels `rootOperation` **Target**,
 which is the span name, not this field.

@@ -3,6 +3,7 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
@@ -18,6 +19,9 @@ public final class RootActionTypes {
     // What Lettuce's connection handshake (RedisHandshake) and Boot's Redis health indicators send.
     private static final Set<String> REDIS_UPKEEP_COMMANDS =
             Set.of("HELLO", "AUTH", "PING", "SELECT", "READONLY", "CLIENT", "INFO", "CLUSTER");
+
+    private static final String CODE_NAMESPACE = "code.namespace";
+    private static final String CODE_FUNCTION = "code.function";
 
     private RootActionTypes() {}
 
@@ -40,6 +44,17 @@ public final class RootActionTypes {
             return detectServerActionType(tags);
         }
         return detectNonServerActionType(kind, rootSpan.name(), rootSpan.parentId(), tags);
+    }
+
+    /**
+     * The method a scheduled job runs, fully qualified, or null where the root lacks either
+     * scheduled-task tag. Spring tags a run with the target class's canonical name and the method
+     * name. Joined, they are the {@code target} Actuator's {@code scheduledtasks} endpoint names,
+     * for a method declared on a top-level class.
+     */
+    public static @Nullable String scheduledTarget(@Nullable SpanData rootSpan) {
+        Map<String, String> tags = rootSpan == null || rootSpan.tags() == null ? Map.of() : rootSpan.tags();
+        return hasScheduledTaskTags(tags) ? tags.get(CODE_NAMESPACE) + "." + tags.get(CODE_FUNCTION) : null;
     }
 
     /**
@@ -119,6 +134,6 @@ public final class RootActionTypes {
      * span reliably, unlike testing the span's name for "schedule"/"cron"/"timer"/"job".
      */
     private static boolean hasScheduledTaskTags(Map<String, String> tags) {
-        return tags.containsKey("code.function") && tags.containsKey("code.namespace");
+        return tags.containsKey(CODE_FUNCTION) && tags.containsKey(CODE_NAMESPACE);
     }
 }

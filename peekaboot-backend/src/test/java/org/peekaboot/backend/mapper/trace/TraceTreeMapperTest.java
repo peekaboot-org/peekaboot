@@ -1063,6 +1063,43 @@ class TraceTreeMapperTest {
         assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
     }
 
+    /** The target as Actuator's {@code scheduledtasks} endpoint names it, which the span's own name does not hold. */
+    @Test
+    void aScheduledJobNamesItsFullyQualifiedTarget() {
+        var rootSpan = span("root")
+                .named("task orderReconciler.reconcileOrders")
+                .tags(Map.of(
+                        "code.function", "reconcileOrders",
+                        "code.namespace", "org.peekaboot.testingapp.order.OrderReconciler"))
+                .build();
+
+        assertThat(RootActionTypes.scheduledTarget(rootSpan))
+                .isEqualTo("org.peekaboot.testingapp.order.OrderReconciler.reconcileOrders");
+    }
+
+    @ParameterizedTest
+    @MethodSource("tagsShortOfTheTaskPair")
+    void aRootWithoutBothTaskTagsNamesNoTarget(Map<String, String> tags) {
+        var rootSpan = span("root")
+                .named("task orderReconciler.reconcileOrders")
+                .tags(tags)
+                .build();
+
+        assertThat(RootActionTypes.scheduledTarget(rootSpan)).isNull();
+    }
+
+    static Stream<Map<String, String>> tagsShortOfTheTaskPair() {
+        return Stream.of(
+                Map.of(),
+                Map.of("code.function", "reconcileOrders"),
+                Map.of("code.namespace", "org.peekaboot.testingapp.order.OrderReconciler"));
+    }
+
+    @Test
+    void aMissingRootNamesNoTarget() {
+        assertThat(RootActionTypes.scheduledTarget(null)).isNull();
+    }
+
     @Test
     void detectsAsyncTaskRootActionTypeFromPeekabootsOwnMarker() {
         // The shape AsyncTaskDecorator produces: no Span.Kind, because a plain
