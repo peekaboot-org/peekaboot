@@ -51,6 +51,4 @@ dependencies {
     testImplementation("com.h2database:h2")
     // QueryParameterAutoConfigurationTest proves the class condition with and without QueryContext
     testImplementation("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
-    // the SQL formatter's condition and the Hibernate meters, proven with Hibernate present and filtered away
-    testImplementation("org.hibernate.orm:hibernate-core")
 }
