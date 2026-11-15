@@ -3,13 +3,19 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
+import java.io.IOException;
 import java.lang.reflect.RecordComponent;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.features.Features;
@@ -23,6 +29,8 @@ import org.peekaboot.backend.insights.config.TileFormat;
 import org.peekaboot.backend.insights.config.Unit;
 import org.peekaboot.backend.text.UptimeFormat;
 import org.peekaboot.backend.ui.InlinedStylesheets;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 /**
  * Exercises the shared ES modules in a real browser, imported from the running
@@ -34,6 +42,8 @@ import org.peekaboot.backend.ui.InlinedStylesheets;
  * nothing but these tests notices when a Java enum and its JS mirror drift apart.
  */
 class SharedModuleIT extends PlaywrightTestBase {
+
+    private static final Pattern FEATURE_READ = Pattern.compile("\\bfeatures\\??\\.([A-Za-z]+)");
 
     private Object evalModule(String module, String expression) {
         return importModule("shared/" + module, expression);
@@ -271,28 +281,30 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     /**
-     * Every key the frontend reads off /api/features is a component of the backend's
-     * Features record: the five flags (traces.js, meters.js, insights.js/overview.js,
-     * lifecycle.js and unmask-control.js gate on them) and the threshold keys severity.js
-     * colours by.
+     * Every key the served modules read off a features object is a component of the backend's
+     * Features record. The reads are collected from the module sources, so a key renamed on
+     * either side fails here.
      */
     @Test
-    void featureKeysReadByTheFrontendMirrorTheBackendRecord() {
+    void featureKeysReadByTheFrontendMirrorTheBackendRecord() throws IOException {
         List<String> published = Arrays.stream(Features.class.getRecordComponents())
                 .map(RecordComponent::getName)
                 .toList();
 
-        assertThat(published)
-                .contains(
-                        "tracing",
-                        "metrics",
-                        "insights",
-                        "lifecycle",
-                        "unmaskingEnabled",
-                        "maskLiteral",
-                        "slowSpanThresholdMs",
-                        "verySlowSpanThresholdMs",
-                        "slowQueryThresholdMs");
+        Set<String> read = new TreeSet<>();
+        for (Resource module :
+                new PathMatchingResourcePatternResolver().getResources("classpath*:META-INF/peekaboot/ui/**/*.js")) {
+            if (module.getURL().getPath().contains("/ui/vendor/")) {
+                continue;
+            }
+            Matcher featureRead = FEATURE_READ.matcher(module.getContentAsString(StandardCharsets.UTF_8));
+            while (featureRead.find()) {
+                read.add(featureRead.group(1));
+            }
+        }
+
+        assertThat(read).contains("tracing", "tracingSpansPossible", "maskLiteral");
+        assertThat(published).containsAll(read);
     }
 
     /**
