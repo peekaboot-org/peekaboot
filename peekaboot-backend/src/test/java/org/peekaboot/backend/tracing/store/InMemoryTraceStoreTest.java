@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -324,6 +325,73 @@ class InMemoryTraceStoreTest {
         TraceData snapshot = store.getTrace("t1").orElseThrow().snapshot();
         assertThat(snapshot.droppedSpans()).isPositive();
         assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(1_500));
+    }
+
+    /** Nearly every trace is fast from its first span to its last, and none of them costs Slow's monitor a visit. */
+    @Test
+    void aSpanOfATraceNeverListedSlowLeavesTheSlowBucketAlone() {
+        AtomicInteger slowRemovals = new AtomicInteger();
+        InMemoryTraceStore counting = countingSlowRemovals(slowRemovals);
+
+        counting.addSpan(fastSpan("query", "handler"));
+        counting.addSpan(fastSpan("handler", "root"));
+        counting.addSpan(spanIn("t1", "root"));
+
+        assertThat(slowRemovals).hasValue(0);
+        assertThat(counting.bucketsOf("t1")).isEmpty();
+    }
+
+    /** The span that takes a trace out of Slow is the last one to look there. */
+    @Test
+    void aTraceThatLeftSlowLeavesTheSlowBucketAloneFromThenOn() {
+        AtomicInteger slowRemovals = new AtomicInteger();
+        InMemoryTraceStore counting = countingSlowRemovals(slowRemovals);
+        counting.addSpan(fastSpan("query", "handler"));
+        counting.restoreBucket(TraceBucket.SLOW, List.of("t1"));
+
+        counting.addSpan(fastSpan("handler", "root"));
+        counting.addSpan(spanIn("t1", "root"));
+
+        assertThat(slowRemovals).hasValue(1);
+        assertThat(counting.bucketsOf("t1")).isEmpty();
+    }
+
+    /** A restore that lists a trace in Errors says nothing about Slow. */
+    @Test
+    void aTraceARestoreListedInErrorsLeavesTheSlowBucketAlone() {
+        AtomicInteger slowRemovals = new AtomicInteger();
+        InMemoryTraceStore counting = countingSlowRemovals(slowRemovals);
+        counting.addSpan(fastSpan("handler", "root"));
+        counting.restoreBucket(TraceBucket.ERRORS, List.of("t1"));
+
+        counting.addSpan(spanIn("t1", "root"));
+
+        assertThat(slowRemovals).hasValue(0);
+        assertThat(counting.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
+    }
+
+    private static InMemoryTraceStore countingSlowRemovals(AtomicInteger slowRemovals) {
+        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            void unfile(TraceBucket bucket, String traceId) {
+                if (bucket == TraceBucket.SLOW) {
+                    slowRemovals.incrementAndGet();
+                }
+                super.unfile(bucket, traceId);
+            }
+        };
+    }
+
+    /** A restore lists a trace in Slow without classifying it, and the trace must still be able to leave. */
+    @Test
+    void aTraceARestoreListedSlowLeavesSlowWhenItsNextSpanShowsItIsNot() {
+        storage.addSpan(fastSpan("handler", "root"));
+        storage.restoreBucket(TraceBucket.SLOW, List.of("t1"));
+        assertThat(storage.bucketsOf("t1")).containsExactly(TraceBucket.SLOW);
+
+        storage.addSpan(spanIn("t1", "root"));
+
+        assertThat(storage.bucketsOf("t1")).isEmpty();
     }
 
     @Test
@@ -932,6 +1000,16 @@ class InMemoryTraceStoreTest {
     /** A 100ms span with nothing else about it. */
     private SpanData spanIn(String traceId, String spanId) {
         return span(spanId).in(traceId).at(START, Duration.ofMillis(100)).build();
+    }
+
+    /** A 10ms span of {@code t1} inside the 100ms of {@link #spanIn}, named after itself. */
+    private static SpanData fastSpan(String spanId, String parentId) {
+        return span(spanId)
+                .in("t1")
+                .parent(parentId)
+                .named(spanId)
+                .at(START.plusMillis(10), Duration.ofMillis(10))
+                .build();
     }
 
     private static SpanData errorSpan(String traceId) {

@@ -76,6 +76,8 @@ public class TraceDataBundle {
     private boolean hasErrorLog;
     /** A failure only a dropped input showed, carried across a fold; guarded by {@code spansLock}. */
     private boolean droppedInputFailed;
+    /** The store filed the trace in Slow and has not taken it out; stays set when Slow's cap evicts it. Guarded by {@code spansLock}. */
+    private boolean listedSlow;
 
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     /** Guarded by {@code logs}, the lock the trim already takes. */
@@ -566,6 +568,19 @@ public class TraceDataBundle {
     boolean hasError() {
         synchronized (spansLock) {
             return failed();
+        }
+    }
+
+    /** Whether the store has to look in Slow to take the trace out of it. */
+    boolean listedSlow() {
+        synchronized (spansLock) {
+            return listedSlow;
+        }
+    }
+
+    void listedSlow(boolean listed) {
+        synchronized (spansLock) {
+            listedSlow = listed;
         }
     }
 

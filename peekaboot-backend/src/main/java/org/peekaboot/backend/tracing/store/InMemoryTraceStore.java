@@ -101,7 +101,7 @@ public class InMemoryTraceStore implements TraceStore {
         TraceDataBundle bundle = resolveBundle(stored.traceId());
         // logs never affect slow classification and can only ever add a trace to the
         // Errors bucket, never remove it, so a full classify() pass is unnecessary here.
-        bundle.addLog(stored, filed -> listIn(TraceBucket.ERRORS, filed));
+        bundle.addLog(stored, filed -> file(TraceBucket.ERRORS, filed));
     }
 
     @Override
@@ -151,11 +151,17 @@ public class InMemoryTraceStore implements TraceStore {
         }
     }
 
-    /** The traces are looked up before the bucket's monitor is taken, which nests in no other. */
+    /**
+     * The traces are looked up, and marked as listed where the bucket is Slow, before the bucket's
+     * monitor is taken, which nests in no other.
+     */
     @Override
     public void restoreBucket(TraceBucket bucket, List<String> traceIds) {
         List<TraceDataBundle> listing =
                 traceIds.stream().map(this::getTrace).flatMap(Optional::stream).toList();
+        if (bucket == TraceBucket.SLOW) {
+            listing.forEach(bundle -> bundle.listedSlow(true));
+        }
         Map<String, ListedTrace> listed = buckets.get(bucket);
         synchronized (listed) {
             listed.clear();
@@ -179,8 +185,12 @@ public class InMemoryTraceStore implements TraceStore {
     }
 
     /** Stamped inside the bucket's lock, so a bucket's insertion order and its stamps agree. */
-    private void listIn(TraceBucket bucket, TraceDataBundle bundle) {
+    void file(TraceBucket bucket, TraceDataBundle bundle) {
         buckets.get(bucket).computeIfAbsent(bundle.traceId(), id -> listedNow(bundle));
+    }
+
+    void unfile(TraceBucket bucket, String traceId) {
+        buckets.get(bucket).remove(traceId);
     }
 
     private ListedTrace listedNow(TraceDataBundle bundle) {
@@ -259,17 +269,20 @@ public class InMemoryTraceStore implements TraceStore {
      * window past the threshold on background work alone; the entry's arrival takes the child
      * into its subtree and the window returns to what the caller waited for. Without the removal
      * below the Slow bucket would keep listing that trace beside a duration disagreeing with
-     * the one it was admitted by. Runs under the bundle's span lock (see
+     * the one it was admitted by. Only a trace filed in Slow can leave it, so every other one, nearly
+     * all of them, costs Slow's monitor nothing per span. Runs under the bundle's span lock (see
      * {@link TraceDataBundle#addSpan(SpanData, java.util.function.Consumer)}).
      */
     private void classify(TraceDataBundle bundle) {
         if (bundle.hasError()) {
-            listIn(TraceBucket.ERRORS, bundle);
+            file(TraceBucket.ERRORS, bundle);
         }
         if (isSlow(bundle)) {
-            listIn(TraceBucket.SLOW, bundle);
-        } else {
-            buckets.get(TraceBucket.SLOW).remove(bundle.traceId());
+            file(TraceBucket.SLOW, bundle);
+            bundle.listedSlow(true);
+        } else if (bundle.listedSlow()) {
+            unfile(TraceBucket.SLOW, bundle.traceId());
+            bundle.listedSlow(false);
         }
     }
 
