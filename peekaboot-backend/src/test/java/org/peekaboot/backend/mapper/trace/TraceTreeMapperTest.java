@@ -849,6 +849,20 @@ class TraceTreeMapperTest {
         assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
+    /** A replayed trace holds the window its remnant carried before any span, and the listing reads that window too. */
+    @Test
+    void anEmptyTraceKeepsTheWindowTheStoreHolds() {
+        var traceData = new TraceData(
+                "trace1", null, Instant.EPOCH, Duration.ofMillis(40), null, true, false, false, List.of(), Set.of(), 0);
+
+        TraceTree result = map(mapper, traceData);
+
+        assertThat(result.startTime()).isEqualTo(Instant.EPOCH);
+        assertThat(result.durationMs()).isEqualTo(40);
+        assertThat(result.rootSpan()).isNull();
+        assertThat(result.orphans()).isEmpty();
+    }
+
     /**
      * TraceData is a public record and map() is public API, so a caller can hand over a root
      * that is not one of the spans; TraceDataBundle.snapshot() is only one of its sources.

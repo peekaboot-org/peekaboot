@@ -50,24 +50,6 @@ public class TraceTreeMapper {
     }
 
     TraceTree map(TraceData traceData, SpanContent content) {
-        if (traceData.spans().isEmpty()) {
-            return new TraceTree(
-                    traceData.traceId(),
-                    traceData.run(),
-                    null,
-                    0L,
-                    traceData.complete(),
-                    traceData.interrupted(),
-                    RootActionType.UNKNOWN,
-                    null,
-                    null,
-                    null,
-                    List.of(),
-                    0,
-                    new TraceSummary.QueryCounts(0, 0L),
-                    null);
-        }
-
         List<SpanData> spans = traceData.spans();
 
         Map<String, SpanData> spanById = spans.stream().collect(Collectors.toMap(SpanData::spanId, s -> s));
@@ -247,7 +229,8 @@ public class TraceTreeMapper {
     /**
      * The stored subtrees of a trace whose root is null, earliest start first: every span whose
      * parent is not stored heads one. A trace that is nothing but a cycle has no such span, so its
-     * earliest-created span heads it, its parent edge cut to end the walk.
+     * earliest-created span heads it, its parent edge cut to end the walk. A trace without spans has
+     * none.
      */
     private List<SpanNode> mapOrphans(
             List<SpanData> spans,
@@ -255,6 +238,9 @@ public class TraceTreeMapper {
             Map<String, List<SpanData>> childrenByParentId,
             SpanContent content,
             Set<String> asyncSpanIds) {
+        if (spans.isEmpty()) {
+            return List.of();
+        }
         List<SpanData> heads = spans.stream()
                 .filter(span -> span.parentId() == null || !spanById.containsKey(span.parentId()))
                 .collect(Collectors.toCollection(ArrayList::new));
@@ -275,10 +261,6 @@ public class TraceTreeMapper {
             SpanContent content,
             Set<String> asyncSpanIds,
             boolean parentIsAsync) {
-        if (spanData == null) {
-            return null;
-        }
-
         boolean isAsync = asyncSpanIds.contains(spanData.spanId());
         List<SpanData> childSpans = childrenByParentId.getOrDefault(spanData.spanId(), List.of());
         List<SpanNode> children = childSpans.stream()
