@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.digest.ErrorDigest;
@@ -30,6 +31,7 @@ import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
+import org.peekaboot.testsupport.LogCapture;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -67,6 +69,10 @@ class PeekabootTracingAutoConfigurationTest {
 
     @TempDir
     Path storageDir;
+
+    /** Where the JVM that plays the first instance writes its output. */
+    @TempDir
+    Path scratch;
 
     @Test
     void createsCoreBeans() {
@@ -197,6 +203,55 @@ class PeekabootTracingAutoConfigurationTest {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(TraceJournal.class);
         });
+    }
+
+    /**
+     * Another process writes the storage directory, so this context starts no journal. It writes no trace
+     * file and no errors.jsonl, and what it captures still reaches its store and its error digest.
+     */
+    @Test
+    void aSecondInstanceOnAStorageDirectoryWritesNoTraceFiles() throws Exception {
+        try (WritingInstance first = WritingInstance.on(storageDir, scratch);
+                LogCapture warning = LogCapture.attach(StorageDirectory.class)) {
+            storageRunner
+                    .withPropertyValues("peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir)
+                    .run(context -> {
+                        assertThat(context.getBeanProvider(TraceJournal.class).getIfAvailable())
+                                .isNull();
+
+                        context.getBean(CaptureEventPublisher.class)
+                                .publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+
+                        assertThat(context.getBean(TraceStore.class).getTrace(TraceFixtures.TRACE_ID))
+                                .isPresent();
+                        assertThat(context.getBean(ErrorDigest.class).entries()).hasSize(1);
+                    });
+
+            // read after the close, which is when a journal folds and writes the digest
+            assertThat(storageDir).isDirectoryNotContaining(file -> !file.endsWith(".lock"));
+            assertThat(warning.appender().list)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage())
+                            .startsWith("Peekaboot: another running instance writes to " + storageDir + ";"));
+        }
+    }
+
+    /** A host's tracer provider is made to depend on the journal bean, which a second instance leaves null. */
+    @Test
+    void aHostTracerProviderStartsOnASecondInstance() throws Exception {
+        try (WritingInstance first = WritingInstance.on(storageDir, scratch);
+                LogCapture warning = LogCapture.attach(StorageDirectory.class)) {
+            storageRunner
+                    .withPropertyValues("peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir)
+                    .withUserConfiguration(HostTracerProviderConfig.class)
+                    .run(context -> {
+                        assertThat(context).hasNotFailed().hasSingleBean(SdkTracerProvider.class);
+                        assertThat(context.getBeanProvider(TraceJournal.class).getIfAvailable())
+                                .isNull();
+                    });
+
+            assertThat(warning.appender().list).hasSize(1);
+        }
     }
 
     /**

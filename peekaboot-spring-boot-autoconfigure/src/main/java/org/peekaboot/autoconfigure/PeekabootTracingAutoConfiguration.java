@@ -1,5 +1,6 @@
 package org.peekaboot.autoconfigure;
 
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.mapper.trace.TraceResources;
@@ -92,16 +93,20 @@ public class PeekabootTracingAutoConfiguration {
     @ConditionalOnBean(StorageDirectory.class)
     static class TraceJournalConfiguration {
 
+        /** Null where another running instance writes the directory: no journal runs, and no trace or digest file is written. */
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
         @ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.STORAGE_TRACES_ENABLED, matchIfMissing = true)
-        public TraceJournal peekabootTraceJournal(
+        public @Nullable TraceJournal peekabootTraceJournal(
                 RestorableTraceStore traceStore,
                 ErrorDigestRecorder errorDigestRecorder,
                 ErrorDigest errorDigest,
                 StorageDirectory storageDirectory,
                 PeekabootProperties properties,
                 PeekabootTracingProperties tracingProperties) {
+            if (storageDirectory.file(ErrorDigestFile.FILE_NAME).isEmpty()) {
+                return null;
+            }
             return TraceJournal.start(
                     traceStore,
                     errorDigestRecorder.liveInputs(),

@@ -18,8 +18,8 @@ import org.peekaboot.backend.storage.OwnerOnlyFiles;
  * The trace journal's two files in the storage directory. No journal is appended to across runs:
  * every fold starts a fresh one under a new id, its header written first. The snapshot is replaced
  * whole and names the journal it absorbed, so a crash between writing it and starting the next
- * journal never replays that journal twice. Both assume one application per directory, like the
- * other persisted files.
+ * journal never replays that journal twice. One process writes both, like the other persisted
+ * files: a second instance on the directory starts no journal.
  */
 final class JournalFiles {
 

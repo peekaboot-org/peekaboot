@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class ErrorDigestFile {
 
-    static final String FILE_NAME = "errors.jsonl";
+    public static final String FILE_NAME = "errors.jsonl";
 
     /** Raised with every change to a line's shape; a file of another version is discarded whole. */
     static final int VERSION = 1;
