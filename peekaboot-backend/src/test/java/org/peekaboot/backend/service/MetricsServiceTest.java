@@ -13,6 +13,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.metrics.MetricGroup;
 import org.peekaboot.backend.domain.metrics.MetricMeasurement;
 import org.peekaboot.backend.domain.metrics.MetricStatistic;
@@ -33,7 +35,7 @@ class MetricsServiceTest {
     void reportsNoMetricsWithoutAMeterRegistry() {
         MetricsService service = new MetricsService(null, new MaskingEngine());
 
-        MetricsInfo result = service.getMetrics();
+        MetricsInfo result = service.getMetrics(null);
 
         assertThat(service.isAvailable()).isFalse();
         assertThat(result.metrics()).isEmpty();
@@ -61,7 +63,7 @@ class MetricsServiceTest {
 
         MetricsService service = new MetricsService(registry, new MaskingEngine());
 
-        MetricsInfo result = service.getMetrics();
+        MetricsInfo result = service.getMetrics(null);
 
         assertThat(result.metrics()).hasSize(1);
 
@@ -126,7 +128,7 @@ class MetricsServiceTest {
 
         MetricsService service = new MetricsService(registry, new MaskingEngine());
 
-        MetricsInfo result = service.getMetrics();
+        MetricsInfo result = service.getMetrics(null);
 
         assertThat(result.metrics()).hasSize(1);
         MetricGroup group = result.metrics().get(0);
@@ -151,7 +153,7 @@ class MetricsServiceTest {
 
         MetricsService service = new MetricsService(registry, new MaskingEngine());
 
-        MetricsInfo result = service.getMetrics();
+        MetricsInfo result = service.getMetrics(null);
 
         assertThat(result.metrics()).extracting(MetricGroup::name).containsExactly("a.metric", "m.metric", "z.metric");
     }
@@ -166,12 +168,63 @@ class MetricsServiceTest {
 
         MetricsService service = new MetricsService(registry, new MaskingEngine());
 
-        MetricsInfo result = service.getMetrics();
+        MetricsInfo result = service.getMetrics(null);
 
         assertThat(result.metrics()).hasSize(1);
         assertThat(result.metrics().get(0).measurements().get(0).tags())
                 .containsEntry("env", "prod")
                 .containsEntry("region", "us-east");
+    }
+
+    @Test
+    void listsOnlyTheMetersWhoseNameStartsWithThePrefix() {
+        MetricsService service = new MetricsService(threeMeters(), new MaskingEngine());
+
+        MetricsInfo result = service.getMetrics("jvm.");
+
+        assertThat(result.metrics())
+                .extracting(MetricGroup::name)
+                .containsExactly("jvm.memory.used", "jvm.threads.live");
+    }
+
+    @Test
+    void aPrefixThatMatchesNothingListsNothing() {
+        MetricsService service = new MetricsService(threeMeters(), new MaskingEngine());
+
+        MetricsInfo result = service.getMetrics("tomcat.");
+
+        assertThat(result.metrics()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"JVM.", " jvm.", "jvm. "})
+    void matchesThePrefixAsWritten(String prefix) {
+        MetricsService service = new MetricsService(threeMeters(), new MaskingEngine());
+
+        MetricsInfo result = service.getMetrics(prefix);
+
+        assertThat(result.metrics()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "  "})
+    void aBlankPrefixListsEveryMeter(String prefix) {
+        MetricsService service = new MetricsService(threeMeters(), new MaskingEngine());
+
+        MetricsInfo result = service.getMetrics(prefix);
+
+        assertThat(result.metrics())
+                .extracting(MetricGroup::name)
+                .containsExactly("http.server.requests", "jvm.memory.used", "jvm.threads.live");
+    }
+
+    @Test
+    void aPrefixWithoutARegistryListsNothing() {
+        MetricsService service = new MetricsService(null, new MaskingEngine());
+
+        MetricsInfo result = service.getMetrics("jvm.");
+
+        assertThat(result.metrics()).isEmpty();
     }
 
     /**
@@ -189,7 +242,7 @@ class MetricsServiceTest {
 
         MetricsService service = new MetricsService(registry, new MaskingEngine());
 
-        MetricsInfo result = service.getMetrics();
+        MetricsInfo result = service.getMetrics(null);
 
         assertThat(result.metrics().get(0).measurements().get(0).tags())
                 .containsEntry("api-key", "******")
@@ -214,10 +267,18 @@ class MetricsServiceTest {
         assertThat(measurement.statistics().get(2).value()).isCloseTo(0.12, within(1e-9));
     }
 
+    private static MeterRegistry threeMeters() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("jvm.memory.used", () -> 1024).register(registry);
+        Gauge.builder("jvm.threads.live", () -> 8).register(registry);
+        Timer.builder("http.server.requests").register(registry);
+        return registry;
+    }
+
     /** The one measurement of the one meter a test registered. */
     private static MetricMeasurement firstMeasurement(MeterRegistry registry) {
         return new MetricsService(registry, new MaskingEngine())
-                .getMetrics()
+                .getMetrics(null)
                 .metrics()
                 .get(0)
                 .measurements()

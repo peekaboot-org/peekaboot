@@ -218,9 +218,9 @@ class PeekabootControllerTest {
         @Test
         void shouldReturnMetricsFromService() {
             MetricsInfo expected = MetricsInfo.empty();
-            when(metricsService.getMetrics()).thenReturn(expected);
+            when(metricsService.getMetrics("jvm.")).thenReturn(expected);
 
-            MetricsInfo result = controller.getMetrics();
+            MetricsInfo result = controller.getMetrics("jvm.");
 
             assertThat(result).isSameAs(expected);
         }

@@ -414,7 +414,15 @@
     "/peekaboot/api/metrics": {
       "get": {
         "operationId": "getMetrics",
-        "summary": "Lists every Micrometer meter, grouped by name.",
+        "summary": "Lists Micrometer meters, grouped by name.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "description": "The start of the meter's name, as written.",
+            "schema": {"type": "string"}
+          }
+        ],
         "responses": {
           "200": {
             "description": "The meters, masked.",

@@ -18,6 +18,7 @@ import org.peekaboot.backend.domain.metrics.MetricStatistic;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
+import org.peekaboot.backend.problem.RequestParameters;
 
 public class MetricsService {
 
@@ -35,13 +36,15 @@ public class MetricsService {
         return meterRegistry != null;
     }
 
-    public MetricsInfo getMetrics() {
+    /** The meters whose name starts with {@code namePrefix}, as written; every meter where it is null or blank. */
+    public MetricsInfo getMetrics(@Nullable String namePrefix) {
         if (meterRegistry == null) {
             return MetricsInfo.empty();
         }
 
-        List<Meter> allMeters = meterRegistry.getMeters();
-        Map<String, List<Meter>> metersByName = allMeters.stream()
+        String prefix = RequestParameters.text(namePrefix);
+        Map<String, List<Meter>> metersByName = meterRegistry.getMeters().stream()
+                .filter(meter -> prefix == null || meter.getId().getName().startsWith(prefix))
                 .collect(Collectors.groupingBy(meter -> meter.getId().getName(), TreeMap::new, Collectors.toList()));
 
         List<MetricGroup> groups = new ArrayList<>();

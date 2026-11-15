@@ -96,7 +96,7 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/metrics", produces = MediaType.APPLICATION_JSON_VALUE)
-    public MetricsInfo getMetrics() {
-        return metricsService.getMetrics();
+    public MetricsInfo getMetrics(@RequestParam(name = "name", required = false) String name) {
+        return metricsService.getMetrics(name);
     }
 }
