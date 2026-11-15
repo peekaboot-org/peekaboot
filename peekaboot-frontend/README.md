@@ -13,8 +13,8 @@ design system:
   render its whitelabel page: the failing request, the exception and its stack trace. Its one
   script, `reveal.js`, opens every folded run at once; the page works without it.
 
-No build step. Plain ES modules and CSS, served as-is. They are linted, though: see
-[Linting](#linting).
+No build step. Plain ES modules and CSS, served as-is. They are linted, though, and the
+modules that need no DOM are tested on Node: see [Linting](#linting).
 
 ```
 META-INF/peekaboot/ui/
@@ -22,13 +22,13 @@ META-INF/peekaboot/ui/
 │                    theme-boot.js: the dashboard's pre-paint theme stamp
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png: the icon set
 ├── shared/          the modules used by two or more surfaces; see the inventory below
+│                    log-entry.js: one captured log, for the Logs tab and a span's details
 ├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (one per tab, plus the
 │                    Insights tab's own insights-stream.js, insights-panels.js,
 │                    insights-store.js, insights-chart.js, insights-time-axis.js,
 │                    insights-markers.js and insights-colors.js)
 │                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
-│                    log-entry.js: one captured log, for the Logs tab and a span's details
 │                    span-tree-link.js: the Queries and Logs tabs' link back to a span
 ├── toolbar/         toolbar.css, toolbar.js
 ├── error-page/      error-page.css: the page Peekaboot renders in place of Boot's
@@ -49,13 +49,23 @@ overlap.
 ## Linting
 
 `mvn verify` and `gradlew check` run ESLint, stylelint and html-validate over this tree on
-a Node the build downloads and pins. To run one by hand:
+a Node the build downloads and pins, and `node --test` over `src/test/js` on the same Node.
+To run one by hand:
 
 ```bash
-npm ci && npm run lint:js     # or lint:css, lint:html
+npm ci && npm run lint:js     # or lint:css, lint:html, test:js
 ```
 
-Four things about the setup are deliberate and easy to undo by accident.
+`src/test/js` holds the tests of the modules that need no DOM (`format.js`, `markup.js`,
+`url-filter.js`), each in a `<module>.test.mjs` that imports the served file. ESLint reads
+those files too. A module that builds or reads elements is tested in a browser, by the
+Playwright classes under `peekaboot-testing-app`.
+
+A Node test passes a locale (`'en-US'` or `'de-DE'`) to every formatter that takes one.
+Node's default follows the machine, so a call without one passes on one host and fails on
+the next.
+
+Five things about the setup are deliberate and easy to undo by accident.
 
 The tool configs sit here, beside `package.json`, not in the repo-root `config/` directory
 where `checkstyle.xml` and the rest live. All three tools resolve their plugin packages
@@ -66,6 +76,11 @@ relative to their own config file, so a config in `config/` would look for them 
 plain `<script>` tag loads: `assets/theme-boot.js`, `dashboard/boot-recovery.js` and
 `error-page/reveal.js`. Add a file that a `<script>` tag loads and it belongs in that
 list; leave it out and an `import` in it lints clean and throws in the browser.
+
+The same file refuses an assignment to `innerHTML` or `outerHTML` and a call to
+`insertAdjacentHTML`. Backend data reaches the page as text nodes only, through `el()` in
+`shared/dom.js`, and one parsed string would undo that. A container is emptied with
+`replaceChildren()`. No disable comment lifts the rule anywhere in the tree.
 
 `js-defined-css-tokens.json` registers `--pk-gantt-depth`, the one custom property that
 JavaScript sets (`trace-detail/tabs/spans.js`) and CSS reads. stylelint cannot see a
@@ -132,7 +147,8 @@ drift away from the dashboard.
 | Token | What it paints |
 |---|---|
 | `--pk-mark-bg` / `--pk-on-mark` | The search highlight's fill and its ink (`base.css`'s `mark`). It needs both. With one missing the highlight is unreadable, not merely off-theme. |
-| `--pk-danger-tint` | The error banner's and the failed-task block's wash: each theme's own `--pk-danger` at 4% alpha. |
+| `--pk-danger-tint` | The error banner's, the tab failure note's and the failed-task block's wash: each theme's own `--pk-danger` at 4% alpha. |
+| `--pk-select-wash` | The drag selection on an Insights chart (`dashboard.css`'s `.pk-insight-chart .u-select`): a dark wash in the light theme, a light one in the dark theme. The one token here whose rule carries no literal fallback. Without the token the selection keeps its two edges. |
 
 Every rule reading one of them repeats the light-theme literal as its `var()` fallback:
 `base.css`'s `mark`, `dashboard.css`'s `.pk-error-banner` and `.pk-task__exception`. A token
@@ -243,38 +259,42 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 
 | Module | Exports |
 |---|---|
-| `api.js` | `createClient({basePath})`, a fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. `BASE_PATH`, the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
-| `components.js` | `badge(text, variant, {title})`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip`, `table`, `cell`, `textCell`, `emptyState`, `loadingBlock`, `iconLink`, `countSummary`, `cardTable`. The JS builders behind the `.pk-*` primitives, every one a detached element. `tabStrip`'s `panel` option wires a runtime-built strip to its tabpanel (`aria-controls`, `aria-labelledby`). `textCell(text, className)` titles the cell with its full text, for a column that truncates. `iconLink(href, {label, icon})` is the icon-only link with a real accessible name (see the a11y rules below). `countSummary([[label, n], ...], locale)` is the row of muted count badges above the Loggers and Scheduled Tasks groups. `cardTable(target, columns, rows)` fills a tab's target with the `.pk-table--card` table the Flyway, Liquibase and Lifecycle tabs show. |
-| `copyable.js` | `copyableId`, `copyableText`, `bindCopyables`. The click-to-copy trace/span id control, and `copyableText(textSource, {label})`, a copy button whose text comes from a callback at click time (the SQL view's copy), both detached elements under one delegated click listener per root (document or shadow root). |
-| `dom.js` | `el(tag, {className, text, title, attrs}, ...children)`, `button(props, ...children)`, `pressedToggle(props, onChange)`. The element builder every surface renders with: text and children become nodes, never parsed markup, so a builder call can carry backend data without escaping it. The only `innerHTML` sites left are cleared containers and the few templates that pass every value through `markup.js`. `pressedToggle` is the one on/off button: `aria-pressed` starts false, flips on every click and is handed to `onChange` (the log reveal control, the SQL view's Formatted and Substitute toggles). |
-| `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, afterRender, fetchData, loadingMessage, fetchErrorMessage})`. The shell of a dashboard tab that shows a list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `loggers.js`, `meters.js` and `scheduled-tasks.js` (no `inputId`, so no filter) are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`); it runs on `self-fetching-tab.js`'s contract, with loading and error states handled by the shell. `propertyGroupTab({inputId, listId, unmaskSlotId, select, extraTop, emptyMessage})` is its property-list case: the backend's `{name, properties}` groups of `{key, value}` rows matched on either, plus the "Show secrets" control; `config.js` and `environment.js` are the two callers. |
+| `api.js` | `createClient({basePath})`, a fetch wrapper; a per-path generation counter makes an overtaken request resolve to `null`, whether it answered, failed or sent a body that does not parse, instead of racing a newer one or reporting an error over it. `BASE_PATH`, the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
+| `components.js` | `badge(text, variant, {title})`, `kvRow`, `group`, `meter`, `groupList`, `tabStrip`, `table`, `cell`, `textCell`, `emptyState`, `loadingBlock`, `iconLink`, `countSummary`, `cardTable`. The JS builders behind the `.pk-*` primitives, every one a detached element. `group` takes `meta`, an array of elements placed ahead of the count inside `.pk-group__meta` (`meters.js`'s type badge and unit). `groupList(container, groups, {key, header, items, revision})` updates by key (see `keyed.js`): a group that stays keeps its header button, its open state and its list element, so a refresh neither closes a group nor takes focus off its header. `revision` is a string for what the rendering depends on besides the data (query, locale, time zone). `tabStrip`'s `panel` option wires a runtime-built strip to its tabpanel (`aria-controls`, `aria-labelledby`), and the strip calls `onSelect(id, {keyboard})` with `keyboard` true for an Arrow, Home or End move. `textCell(text, className)` titles the cell with its full text, for a column that truncates. `iconLink(href, {label, icon})` is the icon-only link with a real accessible name (see the a11y rules below). `countSummary([[label, n], ...], locale)` is the row of muted count badges above the Loggers and Scheduled Tasks groups. `cardTable(target, columns, items, {key, row, revision})` shows the `.pk-table--card` table of the Flyway, Liquibase and Lifecycle tabs. It builds the table once and updates its rows by key. |
+| `copyable.js` | `copyableId`, `copyableText`, `bindCopyables`. The click-to-copy trace/span id control, and `copyableText(textSource, {label})`, a copy button whose text comes from a callback at click time (the SQL view's copy), both detached elements under one delegated click listener per root (document or shadow root). `bindCopyables(root)` also gives the root its one `role="status"` region, outside every button, which announces a copy's result. |
+| `dom.js` | `el(tag, {className, text, title, attrs}, ...children)`, `button(props, ...children)`, `pressedToggle(props, onChange)`, `highlighted(text, query)`, `svgIcon(shapes, {size, strokeWidth, className})`, `setDataAttribute(element, key, value)`. The element builder every surface renders with: text and children become nodes, never parsed markup, so a builder call can carry backend data without escaping it. No `innerHTML` site is left, and ESLint refuses a new one (see *Linting*). `pressedToggle` is the one on/off button: `aria-pressed` starts false, flips on every click and is handed to `onChange` (the log reveal control, the SQL view's Formatted and Substitute toggles). `highlighted` returns a text as child nodes, every match of the query in a `<mark>`. `svgIcon` draws a decorative line icon from `[[tag, attributes], ...]` in the surrounding text colour. `setDataAttribute` writes `element.dataset[key]` only when the value differs, for a caller that runs on every chart draw. |
+| `filtered-group-tab.js` | `filteredGroupTab(container, {inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, filterState, afterRender, fetchData, loadingMessage, fetchErrorMessage})`. The shell of a dashboard tab that shows a list of collapsible groups (the instance's state, the filter input wired once, URL reconciliation, the groups updated by key, empty states); `loggers.js`, `meters.js` and `scheduled-tasks.js` (no `inputId`, so no filter) are built on it and supply only what differs. The call is one tab instance over `container`, the tab's panel, and returns `{show, update, hide, refresh()}`, so a tab's `create` can return it as it is. `refresh()` writes the filter to the URL and renders again, for a control the tab wires itself (`loggers.js`'s checkbox). `filterState(input)` returns the filter's URL state (see `url-filter.js`) for a tab that keeps more in the URL than one `q`; the default is `textFilterState`. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`); it runs on `self-fetching-tab.js`'s contract, with loading and error states handled by the shell. `propertyGroupTab(container, {inputId, listId, unmaskSlotId, select, extraTop, emptyMessage})` is its property-list case and returns `{show, update, hide}`: the backend's `{name, properties}` groups of `{key, value}` rows matched on either, plus the "Show secrets" control; `config.js` and `environment.js` are the two callers. |
 | `fonts.js` | `registerBundledFonts(basePath)`. Adds the bundled Geist faces to the document a shadow-rooted surface renders into, which an `@font-face` rule cannot reach. Idempotent, and a no-op on the dashboard, which declares them in `tokens.css`. See *The bundled webfont* above. |
-| `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatDateTimeWith(value, options, display)` (the two above are it with a fixed option set; a caller with its own set passes the whole set, never a delta), `instantMs` (a backend `Instant`'s ISO-8601 string as epoch millis, cut at the millisecond in every engine, which every date string the formatters take goes through), `formatNumber(n, {locale})`, `formatCount(n, singular, {plural, locale})`, `formatPlainValue`, `formatMetricValue(value, unit, {locale})`, `formatTileValue`, `shortTarget` (a dotted Java name cut to its last two segments, `Class.method`, wherever a target is shown), `byKey` (the code-point entry order the overlay sorts headers, parameters and span tags by), and `METRIC_UNITS`/`TILE_FORMATS`, the wire words of the backend's `Unit` and `TileFormat` enums (pinned by `SharedModuleIT`, as is `insights-chart.js`'s `CHART_TYPES`). Every count is grouped in the `locale` a caller passes (the dashboard's setting), or in the browser's own when it is undefined. |
+| `format.js` | `formatDurationMs(ms, {locale})`, `formatTimelineTicks(totalMs, {locale})`, `formatLongDuration`, `formatInterval`, `formatBytes(bytes, {locale})`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatDateTimeWith(value, options, display)` (the two above are it with a fixed option set; a caller with its own set passes the whole set, never a delta), `instantMs` (a backend `Instant`'s ISO-8601 string as epoch millis, cut at the millisecond in every engine, which every date string the formatters take goes through), `formatNumber(n, {locale})`, `formatCount(n, singular, {plural, locale})`, `formatPlainValue`, `formatMetricValue(value, unit, {locale})`, `formatMeasurementValue(value, baseUnit, {locale})` (one statistic of a meter: bytes as a size, seconds as `µs`, `ms` or `s` with the sign kept, anything else as a number), `formatTileValue`, `shortTarget` (a dotted Java name cut to its last two segments, `Class.method`, wherever a target is shown), `byKey` (the code-point entry order the overlay sorts headers, parameters and span tags by), and `METRIC_UNITS`/`TILE_FORMATS`, the wire words of the backend's `Unit` and `TileFormat` enums (pinned by `SharedModuleIT`, as is `insights-chart.js`'s `CHART_TYPES`). Every count is grouped in the `locale` a caller passes (the dashboard's setting), or in the browser's own when it is undefined. A duration and a size each sit on one unit ladder (`ms`, `s`, `m`, `h`, `d` and `B` to `TB`) and take the smallest unit in which the rounded figure stays below one of the next, so 999.6 ms is `1.00s`, never `1000ms`. The figure takes the decimal mark of `locale` and is not grouped. |
 | `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
-| `markup.js` | `escapeHtml`, `highlightText`. |
+| `keyed.js` | `keyedChildren(parent, items, {key, build, signature, update})`, `renderIfChanged(element, signature, fill)`. What lets a refresh leave alone what did not change. `keyedChildren` brings a parent's children in line with a list, one child per item: an unchanged child is not touched, a changed one goes to `update` or is replaced by a new build, and a kept child moves only when the items' own order changed. Items that share a key are told apart by their order. `renderIfChanged` fills an element only when its signature changed. Both move focus to the node at the same position when the focused node had to be replaced. Key and signature are kept in a `WeakMap`, never in an attribute. `groupList`, `cardTable`, the Overview tab's datasource cards and the trace list are built on it. |
+| `log-entry.js` | `logEntry(log, dateOptions, spanCell)`, `stackTraceParts(folded)`. One captured log and a folded stack trace with its reveal control, as the overlay's Logs tab and a span's panels in the Spans tab both show them. |
+| `markup.js` | `highlightParts(text, query)`. A text split at every match of a literal, case-folded query, as `[{text, match}]`. It needs no DOM; `dom.js`'s `highlighted` turns the parts into nodes. |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)`, the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend does not decide what is sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel`. The icon and label map for a trace's root action type (HTTP request, scheduled job, and so on). |
-| `self-fetching-tab.js` | `selfFetchingTab({fetch, reconcile, loading, renderResult, renderError})`. The shell of a dashboard tab whose data comes from its own endpoint instead of the shared payload: the one place for the active-tab guard (a background render skips the round trip), supersession (a `null` from `api.js` renders nothing) and the error path. `traces.js`, `lifecycle.js`, the Overview tab's tile row and `filteredGroupTab`'s `fetchData` path are built on it. Exposes `render`, `refetch()` for a control the tab wires itself, and the latest render's `container()`/`context()`. |
+| `self-fetching-tab.js` | `selfFetchingTab({fetch, loading, renderResult, renderError})`. The shell of a dashboard tab whose data comes from its own endpoint instead of the shared payload. `load(container, context)` remembers both, fetches and returns a promise that resolves once the answer is rendered; a tab calls it from `show` and `update`. `stop()` is what the tab's `hide` calls: an answer or a failure still in flight then renders nothing, and `refetch()` does nothing until the next `load`. A `null` from `api.js` renders nothing. A rejection, or a result `renderResult` throws on, goes to `renderError`. `traces.js`, `lifecycle.js`, the Overview tab's tile row and `filteredGroupTab`'s `fetchData` path are built on it. Also exposes `refetch()` for a control the tab wires itself, and the latest load's `container()`/`context()`. |
 | `severity.js` | `durationSeverity(ms, features)`, `querySeverity(ms, features)`, `issueSeverity(issues)`, `severityClass(severity)`, `ISSUE_SEVERITIES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)`, `taskStatusVariant(status)`, `migrationStateVariant(state)`, `MIGRATION_STATES`, `changeSetExecTypeVariant(execType)`, `CHANGE_SET_EXEC_TYPES`. `issueSeverity` reads only the issues measured in `ms`. The one place a duration, a span's issues, a log level, a health status, a scheduled task's outcome, a migration's state or a Liquibase change set's exec type is turned into a colour; `severityClass` names the `components.css` class (`.pk-duration--slow`, `--very-slow`) every surface colours a duration with. See *Thresholds and the SLOW badge* below. |
 | `sql.js` | `tokenize(sql)`, `renderSql(tokens)`, `substitute(tokens, literals)`, `placeholderCount(tokens)`, `textOf(tokens)`. The trace overlay's SQL tokenizer: keywords, strings, quoted identifiers, numbers, comments, `?` placeholders, operators and punctuation, lossless so the tokens always join back to the captured text. Display only; a dialect construct it misreads costs a colour, never a value. `renderSql` wraps highlighted tokens in `.pk-sql__<type>` spans and leaves identifiers and whitespace as text. |
 | `sql-view.js` | `sqlView(statement)`. A captured `SqlStatement` as the trace overlay shows it, used by the Spans tab's query panel and the Queries tab alike: the highlighted SQL in a `.pk-code-block`, a Formatted toggle when `statement.formatted` is set, a Substitute parameters toggle when there is exactly one parameter set and it fits the placeholders of the SQL shown, a `copyableText` control for exactly that SQL, and one numbered list per parameter set, followed by a `.pk-sql__params-omitted` note where the backend capped the batch. Toggles start off and are not remembered. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)`. Links the shared sheets (plus the surface's own) into a shadow root; see below. `SHARED_SHEETS`, that list, which `InlinedStylesheets.SHARED_SHEETS` mirrors for the toolbar and the error page (`SharedModuleIT` pins the two). |
 | `storage.js` | `readSetting`, `writeSetting`. Guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. `readLocaleSetting()`, the stored `LOCALE_STORAGE_KEY` tag kept only if `Intl.NumberFormat.supportedLocalesOf` accepts it, else `undefined`, which `Intl` reads as the browser's own locale. The one place the dashboard's locale setting is validated; the toolbar and the overlay it opens read it too. |
 | `theme.js` | `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`, `bindTheme(target, onChange)` (resolve, apply and watch in one call, the way every surface starts; returns the unsubscribe). |
-| `trace-stats.js` | `traceStatParts(summary, {features, locale})`. A trace's stat line, read off the summary's `counts` (span count, query count with total query time, log count, then error and warning badges) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording, order or colouring. `durationStat(lead, ms, severity)`, the `.pk-stat` element behind it, is also the toolbar's own trace-duration stat. `truncatedBadge()`, the one wording for a trace that hit the max-spans cap, shown by the Traces tab and the overlay header. `slowBadge()`, the SLOW pill beside it, which the Queries tab shows for a slow query too. `isSlowTrace(summary)`, whether the summary's `reasons` carry a `SLOW` reason, which the Traces tab, the overlay header and the toolbar all read. |
-| `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash`. The `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview and params replace it. |
-| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})`, the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation. `reconcileTextFilter`/`writeTextFilter(input, context)`, the single-text-input case built on it (`filteredGroupTab`'s default, so `config.js`, `environment.js` and `meters.js`; `loggers.js` composes the lower-level helper directly for its q+checkbox pair, `traces.js` for bucket/type/op, `insights.js` for its level/percentiles/restarts/panels params and `lifecycle.js` for its page). |
+| `trace-stats.js` | `traceStatParts(summary, {features, locale})`. A trace's stat line, read off the summary's `counts` (span count, query count with total query time, log count, then error and warning badges) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording, order or colouring. `durationStat(lead, ms, severity, {locale})`, the `.pk-stat` element behind it, is also the toolbar's own trace-duration stat. `truncatedBadge()`, the one wording for a trace that hit the max-spans cap, shown by the Traces tab and the overlay header. `slowBadge()`, the SLOW pill beside it, which the Queries tab shows for a slow query too. `isSlowTrace(summary)`, whether the summary's `reasons` carry a `SLOW` reason, which the Traces tab, the overlay header and the toolbar all read. |
+| `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash`. The `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview and params replace it, and so does a keyboard move along the tab strip. |
+| `url-filter.js` | `urlState({keys, read, apply, params})` returns `{reconcile(context), save(context)}` and is the one place that decides whether the URL or a tab's current state wins. `read(urlParams)` is the state the params name with every default filled in, `apply(state)` sets the tab's state and controls, `params()` is the current state as URL params with every default left out. `reconcile` lets the URL win when it names one of `keys` or the render is URL-authoritative, and then rewrites it from the state that took effect. On a bare URL of a programmatic render the state wins and is written back. `save` writes the state to the URL, for a control that just changed it. `textFilterState(input)` is the one-input, one-`q` case and `filteredGroupTab`'s default (`config.js`, `environment.js`, `meters.js`). `loggers.js` (q and the checkbox), `traces.js` (bucket, type, op, excluded), `insights.js` (level, percentiles, restarts, panels) and `lifecycle.js` (page) each describe their own. |
 
 ## URL state (deep links)
 
 Every dashboard view is addressable: `#<tab>[/<detail>[/<subview>]][?<params>]`
 (`shared/url-state.js`). Structural segments (tab, detail) push a history entry. Subview
 and params are written with `replaceState`, so a filter keystroke or an overlay tab switch
-never adds a Back stop. Closing the trace overlay pushes a bare `#traces`, so Back reopens
-the trace and a reload does not. Opening a URL restores the state below; changing that state
-rewrites the URL in place. `shared/url-filter.js` holds the "URL vs. current state"
-direction rule every tab applies: a tab-strip click's own bare hash push must not clear a
-filter, a hand-edited bare hash must.
+never adds a Back stop. A move along the tab strip with Arrow, Home or End replaces the
+entry too, so a walk past five tabs is not five Back stops. Closing the trace overlay
+pushes a bare `#traces`, so Back reopens the trace and a reload does not. Opening a URL
+restores the state below; changing that state rewrites the URL in place.
+`shared/url-filter.js` holds the "URL vs. current state" direction rule every tab applies:
+a tab-strip click's own bare hash push must not clear a filter, a hand-edited bare hash
+must.
 
 | View | URL params | Restored / written state |
 |---|---|---|
@@ -329,6 +349,16 @@ it opens (`openTraceDetail(traceId, {locale, timeZone, features})`). The dev too
 fetches `/api/features`; its data blob carries the three span and query thresholds as
 `features` under the same names (`ToolbarDataProvider`), with the mask literal, and the bar
 hands them to the overlay it opens. The frontend keeps no copy of either.
+
+The dashboard asks for the features as the first step of every refresh until they have
+answered. Until then it loads no payload and honours no hash, and a failed try raises the
+`Failed to load data` banner. The first answer replays the hash, so a deep link to a tab or
+a trace survives a failed first try.
+
+A module reads a feature key as `features.<key>` (or `features?.<key>`), off an object of
+that name. That is the shape `SharedModuleIT` scans the served sources for to hold every key
+against the `Features` record, so a key renamed on either side fails there. A key read
+through a destructuring or off an object of another name escapes the scan.
 
 Every comparison is at-or-above (`>=`), on both sides of the wire. `IssueDetector` raises
 SLOW/VERY_SLOW at `selfMs >= threshold` and SLOW_QUERY at `duration >= threshold`, and
@@ -611,11 +641,14 @@ breaks them silently. Grep `peekaboot-testing-app/src/test` before you do.
 | the literal `hidden` class | Used throughout (`.hidden { display: none !important; }` in `dashboard.css`) as the state class Playwright's visibility waits key off. |
 | `#machine-info` | `OverviewMachineIT` waits on and asserts the Machine card's rows here, and checks that `#jvm-defaults-info` carries no second processor-count row. |
 | `#machine-net-tabs`, `#machine-net-ipv4[-btn]`, `#machine-net-ipv6[-btn]` and `.pk-machine-net__addr` | The Machine card's IPv4/IPv6 tab strip and its per-family address rows; `OverviewMachineIT` drives selection, keyboard navigation and the refresh-survival of the open family through these ids. |
-| `#jvm-defaults-card` and `data-datasource` | `OverviewMachineIT` asserts the first datasource card (marked `data-datasource` by `overview.js`) directly follows the JVM Defaults card in the Overview grid. |
+| `#jvm-defaults-card`, `#datasource-cards` and `data-datasource` | `OverviewMachineIT` asserts the first datasource card (marked `data-datasource` by `overview.js`) is the first child of `#datasource-cards`, which directly follows the JVM Defaults card and takes no box of its own (`.pk-contents`), so the card is the Overview grid's next item. |
 | `#traces-bucket` and `data-bucket` | The All/Errors/Slow bucket filter buttons; tests select and click by `[data-bucket="..."]`. |
 | `#traces-unavailable` | The Traces tab's explanation when no span source exists; `TracesTabWithoutSpanSourceIT` waits on it. |
-| `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `renderTab()` looks it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
+| `#traces-more`, `#traces-shown`, `#traces-load-more` | The row under the trace list while older rows exist: the count of rows shown and the Load more button. `TracesTabIT` reads the text, clicks the button and checks that the row hides. |
+| `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `showTab()` and `runHook()` look it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
+| `.pk-tab-failure` | The note `main.js` leaves at the top of a tab's panel when one of its hooks failed. `TabLifecycleIT` waits for it inside `#environment-tab` and reads its text. |
 | `data-tab` | The tab-strip button attribute (`.pk-tab[data-tab="<id>"]`) that `tabStrip()` and `main.js` both key off for selection state. |
+| `#pk-logs-empty` | The overlay's Logs tab's "No logs match the filters" message, directly after `#pk-logs-list`. `LogsTabIT` checks it shows only while the filters leave no row. |
 | `#peekaboot-trace-overlay[data-trace-id]` | The overlay host, stamped with the trace it shows. `trace-detail.js` sets it only for the UI tests, which wait on it to tell one open from the next (`TraceOverlay.awaitTrace`). |
 | `.pk-error`, `.pk-stack-trace__frame`, `.pk-stack-trace__frame--app` | The error page's root, its trace lines and the ones in the application's own packages. `PeekabootErrorView` and `StackTraceHtml` write them and the UI tests assert the page is Peekaboot's and that the marked frames are the application's. |
 
@@ -649,16 +682,44 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
 
 ## How to add a dashboard tab
 
-1. Create `dashboard/tabs/<id>.js` exporting `id` and `render(container, data, context)`.
-   `context` comes from `main.js`'s `currentContext()`
-   and carries `{client, locale, timeZone, openTrace, features, active, unmaskRequested,
-   toggleUnmask, urlParams, urlIsAuthoritative, setUrlParams}`. The five that need
+1. Create `dashboard/tabs/<id>.js` exporting `id` and `create(container)`. `create` gets
+   the tab's `#<id>-tab` section the first time the tab is used and returns the tab
+   instance `{show(data, context), update(data, context), hide()}`. State lives in
+   `create`'s closure, never at module level. `flyway.js` is the shape:
+
+   ```js
+   export const id = 'flyway';
+
+   export function create(container) {
+       function render(data, {locale, timeZone}) {
+           // fills container.querySelector('#flyway-timeline')
+       }
+       return {show: render, update: render};
+   }
+   ```
+
+   `main.js` calls the hooks of the tab on screen and of no other:
+   - `show` when the tab comes on screen: on the first payload, on a tab-strip selection
+     and on a hash change, one that stays on the tab included. No hook runs before the
+     first payload has arrived.
+   - `update` for every later payload and for a timezone switch while the tab shows. A
+     hidden tab gets no call, so it renders nothing and fetches nothing.
+   - `hide`, which is optional, when the reader leaves the tab, before the next tab's
+     `show`.
+
+   A tab that keeps state in the URL reconciles it in `show` and in `update`
+   (`shared/url-filter.js`), since the next `update` is what writes a filter back into the
+   bare hash a closing overlay leaves.
+
+   A hook that throws, or whose promise rejects, leaves `This tab could not be shown:
+   <message>` in a `.pk-tab-failure` at the top of the tab's own panel, and the next hook
+   of that tab that succeeds removes it. The other tabs keep working. The page banner stays
+   for a payload that failed to load.
+
+   `context` comes from `main.js`'s `currentContext()` and carries `{client, locale,
+   timeZone, openTrace, features, unmaskRequested, toggleUnmask, urlParams,
+   urlIsAuthoritative, setUrlParams}`. `features` is always an object. The four that need
    explaining:
-   - `active`: whether the tab being rendered is the visible one. Every tab is rendered on
-     the 30s cycle whichever is showing, so a tab only reconciles its filter with
-     `urlParams` (which reflect the URL's tab, not this one) and only fetches its own data
-     while `active`. `main.js` renders it again the moment it is switched to. A tab with
-     its own endpoint builds on `shared/self-fetching-tab.js`, which applies that guard.
    - `unmaskRequested` / `toggleUnmask()`: whether the current payload was fetched with
      real values instead of `"******"`, and the shared flip that re-fetches (see
      `shared/unmask-control.js`). One state for every tab, never persisted.
@@ -683,18 +744,26 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
    builds on `shared/filtered-group-tab.js` rather than hand-rolling the shell:
    `scheduled-tasks.js` is the smallest example (no filter), `loggers.js` one with a
    second control, and `config.js`/`environment.js` sit on its `propertyGroupTab` case.
+
+   `filteredGroupTab(container, {...})` and `propertyGroupTab(container, {...})` take the
+   panel first and return a tab instance, so `create` returns the call (`config.js`). A tab
+   with its own endpoint keeps a `selfFetchingTab({...})` in `create`, calls its
+   `load(container, context)` from `show` and `update` and hands its `stop` out as `hide`
+   (`lifecycle.js`). `insights.js` has the other kind of `hide`, which pauses its event
+   stream until `show` resumes it.
 2. In `dashboard/main.js`, `import * as <name> from './tabs/<id>.js';` and add `<name>` to
-   the `TABS` array. `main.js` never renders domain data itself; it only decides which tab
-   module gets the fetched payload, so this is the only wiring the file needs.
+   the `TABS` array. `main.js` never renders domain data itself; it only shows, updates and
+   hides the tab on screen, so this is the only wiring the file needs.
 3. In `dashboard/index.html`, add the strip button and the content panel by hand. `TABS`
    drives *rendering*; this markup is static:
    - `<button type="button" class="pk-tab" role="tab" id="<id>-tab-btn" data-tab="<id>" aria-controls="<id>-tab" aria-selected="false">Display Name</button>`
      inside `#main-tabs` (add `hidden` to the class list if the tab is meant to start
      hidden pending `isAvailable`).
    - `<section class="pk-tab-panel" id="<id>-tab" role="tabpanel" aria-labelledby="<id>-tab-btn">...</section>`
-     inside `<main>`, with whatever container elements `render()` expects to find via
-     `container.querySelector(...)`.
+     inside `<main>`, with whatever container elements `create()` and the hooks expect to
+     find via `container.querySelector(...)`.
 
-   `renderTab()` looks up the button by `.pk-tab[data-tab="<id>"]` and the panel by
-   `#<id>-tab`. Without both in the HTML, the tab is registered but never rendered or
-   shown, whatever `TABS` says.
+   `tabStrip()` looks up the button by `.pk-tab[data-tab="<id>"]`, and `showTab()` and
+   `runHook()` the panel by `#<id>-tab`. Without the button the strip builds one that has
+   no label. Without the panel nothing shows and the tab's first hook fails with a
+   `TypeError` in the console.
