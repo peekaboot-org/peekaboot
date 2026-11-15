@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.QueryInfo;
+import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceDetail;
 import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
@@ -36,6 +38,8 @@ import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 
 class TraceResourcesTest {
+
+    private static final int SPAN_CAP = new PeekabootTracingProperties().getMaxSpansPerTrace();
 
     private final TraceResources resources = new TraceResources(
             new MaskingEngine(),
@@ -117,6 +121,34 @@ class TraceResourcesTest {
                 .tag("status", "404")
                 .order(10)
                 .build());
+    }
+
+    /**
+     * Trace {@code t1} as a chain of {@code length} spans below {@code parentId}, each the parent of the
+     * next and stored leaf first, as spans end. Each has its own name, since the store folds a child
+     * into a parent of equal name and tags.
+     */
+    private void addAChain(int length, String parentId) {
+        for (int i = length - 1; i >= 0; i--) {
+            String link = "link" + i;
+            store.addSpan(span(link)
+                    .in("t1")
+                    .named(link)
+                    .parent(i == 0 ? parentId : "link" + (i - 1))
+                    .at(0, 1)
+                    .build());
+        }
+    }
+
+    /** The generations from {@code top} down its first children, counted without recursion. */
+    private static int depthOf(SpanNode top) {
+        int depth = 1;
+        for (SpanNode span = top;
+                !span.children().isEmpty();
+                span = span.children().getFirst()) {
+            depth++;
+        }
+        return depth;
     }
 
     @Test
@@ -472,5 +504,50 @@ class TraceResourcesTest {
         assertThat(counts.droppedSpans()).isEqualTo(1);
         assertThat(counts.logs().count()).isEqualTo(1);
         assertThat(counts.droppedLogs()).isEqualTo(1);
+    }
+
+    /** A span nests two JSON levels, itself and its children, so the deepest tree the default cap stores nests a thousand. */
+    @Test
+    void aSpanChainAsDeepAsTheSpanCapMapsAndSerialises() {
+        addAChain(SPAN_CAP - 1, "root");
+        store.addSpan(span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
+        TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
+
+        TraceResource trace = resources.trace(bundle, store.bucketsOf("t1"));
+        TraceResource row = resources.row(bundle, null, store.bucketsOf("t1"), TraceView.SUMMARY);
+
+        assertThat(depthOf(trace.data().rootSpan())).isEqualTo(SPAN_CAP);
+        assertThat(row.summary().counts().spans()).isEqualTo(SPAN_CAP);
+        assertThatCode(() -> PeekabootJson.MAPPER.writeValueAsString(trace)).doesNotThrowAnyException();
+        assertThatCode(() -> PeekabootJson.MAPPER.writeValueAsString(row)).doesNotThrowAnyException();
+    }
+
+    /** While the root is missing the chain is served under {@code orphans}, just as deep. */
+    @Test
+    void aDeepChainWithoutARootSerialisesAsOrphans() {
+        addAChain(SPAN_CAP - 1, "root");
+
+        TraceResource trace = resources.trace(store.getTrace("t1").orElseThrow(), store.bucketsOf("t1"));
+
+        assertThat(trace.data().rootSpan()).isNull();
+        assertThat(trace.data().orphans())
+                .singleElement()
+                .satisfies(orphan -> assertThat(depthOf(orphan)).isEqualTo(SPAN_CAP - 1));
+        assertThatCode(() -> PeekabootJson.MAPPER.writeValueAsString(trace)).doesNotThrowAnyException();
+    }
+
+    /** An async row serves its task's subtree, which the cap bounds like the whole trace. */
+    @Test
+    void aDeepChainInsideAnAsyncRowSerialises() {
+        addAChain(SPAN_CAP - 2, "task");
+        store.addSpan(asyncTask("task").in("t1").parent("root").at(2, 50).build());
+        store.addSpan(span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
+
+        TraceResource row =
+                resources.row(store.getTrace("t1").orElseThrow(), "task", store.bucketsOf("t1"), TraceView.FULL);
+
+        assertThat(row.summary().subtree()).isNotNull();
+        assertThat(depthOf(row.data().rootSpan())).isEqualTo(SPAN_CAP - 1);
+        assertThatCode(() -> PeekabootJson.MAPPER.writeValueAsString(row)).doesNotThrowAnyException();
     }
 }
