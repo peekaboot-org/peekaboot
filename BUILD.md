@@ -282,13 +282,14 @@ Each config file explains its own exclusions; the short version:
   Added: `InvalidLogMessageFormat`, because a placeholder that does not match its arguments
   compiles and runs, and `UnnecessaryWarningSuppression`, which fails the build on a PMD
   suppression that no longer suppresses anything.
-- **SpotBugs** excludes `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` globally. Measured, not assumed:
-  every exposure the pair reports across the backend falls in a category the rule cannot
-  help with. Most are JSON carriers, which must hold the nulls real actuator data contains
-  and so cannot use `List.copyOf`/`Map.copyOf`. The rest are constructors storing injected
-  collaborators, `@ConfigurationProperties` accessors and framework contracts. No store or
-  service leaks a live collection. `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped to
-  `ContainerRuntime$Signals`, the only class that raises it.
+- **SpotBugs** excludes `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` globally. Measured on 2026-11-16:
+  without the exclusion the pair reports 227 exposures in 95 backend classes, and every one
+  falls in a category the rule cannot help with. 182 are on records, which hold what they
+  are handed. The JSON carriers among them must hold the nulls real actuator data contains
+  and so cannot use `List.copyOf`/`Map.copyOf`. 16 are constructors storing injected
+  collaborators, 26 are `@ConfigurationProperties` accessors and 3 are framework contracts.
+  No store or service leaks a live collection. `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped
+  to `ContainerRuntime$Signals`, the only class that raises it.
 - **The frontend gate** runs ESLint, stylelint and html-validate from
   `peekaboot-frontend/package.json`. It went in after a missing `import` passed every other
   gate and surfaced as 26 Playwright timeouts. PMD's `pmd-javascript` module was never an
