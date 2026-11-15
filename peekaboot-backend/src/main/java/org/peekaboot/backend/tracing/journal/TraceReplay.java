@@ -16,8 +16,9 @@ import org.slf4j.LoggerFactory;
  * run begins, which ends the last restored run.
  *
  * <p>The files are a cache: whatever is wrong with them costs only what they held, so a restore says
- * so once, at INFO. Files of another schema version, or with a damaged header, are deleted. A last line
- * cut short by a crash is expected and says nothing.
+ * so once, at INFO. Files of another schema version, or with a damaged header, are deleted. A line the
+ * store throws on is skipped and counted like one that cannot be read, and the replay goes on with the
+ * next. A last line cut short by a crash is expected and says nothing.
  */
 final class TraceReplay {
 
@@ -27,13 +28,23 @@ final class TraceReplay {
 
     static void restore(JournalFiles files, TraceStore store) {
         try {
-            JournalFiles.Contents contents = replay(files, store, (text, line) -> {});
+            Replayed replayed = replay(files, store, null);
+            JournalFiles.Contents contents = replayed.contents();
+            RuntimeException firstRefusal = replayed.firstRefusal();
             if (contents.foreign()) {
                 log.info(
                         "Peekaboot traces: the files in {} come from another Peekaboot version or start with a"
                                 + " damaged header; starting without them",
                         files.directory());
                 deleteBoth(files);
+            } else if (firstRefusal != null) {
+                log.info(
+                        "Peekaboot traces: skipped {} unreadable lines and {} the store refused ({}) in {}; restored"
+                                + " the rest",
+                        contents.unreadableLines(),
+                        replayed.refusedLines(),
+                        firstRefusal.toString(),
+                        files.directory());
             } else if (contents.unreadableLines() > 0) {
                 log.info(
                         "Peekaboot traces: skipped {} unreadable lines in {}; restored the rest",
@@ -51,40 +62,27 @@ final class TraceReplay {
     }
 
     /**
-     * Replays the files into {@code store}, handing each line to {@code alongside} just before the store
-     * takes it. Logs nothing and begins no live run; a fold replays this way into a store of its own.
+     * Replays the files into {@code store}, skipping each line the store throws on. Logs nothing and begins
+     * no live run; a fold replays this way into a store of its own and passes its {@code tally}, which
+     * counts the lines the store took and notes the ones it refused.
      */
-    static JournalFiles.Contents replay(JournalFiles files, TraceStore store, JournalFiles.LineVisitor alongside)
-            throws IOException {
-        Runs runs = new Runs(store);
+    static Replayed replay(JournalFiles files, TraceStore store, @Nullable FoldTally tally) throws IOException {
+        Lines lines = new Lines(store, tally);
         // fewer lines evict in another order; the snapshot's bucket lines, not All's cap, decide its traces
         store.holdAll(true);
         try {
-            return files.read(
-                    (text, line) -> {
-                        alongside.visit(text, line);
-                        apply(line, store, runs);
-                    },
-                    () -> store.holdAll(false));
+            JournalFiles.Contents contents = files.read(lines::replay, () -> store.holdAll(false));
+            return new Replayed(contents, lines.refused, lines.firstRefusal);
         } finally {
             store.holdAll(false);
         }
     }
 
-    private static void apply(JournalLine line, TraceStore store, Runs runs) {
-        switch (line) {
-            case JournalLine.RunLine run -> runs.begin(run.startedAt());
-            case JournalLine.SpanLine span -> store.addSpan(span.span());
-            case JournalLine.LogLine logged -> store.addLog(logged.toEvent());
-            case JournalLine.RequestLine request -> store.setRequest(request.request());
-            case JournalLine.DiscardLine discard -> store.discard(discard.traceId());
-            case JournalLine.RemnantLine remnant -> store.restoreRemnant(remnant.traceId(), remnant.remnant());
-            case JournalLine.BucketLine listing -> store.restoreBucket(listing.bucket(), listing.traceIds());
-            case JournalLine.SnapshotHeader _, JournalLine.JournalHeader _ -> {
-                // a header names nothing to replay; JournalFiles checks the one each file starts with
-            }
-        }
-    }
+    /** What {@link #replay} found. {@code refusedLines}: the lines the store threw on; {@code firstRefusal}: the first throw. */
+    record Replayed(
+            JournalFiles.Contents contents,
+            int refusedLines,
+            @Nullable RuntimeException firstRefusal) {}
 
     /** A file whose header is foreign fails every start; deleting it keeps that from repeating. */
     private static void deleteBoth(JournalFiles files) {
@@ -92,6 +90,65 @@ final class TraceReplay {
             files.deleteBoth();
         } catch (IOException e) {
             log.debug("Could not delete the unusable trace journal in {}", files.directory(), e);
+        }
+    }
+
+    /** Replays one line at a time, so a line the store refuses costs itself alone. */
+    private static final class Lines {
+
+        private final TraceStore store;
+        private final Runs runs;
+
+        @Nullable
+        private final FoldTally tally;
+
+        private int refused;
+
+        @Nullable
+        private RuntimeException firstRefusal;
+
+        Lines(TraceStore store, @Nullable FoldTally tally) {
+            this.store = store;
+            this.runs = new Runs(store);
+            this.tally = tally;
+        }
+
+        void replay(String text, JournalLine line) {
+            boolean beginsBundle = tally != null && tally.beginsBundle(line, store);
+            try {
+                apply(line);
+            } catch (RuntimeException e) {
+                refuse(text, e);
+                return;
+            }
+            if (tally != null) {
+                tally.count(line, beginsBundle);
+            }
+        }
+
+        private void apply(JournalLine line) {
+            switch (line) {
+                case JournalLine.RunLine run -> runs.begin(run.startedAt());
+                case JournalLine.SpanLine span -> store.addSpan(span.span());
+                case JournalLine.LogLine logged -> store.addLog(logged.toEvent());
+                case JournalLine.RequestLine request -> store.setRequest(request.request());
+                case JournalLine.DiscardLine discard -> store.discard(discard.traceId());
+                case JournalLine.RemnantLine remnant -> store.restoreRemnant(remnant.traceId(), remnant.remnant());
+                case JournalLine.BucketLine listing -> store.restoreBucket(listing.bucket(), listing.traceIds());
+                case JournalLine.SnapshotHeader _, JournalLine.JournalHeader _ -> {
+                    // a header names nothing to replay; JournalFiles checks the one each file starts with
+                }
+            }
+        }
+
+        private void refuse(String text, RuntimeException refusal) {
+            refused++;
+            if (firstRefusal == null) {
+                firstRefusal = refusal;
+            }
+            if (tally != null) {
+                tally.refuse(text);
+            }
         }
     }
 

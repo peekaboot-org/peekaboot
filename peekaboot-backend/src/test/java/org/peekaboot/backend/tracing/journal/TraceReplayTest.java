@@ -12,6 +12,7 @@ import static org.peekaboot.backend.tracing.journal.JournalTexts.snapshotHeader;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.untracedLine;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.writeJournal;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.contentOf;
+import static org.peekaboot.backend.tracing.journal.RestoredStores.refusing;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -276,9 +277,9 @@ class TraceReplayTest {
                 .isTrue();
     }
 
-    /** A fault in the store ends the replay at that line; what came before stays, and the live run begins. */
+    /** A line the store throws on costs itself alone: the lines after it are restored, and the live run begins. */
     @Test
-    void aFaultWhileReplayingIsSaidOnceAndTheLiveRunStillBegins() {
+    void aLineTheStoreRefusesIsSkippedAndTheRestRestored() {
         JournalFiles files = new JournalFiles(dir);
         JournalTexts.write(
                 files.journal(),
@@ -287,11 +288,39 @@ class TraceReplayTest {
                 line(child("a", "a1", "a0", 1)),
                 line(logged("a", "INFO", "boom")),
                 line(child("b", "b1", "b0", 2)));
+        InMemoryTraceStore store = refusing("boom");
+
+        try (LogCapture capture = LogCapture.attach(TraceReplay.class, Level.INFO)) {
+            TraceReplay.restore(files, store);
+
+            assertThat(capture.appender().list)
+                    .extracting(ILoggingEvent::getLevel, ILoggingEvent::getFormattedMessage)
+                    .containsExactly(tuple(
+                            Level.INFO,
+                            "Peekaboot traces: skipped 0 unreadable lines and 1 the store refused"
+                                    + " (java.lang.IllegalStateException: boom) in " + dir + "; restored the rest"));
+        }
+        assertThat(store.getTrace("a").orElseThrow().snapshot().interrupted()).isTrue();
+        assertThat(store.getTrace("b")).isPresent();
+    }
+
+    /** One line for the restore, however many lines were skipped and for whichever reason. */
+    @Test
+    void everyRefusedLineIsCountedBesideTheUnreadableOnesAndTheFirstRefusalNamed() {
+        JournalFiles files = new JournalFiles(dir);
+        JournalTexts.write(
+                files.journal(),
+                journalHeader("j1"),
+                runLine(T2),
+                line(logged("t1", "INFO", "refused first")),
+                "not json at all",
+                line(logged("t1", "INFO", "kept")),
+                line(logged("t1", "INFO", "refused second")));
         InMemoryTraceStore store = new InMemoryTraceStore(new PeekabootTracingProperties()) {
             @Override
             public void addLog(LogCapturedEvent log) {
-                if ("boom".equals(log.message())) {
-                    throw new IllegalStateException("boom");
+                if (log.message().startsWith("refused")) {
+                    throw new IllegalStateException(log.message());
                 }
                 super.addLog(log);
             }
@@ -304,11 +333,13 @@ class TraceReplayTest {
                     .extracting(ILoggingEvent::getLevel, ILoggingEvent::getFormattedMessage)
                     .containsExactly(tuple(
                             Level.INFO,
-                            "Peekaboot traces: cannot read " + dir
-                                    + " (java.lang.IllegalStateException: boom); restored what was read before it"));
+                            "Peekaboot traces: skipped 1 unreadable lines and 2 the store refused"
+                                    + " (java.lang.IllegalStateException: refused first) in " + dir
+                                    + "; restored the rest"));
         }
-        assertThat(store.getTrace("a").orElseThrow().snapshot().interrupted()).isTrue();
-        assertThat(store.getTrace("b")).isEmpty();
+        assertThat(store.getTrace("t1").orElseThrow().capturedLogs().logs())
+                .extracting(LogCapturedEvent::message)
+                .containsExactly("kept");
     }
 
     /** A run that never reported ready has no start to tell it by, so each of its run lines begins a run. */

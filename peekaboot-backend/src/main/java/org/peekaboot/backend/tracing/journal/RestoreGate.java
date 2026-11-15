@@ -51,8 +51,9 @@ final class RestoreGate {
 
     /**
      * Applies what was held, including what arrives meanwhile, then lets every input through. A held input
-     * that throws is counted and skipped. The writer took it when it was held, so the throw can repeat in the
-     * fold and in the next restore.
+     * that throws is counted and skipped. The writer took it when it was held, so its line is in the journal.
+     * A fold's store throws on it the same way and the fold leaves the line out; a restore that meets it
+     * first skips and counts it.
      */
     void open(TraceInputs live) {
         while (true) {

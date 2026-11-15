@@ -31,6 +31,25 @@ final class RestoredStores {
         return checkpoint(files, properties -> {});
     }
 
+    /** A store with the default caps that throws on a log saying {@code message}, before it takes anything of it. */
+    static InMemoryTraceStore refusing(String message) {
+        return refusing(message, properties -> {});
+    }
+
+    static InMemoryTraceStore refusing(String message, Consumer<PeekabootTracingProperties> caps) {
+        PeekabootTracingProperties properties = new PeekabootTracingProperties();
+        caps.accept(properties);
+        return new InMemoryTraceStore(properties) {
+            @Override
+            public void addLog(LogCapturedEvent log) {
+                if (message.equals(log.message())) {
+                    throw new IllegalStateException(message);
+                }
+                super.addLog(log);
+            }
+        };
+    }
+
     /** The bucket's trace ids, newest first, as a listing shows them. */
     static List<String> idsIn(InMemoryTraceStore store, TraceBucket bucket) {
         return store.getTraces(bucket, Integer.MAX_VALUE).stream()

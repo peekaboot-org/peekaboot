@@ -7,6 +7,7 @@ import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Logs.untraced;
 import static org.peekaboot.backend.testsupport.Spans.span;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.line;
+import static org.peekaboot.backend.tracing.journal.RestoredStores.refusing;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -192,7 +193,8 @@ class TraceJournalTest {
 
     /**
      * A held input that throws costs itself alone: the restore's end says so once, and the journal goes
-     * on to write. The store below holds the restore until the inputs have been handed in.
+     * on to write. The fold's store refuses the input as the live one did, so the snapshot leaves its line
+     * out. The store below holds the restore until the inputs have been handed in.
      */
     @Test
     void reportsAHeldInputThatCouldNotBeAppliedAndKeepsWriting() {
@@ -214,12 +216,20 @@ class TraceJournalTest {
                 super.addLog(log);
             }
         };
+        TraceInput bad = logged("t1", "bad");
         TraceInput after = logged("t1", "after");
 
         try (LogCapture capture = LogCapture.attach(TraceJournal.class)) {
-            try (TraceJournal journal = start(store, dir, Long.MAX_VALUE)) {
+            try (TraceJournal journal = TraceJournal.start(
+                    store,
+                    TraceInputs.into(store),
+                    new ErrorDigestFile(dir, new ErrorDigest()),
+                    dir,
+                    FAST,
+                    Long.MAX_VALUE,
+                    () -> refusing("bad"))) {
                 Latches.awaitQuietly(restoring);
-                journal.accept(logged("t1", "bad"));
+                journal.accept(bad);
                 journal.accept(after);
                 release.countDown();
             }
@@ -231,7 +241,9 @@ class TraceJournalTest {
             });
         }
         assertThat(messages(store, "t1")).containsExactly("after");
-        assertThat(JournalTexts.lines(new JournalFiles(dir).snapshot())).contains(line(after));
+        assertThat(JournalTexts.lines(new JournalFiles(dir).snapshot()))
+                .contains(line(after))
+                .doesNotContain(line(bad));
     }
 
     /** Past the size limit the journal is folded while the application runs; nothing it took is lost. */

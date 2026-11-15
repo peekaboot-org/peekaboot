@@ -19,7 +19,8 @@ import org.peekaboot.backend.tracing.store.TraceStore;
  * store's caps, and the lines of what that store keeps are copied as written, in arrival order. A
  * trace whose caps dropped anything, or whose bundle began with a line it does not keep, gets a
  * remnant line where its bundle began, so a restore shows the trace as the store held it and the
- * snapshot stays within the caps. A run line is copied where a copied line of its run follows.
+ * snapshot stays within the caps. A run line is copied where a copied line of its run follows. A line
+ * the store throws on in that replay is left out, so no later fold or restore meets it.
  *
  * <p>The snapshot ends with a line for each bucket listing its traces in the replayed store's order,
  * Errors and Slow first, then All: a restore lists exactly those, so every bucket comes back exactly as
@@ -45,7 +46,7 @@ final class Checkpoint implements JournalWriter.Folding {
     public OpenJournal fold() throws IOException {
         TraceStore kept = emptyStore.get();
         FoldTally tally = new FoldTally();
-        TraceReplay.replay(files, kept, (text, line) -> tally.count(line, kept));
+        TraceReplay.replay(files, kept, tally);
         String absorbed = files.journalId();
         files.replaceSnapshot(stream -> write(stream, kept, tally, absorbed));
         return files.startJournal();
@@ -94,6 +95,9 @@ final class Checkpoint implements JournalWriter.Folding {
         }
 
         void visit(String text, JournalLine line) throws IOException {
+            if (tally.refused(text)) {
+                return;
+            }
             if (line instanceof JournalLine.RunLine) {
                 pendingRunLine = text;
                 return;

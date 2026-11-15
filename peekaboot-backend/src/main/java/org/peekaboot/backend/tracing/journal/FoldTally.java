@@ -1,37 +1,59 @@
 package org.peekaboot.backend.tracing.journal;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import org.peekaboot.backend.tracing.store.TraceStore;
 
 /**
  * The fold's first pass: for each trace, where the bundle the replayed store keeps for it began and how
  * many logs and requests arrived since, and how many lines were written outside any trace. A discard,
  * or an eviction from every bucket, ends a bundle and the trace's next line begins another, so only
- * what arrived from that line on is the trace a restore shows.
+ * what arrived from that line on is the trace a restore shows. A line the store refused is in none of
+ * the counts, so the second pass leaves it out and loses no other line for it.
  */
 final class FoldTally {
 
     private final Map<String, Trace> traces = new HashMap<>();
+    private final Set<String> refused = new HashSet<>();
     private long untracedLines;
 
-    /** Counts {@code line} before {@code store} takes it, so a trace the store holds nothing for begins a bundle with it. */
-    void count(JournalLine line, TraceStore store) {
+    /** Asked before {@code store} takes {@code line}: a trace the store holds nothing for begins a bundle with it. */
+    boolean beginsBundle(JournalLine line, TraceStore store) {
+        String traceId = line.traceId();
+        return traceId != null
+                && !(line instanceof JournalLine.DiscardLine)
+                && store.getTrace(traceId).isEmpty();
+    }
+
+    /** Told once the store took {@code line}, with what {@link #beginsBundle} answered for it. */
+    void count(JournalLine line, boolean beginsBundle) {
         String traceId = line.traceId();
         if (traceId != null) {
-            boolean beginsBundle = !(line instanceof JournalLine.DiscardLine)
-                    && store.getTrace(traceId).isEmpty();
             traces.computeIfAbsent(traceId, id -> new Trace()).count(line, beginsBundle);
         } else if (line instanceof JournalLine.LogLine) {
             untracedLines++;
         }
     }
 
+    /** Told in place of {@link #count} where the store threw on the line written as {@code text}. */
+    void refuse(String text) {
+        refused.add(text);
+    }
+
+    boolean refused(String text) {
+        return refused.contains(text);
+    }
+
     long untracedLines() {
         return untracedLines;
     }
 
-    /** Every traced line the second pass visits was counted here, since both passes read the same files. */
+    /**
+     * Every traced line the second pass looks up was counted here: both passes read the same files, and
+     * the second skips a refused line before it looks.
+     */
     Trace of(String traceId) {
         return traces.get(traceId);
     }

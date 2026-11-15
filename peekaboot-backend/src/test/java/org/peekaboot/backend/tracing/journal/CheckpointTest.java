@@ -14,6 +14,7 @@ import static org.peekaboot.backend.tracing.journal.RestoredStores.checkpoint;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.contentOf;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.idsIn;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.messages;
+import static org.peekaboot.backend.tracing.journal.RestoredStores.refusing;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.restored;
 
 import io.micrometer.tracing.Span;
@@ -669,6 +670,56 @@ class CheckpointTest {
 
         assertThat(body(files.snapshot()))
                 .containsExactly(runLine(T2), line(aSpan), line(untracedLine("u4")), line(untracedLine("u5")));
+    }
+
+    /** The fold's store refuses what the live store refused, and the line leaves the files with this fold. */
+    @Test
+    void aLineTheStoreRefusesIsLeftOutOfTheSnapshot() throws IOException {
+        JournalFiles files = new JournalFiles(dir);
+        TraceInput good = logged("t1", "good");
+        TraceInput boom = logged("t1", "boom");
+        TraceInput after = logged("t1", "after");
+        writeJournal(files, List.of(good, boom, after));
+
+        new Checkpoint(files, () -> refusing("boom")).fold().close();
+
+        assertThat(body(files.snapshot())).containsExactly(runLine(T2), line(good), line(after));
+    }
+
+    /** The refused line is no log of the trace, so the cap trims the oldest of the others and no more. */
+    @Test
+    void aRefusedLineAmongATracesLogsCostsNoOtherLine() throws IOException {
+        JournalFiles files = new JournalFiles(dir);
+        TraceInput two = logged("t1", "two");
+        TraceInput three = logged("t1", "three");
+        writeJournal(files, List.of(logged("t1", "one"), logged("t1", "boom"), two, three));
+
+        new Checkpoint(files, () -> refusing("boom", properties -> properties.setMaxLogsPerTrace(2)))
+                .fold()
+                .close();
+
+        TraceRemnant oneLogDropped = new TraceRemnant(0, 1, false, false, null, null, null, null, List.of());
+        assertThat(body(files.snapshot()))
+                .containsExactly(
+                        runLine(T2),
+                        JournalCodec.encode(new JournalLine.RemnantLine("t1", oneLogDropped)),
+                        line(two),
+                        line(three));
+    }
+
+    /** Nor is it a line of the ring, which keeps its newest two of the others. */
+    @Test
+    void aRefusedLineOutsideAnyTraceCostsNoOtherLine() throws IOException {
+        JournalFiles files = new JournalFiles(dir);
+        writeJournal(
+                files, List.of(untracedLine("one"), untracedLine("boom"), untracedLine("two"), untracedLine("three")));
+
+        new Checkpoint(files, () -> refusing("boom", properties -> properties.setMaxUntracedLogs(2)))
+                .fold()
+                .close();
+
+        assertThat(body(files.snapshot()))
+                .containsExactly(runLine(T2), line(untracedLine("two")), line(untracedLine("three")));
     }
 
     @Test
