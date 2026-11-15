@@ -1,6 +1,5 @@
 package org.peekaboot.backend.service;
 
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.TraceResource;
 import org.peekaboot.backend.domain.trace.TraceView;
@@ -24,8 +23,7 @@ final class TraceReads {
     private TraceReads() {}
 
     static TraceResource whole(TraceStore store, TraceResources resources, TraceDataBundle bundle) {
-        // mapped without buckets: a summary only echoes them, nothing is judged from them
-        return resources.trace(bundle, Set.of()).withBuckets(store.bucketsOf(bundle.traceId()));
+        return resources.trace(bundle).withBuckets(store.bucketsOf(bundle.traceId()));
     }
 
     static TraceResource row(
@@ -34,6 +32,6 @@ final class TraceReads {
             TraceDataBundle bundle,
             @Nullable String subtreeRootSpanId,
             TraceView view) {
-        return resources.row(bundle, subtreeRootSpanId, Set.of(), view).withBuckets(store.bucketsOf(bundle.traceId()));
+        return resources.row(bundle, subtreeRootSpanId, view).withBuckets(store.bucketsOf(bundle.traceId()));
     }
 }

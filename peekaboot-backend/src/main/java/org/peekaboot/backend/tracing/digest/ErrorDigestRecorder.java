@@ -1,7 +1,6 @@
 package org.peekaboot.backend.tracing.digest;
 
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.TraceView;
@@ -108,8 +107,7 @@ public final class ErrorDigestRecorder {
     /** The summary is mapped once per failed trace, on the thread that applied the input. */
     private void recordIfFailed(TraceDataBundle bundle) {
         if (bundle.completeAndFailed() && digest.claim(bundle.traceId())) {
-            digest.record(
-                    resources.row(bundle, null, Set.of(), TraceView.SUMMARY).summary());
+            digest.record(resources.row(bundle, null, TraceView.SUMMARY).summary());
         }
     }
 

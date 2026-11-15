@@ -51,17 +51,15 @@ class TraceResourcesTest {
 
     private TraceSummary whole(String traceId) {
         return resources
-                .row(store.getTrace(traceId).orElseThrow(), null, store.bucketsOf(traceId), TraceView.SUMMARY)
+                .row(store.getTrace(traceId).orElseThrow(), null, TraceView.SUMMARY)
+                .withBuckets(store.bucketsOf(traceId))
                 .summary();
     }
 
     private TraceSummary subtree(String traceId, String subtreeRootSpanId) {
         return resources
-                .row(
-                        store.getTrace(traceId).orElseThrow(),
-                        subtreeRootSpanId,
-                        store.bucketsOf(traceId),
-                        TraceView.SUMMARY)
+                .row(store.getTrace(traceId).orElseThrow(), subtreeRootSpanId, TraceView.SUMMARY)
+                .withBuckets(store.bucketsOf(traceId))
                 .summary();
     }
 
@@ -290,7 +288,7 @@ class TraceResourcesTest {
         store.addLog(log("t1").inSpan("root").at("WARN").saying("retrying").build());
         store.addSpan(span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
 
-        TraceResource trace = resources.trace(store.getTrace("t1").orElseThrow(), store.bucketsOf("t1"));
+        TraceResource trace = resources.trace(store.getTrace("t1").orElseThrow());
 
         assertThat(trace.data().logs()).hasSize(3);
         assertThat(trace.summary().reasons())
@@ -313,7 +311,7 @@ class TraceResourcesTest {
         movingRedirects.addLog(
                 log("t1").inSpan("root").at("ERROR").saying("payment declined").build(), UNFILED);
 
-        TraceResource trace = resources.trace(movingRedirects, Set.of());
+        TraceResource trace = resources.trace(movingRedirects);
 
         assertThat(trace.summary().reasons())
                 .singleElement()
@@ -336,7 +334,7 @@ class TraceResourcesTest {
                 asyncTask("task").in("t1").parent("root").at(2, 50).build(), UNFILED);
         movingRedirects.addLog(log("t1").inSpan("task").saying("inside").build(), UNFILED);
 
-        TraceResource row = resources.row(movingRedirects, "task", Set.of(), TraceView.FULL);
+        TraceResource row = resources.row(movingRedirects, "task", TraceView.FULL);
 
         assertThat(row.data().logs()).extracting(TraceLog::spanId).containsExactly("task");
     }
@@ -350,9 +348,7 @@ class TraceResourcesTest {
                 .exception("java.lang.IllegalStateException", "boom")
                 .build());
 
-        TraceSummary trace = resources
-                .trace(store.getTrace("t1").orElseThrow(), store.bucketsOf("t1"))
-                .summary();
+        TraceSummary trace = resources.trace(store.getTrace("t1").orElseThrow()).summary();
 
         assertThat(trace.outcome()).isEqualTo(TraceOutcome.IN_PROGRESS);
         assertThat(trace.reasons()).extracting(TraceReason::kind).containsExactly(TraceReason.Kind.EXCEPTION);
@@ -363,11 +359,11 @@ class TraceResourcesTest {
         store.addSpan(span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
 
         assertThat(resources
-                        .row(store.getTrace("t1").orElseThrow(), null, Set.of(), TraceView.SUMMARY)
+                        .row(store.getTrace("t1").orElseThrow(), null, TraceView.SUMMARY)
                         .data())
                 .isNull();
         assertThat(resources
-                        .row(store.getTrace("t1").orElseThrow(), null, Set.of(), TraceView.FULL)
+                        .row(store.getTrace("t1").orElseThrow(), null, TraceView.FULL)
                         .data())
                 .isNotNull();
     }
@@ -388,7 +384,7 @@ class TraceResourcesTest {
                 span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).order(4).build());
 
         TraceDetail data = resources
-                .row(store.getTrace("t1").orElseThrow(), "task", Set.of(), TraceView.FULL)
+                .row(store.getTrace("t1").orElseThrow(), "task", TraceView.FULL)
                 .data();
 
         assertThat(data.queries()).extracting(QueryInfo::spanId).containsExactly("inTask");
@@ -412,7 +408,7 @@ class TraceResourcesTest {
         store.addSpan(
                 span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).order(4).build());
 
-        recording.row(store.getTrace("t1").orElseThrow(), "task", Set.of(), TraceView.FULL);
+        recording.row(store.getTrace("t1").orElseThrow(), "task", TraceView.FULL);
 
         assertThat(formatted).containsExactly("SELECT 2");
     }
@@ -428,11 +424,11 @@ class TraceResourcesTest {
                 span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).order(2).build());
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
 
-        recording.row(bundle, null, Set.of(), TraceView.SUMMARY);
+        recording.row(bundle, null, TraceView.SUMMARY);
 
         assertThat(formatted).isEmpty();
 
-        recording.row(bundle, null, Set.of(), TraceView.FULL);
+        recording.row(bundle, null, TraceView.FULL);
 
         assertThat(formatted).containsExactly("SELECT 1");
     }
@@ -443,17 +439,13 @@ class TraceResourcesTest {
         addATraceRaisingEveryVerdict();
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
 
-        TraceSummary summary = resources
-                .row(bundle, null, store.bucketsOf("t1"), TraceView.SUMMARY)
-                .summary();
+        TraceSummary summary = resources.row(bundle, null, TraceView.SUMMARY).summary();
 
         assertThat(summary.issues()).extracting(TraceIssue::type).contains(IssueType.values());
         assertThat(summary.reasons()).extracting(TraceReason::kind).contains(TraceReason.Kind.values());
         assertThat(summary.cause()).isNotNull();
         assertThat(summary)
-                .isEqualTo(resources
-                        .row(bundle, null, store.bucketsOf("t1"), TraceView.FULL)
-                        .summary());
+                .isEqualTo(resources.row(bundle, null, TraceView.FULL).summary());
     }
 
     /** The tree behind a summary holds its tags as stored, so the row is where they must not come out. */
@@ -462,7 +454,7 @@ class TraceResourcesTest {
         addATraceRaisingEveryVerdict();
 
         String served = PeekabootJson.MAPPER.writeValueAsString(
-                resources.row(store.getTrace("t1").orElseThrow(), null, store.bucketsOf("t1"), TraceView.SUMMARY));
+                resources.row(store.getTrace("t1").orElseThrow(), null, TraceView.SUMMARY));
 
         assertThat(served).contains("token=******").doesNotContain("abc123");
     }
@@ -513,8 +505,8 @@ class TraceResourcesTest {
         store.addSpan(span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
 
-        TraceResource trace = resources.trace(bundle, store.bucketsOf("t1"));
-        TraceResource row = resources.row(bundle, null, store.bucketsOf("t1"), TraceView.SUMMARY);
+        TraceResource trace = resources.trace(bundle);
+        TraceResource row = resources.row(bundle, null, TraceView.SUMMARY);
 
         assertThat(depthOf(trace.data().rootSpan())).isEqualTo(SPAN_CAP);
         assertThat(row.summary().counts().spans()).isEqualTo(SPAN_CAP);
@@ -527,7 +519,7 @@ class TraceResourcesTest {
     void aDeepChainWithoutARootSerialisesAsOrphans() {
         addAChain(SPAN_CAP - 1, "root");
 
-        TraceResource trace = resources.trace(store.getTrace("t1").orElseThrow(), store.bucketsOf("t1"));
+        TraceResource trace = resources.trace(store.getTrace("t1").orElseThrow());
 
         assertThat(trace.data().rootSpan()).isNull();
         assertThat(trace.data().orphans())
@@ -543,8 +535,7 @@ class TraceResourcesTest {
         store.addSpan(asyncTask("task").in("t1").parent("root").at(2, 50).build());
         store.addSpan(span("root").in("t1").kind(Span.Kind.SERVER).at(0, 10).build());
 
-        TraceResource row =
-                resources.row(store.getTrace("t1").orElseThrow(), "task", store.bucketsOf("t1"), TraceView.FULL);
+        TraceResource row = resources.row(store.getTrace("t1").orElseThrow(), "task", TraceView.FULL);
 
         assertThat(row.summary().subtree()).isNotNull();
         assertThat(depthOf(row.data().rootSpan())).isEqualTo(SPAN_CAP - 1);

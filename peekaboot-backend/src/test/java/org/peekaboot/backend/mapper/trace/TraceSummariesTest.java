@@ -17,6 +17,7 @@ import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;
+import org.peekaboot.backend.domain.trace.TraceResource;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -26,9 +27,8 @@ class TraceSummariesTest {
 
     private final TraceSummaries summaries = new TraceSummaries(new PeekabootTracingProperties());
 
-    private static TraceFacts facts(
-            Set<TraceBucket> buckets, List<LogCapturedEvent> logs, int droppedSpans, int droppedLogs) {
-        return new TraceFacts(false, buckets, logs, List.of(), droppedSpans, droppedLogs);
+    private static TraceFacts facts(List<LogCapturedEvent> logs, int droppedSpans, int droppedLogs) {
+        return new TraceFacts(false, logs, List.of(), droppedSpans, droppedLogs);
     }
 
     private static SpanIssue issue(String spanId) {
@@ -44,7 +44,7 @@ class TraceSummariesTest {
                 .children(List.of(child))
                 .build();
 
-        TraceSummary summary = summaries.of(tree(root).build(), facts(Set.of(), List.of(), 0, 0));
+        TraceSummary summary = summaries.of(tree(root).build(), facts(List.of(), 0, 0));
 
         assertThat(summary.issues()).extracting(TraceIssue::spanId).containsExactly("root", "child");
     }
@@ -57,19 +57,23 @@ class TraceSummariesTest {
                 log("t").at("WARN").saying("c").build(),
                 log("t").at("INFO").saying("d").build());
 
-        TraceSummary summary = summaries.of(tree(node("root").build()).build(), facts(Set.of(), logs, 3, 7));
+        TraceSummary summary = summaries.of(tree(node("root").build()).build(), facts(logs, 3, 7));
 
         assertThat(summary.counts().logs()).isEqualTo(new TraceSummary.LogCounts(4, 2, 1));
         assertThat(summary.counts().droppedSpans()).isEqualTo(3);
         assertThat(summary.counts().droppedLogs()).isEqualTo(7);
     }
 
+    /** A summary is built naming no bucket; its trace takes them once they are read, as {@code TraceReads} does. */
     @Test
     void namesTheBucketsInTheirOwnOrder() {
         Set<TraceBucket> slowFirst = new LinkedHashSet<>(List.of(TraceBucket.SLOW, TraceBucket.ERRORS));
+        TraceSummary built = summaries.of(tree(node("root").build()).build(), facts(List.of(), 0, 0));
 
-        TraceSummary summary = summaries.of(tree(node("root").build()).build(), facts(slowFirst, List.of(), 0, 0));
+        TraceSummary summary =
+                new TraceResource(built, null).withBuckets(slowFirst).summary();
 
+        assertThat(built.buckets()).isEmpty();
         assertThat(summary.buckets()).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
     }
 
@@ -78,7 +82,7 @@ class TraceSummariesTest {
     void namesTheCauseFromTheFactsErrorLogs() {
         TraceLog errorLog = new TraceLog(
                 "trace1", "root", Instant.EPOCH, "ERROR", "TestLogger", "main", "logged", null, List.of(), List.of());
-        TraceFacts facts = new TraceFacts(false, Set.of(), List.of(), List.of(errorLog), 0, 0);
+        TraceFacts facts = new TraceFacts(false, List.of(), List.of(errorLog), 0, 0);
 
         TraceSummary summary = summaries.of(tree(node("root").build()).build(), facts);
 

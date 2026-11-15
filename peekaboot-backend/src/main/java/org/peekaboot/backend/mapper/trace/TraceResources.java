@@ -10,7 +10,6 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.SpanData;
-import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 
 /**
@@ -52,16 +51,15 @@ public final class TraceResources {
     }
 
     /** The whole trace, its summary and its data. */
-    public TraceResource trace(TraceDataBundle bundle, Set<TraceBucket> buckets) {
-        return row(bundle, null, buckets, TraceView.FULL);
+    public TraceResource trace(TraceDataBundle bundle) {
+        return row(bundle, null, TraceView.FULL);
     }
 
     /**
      * One listing row, the whole trace or the async subtree {@code subtreeRootSpanId} names. A subtree
      * whose entry span was evicted since the listing maps as the whole trace.
      */
-    public TraceResource row(
-            TraceDataBundle bundle, @Nullable String subtreeRootSpanId, Set<TraceBucket> buckets, TraceView view) {
-        return traceRows.of(bundle, subtreeRootSpanId, buckets, view);
+    public TraceResource row(TraceDataBundle bundle, @Nullable String subtreeRootSpanId, TraceView view) {
+        return traceRows.of(bundle, subtreeRootSpanId, view);
     }
 }

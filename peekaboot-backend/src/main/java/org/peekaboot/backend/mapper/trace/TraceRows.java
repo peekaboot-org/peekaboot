@@ -14,7 +14,6 @@ import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.mapper.trace.SpanContents.ServedSpans;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.CapturedLogs;
-import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 
@@ -41,8 +40,7 @@ final class TraceRows {
     }
 
     /** See {@link TraceResources#row}. */
-    TraceResource of(
-            TraceDataBundle bundle, @Nullable String subtreeRootSpanId, Set<TraceBucket> buckets, TraceView view) {
+    TraceResource of(TraceDataBundle bundle, @Nullable String subtreeRootSpanId, TraceView view) {
         TraceData traceData = bundle.snapshot();
         boolean full = view == TraceView.FULL;
         // a summary serves no span, so its tree pays for no tag masked and no statement laid out
@@ -64,7 +62,6 @@ final class TraceRows {
         TraceFacts facts = new TraceFacts(
                 // the store's flag covers the enclosing request, which a subtree row does not report
                 whole && traceData.failed(),
-                buckets,
                 logs,
                 full ? TraceLogMapper.errorsAmong(logs, mapped) : mapped,
                 traceData.droppedSpans(),

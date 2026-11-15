@@ -34,7 +34,8 @@ final class TraceSummaries {
                 tree.rootOperation(),
                 tree.request(),
                 TraceOutcome.of(tree.complete(), tree.interrupted(), failed),
-                facts.buckets().stream().sorted().toList(),
+                // read after the mapping, see TraceReads
+                List.of(),
                 reasons,
                 TraceCauses.of(visits, facts.errorLogs()),
                 issuesOf(visits),
