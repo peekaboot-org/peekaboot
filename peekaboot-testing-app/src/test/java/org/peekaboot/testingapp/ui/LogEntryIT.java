@@ -6,7 +6,7 @@ import com.microsoft.playwright.Page;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Exercises trace-detail/log-entry.js directly, with the sheets that colour it. */
+/** Exercises shared/log-entry.js directly, with the sheets that colour it. */
 class LogEntryIT extends PlaywrightTestBase {
 
     /** Each level takes the text token of its badge tier (severity.js's logLevelVariant). */
@@ -16,7 +16,7 @@ class LogEntryIT extends PlaywrightTestBase {
         page.addStyleTag(new Page.AddStyleTagOptions().setUrl("/peekaboot/ui/assets/tokens.css"));
         page.addStyleTag(new Page.AddStyleTagOptions().setUrl("/peekaboot/ui/trace-detail/trace-detail.css"));
 
-        Object colours = importModule("trace-detail/log-entry.js", """
+        Object colours = importModule("shared/log-entry.js", """
                 (() => {
                     const colour = element => getComputedStyle(element).color;
                     const token = name => {

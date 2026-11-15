@@ -25,7 +25,7 @@ import {ISSUE_SEVERITIES, issueBadgeVariant, issueSeverity, severityClass} from 
 import {badge} from '../../shared/components.js';
 import {copyableId} from '../../shared/copyable.js';
 import {sqlView} from '../../shared/sql-view.js';
-import {logEntry, stackTraceParts} from '../log-entry.js';
+import {logEntry, stackTraceParts} from '../../shared/log-entry.js';
 
 const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
 

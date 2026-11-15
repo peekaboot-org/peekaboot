@@ -1,13 +1,13 @@
 /**
- * Trace-detail overlay - one captured log as both the Logs tab and a span's details panel show
+ * One captured log as the trace overlay's Logs tab and a span's details panel both show
  * it: time, level, message and the folded stack trace with its reveal control. The Logs tab
  * passes its span cell (filter-to-span, tree link, copyable id) to sit after the time; a span's
  * panel passes none, since every entry there already belongs to that span. The span's panel
  * also renders a failed span's exception through stackTraceParts.
  */
-import {el, pressedToggle} from '../shared/dom.js';
-import {formatTimeOfDay} from '../shared/format.js';
-import {logLevelVariant} from '../shared/severity.js';
+import {el, pressedToggle} from './dom.js';
+import {formatTimeOfDay} from './format.js';
+import {logLevelVariant} from './severity.js';
 
 export function logEntry(log, dateOptions, spanCell = null) {
     const row = el('div', {className: 'pk-log__row'},
@@ -27,7 +27,7 @@ export function logEntry(log, dateOptions, spanCell = null) {
 export function stackTraceParts(folded) {
     if (!folded.stackTrace) return [];
     const trace = traceBlock(folded);
-    // A control that reveals nothing must not appear (shared/unmask-control.js).
+    // A control that reveals nothing must not appear (unmask-control.js).
     return (folded.hiddenFrames || []).length > 0 ? [revealControl(trace), trace] : [trace];
 }
 

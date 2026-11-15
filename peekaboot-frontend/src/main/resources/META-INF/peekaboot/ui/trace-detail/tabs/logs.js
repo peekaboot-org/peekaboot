@@ -9,7 +9,7 @@ import {el, button} from '../../shared/dom.js';
 import {LOG_LEVELS} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
 import {emptyState} from '../../shared/components.js';
-import {logEntry} from '../log-entry.js';
+import {logEntry} from '../../shared/log-entry.js';
 import {spanTreeLink} from '../span-tree-link.js';
 import {traceSpans} from './spans.js';
 
