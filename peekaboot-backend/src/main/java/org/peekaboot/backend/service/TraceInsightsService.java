@@ -66,8 +66,8 @@ public class TraceInsightsService {
         RowResources resources = new RowResources(traceStore, traceResources, query.view());
         TraceFilter filter = query.filter();
         // filtered on each row's listing facts; only the returned page is mapped (and masked), plus
-        // the async rows a verdict filter has to read
-        List<RowSource> matches = RowSources.matching(traceStore, query.bucket(), filter, resources::summaryOf);
+        // the path a path filter reads and the async rows a verdict filter has to read
+        List<RowSource> matches = RowSources.matching(traceStore, query.bucket(), filter, resources);
         RowPosition after = query.afterIn(traceStore.numbering());
         List<RowSource> older = after == null
                 ? matches
@@ -113,9 +113,8 @@ public class TraceInsightsService {
             List<RowSource> requestedMatches,
             TraceFilter filter,
             RowResources resources) {
-        List<RowSource> rows = bucket == requested
-                ? requestedMatches
-                : RowSources.matching(traceStore, bucket, filter, resources::summaryOf);
+        List<RowSource> rows =
+                bucket == requested ? requestedMatches : RowSources.matching(traceStore, bucket, filter, resources);
         return (int) rows.stream().map(row -> row.bundle().traceId()).distinct().count();
     }
 

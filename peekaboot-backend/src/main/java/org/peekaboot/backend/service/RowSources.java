@@ -5,9 +5,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.ListedTrace;
 import org.peekaboot.backend.tracing.store.ListingRoots;
@@ -61,23 +59,21 @@ final class RowSources {
 
     /**
      * The bucket's rows that pass {@code filter}, newest first. Nothing is mapped or masked yet but
-     * the async rows a verdict filter asks {@code summaryOf} about. Newest means the row appeared in
-     * the bucket most recently, which for an async row is when its task ended: the list stays in the
-     * order things arrived, and a task that outlived its request by minutes lists at the top rather
-     * than beside a request long scrolled away.
+     * what the filter asks {@code resources} for: the path a path filter reads and the async rows a
+     * verdict filter reads. Newest means the row appeared in the bucket most recently, which for an
+     * async row is when its task ended: the list stays in the order things arrived, and a task that
+     * outlived its request by minutes lists at the top rather than beside a request long scrolled
+     * away.
      *
      * <p>The bucket's entries are read under the bucket's lock, then each bundle's listing facts under
      * that bundle's lock. A trace that enters, leaves or changes in between is listed as the read of
      * its own facts found it.
      */
     static List<RowSource> matching(
-            TraceStore traceStore,
-            TraceBucket bucket,
-            TraceFilter filter,
-            Function<RowSource, TraceSummary> summaryOf) {
+            TraceStore traceStore, TraceBucket bucket, TraceFilter filter, RowResources resources) {
         return traceStore.getTraces(bucket, Integer.MAX_VALUE).stream()
                 .flatMap(listed -> rowsOf(listed).stream())
-                .filter(row -> filter.admits(row, summaryOf))
+                .filter(row -> filter.admits(row, resources))
                 .sorted(NEWEST_FIRST)
                 .toList();
     }

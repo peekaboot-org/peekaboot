@@ -38,5 +38,18 @@ final class RowResources {
         return of(row).summary();
     }
 
+    /**
+     * The request path as the row's summary serves it, masked, read without mapping the row. Null
+     * for an async row, which answers no request, and for a root that names no path.
+     */
+    @Nullable
+    String pathOf(RowSource row) {
+        if (row.subtree()) {
+            return null;
+        }
+        TraceSummary.Request request = traceResources.requestOf(row.rootSpan());
+        return request == null ? null : request.path();
+    }
+
     private record RowKey(String traceId, @Nullable String subtreeRootSpanId) {}
 }

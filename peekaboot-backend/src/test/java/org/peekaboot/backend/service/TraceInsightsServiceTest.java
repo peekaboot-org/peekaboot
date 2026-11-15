@@ -844,6 +844,39 @@ class TraceInsightsServiceTest {
         assertThat(listedIds(listing().path("/api/orders"))).containsExactly("c", "a");
     }
 
+    /** A filter on the stored path would confirm a guess at what the response hides. */
+    @Test
+    void thePathFilterReadsThePathAsServed() {
+        addRequest("t1", "/reset", "/reset;token=abc123", 200, 0, 10);
+
+        assertThat(listedIds(listing().path("/reset;token=abc"))).isEmpty();
+        assertThat(listedIds(listing().path("/reset;token=***"))).containsExactly("t1");
+    }
+
+    @Test
+    void aRowThatNamesNoPathMatchesNoPathFilter() {
+        addScheduledJobTrace("job", 10);
+        addTraceWithAsyncWork("req", 10, 50);
+        store.addSpan(rootSpan("bare", "test-operation", Span.Kind.SERVER, 10).build());
+
+        assertThat(listedIds(listing().rootActionType("*").path("/"))).isEmpty();
+    }
+
+    /** An async row answers no request, whatever its entry span is tagged with. */
+    @Test
+    void anAsyncRowNamesNoPathWhateverItsEntrySpanCarries() {
+        addRequest("t1", "/jobs", "/jobs", 200, 0, 50);
+        store.addSpan(asyncTask("async-t1")
+                .in("t1")
+                .parent("span-t1")
+                .at(40, 100)
+                .tag("url.path", "/jobs")
+                .build());
+
+        assertThat(rowsOf(listing().rootActionType("*").path("/jobs")))
+                .containsExactly(tuple("t1", RootActionType.HTTP_REQUEST));
+    }
+
     /** Only 500 matches; 503 does not. */
     @Test
     void filtersByTheExactStatusCode() {

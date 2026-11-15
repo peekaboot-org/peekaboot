@@ -4,14 +4,19 @@ import java.util.Map;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.HttpRequest;
 import org.peekaboot.backend.domain.trace.HttpResponse;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
-/** A captured request as the Request tab shows it. */
+/** A captured request as the Request tab shows it. The path is masked by the value rules. */
 public final class HttpExchangeMapper {
 
-    private HttpExchangeMapper() {}
+    private final MaskingEngine maskingEngine;
 
-    public static HttpExchange map(RequestCompletedEvent event) {
+    public HttpExchangeMapper(MaskingEngine maskingEngine) {
+        this.maskingEngine = maskingEngine;
+    }
+
+    public HttpExchange map(RequestCompletedEvent event) {
         HttpRequest.Controller controller =
                 new HttpRequest.Controller(event.controllerClass(), event.controllerMethod());
         HttpRequest.Params params = new HttpRequest.Params(
@@ -19,7 +24,7 @@ public final class HttpExchangeMapper {
                 event.formParams() != null ? event.formParams() : Map.of());
         HttpRequest request = new HttpRequest(
                 event.method(),
-                event.path(),
+                maskingEngine.maskValue(event.path()),
                 event.queryString(),
                 event.requestHeaders() != null ? event.requestHeaders() : Map.of(),
                 controller,

@@ -18,6 +18,11 @@ import org.peekaboot.backend.tracing.store.TraceDataBundle;
 final class TraceDetails {
 
     private final QueryExtractor queryExtractor = new QueryExtractor();
+    private final HttpExchangeMapper httpExchangeMapper;
+
+    TraceDetails(HttpExchangeMapper httpExchangeMapper) {
+        this.httpExchangeMapper = httpExchangeMapper;
+    }
 
     /**
      * {@code logs} are the row's logs already mapped. A subtree row's data is its own work, so it
@@ -30,7 +35,7 @@ final class TraceDetails {
         if (tree.subtree() == null) {
             ownQueries = queryExtractor.extract(traceData, queries);
             RequestCompletedEvent request = bundle.request();
-            httpExchange = request != null ? HttpExchangeMapper.map(request) : null;
+            httpExchange = request != null ? httpExchangeMapper.map(request) : null;
         } else {
             Set<String> inSubtree =
                     SpanWalk.subtree(tree.rootSpan()).map(SpanNode::spanId).collect(Collectors.toSet());

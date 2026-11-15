@@ -6,7 +6,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.RootActionType;
@@ -35,7 +34,7 @@ import org.peekaboot.backend.tracing.tags.HttpSpanTags;
  *     {@code MAINTENANCE}, and {@code *} every type, the empty set here
  * @param rootOperation part of the row's root span name, in any case
  * @param route the matched route pattern, exactly
- * @param pathPrefix the start of the request path, as written
+ * @param pathPrefix the start of the request path as the row's summary serves it, after masking
  * @param statusCode the response status, exactly
  * @param outcome the row's {@code outcome}, an async row's own
  * @param minDurationMs the shortest {@code durationMs} listed, inclusive
@@ -111,12 +110,15 @@ record TraceFilter(
                         .anyMatch(Objects::nonNull);
     }
 
-    /** {@code summaryOf} is asked only for an async row, and only while {@code outcome} or {@code minDurationMs} is set. */
-    boolean admits(RowSource row, Function<RowSource, TraceSummary> summaryOf) {
+    /**
+     * {@code resources} is asked for a row's path only while {@code pathPrefix} is set, and for a
+     * summary only of an async row while {@code outcome} or {@code minDurationMs} is set.
+     */
+    boolean admits(RowSource row, RowResources resources) {
         return matchesRoot(row.rootSpan())
-                && matchesRequest(row.requestTags())
+                && matchesRequest(row, resources)
                 && window.contains(row.startTime())
-                && matchesVerdict(row, summaryOf);
+                && matchesVerdict(row, resources);
     }
 
     /**
@@ -146,17 +148,19 @@ record TraceFilter(
                 && operation.contains(segments[segments.length - 2] + "." + segments[segments.length - 1]);
     }
 
-    /** {@code tags} is empty on a row that answered no request, which no request filter admits. */
-    private boolean matchesRequest(Map<String, String> tags) {
-        return matchesRoute(tags) && matchesPath(tags) && matchesStatus(tags);
+    /** The tags are empty on a row that answered no request, which no request filter admits. */
+    private boolean matchesRequest(RowSource row, RowResources resources) {
+        Map<String, String> tags = row.requestTags();
+        return matchesRoute(tags) && matchesPath(row, resources) && matchesStatus(tags);
     }
 
     private boolean matchesRoute(Map<String, String> tags) {
         return route == null || route.equals(HttpSpanTags.route(tags));
     }
 
-    private boolean matchesPath(Map<String, String> tags) {
-        return pathPrefix == null || startsWith(HttpSpanTags.path(tags), pathPrefix);
+    /** Matched on the masked path: the stored one would confirm a guess at what the response hides. */
+    private boolean matchesPath(RowSource row, RowResources resources) {
+        return pathPrefix == null || startsWith(resources.pathOf(row), pathPrefix);
     }
 
     private static boolean startsWith(@Nullable String path, String prefix) {
@@ -167,12 +171,12 @@ record TraceFilter(
         return statusCode == null || statusCode.equals(HttpSpanTags.statusCode(tags));
     }
 
-    private boolean matchesVerdict(RowSource row, Function<RowSource, TraceSummary> summaryOf) {
+    private boolean matchesVerdict(RowSource row, RowResources resources) {
         if (!filtersVerdict()) {
             return true;
         }
         if (row.subtree()) {
-            TraceSummary summary = summaryOf.apply(row);
+            TraceSummary summary = resources.summaryOf(row);
             return matchesVerdict(summary.outcome(), summary.durationMs());
         }
         ListingRoots roots = row.roots();

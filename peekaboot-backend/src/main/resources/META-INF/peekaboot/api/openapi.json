@@ -92,7 +92,7 @@
           {
             "name": "path",
             "in": "query",
-            "description": "The start of the request path, as written.",
+            "description": "The start of the request path as `summary.request.path` shows it, after masking.",
             "schema": {"type": "string"}
           },
           {
@@ -672,7 +672,7 @@
         "properties": {
           "method": {"type": ["string", "null"]},
           "route": {"type": ["string", "null"], "description": "The matched route pattern."},
-          "path": {"type": ["string", "null"]},
+          "path": {"type": ["string", "null"], "description": "Masked by value shape."},
           "statusCode": {"type": ["integer", "null"], "format": "int32"}
         }
       },
@@ -970,7 +970,7 @@
         "required": ["method", "path", "query", "headers", "controller", "params"],
         "properties": {
           "method": {"type": "string"},
-          "path": {"type": "string"},
+          "path": {"type": "string", "description": "Masked by value shape."},
           "query": {"type": ["string", "null"]},
           "headers": {"type": "object", "additionalProperties": {"type": "string"}},
           "controller": {"$ref": "#/components/schemas/HttpRequest.Controller"},

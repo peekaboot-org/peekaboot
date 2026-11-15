@@ -41,13 +41,15 @@ import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 
 class TraceTreeMapperTest {
 
-    private final TraceTreeMapper mapper =
-            new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()));
+    private final TraceTreeMapper mapper = mapperWith(SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()));
 
-    private final TraceTreeMapper foldingMapper = new TraceTreeMapper(
-            new MaskingEngine(),
-            SqlFormatter.NONE,
-            new StackTraceRules(List.of("org.springframework"), List.of("org.peekaboot.app")));
+    private final TraceTreeMapper foldingMapper = mapperWith(
+            SqlFormatter.NONE, new StackTraceRules(List.of("org.springframework"), List.of("org.peekaboot.app")));
+
+    private static TraceTreeMapper mapperWith(SqlFormatter sqlFormatter, StackTraceRules stackTraceRules) {
+        MaskingEngine maskingEngine = new MaskingEngine();
+        return new TraceTreeMapper(maskingEngine, sqlFormatter, stackTraceRules, new TraceRequests(maskingEngine));
+    }
 
     private static TraceTree map(TraceTreeMapper treeMapper, TraceData traceData) {
         return treeMapper.map(traceData, treeMapper.queriesOf(traceData));
@@ -662,7 +664,7 @@ class TraceTreeMapperTest {
                 jdbcQuery("q-task", "select 2").parent("async").at(50, 5).build();
 
         mapSubtree(
-                new TraceTreeMapper(new MaskingEngine(), recording, new StackTraceRules(List.of(), List.of())),
+                mapperWith(recording, new StackTraceRules(List.of(), List.of())),
                 TraceDatas.of("trace1", root, requestQuery, async, taskQuery),
                 "async");
 
@@ -1147,6 +1149,22 @@ class TraceTreeMapperTest {
     }
 
     @Test
+    void theRequestPathIsMaskedLikeTheTagItCameFrom() {
+        var root = span("root")
+                .named("http get /reset")
+                .kind(Span.Kind.SERVER)
+                .at(0, 10)
+                .tag("http.request.method", "GET")
+                .tag("url.path", "/reset;token=abc123")
+                .build();
+
+        TraceTree tree = map(mapper, TraceDatas.of("trace1", root));
+
+        assertThat(tree.request().path()).isEqualTo("/reset;token=******");
+        assertThat(tree.rootSpan().tags()).containsEntry("url.path", "/reset;token=******");
+    }
+
+    @Test
     void mapsSpanEventsFromNonEmptyEventsList() {
         var eventTime = Instant.parse("2024-01-15T10:00:00.500Z");
         var span = span("span1")
@@ -1348,8 +1366,8 @@ class TraceTreeMapperTest {
 
     @Test
     void aQuerySpanCarriesItsStatementLaidOutByTheMappersFormatter() {
-        TraceTreeMapper formattingMapper = new TraceTreeMapper(
-                new MaskingEngine(), new HibernateSqlFormatter(), new StackTraceRules(List.of(), List.of()));
+        TraceTreeMapper formattingMapper =
+                mapperWith(new HibernateSqlFormatter(), new StackTraceRules(List.of(), List.of()));
 
         SpanNode node =
                 map(formattingMapper, personLookupTrace()).rootSpan().children().getFirst();

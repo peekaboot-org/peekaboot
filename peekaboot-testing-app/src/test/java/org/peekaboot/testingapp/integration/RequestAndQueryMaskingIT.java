@@ -71,6 +71,25 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
         assertThat(formParams.path("username").get(0).asString()).isEqualTo("alice");
     }
 
+    /** The id is no number, so the request answers 400 and its trace is captured all the same. */
+    @Test
+    void aCredentialInThePathComesBackMaskedFromTheTraceApi() {
+        String token = "ey" + "J".repeat(20) + ".ey" + "J".repeat(20) + "." + "a".repeat(12);
+        String traceId = traces.get("/persons/" + token);
+
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
+
+        assertThat(trace.path("summary").path("request").path("path").asString())
+                .isEqualTo("/persons/******");
+        assertThat(trace.path("data")
+                        .path("httpExchange")
+                        .path("request")
+                        .path("path")
+                        .asString())
+                .isEqualTo("/persons/******");
+        assertThat(trace.toString()).doesNotContain(token);
+    }
+
     /**
      * The captured span is written straight to the real TraceStore bean rather than
      * triggered through an actual JDBC call, so this test can isolate what it's actually

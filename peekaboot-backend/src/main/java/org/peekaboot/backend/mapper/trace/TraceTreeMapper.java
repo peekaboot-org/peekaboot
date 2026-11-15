@@ -25,12 +25,18 @@ public class TraceTreeMapper {
     private final TagMasker tagMasker;
     private final SqlStatements sqlStatements;
     private final SpanExceptions spanExceptions;
+    private final TraceRequests traceRequests;
 
     /** {@code sqlFormatter} is {@link SqlFormatter#NONE} where none is available. */
-    TraceTreeMapper(MaskingEngine maskingEngine, SqlFormatter sqlFormatter, StackTraceRules stackTraceRules) {
+    TraceTreeMapper(
+            MaskingEngine maskingEngine,
+            SqlFormatter sqlFormatter,
+            StackTraceRules stackTraceRules,
+            TraceRequests traceRequests) {
         this.tagMasker = new TagMasker(maskingEngine);
         this.sqlStatements = new SqlStatements(maskingEngine, sqlFormatter);
         this.spanExceptions = new SpanExceptions(maskingEngine, stackTraceRules);
+        this.traceRequests = traceRequests;
     }
 
     /** The statements and row counts of {@code traceData}'s query spans, to share with {@link QueryExtractor}. */
@@ -87,7 +93,7 @@ public class TraceTreeMapper {
                 traceData.interrupted(),
                 rootActionType,
                 rootOperation,
-                TraceRequests.of(rootSpanData),
+                traceRequests.of(rootSpanData),
                 rootSpan,
                 orphans,
                 spans.size(),

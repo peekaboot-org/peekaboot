@@ -3,10 +3,12 @@ package org.peekaboot.backend.mapper.trace;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.TraceResource;
+import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 
@@ -17,6 +19,7 @@ import org.peekaboot.backend.tracing.store.TraceDataBundle;
  */
 public final class TraceResources {
 
+    private final TraceRequests traceRequests;
     private final TraceRows traceRows;
 
     public TraceResources(
@@ -24,12 +27,18 @@ public final class TraceResources {
             SqlFormatter sqlFormatter,
             PeekabootTracingProperties tracingProperties,
             StackTraceRules stackTraceRules) {
+        this.traceRequests = new TraceRequests(maskingEngine);
         this.traceRows = new TraceRows(
-                new TraceTreeMapper(maskingEngine, sqlFormatter, stackTraceRules),
+                new TraceTreeMapper(maskingEngine, sqlFormatter, stackTraceRules, traceRequests),
                 new IssueDetector(tracingProperties),
                 new TraceLogMapper(maskingEngine, stackTraceRules),
                 new TraceSummaries(tracingProperties),
-                new TraceDetails());
+                new TraceDetails(new HttpExchangeMapper(maskingEngine)));
+    }
+
+    /** The request a root span answered as a summary names it, without mapping its trace. */
+    public TraceSummary.@Nullable Request requestOf(@Nullable SpanData root) {
+        return traceRequests.of(root);
     }
 
     /** The whole trace, its summary and its data. */

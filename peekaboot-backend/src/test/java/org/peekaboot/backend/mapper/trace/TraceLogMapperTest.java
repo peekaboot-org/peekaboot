@@ -199,8 +199,12 @@ class TraceLogMapperTest {
         store.addLog(log("t1").inSpan("async-child").saying("inside").build());
         store.addLog(log("t1").inSpan(null).saying("nowhere").build());
         TraceDataBundle bundle = bundle();
-        TraceTreeMapper treeMapper =
-                new TraceTreeMapper(new MaskingEngine(), SqlFormatter.NONE, new StackTraceRules(List.of(), List.of()));
+        MaskingEngine maskingEngine = new MaskingEngine();
+        TraceTreeMapper treeMapper = new TraceTreeMapper(
+                maskingEngine,
+                SqlFormatter.NONE,
+                new StackTraceRules(List.of(), List.of()),
+                new TraceRequests(maskingEngine));
         TraceData snapshot = bundle.snapshot();
         TraceTree subtree = treeMapper.mapSubtree(snapshot, "async", treeMapper.queriesOf(snapshot));
 
