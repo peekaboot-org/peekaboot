@@ -3,6 +3,7 @@ package org.peekaboot.backend.mapper.trace;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.analysis.DbSpans;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.trace.SqlStatement;
 import org.peekaboot.backend.masking.MaskingEngine;

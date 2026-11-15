@@ -1,4 +1,4 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
@@ -6,10 +6,10 @@ import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.analysis.SpanWalk.Visit;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 
 class HotspotsTest {
 

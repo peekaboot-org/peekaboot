@@ -23,6 +23,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.peekaboot.backend.analysis.DbSpans;
+import org.peekaboot.backend.analysis.RootActionTypes;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.SpanNode;

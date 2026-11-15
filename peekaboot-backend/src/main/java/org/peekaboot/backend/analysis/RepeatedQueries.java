@@ -1,4 +1,4 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import java.util.LinkedHashMap;
 import java.util.List;

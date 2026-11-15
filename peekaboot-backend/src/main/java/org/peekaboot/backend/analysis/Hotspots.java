@@ -1,20 +1,20 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import java.util.Comparator;
 import java.util.List;
+import org.peekaboot.backend.analysis.SpanWalk.Visit;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceSummary;
-import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 
 /** The spans that did the most work themselves, where a slow trace spent its time. */
-final class Hotspots {
+public final class Hotspots {
 
     private static final int LIMIT = 3;
 
     private Hotspots() {}
 
     /** The sort is stable, so of equal self times the span walked first comes first. */
-    static List<TraceSummary.Hotspot> of(List<Visit> visits) {
+    public static List<TraceSummary.Hotspot> of(List<Visit> visits) {
         return visits.stream()
                 .map(Visit::span)
                 .filter(span -> span.selfMs() > 0)

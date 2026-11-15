@@ -1,4 +1,4 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -9,15 +9,19 @@ import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.SpanNode;
 
 /** A mapped trace's spans in the order the Spans tab draws them, each before its children. */
-final class SpanWalk {
+public final class SpanWalk {
 
-    /** @param depth 0 for a top span, and one more for each generation below it */
-    record Visit(SpanNode span, int depth) {}
+    /**
+     * A span at its place in the walk.
+     *
+     * @param depth 0 for a top span, and one more for each generation below it
+     */
+    public record Visit(SpanNode span, int depth) {}
 
     private SpanWalk() {}
 
     /** The root's tree, or while the root is missing each orphan subtree in turn. */
-    static List<Visit> visits(@Nullable SpanNode rootSpan, List<SpanNode> orphans) {
+    public static List<Visit> visits(@Nullable SpanNode rootSpan, List<SpanNode> orphans) {
         List<Visit> visits = new ArrayList<>();
         // a stack of its own, since a chain of spans can nest deeper than the thread's stack allows
         Deque<Visit> pending = new ArrayDeque<>();
@@ -30,7 +34,7 @@ final class SpanWalk {
         return Collections.unmodifiableList(visits);
     }
 
-    static List<SpanNode> subtree(SpanNode span) {
+    public static List<SpanNode> subtree(SpanNode span) {
         return visits(span, List.of()).stream().map(Visit::span).toList();
     }
 

@@ -3,6 +3,7 @@ package org.peekaboot.backend.mapper.trace;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.peekaboot.backend.analysis.SpanWalk;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.SpanNode;

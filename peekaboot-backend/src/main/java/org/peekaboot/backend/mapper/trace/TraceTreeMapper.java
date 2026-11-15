@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.peekaboot.backend.analysis.DbSpans;
+import org.peekaboot.backend.analysis.RootActionTypes;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;

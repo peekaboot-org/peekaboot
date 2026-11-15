@@ -1,4 +1,4 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;

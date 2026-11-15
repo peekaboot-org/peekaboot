@@ -91,7 +91,7 @@ what it does with Lettuce's spans today, for a decision on whether it should.
   reactive `set`, stays `DATABASE` and listed.
 
 A span counts as a query when it is a CLIENT span with any `db.*` or `jdbc.query*` tag:
-`isQuery` in `peekaboot-backend/src/main/java/org/peekaboot/backend/mapper/trace/DbSpans.java`.
+`isQuery` in `peekaboot-backend/src/main/java/org/peekaboot/backend/analysis/DbSpans.java`.
 
 ## The automated UI suite (`src/test`)
 

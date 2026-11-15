@@ -5,6 +5,7 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.analysis.IssueDetector;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceLog;

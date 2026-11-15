@@ -1,4 +1,4 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
@@ -9,13 +9,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.analysis.SpanWalk.Visit;
 import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 
 class TraceCausesTest {

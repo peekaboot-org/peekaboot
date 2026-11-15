@@ -4,6 +4,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.hibernate.engine.jdbc.internal.FormatStyle;
 import org.hibernate.engine.jdbc.internal.Formatter;
+import org.peekaboot.backend.analysis.DbSpans;
 
 /**
  * Hibernate's {@code format_sql} layout ({@link FormatStyle#BASIC}), so a statement reads the

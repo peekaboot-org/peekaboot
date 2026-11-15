@@ -1,14 +1,14 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.analysis.SpanWalk.Visit;
 import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceSummary;
-import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 
@@ -18,7 +18,7 @@ import org.peekaboot.backend.tracing.tags.HttpSpanTags;
  * log, then a SERVER span's 5xx. The deepest failing span is nearest the code that threw, since
  * each ancestor only passed the exception on.
  */
-final class TraceCauses {
+public final class TraceCauses {
 
     /** A failing span with the exception info it carries, at its depth in the walk. */
     private record Failure(String spanId, SpanExceptionInfo exception, int depth) {}
@@ -29,7 +29,7 @@ final class TraceCauses {
      * Null where nothing failed the trace, where the caps evicted what did, or where the only
      * failure is a span that names no exception type or message.
      */
-    static TraceSummary.@Nullable Cause of(List<Visit> visits, List<TraceLog> errorLogs) {
+    public static TraceSummary.@Nullable Cause of(List<Visit> visits, List<TraceLog> errorLogs) {
         List<Failure> failures = visits.stream()
                 .filter(visit -> TraceReasons.failed(visit.span()))
                 .flatMap(TraceCauses::failureOf)

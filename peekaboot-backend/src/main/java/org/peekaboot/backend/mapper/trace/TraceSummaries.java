@@ -1,12 +1,16 @@
 package org.peekaboot.backend.mapper.trace;
 
 import java.util.List;
+import org.peekaboot.backend.analysis.Hotspots;
+import org.peekaboot.backend.analysis.SpanWalk;
+import org.peekaboot.backend.analysis.SpanWalk.Visit;
+import org.peekaboot.backend.analysis.TraceCauses;
+import org.peekaboot.backend.analysis.TraceReasons;
 import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.domain.trace.TraceOutcome;
 import org.peekaboot.backend.domain.trace.TraceReason;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 

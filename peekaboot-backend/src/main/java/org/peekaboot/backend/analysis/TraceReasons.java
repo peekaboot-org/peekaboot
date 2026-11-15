@@ -1,8 +1,9 @@
-package org.peekaboot.backend.mapper.trace;
+package org.peekaboot.backend.analysis;
 
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.analysis.SpanWalk.Visit;
 import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
@@ -10,7 +11,6 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceReason;
 import org.peekaboot.backend.domain.trace.TraceReason.Kind;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 
 /**
@@ -18,7 +18,7 @@ import org.peekaboot.backend.tracing.tags.HttpSpanTags;
  * admission rules, so on a whole trace a reason names what put the trace in its bucket. An async
  * row is judged on its own subtree and window, which the store never admits by.
  */
-final class TraceReasons {
+public final class TraceReasons {
 
     private TraceReasons() {}
 
@@ -26,7 +26,7 @@ final class TraceReasons {
      * Failures by kind in tree order, then the ERROR logs as they arrived, then slowness.
      * {@code visits} is the walk of {@code tree}.
      */
-    static List<TraceReason> of(
+    public static List<TraceReason> of(
             TraceTree tree, List<Visit> visits, List<TraceLog> errorLogs, long slowTraceThresholdMs) {
         List<TraceReason> reasons = new ArrayList<>();
         for (Visit visit : visits) {
