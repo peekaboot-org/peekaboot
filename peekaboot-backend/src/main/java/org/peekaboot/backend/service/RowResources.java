@@ -11,8 +11,9 @@ import org.peekaboot.backend.service.RowSources.RowSource;
 import org.peekaboot.backend.tracing.store.TraceStore;
 
 /**
- * The rows one listing request maps, each at most once. An async row a verdict filter read is
- * mapped in the requested view, so the page serves that same mapping instead of a second one.
+ * The rows one listing request maps. A verdict filter judges an async row on its summary, mapped
+ * once per request whatever view the request asked for. A summary page serves those mappings, and
+ * a full page maps only its own rows in full, so no row is laid out for a page that leaves it out.
  * Lives for one request; not thread-safe.
  */
 final class RowResources {
@@ -20,7 +21,7 @@ final class RowResources {
     private final TraceStore traceStore;
     private final TraceResources traceResources;
     private final TraceView view;
-    private final Map<RowKey, TraceResource> mapped = new HashMap<>();
+    private final Map<RowKey, TraceResource> summaries = new HashMap<>();
 
     RowResources(TraceStore traceStore, TraceResources traceResources, TraceView view) {
         this.traceStore = traceStore;
@@ -28,14 +29,25 @@ final class RowResources {
         this.view = view;
     }
 
+    /**
+     * The row in the requested view, for the page. A full row is a later read than the summary a
+     * filter judged it on, so a span that landed in between shows in the row alone.
+     */
     TraceResource of(RowSource row) {
-        return mapped.computeIfAbsent(
-                new RowKey(row.bundle().traceId(), row.subtreeRootSpanId()),
-                key -> TraceReads.row(traceStore, traceResources, row.bundle(), key.subtreeRootSpanId(), view));
+        return view == TraceView.SUMMARY ? summaryRow(row) : map(row, view);
     }
 
     TraceSummary summaryOf(RowSource row) {
-        return of(row).summary();
+        return summaryRow(row).summary();
+    }
+
+    private TraceResource summaryRow(RowSource row) {
+        return summaries.computeIfAbsent(
+                new RowKey(row.bundle().traceId(), row.subtreeRootSpanId()), key -> map(row, TraceView.SUMMARY));
+    }
+
+    private TraceResource map(RowSource row, TraceView rowView) {
+        return TraceReads.row(traceStore, traceResources, row.bundle(), row.subtreeRootSpanId(), rowView);
     }
 
     /**

@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
@@ -99,16 +101,7 @@ class TraceInsightsServiceTest {
     @Test
     void theDetailFormatsEachQueryOnce() {
         List<String> formatted = new ArrayList<>();
-        SqlFormatter recording = sql -> {
-            formatted.add(sql);
-            return sql;
-        };
-        TraceInsightsService recordingService = new TraceInsightsService(
-                store,
-                new MaskingEngine(),
-                recording,
-                new PeekabootTracingProperties(),
-                new StackTraceRules(List.of(), List.of()));
+        TraceInsightsService recordingService = serviceRecordingFormattedSqlInto(formatted);
         addTraceWithDbSpan("t1", 100);
 
         TraceResource detail = recordingService.getTrace("t1").orElseThrow();
@@ -1000,31 +993,12 @@ class TraceInsightsServiceTest {
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
 
-    /** A verdict filter maps an async row to judge it, and the page serves that same mapping. */
+    /** A verdict filter judges an async row on a summary, so the row's one full mapping is the page's. */
     @Test
-    void aVerdictFilterMapsAnAsyncRowOnce() {
+    void aVerdictFilterInTheFullViewMapsAnAsyncRowInFullOnce() {
         List<String> formatted = new ArrayList<>();
-        SqlFormatter recording = sql -> {
-            formatted.add(sql);
-            return sql;
-        };
-        TraceInsightsService recordingService = new TraceInsightsService(
-                store,
-                new MaskingEngine(),
-                recording,
-                new PeekabootTracingProperties(),
-                new StackTraceRules(List.of(), List.of()));
-        store.addSpan(rootSpan("t1", "test-operation", Span.Kind.SERVER, 50).build());
-        store.addSpan(span("db-t1")
-                .in("t1")
-                .parent("async-t1")
-                .named("SELECT users")
-                .kind(Span.Kind.CLIENT)
-                .at(60, 20)
-                .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"))
-                .build());
-        store.addSpan(
-                asyncTask("async-t1").in("t1").parent("span-t1").at(40, 100).build());
+        TraceInsightsService recordingService = serviceRecordingFormattedSqlInto(formatted);
+        addTraceWithAsyncQuery("t1", "SELECT * FROM users WHERE id = ?");
 
         List<TraceResource> rows = recordingService
                 .listTraces(listing()
@@ -1036,6 +1010,52 @@ class TraceInsightsServiceTest {
 
         assertThat(rows).extracting(row -> row.summary().rootActionType()).containsExactly(RootActionType.ASYNC_TASK);
         assertThat(formatted).containsExactly("SELECT * FROM users WHERE id = ?");
+    }
+
+    /** All three async rows are judged and one is on the page. Only a full mapping lays a statement out. */
+    @Test
+    void aVerdictFilterInTheFullViewFormatsOnlyThePagesRows() {
+        List<String> formatted = new ArrayList<>();
+        TraceInsightsService recordingService = serviceRecordingFormattedSqlInto(formatted);
+        addTraceWithAsyncQuery("t1", "SELECT 1");
+        addTraceWithAsyncQuery("t2", "SELECT 2");
+        addTraceWithAsyncQuery("t3", "SELECT 3");
+
+        TraceListResponse response = recordingService.listTraces(listing()
+                .rootActionType("async_task")
+                .minDurationMs("0")
+                .view("full")
+                .limit(1)
+                .build());
+
+        assertThat(idsOf(response)).containsExactly("t3");
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(3, 0, 0));
+        assertThat(formatted).containsExactly("SELECT 3");
+    }
+
+    /** Each mapping of a row reads the trace's buckets once, so the bucket reads count the mappings. */
+    @Test
+    void aVerdictFilterInTheSummaryViewMapsAnAsyncRowOnce() {
+        AtomicInteger bucketReads = new AtomicInteger();
+        InMemoryTraceStore counting = new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            public Set<TraceBucket> bucketsOf(String traceId) {
+                bucketReads.incrementAndGet();
+                return super.bucketsOf(traceId);
+            }
+        };
+        counting.addSpan(rootSpan("t1", "test-operation", Span.Kind.SERVER, 10).build());
+        counting.addSpan(asyncTaskSpan("t1", 10, 50));
+
+        List<TraceResource> rows = newService(counting)
+                .listTraces(listing()
+                        .rootActionType("async_task")
+                        .minDurationMs("0")
+                        .build())
+                .traces();
+
+        assertThat(rows).extracting(row -> row.summary().rootActionType()).containsExactly(RootActionType.ASYNC_TASK);
+        assertThat(bucketReads).hasValue(1);
     }
 
     /** Every type is listed, so only {@code statusCode} makes the counts filtered ones. */
@@ -1657,6 +1677,20 @@ class TraceInsightsServiceTest {
                 new StackTraceRules(exclusions, applicationPackages));
     }
 
+    /** A service on the test's store that records every statement it lays out, in order. */
+    private TraceInsightsService serviceRecordingFormattedSqlInto(List<String> formatted) {
+        SqlFormatter recording = sql -> {
+            formatted.add(sql);
+            return sql;
+        };
+        return new TraceInsightsService(
+                store,
+                new MaskingEngine(),
+                recording,
+                new PeekabootTracingProperties(),
+                new StackTraceRules(List.of(), List.of()));
+    }
+
     /** A single SERVER root span of the given duration. */
     private Spans.SpanBuilder rootSpan(String traceId, String name, Span.Kind kind, long durationMs) {
         return span("span-" + traceId).in(traceId).named(name).kind(kind).at(0, durationMs);
@@ -1738,6 +1772,24 @@ class TraceInsightsServiceTest {
         store.addSpan(
                 rootSpan(traceId, "test-operation", Span.Kind.SERVER, requestMs).build());
         store.addSpan(asyncTaskSpan(traceId, requestMs, asyncMs));
+    }
+
+    /** A request whose background task ran one statement and outlived it. */
+    private void addTraceWithAsyncQuery(String traceId, String sql) {
+        store.addSpan(rootSpan(traceId, "test-operation", Span.Kind.SERVER, 50).build());
+        store.addSpan(span("db-" + traceId)
+                .in(traceId)
+                .parent("async-" + traceId)
+                .named("SELECT users")
+                .kind(Span.Kind.CLIENT)
+                .at(60, 20)
+                .tags(Map.of("db.system", "postgresql", "db.statement", sql))
+                .build());
+        store.addSpan(asyncTask("async-" + traceId)
+                .in(traceId)
+                .parent("span-" + traceId)
+                .at(40, 100)
+                .build());
     }
 
     /** The same hand-off, from a request that then failed while the background work did not. */
