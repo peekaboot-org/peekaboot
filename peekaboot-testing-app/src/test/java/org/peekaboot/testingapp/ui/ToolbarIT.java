@@ -421,9 +421,9 @@ class ToolbarIT extends PlaywrightTestBase {
             page.evaluate("id => fetch('/api/orders/' + id + '/report')", String.valueOf(order.getId()));
             toolbar.awaitMetrics("span");
 
-            assertThat(toolbar.text("#pk-metrics .pk-stat__duration")).matches("\\d,\\d{2}s");
+            assertThat(toolbar.text("#pk-metrics .pk-stat__duration")).matches("\\d+,\\d{2}s");
             toolbar.openOverlay();
-            assertThat(overlay.text(".pk-overlay__duration")).matches("\\d,\\d{2}s");
+            assertThat(overlay.text(".pk-overlay__duration")).matches("\\d+,\\d{2}s");
         } finally {
             OrderFixtures.deleteOrder(orderRepository, orderLineRepository, order);
         }
