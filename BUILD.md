@@ -7,8 +7,8 @@ checks and a coverage floor run as gates across the build lifecycle (see
 in the build needs it and nothing uses the machine's own Node.
 
 A parallel Gradle build covers the same modules, tests and gates (see
-[the Gradle build](#the-parallel-gradle-build) below). CI runs Maven, and Gradle only for
-Dependabot branches, so every Maven statement in this document is authoritative and the
+[the Gradle build](#the-parallel-gradle-build) below). CI runs Maven, and Gradle only on `dev`
+and on Dependabot branches, so every Maven statement in this document is authoritative and the
 Gradle build must be kept in lockstep.
 
 ## Prerequisites
@@ -123,16 +123,24 @@ resolves from the reactor under either parent, and both parents manage dependenc
 through the same `spring-boot-dependencies` BOM, so dependency resolution matches apart from
 the parent's slf4j-api override (see [the dependency check](#the-dependency-check)). A
 real consume-as-a-user check would build outside the reactor against an installed jar,
-and nothing here does that. The cost of the split is duplication: its POM re-declares the
-verify-bound static-analysis gates, the JaCoCo and Mockito agent wiring, the
-`spotless-apply-local` profile and the Error Prone compiler config by hand, pins the
-compiler, dependency, surefire and failsafe plugins at the parent's versions, and picks
-up Spring Boot's plugin versions for everything else. `BuildVersionLockstepTest` compares
-the copies its Javadoc lists with the root pom; every other change to the parent's build
-config has to be mirrored there by hand. The one deliberate
-exception is the dependency check: the sample app is the module that violates it (see
-[the dependency check](#the-dependency-check)), and gating an unpublished sample on a
-third-party version clash would buy nothing but two permanent exclusions.
+and nothing here does that.
+
+The cost of the split is duplication: its POM re-declares the verify-bound static-analysis
+gates, the JaCoCo and Mockito agent wiring, the `spotless-apply-local` profile and the Error
+Prone compiler config by hand, pins the compiler, dependency, surefire, failsafe, install and
+deploy plugins at the parent's versions, and picks up Spring Boot's plugin versions for
+everything else.
+
+`BuildVersionLockstepTest` compares the copies with the root pom: the four static-analysis
+gates and the JaCoCo plugin as whole plugin declarations, the Error Prone compiler arguments
+and version, every plugin version both poms pin, the Java level, the build instant, the
+JaCoCo, PMD and Surefire versions and the Spring Boot line. The Mockito agent wiring and the
+`spotless-apply-local` profile are compared with nothing and have to be mirrored there by
+hand.
+
+The one deliberate exception is the dependency check: the sample app is the module that
+violates it (see [the dependency check](#the-dependency-check)), and gating an unpublished
+sample on a third-party version clash would buy nothing but two permanent exclusions.
 
 ## The parallel Gradle build
 
@@ -160,23 +168,28 @@ The Gradle build copies nothing the poms declare. `settings.gradle.kts` reads th
 list, the module `<version>` and every `<properties>` entry out of the root pom and each
 module's pom, a module's own properties over the root pom's. Scripts read one with
 `pomProperty("...")` from `buildSrc/src/main/kotlin/PomProperties.kt`; `buildSrc`, a build of
-its own, reads `spring-boot.version` for the Boot plugin directly. So the Spring Boot line,
-datasource-micrometer, JaCoCo, PMD, the compiler release level, the coverage floors, the Node
-pin, Playwright, the JSON Schema validator, the IT defaults and the build instant each live in
-one pom. Mockito's agent jar takes its version from the Boot BOM, as Maven does.
+its own, reads `spring-boot.version` for the Boot plugin directly. So datasource-micrometer,
+the coverage floors, the Node pin, Playwright, the JSON Schema validator and the IT defaults
+each live in one pom. The Spring Boot line, JaCoCo, PMD, Surefire, the compiler release level
+and the build instant live in two, the root's and the testing-app's, and
+`BuildVersionLockstepTest` holds the two equal. Mockito's agent jar takes its version from the
+Boot BOM, as Maven does.
+
 `maven-release-plugin` rewrites the poms alone and Dependabot bumps a pom property alone, so a
-copy on the Gradle side would go stale behind a green build, because CI builds Gradle only on
-Dependabot branches. `BuildVersionLockstepTest` fails if `gradle.properties` holds anything but
-Gradle's own settings, or if a Gradle script pins a build instant of its own.
+copy on the Gradle side would go stale behind a green build, because each build is consistent
+in itself and CI builds Gradle only on `dev` and on Dependabot branches.
+`BuildVersionLockstepTest` fails if `gradle.properties` holds anything but Gradle's own
+settings, or if a Gradle script pins a build instant of its own.
 
 A value with no pom property behind it is written on both sides and has to change on both:
 Error Prone, palantir, Checkstyle, SpotBugs and Spotless, all spelled inside plugin
 configuration, the root pom's slf4j-api override (a constraint in the convention plugin),
 jdbc-url-parser, cron-utils, the testing-app's springdoc, datasource-proxy and axe-core, and
-the frontend gate's `npm ci`. `BuildVersionLockstepTest` compares every pair. SpotBugs and
-Spotless compare through a mapping, because one side names a plugin whose version is not the
-tool's. The
-frontend's *lint tool* versions are not on that list. They live once in
+the frontend gate's `npm ci`. `BuildVersionLockstepTest` compares SpotBugs and Spotless
+through a mapping, because one side names a plugin whose version is not the tool's. It
+compares every other pair as written.
+
+The frontend's *lint tool* versions are not on that list. They live once in
 `peekaboot-frontend/package.json`, which both builds install from, so there is nothing to
 drift.
 
@@ -187,9 +200,9 @@ coordinate on both sides (springdoc, datasource-proxy, jdbc-url-parser, cron-uti
 gets a `gradle` PR next to the `maven` one, and the human lands the two together. A tool Gradle
 pins through `toolVersion` or `palantirJavaFormat(...)` has no Gradle PR, because
 Dependabot's `gradle` ecosystem bumps dependency coordinates only. The Maven PR goes red alone,
-and the human adds the Gradle edit on that branch. On every `dependabot/*` branch
-`build-on-push` adds a `gradle-build` job next to the Maven job, so that Gradle edit builds
-before the merge. A Gradle bump with no Maven twin, such as a `buildSrc` plugin or the
+and the human adds the Gradle edit on that branch. On every `dependabot/*` branch, as on
+`dev`, `build-on-push` adds a `gradle-build` job next to the Maven job, so that Gradle edit
+builds before the merge. A Gradle bump with no Maven twin, such as a `buildSrc` plugin or the
 wrapper, auto-merges once both jobs are green.
 
 ### Reproducibility and artifact parity
@@ -214,8 +227,9 @@ block of the conventions plugin. `PublishedJarLicenceIT` holds the four jars to 
 two files, byte for byte, in whichever build runs it.
 
 Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-publish`
-and `peekaboot-release` profiles, and the CI wiring around them. Nor the dependency check, which guards a Maven
-resolution behaviour Gradle does not have. Outside the testing app's enforced BOM, Gradle takes
+profile, the signature in `peekaboot-release`, the `maven-release-plugin` configuration and
+the CI wiring around them. Nor the dependency check, which guards a Maven resolution
+behaviour Gradle does not have. Outside the testing app's enforced BOM, Gradle takes
 the highest requested version, so it cannot settle a transitive below what a dependent asked
 for.
 
@@ -266,8 +280,9 @@ POM and build script, because the root `<plugins>` block reaches modules that ha
 `package.json` and lockfile, which both build systems install from.
 
 `-Dpeekaboot.frontend.lint.skip=true` turns the frontend gate off. It is the switch CI's
-snapshot-install step uses; `-DskipTests` and `-Dmaven.test.skip` do not reach it, because
-frontend-maven-plugin honours those only in the `test` and `integration-test` phases.
+`install-reactor-snapshots` and `maven-deploy-snapshot` steps use; `-DskipTests` and
+`-Dmaven.test.skip` do not reach it, because frontend-maven-plugin honours those only in the
+`test` and `integration-test` phases.
 
 Each config file explains its own exclusions; the short version:
 
@@ -430,7 +445,8 @@ covers only the build mechanics.
   `*IT` for failsafe, the same patterns as the Gradle `test`/`integrationTest` tasks.
   The defaults would also take `Test*`, `*TestCase`, `IT*` and `*ITCase`, which Gradle
   would not, so a class named that way would run under one build only. The testing-app
-  keeps Boot's defaults; every class the suite runs there is a `*IT`.
+  keeps Boot's defaults. Two classes run under surefire there, `ComposeImagesTest` and
+  `ColourVisionTest`; every other class the suite runs is a `*IT`.
 - Two classes are excluded from normal runs by *naming*, not configuration:
   `ScreenshotCapture` (a website-screenshot tool that does need Docker) and
   `TraceWritePathBenchmark`. Neither matches those includes. Running either is Maven
@@ -441,10 +457,8 @@ covers only the build mechanics.
 
 The workflows live under `.github/workflows/`. Every workflow that builds uses the checked-in
 `./mvnw`, and every third-party action is pinned to a commit SHA with the tag in a trailing
-comment; Dependabot's `github-actions` updates move the pins. `osslabz/github-actions` is the
-exception, tracked by its moving `@v1` tag: SHA pinning defends against a third-party action
-being retagged under you, which does not apply to an action in an organisation of our own, and
-pinning it here would leave this repository the one consumer that never receives its fixes.
+comment, `osslabz/github-actions` included. Dependabot's `github-actions` updates move the
+pins, that one too.
 
 ### `.github/actions/prepare-build`
 
@@ -452,30 +466,45 @@ The steps the build workflows share between their checkout and their Maven build
 composite action: JDK 25 (temurin) with the Maven cache and the `settings.xml` credentials a
 workflow asks for, the Playwright browser and npm caches, the reactor's SNAPSHOTs installed,
 then the Playwright browsers. The `browsers` input names the engines and defaults to
-`chromium`; `with-deps` adds `--with-deps` for their system libraries. `build-on-push` and
-`release` both name the `central` server and its origin, because both publish; only the
-release passes a GPG key. `cross-browser` passes none and gets `setup-java`'s defaults. The
-reason for each step sits beside it in
+`chromium`; `with-deps` adds `--with-deps` for their system libraries. `cache: 'false'`
+restores and saves none of the three caches.
+
+`build-on-push` names the `central` server and its origin, because it publishes. The release
+passes `cache: 'false'` and no credentials. It imports its signing key and names the `central`
+server in a later step of its own, `import-signing-key`. `cross-browser` names no server and
+gets `setup-java`'s defaults. The reason for each step sits beside it in
 [`action.yml`](.github/actions/prepare-build/action.yml).
 
 ### `build-on-push.yml`
 
 Runs on every branch except `main`, and on a `workflow_dispatch`, which
-`dependabot-pr-auto-merge` sends for `dev` after each merge. It gates the pushed commit
-subjects, runs `prepare-build`, sets the branch's snapshot version and runs
-`./mvnw --batch-mode clean deploy -P peekaboot-publish`. A run that cannot read the publishing
-secret, which covers Dependabot's, runs `verify` instead. After the build it runs the
-release-notes tests and the tests of `.github/central/await-release.sh` (against the real
-repo1), and writes the pending notes into the run summary. See [Snapshots](#snapshots) and
-[Release notes](#release-notes).
+`dependabot-pr-auto-merge` sends for `dev` after each merge. A push to a branch cancels that
+branch's run in progress. On `dev` a run may be in its deploy, so the newer run waits
+instead.
+
+It gates the pushed commit subjects, runs `prepare-build`, sets the branch's snapshot version
+and runs `./mvnw --batch-mode clean verify -P peekaboot-publish` in a step that holds no
+secret. A second step, `maven-deploy-snapshot`, holds the Central token and deploys what the
+first one compiled, with the tests and the verify-bound gates switched off. It runs only when
+the run can read the publishing secret, which Dependabot's runs cannot.
+`detect-publishing-secret` answers that as a step output, because a step's `if` cannot read
+`secrets`. See [Snapshots](#snapshots).
+
+After the deploy it runs the release-notes tests, the tests of
+`.github/central/await-release.sh` (against the real repo1) and the tests of
+`.github/release/publish-refs.sh` (against fixture repositories, needing `git` only), and
+writes the pending notes into the run summary. If repo1 cannot be reached, the
+`await-release.sh` tests print a warning and pass, so an outage does not fail a run whose
+snapshot is already deployed. `REPO1_PROBE_URL` overrides the address they probe. See
+[Release notes](#release-notes) and [Recovering a release](#recovering-a-release).
 
 A `lint` job runs next to it on every push: actionlint over the workflows and shellcheck over
 every `*.sh` under `.github`. Both are downloaded at a pinned version and checked against its
 SHA-256, and actionlint is handed that shellcheck for the workflows' `run:` blocks.
 
-On a `dependabot/*` branch a third job, `gradle-build`, validates the Gradle wrapper and runs
-`./gradlew build` next to the Maven job. See [Lockstep](#lockstep). The reasons behind each
-job's steps are in the [workflow](.github/workflows/build-on-push.yml).
+On `dev` and on every `dependabot/*` branch a third job, `gradle-build`, validates the Gradle
+wrapper and runs `./gradlew build` next to the Maven job. See [Lockstep](#lockstep). The
+reasons behind each job's steps are in the [workflow](.github/workflows/build-on-push.yml).
 
 ### `draft-release-notes.yml`
 
@@ -524,9 +553,11 @@ on `dev`. It merges patch and minor updates from the `github_actions`, `maven`, 
 It derives from `osslabz/github-actions`' shared `.github/workflows/dependabot-auto-merge.yml`.
 Why it waits for the build itself, why the allow-list leaves out what it does and how the jobs
 split their permissions are in the [workflow](.github/workflows/dependabot-pr-auto-merge.yml).
-Dependabot watches Maven, Gradle and the frontend's npm packages daily, GitHub Actions weekly.
-Every ecosystem holds an update back for seven days after its release, security updates
-excepted ([`dependabot.yml`](.github/dependabot.yml)).
+Dependabot watches Maven, Gradle and the frontend's npm packages daily, GitHub Actions and the
+testing app's `compose.yml` weekly. An image bump is not on the allow-list, so a person merges
+it; the three container ITs start the bumped image on its pull request. Every ecosystem holds
+an update back for seven days after its release, security updates excepted
+([`dependabot.yml`](.github/dependabot.yml)).
 
 Branch model: `dev` is the default and integration branch, and the only branch that
 originates commits. `main` is a pointer to the last released commit; the release job
@@ -535,6 +566,17 @@ forbids deletion and requires linear history. Its bypass list holds the organisa
 and the repository admin role, both `bypass_mode: always`, so those two rules bind CI and the
 merge button rather than the owner. Nothing requires a status check on `dev`; see
 [Releasing](#releasing) for why one cannot coexist with an automated release.
+
+### Pins nothing watches
+
+Dependabot reads none of these, so each moves by hand. Where a pin carries a checksum,
+compute it from the downloaded archive with `sha512sum` or `sha256sum`.
+
+| Pin | Where | Run after a bump |
+| --- | --- | --- |
+| git-cliff | `version` and `sha512` in `.github/actions/install-git-cliff/action.yml` | `.github/release-notes/test/run.sh`, with the new git-cliff on `PATH` |
+| actionlint, shellcheck | `VERSION` and `SHA256` in the `lint` job of `build-on-push.yml` | that job's `actionlint` and `shellcheck` commands, with the new binaries |
+| Node | `peekaboot.node.version` in `peekaboot-frontend/pom.xml`, which both builds read | `./mvnw -pl peekaboot-frontend -am verify` |
 
 ## Snapshots
 
@@ -545,8 +587,8 @@ branches carry the same version and a single coordinate would leave only the las
 standing.
 
 ```
-dev                          0.2.1-SNAPSHOT
-feat/async-instrumentation   0.2.1-feat-async-instrumentation-SNAPSHOT
+dev                          x.y.z-SNAPSHOT
+feat/async-instrumentation   x.y.z-feat-async-instrumentation-SNAPSHOT
 ```
 
 The `snapshot-version` action in
@@ -563,6 +605,10 @@ this pom pins nothing for it.
 whole mechanism: the plugin reads the version and routes a `-SNAPSHOT` to the snapshot
 repository by itself. The signature stays behind in `peekaboot-release`, because Central
 validates a release and takes a snapshot as it comes. A release activates both.
+
+`build-on-push` deploys in a step of its own, `maven-deploy-snapshot`:
+`./mvnw deploy -P peekaboot-publish` with the tests and the verify-bound gates skipped,
+because the `verify` step before it ran them without a secret.
 
 What lands is what a release lands, jar, sources and javadoc alike: the plugin publishes
 every attached artifact, and the source and javadoc jars are attached by the main build
