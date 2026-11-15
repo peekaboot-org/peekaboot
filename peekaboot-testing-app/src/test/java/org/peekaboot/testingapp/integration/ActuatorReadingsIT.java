@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import java.lang.reflect.RecordComponent;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -23,6 +25,9 @@ import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
+import org.peekaboot.backend.domain.scheduledtasks.ScheduledTaskInfo;
+import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
+import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testsupport.LogCapture;
@@ -31,11 +36,18 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.scheduling.Trigger;
+import org.springframework.scheduling.TriggerContext;
+import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest(classes = TestingApp.class)
 @ActiveProfiles("test")
-@Import({ActuatorReadingsIT.DataSourceMetadataFixtureConfig.class, ActuatorReadingsIT.ThrowingSourceConfig.class})
+@Import({
+    ActuatorReadingsIT.DataSourceMetadataFixtureConfig.class,
+    ActuatorReadingsIT.ThrowingSourceConfig.class,
+    ActuatorReadingsIT.CustomTriggerConfig.class
+})
 class ActuatorReadingsIT {
 
     @Autowired
@@ -113,6 +125,23 @@ class ActuatorReadingsIT {
     }
 
     /**
+     * Boot lists a task on a trigger of the application's own apart from the cron and fixed
+     * ones, under a name and in a shape of its own. Read off a real endpoint, so a binding that
+     * misses either lists no such task here.
+     */
+    @Test
+    void aTaskOnACustomTriggerReachesTheInsightsWithTheTriggerAsItsSchedule() {
+        ScheduledTasksInfo scheduledTasks =
+                insightsService.getInsights(Locale.ENGLISH, false).scheduledTasks();
+
+        assertThat(scheduledTasks.customCount()).isEqualTo(1);
+        assertThat(scheduledTasks.tasks())
+                .filteredOn(task -> task.type() == TaskType.CUSTOM)
+                .extracting(ScheduledTaskInfo::schedule)
+                .containsExactly("every full moon");
+    }
+
+    /**
      * Replaces Peekaboot's own loggers source by bean name - the way an application would -
      * to pin that one broken source does not break the rest of the insights payload.
      */
@@ -123,6 +152,28 @@ class ActuatorReadingsIT {
             return new InsightsSource("loggers", () -> {
                 throw new IllegalStateException("boom");
             });
+        }
+    }
+
+    /** The test profile's scheduler starts no task, so the job never runs. */
+    @TestConfiguration
+    static class CustomTriggerConfig {
+        @Bean
+        SchedulingConfigurer lunarJob() {
+            return registrar -> registrar.addTriggerTask(() -> {}, new LunarTrigger());
+        }
+    }
+
+    private static final class LunarTrigger implements Trigger {
+
+        @Override
+        public Instant nextExecution(TriggerContext triggerContext) {
+            return triggerContext.getClock().instant().plus(Duration.ofDays(29));
+        }
+
+        @Override
+        public String toString() {
+            return "every full moon";
         }
     }
 

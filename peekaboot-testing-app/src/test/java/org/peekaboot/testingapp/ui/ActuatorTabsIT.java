@@ -188,7 +188,7 @@ class ActuatorTabsIT extends PlaywrightTestBase {
                 m.create(container).show({scheduledTasks: {tasks: [{target: 'demo.Job.run', type: 'FIXED_RATE',
                     intervalMs: 60000, lastStatus: 'FAILED', lastExecution: 0,
                     lastException: 'java.lang.IllegalStateException: fixedDelay failed'}],
-                    cronCount: 0, fixedDelayCount: 0, fixedRateCount: 1}}, {});
+                    cronCount: 0, fixedDelayCount: 0, fixedRateCount: 1, customCount: 0}}, {});
             })()
             """);
 
@@ -197,6 +197,38 @@ class ActuatorTabsIT extends PlaywrightTestBase {
         assertThat(page.textContent("#pk-tasks-test-container .pk-task__exception"))
                 .contains("Error during last Execution:")
                 .contains("fixedDelay failed");
+    }
+
+    /**
+     * A custom trigger has neither a cron expression nor an interval to show, only the text it
+     * describes itself with. The sample app registers none, so the row is rendered from the
+     * payload shape the backend would send.
+     */
+    @Test
+    void aCustomTriggerTaskShowsItsTriggerInAGroupOfItsOwn() {
+        importModule("dashboard/tabs/scheduled-tasks.js", """
+            (() => {
+                const container = document.createElement('div');
+                container.innerHTML = '<div id="scheduled-tasks-groups"></div>';
+                container.id = 'pk-custom-task-test-container';
+                document.body.appendChild(container);
+                m.create(container).show({scheduledTasks: {tasks: [{target: 'demo.Job.run', type: 'CUSTOM',
+                    schedule: 'every full moon', scheduleDescription: null, intervalMs: null,
+                    lastStatus: 'PENDING', lastExecution: null, lastException: null, nextExecution: null}],
+                    cronCount: 0, fixedDelayCount: 0, fixedRateCount: 0, customCount: 1}}, {});
+            })()
+            """);
+
+        assertThat(page.locator("#pk-custom-task-test-container .pk-count-summary .pk-badge")
+                        .allTextContents())
+                .containsExactly("Total: 1", "Cron: 0", "Fixed Delay: 0", "Fixed Rate: 0", "Custom: 1");
+        assertThat(page.locator("#pk-custom-task-test-container .pk-group__name")
+                        .allTextContents())
+                .containsExactly("Custom Trigger Tasks");
+        assertThat(page.textContent("#pk-custom-task-test-container .pk-task__left .pk-badge"))
+                .isEqualTo("Custom");
+        assertThat(page.textContent("#pk-custom-task-test-container .pk-task__schedule"))
+                .isEqualTo("every full moon");
     }
 
     /**
@@ -212,7 +244,7 @@ class ActuatorTabsIT extends PlaywrightTestBase {
                 document.body.appendChild(container);
                 const ranAt = lastExecution => ({scheduledTasks: {tasks: [{target: 'demo.Job.run', type: 'FIXED_RATE',
                     intervalMs: 60000, lastStatus: 'SUCCESS', lastExecution}],
-                    cronCount: 0, fixedDelayCount: 0, fixedRateCount: 1}});
+                    cronCount: 0, fixedDelayCount: 0, fixedRateCount: 1, customCount: 0}});
                 const context = {features: {tracing: true}};
                 const tab = m.create(container);
                 tab.show(ranAt('2026-01-15T12:00:00Z'), context);

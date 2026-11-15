@@ -1705,12 +1705,13 @@
         "type": "object",
         "description": "Scheduled tasks.",
         "additionalProperties": false,
-        "required": ["tasks", "cronCount", "fixedDelayCount", "fixedRateCount"],
+        "required": ["tasks", "cronCount", "fixedDelayCount", "fixedRateCount", "customCount"],
         "properties": {
           "tasks": {"type": "array", "items": {"$ref": "#/components/schemas/ScheduledTaskInfo"}},
           "cronCount": {"type": "integer", "format": "int32"},
           "fixedDelayCount": {"type": "integer", "format": "int32"},
-          "fixedRateCount": {"type": "integer", "format": "int32"}
+          "fixedRateCount": {"type": "integer", "format": "int32"},
+          "customCount": {"type": "integer", "format": "int32"}
         }
       },
       "ScheduledTaskInfo": {
@@ -1723,16 +1724,16 @@
         ],
         "properties": {
           "target": {"type": "string"},
-          "type": {"type": "string", "enum": ["CRON", "FIXED_DELAY", "FIXED_RATE"]},
+          "type": {"type": "string", "enum": ["CRON", "FIXED_DELAY", "FIXED_RATE", "CUSTOM"]},
           "schedule": {
             "type": ["string", "null"],
-            "description": "The cron expression, `null` for a fixed task."
+            "description": "The cron expression, or a custom trigger's own description; `null` for a fixed rate or delay."
           },
           "scheduleDescription": {"type": ["string", "null"]},
           "intervalMs": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "`null` for a cron task."
+            "description": "`null` for a cron or a custom-trigger task."
           },
           "lastExecution": {"type": ["string", "null"], "format": "date-time"},
           "lastStatus": {"type": "string", "enum": ["SUCCESS", "FAILED", "PENDING", "RUNNING", "UNKNOWN"]},

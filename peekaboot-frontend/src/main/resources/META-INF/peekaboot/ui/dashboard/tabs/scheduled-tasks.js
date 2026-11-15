@@ -1,7 +1,7 @@
 /**
- * The "Scheduled Tasks" tab: @Scheduled methods grouped by schedule type (cron, fixed
- * delay, fixed rate), each expandable to its individual task rows, with a summary badge
- * row above the groups and a link to the Traces tab for scheduler-triggered traces.
+ * The "Scheduled Tasks" tab: scheduled tasks grouped by schedule type (cron, fixed delay,
+ * fixed rate, custom trigger), each expandable to its individual task rows, with a summary
+ * badge row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
 import {badge, countSummary, iconLink} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
@@ -13,8 +13,13 @@ import {buildAppHash} from '../../shared/url-state.js';
 export const id = 'scheduled-tasks';
 
 /** Every TaskType the backend emits, in the order the groups render. */
-const TYPE_LABELS = {CRON: 'Cron Tasks', FIXED_DELAY: 'Fixed Delay Tasks', FIXED_RATE: 'Fixed Rate Tasks'};
-const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 'Fixed Rate'};
+const TYPE_LABELS = {
+    CRON: 'Cron Tasks',
+    FIXED_DELAY: 'Fixed Delay Tasks',
+    FIXED_RATE: 'Fixed Rate Tasks',
+    CUSTOM: 'Custom Trigger Tasks'
+};
+const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 'Fixed Rate', CUSTOM: 'Custom'};
 
 export const TASK_TYPES = Object.keys(TYPE_LABELS);
 
@@ -39,7 +44,8 @@ export function create(container) {
             ['Total', scheduledTasks.tasks.length],
             ['Cron', scheduledTasks.cronCount],
             ['Fixed Delay', scheduledTasks.fixedDelayCount],
-            ['Fixed Rate', scheduledTasks.fixedRateCount]
+            ['Fixed Rate', scheduledTasks.fixedRateCount],
+            ['Custom', scheduledTasks.customCount]
         ], context.locale),
         emptyMessage: 'No scheduled tasks configured'
     });
@@ -56,9 +62,7 @@ function renderTaskRow(task, type, context) {
     const {locale, timeZone} = context;
     const dateOptions = {locale, timeZone};
 
-    const scheduleDisplay = type === 'CRON'
-        ? (task.scheduleDescription || task.schedule)
-        : formatFixedInterval(task.intervalMs);
+    const scheduleDisplay = scheduleText(task, type);
 
     // the description truncates when the row is narrow, so the tooltip has to carry it
     // as well as the raw expression it was derived from - when the backend shipped one;
@@ -80,6 +84,13 @@ function renderTaskRow(task, type, context) {
             el('span', {className: 'pk-task__target', text: shortTarget(task.target), title: task.target}),
             context.features?.tracing ? renderTracesLink(task) : null),
         task.lastException ? renderException(task.lastException) : null);
+}
+
+/** A cron task's expression in words, a custom trigger's own description, or the fixed interval. */
+function scheduleText(task, type) {
+    if (type === 'CRON') return task.scheduleDescription || task.schedule;
+    if (type === 'CUSTOM') return task.schedule;
+    return formatFixedInterval(task.intervalMs);
 }
 
 function timingEl(labelText, value) {

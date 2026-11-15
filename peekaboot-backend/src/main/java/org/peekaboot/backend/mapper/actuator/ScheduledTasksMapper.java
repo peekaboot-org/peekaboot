@@ -23,12 +23,13 @@ public class ScheduledTasksMapper {
 
     public ScheduledTasksInfo map(ScheduledTasksResponse response, Locale locale) {
         if (response == null) {
-            return new ScheduledTasksInfo(List.of(), 0, 0, 0);
+            return new ScheduledTasksInfo(List.of(), 0, 0, 0, 0);
         }
 
         var cronTasks = response.cron();
         var fixedDelayTasks = response.fixedDelay();
         var fixedRateTasks = response.fixedRate();
+        var customTasks = response.custom();
 
         List<ScheduledTaskInfo> tasks = new ArrayList<>();
         for (var cron : cronTasks) {
@@ -40,10 +41,14 @@ public class ScheduledTasksMapper {
         for (var fixed : fixedRateTasks) {
             tasks.add(mapFixedTask(fixed, TaskType.FIXED_RATE));
         }
+        for (var custom : customTasks) {
+            tasks.add(mapCustomTask(custom));
+        }
 
         tasks.sort(Comparator.comparing(ScheduledTaskInfo::type).thenComparing(ScheduledTaskInfo::target));
 
-        return new ScheduledTasksInfo(tasks, cronTasks.size(), fixedDelayTasks.size(), fixedRateTasks.size());
+        return new ScheduledTasksInfo(
+                tasks, cronTasks.size(), fixedDelayTasks.size(), fixedRateTasks.size(), customTasks.size());
     }
 
     private ScheduledTaskInfo mapCronTask(ScheduledTasksResponse.CronTask cron, Locale locale) {
@@ -70,6 +75,20 @@ public class ScheduledTasksMapper {
                 parseStatus(fixed.lastExecution()),
                 parseException(fixed.lastExecution()),
                 timeOf(fixed.nextExecution()));
+    }
+
+    private ScheduledTaskInfo mapCustomTask(ScheduledTasksResponse.CustomTask custom) {
+        return new ScheduledTaskInfo(
+                extractTarget(custom.runnable()),
+                TaskType.CUSTOM,
+                // The trigger describes itself with toString(), which can echo what it was built from.
+                maskingEngine.maskValue(custom.trigger()),
+                null,
+                null,
+                timeOf(custom.lastExecution()),
+                parseStatus(custom.lastExecution()),
+                parseException(custom.lastExecution()),
+                timeOf(custom.nextExecution()));
     }
 
     private String extractTarget(ScheduledTasksResponse.RunnableTarget runnable) {

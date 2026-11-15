@@ -47,7 +47,8 @@ class PeekabootJsonTest {
                                 Instant.parse("2026-09-01T11:00:00Z"))),
                         0,
                         0,
-                        1));
+                        1,
+                        0));
 
         contextRunner.run(context -> {
             JsonMapper bootDefault = context.getBean(JsonMapper.class);

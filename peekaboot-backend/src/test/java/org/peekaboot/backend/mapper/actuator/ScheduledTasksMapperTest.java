@@ -27,6 +27,7 @@ class ScheduledTasksMapperTest {
                         new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T07:00:00Z")),
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask"))),
                 List.of(),
+                List.of(),
                 List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
@@ -50,6 +51,7 @@ class ScheduledTasksMapperTest {
                                 null, "SUCCESS", Instant.parse("2026-01-11T06:49:25Z")),
                         new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T06:49:30Z")),
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay"))),
+                List.of(),
                 List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
@@ -74,7 +76,8 @@ class ScheduledTasksMapperTest {
                         new ScheduledTasksResponse.TaskExecution(
                                 null, "SUCCESS", Instant.parse("2026-01-11T06:49:20Z")),
                         new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T07:49:20Z")),
-                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRate"))));
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRate"))),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -105,6 +108,7 @@ class ScheduledTasksMapperTest {
                                 Instant.parse("2026-01-11T06:49:20Z")),
                         null,
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.failingTask"))),
+                List.of(),
                 List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
@@ -129,6 +133,7 @@ class ScheduledTasksMapperTest {
                                 Instant.parse("2026-01-11T06:49:20Z")),
                         null,
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.reconcile"))),
+                List.of(),
                 List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
@@ -145,6 +150,7 @@ class ScheduledTasksMapperTest {
                         createCronTask("0 0 * * * *", "b.Scheduler.cronB"),
                         createCronTask("0 0 * * * *", "a.Scheduler.cronA")),
                 List.of(createFixedTask(1000L, "c.Scheduler.fixed")),
+                List.of(),
                 List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
@@ -165,7 +171,8 @@ class ScheduledTasksMapperTest {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b")),
-                List.of(createFixedTask(120000L, "c")));
+                List.of(createFixedTask(120000L, "c")),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -181,7 +188,10 @@ class ScheduledTasksMapperTest {
     @Test
     void map_cronTask_shouldPopulateScheduleDescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(createCronTask("0 0 * * * *", "com.example.Scheduler.hourlyTask")), List.of(), List.of());
+                List.of(createCronTask("0 0 * * * *", "com.example.Scheduler.hourlyTask")),
+                List.of(),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -191,11 +201,68 @@ class ScheduledTasksMapperTest {
                 .contains("hour");
     }
 
+    /** A trigger that is neither a cron expression nor a fixed interval has only its own description to show. */
+    @Test
+    void map_shouldListACustomTriggerTask() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+                List.of(),
+                List.of(),
+                List.of(createFixedTask(1000L, "z.Scheduler.fixedRate")),
+                List.of(new ScheduledTasksResponse.CustomTask(
+                        "every full moon",
+                        new ScheduledTasksResponse.TaskExecution(
+                                null, "SUCCESS", Instant.parse("2026-01-11T06:00:00Z")),
+                        new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-02-09T06:00:00Z")),
+                        new ScheduledTasksResponse.RunnableTarget("a.Scheduler.lunar"))));
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.customCount()).isEqualTo(1);
+        assertThat(result.tasks())
+                .as("the custom task sorts after the fixed-rate one, whatever its target")
+                .extracting(ScheduledTaskInfo::type)
+                .containsExactly(TaskType.FIXED_RATE, TaskType.CUSTOM);
+        assertThat(result.tasks().get(1))
+                .isEqualTo(new ScheduledTaskInfo(
+                        "a.Scheduler.lunar",
+                        TaskType.CUSTOM,
+                        "every full moon",
+                        null,
+                        null,
+                        Instant.parse("2026-01-11T06:00:00Z"),
+                        TaskExecutionStatus.SUCCESS,
+                        null,
+                        Instant.parse("2026-02-09T06:00:00Z")));
+    }
+
+    /** A trigger describes itself with toString(), which can echo the address it polls. */
+    @Test
+    void map_shouldMaskACredentialInsideACustomTrigger() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(new ScheduledTasksResponse.CustomTask(
+                        "poll https://admin:hunter2@queue.example/jobs",
+                        null,
+                        null,
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.poll"))));
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks())
+                .extracting(ScheduledTaskInfo::schedule)
+                .containsExactly("poll https://******@queue.example/jobs");
+    }
+
     /** Boot omits the runnable for a task it cannot describe; the row still has a name. */
     @Test
     void map_shouldNameAnUnknownTargetWhenTheRunnableIsMissing() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(), List.of(new ScheduledTasksResponse.FixedTask(1000L, null, null, null)), List.of());
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(1000L, null, null, null)),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -206,7 +273,7 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldNameAnUnknownTargetWhenTheRunnableNamesNone() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(), List.of(createFixedTask(1000L, null), createFixedTask(2000L, null)), List.of());
+                List.of(), List.of(createFixedTask(1000L, null), createFixedTask(2000L, null)), List.of(), List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -221,6 +288,7 @@ class ScheduledTasksMapperTest {
                 List.of(
                         failedTask("a", new ScheduledTasksResponse.TaskExceptionInfo("Task failed", null)),
                         failedTask("b", new ScheduledTasksResponse.TaskExceptionInfo(null, "java.io.IOException"))),
+                List.of(),
                 List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);

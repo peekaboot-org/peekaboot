@@ -73,6 +73,9 @@ class ActuatorResponseParserTest {
         assertThat(response.scheduledtasks().cron())
                 .extracting(ScheduledTasksResponse.CronTask::expression)
                 .containsExactly("0 0 * * * *");
+        assertThat(response.scheduledtasks().custom())
+                .extracting(ScheduledTasksResponse.CustomTask::trigger)
+                .containsExactly("com.example.sample.Scheduler$LunarTrigger@4f5a6d2e");
     }
 
     @Test
