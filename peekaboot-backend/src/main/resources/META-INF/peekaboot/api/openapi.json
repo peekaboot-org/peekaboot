@@ -1251,7 +1251,7 @@
       },
       "SeriesSummary": {
         "type": "object",
-        "description": "A series over the window. The statistics are `null` when `samples` is 0.",
+        "description": "A series over the window. The statistics are `null` when `samples` is 0. One that is no finite number is `null` too, as a window holding an infinite sample gives.",
         "additionalProperties": false,
         "required": ["min", "avg", "max", "median", "p95", "latest", "samples"],
         "properties": {
@@ -1779,7 +1779,7 @@
       },
       "MetricsInfo": {
         "type": "object",
-        "description": "Every meter in the registry, grouped by name.",
+        "description": "The registry's meters, grouped by name: every one, or with `name` only those whose name starts with it.",
         "additionalProperties": false,
         "required": ["metrics"],
         "properties": {"metrics": {"type": "array", "items": {"$ref": "#/components/schemas/MetricGroup"}}}

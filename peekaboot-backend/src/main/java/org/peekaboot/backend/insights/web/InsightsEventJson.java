@@ -8,8 +8,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Renders one collector event as the JSON document the insights stream carries, which
- * {@code dashboard/tabs/insights-store.js} mirrors field by field. NaN is written as null:
- * JSON has no NaN, and a missing value is what the charts draw a gap for.
+ * {@code dashboard/tabs/insights-store.js} mirrors field by field. NaN and the infinities are
+ * written as null: JSON has neither, and a missing value is what the charts draw a gap for.
  */
 final class InsightsEventJson {
 

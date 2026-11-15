@@ -65,6 +65,7 @@ public record TraceSummary(
      * @param route the route tag as recorded, such as {@code /persons/{id}}; null when the request recorded none, or
      *     only a placeholder such as {@code NOT_FOUND}. Under Boot's default static-resource mapping
      *     ({@code spring.web.resources.add-mappings}), a request no controller matched carries {@code /**}
+     * @param path the request path, masked by the value rules
      */
     public record Request(
             @Nullable String method,

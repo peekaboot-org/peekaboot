@@ -6,7 +6,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * One level's history over the requested window, ready for JSON: a gap is {@code null} here,
- * since JSON has no NaN.
+ * and so is an infinite sample, since JSON has neither NaN nor an infinity.
  *
  * @param level the level the summaries were computed on
  * @param endEpochMs when the newest sample was taken; 0 before the level's first one

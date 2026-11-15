@@ -75,7 +75,7 @@ sealed interface LevelData permits TickLevelData, WindowLevelData {
         return Double.NaN;
     }
 
-    /** {@code values} with NaN mapped to null, since Jackson would emit invalid JSON ({@code NaN}) otherwise. */
+    /** {@code values} with NaN and the infinities mapped to null, since JSON has neither. */
     static List<Double> boxed(double[] values) {
         List<Double> boxed = new ArrayList<>(values.length);
         for (double value : values) {
