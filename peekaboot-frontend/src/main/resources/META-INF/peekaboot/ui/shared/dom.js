@@ -46,6 +46,14 @@ export function pressedToggle(props, onChange) {
     return control;
 }
 
+/**
+ * Sets `element.dataset[key]` unless it already holds `value`. A caller that runs on every
+ * chart draw then writes an attribute only when it changed.
+ */
+export function setDataAttribute(element, key, value) {
+    if (element.dataset[key] !== value) element.dataset[key] = value;
+}
+
 /** `text` as child nodes: every match of `query` (see markup.js's highlightParts) in a <mark>, the rest as text. */
 export function highlighted(text, query) {
     return highlightParts(text, query).map(part => (part.match ? el('mark', {text: part.text}) : part.text));

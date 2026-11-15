@@ -26,7 +26,7 @@
  * valToPos for whichever space a given call site needs rather than converting one into
  * the other by hand.
  */
-import {el} from '../../shared/dom.js';
+import {el, setDataAttribute} from '../../shared/dom.js';
 import {formatDateTimeWith, instantMs} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
 
@@ -112,8 +112,8 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({}), label})
     function publish(u) {
         const panel = panelOf(u);
         if (!panel) return;
-        panel.dataset.markerCount = String(placed.length);
-        panel.dataset.markerX = placed.map(marker => Math.round(marker.left)).join(',');
+        setDataAttribute(panel, 'markerCount', String(placed.length));
+        setDataAttribute(panel, 'markerX', placed.map(marker => Math.round(marker.left)).join(','));
     }
 
     function draw(u) {

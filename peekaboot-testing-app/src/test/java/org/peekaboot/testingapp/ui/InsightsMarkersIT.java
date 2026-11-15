@@ -157,6 +157,37 @@ class InsightsMarkersIT extends PlaywrightTestBase {
     }
 
     /**
+     * A chart redraws with every tick, and the readback the tests hang off is two attributes
+     * of the panel. The first draw writes both. A redraw that places the marker where it was
+     * writes neither.
+     */
+    @Test
+    void aRedrawThatMovesNoMarkerWritesNoHook() {
+        Object writes = importModule("dashboard/tabs/insights-markers.js", """
+            (() => {
+                const panel = document.createElement('div');
+                panel.className = 'pk-insight-panel';
+                const root = panel.appendChild(document.createElement('div'));
+                const plot = {root, ctx: document.createElement('canvas').getContext('2d'),
+                    bbox: {left: 0, top: 0, width: 200, height: 100}, scales: {x: {min: 0, max: 100}},
+                    valToPos: value => value * 2};
+                const layer = m.createMarkerLayer({intervalMs: 1000});
+                layer.setEvents([{type: 'start', timestamp: '1970-01-01T00:00:50Z'}]);
+                const observer = new MutationObserver(() => {});
+                observer.observe(panel, {attributes: true});
+                const writes = [];
+                for (let draw = 0; draw < 2; draw++) {
+                    layer.plugin.hooks.draw(plot);
+                    writes.push(observer.takeRecords().length);
+                }
+                return writes;
+            })()
+            """);
+
+        assertThat(writes).isEqualTo(List.of(2, 0));
+    }
+
+    /**
      * The markers are canvas drawing, so nothing in them can take focus. The plot does, and
      * the arrow keys bring up the details a pointer gets by hovering.
      */

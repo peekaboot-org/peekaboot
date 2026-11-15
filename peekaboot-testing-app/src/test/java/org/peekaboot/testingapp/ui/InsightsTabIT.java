@@ -512,6 +512,49 @@ class InsightsTabIT extends PlaywrightTestBase {
     }
 
     /**
+     * While a level's ring fills, a tick moves the window's right edge and leaves the left one
+     * where it was. The readback (data-zoom-min/-max, see insights-chart.js's setScale hook)
+     * then writes the edge that moved and not the other. The chart is built through
+     * createChart, the call a panel makes, on five samples and then given a sixth.
+     */
+    @Test
+    void aTickThatMovesOneEdgeOfTheWindowWritesOnlyThatHook() {
+        Object written = importModule("dashboard/tabs/insights-chart.js", """
+            (async () => {
+                await m.ensureUplot();
+                const panel = document.createElement('div');
+                panel.className = 'pk-insight-panel';
+                const mount = panel.appendChild(document.createElement('div'));
+                document.body.append(panel);
+                const snapshot = count => ({count, intervalMs: 1000, endEpochMs: count * 1000,
+                    series: {load: Array.from({length: count}, (_, i) => i)}});
+                const written = [];
+                new MutationObserver(records => written.push(...records.map(record => record.attributeName)))
+                    .observe(panel, {attributeFilter: ['data-zoom-min', 'data-zoom-max']});
+                // uPlot commits a scale change in a microtask
+                const writtenSince = async () => {
+                    await new Promise(resolve => setTimeout(resolve));
+                    return written.splice(0);
+                };
+                const chart = m.createChart({
+                    panel: {title: 'Load', unit: 'count', chart: 'line', series: [{id: 'load', label: 'Load'}]},
+                    mount, level: 0, snapshot: snapshot(5),
+                    showPercentiles: false, events: [], showMarkers: false,
+                    dateOptions: () => ({locale: 'en-US', timeZone: 'UTC'}),
+                    onZoom() {}, onZoomReset() {}
+                });
+                const built = await writtenSince();
+                chart.setData(snapshot(6));
+                const ticked = await writtenSince();
+                chart.destroy();
+                return [built, ticked];
+            })()
+            """);
+
+        assertThat(written).isEqualTo(List.of(List.of("data-zoom-min", "data-zoom-max"), List.of("data-zoom-max")));
+    }
+
+    /**
      * A panel charting something other than the global interval is marked as such (see
      * dashboard.css); an inset box-shadow on the button group paints underneath the
      * buttons' own opaque backgrounds and never actually shows on screen, which a pure CSS

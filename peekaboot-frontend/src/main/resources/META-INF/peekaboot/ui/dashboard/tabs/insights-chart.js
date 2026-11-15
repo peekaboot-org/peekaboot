@@ -11,6 +11,7 @@
  * feeds which column) is fixed at construction and reused by every setData, so
  * callers only ever hand over a level snapshot.
  */
+import {setDataAttribute} from '../../shared/dom.js';
 import {formatMetricValue} from '../../shared/format.js';
 import {createMarkerLayer} from './insights-markers.js';
 import {themeToken, withAlpha} from './insights-colors.js';
@@ -245,8 +246,8 @@ export function createChart({
                 if (key !== 'x') return;
                 const panelEl = mount.closest('.pk-insight-panel');
                 if (!panelEl) return;
-                panelEl.dataset.zoomMin = String(u.scales.x.min);
-                panelEl.dataset.zoomMax = String(u.scales.x.max);
+                setDataAttribute(panelEl, 'zoomMin', String(u.scales.x.min));
+                setDataAttribute(panelEl, 'zoomMax', String(u.scales.x.max));
             }]
         }
     };
