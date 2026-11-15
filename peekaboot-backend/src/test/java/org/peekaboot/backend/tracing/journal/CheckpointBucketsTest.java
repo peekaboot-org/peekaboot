@@ -105,8 +105,9 @@ class CheckpointBucketsTest {
     }
 
     /**
-     * Spans, some async, failing or continuing a caller, and some arriving before the async entry span
-     * they belong under, as they export; INFO and ERROR lines, a few outside any trace; requests; discards.
+     * Spans, some async, failing, continuing a caller or folding into their parent, and some arriving before the
+     * async entry span they belong under, as they export; INFO and ERROR lines, a few outside any trace; requests;
+     * discards.
      */
     private static List<TraceInput> inputsFrom(Random random) {
         List<TraceInput> inputs = new ArrayList<>();
@@ -147,7 +148,7 @@ class CheckpointBucketsTest {
             Random random, String traceId, int index, List<String> earlier, Deque<SpanData> entriesToCome) {
         String spanId = traceId + "s" + index;
         Spans.SpanBuilder builder =
-                random.nextInt(5) == 0 ? asyncTask(spanId) : span(spanId).named("n" + index);
+                random.nextInt(5) == 0 ? asyncTwin(spanId) : span(spanId).named("n" + index);
         builder.in(traceId);
         String parent = null;
         if (!earlier.isEmpty() && random.nextBoolean()) {
@@ -157,7 +158,7 @@ class CheckpointBucketsTest {
         }
         if (random.nextInt(5) == 0) {
             String entryId = traceId + "e" + index;
-            Spans.SpanBuilder entry = asyncTask(entryId).in(traceId).at(START, Duration.ofMillis(random.nextInt(50)));
+            Spans.SpanBuilder entry = asyncTwin(entryId).in(traceId).at(START, Duration.ofMillis(random.nextInt(50)));
             entriesToCome.add((parent == null ? entry : entry.parent(parent)).build());
             earlier.add(entryId);
             parent = entryId;
@@ -171,5 +172,13 @@ class CheckpointBucketsTest {
         builder.at(START.plusMillis(random.nextInt(300)), Duration.ofMillis(random.nextInt(250)));
         earlier.add(spanId);
         return builder.build();
+    }
+
+    /**
+     * An async span that is a datasource span too. One nested under another that failed alike folds
+     * into it as a JDBC twin does, so a journal holds spans the store kept only as a redirect.
+     */
+    private static Spans.SpanBuilder asyncTwin(String spanId) {
+        return asyncTask(spanId).tag("db.system", "postgresql");
     }
 }

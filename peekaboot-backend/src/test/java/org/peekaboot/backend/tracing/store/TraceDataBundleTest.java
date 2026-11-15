@@ -25,6 +25,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.testsupport.Monitors;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -233,6 +235,44 @@ class TraceDataBundleTest {
         bundle.addSpan(child, UNFILED);
 
         assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("parent1", "child1");
+    }
+
+    /** Folded away it would cost the trace its error flag where the parent is stored first, and its exception where the duplicate is. */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void aFailingDuplicateOfAParentThatSucceededKeepsItsErrorAndDetail(boolean duplicateArrivesFirst) {
+        TraceDataBundle bundle = bundle("trace1", 100, NO_CAP);
+        SpanData real = jdbcQuery("real", SQL).order(1).build();
+        SpanData duplicate = jdbcDuplicate("dup", "real", SQL)
+                .exception("java.sql.SQLException", "boom")
+                .order(2)
+                .build();
+
+        for (SpanData span : duplicateArrivesFirst ? List.of(duplicate, real) : List.of(real, duplicate)) {
+            bundle.addSpan(span, UNFILED);
+        }
+
+        TraceData snapshot = bundle.snapshot();
+        assertThat(snapshot.failed()).isTrue();
+        assertThat(snapshot.spans()).extracting(SpanData::spanId).containsExactly("real", "dup");
+        assertThat(snapshot.spans().getLast().exception().message()).isEqualTo("boom");
+    }
+
+    /** A method that calls itself under {@code @Observed} nests two spans alike in name and tags; neither is a datasource span. */
+    @Test
+    void aRecursiveCallKeepsBothSpans() {
+        TraceDataBundle bundle = bundle("trace1", 100, NO_CAP);
+        SpanData inner = span("inner")
+                .parent("outer")
+                .named("OrderService.process")
+                .order(2)
+                .build();
+        SpanData outer = span("outer").named("OrderService.process").order(1).build();
+
+        bundle.addSpan(inner, UNFILED);
+        bundle.addSpan(outer, UNFILED);
+
+        assertThat(bundle.snapshot().spans()).extracting(SpanData::spanId).containsExactly("outer", "inner");
     }
 
     @Test
@@ -965,10 +1005,7 @@ class TraceDataBundleTest {
 
     /**
      * A span carrying Peekaboot's async marker - what AsyncTaskDecorator's observation exports
-     * as. Tagged with its own span id under {@code THREAD_TAG_KEY} so two async spans in the
-     * same test are never tag-for-tag identical: {@link SpanDuplicateMatcher} would otherwise
-     * fold a nested async span into its outer parent as a JDBC-duplicate artifact, which is not
-     * the shape these tests are exercising.
+     * as - with its own span id as the thread tag.
      */
     private SpanData asyncSpan(String spanId, String parentId, long startOffsetMs, long durationMs) {
         return asyncTask(spanId)
@@ -978,13 +1015,19 @@ class TraceDataBundleTest {
                 .build();
     }
 
-    /** An async span with no thread tag, so two of them are tag-for-tag identical and one folds into the other. */
+    /**
+     * An async span that is a datasource span too, with no thread tag, so two of them are
+     * tag-for-tag identical and one folds into the other.
+     */
     private SpanData markedTwin(String spanId, String parentId) {
-        return asyncTask(spanId).parent(parentId).at(0, 100).build();
+        return asyncTask(spanId)
+                .parent(parentId)
+                .tag("db.system", "postgresql")
+                .at(0, 100)
+                .build();
     }
 
-    /** Named after its own span id, so a plain span parented under another plain span is never
-     * name-and-tag identical to it and mistaken for a {@link SpanDuplicateMatcher} artifact. */
+    /** A span named after its own span id. */
     private SpanData plainSpan(String spanId, String parentId, long startOffsetMs, long durationMs) {
         return span(spanId)
                 .parent(parentId)

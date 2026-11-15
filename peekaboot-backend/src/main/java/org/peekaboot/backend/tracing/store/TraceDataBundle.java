@@ -42,6 +42,9 @@ import org.peekaboot.backend.tracing.tags.HttpSpanTags;
  * out via {@link #snapshot()}. That table is pruned as spans are evicted (see
  * {@link #evictOldest}), so it stays bounded by the {@code maxSpans} cap rather than growing
  * for the trace's whole life.
+ *
+ * <p>Only datasource twins that both failed or both did not are folded, so a fold never costs
+ * the trace a failure and a method that calls itself keeps its nested spans.
  */
 public class TraceDataBundle {
 

@@ -23,10 +23,14 @@ class SpanDuplicateMatcherTest {
     /** Either decorator may carry the datasource name under its own key; neither key takes part in the comparison. */
     @Test
     void theTwoServiceIdentifierKeysAreIgnoredWhicheverEachSpanSets() {
-        SpanData byPeerService =
-                span("a").named("query").tag("peer.service", "orders_db").build();
+        SpanData byPeerService = span("a")
+                .named("query")
+                .tag("db.system", "postgresql")
+                .tag("peer.service", "orders_db")
+                .build();
         SpanData byDatasourceName = span("b")
                 .named("query")
+                .tag("db.system", "postgresql")
                 .tag("jdbc.datasource.name", "dataSource")
                 .build();
 
@@ -34,7 +38,7 @@ class SpanDuplicateMatcherTest {
                 .isTrue();
     }
 
-    /** Two unrelated spans that happen to share a name and tags fold too; the bundle's parent check is what keeps them apart. */
+    /** Two unrelated datasource spans that happen to share a name and tags fold too; the bundle's parent check is what keeps them apart. */
     @Test
     void spansWithTheSameNameAndTagsAndNoServiceKeyAreDuplicates() {
         SpanData a =
@@ -46,14 +50,84 @@ class SpanDuplicateMatcherTest {
     }
 
     @Test
-    void aSpanWithoutTagsMatchesOneWithNone() {
+    void spansWithoutTagsAreNotDuplicates() {
         // the record allows a null tag map; the builder never produces one
         SpanData untagged = new SpanData(
                 "t", "a", null, false, "connection", null, Instant.EPOCH, Instant.EPOCH, null, List.of(), null, 1);
         SpanData empty = span("b").named("connection").build();
 
-        assertThat(SpanDuplicateMatcher.isDuplicate(untagged, empty)).isTrue();
-        assertThat(SpanDuplicateMatcher.isDuplicate(empty, untagged)).isTrue();
+        assertThat(SpanDuplicateMatcher.isDuplicate(untagged, empty)).isFalse();
+        assertThat(SpanDuplicateMatcher.isDuplicate(empty, untagged)).isFalse();
+    }
+
+    /** A method that calls itself under {@code @Observed} nests two spans alike in name and tags. */
+    @Test
+    void aParentAndChildThatAreNoDatasourceSpansAreNotDuplicates() {
+        SpanData outer = span("outer")
+                .named("OrderService.process")
+                .tag("class", "OrderService")
+                .tag("method", "process")
+                .build();
+        SpanData inner = span("inner")
+                .parent("outer")
+                .named("OrderService.process")
+                .tag("class", "OrderService")
+                .tag("method", "process")
+                .build();
+
+        assertThat(SpanDuplicateMatcher.isDuplicate(inner, outer)).isFalse();
+    }
+
+    /** One datasource span does not make a pair: the other has to be one too, or the relation stops being transitive. */
+    @Test
+    void aDatasourceSpanIsNoDuplicateOfAPlainSpanOfTheSameName() {
+        SpanData datasource = span("a")
+                .named("connection")
+                .tag("jdbc.datasource.name", "dataSource")
+                .build();
+        SpanData plain = span("b").named("connection").build();
+
+        assertThat(SpanDuplicateMatcher.isDuplicate(datasource, plain)).isFalse();
+        assertThat(SpanDuplicateMatcher.isDuplicate(plain, datasource)).isFalse();
+    }
+
+    /** The datasource name can be the only jdbc key a connection span carries, and it is a key the comparison skips. */
+    @Test
+    void twinsWhoseOnlyDatasourceKeyIsTheDatasourceNameAreDuplicates() {
+        SpanData real = span("a")
+                .named("connection")
+                .tag("jdbc.datasource.name", "ordersDataSource")
+                .build();
+        SpanData twin = span("b")
+                .parent("a")
+                .named("connection")
+                .tag("jdbc.datasource.name", "dataSource")
+                .build();
+
+        assertThat(SpanDuplicateMatcher.isDuplicate(twin, real)).isTrue();
+    }
+
+    @Test
+    void aFailedSpanIsNoDuplicateOfOneThatSucceeded() {
+        SpanData succeeded = jdbcQuery("real", "SELECT 1").build();
+        SpanData failed = jdbcDuplicate("twin", "real", "SELECT 1")
+                .exception("java.sql.SQLException", "boom")
+                .build();
+
+        assertThat(SpanDuplicateMatcher.isDuplicate(failed, succeeded)).isFalse();
+        assertThat(SpanDuplicateMatcher.isDuplicate(succeeded, failed)).isFalse();
+    }
+
+    @Test
+    void twoTwinsThatBothFailedAreDuplicates() {
+        SpanData real = jdbcQuery("real", "SELECT 1")
+                .exception("java.sql.SQLException", "boom")
+                .build();
+        SpanData twin = jdbcDuplicate("twin", "real", "SELECT 1")
+                .exception("java.sql.SQLException", "boom")
+                .build();
+
+        assertThat(SpanDuplicateMatcher.isDuplicate(twin, real)).isTrue();
     }
 
     @Test
