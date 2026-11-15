@@ -40,8 +40,9 @@ final class TraceDetails {
             RequestCompletedEvent request = bundle.request();
             httpExchange = request != null ? httpExchangeMapper.map(request) : null;
         } else {
-            Set<String> inSubtree =
-                    SpanWalk.subtree(tree.rootSpan()).map(SpanNode::spanId).collect(Collectors.toSet());
+            Set<String> inSubtree = SpanWalk.subtree(tree.rootSpan()).stream()
+                    .map(SpanNode::spanId)
+                    .collect(Collectors.toSet());
             // filtered before extracting, so the statements outside the subtree are never formatted
             List<SpanData> ownSpans = traceData.spans().stream()
                     .filter(span -> inSubtree.contains(span.spanId()))

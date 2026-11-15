@@ -8,7 +8,6 @@ import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.SpanExceptionInfo;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceSummary;
-import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
@@ -30,8 +29,8 @@ final class TraceCauses {
      * Null where nothing failed the trace, where the caps evicted what did, or where the only
      * failure is a span that names no exception type or message.
      */
-    static TraceSummary.@Nullable Cause of(TraceTree tree, List<TraceLog> errorLogs) {
-        List<Failure> failures = SpanWalk.visits(tree.rootSpan(), tree.orphans())
+    static TraceSummary.@Nullable Cause of(List<Visit> visits, List<TraceLog> errorLogs) {
+        List<Failure> failures = visits.stream()
                 .filter(visit -> TraceReasons.failed(visit.span()))
                 .flatMap(TraceCauses::failureOf)
                 .toList();
@@ -44,7 +43,7 @@ final class TraceCauses {
                 .or(() -> deepest(failures.stream().filter(TraceCauses::namesItsException))
                         .map(TraceCauses::spanCause))
                 .or(() -> errorLogs.stream().findFirst().map(TraceCauses::loggedMessageCause))
-                .or(() -> serverErrorCause(tree))
+                .or(() -> serverErrorCause(visits))
                 .orElse(null);
     }
 
@@ -92,8 +91,9 @@ final class TraceCauses {
         return new TraceSummary.Cause(null, log.message(), null, log.spanId());
     }
 
-    private static Optional<TraceSummary.Cause> serverErrorCause(TraceTree tree) {
-        return SpanWalk.depthFirst(tree.rootSpan(), tree.orphans())
+    private static Optional<TraceSummary.Cause> serverErrorCause(List<Visit> visits) {
+        return visits.stream()
+                .map(Visit::span)
                 .filter(span -> HttpSpanTags.isServerError(span.kind(), span.tags()))
                 .findFirst()
                 .map(span -> new TraceSummary.Cause(null, TraceReasons.serverErrorDetail(span), null, span.spanId()));

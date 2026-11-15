@@ -6,6 +6,7 @@ import org.peekaboot.backend.domain.trace.TraceOutcome;
 import org.peekaboot.backend.domain.trace.TraceReason;
 import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
@@ -19,7 +20,8 @@ final class TraceSummaries {
     }
 
     TraceSummary of(TraceTree tree, TraceFacts facts) {
-        List<TraceReason> reasons = TraceReasons.of(tree, facts.errorLogs(), slowTraceThresholdMs);
+        List<Visit> visits = SpanWalk.visits(tree.rootSpan(), tree.orphans());
+        List<TraceReason> reasons = TraceReasons.of(tree, visits, facts.errorLogs(), slowTraceThresholdMs);
         boolean failed = facts.storeFailed()
                 || reasons.stream().anyMatch(reason -> reason.kind().failure());
         return new TraceSummary(
@@ -34,18 +36,20 @@ final class TraceSummaries {
                 TraceOutcome.of(tree.complete(), tree.interrupted(), failed),
                 facts.buckets().stream().sorted().toList(),
                 reasons,
-                TraceCauses.of(tree, facts.errorLogs()),
-                issuesOf(tree),
-                Hotspots.of(tree),
+                TraceCauses.of(visits, facts.errorLogs()),
+                issuesOf(visits),
+                Hotspots.of(visits),
                 countsOf(tree, facts),
                 tree.subtree());
     }
 
     /** Every issue of the judged tree, each span's before its children's. */
     static List<TraceIssue> issuesOf(TraceTree tree) {
-        return SpanWalk.depthFirst(tree.rootSpan(), tree.orphans())
-                .flatMap(span -> span.issues().stream())
-                .toList();
+        return issuesOf(SpanWalk.visits(tree.rootSpan(), tree.orphans()));
+    }
+
+    private static List<TraceIssue> issuesOf(List<Visit> visits) {
+        return visits.stream().flatMap(visit -> visit.span().issues().stream()).toList();
     }
 
     private static TraceSummary.Counts countsOf(TraceTree tree, TraceFacts facts) {

@@ -15,6 +15,7 @@ import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceReason;
 import org.peekaboot.backend.domain.trace.TraceReason.Kind;
+import org.peekaboot.backend.domain.trace.TraceTree;
 
 class TraceReasonsTest {
 
@@ -25,6 +26,10 @@ class TraceReasonsTest {
                 "trace1", spanId, Instant.EPOCH, "ERROR", "TestLogger", "main", message, null, List.of(), List.of());
     }
 
+    private static List<TraceReason> reasonsOf(TraceTree tree, List<TraceLog> errorLogs) {
+        return TraceReasons.of(tree, SpanWalk.visits(tree.rootSpan(), tree.orphans()), errorLogs, THRESHOLD_MS);
+    }
+
     @Test
     void aFailedSpanNamesItsException() {
         SpanNode root = node("root")
@@ -32,7 +37,7 @@ class TraceReasonsTest {
                 .exception("java.lang.IllegalStateException", "boom")
                 .build();
 
-        assertThat(TraceReasons.of(tree(root).build(), List.of(), THRESHOLD_MS))
+        assertThat(reasonsOf(tree(root).build(), List.of()))
                 .containsExactly(new TraceReason(Kind.EXCEPTION, "root", "java.lang.IllegalStateException: boom"));
     }
 
@@ -43,7 +48,7 @@ class TraceReasonsTest {
                 .exception("java.lang.NullPointerException", null)
                 .build();
 
-        assertThat(TraceReasons.of(tree(root).build(), List.of(), THRESHOLD_MS))
+        assertThat(reasonsOf(tree(root).build(), List.of()))
                 .extracting(TraceReason::detail)
                 .containsExactly("java.lang.NullPointerException");
     }
@@ -55,7 +60,7 @@ class TraceReasonsTest {
                 .tags(Map.of("http.response.status_code", "503"))
                 .build();
 
-        assertThat(TraceReasons.of(tree(root).build(), List.of(), THRESHOLD_MS))
+        assertThat(reasonsOf(tree(root).build(), List.of()))
                 .containsExactly(new TraceReason(Kind.SERVER_ERROR, "root", "Answered with status 503."));
     }
 
@@ -63,10 +68,7 @@ class TraceReasonsTest {
     void eachErrorLogIsAReason() {
         SpanNode root = node("root").build();
 
-        assertThat(TraceReasons.of(
-                        tree(root).build(),
-                        List.of(errorLog("root", "first"), errorLog("root", "second")),
-                        THRESHOLD_MS))
+        assertThat(reasonsOf(tree(root).build(), List.of(errorLog("root", "first"), errorLog("root", "second"))))
                 .extracting(TraceReason::kind, TraceReason::detail)
                 .containsExactly(tuple(Kind.ERROR_LOG, "first"), tuple(Kind.ERROR_LOG, "second"));
     }
@@ -76,10 +78,10 @@ class TraceReasonsTest {
     void aTraceAtTheSlowTraceThresholdIsSlow() {
         SpanNode root = node("root").durationMs(THRESHOLD_MS).build();
 
-        assertThat(TraceReasons.of(tree(root).build(), List.of(), THRESHOLD_MS))
+        assertThat(reasonsOf(tree(root).build(), List.of()))
                 .containsExactly(new TraceReason(
                         Kind.SLOW, "root", "Took 1000 ms, at or above the 1000 ms slow-trace threshold."));
-        assertThat(TraceReasons.of(tree(root).durationMs(THRESHOLD_MS - 1).build(), List.of(), THRESHOLD_MS))
+        assertThat(reasonsOf(tree(root).durationMs(THRESHOLD_MS - 1).build(), List.of()))
                 .isEmpty();
     }
 
@@ -87,14 +89,13 @@ class TraceReasonsTest {
     void aSlowTraceWithoutItsRootNamesNoSpan() {
         SpanNode orphan = node("orphan").build();
 
-        assertThat(TraceReasons.of(
+        assertThat(reasonsOf(
                         tree(null)
                                 .complete(false)
                                 .orphans(List.of(orphan))
                                 .durationMs(THRESHOLD_MS)
                                 .build(),
-                        List.of(),
-                        THRESHOLD_MS))
+                        List.of()))
                 .containsExactly(new TraceReason(
                         Kind.SLOW, null, "Took 1000 ms, at or above the 1000 ms slow-trace threshold."));
     }
@@ -115,7 +116,7 @@ class TraceReasonsTest {
                 .children(List.of(child))
                 .build();
 
-        assertThat(TraceReasons.of(tree(root).build(), List.of(errorLog("child", "logged")), THRESHOLD_MS))
+        assertThat(reasonsOf(tree(root).build(), List.of(errorLog("child", "logged"))))
                 .extracting(TraceReason::kind, TraceReason::spanId)
                 .containsExactly(
                         tuple(Kind.EXCEPTION, "root"),

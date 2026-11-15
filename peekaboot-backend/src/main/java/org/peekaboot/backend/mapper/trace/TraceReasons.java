@@ -10,6 +10,7 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceReason;
 import org.peekaboot.backend.domain.trace.TraceReason.Kind;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.tracing.tags.HttpSpanTags;
 
 /**
@@ -21,17 +22,21 @@ final class TraceReasons {
 
     private TraceReasons() {}
 
-    /** Failures by kind in tree order, then the ERROR logs as they arrived, then slowness. */
-    static List<TraceReason> of(TraceTree tree, List<TraceLog> errorLogs, long slowTraceThresholdMs) {
-        List<SpanNode> spans =
-                SpanWalk.depthFirst(tree.rootSpan(), tree.orphans()).toList();
+    /**
+     * Failures by kind in tree order, then the ERROR logs as they arrived, then slowness.
+     * {@code visits} is the walk of {@code tree}.
+     */
+    static List<TraceReason> of(
+            TraceTree tree, List<Visit> visits, List<TraceLog> errorLogs, long slowTraceThresholdMs) {
         List<TraceReason> reasons = new ArrayList<>();
-        for (SpanNode span : spans) {
+        for (Visit visit : visits) {
+            SpanNode span = visit.span();
             if (failed(span)) {
                 reasons.add(new TraceReason(Kind.EXCEPTION, span.spanId(), exceptionDetail(span.exception())));
             }
         }
-        for (SpanNode span : spans) {
+        for (Visit visit : visits) {
+            SpanNode span = visit.span();
             if (HttpSpanTags.isServerError(span.kind(), span.tags())) {
                 reasons.add(new TraceReason(Kind.SERVER_ERROR, span.spanId(), serverErrorDetail(span)));
             }

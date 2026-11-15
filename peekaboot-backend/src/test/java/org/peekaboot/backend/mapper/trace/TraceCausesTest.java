@@ -14,6 +14,8 @@ import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceSummary;
+import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.mapper.trace.SpanWalk.Visit;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 
 class TraceCausesTest {
@@ -77,6 +79,10 @@ class TraceCausesTest {
                 .build();
     }
 
+    private static List<Visit> visits(TraceTree tree) {
+        return SpanWalk.visits(tree.rootSpan(), tree.orphans());
+    }
+
     @Test
     void theDeepestFailingSpanIsTheCause() {
         SpanNode root = failing(
@@ -85,7 +91,7 @@ class TraceCausesTest {
                 TRACE,
                 failing("handler", "java.lang.IllegalStateException", TRACE));
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of()))
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of()))
                 .isEqualTo(new TraceSummary.Cause(
                         "java.lang.IllegalStateException",
                         "gateway down",
@@ -106,7 +112,8 @@ class TraceCausesTest {
                                 .build()))
                 .build();
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of()).spanId()).isEqualTo("deep");
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of()).spanId())
+                .isEqualTo("deep");
     }
 
     @Test
@@ -117,14 +124,15 @@ class TraceCausesTest {
                         failing("second", "java.io.IOException", TRACE)))
                 .build();
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of()).spanId()).isEqualTo("first");
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of()).spanId())
+                .isEqualTo("first");
     }
 
     @Test
     void aSpansExceptionBeatsALoggedOne() {
         SpanNode root = failing("root", "java.lang.IllegalStateException", TRACE);
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of(errorLog("root", LOGGED_TRACE)))
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of(errorLog("root", LOGGED_TRACE)))
                         .type())
                 .isEqualTo("java.lang.IllegalStateException");
     }
@@ -134,7 +142,7 @@ class TraceCausesTest {
     void aLoggedStackTraceBeatsASpanWithoutOne() {
         SpanNode root = failing("root", null, null);
 
-        TraceSummary.Cause cause = TraceCauses.of(tree(root).build(), List.of(errorLog("root", LOGGED_TRACE)));
+        TraceSummary.Cause cause = TraceCauses.of(visits(tree(root).build()), List.of(errorLog("root", LOGGED_TRACE)));
 
         assertThat(cause)
                 .isEqualTo(new TraceSummary.Cause(
@@ -169,7 +177,7 @@ class TraceCausesTest {
                 List.of(),
                 List.of());
 
-        assertThat(TraceCauses.of(tree(node("root").build()).build(), List.of(first, second))
+        assertThat(TraceCauses.of(visits(tree(node("root").build()).build()), List.of(first, second))
                         .spanId())
                 .isEqualTo("first");
     }
@@ -181,7 +189,7 @@ class TraceCausesTest {
                 .exception(null, "Bad Gateway")
                 .build();
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of(errorLog("root", null))))
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of(errorLog("root", null))))
                 .isEqualTo(new TraceSummary.Cause(null, "Bad Gateway", null, "root"));
     }
 
@@ -189,7 +197,7 @@ class TraceCausesTest {
     void anErrorLogBeatsASpanThatFailedWithoutNamingWhy() {
         SpanNode root = failedNamingNothing(Map.of());
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of(errorLog("root", null))))
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of(errorLog("root", null))))
                 .isEqualTo(new TraceSummary.Cause(null, "logged", null, "root"));
     }
 
@@ -197,7 +205,7 @@ class TraceCausesTest {
     void a5xxBeatsASpanThatFailedWithoutNamingWhy() {
         SpanNode root = failedNamingNothing(Map.of("http.response.status_code", "503"));
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of()))
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of()))
                 .isEqualTo(new TraceSummary.Cause(null, "Answered with status 503.", null, "root"));
     }
 
@@ -205,9 +213,9 @@ class TraceCausesTest {
     void aSpanThatFailedWithoutNamingWhyIsNoCauseOnItsOwn() {
         SpanNode withoutExceptionInfo = node("root").status(SpanStatus.ERROR).build();
 
-        assertThat(TraceCauses.of(tree(withoutExceptionInfo).build(), List.of()))
+        assertThat(TraceCauses.of(visits(tree(withoutExceptionInfo).build()), List.of()))
                 .isNull();
-        assertThat(TraceCauses.of(tree(failedNamingNothing(Map.of())).build(), List.of()))
+        assertThat(TraceCauses.of(visits(tree(failedNamingNothing(Map.of())).build()), List.of()))
                 .isNull();
     }
 
@@ -219,7 +227,7 @@ class TraceCausesTest {
                         "java.lang.IllegalStateException", "handled", TRACE, List.of(), APPLICATION_FRAMES))
                 .build();
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of())).isNull();
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of())).isNull();
     }
 
     @Test
@@ -231,13 +239,13 @@ class TraceCausesTest {
                 .exception(null, "Bad Gateway")
                 .build();
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of()))
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of()))
                 .isEqualTo(new TraceSummary.Cause(null, "Bad Gateway", null, "root"));
     }
 
     @Test
     void anErrorLogWithoutAStackTraceBeatsA5xx() {
-        assertThat(TraceCauses.of(tree(answering503()).build(), List.of(errorLog("root", null))))
+        assertThat(TraceCauses.of(visits(tree(answering503()).build()), List.of(errorLog("root", null))))
                 .isEqualTo(new TraceSummary.Cause(null, "logged", null, "root"));
     }
 
@@ -248,14 +256,14 @@ class TraceCausesTest {
         TraceLog second = new TraceLog(
                 "trace1", "second", Instant.EPOCH, "ERROR", "TestLogger", "main", "logged", null, List.of(), List.of());
 
-        assertThat(TraceCauses.of(tree(node("root").build()).build(), List.of(first, second))
+        assertThat(TraceCauses.of(visits(tree(node("root").build()).build()), List.of(first, second))
                         .spanId())
                 .isEqualTo("first");
     }
 
     @Test
     void a5xxWithoutAFailureIsItsOwnCause() {
-        assertThat(TraceCauses.of(tree(answering503()).build(), List.of()))
+        assertThat(TraceCauses.of(visits(tree(answering503()).build()), List.of()))
                 .isEqualTo(new TraceSummary.Cause(null, "Answered with status 503.", null, "root"));
     }
 
@@ -269,12 +277,12 @@ class TraceCausesTest {
                         .build()))
                 .build();
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of())).isNull();
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of())).isNull();
     }
 
     @Test
     void aTraceThatDidNotFailHasNoCause() {
-        assertThat(TraceCauses.of(tree(node("root").build()).build(), List.of()))
+        assertThat(TraceCauses.of(visits(tree(node("root").build()).build()), List.of()))
                 .isNull();
     }
 
@@ -292,7 +300,8 @@ class TraceCausesTest {
                 List.of(),
                 List.of());
 
-        TraceSummary.Cause cause = TraceCauses.of(tree(node("root").build()).build(), List.of(log));
+        TraceSummary.Cause cause =
+                TraceCauses.of(visits(tree(node("root").build()).build()), List.of(log));
 
         assertThat(cause.type()).isEqualTo("java.lang.NullPointerException");
         assertThat(cause.message()).isNull();
@@ -316,7 +325,7 @@ class TraceCausesTest {
                         List.of(new Range(2, 3))))
                 .build();
 
-        assertThat(TraceCauses.of(tree(root).build(), List.of()).applicationFrame())
+        assertThat(TraceCauses.of(visits(tree(root).build()), List.of()).applicationFrame())
                 .isEqualTo("com.acme.Pool.close(Pool.java:9)");
     }
 
@@ -325,10 +334,10 @@ class TraceCausesTest {
         SpanNode orphan = failing("orphan", "java.lang.IllegalStateException", TRACE);
 
         assertThat(TraceCauses.of(
-                                tree(null)
+                                visits(tree(null)
                                         .complete(false)
                                         .orphans(List.of(orphan))
-                                        .build(),
+                                        .build()),
                                 List.of())
                         .spanId())
                 .isEqualTo("orphan");
