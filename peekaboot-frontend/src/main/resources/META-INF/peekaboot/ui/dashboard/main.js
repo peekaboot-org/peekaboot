@@ -182,9 +182,11 @@ function initTabs() {
     const initialTabId = resolveTabId(parseAppHash().tab);
     // the strip's buttons are static in index.html, so only the ids are needed here
     mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id})), {
-        onSelect: tabId => {
+        onSelect: (tabId, {keyboard}) => {
             showTab(tabId);
-            pushAppHash({tab: tabId});
+            // an arrow-key walk passes through tabs, so only a click is a Back stop
+            const writeHash = keyboard ? replaceAppHash : pushAppHash;
+            writeHash({tab: tabId});
             enterTab(tabId);
         },
         initial: initialTabId

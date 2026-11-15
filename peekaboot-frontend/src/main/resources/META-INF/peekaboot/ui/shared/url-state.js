@@ -9,6 +9,7 @@
  *
  * Push/replace rule: structural segments (tab, detail) push a new history entry via
  * pushAppHash - Back should walk dashboard tabs and close the overlay one step at a time.
+ * An arrow-key move along the tab strip replaces instead: it passes through tabs.
  * subview and params are written via replaceAppHash instead - switching the overlay's
  * internal tab, or typing into a filter, must never add a Back stop of its own. Every hash
  * write in the app is expected to go through pushAppHash/replaceAppHash; nothing should

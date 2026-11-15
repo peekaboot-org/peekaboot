@@ -209,6 +209,8 @@ export function groupList(container, groups, {key, header, items, revision = ''}
  * `onSelect` too unless called with `{silent: true}` - the escape hatch a caller
  * needs to sync the strip's visual selection (e.g. from hash-driven routing)
  * without re-triggering the side effects `onSelect` runs for real user activation.
+ * `onSelect(id, {keyboard})` gets `keyboard: true` for an Arrow, Home or End move, so
+ * a caller that records the selection can tell a walk along the strip from a click.
  */
 export function tabStrip(container, tabs, {onSelect, initial, panel} = {}) {
     container.setAttribute('role', 'tablist');
@@ -232,7 +234,7 @@ export function tabStrip(container, tabs, {onSelect, initial, panel} = {}) {
 
     const visible = () => buttons.filter(tabButton => tabButton.offsetParent !== null);
 
-    function select(id, {focus = false, silent = false} = {}) {
+    function select(id, {focus = false, silent = false, keyboard = false} = {}) {
         buttons.forEach(tabButton => {
             const active = tabButton.dataset.tab === id;
             tabButton.setAttribute('aria-selected', String(active));
@@ -240,7 +242,7 @@ export function tabStrip(container, tabs, {onSelect, initial, panel} = {}) {
             if (active && focus) tabButton.focus();
             if (active && panel && tabButton.id) panel.setAttribute('aria-labelledby', tabButton.id);
         });
-        if (onSelect && !silent) onSelect(id);
+        if (onSelect && !silent) onSelect(id, {keyboard});
     }
 
     container.addEventListener('click', event => {
@@ -265,7 +267,7 @@ export function tabStrip(container, tabs, {onSelect, initial, panel} = {}) {
 
         if (next !== null) {
             event.preventDefault();
-            select(candidates[next].dataset.tab, {focus: true});
+            select(candidates[next].dataset.tab, {focus: true, keyboard: true});
         }
     });
 

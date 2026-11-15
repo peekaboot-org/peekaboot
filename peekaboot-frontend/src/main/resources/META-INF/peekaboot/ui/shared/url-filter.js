@@ -16,7 +16,7 @@
  *    with the params taken out asks for the defaults. The URL is then written from the
  *    state that took effect, which corrects a bogus or non-canonical value.
  *  - Otherwise the URL is bare on a programmatic render, which almost always means the tab
- *    strip switched tabs (main.js's onSelect pushes a plain "#<tab>"): the state wins and
+ *    strip switched tabs (main.js's onSelect writes a plain "#<tab>"): the state wins and
  *    is written back, so a filter survives switching away and back.
  *
  * `save(context)` writes the state to the URL, for a control that just changed it.

@@ -43,6 +43,21 @@ class DashboardTabStripIT extends PlaywrightTestBase {
         assertThat(dashboard.selectedTab()).isEqualTo("insights");
     }
 
+    /** An arrow-key walk along the strip is one move: Back leaves the dashboard as it would have before the walk. */
+    @Test
+    void arrowKeysMoveThroughTabsWithoutAddingHistoryEntries() {
+        openDashboard();
+        page.focus(".pk-tab[data-tab='overview']");
+        Object before = page.evaluate("() => history.length");
+
+        page.keyboard().press("ArrowRight");
+        page.keyboard().press("ArrowRight");
+        page.keyboard().press("ArrowRight");
+
+        assertThat(page.evaluate("() => history.length")).isEqualTo(before);
+        assertThat(page.url()).endsWith("#" + dashboard.visibleTabs().get(3));
+    }
+
     @Test
     void arrowKeysWrapAtTheEnds() {
         openDashboard();
