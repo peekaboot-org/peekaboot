@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: 'postgres:18'
+    image: 'postgres:18.7'
     environment:
       - 'POSTGRES_DB=sample_app_db'
       - 'POSTGRES_USER=sample_app_db_user'
@@ -8,7 +8,7 @@ services:
     ports:
       - '5432'
   mysql:
-    image: 'mysql:9'
+    image: 'mysql:9.7.4'
     environment:
       - 'MYSQL_DATABASE=inventory'
       - 'MYSQL_USER=inventory'
@@ -26,7 +26,7 @@ services:
       timeout: 5s
       retries: 30
   redis:
-    image: 'redis:8'
+    image: 'redis:8.10.3'
     ports:
       - '6379'
   httpbin:

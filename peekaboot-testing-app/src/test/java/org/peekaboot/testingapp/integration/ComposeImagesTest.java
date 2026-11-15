@@ -1,27 +1,19 @@
 package org.peekaboot.testingapp.integration;
 
-import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.Properties;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
-import org.springframework.core.io.FileSystemResource;
 
 /**
- * The demo runs on the engines its ITs test against. Dependabot watches neither file, so a bump
- * made by hand in one fails here until the other follows.
+ * A major tag moves under the build without a commit. Dependabot bumps {@code compose.yml}, and
+ * the ITs start what it names ({@link TestImages}).
  */
 class ComposeImagesTest {
 
     @Test
-    void composeRunsTheImagesTheItsStart() {
-        YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
-        yaml.setResources(new FileSystemResource("compose.yml"));
-        Properties compose = requireNonNull(yaml.getObject(), "compose.yml read as nothing");
-
-        assertThat(compose.getProperty("services.mysql.image")).isEqualTo(TestImages.MYSQL);
-        assertThat(compose.getProperty("services.redis.image")).isEqualTo(TestImages.REDIS);
-        assertThat(compose.getProperty("services.httpbin.image")).isEqualTo(TestImages.HTTPBIN);
+    void composePinsEveryImagePastItsMajorVersion() {
+        assertThat(TestImages.composeImages())
+                .containsKeys("postgres", "mysql", "redis", "httpbin")
+                .allSatisfy((service, image) -> assertThat(image).as(service).matches(".+:\\d+\\.\\d+(\\.\\d+)?"));
     }
 }

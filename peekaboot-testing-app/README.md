@@ -97,7 +97,8 @@ A span counts as a query when it is a CLIENT span with any `db.*` or `jdbc.query
 
 The Playwright tests and every test that boots a Spring context live here, all in `*IT`
 classes, so they run under failsafe at `verify`. `mvn test` runs one plain unit test here,
-`ComposeImagesTest`: `compose.yml` must name the image tags the ITs start (`integration/TestImages`).
+`ComposeImagesTest`: every image in `compose.yml` must carry a tag past its major version. The
+ITs read their images from that file (`integration/TestImages`).
 The ITs activate the `test` profile, which swaps PostgreSQL for in-memory H2 and disables
 Docker Compose, so the suite needs neither Docker nor network access, with two exceptions.
 `MultiDataSourceTraceIT` and `RedisTraceIT` start MySQL and Redis through Testcontainers and

@@ -47,3 +47,11 @@ updates:
       interval: "daily"
     cooldown:
       default-days: 7
+  # The ITs start these images too (integration/TestImages reads compose.yml), so a bump is
+  # tested on its own pull request. The auto-merge workflow does not list this ecosystem.
+  - package-ecosystem: "docker-compose"
+    directory: "/peekaboot-testing-app"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
