@@ -1016,7 +1016,7 @@
       },
       "HttpRequest.Params": {
         "type": "object",
-        "description": "Query and form parameters.",
+        "description": "Query and form parameters. Form parameters are present only when the application, or a filter behind the capture filter, read them. A name or value over 4,096 characters is cut.",
         "additionalProperties": false,
         "required": ["query", "form"],
         "properties": {
