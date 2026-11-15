@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -132,5 +133,34 @@ class RequestParametersTest {
     @ValueSource(strings = {"", "  "})
     void readsAnAbsentInstantAsNothing(String value) {
         assertThat(RequestParameters.instant("since", value)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"de-DE", "de_DE"})
+    void readsALanguageTagWithAHyphenOrAnUnderscore(String value) {
+        assertThat(RequestParameters.locale("locale", value)).isEqualTo(Locale.forLanguageTag("de-DE"));
+    }
+
+    @Test
+    void readsAWellFormedTagForALanguageNobodySpeaks() {
+        assertThat(RequestParameters.locale("locale", "xx-YY")).isEqualTo(Locale.forLanguageTag("xx-YY"));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "  "})
+    void readsAnAbsentLocaleAsNothing(String value) {
+        assertThat(RequestParameters.locale("locale", value)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"not a tag", "!!"})
+    void refusesAnIllFormedLanguageTag(String value) {
+        assertThatThrownBy(() -> RequestParameters.locale("locale", value))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> {
+                    assertThat(e.problem().parameter()).isEqualTo("locale");
+                    assertThat(e.problem().detail())
+                            .isEqualTo("locale must be a language tag such as de-DE, got '" + value + "'.");
+                });
     }
 }

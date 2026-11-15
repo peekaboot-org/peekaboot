@@ -3,6 +3,7 @@ package org.peekaboot.backend.problem;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
+import java.util.IllformedLocaleException;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -79,6 +80,33 @@ public final class RequestParameters {
         try {
             return Instant.parse(candidate);
         } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    /**
+     * {@code value} as a language tag, an underscore read as a hyphen; null where it is absent or blank.
+     * A well-formed tag is accepted whatever language it names.
+     */
+    @Nullable
+    public static Locale locale(String parameter, @Nullable String value) {
+        String present = text(value);
+        if (present == null) {
+            return null;
+        }
+        Locale parsed = wellFormedOrNull(present.replace('_', '-'));
+        if (parsed == null) {
+            throw ApiProblemException.badParameter(
+                    parameter, parameter + " must be a language tag such as de-DE, got '" + value + "'.");
+        }
+        return parsed;
+    }
+
+    @Nullable
+    private static Locale wellFormedOrNull(String languageTag) {
+        try {
+            return new Locale.Builder().setLanguageTag(languageTag).build();
+        } catch (IllformedLocaleException e) {
             return null;
         }
     }

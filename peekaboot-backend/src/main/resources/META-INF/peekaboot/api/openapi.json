@@ -389,7 +389,7 @@
           {
             "name": "locale",
             "in": "query",
-            "description": "A language tag such as `de-DE`, for cron descriptions and the server locale's display name. English where absent.",
+            "description": "A language tag such as `de-DE`, for cron descriptions and the server locale's display name. English where absent. A tag that is not well formed is refused.",
             "schema": {"type": "string"}
           },
           {

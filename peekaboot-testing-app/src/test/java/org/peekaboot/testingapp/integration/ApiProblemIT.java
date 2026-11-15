@@ -52,6 +52,7 @@ class ApiProblemIT extends TestingAppITBase {
                 "/peekaboot/api/logs?cursor=dC43LjEuMS4tMQ | cursor",
                 "/peekaboot/api/logs?q=a&q=b | q",
                 "/peekaboot/api/actuator/all/insights?unmask=maybe | unmask",
+                "/peekaboot/api/actuator/all/insights?locale=!! | locale",
                 "/peekaboot/api/insights/data?level=abc | level",
                 "/peekaboot/api/insights/data | level",
                 "/peekaboot/api/insights/data?level=99 | level",

@@ -9,6 +9,7 @@ import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.problem.RequestParameters;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
@@ -62,10 +63,9 @@ public class PeekabootController {
     public ActuatorInsightsResponse getInsights(
             @RequestParam(name = "locale", required = false) String locale,
             @RequestParam(name = "unmask", defaultValue = "false") boolean unmask) {
-        Locale parsedLocale = (locale != null && !locale.isBlank())
-                ? Locale.forLanguageTag(locale.replace('_', '-'))
-                : Locale.ENGLISH;
-        return actuatorInsightsService.getInsights(parsedLocale, resolveUnmask(unmask));
+        Locale requested = RequestParameters.locale("locale", locale);
+        return actuatorInsightsService.getInsights(
+                requested != null ? requested : Locale.ENGLISH, resolveUnmask(unmask));
     }
 
     @GetMapping(value = "/api/features", produces = MediaType.APPLICATION_JSON_VALUE)
