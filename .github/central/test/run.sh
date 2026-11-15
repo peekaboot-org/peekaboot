@@ -9,6 +9,13 @@ WORK="$(mktemp -d)"
 readonly HERE WORK
 trap 'rm -rf "$WORK"' EXIT
 
+# An outage of repo1 is no defect of the script, so it must not fail the run.
+if ! curl --silent --fail --head --max-time 30 --output /dev/null \
+    "${REPO1_PROBE_URL:-https://repo1.maven.org/maven2/}"; then
+    echo "::warning::repo1.maven.org is unreachable; await-release.sh was not checked"
+    exit 0
+fi
+
 echo "checking a published version passes"
 AWAIT_TIMEOUT_SECONDS=0 "$HERE/../await-release.sh" 1.0.0 > "$WORK/published.out"
 diff -u <(echo "1.0.0 is on Maven Central") "$WORK/published.out"
