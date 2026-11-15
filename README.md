@@ -109,6 +109,8 @@ Further reading:
   layers, the design tokens and their pairing rules, and how to add a dashboard tab.
 - [`peekaboot-testing-app/README.md`](peekaboot-testing-app/README.md) for the sample
   app, its UI suite and the screenshot-capture command.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to propose a change.
+- [`SECURITY.md`](SECURITY.md) for how to report a vulnerability.
 
 ## Requirements
 
