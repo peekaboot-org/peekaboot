@@ -33,6 +33,11 @@ final class PeekabootApi {
                 .build());
     }
 
+    /** The same app read by a client that sends {@code name: value} with every request. */
+    PeekabootApi withHeader(String name, String value) {
+        return new PeekabootApi(restClient.mutate().defaultHeader(name, value).build());
+    }
+
     RestClient restClient() {
         return restClient;
     }

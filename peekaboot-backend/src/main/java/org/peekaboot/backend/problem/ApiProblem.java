@@ -5,10 +5,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
 /**
- * The body of the errors {@link ApiProblemHandler} and the dashboard guard answer with, an
- * RFC 9457 problem served as {@code application/problem+json}. {@code type} stays
- * {@code about:blank}, so {@code title} is the status's own phrase and {@code detail} says
- * what was wrong with this request.
+ * The body of the errors {@link ApiProblemHandler}, the dashboard guard and a local run's
+ * loopback rule answer with, an RFC 9457 problem served as {@code application/problem+json}.
+ * {@code type} stays {@code about:blank}, so {@code title} is the status's own phrase and
+ * {@code detail} says what was wrong with this request.
  *
  * @param parameter the request parameter at fault; null where no single parameter is
  */

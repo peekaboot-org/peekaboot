@@ -5,7 +5,7 @@
     "title": "Peekaboot API",
     "version": "1",
     "summary": "The traces, logs, failures, routes and metrics Peekaboot holds for this application.",
-    "description": "Every endpoint answers `GET` only. An optional field is always present, `null` where it has no value. A point in time Peekaboot records is an ISO-8601 string in UTC. `server.currentTime` keeps the JVM's own offset. Epoch milliseconds appear only in the insights endpoints: `epochMs`, `endEpochMs`, `timestamps` and a `datetime` tile's `value`. Any other field ending in `Ms` is a duration in milliseconds.\n\nAn endpoint refuses a query parameter it does not take, and any parameter sent more than once, with a `400` problem naming it. Spring Security's `continue` is accepted everywhere.\n\nA value Peekaboot masked reads `******`, the literal `/peekaboot/api/features` names in `maskLiteral`. The real value exists but is not shown.\n\nWhere Peekaboot's guard is armed, every endpoint needs HTTP Basic credentials: `peekaboot.security.username`, else the build's artifact id or the application name plus `-admin`, else `peekaboot-admin`, and `peekaboot.security.password`, else the password Peekaboot generated and printed on the start that created it. A `405`, a `406` or an unexpected `500` is the application's own error response.",
+    "description": "Every endpoint answers `GET` only. An optional field is always present, `null` where it has no value. A point in time Peekaboot records is an ISO-8601 string in UTC. `server.currentTime` keeps the JVM's own offset. Epoch milliseconds appear only in the insights endpoints: `epochMs`, `endEpochMs`, `timestamps` and a `datetime` tile's `value`. Any other field ending in `Ms` is a duration in milliseconds.\n\nAn endpoint refuses a query parameter it does not take, and any parameter sent more than once, with a `400` problem naming it. Spring Security's `continue` is accepted everywhere.\n\nA value Peekaboot masked reads `******`, the literal `/peekaboot/api/features` names in `maskLiteral`. The real value exists but is not shown.\n\nWhere Peekaboot's guard is armed, every endpoint needs HTTP Basic credentials: `peekaboot.security.username`, else the build's artifact id or the application name plus `-admin`, else `peekaboot-admin`, and `peekaboot.security.password`, else the password Peekaboot generated and printed on the start that created it. On a local run without the guard, every endpoint answers only the machine the application runs on and any other request with a `403` problem. A `405`, a `406` or an unexpected `500` is the application's own error response.",
     "license": {"name": "Apache-2.0", "identifier": "Apache-2.0"}
   },
   "externalDocs": {
@@ -25,7 +25,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiIndex"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -39,7 +40,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OpenApiDocument"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -53,7 +55,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Features"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -138,7 +141,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TraceListResponse"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -162,6 +166,7 @@
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {"$ref": "#/components/responses/NotFound"}
         }
       }
@@ -217,7 +222,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LogSearchResponse"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -232,7 +238,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RouteListResponse"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -261,7 +268,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorDigestResponse"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -278,6 +286,7 @@
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {
             "description": "Insights is off (`peekaboot.insights.enabled=false`, or no `MeterRegistry`). The body is the application's own error response."
           }
@@ -322,6 +331,7 @@
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {
             "description": "Insights is off (`peekaboot.insights.enabled=false`, or no `MeterRegistry`). The body is the application's own error response."
           }
@@ -339,6 +349,7 @@
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {
             "description": "Insights is off (`peekaboot.insights.enabled=false`, or no `MeterRegistry`). The body is the application's own error response."
           },
@@ -359,6 +370,7 @@
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {
             "description": "Lifecycle is off (`peekaboot.lifecycle.enabled=false`). The body is the application's own error response."
           }
@@ -378,6 +390,7 @@
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {
             "description": "Lifecycle is off (`peekaboot.lifecycle.enabled=false`). The body is the application's own error response."
           }
@@ -410,7 +423,8 @@
             }
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -432,7 +446,8 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MetricsInfo"}}}
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     }
@@ -473,6 +488,10 @@
             "schema": {"type": "string"}
           }
         }
+      },
+      "Forbidden": {
+        "description": "The application is on a local run without the guard and the request does not come from the machine it runs on. `detail` names `peekaboot.remote-access.enabled`.",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiProblem"}}}
       },
       "NotFound": {
         "description": "The store does not hold the trace.",

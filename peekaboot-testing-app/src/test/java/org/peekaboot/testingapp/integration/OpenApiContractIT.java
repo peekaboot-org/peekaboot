@@ -131,6 +131,9 @@ class OpenApiContractIT extends TestingAppITBase {
             assertThat(operation.path("responses").path("401").path("$ref").asString(""))
                     .as(path.getKey())
                     .isEqualTo("#/components/responses/Unauthorized");
+            assertThat(operation.path("responses").path("403").path("$ref").asString(""))
+                    .as(path.getKey())
+                    .isEqualTo("#/components/responses/Forbidden");
         });
     }
 
