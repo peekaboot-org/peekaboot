@@ -555,9 +555,10 @@ Why it waits for the build itself, why the allow-list leaves out what it does an
 split their permissions are in the [workflow](.github/workflows/dependabot-pr-auto-merge.yml).
 Dependabot watches Maven, Gradle and the frontend's npm packages daily, GitHub Actions and the
 testing app's `compose.yml` weekly. An image bump is not on the allow-list, so a person merges
-it; the three container ITs start the bumped image on its pull request. Every ecosystem holds
-an update back for seven days after its release, security updates excepted
-([`dependabot.yml`](.github/dependabot.yml)).
+it. The container ITs start a bumped MySQL, Redis or go-httpbin image on its pull request.
+Nothing in the build starts the Postgres image; only the sample app and `ScreenshotCapture` do,
+through Docker Compose. Every ecosystem holds an update back for seven days after its release,
+security updates excepted ([`dependabot.yml`](.github/dependabot.yml)).
 
 Branch model: `dev` is the default and integration branch, and the only branch that
 originates commits. `main` is a pointer to the last released commit; the release job
