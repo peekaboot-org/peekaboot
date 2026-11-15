@@ -96,6 +96,15 @@ final class JournalFiles {
         return header(journal(), false).id();
     }
 
+    /**
+     * True when the journal has a usable header the snapshot did not absorb and a complete line after it.
+     * Only then would a fold add anything to the snapshot.
+     */
+    boolean holdsUnfoldedLines() throws IOException {
+        String journalId = journalId();
+        return journalId != null && !journalId.equals(header(snapshot(), true).absorbed()) && holdsALine(journal());
+    }
+
     /** Replaces the snapshot in one step, through the same mechanism as every file a store replaces whole. */
     void replaceSnapshot(OwnerOnlyFiles.Content content) throws IOException {
         OwnerOnlyFiles.replaceAtomically(snapshot(), content);
@@ -159,6 +168,16 @@ final class JournalFiles {
             }
         }
         return unreadable;
+    }
+
+    /** A line cut short does not count, since a read skips it. */
+    private static boolean holdsALine(Path file) throws IOException {
+        try (BufferedReader reader = reader(file)) {
+            reader.readLine();
+            String line = reader.readLine();
+            String next = reader.readLine();
+            return line != null && (next != null || endsWithLineBreak(file));
+        }
     }
 
     /** Decoding replaces malformed bytes, so a damaged byte costs its line and the read goes on. */

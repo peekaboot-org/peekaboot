@@ -18,10 +18,11 @@ import org.slf4j.LoggerFactory;
  * Keeps the store's traces across restarts. Every input reaches the store first and is then handed
  * to one writer thread, which appends it to {@code traces.journal.jsonl}. That thread's first work
  * is the restore: it replays the files into the store while a {@link RestoreGate} holds live inputs
- * back, opens the gate, and folds the files into a new snapshot. Closing writes what is queued and
- * folds once more. The journal holds the inputs as the store takes them. Headers, the query string and
- * parameters arrive masked from capture; span attributes, SQL with its bind parameters, log messages and
- * stack traces are written raw and masked when read.
+ * back, opens the gate, and folds the journal's lines, where the last run left any, into a new
+ * snapshot. Closing writes what is queued and folds once more. The journal holds the inputs as the
+ * store takes them. Headers, the query string and parameters arrive masked from capture; span
+ * attributes, SQL with its bind parameters, log messages and stack traces are written raw and masked
+ * when read.
  *
  * <p>The writer thread is a platform thread, since the restore and each fold are CPU-bound and would hold a
  * virtual thread's carrier for as long as they take. It is a daemon, so a fold still running when

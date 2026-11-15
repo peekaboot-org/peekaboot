@@ -129,6 +129,48 @@ class JournalFilesTest {
     }
 
     @Test
+    void aMissingJournalHoldsNothingToFold() throws IOException {
+        JournalTexts.write(files.snapshot(), snapshotHeader("j0"), DISCARD_A);
+
+        assertThat(files.holdsUnfoldedLines()).isFalse();
+    }
+
+    /** As a stop leaves it, once its last fold took every line and started the next journal. */
+    @Test
+    void aJournalOfOnlyItsHeaderHoldsNothingToFold() throws IOException {
+        JournalTexts.write(files.snapshot(), snapshotHeader("j0"), DISCARD_A);
+        JournalTexts.write(files.journal(), journalHeader("j1"));
+
+        assertThat(files.holdsUnfoldedLines()).isFalse();
+    }
+
+    /** A crash after the snapshot moved into place leaves the absorbed journal behind, its lines folded already. */
+    @Test
+    void aJournalTheSnapshotAbsorbedHoldsNothingToFold() throws IOException {
+        JournalTexts.write(files.snapshot(), snapshotHeader("j1"), DISCARD_A);
+        JournalTexts.write(files.journal(), journalHeader("j1"), DISCARD_A);
+
+        assertThat(files.holdsUnfoldedLines()).isFalse();
+    }
+
+    @Test
+    void aJournalWithALineHoldsSomethingToFold() throws IOException {
+        JournalTexts.write(files.snapshot(), snapshotHeader("j0"), DISCARD_A);
+        JournalTexts.write(files.journal(), journalHeader("j1"), DISCARD_B);
+
+        assertThat(files.holdsUnfoldedLines()).isTrue();
+    }
+
+    /** A restore skips a line cut short, so a fold would find nothing in it either. */
+    @Test
+    void aJournalWhoseOnlyLineIsCutShortHoldsNothingToFold() throws IOException {
+        JournalTexts.write(files.snapshot(), snapshotHeader("j0"), DISCARD_A);
+        JournalTexts.writeCutShort(files.journal(), journalHeader("j1"), "{\"type\":\"discard\",\"tra");
+
+        assertThat(files.holdsUnfoldedLines()).isFalse();
+    }
+
+    @Test
     void aNewJournalStartsWithAHeaderUnderAFreshId() throws IOException {
         JournalTexts.write(files.journal(), journalHeader("old"), DISCARD_A);
 

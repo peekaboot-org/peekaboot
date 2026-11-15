@@ -122,6 +122,15 @@ class CheckpointTest {
         return lines.subList(1, lines.size() - TraceBucket.values().length);
     }
 
+    /**
+     * Folds what a fold wrote. The journal holds the run line the writer repeats after a fold past the size
+     * limit, since a journal of only its header is not folded.
+     */
+    private static void foldAgain(JournalFiles files, Consumer<PeekabootTracingProperties> caps) throws IOException {
+        JournalTexts.write(files.journal(), journalHeader("j2"), runLine(T2));
+        checkpoint(files, caps).fold().close();
+    }
+
     private static List<String> bucketLines(Path file) {
         List<String> lines = JournalTexts.lines(file);
         return lines.subList(lines.size() - TraceBucket.values().length, lines.size());
@@ -275,7 +284,7 @@ class CheckpointTest {
         InMemoryTraceStore before = restored(files, caps);
 
         checkpoint(files, caps).fold().close();
-        checkpoint(files, caps).fold().close();
+        foldAgain(files, caps);
         InMemoryTraceStore after = restored(files, caps);
 
         assertThat(idsIn(before, TraceBucket.ERRORS)).containsExactly("a");
@@ -314,7 +323,7 @@ class CheckpointTest {
 
         checkpoint(files, caps).fold().close();
         InMemoryTraceStore after = restored(files, caps);
-        checkpoint(files, caps).fold().close();
+        foldAgain(files, caps);
         InMemoryTraceStore afterTwo = restored(files, caps);
 
         assertThat(idsIn(before, TraceBucket.ALL)).containsExactly("u", "t");
@@ -783,6 +792,24 @@ class CheckpointTest {
         assertThat(next).isNotEqualTo("j1");
     }
 
+    /**
+     * A clean stop leaves a journal of only its header, so the next start has no line to add. The snapshot
+     * stays as it is, the journal it absorbed still named, and the next journal starts.
+     */
+    @Test
+    void aFoldWithNothingToFoldLeavesTheSnapshotAsItIs() throws IOException {
+        JournalFiles files = new JournalFiles(dir);
+        writeJournal(files, List.of(spanned("a", "a1"), logged("a", "a says")));
+        checkpoint(files).fold().close();
+        List<String> snapshot = JournalTexts.lines(files.snapshot());
+        String journalId = files.journalId();
+
+        checkpoint(files).fold().close();
+
+        assertThat(JournalTexts.lines(files.snapshot())).isEqualTo(snapshot).startsWith(snapshotHeader("j1"));
+        assertThat(files.journalId()).isNotEqualTo(journalId);
+    }
+
     /** A crash after the snapshot moved into place and before the next journal started: nothing is replayed twice. */
     @Test
     void aCrashBeforeTheNextJournalReplaysNothingTwice() throws IOException {
@@ -809,8 +836,9 @@ class CheckpointTest {
         checkpoint(files, CheckpointTest::capped).fold().close();
         List<String> first = body(files.snapshot());
 
-        checkpoint(files, CheckpointTest::capped).fold().close();
+        foldAgain(files, CheckpointTest::capped);
 
+        assertThat(JournalTexts.lines(files.snapshot()).getFirst()).isEqualTo(snapshotHeader("j2"));
         assertThat(body(files.snapshot())).isEqualTo(first);
     }
 

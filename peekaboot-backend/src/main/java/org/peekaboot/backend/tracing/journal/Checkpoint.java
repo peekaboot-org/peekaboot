@@ -31,6 +31,9 @@ import org.peekaboot.backend.tracing.store.TraceStore;
  * <p>The new snapshot names the journal it absorbed, then the next journal starts under a new id; a
  * crash in between leaves a journal the next restore skips. The replay holds a second store's worth of
  * traces while the fold runs.
+ *
+ * <p>A journal with no line the snapshot lacks, as a clean stop leaves it, is not folded. The snapshot
+ * stays as it is and only the next journal starts, so the start after a clean stop decodes the files once.
  */
 final class Checkpoint implements JournalWriter.Folding {
 
@@ -45,6 +48,9 @@ final class Checkpoint implements JournalWriter.Folding {
 
     @Override
     public OpenJournal fold() throws IOException {
+        if (!files.holdsUnfoldedLines()) {
+            return files.startJournal();
+        }
         RestorableTraceStore kept = emptyStore.get();
         FoldTally tally = new FoldTally();
         TraceReplay.replay(files, kept, tally);
