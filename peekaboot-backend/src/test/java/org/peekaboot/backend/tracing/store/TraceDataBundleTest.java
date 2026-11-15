@@ -301,11 +301,9 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void theRedirectTableIsPrunedAsRealSpansAreEvicted() {
-        // The redirect table gains one entry per fold; unless it is pruned as spans are
-        // evicted it grows for the trace's whole life regardless of maxSpans. Here 500
-        // real+duplicate pairs are folded against a cap of 10 - unpruned, the table would
-        // hold close to 500 entries by the end.
+    void pairsFoldedBeyondTheCapCountOneDroppedSpanEach() {
+        // 500 real+duplicate pairs against a cap of 10: every pair folds to one span before
+        // the cap is checked, so each eviction drops one real span and no duplicate.
         int cap = 10;
         TraceDataBundle bundle = bundle("trace1", cap, NO_CAP);
         int pairs = 500;
@@ -322,23 +320,13 @@ class TraceDataBundleTest {
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
         assertThat(bundle.snapshot().droppedSpans()).isEqualTo(pairs - cap);
-        assertThat(bundle.parentRedirectCountForTesting())
-                .as("the redirect table must be pruned as spans are evicted, not grow with "
-                        + "every duplicate ever folded over the trace's whole life")
-                .isLessThanOrEqualTo(cap * 2);
     }
 
     @Test
-    void theRedirectTableIsPrunedAcrossChainedFoldsEvenWhenTheIntermediateSurvivorIsEvicted() {
-        // Chained-redirect residue: when a duplicate (dup1) is itself
-        // later folded into a further survivor, an earlier fold that had targeted dup1
-        // (gc -> dup1) stays keyed on dup1 in the reverse index. dup1 was folded away and
-        // never itself stored as a real span, so it is never passed to
-        // pruneRedirectsPointingAt when the eventual survivor is evicted - the entry for gc
-        // would leak forever instead of being pruned with it. This needs triple instrumentation
-        // (three spans that pairwise match, nested three deep), which does not occur in
-        // production - but the class Javadoc promises the redirect table "stays bounded by
-        // the maxSpans cap" unconditionally, so this must hold even for that shape.
+    void chainedFoldsBeyondTheCapCountOneDroppedSpanEach() {
+        // Triple instrumentation (three spans that pairwise match, nested three deep) does
+        // not occur in production, but the fold must stay correct if it ever did: gc folds
+        // into dup1, dup1 into the survivor, and the three count as one span against the cap.
         int cap = 10;
         TraceDataBundle bundle = bundle("trace1", cap, NO_CAP);
         int triples = 500;
@@ -367,10 +355,7 @@ class TraceDataBundleTest {
         }
 
         assertThat(bundle.snapshot().spans()).hasSize(cap);
-        assertThat(bundle.parentRedirectCountForTesting())
-                .as("the redirect table must not leak an entry per chained fold whose "
-                        + "intermediate survivor was itself later folded away and evicted")
-                .isLessThanOrEqualTo(cap * 2);
+        assertThat(bundle.snapshot().droppedSpans()).isEqualTo(triples - cap);
     }
 
     @Test

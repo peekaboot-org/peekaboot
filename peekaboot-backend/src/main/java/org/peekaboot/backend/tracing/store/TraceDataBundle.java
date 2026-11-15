@@ -7,11 +7,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -36,12 +36,9 @@ import org.peekaboot.backend.tracing.tags.HttpSpanTags;
  * <p>The fold below therefore checks both directions on every insertion: does the arriving
  * span turn out to duplicate its own already-stored parent (the uncommon ordering), and does
  * an already-stored span turn out to duplicate the span that just arrived (the expected
- * ordering). A folded-away duplicate's id is kept in a redirect table so a later span whose
- * stated parent was already folded away - a grandchild of the duplicate, which arrives before
- * the duplicate does - still resolves to the surviving ancestor when the trace is read back
- * out via {@link #snapshot()}. That table is pruned as spans are evicted (see
- * {@link #evictOldest}), so it stays bounded by the {@code maxSpans} cap rather than growing
- * for the trace's whole life.
+ * ordering). {@link DuplicateFolds} keeps the redirect table that lets a span whose stated
+ * parent was folded away still resolve to the surviving ancestor when the trace is read back
+ * out via {@link #snapshot()}.
  *
  * <p>Only datasource twins that both failed or both did not are folded, so a fold never costs
  * the trace a failure and a method that calls itself keeps its nested spans.
@@ -54,11 +51,7 @@ public class TraceDataBundle {
     private final TraceRun run;
     private final Object spansLock = new Object();
     private final Map<String, SpanData> spansById = new LinkedHashMap<>();
-    private final Map<String, String> parentRedirects = new HashMap<>();
-    /** Reverse index of {@link #parentRedirects}, so an evicted survivor's redirects can be pruned. */
-    private final Map<String, List<String>> redirectsPointingAt = new HashMap<>();
-
-    private final Map<String, List<String>> childrenByParentId = new HashMap<>();
+    private final DuplicateFolds folds = new DuplicateFolds();
     /** Real spans the cap evicted. A folded duplicate was never stored, so it never counts. */
     private int droppedSpans;
     /** Never cleared: a root the span cap evicts later leaves the trace complete. */
@@ -130,7 +123,7 @@ public class TraceDataBundle {
         }
     }
 
-    /** A span that is its own parent would fold into itself, and {@link #resolve} would never leave its redirect. */
+    /** A span that is its own parent would fold into itself, and resolving it would never leave its redirect. */
     static void refuseOwnParent(SpanData span) {
         if (span.spanId().equals(span.parentId())) {
             throw new IllegalArgumentException("span " + span.spanId() + " names itself as its parent");
@@ -138,22 +131,19 @@ public class TraceDataBundle {
     }
 
     /**
-     * True if {@code span}'s parent is already stored and {@code span} duplicates it - the
-     * uncommon ordering, but possible once earlier folds have populated
-     * {@link #parentRedirects}. If so, records the redirect instead of storing the span.
+     * True if {@code span}'s parent is already stored and {@code span} duplicates it, in which
+     * case it is redirected instead of stored (see {@link DuplicateFolds#foldIntoStoredParent}).
      */
     private boolean isDuplicateOfStoredParent(SpanData span) {
-        String resolvedParentId = resolve(span.parentId());
-        SpanData parent = resolvedParentId != null ? spansById.get(resolvedParentId) : null;
-        if (parent != null && SpanDuplicateMatcher.isDuplicate(span, parent)) {
-            recordRedirect(span.spanId(), parent.spanId());
-            // the duplicate's stored children resolve to parent, so they share its subtree
-            if (asyncMembership.contains(parent.spanId())) {
-                joinDescendants(span.spanId());
-            }
-            return true;
+        SpanData parent = folds.foldIntoStoredParent(span, spansById);
+        if (parent == null) {
+            return false;
         }
-        return false;
+        // the duplicate's stored children resolve to parent, so they share its subtree
+        if (asyncMembership.contains(parent.spanId())) {
+            joinDescendants(span.spanId());
+        }
+        return true;
     }
 
     private void store(SpanData span) {
@@ -168,11 +158,7 @@ public class TraceDataBundle {
             parentlessSpanStored = true;
         }
         fullWindow = fullWindow.including(span);
-        if (span.parentId() != null) {
-            childrenByParentId
-                    .computeIfAbsent(span.parentId(), k -> new ArrayList<>())
-                    .add(span.spanId());
-        }
+        folds.stored(span);
     }
 
     /**
@@ -185,7 +171,7 @@ public class TraceDataBundle {
     private void placeInAsyncSubtrees(SpanData span, List<SpanData> absorbedDuplicates) {
         // a span a fold carried as async enters as it did live, though its entry span was not kept
         if (AsyncTaskMarker.isMarked(span.tags())
-                || asyncMembership.contains(resolve(span.parentId()))
+                || asyncMembership.contains(folds.resolve(span.parentId()))
                 || asyncMembership.contains(span.spanId())) {
             asyncMembership.enter(span.spanId(), absorbedDuplicates);
             joinDescendants(span.spanId());
@@ -202,7 +188,7 @@ public class TraceDataBundle {
         Deque<String> pending = new ArrayDeque<>();
         pending.add(spanId);
         while (!pending.isEmpty()) {
-            for (String childId : resolvedChildIdsOf(pending.remove())) {
+            for (String childId : folds.resolvedChildIdsOf(pending.remove())) {
                 SpanData child = spansById.get(childId);
                 if (child != null && asyncMembership.join(child)) {
                     pending.add(childId);
@@ -212,94 +198,26 @@ public class TraceDataBundle {
     }
 
     /**
-     * The ids of the stored spans whose resolved parent is {@code spanId}. {@link #childrenByParentId}
-     * is keyed on the raw parent id, so a child naming a folded-away duplicate of {@code spanId}
-     * sits under the duplicate's id, and {@link #redirectsPointingAt} lists every such duplicate.
-     */
-    private List<String> resolvedChildIdsOf(String spanId) {
-        List<String> childIds = new ArrayList<>(childrenByParentId.getOrDefault(spanId, List.of()));
-        for (String duplicateId : redirectsPointingAt.getOrDefault(spanId, List.of())) {
-            childIds.addAll(childrenByParentId.getOrDefault(duplicateId, List.of()));
-        }
-        return childIds;
-    }
-
-    /**
-     * The span just stored may be the real span whose duplicate already arrived as one of
-     * its direct children - the expected ordering, since a duplicate ends (and so exports)
-     * before the real span containing it does. Folds any such child away, redirects it here
-     * and returns it, so the survivor's placement can settle whether its time stays synchronous.
+     * Folds away the direct children that duplicate the span just stored (see
+     * {@link DuplicateFolds#absorbDuplicateChildren}) and returns them, so the survivor's
+     * placement can settle whether its time stays synchronous.
      */
     private List<SpanData> absorbDuplicateChildrenOf(SpanData survivor) {
-        List<String> children = childrenByParentId.get(survivor.spanId());
-        if (children == null || children.isEmpty()) {
-            return List.of();
-        }
-        List<SpanData> absorbed = new ArrayList<>();
-        Iterator<String> it = children.iterator();
-        while (it.hasNext()) {
-            String childId = it.next();
-            SpanData candidate = spansById.get(childId);
-            if (candidate != null && SpanDuplicateMatcher.isDuplicate(candidate, survivor)) {
-                spansById.remove(childId);
-                recordRedirect(childId, survivor.spanId());
-                asyncMembership.forget(candidate);
-                absorbed.add(candidate);
-                it.remove();
-            }
-        }
+        List<SpanData> absorbed = folds.absorbDuplicateChildren(survivor, spansById);
+        absorbed.forEach(asyncMembership::forget);
         return absorbed;
     }
 
     /**
-     * Records that {@code removedId} folded into {@code survivorId}, maintaining
-     * {@link #redirectsPointingAt} alongside {@link #parentRedirects} so the entry can be
-     * pruned in {@link #evictOldest} once {@code survivorId} itself is evicted.
-     */
-    private void recordRedirect(String removedId, String survivorId) {
-        parentRedirects.put(removedId, survivorId);
-        redirectsPointingAt.computeIfAbsent(survivorId, k -> new ArrayList<>()).add(removedId);
-        retargetChainedRedirects(removedId, survivorId);
-    }
-
-    /**
-     * {@code removedId} may itself have been an earlier fold's survivor - i.e. other ids
-     * already redirect to it (triple-nested duplicates; does not occur in production, but
-     * the fold must stay correct if it ever did). A folded-away id, unlike a real span, is
-     * never evicted, so entries keyed on it would never be pruned. Re-point them directly
-     * at {@code survivorId} so they are pruned together with it once it is evicted.
-     */
-    private void retargetChainedRedirects(String removedId, String survivorId) {
-        List<String> chained = redirectsPointingAt.remove(removedId);
-        if (chained == null || chained.isEmpty()) {
-            return;
-        }
-        chained.forEach(id -> parentRedirects.put(id, survivorId));
-        redirectsPointingAt.computeIfAbsent(survivorId, k -> new ArrayList<>()).addAll(chained);
-    }
-
-    /**
-     * Follows the redirect chain for a (possibly folded-away) span id to the span it
-     * ultimately survived as. Returns {@code spanId} unchanged if it was never redirected.
-     */
-    private String resolve(String spanId) {
-        String current = spanId;
-        while (current != null && parentRedirects.containsKey(current)) {
-            current = parentRedirects.get(current);
-        }
-        return current;
-    }
-
-    /**
      * Resolves a log's MDC spanId to the span it ultimately survived as, following
-     * {@link #parentRedirects} the same way {@link #withResolvedParent} does for spans. Logs
+     * {@link DuplicateFolds} the same way {@link #withResolvedParent} does for spans. Logs
      * arrive synchronously via MDC while the span that folds them (and the resulting redirect)
      * arrives later via the OTel {@code BatchSpanProcessor}, so this must be resolved at read
      * time rather than when the log is stored.
      */
     public String resolveSpanId(String spanId) {
         synchronized (spansLock) {
-            return resolve(spanId);
+            return folds.resolve(spanId);
         }
     }
 
@@ -308,32 +226,8 @@ public class TraceDataBundle {
         for (int i = 0; i < count && it.hasNext(); i++) {
             SpanData evicted = it.next().getValue();
             it.remove();
-            removeFromParentIndex(evicted);
-            childrenByParentId.remove(evicted.spanId());
-            pruneRedirectsPointingAt(evicted.spanId());
+            folds.evicted(evicted);
             asyncMembership.evict(evicted);
-        }
-    }
-
-    /** Redirects into an evicted span can never resolve again. */
-    private void pruneRedirectsPointingAt(String evictedSpanId) {
-        List<String> redirected = redirectsPointingAt.remove(evictedSpanId);
-        if (redirected != null) {
-            redirected.forEach(parentRedirects::remove);
-        }
-    }
-
-    private void removeFromParentIndex(SpanData span) {
-        if (span.parentId() == null) {
-            return;
-        }
-        List<String> siblings = childrenByParentId.get(span.parentId());
-        if (siblings == null) {
-            return;
-        }
-        siblings.remove(span.spanId());
-        if (siblings.isEmpty()) {
-            childrenByParentId.remove(span.parentId());
         }
     }
 
@@ -393,7 +287,7 @@ public class TraceDataBundle {
     /** Whether the bundle keeps {@code spanId}, stored or folded into a span it stores. */
     public boolean keepsSpan(String spanId) {
         synchronized (spansLock) {
-            return spansById.containsKey(spanId) || parentRedirects.containsKey(spanId);
+            return spansById.containsKey(spanId) || folds.foldedAway(spanId);
         }
     }
 
@@ -417,7 +311,7 @@ public class TraceDataBundle {
     private boolean descendsFrom(SpanData span, String ancestorId) {
         SpanData current = span;
         while (current != null) {
-            String parentId = resolve(current.parentId());
+            String parentId = folds.resolve(current.parentId());
             if (ancestorId.equals(parentId)) {
                 return true;
             }
@@ -428,7 +322,7 @@ public class TraceDataBundle {
 
     /** Whether {@code log} names {@code spanId} or a stored span; must run under {@code spansLock}. */
     private boolean isWrittenUnder(LogCapturedEvent log, String spanId) {
-        return spanId.equals(log.spanId()) || spansById.containsKey(resolve(log.spanId()));
+        return spanId.equals(log.spanId()) || spansById.containsKey(folds.resolve(log.spanId()));
     }
 
     /**
@@ -451,13 +345,6 @@ public class TraceDataBundle {
 
     public void setRequest(RequestCompletedEvent request) {
         this.request = request;
-    }
-
-    /** Test-only: pins a bound on the redirect table's growth without reflection. */
-    int parentRedirectCountForTesting() {
-        synchronized (spansLock) {
-            return parentRedirects.size();
-        }
     }
 
     /**
@@ -490,14 +377,14 @@ public class TraceDataBundle {
 
     /**
      * Rewrites a stored span's parentId if it still points at a span folded away since -
-     * must run under {@code spansLock}, as it consults {@link #parentRedirects}.
+     * must run under {@code spansLock}, as it consults {@link DuplicateFolds}.
      */
     private SpanData withResolvedParent(SpanData span) {
         if (span.parentId() == null) {
             return span;
         }
-        String resolvedParentId = resolve(span.parentId());
-        return resolvedParentId.equals(span.parentId()) ? span : span.withParentId(resolvedParentId);
+        String resolvedParentId = folds.resolve(span.parentId());
+        return Objects.equals(resolvedParentId, span.parentId()) ? span : span.withParentId(resolvedParentId);
     }
 
     /**
@@ -545,7 +432,7 @@ public class TraceDataBundle {
      * (see {@link TraceData#complete}). A remote parent can be this application's own client
      * span, when it called itself; it is stored once it ends, and from then on the span below it
      * roots nothing. The one definition of the root, over stored spans or their resolved copies;
-     * must run under {@code spansLock}, as it consults {@link #parentRedirects}.
+     * must run under {@code spansLock}, as it consults {@link DuplicateFolds}.
      */
     private @Nullable SpanData rootOf(Collection<SpanData> spans) {
         SpanData parentless = null;
@@ -553,7 +440,7 @@ public class TraceDataBundle {
         for (SpanData span : spans) {
             if (span.parentId() == null) {
                 parentless = earlier(parentless, span);
-            } else if (span.remoteParent() && !spansById.containsKey(resolve(span.parentId()))) {
+            } else if (span.remoteParent() && !spansById.containsKey(folds.resolve(span.parentId()))) {
                 continuingCaller = earlier(continuingCaller, span);
             }
         }
@@ -622,7 +509,8 @@ public class TraceDataBundle {
         }
         List<SpanData> entries = new ArrayList<>();
         for (SpanData stored : spansById.values()) {
-            if (asyncMembership.contains(stored.spanId()) && !asyncMembership.contains(resolve(stored.parentId()))) {
+            if (asyncMembership.contains(stored.spanId())
+                    && !asyncMembership.contains(folds.resolve(stored.parentId()))) {
                 entries.add(stored);
             }
         }
