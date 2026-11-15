@@ -1,15 +1,15 @@
 name: prepare-build
 description: >
   Everything the build workflows do between the checkout and their Maven build: JDK, the
-  Playwright browser cache, the reactor's SNAPSHOTs, the browsers themselves. The checkout
-  itself stays in the workflow, because a local action resolves from the runner's workspace
-  and so cannot run before it. See BUILD.md, CI.
+  Maven, Playwright and npm caches unless `cache` turns them off, the reactor's SNAPSHOTs,
+  the browsers themselves. The checkout itself stays in the workflow, because a local action
+  resolves from the runner's workspace and so cannot run before it. See BUILD.md, CI.
 
 inputs:
   server-id:
     description: >
-      Maven server id setup-java writes to settings.xml. The two publishing workflows,
-      build-on-push and release, set it to central.
+      Maven server id setup-java writes to settings.xml. build-on-push sets it to central
+      for its snapshot deploy; the release names that server in a step of its own.
     default: github
   server-username-env-var:
     description: Name of the environment variable holding that server's username.
@@ -40,6 +40,12 @@ inputs:
       'true' adds --with-deps, which apt-installs the engines' system libraries and needs
       passwordless sudo. WebKit on Linux does not start without them.
     default: 'false'
+  cache:
+    description: >
+      'false' restores and saves no cache: not Maven's, not Playwright's, not npm's. The
+      release sets it, so what it signs and publishes is built from nothing an earlier run
+      left behind.
+    default: 'true'
 
 runs:
   using: composite
@@ -49,7 +55,7 @@ runs:
       with:
         java-version: 25
         distribution: 'temurin'
-        cache: maven
+        cache: ${{ inputs.cache == 'true' && 'maven' || '' }}
         server-id: ${{ inputs.server-id }}
         server-username-env-var: ${{ inputs.server-username-env-var }}
         server-password-env-var: ${{ inputs.server-password-env-var }}
@@ -76,6 +82,7 @@ runs:
       run: echo "release=$(. /etc/os-release && echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
 
     - name: Cache Playwright browsers
+      if: inputs.cache == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ms-playwright
@@ -84,8 +91,10 @@ runs:
 
     # The frontend lint gate's npm packages. The Node distribution itself needs no entry:
     # frontend-maven-plugin caches the tarball as a Maven artifact, which setup-java's
-    # maven cache above already covers. Keyed on the lockfile, the only input npm ci reads.
+    # maven cache above already covers when `cache` is on. Keyed on the lockfile, the only
+    # input npm ci reads.
     - name: Cache npm packages
+      if: inputs.cache == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.npm

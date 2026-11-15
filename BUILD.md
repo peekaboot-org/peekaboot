@@ -588,25 +588,30 @@ accepted. That is a one-off toggle on `org.peekaboot` under Namespaces, with no 
 
 ## Releasing
 
-Signing and the release mechanics sit in the `peekaboot-release` profile, publishing itself in
-`peekaboot-publish`; a release activates both, and the push build activates publishing alone
-(see [Snapshots](#snapshots)). A local build activates neither profile nor a `deploy` goal, so
-it never signs or publishes anything. Releases start by hand: run the `release` workflow from the
-Actions tab with `dev` selected, and it fails immediately if dispatched from anything else.
-Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does:
+The signature sits in the `peekaboot-release` profile, publishing itself in
+`peekaboot-publish`; `release:perform` activates both, and the push build activates publishing
+alone (see [Snapshots](#snapshots)). `maven-release-plugin` is configured in the root pom's
+`pluginManagement`, outside both, so `release:prepare` runs with neither.
+
+A local build activates neither profile nor a `deploy` goal, so it never signs or publishes
+anything. Releases start by hand: run the `release` workflow from the Actions tab with `dev`
+selected, and it fails immediately if dispatched from anything else. Leave `releaseVersion`
+empty unless git-cliff reads the bump wrong. The run does:
 
 1. A preflight that fails the run before anything is built when `dev` moved since the
-   dispatch, when no commit but the next development version follows the last tag, or when
-   `main` is not an ancestor of `dev` and so could not fast-forward.
+   dispatch, when a release tag is not on `dev`, when no commit but the next development
+   version follows the last tag, or when `main` is not an ancestor of `dev` and so could not
+   fast-forward.
 2. The release version resolved with `git-cliff --bumped-version`. `CHANGELOG.md` regenerated
    whole against it and staged, and `README.md`'s dependency snippet rewritten to it and
    staged. See [Release notes](#release-notes).
-3. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
-   picks the staged changelog up, so version bump, changelog and tag are one commit. Its
-   `clean verify` is the release's one full build.
-4. `./mvnw -P peekaboot-release release:perform`, then a wait until the release is on repo1.
-5. `main` fast-forwarded to the tagged commit, so it names exactly what was published.
-   Nothing merges back, because `main` originates no commits of its own.
+3. `./mvnw release:prepare -DreleaseVersion=<x.y.z>`, whose own commit picks the staged
+   changelog up, so version bump, changelog and tag are one commit. Its `clean verify` is the
+   release's one full build. It commits and tags on the runner and pushes nothing.
+4. The tag pushed alone. Then `./mvnw release:perform`, which clones that tag from `origin`,
+   builds it and uploads, and a wait until the release is on repo1.
+5. `main` fast-forwarded to the tagged commit, so it names exactly what was published, and
+   `dev` pushed. Nothing merges back, because `main` originates no commits of its own.
 6. Grouped release notes for the new tag rendered by git-cliff into the release body, and
    the `unreleased` draft deleted.
 7. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
@@ -615,9 +620,9 @@ Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does
 8. `build-on-push` dispatched on `dev`, so the next development version gets its build and
    snapshot. The release's own pushes use `GITHUB_TOKEN`, which starts no workflow.
 
-`release:prepare` pushes to `dev` with `GITHUB_TOKEN`, and that works only because the ruleset
-requires no status check. A required check refuses any push that does not carry one, and a
-`GITHUB_TOKEN` push never carries one, because that token starts no workflows. The usual
+`publish-release-branches` pushes to `dev` with `GITHUB_TOKEN`, and that works only because the
+ruleset requires no status check. A required check refuses any push that does not carry one,
+and a `GITHUB_TOKEN` push never carries one, because that token starts no workflows. The usual
 escape is a ruleset bypass, but GitHub Actions is not an eligible bypass actor at all: the
 list admits repository admins, organisation and enterprise owners, the maintain or write role,
 teams, GitHub Apps and Dependabot. So a required check on `dev` and an automated release
@@ -626,8 +631,9 @@ cannot coexist, short of running the release under a GitHub App or a personal to
 That check used to exist to arm auto-merge on Dependabot pull requests, which is why
 [`dependabot-pr-auto-merge.yml`](#dependabot-pr-auto-mergeyml) now waits for the build itself.
 
-Nothing is left to do by hand afterwards. The Gradle build needs no step either, since it
-derives the version and the build instant from the poms.
+Nothing is left to do by hand after a green run. The Gradle build needs no step either, since
+it derives the version and the build instant from the poms. A run that stopped is covered by
+[Recovering a release](#recovering-a-release).
 
 Both places that spell a version out are rewritten by the job. `README.md`'s dependency
 snippet is staged before `release:prepare`, so it rides into the tagged commit beside the
@@ -640,12 +646,15 @@ The site repo follows the same branch model as this one: `dev` is where commits 
 `main` is fast-forwarded onto them, which is what triggers the Pages rebuild. Its tag is the
 same bare `x.y.z` as the app's, so a site commit can be traced to the release it shipped with.
 
-`peekaboot-release` adds `maven-release-plugin`, which the workflow drives with an explicit
-`-DreleaseVersion`; see [How the next version is chosen](#how-the-next-version-is-chosen).
-Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
-GPG-signs with `raphael@peekaboot.org`. `releaseProfiles` names both profiles, because the
-fork `release:perform` starts is what runs `deploy` and it needs the publishing plugin as
-well as the signature.
+The workflow drives `maven-release-plugin` with an explicit `-DreleaseVersion`; see
+[How the next version is chosen](#how-the-next-version-is-chosen). Tags are bare
+`@{project.version}`; release commits are prefixed `[release]`. `pushChanges` is `false`:
+the plugin pushes nothing, and the workflow pushes through `.github/release/publish-refs.sh`.
+
+`peekaboot-release` GPG-signs with `raphael@peekaboot.org`. `releaseProfiles` names both
+profiles, because the fork `release:perform` starts is what runs `deploy` and it needs the
+publishing plugin as well as the signature. `release:prepare` hands its fork the profiles of
+its own command line, which names none, so the release's test run signs nothing.
 
 `peekaboot-publish` contributes `central-publishing-maven-plugin`, which on a release runs
 with `autoPublish=true` / `waitUntil=uploaded`. Any later wait polls the Portal's status
@@ -659,8 +668,8 @@ which never calls the Portal.
 
 The sources and javadoc jars are *not* release-only. Both are attached on every build of
 the published modules, and javadoc runs with `doclint` at `all,-missing` and fails on an
-error, so a broken `@link` surfaces at `./mvnw package` rather than after `release:prepare`
-has pushed the tag.
+error, so a broken `@link` surfaces at `./mvnw package` rather than in `release:perform`,
+when the tag is already public.
 
 Three modules stay out of the bundle, by two different switches. The publishing plugin
 binds itself to `deploy` in every module that inherits the profile and ignores
@@ -673,20 +682,24 @@ the bundle is still uploaded from `peekaboot-coverage`, the reactor's last modul
 
 `release:prepare` bumps the POMs to the release version, runs its `preparationGoals`
 (`clean verify`) against that tree, then commits it, tags it and commits the next
-`-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
-`target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where
-signing and the upload to Central happen. The workflow passes it
-`-Darguments="-DskipTests -DskipITs -Djacoco.skip=true"`. Failsafe ignores `-DskipTests`,
-so `-DskipITs` is what keeps the Playwright suite out. That tree passed `verify` in
-`preparationGoals`, so a second run would only repeat the Playwright suite. The static-analysis gates, both
-dependency checks and the configuration-metadata check still run.
+`-SNAPSHOT` version; it deploys nothing and pushes nothing.
+
+`release:perform` clones the tag from `origin` into `target/checkout`, because `localCheckout`
+keeps its default, `false`. That is why the tag is pushed before it: what is built and
+uploaded is what `origin` serves under the tag. It runs the configured `<goals>` (`deploy`)
+there, which is where signing and the upload to Central happen.
+
+The workflow passes it `-Darguments="-DskipTests -DskipITs -Djacoco.skip=true"`. Failsafe
+ignores `-DskipTests`, so `-DskipITs` is what keeps the Playwright suite out. That tree passed
+`verify` in `preparationGoals`, so a second run would only repeat the Playwright suite. The
+static-analysis gates, both dependency checks and the configuration-metadata check still run.
 
 The changelog reaches the tagged commit because that commit is a plain `git commit` over
 the whole index: maven-scm stages the POMs and then commits everything staged. So the
 workflow renders and stages `CHANGELOG.md` before prepare runs, and
 `checkModificationExcludes` stops the modification check refusing the staged file. No
 version of maven-scm documents that, so `verify-release-commit` greps the new tag and
-fails the job while the only damage is a tag nobody has consumed.
+fails the job before the tag is pushed.
 
 Reproducibility depends on `project.build.outputTimestamp` being pinned in the root pom and
 in the testing-app's, and on every plugin version being explicit. That includes the
@@ -694,6 +707,59 @@ lifecycle plugins Maven would otherwise bind on its own. The testing-app pins, i
 `pluginManagement`, each plugin whose root pom version differs from the one
 `spring-boot-dependencies` manages, so Dependabot bumps both poms in one pull request and a
 reactor build runs one version of each.
+
+### Recovering a release
+
+The workflow never forces a push and never deletes a ref, so a run that stops leaves what it
+made public. The Portal's deployments and this listing say where it stopped; a failed run
+prints the listing in its summary.
+
+```bash
+git ls-remote origin 'refs/tags/<version>' refs/heads/dev refs/heads/main
+```
+
+A run that is dispatched or re-run while a release tag is not on `dev` stops at `preflight`.
+
+| Where it stopped | Public so far | Do |
+|---|---|---|
+| before the tag is on `origin` | nothing | fix, dispatch again |
+| at the upload, or at `await-maven-central` while the Portal shows a failed deployment or none | the tag | drop the failed deployment in the Portal if there is one, delete the tag, fix, dispatch again |
+| at `await-maven-central` while the Portal shows the deployment publishing or published, or at `publish-release-branches` before its first push | the tag, the artifacts | keep the tag and finish by hand, from the first command below |
+| at `publish-release-branches` with "dev moved" | the tag, the artifacts, `main` | keep the tag and finish by hand, with the merge in place of the fast-forward |
+| at any later step | the tag, the artifacts, `main`, `dev` | run the remaining steps by hand, in the workflow's order |
+
+Deleting the tag:
+
+```bash
+git push origin :refs/tags/<version>
+git tag -d <version>
+```
+
+Run the second line in every clone that fetched the tag, or a later `git push --tags` brings
+it back. The next run tags a new commit under the same name, so delete a tag only while
+Central has nothing under that version. No ruleset covers tags, so the delete needs write
+access and nothing else.
+
+Finishing by hand, in a clean clone on `dev`. `<before>` is the snapshot version `dev` had
+before the release (`git show '<version>^:pom.xml'`). `<next>` is the release version with its
+patch raised by one, which is what `release:prepare` derives.
+
+```bash
+git merge --ff-only '<version>^{commit}'      # dev moved: git merge --no-ff '<version>^{commit}'
+git diff '<version>^' '<version>' -- pom.xml 'peekaboot-*/pom.xml' | git apply -R --index
+sed -i 's|<version><before>-SNAPSHOT</version>|<version><next>-SNAPSHOT</version>|' pom.xml peekaboot-*/pom.xml
+git commit -a -m '[release] prepare for next development iteration'
+.github/release/publish-refs.sh branches <version>
+```
+
+Then the steps after `publish-release-branches`, by hand and with the commands of
+[`release.yml`](.github/workflows/release.yml): the release notes, the site, and
+`gh workflow run build-on-push.yml --ref dev`.
+
+The rebuilt commit carries an older `project.build.outputTimestamp`, which the next release
+overwrites. After `dev` moved the merge is a merge commit, and `dev` requires linear history,
+so that push needs one of the ruleset's bypass actors. Nothing in the run rewrites `dev` or
+`main`.
 
 ### Release notes
 
@@ -782,15 +848,27 @@ one.
 ### Signing and secrets
 
 Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SECRET_KEY`,
-`OSSRH_GPG_SECRET_KEY_PASSWORD`. The `OSSRH_` prefix is historical: the workflow talks to
-the Central Portal (`server-id: central`), and the first two hold a Portal user token. The
-names live in the repository settings as well as in the workflow, so a rename touches both.
+`OSSRH_GPG_SECRET_KEY_PASSWORD`, `SITE_REPO_TOKEN`. The `OSSRH_` prefix is historical: the
+workflow talks to the Central Portal (`server-id: central`), and the first two hold a Portal
+user token. The names live in the repository settings as well as in the workflow, so a rename
+touches both.
+
+Each secret enters at the step that needs it. No step above `import-signing-key` holds one,
+so `release:prepare` and its tests run without any, and the checkout persists no token.
+
+| Step | Holds |
+|---|---|
+| `import-signing-key` | `OSSRH_GPG_SECRET_KEY`; the imported key stays for the steps after it |
+| `push-release-tag`, `publish-release-branches` | the built-in `GITHUB_TOKEN`, for the push |
+| `perform-release-publish-on-maven-central` | `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SECRET_KEY_PASSWORD` |
+| `create-release-notes`, `delete-unreleased-draft` | the built-in `GITHUB_TOKEN`, for `gh` |
+| `checkout-site` | `SITE_REPO_TOKEN`, kept in the site clone for `publish-site`'s pushes |
 
 `OSSRH_GPG_SECRET_KEY` is only half the signing story. Central verifies every `.asc` by
 looking the signing key up by fingerprint on a public keyserver, so the public half has to
 be distributed before a release. Otherwise the deployment fails validation with
 *"Could not find a public key by the key fingerprint"* for every artifact of every module at
-once, long after `release:prepare` has tagged and pushed. Distribute it with
+once, after the tag is public and the upload is done. Distribute it with
 `gpg --keyserver keyserver.ubuntu.com --send-keys <FINGERPRINT>`. Central queries
 `keyserver.ubuntu.com`, `keys.openpgp.org` and `pgp.mit.edu`; the last has been unreachable
 for years, so treat the first as mandatory and the second as the backup. Confirm it landed

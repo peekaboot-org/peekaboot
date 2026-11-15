@@ -31,17 +31,22 @@ jobs:
             exit 1
           fi
 
-      # No `ref`: checkout leaves HEAD on a local `dev`, and maven-scm pushes to whatever
-      # branch it finds checked out, which is the whole mechanism targeting `dev`. Naming
-      # `ref: dev` would redirect a mis-dispatched run instead of letting the guard fail it.
+      # No `ref`: checkout leaves HEAD on a local `dev`. release:prepare commits to it and
+      # `publish-refs.sh branches` pushes it, which is the whole mechanism targeting `dev`.
+      # Naming `ref: dev` would redirect a mis-dispatched run instead of letting the guard
+      # fail it.
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # full history: git-cliff resolves the range back to the previous tag
           fetch-depth: 0
+          # The build and its tests run with no write token on disk; the two push steps
+          # bring their own.
+          persist-credentials: false
 
-      # Each of these would otherwise fail only after release:prepare has pushed the tag or
-      # the artifacts are on Central. First, so nothing is built or rendered for a doomed run.
+      # The tag is public before the upload and stays public when a later step fails, so
+      # each of these stops a doomed run before that. First, so nothing is built or rendered
+      # for one.
       - name: preflight
         run: |
           # A second dispatch queued behind this one by the concurrency group checks out the
@@ -52,6 +57,16 @@ jobs:
             exit 1
           fi
 
+          # The tag of a failed upload stays public until a person deletes it, and git-cliff
+          # must not resolve a version beside it.
+          unfinished="$(git tag --no-merged HEAD --list '[0-9]*.[0-9]*.[0-9]*')"
+          if [ -n "$unfinished" ]; then
+            for tag in $unfinished; do
+              echo "::error::tag ${tag} is not on dev: a release did not finish. See BUILD.md, Recovering a release"
+            done
+            exit 1
+          fi
+
           # A release leaves exactly one commit after its tag, the next development version.
           last_tag="$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2> /dev/null || true)"
           if [ -n "$last_tag" ] && [ "$(git rev-list --no-merges --count "${last_tag}..HEAD")" -le 1 ]; then
@@ -59,22 +74,19 @@ jobs:
             exit 1
           fi
 
-          # fast-forward-main pushes without --force, so a main that is not behind dev would
-          # reject it after the publish.
+          # publish-release-branches pushes main without --force, so a main that is not
+          # behind dev would reject it after the publish.
           if ! git merge-base --is-ancestor refs/remotes/origin/main HEAD; then
             echo "::error::main is not an ancestor of dev, so it cannot fast-forward to the release"
             exit 1
           fi
 
+      # No cache: what is signed and published is built from nothing an earlier run left
+      # behind. No server and no key either: release:prepare has nothing to authenticate with.
       - name: prepare-build
         uses: ./.github/actions/prepare-build
         with:
-          server-id: central
-          server-username-env-var: MAVEN_USERNAME
-          server-password-env-var: MAVEN_PASSWORD
-          server-origin: https://central.sonatype.com
-          gpg-private-key: ${{ secrets.OSSRH_GPG_SECRET_KEY }}
-          gpg-passphrase-env-var: MAVEN_GPG_PASSPHRASE
+          cache: 'false'
 
       # Before release:prepare and release:perform: a failed download or checksum here must
       # not strand a job that has already published to Central.
@@ -129,33 +141,59 @@ jobs:
           git add README.md
 
       # The identity checkout documents for commits made with the built-in token. Global, so
-      # publish-site's clone of the site repository commits as the same identity.
+      # publish-site's commit in the site repository carries the same identity.
       - name: configure-git-user
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       # No developmentVersion: the release plugin derives the next `-SNAPSHOT` from the
-      # release version by incrementing its patch.
+      # release version by incrementing its patch. No profile and no secret: this is the step
+      # that runs the tests, and it signs nothing. It commits and tags on the runner and
+      # pushes neither (pushChanges in pom.xml).
       - name: prepare-release
         run: |
-          ./mvnw --batch-mode -P peekaboot-release release:prepare \
+          ./mvnw --batch-mode release:prepare \
             -DreleaseVersion="${VERSION}"
-        env:
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
 
       # The changelog and the README rewrite ride into the release commit on maven-scm's
-      # `git commit` taking the whole index, which it documents nowhere. A regression has to
-      # surface here, where the damage is a tag, and not after Central holds the artifacts.
+      # `git commit` taking the whole index, which it documents nowhere. A regression
+      # surfaces here, before the tag is pushed.
       - name: verify-release-commit
         run: |
           git grep -q "^## ${VERSION} " "${VERSION}" -- CHANGELOG.md
           git grep -q "<version>${VERSION}</version>" "${VERSION}" -- README.md
 
+      # setup-java a second time, so the key and the Central server entry exist from here on
+      # only. Above the tag push, so a failed import leaves nothing public. The pin is
+      # prepare-build's; dependabot.yml watches both directories, so the two move together.
+      - name: import-signing-key
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          java-version: 25
+          distribution: 'temurin'
+          server-id: central
+          server-username-env-var: MAVEN_USERNAME
+          server-password-env-var: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.OSSRH_GPG_SECRET_KEY }}
+          gpg-passphrase-env-var: MAVEN_GPG_PASSPHRASE
+          mvn-server-repository-origins: central:https://central.sonatype.com
+
+      # The checkout kept no credential, so the write token enters here. The tag goes first
+      # because release:perform builds what `origin` serves under it.
+      - name: push-release-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh auth setup-git
+          .github/release/publish-refs.sh tag "${VERSION}"
+
       # No second test run: release:prepare's preparationGoals verified the tag's tree, and
       # nothing is pushed or published before that verify passes, so it is the job's one gate.
+      # The fork clones the tag from `origin` and builds that, with both profiles from
+      # releaseProfiles in pom.xml.
       - name: perform-release-publish-on-maven-central
-        run: ./mvnw --batch-mode -P peekaboot-release release:perform -Darguments="-DskipTests -DskipITs -Djacoco.skip=true"
+        run: ./mvnw --batch-mode release:perform -Darguments="-DskipTests -DskipITs -Djacoco.skip=true"
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
@@ -166,16 +204,14 @@ jobs:
       - name: await-maven-central
         run: .github/central/await-release.sh "${VERSION}"
 
-      # main originates nothing; it is a pointer that only ever fast-forwards onto the commit
-      # that was published. Pushing a bare commit SHA makes git refuse anything but a
-      # fast-forward, so this needs no --force and can never rewrite main. The tag is
-      # annotated, hence the dereference: pushing a tag object to a branch ref is rejected.
-      # First of the post-publish steps because it is the one that cannot fail on its own, so
-      # a later step failing cannot leave main stale.
-      - name: fast-forward-main
+      # `main` and `dev` move only once Central has the release. First of the post-publish
+      # steps, so a later step failing cannot leave either branch stale.
+      - name: publish-release-branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag_commit="$(git rev-parse "refs/tags/${VERSION}^{commit}")"
-          git push origin "${tag_commit}:refs/heads/main"
+          gh auth setup-git
+          .github/release/publish-refs.sh branches "${VERSION}"
 
       - name: render-release-notes
         run: |
@@ -185,7 +221,7 @@ jobs:
           # "## Unreleased" and still exit 0, which would publish as the release body.
           grep -q "^## ${VERSION} " release-notes.md
 
-      # --verify-tag: fails rather than creating the tag if release:prepare's push is missing.
+      # --verify-tag: fails rather than creating the tag if push-release-tag's push is missing.
       - name: create-release-notes
         run: |
           gh release create "${VERSION}" --verify-tag --title "${VERSION}" \
@@ -218,19 +254,26 @@ jobs:
             | jq -f .github/release-notes/site.jq > releases.json
           jq -e 'length > 0' releases.json > /dev/null
 
+      # The token goes to checkout as an input and reaches git as an auth header, so it is
+      # never part of a URL. The clone keeps it for publish-site's pushes.
+      - name: checkout-site
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: peekaboot-org/peekaboot-org.github.io
+          ref: dev
+          token: ${{ secrets.SITE_REPO_TOKEN }}
+          path: site
+          fetch-depth: 0
+
       # The site runs GitHub's legacy Pages build: no workflow, no plugins, nothing fetched at
       # build time, so both the release data and the version have to be committed into that
       # repo. It follows this repo's model - commits land on `dev` and `main` is fast-forwarded
-      # onto them, and that second push is what makes Pages rebuild. A full clone rather than
-      # --depth 1, because a shallow clone cannot be relied on to push a branch it did not
-      # fetch. The clone inherits the job's git identity from configure-git-user.
+      # onto them, and that second push is what makes Pages rebuild. checkout-site clones in
+      # full rather than at depth 1, because a shallow clone cannot be relied on to push a
+      # branch it did not fetch. The commit takes the job's git identity from
+      # configure-git-user.
       - name: publish-site
-        env:
-          SITE_REPO_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
         run: |
-          git clone --branch dev \
-            "https://x-access-token:${SITE_REPO_TOKEN}@github.com/peekaboot-org/peekaboot-org.github.io.git" \
-            site
           cp releases.json site/_data/releases.json
           sed -i -E "s|^peekaboot_version: .*$|peekaboot_version: ${VERSION}|" site/_config.yml
           grep -q "^peekaboot_version: ${VERSION}$" site/_config.yml
@@ -243,6 +286,25 @@ jobs:
           git -C site push origin HEAD:dev
           git -C site push origin HEAD:main
           git -C site push origin "refs/tags/${VERSION}"
+
+      # Last, and only on a failure: where the run stopped decides what a person does next.
+      - name: report-unfinished-release
+        if: failure()
+        run: |
+          {
+            echo "### The release did not finish"
+            echo
+            if [ -n "${VERSION:-}" ]; then
+              echo "What \`origin\` has of ${VERSION}, and where its branches are:"
+              echo
+              echo '```'
+              git ls-remote origin "refs/tags/${VERSION}" refs/heads/dev refs/heads/main \
+                || echo "origin could not be read"
+              echo '```'
+              echo
+            fi
+            echo "BUILD.md, \"Recovering a release\", says what to do."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # The release pushed dev with GITHUB_TOKEN, which starts no push run, so the next snapshot
   # is built on request. A job of its own, so the release job never holds `actions: write`.
