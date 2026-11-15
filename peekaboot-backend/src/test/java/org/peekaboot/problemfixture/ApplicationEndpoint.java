@@ -1,6 +1,8 @@
 package org.peekaboot.problemfixture;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -11,5 +13,13 @@ public class ApplicationEndpoint {
     @GetMapping("/app/test")
     String get(@RequestParam("limit") int limit) {
         return "ok";
+    }
+
+    public record Page(@Nullable String limit) {}
+
+    /** Answers the limit it bound, so a test sees whether a request header reached the record. */
+    @GetMapping("/app/page")
+    String page(@ModelAttribute Page page) {
+        return String.valueOf(page.limit());
     }
 }

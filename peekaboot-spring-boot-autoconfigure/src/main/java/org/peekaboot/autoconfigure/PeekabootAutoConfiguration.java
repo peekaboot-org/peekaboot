@@ -11,6 +11,7 @@ import org.peekaboot.backend.controller.ErrorDigestController;
 import org.peekaboot.backend.controller.LogController;
 import org.peekaboot.backend.controller.PeekabootApiController;
 import org.peekaboot.backend.controller.PeekabootController;
+import org.peekaboot.backend.controller.QueryParameterBinding;
 import org.peekaboot.backend.controller.TraceController;
 import org.peekaboot.backend.datasource.DataSourceMetadataList;
 import org.peekaboot.backend.domain.api.ApiDocument;
@@ -206,6 +207,12 @@ public class PeekabootAutoConfiguration {
     @ConditionalOnMissingBean
     public ApiProblemHandler peekabootApiProblemHandler() {
         return new ApiProblemHandler();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public QueryParameterBinding peekabootQueryParameterBinding() {
+        return new QueryParameterBinding();
     }
 
     /** Only with Hibernate on the classpath; without it every query's {@code formatted} SQL is null. */

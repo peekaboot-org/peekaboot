@@ -37,7 +37,7 @@ class TraceControllerTest {
                     new PeekabootTracingProperties(),
                     new StackTraceRules(List.of(), List.of()))))
             .addInterceptors(new QueryParameterGuard())
-            .setControllerAdvice(new ApiProblemHandler())
+            .setControllerAdvice(new ApiProblemHandler(), new QueryParameterBinding())
             .build();
 
     /**

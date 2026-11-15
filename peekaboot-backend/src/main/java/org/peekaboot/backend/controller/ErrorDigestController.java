@@ -5,9 +5,7 @@ import org.peekaboot.backend.domain.errors.ErrorDigestParameters;
 import org.peekaboot.backend.domain.errors.ErrorDigestResponse;
 import org.peekaboot.backend.service.ErrorDigestService;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,15 +19,6 @@ public class ErrorDigestController {
 
     public ErrorDigestController(ErrorDigestService errorDigestService) {
         this.errorDigestService = errorDigestService;
-    }
-
-    /**
-     * Binds the digest's parameters from the query string alone (see {@link QueryParameterBinding}).
-     * The name is the one Spring derives for the {@code @ModelAttribute} below.
-     */
-    @InitBinder("errorDigestParameters")
-    public void bindFromQueryStringOnly(WebDataBinder binder) {
-        QueryParameterBinding.bindFromQueryStringOnly(binder);
     }
 
     /** See {@link ErrorDigestService#list}. Every parameter arrives as written; the service reads them. */

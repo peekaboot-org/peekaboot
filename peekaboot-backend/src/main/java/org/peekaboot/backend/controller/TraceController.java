@@ -9,9 +9,7 @@ import org.peekaboot.backend.problem.ApiProblem;
 import org.peekaboot.backend.problem.ApiProblemException;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,15 +24,6 @@ public class TraceController {
 
     public TraceController(TraceInsightsService traceInsightsService) {
         this.traceInsightsService = traceInsightsService;
-    }
-
-    /**
-     * Binds the listing's parameters from the query string alone (see {@link QueryParameterBinding}).
-     * The name is the one Spring derives for the {@code @ModelAttribute} below.
-     */
-    @InitBinder("traceListParameters")
-    public void bindFromQueryStringOnly(WebDataBinder binder) {
-        QueryParameterBinding.bindFromQueryStringOnly(binder);
     }
 
     /** See {@link TraceInsightsService#listTraces}. Every parameter arrives as written; the service reads them. */

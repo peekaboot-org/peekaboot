@@ -27,7 +27,7 @@ class LogControllerTest {
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new LogController(
                     new LogSearchService(store, new MaskingEngine(), new StackTraceRules(List.of(), List.of()))))
             .addInterceptors(new QueryParameterGuard())
-            .setControllerAdvice(new ApiProblemHandler())
+            .setControllerAdvice(new ApiProblemHandler(), new QueryParameterBinding())
             .build();
 
     /** Spring's record binding falls back to a same-named request header, which would put the search in a client's or proxy's hands. */

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import tools.jackson.databind.JsonNode;
 
@@ -230,12 +231,31 @@ class ApiProblemIT extends TestingAppITBase {
         assertThat(fetch(path).status()).isEqualTo(200);
     }
 
+    /** One row for each endpoint that binds a record, since Spring's binding falls back to a same-named request header. */
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "/peekaboot/api/traces | Limit | 0",
+                "/peekaboot/api/logs | Limit | 0",
+                "/peekaboot/api/errors | since | yesterday",
+                "/peekaboot/api/insights/data?level=0 | view | all"
+            })
+    void aHeaderNamedLikeAParameterSetsNoneOnAnyEndpoint(String path, String header, String value) {
+        assertThat(fetch(path, header, value).status()).isEqualTo(200);
+    }
+
     private Answer fetch(String path) {
-        return api.restClient()
-                .get()
-                .uri(path)
-                .accept(MediaType.APPLICATION_JSON)
-                .exchange((request, response) -> new Answer(
+        return answerTo(api.restClient().get().uri(path));
+    }
+
+    private Answer fetch(String path, String header, String value) {
+        return answerTo(api.restClient().get().uri(path).header(header, value));
+    }
+
+    private Answer answerTo(RestClient.RequestHeadersSpec<?> request) {
+        return request.accept(MediaType.APPLICATION_JSON)
+                .exchange((sent, response) -> new Answer(
                         response.getStatusCode().value(),
                         response.getHeaders().getContentType(),
                         PeekabootApi.readJson(new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8)),
