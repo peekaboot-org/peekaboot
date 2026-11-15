@@ -76,6 +76,9 @@ jobs:
       - name: await-central-tests
         run: .github/central/test/run.sh
 
+      - name: release-scripts-tests
+        run: .github/release/test/run.sh
+
       # On a feature branch there is no draft release, so this summary is the only place
       # the pending notes are visible before the branch is merged.
       - name: unreleased-notes-preview
