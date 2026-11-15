@@ -1,8 +1,10 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.autoconfigure.BuildFiles.normalised;
 import static org.peekaboot.autoconfigure.BuildFiles.pom;
 import static org.peekaboot.autoconfigure.BuildFiles.reactorRoot;
+import static org.peekaboot.autoconfigure.BuildFiles.xpathNodes;
 import static org.peekaboot.autoconfigure.BuildFiles.xpathText;
 
 import java.io.IOException;
@@ -15,8 +17,11 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -26,6 +31,8 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.w3c.dom.Node;
 
 /**
  * Build metadata both build systems need is declared once, in the poms, because
@@ -33,7 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * Gradle build, and Dependabot bumps a pom alone. The Gradle build reads the module version and
  * every pom property out of the poms. A second copy on the Gradle side would go stale behind a
  * green build, because each build is internally consistent and CI builds Gradle only on
- * Dependabot branches.
+ * {@code dev} and on Dependabot branches.
  *
  * <p>A value with no pom property behind it is written on both sides instead: the
  * static-analysis tool versions spelled inside plugin configuration, the slf4j-api override, the
@@ -41,8 +48,10 @@ import org.junit.jupiter.params.provider.MethodSource;
  * guarded here by comparing the two declarations, which fails the Maven build every branch runs.
  *
  * <p>The testing-app pom does not inherit {@code peekaboot-parent}, so it repeats the build
- * instant, the JaCoCo, PMD and Surefire versions, the compiler release level and the Spring Boot
- * line by hand. All but the release level are compared against the root pom the same way.
+ * instant, the JaCoCo, PMD and Surefire versions, the Java level, the Spring Boot line, the
+ * plugin pins, the Error Prone setup and the five verify-bound gates by hand. Each is compared
+ * against the root pom the same way. A gate is compared as a whole plugin declaration, because a
+ * copied option drifts the way a copied version does.
  */
 class BuildVersionLockstepTest {
 
@@ -51,6 +60,10 @@ class BuildVersionLockstepTest {
 
     /** Generated trees and the git database, which no Gradle script of ours lives in. */
     private static final Set<String> PRUNED_DIRECTORIES = Set.of("target", "build", "node_modules", ".git", ".gradle");
+
+    private static final Path ROOT_POM = reactorRoot().resolve("pom.xml");
+
+    private static final Path TESTING_APP_POM = reactorRoot().resolve("peekaboot-testing-app/pom.xml");
 
     @Test
     @Timeout(10)
@@ -113,6 +126,76 @@ class BuildVersionLockstepTest {
                 "/project/properties/spring-boot.version",
                 "/project/parent/version",
                 "the testing-app's spring-boot-starter-parent must be the Boot line the root pom imports");
+    }
+
+    @Test
+    @Timeout(10)
+    void testingAppCompilesAtTheRootPomsJavaLevel() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/peekaboot.java.version",
+                "/project/properties/java.version",
+                "the root pom compiles and runs PMD at peekaboot.java.version; "
+                        + "the testing-app's java.version is its copy and moves by hand");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(
+            strings = {
+                "maven-pmd-plugin",
+                "maven-checkstyle-plugin",
+                "spotbugs-maven-plugin",
+                "spotless-maven-plugin",
+                "jacoco-maven-plugin"
+            })
+    @Timeout(10)
+    void testingAppDeclaresTheGateAsTheRootPomDoes(String artifactId) throws IOException {
+        assertTestingAppDeclaresAsRoot(
+                "/project/build/plugins/plugin[artifactId='" + artifactId + "']",
+                "the testing-app repeats the root pom's gate by hand; a version, a tool pin or an option "
+                        + "changed in one pom alone holds the sample app to another standard");
+    }
+
+    /**
+     * The compiler plugin is not compared whole: the root pom also runs the configuration
+     * processor, and the testing-app pins the plugin's version under {@code pluginManagement}.
+     */
+    @Test
+    @Timeout(10)
+    void testingAppCompilesWithTheRootPomsErrorProneSetup() throws IOException {
+        String configuration = "/project/build/plugins/plugin[artifactId='maven-compiler-plugin']/configuration";
+        String errorProneVersion =
+                configuration + "/annotationProcessorPaths/path[artifactId='error_prone_core']/version";
+        assertTestingAppDeclaresAsRoot(
+                configuration + "/compilerArgs",
+                "these arguments load Error Prone and fail the build on its findings; "
+                        + "the testing-app copy moves by hand");
+        assertTestingAppMatchesRoot(
+                errorProneVersion,
+                errorProneVersion,
+                "another Error Prone release reports other findings; the testing-app copy moves by hand");
+    }
+
+    @Test
+    @Timeout(10)
+    void testingAppPinsEveryPluginItSharesWithTheRootPomAtTheSameVersion() throws IOException {
+        Map<String, Set<String>> root = pinnedPluginVersions(ROOT_POM);
+        Map<String, Set<String>> testingApp = pinnedPluginVersions(TESTING_APP_POM);
+        root.keySet().retainAll(testingApp.keySet());
+        testingApp.keySet().retainAll(root.keySet());
+
+        assertThat(testingApp)
+                .as("the root pom moved these past the versions spring-boot-starter-parent manages; "
+                        + "a pin dropped from the testing-app hands the plugin back to that parent")
+                .containsKeys(
+                        "maven-install-plugin",
+                        "maven-deploy-plugin",
+                        "maven-compiler-plugin",
+                        "maven-dependency-plugin",
+                        "maven-surefire-plugin",
+                        "maven-failsafe-plugin");
+        assertThat(testingApp)
+                .as("one reactor runs one version of each plugin; the testing-app's pins move by hand")
+                .containsExactlyInAnyOrderEntriesOf(root);
     }
 
     /**
@@ -289,9 +372,35 @@ class BuildVersionLockstepTest {
 
     private void assertTestingAppMatchesRoot(String rootExpression, String testingAppExpression, String why)
             throws IOException {
-        assertThat(pomValue(reactorRoot().resolve("peekaboot-testing-app/pom.xml"), testingAppExpression))
+        assertThat(pomValue(TESTING_APP_POM, testingAppExpression))
                 .as(why)
-                .isEqualTo(pomValue(reactorRoot().resolve("pom.xml"), rootExpression));
+                .isEqualTo(pomValue(ROOT_POM, rootExpression));
+    }
+
+    private void assertTestingAppDeclaresAsRoot(String expression, String why) throws IOException {
+        // java.version is the testing-app's name for the Java level; the two values are compared apart.
+        assertThat(pomElement(TESTING_APP_POM, expression).replace("${java.version}", "${peekaboot.java.version}"))
+                .as(why)
+                .isEqualTo(pomElement(ROOT_POM, expression));
+    }
+
+    /** The one element {@code expression} selects in {@code file}, as layout-free text. */
+    private String pomElement(Path file, String expression) throws IOException {
+        List<Node> selected = xpathNodes(pom(file), expression);
+        assertThat(selected)
+                .as("%s in %s", expression, reactorRoot().relativize(file))
+                .hasSize(1);
+        return normalised(selected.get(0));
+    }
+
+    /** The versions {@code file} pins each plugin at, by artifactId; a plugin it gives no version is left out. */
+    private Map<String, Set<String>> pinnedPluginVersions(Path file) throws IOException {
+        Map<String, Set<String>> versions = new TreeMap<>();
+        for (Node plugin : xpathNodes(pom(file), "//plugin[version]")) {
+            versions.computeIfAbsent(xpathText(plugin, "artifactId"), artifactId -> new TreeSet<>())
+                    .add(xpathText(plugin, "version"));
+        }
+        return versions;
     }
 
     private String pomValue(Path file, String expression) throws IOException {
