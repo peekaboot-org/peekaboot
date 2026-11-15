@@ -4,9 +4,8 @@
  * component grid.
  */
 import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
-import {el, button} from '../../shared/dom.js';
+import {el, button, svgIcon} from '../../shared/dom.js';
 import {keyedChildren, renderIfChanged} from '../../shared/keyed.js';
-import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatMetricValue, formatNumber, formatPlainValue, formatTileValue} from '../../shared/format.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
@@ -44,21 +43,23 @@ export function create(container) {
 /**
  * The insights stat tiles (started at / startup / ready / uptime). They are
  * config-driven server-side, so the icons are keyed by tile id with a neutral fallback
- * for any tile an application adds in its own peekaboot-insights.yml. 24x24 viewBox,
- * drawn in the surrounding text colour so they follow the theme with no extra tokens.
+ * for any tile an application adds in its own peekaboot-insights.yml. Each is the shape
+ * list svgIcon() draws.
  */
 const TILE_ICONS = new Map([
-    ['started-at', '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>'],
-    ['startup-time', '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>'],
-    ['ready-time', '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'],
-    ['uptime', '<path d="M10 2h4M12 14v-4"/><circle cx="12" cy="14" r="8"/>']
+    ['started-at', [['rect', {x: 3, y: 4, width: 18, height: 17, rx: 2}], ['path', {d: 'M8 2v4M16 2v4M3 10h18'}]]],
+    ['startup-time', [['path', {d: 'M13 2 4 14h7l-1 8 9-12h-7l1-8z'}]]],
+    ['ready-time', [['circle', {cx: 12, cy: 12, r: 9}], ['path', {d: 'm8.5 12 2.5 2.5 4.5-5'}]]],
+    ['uptime', [['path', {d: 'M10 2h4M12 14v-4'}], ['circle', {cx: 12, cy: 14, r: 8}]]]
 ]);
-const FALLBACK_TILE_ICON = '<path d="M3 12h4l3 8 4-16 3 8h4"/>';
+const FALLBACK_TILE_ICON = [['path', {d: 'M3 12h4l3 8 4-16 3 8h4'}]];
 
-function tileIcon(tileId) {
-    return `<svg class="pk-insight-tile__icon" viewBox="0 0 24 24" width="18" height="18" fill="none"
-            stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
-            aria-hidden="true">${TILE_ICONS.get(tileId) ?? FALLBACK_TILE_ICON}</svg>`;
+function insightTile(tile, formats) {
+    return el('div', {className: 'pk-insight-tile', attrs: {'data-tile-id': tile.id}},
+        svgIcon(TILE_ICONS.get(tile.id) ?? FALLBACK_TILE_ICON, {className: 'pk-insight-tile__icon'}),
+        el('div', {className: 'pk-insight-tile__text'},
+            el('div', {className: 'pk-insight-tile__label pk-label', text: tile.label}),
+            el('div', {className: 'pk-insight-tile__value', text: formatTileValue(tile.value, tile.format, formats)})));
 }
 
 /**
@@ -78,15 +79,7 @@ function insightTileRow() {
         renderResult: (container, config, {locale, timeZone}) => {
             const tiles = config.tiles ?? [];
             const row = container.querySelector('#insights-tiles');
-            row.innerHTML = tiles.map(tile => `
-                <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
-                    ${tileIcon(tile.id)}
-                    <div class="pk-insight-tile__text">
-                        <div class="pk-insight-tile__label pk-label">${escapeHtml(tile.label)}</div>
-                        <div class="pk-insight-tile__value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
-                    </div>
-                </div>
-            `).join('');
+            row.replaceChildren(...tiles.map(tile => insightTile(tile, {locale, timeZone})));
             row.classList.toggle('hidden', tiles.length === 0);
         },
         renderError: (container, error) => {
@@ -407,10 +400,9 @@ function renderHealthBanner(container, health, locale) {
     const severity = healthSeverity(status);
     const modifier = healthModifier(severity);
 
-    statusContainer.innerHTML = '';
     const pill = badge(status, severity);
     pill.id = 'health-status-text';
-    statusContainer.appendChild(pill);
+    statusContainer.replaceChildren(pill);
 
     // classList, not className - a full reassignment would also wipe out the base
     // classes (pk-health, pk-status-dot pk-health__dot) the static markup put on both elements.
@@ -429,7 +421,7 @@ function renderHealthBanner(container, health, locale) {
 
 function renderHealthComponents(container, components, locale) {
     const grid = container.querySelector('#components-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
 
     if (!components || components.length === 0) {
         grid.appendChild(emptyState('No health components available'));

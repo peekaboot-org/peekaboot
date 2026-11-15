@@ -10,19 +10,18 @@
  *   onPanelLevelChange() -> a panel's own level switch or reset was clicked
  *   onZoomChange(zoomed) -> a drag-select zoom was applied or lifted
  */
-import {el} from '../../shared/dom.js';
-import {escapeHtml} from '../../shared/markup.js';
+import {el, button, svgIcon} from '../../shared/dom.js';
 import {formatInterval, formatMetricValue} from '../../shared/format.js';
 import {lastValue} from './insights-store.js';
 import {createChart, ensureUplot} from './insights-chart.js';
 
 const EMPTY_PANEL_CLASS = 'pk-insight-panel--empty';
 const OVERRIDDEN_PANEL_CLASS = 'pk-insight-panel--overridden';
+
 /** A counter-clockwise arrow, drawn in the button's own ink - every "undo this" reset control. */
-export const RESET_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
-</svg>`;
+export function resetIcon() {
+    return svgIcon([['path', {d: 'M3 12a9 9 0 1 0 3-6.7L3 8'}], ['path', {d: 'M3 3v5h5'}]], {size: 14, strokeWidth: 2});
+}
 
 /**
  * A radio-like button group rather than a <select>: there are only ever a handful of
@@ -31,17 +30,17 @@ export const RESET_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill=
  * what tells them apart visually (the toolbar's carries more weight; a panel's sits in
  * a card header and stays subtler).
  */
-export function levelButtonsHtml(levels, activeLevel, buttonClass) {
-    return levels.map(level => `
-        <button type="button" class="pk-btn ${buttonClass} pk-insight-level" data-level="${escapeHtml(level.index)}"
-                aria-pressed="${level.index === activeLevel}"
-        >${escapeHtml(formatInterval(level.intervalMs))}</button>
-    `).join('');
+export function levelButtons(levels, activeLevel, buttonClass) {
+    return levels.map(level => button({
+        className: `pk-btn ${buttonClass} pk-insight-level`,
+        text: formatInterval(level.intervalMs),
+        attrs: {'data-level': level.index, 'aria-pressed': String(level.index === activeLevel)}
+    }));
 }
 
 export function updateLevelButtons(group, activeLevel) {
-    group.querySelectorAll('.pk-insight-level').forEach(button =>
-            button.setAttribute('aria-pressed', String(Number(button.dataset.level) === activeLevel)));
+    group.querySelectorAll('.pk-insight-level').forEach(levelButton =>
+            levelButton.setAttribute('aria-pressed', String(Number(levelButton.dataset.level) === activeLevel)));
 }
 
 /** Restarts the CSS blink animation, which only replays if the class is re-added. */
@@ -75,22 +74,24 @@ export function createInsightsPanels({
     // --- Markup ---------------------------------------------------------------------------
 
     function renderPanels() {
-        const panelsEl = container.querySelector('#insights-panels');
-        panelsEl.innerHTML = config.panels.map(panel => `
-            <div class="pk-insight-panel" data-panel-id="${escapeHtml(panel.id)}">
-                <div class="pk-insight-panel__header">
-                    <h3 class="pk-insight-panel__title">${escapeHtml(panel.title)}</h3>
-                    <span class="pk-insight-current"></span>
-                    <div class="pk-insight-levels pk-insight-panel-levels" role="group"
-                         aria-label="${escapeHtml(panel.title)} aggregation level"
-                    >${levelButtonsHtml(config.levels, panel.level ?? globalLevel, 'pk-btn--small')}</div>
-                    <button type="button" class="pk-btn pk-btn--icon pk-insight-panel-reset hidden"
-                            title="Reset to global interval"
-                            aria-label="Reset ${escapeHtml(panel.title)} to global interval">${RESET_ICON}</button>
-                </div>
-                <div class="pk-insight-chart"></div>
-            </div>
-        `).join('');
+        container.querySelector('#insights-panels').replaceChildren(...config.panels.map(panelCard));
+    }
+
+    function panelCard(panel) {
+        return el('div', {className: 'pk-insight-panel', attrs: {'data-panel-id': panel.id}},
+            el('div', {className: 'pk-insight-panel__header'},
+                el('h3', {className: 'pk-insight-panel__title', text: panel.title}),
+                el('span', {className: 'pk-insight-current'}),
+                el('div', {
+                    className: 'pk-insight-levels pk-insight-panel-levels',
+                    attrs: {role: 'group', 'aria-label': `${panel.title} aggregation level`}
+                }, ...levelButtons(config.levels, panel.level ?? globalLevel, 'pk-btn--small')),
+                button({
+                    className: 'pk-btn pk-btn--icon pk-insight-panel-reset hidden',
+                    title: 'Reset to global interval',
+                    attrs: {'aria-label': `Reset ${panel.title} to global interval`}
+                }, resetIcon())),
+            el('div', {className: 'pk-insight-chart'}));
     }
 
     function initPanels(urlOverrides) {
@@ -103,9 +104,9 @@ export function createInsightsPanels({
             markOverride(panel);
 
             panel.levelGroup.addEventListener('click', event => {
-                const button = event.target.closest('.pk-insight-level');
-                if (!button) return;
-                selectPanelLevel(panel, Number(button.dataset.level));
+                const levelButton = event.target.closest('.pk-insight-level');
+                if (!levelButton) return;
+                selectPanelLevel(panel, Number(levelButton.dataset.level));
                 markOverride(panel);
                 onPanelLevelChange();
             });

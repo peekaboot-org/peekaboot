@@ -393,7 +393,7 @@ function togglePause() {
     const pauseBtn = document.getElementById('pause-btn');
 
     const label = isPaused ? 'Resume auto-refresh' : 'Pause auto-refresh';
-    pauseIcon.innerHTML = isPaused ? '&#9654;' : '&#10074;&#10074;';
+    pauseIcon.textContent = isPaused ? '▶' : '❚❚';
     pauseBtn.title = label;
     pauseBtn.setAttribute('aria-label', label);
 }

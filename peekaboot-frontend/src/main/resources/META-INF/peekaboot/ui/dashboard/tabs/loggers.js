@@ -3,10 +3,9 @@
  * restrictable to loggers with an explicit configured level.
  */
 import {badge, countSummary} from '../../shared/components.js';
-import {el} from '../../shared/dom.js';
+import {el, highlighted} from '../../shared/dom.js';
 import {formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
-import {highlightText} from '../../shared/markup.js';
 import {logLevelVariant} from '../../shared/severity.js';
 import {urlState} from '../../shared/url-filter.js';
 
@@ -85,7 +84,7 @@ function matches(logger, query, configuredOnly) {
 }
 
 function renderLoggerRow(logger, query) {
-    const name = el('span', {className: 'pk-kv__key' + (isConfigured(logger) ? ' pk-kv__key--configured' : '')});
-    name.innerHTML = highlightText(logger.name, query);
+    const name = el('span', {className: 'pk-kv__key' + (isConfigured(logger) ? ' pk-kv__key--configured' : '')},
+        ...highlighted(logger.name, query));
     return el('div', {className: 'pk-kv'}, name, badge(logger.effectiveLevel || '-', logLevelVariant(logger.effectiveLevel)));
 }

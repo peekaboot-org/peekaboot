@@ -271,6 +271,21 @@ class InsightsMarkersIT extends PlaywrightTestBase {
                 .containsExactly("a", "b");
     }
 
+    /** Markers that share one tooltip are told apart by a rule between them, and a lone marker has none. */
+    @Test
+    void markersListedTogetherAreSeparatedByARule() {
+        openAStubPlotWithFourMarkers();
+        page.focus(STUB_PLOT);
+        String children = "plot => [...document.querySelector(plot + ' .pk-insight-marker-tip').children]"
+                + ".map(child => child.tagName)";
+
+        page.keyboard().press("ArrowRight");
+        assertThat(page.evaluate(children, STUB_PLOT)).isEqualTo(List.of("P", "DL", "HR", "P", "DL"));
+
+        page.keyboard().press("ArrowRight");
+        assertThat(page.evaluate(children, STUB_PLOT)).isEqualTo(List.of("P", "DL"));
+    }
+
     @Test
     void theFirstPressOfLeftStartsAtTheNewestMarker() {
         openAStubPlotWithFourMarkers();

@@ -1,7 +1,10 @@
+import {highlightParts} from './markup.js';
+
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
 /**
  * The element builder behind every surface that renders as DOM. Text and children are
- * appended as nodes, never parsed, so nothing built here reaches innerHTML; a caller with
- * a highlighted string still goes through markup.js's highlightText on its own.
+ * appended as nodes, never parsed, so a builder call can carry backend data as it is.
  *
  *   el(tag, {className, text, title, attrs}, ...children)
  *
@@ -13,14 +16,16 @@ export function el(tag, {className, text, title, attrs} = {}, ...children) {
     const element = document.createElement(tag);
     if (className) element.className = className;
     if (title != null) element.title = title;
-    if (attrs) {
-        Object.entries(attrs).forEach(([name, value]) => {
-            if (value != null) element.setAttribute(name, value);
-        });
-    }
+    if (attrs) setAttributes(element, attrs);
     if (text != null) element.textContent = text;
     element.append(...children.filter(child => child != null));
     return element;
+}
+
+function setAttributes(element, attrs) {
+    Object.entries(attrs).forEach(([name, value]) => {
+        if (value != null) element.setAttribute(name, value);
+    });
 }
 
 export function button(props = {}, ...children) {
@@ -39,4 +44,29 @@ export function pressedToggle(props, onChange) {
         onChange(pressed, control);
     });
     return control;
+}
+
+/** `text` as child nodes: every match of `query` (see markup.js's highlightParts) in a <mark>, the rest as text. */
+export function highlighted(text, query) {
+    return highlightParts(text, query).map(part => (part.match ? el('mark', {text: part.text}) : part.text));
+}
+
+/**
+ * A decorative line icon on a 24x24 grid, drawn in the surrounding text colour so it follows
+ * the theme with no token of its own. `shapes` is `[[tag, attributes], ...]`, one SVG shape each.
+ */
+export function svgIcon(shapes, {size = 18, strokeWidth = 1.75, className} = {}) {
+    const icon = svgElement('svg', {
+        class: className, viewBox: '0 0 24 24', width: size, height: size,
+        fill: 'none', stroke: 'currentColor', 'stroke-width': strokeWidth,
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true'
+    });
+    icon.append(...shapes.map(([tag, attributes]) => svgElement(tag, attributes)));
+    return icon;
+}
+
+function svgElement(tag, attributes) {
+    const element = document.createElementNS(SVG_NAMESPACE, tag);
+    setAttributes(element, attributes);
+    return element;
 }

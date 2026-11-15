@@ -1,7 +1,6 @@
-import {el, button} from './dom.js';
+import {el, button, highlighted} from './dom.js';
 import {formatNumber} from './format.js';
 import {keyedChildren, renderIfChanged} from './keyed.js';
-import {highlightText} from './markup.js';
 
 let groupSequence = 0;
 
@@ -88,14 +87,13 @@ export function textCell(text, className) {
 
 /** `element` holding text with every match of the query wrapped in <mark>, or plain text when there is no query. */
 function withHighlightedText(element, text, highlight) {
-    if (highlight) element.innerHTML = highlightText(text, highlight);
-    else element.textContent = text;
+    element.replaceChildren(...highlighted(text, highlight));
     return element;
 }
 
 /**
- * A key/value row. `highlight`, when given, is a plain query string -- kvRow calls
- * highlightText() itself, so no caller can pass raw markup through key/value/highlight.
+ * A key/value row. `highlight`, when given, is a plain query string -- kvRow marks the
+ * matches itself, so no caller can pass raw markup through key/value/highlight.
  *
  * Values arrive already masked by the backend when sensitive (a literal `******`), so
  * kvRow has no `sensitive` option of its own to decide or flag - there is nothing left
@@ -111,7 +109,7 @@ export function kvRow(key, value, {mono = false, tight = false, highlight} = {})
 /**
  * A collapsible group. Returns the wrapper plus its header button and list so
  * callers can populate the list and drive state without re-querying. `highlight`,
- * when given, is a plain query string applied to the name via highlightText(); the
+ * when given, is a plain query string whose matches in the name are marked; the
  * count is always rendered as plain text. `nameModifier` picks one of the name's
  * components.css variants (`strong`, `mono`). `meta` is an array of elements that share
  * `.pk-group__meta` with the count, ahead of it, as columns that line up down a list.

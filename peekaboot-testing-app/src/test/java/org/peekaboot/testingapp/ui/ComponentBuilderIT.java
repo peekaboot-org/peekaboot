@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
  * the self-fetching tab shell in a real browser.
  *
  * kvRow/group intentionally do NOT accept pre-escaped markup (no keyHtml/valueHtml/
- * nameHtml). They accept a plain `highlight` query string and call highlightText()
+ * nameHtml). They accept a plain `highlight` query string and mark its matches
  * themselves, so no caller can smuggle raw HTML into a row built from backend-supplied
  * property keys/values.
  */
@@ -65,6 +65,16 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 const keyText = row.querySelector('.pk-kv__key').textContent;
                 return hasImg + '|' + hasMark + '|' + keyText;
                 """)).isEqualTo("false|true|<img src=x onerror=alert(1)>");
+    }
+
+    /** No string is parsed on the way into a row, so markup in a key or a value stays the text it is, marked or not. */
+    @Test
+    void aValueThatLooksLikeMarkupRendersAsText() {
+        assertThat(evalBuilders("""
+                const row = m.kvRow('<img src=x onerror=alert(1)>', '<b>v</b>', {highlight: 'img'});
+                return [row.querySelector('img, b') === null, row.querySelector('mark').textContent,
+                    row.querySelector('.pk-kv__key').textContent, row.querySelector('.pk-kv__value').textContent];
+                """)).isEqualTo(List.of(true, "img", "<img src=x onerror=alert(1)>", "<b>v</b>"));
     }
 
     @Test

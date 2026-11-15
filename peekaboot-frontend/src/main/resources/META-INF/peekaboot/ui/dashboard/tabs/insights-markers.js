@@ -27,7 +27,6 @@
  * the other by hand.
  */
 import {el} from '../../shared/dom.js';
-import {escapeHtml} from '../../shared/markup.js';
 import {formatDateTimeWith, instantMs} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
 
@@ -187,15 +186,16 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({}), label})
         if (event.shortCommitId) rows.push(['Commit', event.shortCommitId]);
         if (event.buildTime) rows.push(['Built', formatDateTimeWith(event.buildTime, TIMESTAMP_OPTIONS, display)]);
 
-        const title = `${event.type === 'stop' ? 'Stopped' : 'Started'} ${escapeHtml(when)}`;
-        const details = rows
-            .map(([label, value]) => `<dt>${label}</dt><dd>${escapeHtml(String(value))}</dd>`)
-            .join('');
-        const unclean = event.uncleanPrevious
-            ? '<p class="pk-insight-marker-tip__note">Previous run ended without a clean shutdown</p>'
-            : '';
-        return `<p class="pk-insight-marker-tip__title">${title}</p>${
-            details ? `<dl>${details}</dl>` : ''}${unclean}`;
+        const title = `${event.type === 'stop' ? 'Stopped' : 'Started'} ${when}`;
+        const lines = [el('p', {className: 'pk-insight-marker-tip__title', text: title})];
+        if (rows.length > 0) {
+            lines.push(el('dl', {},
+                ...rows.flatMap(([label, value]) => [el('dt', {text: label}), el('dd', {text: String(value)})])));
+        }
+        if (event.uncleanPrevious) {
+            lines.push(el('p', {className: 'pk-insight-marker-tip__note', text: 'Previous run ended without a clean shutdown'}));
+        }
+        return lines;
     }
 
     function hide() {
@@ -210,7 +210,8 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({}), label})
             tooltip.hidden = true;
             return;
         }
-        tooltip.innerHTML = hits.map(describe).join('<hr>');
+        // a rule before each marker, and none before the first
+        tooltip.replaceChildren(...hits.flatMap(hit => [el('hr'), ...describe(hit)]).slice(1));
         tooltip.hidden = false;
         // flip to the left of the position rather than overflow the plot
         const overflows = left + tooltip.offsetWidth + 12 > u.over.clientWidth;

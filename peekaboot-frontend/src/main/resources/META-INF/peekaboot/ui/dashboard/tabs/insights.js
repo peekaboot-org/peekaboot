@@ -16,9 +16,10 @@
  * looking at holds no connection.
  */
 import {emptyState} from '../../shared/components.js';
+import {el, button} from '../../shared/dom.js';
 import {urlState} from '../../shared/url-filter.js';
 import {createInsightsStream} from './insights-stream.js';
-import {createInsightsPanels, levelButtonsHtml, updateLevelButtons, RESET_ICON} from './insights-panels.js';
+import {createInsightsPanels, levelButtons, updateLevelButtons, resetIcon} from './insights-panels.js';
 
 export const id = 'insights';
 
@@ -218,41 +219,53 @@ export function create(container) {
 
     function renderToolbar() {
         toolbar = container.querySelector('#insights-toolbar');
+        levelGroup = el('div', {
+            className: 'pk-insight-levels',
+            attrs: {id: 'insights-level', role: 'group', 'aria-label': 'Aggregation level'}
+        }, ...levelButtons(config.levels, panels.globalLevel(), 'pk-btn--bucket'));
+        percentilesCheckbox = checkbox('insights-percentiles', panels.percentiles());
+        markersCheckbox = checkbox('insights-markers', panels.markers());
+        zoomResetButton = button({
+            className: 'pk-btn pk-btn--icon hidden',
+            title: 'Reset zoom',
+            attrs: {id: 'insights-zoom-reset', 'aria-label': 'Reset zoom'}
+        }, resetIcon());
+        streamStoppedNote = el('span', {
+            className: 'pk-insight-stream-note hidden',
+            text: 'Live updates stopped',
+            attrs: {id: 'insights-stream-stopped', role: 'status'}
+        });
         // the zoom-reset button sits last: it is the only toolbar control that toggles
         // hidden/shown at runtime, and trailing keeps that from shifting anything else
-        toolbar.innerHTML = `
-            <div id="insights-level" class="pk-insight-levels" role="group"
-                 aria-label="Aggregation level">${levelButtonsHtml(config.levels, panels.globalLevel(), 'pk-btn--bucket')}</div>
-            <label><input type="checkbox" id="insights-percentiles"${panels.percentiles() ? ' checked' : ''}> Percentiles</label>
-            <label><input type="checkbox" id="insights-markers"${panels.markers() ? ' checked' : ''}> Restarts</label>
-            <button type="button" id="insights-zoom-reset" class="pk-btn pk-btn--icon hidden"
-                    title="Reset zoom" aria-label="Reset zoom">${RESET_ICON}</button>
-            <span id="insights-stream-stopped" class="pk-insight-stream-note hidden" role="status">Live updates stopped</span>
-        `;
-        streamStoppedNote = toolbar.querySelector('#insights-stream-stopped');
+        toolbar.replaceChildren(
+            levelGroup,
+            el('label', {}, percentilesCheckbox, ' Percentiles'),
+            el('label', {}, markersCheckbox, ' Restarts'),
+            zoomResetButton,
+            streamStoppedNote);
 
-        levelGroup = toolbar.querySelector('#insights-level');
         levelGroup.addEventListener('click', event => {
-            const button = event.target.closest('.pk-insight-level');
-            if (!button) return;
-            setGlobalLevel(Number(button.dataset.level));
+            const levelButton = event.target.closest('.pk-insight-level');
+            if (!levelButton) return;
+            setGlobalLevel(Number(levelButton.dataset.level));
             saveViewState();
         });
 
-        zoomResetButton = toolbar.querySelector('#insights-zoom-reset');
         zoomResetButton.addEventListener('click', () => panels.resetZoom());
 
-        percentilesCheckbox = toolbar.querySelector('#insights-percentiles');
         percentilesCheckbox.addEventListener('change', event => {
             setShowPercentiles(event.target.checked);
             saveViewState();
         });
 
-        markersCheckbox = toolbar.querySelector('#insights-markers');
         markersCheckbox.addEventListener('change', event => {
             setShowMarkers(event.target.checked);
             saveViewState();
         });
+    }
+
+    function checkbox(id, checked) {
+        return el('input', {attrs: {type: 'checkbox', id, checked: checked ? '' : null}});
     }
 
     /** The panels' setting plus the toolbar control that has to show it - a seed from the URL did not click it. */

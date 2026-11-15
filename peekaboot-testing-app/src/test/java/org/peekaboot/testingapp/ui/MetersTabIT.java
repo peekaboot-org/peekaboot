@@ -3,6 +3,9 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -45,6 +48,25 @@ class MetersTabIT extends PlaywrightTestBase {
 
         assertThat(page.evaluate("() => document.querySelector('#meters-list .pk-group__name mark')?.textContent"))
                 .isEqualTo("jvm.memory");
+    }
+
+    /** A tag is written key=value, and a filter that matched its value marks the value and nothing else. */
+    @Test
+    void theFilterHighlightsTheTagThatMatched() {
+        openDashboard();
+        dashboard.openTab("meters");
+
+        page.fill("#meters-filter", "nonheap");
+        page.waitForSelector(
+                "#meters-list .pk-metric__tag mark",
+                new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
+
+        assertThat(page.evaluate("""
+                () => {
+                    const mark = document.querySelector('#meters-list .pk-metric__tag mark');
+                    return [mark.textContent, mark.parentElement.textContent, mark.parentElement.childElementCount];
+                }
+                """)).isEqualTo(List.of("nonheap", "area=nonheap", 1));
     }
 
     /** Every meter's type badge fits its column whole, clipped nowhere and clear of the unit beside it. */

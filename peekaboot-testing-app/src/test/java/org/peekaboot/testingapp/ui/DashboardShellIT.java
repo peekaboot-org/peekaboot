@@ -76,6 +76,19 @@ class DashboardShellIT extends PlaywrightTestBase {
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
     }
 
+    /** The glyph is all a reader has to tell a paused dashboard from a running one. */
+    @Test
+    void thePauseButtonShowsPlayWhilePausedAndPauseAgainAfter() {
+        openDashboard();
+        assertThat(page.textContent("#pause-icon")).isEqualTo("\u275a\u275a");
+
+        page.click("#pause-btn");
+        assertThat(page.textContent("#pause-icon")).isEqualTo("\u25b6");
+
+        page.click("#pause-btn");
+        assertThat(page.textContent("#pause-icon")).isEqualTo("\u275a\u275a");
+    }
+
     /**
      * The header is a neutral --pk-bg surface, so the wordmark takes --pk-text-strong
      * rather than an on-fill ink - a bare `color: white` on a --pk-primary slab scores only

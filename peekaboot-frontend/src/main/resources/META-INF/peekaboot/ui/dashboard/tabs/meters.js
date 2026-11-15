@@ -5,8 +5,7 @@
  * the main dashboard payload.
  */
 import {badge} from '../../shared/components.js';
-import {el} from '../../shared/dom.js';
-import {highlightText} from '../../shared/markup.js';
+import {el, highlighted} from '../../shared/dom.js';
 import {formatCount, formatMeasurementValue, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
@@ -78,11 +77,8 @@ function matchesMetricFilter(metric, query) {
 function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
     const tags = Object.entries(measurement.tags || {});
     const tagsEl = el('div', {className: 'pk-metric__tags'},
-        ...(tags.length === 0 ? [el('span', {className: 'pk-note pk-metric__no-tags', text: 'no tags'})] : tags.map(([key, value]) => {
-            const tag = el('span', {className: 'pk-metric__tag'});
-            tag.innerHTML = `${highlightText(key, filterQuery)}=${highlightText(value, filterQuery)}`;
-            return tag;
-        })));
+        ...(tags.length === 0 ? [el('span', {className: 'pk-note pk-metric__no-tags', text: 'no tags'})] : tags.map(([key, value]) =>
+            el('span', {className: 'pk-metric__tag'}, ...highlighted(key, filterQuery), '=', ...highlighted(value, filterQuery)))));
 
     const statsEl = el('div', {className: 'pk-metric__stats'},
         ...(measurement.statistics || []).map(stat => el('span', {className: 'pk-metric__stat'},

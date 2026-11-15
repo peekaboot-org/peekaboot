@@ -71,6 +71,25 @@ class ActuatorTabsIT extends PlaywrightTestBase {
                 .contains("ROOT");
     }
 
+    /** A logger's name is marked where the filter matched it, and the name around the mark stays whole. */
+    @Test
+    void theLoggersFilterHighlightsTheNameThatMatched() {
+        openDashboard();
+        dashboard.openTab("loggers");
+
+        page.fill("#loggers-filter", "org.peekaboot");
+        page.waitForSelector(
+                "#loggers-list .pk-kv__key mark",
+                new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
+
+        assertThat(page.evaluate("""
+                () => {
+                    const mark = document.querySelector('#loggers-list .pk-kv__key mark');
+                    return [mark.textContent, mark.parentElement.textContent.startsWith('org.peekaboot')];
+                }
+                """)).isEqualTo(List.of("org.peekaboot", true));
+    }
+
     /** The checkbox is URL state beside the text filter: each is written when it changes and left out at its default. */
     @Test
     void theLoggersFilterAndCheckboxAreWrittenToTheUrl() {

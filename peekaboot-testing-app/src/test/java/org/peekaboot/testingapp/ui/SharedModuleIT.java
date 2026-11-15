@@ -78,31 +78,47 @@ class SharedModuleIT extends PlaywrightTestBase {
         return Arrays.stream(constants).map(Enum::name).toList();
     }
 
+    /**
+     * An icon made with createElement would carry the same attributes and paint nothing, so
+     * the namespace is read off the element and its size off the page.
+     */
     @Test
-    void escapeHtmlNeutralisesMarkup() {
-        assertThat(evalModule("markup.js", "m.escapeHtml('<img src=x onerror=alert(1)>')"))
-                .isEqualTo("&lt;img src=x onerror=alert(1)&gt;");
+    void svgIconDrawsItsShapesAsSvgInTheSizeAsked() {
+        assertThat(evalModule("dom.js", """
+                (() => {
+                    const icon = document.body.appendChild(m.svgIcon(
+                        [['rect', {x: 3, y: 4, width: 18, height: 17, rx: 2}], ['path', {d: 'M8 2v4'}]],
+                        {size: 14, strokeWidth: 2, className: 'pk-probe'}));
+                    const attributes = ['class', 'viewBox', 'width', 'stroke-width', 'fill', 'stroke', 'aria-hidden'];
+                    return [icon instanceof SVGSVGElement, ...[...icon.children].map(shape => shape.constructor.name),
+                        icon.querySelector('rect').getAttribute('rx'), icon.getBoundingClientRect().width,
+                        ...attributes.map(name => icon.getAttribute(name))];
+                })()
+                """))
+                .isEqualTo(List.of(
+                        true,
+                        "SVGRectElement",
+                        "SVGPathElement",
+                        "2",
+                        14,
+                        "pk-probe",
+                        "0 0 24 24",
+                        "14",
+                        "2",
+                        "none",
+                        "currentColor",
+                        "true"));
     }
 
     @Test
-    void escapeHtmlTreatsNullAsEmpty() {
-        assertThat(evalModule("markup.js", "m.escapeHtml(null)")).isEqualTo("");
-    }
-
-    @Test
-    void escapeHtmlEscapesAmpersandsAndQuotesForAttributeContext() {
-        assertThat(evalModule("markup.js", "m.escapeHtml('<script>alert(1)<' + '/script> & more')"))
-                .isEqualTo("&lt;script&gt;alert(1)&lt;/script&gt; &amp; more");
-        assertThat(evalModule("markup.js", "m.escapeHtml('\" onmouseover=\"alert(1)')"))
-                .isEqualTo("&quot; onmouseover=&quot;alert(1)");
-        assertThat(evalModule("markup.js", "m.escapeHtml(\"' onmouseover='alert(1)\")"))
-                .isEqualTo("&#39; onmouseover=&#39;alert(1)");
-    }
-
-    @Test
-    void escapeHtmlTreatsUndefinedAsEmptyButPreservesFalsyZero() {
-        assertThat(evalModule("markup.js", "m.escapeHtml(undefined)")).isEqualTo("");
-        assertThat(evalModule("markup.js", "m.escapeHtml(0)")).isEqualTo("0");
+    void svgIconDefaultsToTheTileSizeAndCarriesNoClass() {
+        assertThat(evalModule("dom.js", """
+                (() => {
+                    const icon = m.svgIcon([['path', {d: 'M8 2v4'}]]);
+                    return ['width', 'height', 'stroke-width'].map(name => icon.getAttribute(name))
+                        .concat(icon.hasAttribute('class'));
+                })()
+                """)).isEqualTo(List.of("18", "18", "1.75", false));
     }
 
     /**
@@ -127,33 +143,6 @@ class SharedModuleIT extends PlaywrightTestBase {
                                 "storage.js",
                                 "(() => { localStorage.setItem('peekaboot-locale', 'de-DE'); return m.readLocaleSetting(); })()"))
                 .isEqualTo("de-DE");
-    }
-
-    @Test
-    void highlightTextWrapsEveryMatchAndEscapesTheRest() {
-        assertThat(evalModule("markup.js", "m.highlightText('a<b>a', 'a')"))
-                .isEqualTo("<mark>a</mark>&lt;b&gt;<mark>a</mark>");
-    }
-
-    /** The query is a filter string, so its regex metacharacters mean themselves. */
-    @Test
-    void highlightTextTreatsTheQueryLiterally() {
-        assertThat(evalModule("markup.js", "m.highlightText('a.b (c) [d]', '(c)')"))
-                .isEqualTo("a.b <mark>(c)</mark> [d]");
-        assertThat(evalModule("markup.js", "m.highlightText('a.b', '.')")).isEqualTo("a<mark>.</mark>b");
-    }
-
-    /**
-     * Matched on the original string with Unicode case folding: an upper-case match keeps
-     * its own spelling inside the mark, and a letter whose lower-case form is longer than
-     * itself does not shift the marks that follow it.
-     */
-    @Test
-    void highlightTextFoldsCaseWithoutShiftingLaterMarks() {
-        assertThat(evalModule("markup.js", "m.highlightText('\u00c4rger', '\u00e4')"))
-                .isEqualTo("<mark>\u00c4</mark>rger");
-        assertThat(evalModule("markup.js", "m.highlightText('\u0130x-ab-ab', 'ab')"))
-                .isEqualTo("\u0130x-<mark>ab</mark>-<mark>ab</mark>");
     }
 
     @Test
