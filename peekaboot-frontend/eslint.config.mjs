@@ -3,6 +3,7 @@ import globals from 'globals';
 import { importX } from 'eslint-plugin-import-x';
 
 const UI = 'src/main/resources/META-INF/peekaboot/ui';
+const NO_MARKUP_STRINGS = 'Build elements with el() from shared/dom.js. Markup strings are never parsed.';
 
 export default [
     // Load-bearing, not hygiene: uplot's minified bundle reports seven errors of its own
@@ -20,6 +21,23 @@ export default [
             // is what makes this gate catch a missing import at all.
             sourceType: 'module',
             globals: globals.browser,
+        },
+    },
+
+    {
+        // Backend data reaches the page as text nodes only. One parsed string would undo that.
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: 'AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]',
+                    message: NO_MARKUP_STRINGS,
+                },
+                {
+                    selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
+                    message: NO_MARKUP_STRINGS,
+                },
+            ],
         },
     },
 
