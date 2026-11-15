@@ -9,6 +9,9 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.util.ContextInitializer;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.read.ListAppender;
+import com.example.listener.EverythingListener;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -16,7 +19,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -37,17 +39,19 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.context.servlet.AnnotationConfigServletWebApplicationContext;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
-import org.springframework.context.event.EventListener;
 import org.springframework.context.event.SimpleApplicationEventMulticaster;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.support.SpringFactoriesLoader;
 
 class TraceCaptureAutoConfigurationTest {
+
+    private static final String TRACE_ID = "0123456789abcdef0123456789abcdef";
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -132,10 +136,7 @@ class TraceCaptureAutoConfigurationTest {
                 .isEqualTo(before);
     }
 
-    /**
-     * A line that reached the store while the closing context destroys its beans would make it
-     * rebuild them, so capture ends at ContextClosedEvent, before the first bean is destroyed.
-     */
+    /** Capture ends at ContextClosedEvent, so the store takes no line a bean logs while it is destroyed. */
     @Test
     void stopsCapturingOnceTheContextStartsClosing() {
         int before = peekabootAppenderCount();
@@ -241,23 +242,54 @@ class TraceCaptureAutoConfigurationTest {
      */
     @Test
     void logCaptureSurvivesLogbackReinitialisation() {
+        contextRunner.withUserConfiguration(TracerOnlyConfig.class).run(context -> {
+            logWithTraceId("before reinitialisation");
+            assertThat(capturedMessages(context))
+                    .as("capture must work beforehand, or the assertion below would "
+                            + "pass on an appender that never captured anything")
+                    .contains("before reinitialisation");
+
+            reinitialiseLogback();
+            logWithTraceId("after reinitialisation");
+
+            assertThat(capturedMessages(context))
+                    .as("log capture must survive the Logback re-initialisation that "
+                            + "every newly started application triggers")
+                    .contains("after reinitialisation");
+        });
+    }
+
+    /** An application that listens for every event must not be handed each line it logs. */
+    @Test
+    void captureNeverReachesTheApplicationsEventListeners() {
+        String line = "logged beside a catch-all listener " + UUID.randomUUID();
+
         contextRunner
-                .withUserConfiguration(TracerOnlyConfig.class, CapturedLogRecorder.class)
+                .withUserConfiguration(TracerOnlyConfig.class)
+                .withBean(EverythingListener.class)
                 .run(context -> {
-                    CapturedLogRecorder recorder = context.getBean(CapturedLogRecorder.class);
-                    logWithTraceId("before reinitialisation");
-                    assertThat(recorder.messages())
-                            .as("capture must work beforehand, or the assertion below would "
-                                    + "pass on an appender that never captured anything")
-                            .contains("before reinitialisation");
+                    logWithTraceId(line);
 
-                    reinitialiseLogback();
-                    logWithTraceId("after reinitialisation");
+                    assertThat(context.getBean(EverythingListener.class).heard())
+                            .as("the listener hears the context's own events and no captured line")
+                            .isNotEmpty()
+                            .noneMatch(LogCapturedEvent.class::isInstance);
+                    assertThat(capturedMessages(context)).contains(line);
+                });
+    }
 
-                    assertThat(recorder.messages())
-                            .as("log capture must survive the Logback re-initialisation that "
-                                    + "every newly started application triggers")
-                            .contains("after reinitialisation");
+    /** The listener instrumentation spans an application's listener call wherever an observation is current. */
+    @Test
+    void aCatchAllListenerGetsNoSpanForCapturedLogLines() {
+        contextRunner
+                .withConfiguration(AutoConfigurations.of(EventListenerInstrumentationAutoConfiguration.class))
+                .withUserConfiguration(TracerOnlyConfig.class, RecordedObservationsConfig.class)
+                .withBean(EverythingListener.class)
+                .run(context -> {
+                    Observation.createNotStarted("parent", context.getBean(ObservationRegistry.class))
+                            .observe(() -> logWithTraceId("logged inside an observation"));
+
+                    assertThat(context.getBean(RecordingHandler.class).started).containsExactly("parent");
                 });
     }
 
@@ -375,6 +407,22 @@ class TraceCaptureAutoConfigurationTest {
         }
     }
 
+    /** One registry, whose every started observation the handler records. */
+    @Configuration
+    static class RecordedObservationsConfig {
+        @Bean
+        RecordingHandler recordingHandler() {
+            return new RecordingHandler();
+        }
+
+        @Bean
+        ObservationRegistry observationRegistry(RecordingHandler handler) {
+            ObservationRegistry registry = ObservationRegistry.create();
+            registry.observationConfig().observationHandler(handler);
+            return registry;
+        }
+    }
+
     /**
      * Reproduces what Spring Boot's {@code LogbackLoggingSystem.stopAndReset} does - stopping
      * the logger context (which drops every listener, reset-resistant ones included) and then
@@ -412,7 +460,7 @@ class TraceCaptureAutoConfigurationTest {
             }
         }
         unhooked.forEach(root::detachAppender);
-        MDC.put("traceId", "0123456789abcdef0123456789abcdef");
+        MDC.put("traceId", TRACE_ID);
         try {
             LoggerFactory.getLogger(TraceCaptureAutoConfigurationTest.class).error(message);
         } finally {
@@ -421,18 +469,15 @@ class TraceCaptureAutoConfigurationTest {
         }
     }
 
-    @Configuration(proxyBeanMethods = false)
-    static class CapturedLogRecorder {
-
-        private final List<String> messages = new CopyOnWriteArrayList<>();
-
-        @EventListener
-        void onLogCaptured(LogCapturedEvent event) {
-            messages.add(event.message());
-        }
-
-        List<String> messages() {
-            return messages;
-        }
+    /** The messages the store holds for the trace {@link #logWithTraceId} logs in. */
+    private static List<String> capturedMessages(ApplicationContext context) {
+        return context
+                .getBean(TraceStore.class)
+                .getTrace(TRACE_ID)
+                .map(trace -> trace.capturedLogs().logs())
+                .orElse(List.of())
+                .stream()
+                .map(LogCapturedEvent::message)
+                .toList();
     }
 }

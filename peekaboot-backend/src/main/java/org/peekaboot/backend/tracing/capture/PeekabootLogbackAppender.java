@@ -15,7 +15,7 @@ import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
- * Logback appender that captures log events and publishes them via Spring events.
+ * Logback appender that captures log events and publishes each as a {@link LogCapturedEvent}.
  * Uses MDC for traceId/spanId correlation since logback events contain frozen MDC state.
  *
  * <p>Every event Logback delivers is captured, except what {@link SecurityPostureListener} logs:

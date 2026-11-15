@@ -24,6 +24,7 @@ import org.peekaboot.backend.tracing.digest.ErrorDigestRecorder;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.backend.tracing.journal.TraceJournal;
+import org.peekaboot.backend.tracing.store.CaptureEventPublisher;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -70,6 +71,7 @@ class PeekabootTracingAutoConfigurationTest {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(TraceStore.class);
             assertThat(context).hasSingleBean(TraceStoreEventListener.class);
+            assertThat(context).hasSingleBean(CaptureEventPublisher.class);
             assertThat(context).hasSingleBean(ErrorDigest.class).hasBean("peekabootErrorDigest");
             assertThat(context).hasSingleBean(ErrorDigestRecorder.class).hasBean("peekabootErrorDigestRecorder");
         });
@@ -79,7 +81,8 @@ class PeekabootTracingAutoConfigurationTest {
     @Test
     void aFailedRequestReachesTheErrorDigest() {
         contextRunner.run(context -> {
-            context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+            context.getBean(CaptureEventPublisher.class)
+                    .publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
 
             assertThat(context.getBean(ErrorDigest.class).entries())
                     .singleElement()
@@ -96,7 +99,8 @@ class PeekabootTracingAutoConfigurationTest {
         storageRunner
                 .withPropertyValues("peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir)
                 .run(context -> {
-                    context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+                    context.getBean(CaptureEventPublisher.class)
+                            .publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
 
                     ErrorDigest digest = context.getBean(ErrorDigest.class);
                     await().atMost(Duration.ofSeconds(5))
@@ -205,11 +209,12 @@ class PeekabootTracingAutoConfigurationTest {
                 "peekaboot.storage.dir=" + storageDir,
                 "peekaboot.tracing.slow-trace-threshold-ms=1");
 
-        persisted.run(context -> context.publishEvent(new SpanDataEvent(TraceFixtures.rootSpanLasting(5))));
+        persisted.run(context -> context.getBean(CaptureEventPublisher.class)
+                .publishEvent(new SpanDataEvent(TraceFixtures.rootSpanLasting(5))));
 
         persisted.run(context -> {
             TraceStore store = context.getBean(TraceStore.class);
-            context.publishEvent(TraceFixtures.untracedLog("live"));
+            context.getBean(CaptureEventPublisher.class).publishEvent(TraceFixtures.untracedLog("live"));
             await().atMost(Duration.ofSeconds(5))
                     .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
 
@@ -225,14 +230,15 @@ class PeekabootTracingAutoConfigurationTest {
                 "peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir);
 
         persisted.run(context -> {
-            context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+            context.getBean(CaptureEventPublisher.class)
+                    .publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
             ErrorDigest digest = context.getBean(ErrorDigest.class);
             await().atMost(Duration.ofSeconds(5)).until(() -> !digest.entries().isEmpty());
         });
 
         persisted.run(context -> {
             TraceStore store = context.getBean(TraceStore.class);
-            context.publishEvent(TraceFixtures.untracedLog("live"));
+            context.getBean(CaptureEventPublisher.class).publishEvent(TraceFixtures.untracedLog("live"));
             await().atMost(Duration.ofSeconds(5))
                     .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
 
@@ -252,7 +258,8 @@ class PeekabootTracingAutoConfigurationTest {
                         "peekaboot.storage.dir=" + storageDir,
                         "peekaboot.storage.traces.enabled=false")
                 .run(context -> {
-                    context.publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
+                    context.getBean(CaptureEventPublisher.class)
+                            .publishEvent(new SpanDataEvent(TraceFixtures.failedRootSpan()));
 
                     assertThat(context.getBean(ErrorDigest.class).entries()).hasSize(1);
                 });
@@ -271,7 +278,8 @@ class PeekabootTracingAutoConfigurationTest {
         try {
             storageRunner
                     .withPropertyValues("peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir)
-                    .run(context -> context.publishEvent(new SpanDataEvent(TraceFixtures.rootSpanLasting(5))));
+                    .run(context -> context.getBean(CaptureEventPublisher.class)
+                            .publishEvent(new SpanDataEvent(TraceFixtures.rootSpanLasting(5))));
         } finally {
             journalLogger.detachAppender(journalLines);
         }
@@ -338,7 +346,7 @@ class PeekabootTracingAutoConfigurationTest {
     private static void assertTheNextContextHolds(WebApplicationContextRunner persisted, String traceId) {
         persisted.run(context -> {
             TraceStore store = context.getBean(TraceStore.class);
-            context.publishEvent(TraceFixtures.untracedLog("live"));
+            context.getBean(CaptureEventPublisher.class).publishEvent(TraceFixtures.untracedLog("live"));
             await().atMost(Duration.ofSeconds(5))
                     .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
 

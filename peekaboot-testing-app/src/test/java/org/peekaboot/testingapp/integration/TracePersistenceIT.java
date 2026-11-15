@@ -4,21 +4,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import io.micrometer.tracing.Span;
+import io.opentelemetry.sdk.common.CompletableResultCode;
+import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.store.CaptureEventPublisher;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
@@ -29,7 +34,6 @@ import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.PayloadApplicationEvent;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.http.MediaType;
 import tools.jackson.databind.JsonNode;
@@ -64,13 +68,15 @@ class TracePersistenceIT {
     /**
      * Spans wait in the exporter's batch until the tracer provider is destroyed: no schedule, and a batch and
      * queue far above what one request makes, so none leaves early and none is dropped. {@code listener}
-     * hears every event.
+     * hears every event, and {@code exporter} is a bean: Boot hands every {@code SpanExporter} bean the same
+     * batch.
      */
     private static ConfigurableApplicationContext bootHoldingSpans(
-            Path dir, ApplicationListener<ApplicationEvent> listener) {
+            Path dir, ApplicationListener<ApplicationEvent> listener, SpanExporter exporter) {
         return new SpringApplicationBuilder(TestingApp.class)
                 .profiles("test")
                 .listeners(listener)
+                .initializers(context -> context.getBeanFactory().registerSingleton("recordingSpanExporter", exporter))
                 .run(
                         "--server.port=0",
                         "--peekaboot.storage.enabled=true",
@@ -154,15 +160,15 @@ class TracePersistenceIT {
         String id;
         TraceStore firstStore;
         Duration closeTook;
-        try (ConfigurableApplicationContext first = bootHoldingSpans(storageDir, event -> {
-            if (event instanceof ContextClosedEvent) {
-                closing.set(true);
-            } else if (event instanceof PayloadApplicationEvent<?> payload
-                    && payload.getPayload() instanceof SpanDataEvent span) {
-                (closing.get() ? exportedAtClose : exportedBeforeClose)
-                        .add(span.spanData().traceId());
-            }
-        })) {
+        try (ConfigurableApplicationContext first = bootHoldingSpans(
+                storageDir,
+                event -> {
+                    if (event instanceof ContextClosedEvent) {
+                        closing.set(true);
+                    }
+                },
+                new RecordingSpanExporter(
+                        traceId -> (closing.get() ? exportedAtClose : exportedBeforeClose).add(traceId)))) {
             firstStore = first.getBean(TraceStore.class);
             id = tracesOf(first).get("/persons");
             long closeStarted = System.nanoTime();
@@ -207,13 +213,14 @@ class TracePersistenceIT {
             // the test thread runs outside any trace, so these are lines the untraced ring keeps
             log.info("{} one", tag);
             log.info("{} two", tag);
-            first.publishEvent(new SpanDataEvent(TestSpans.span(cutOffTraceId, "query")
+            CaptureEventPublisher capture = first.getBean(CaptureEventPublisher.class);
+            capture.publishEvent(new SpanDataEvent(TestSpans.span(cutOffTraceId, "query")
                     .parent("handler-never-exported")
                     .named("SELECT person")
                     .kind(Span.Kind.CLIENT)
                     .at(5, 2)
                     .build()));
-            first.publishEvent(new LogCapturedEvent(
+            capture.publishEvent(new LogCapturedEvent(
                     listedCutOffTraceId,
                     null,
                     Instant.now(),
@@ -323,6 +330,26 @@ class TracePersistenceIT {
             JsonNode counted = awaitBoomEntry(traces.api(), 3);
             assertThat(counted.path("lastTraceId").asString()).isEqualTo(failed);
             assertThat(counted.path("runs")).hasSize(2);
+        }
+    }
+
+    /** Tells {@code exported} the trace of every span the tracer provider exports. */
+    private record RecordingSpanExporter(Consumer<String> exported) implements SpanExporter {
+
+        @Override
+        public CompletableResultCode export(Collection<io.opentelemetry.sdk.trace.data.SpanData> spans) {
+            spans.forEach(span -> exported.accept(span.getTraceId()));
+            return CompletableResultCode.ofSuccess();
+        }
+
+        @Override
+        public CompletableResultCode flush() {
+            return CompletableResultCode.ofSuccess();
+        }
+
+        @Override
+        public CompletableResultCode shutdown() {
+            return CompletableResultCode.ofSuccess();
         }
     }
 }

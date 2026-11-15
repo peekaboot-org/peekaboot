@@ -11,6 +11,7 @@ import org.peekaboot.backend.tracing.digest.ErrorDigest;
 import org.peekaboot.backend.tracing.digest.ErrorDigestFile;
 import org.peekaboot.backend.tracing.digest.ErrorDigestRecorder;
 import org.peekaboot.backend.tracing.journal.TraceJournal;
+import org.peekaboot.backend.tracing.store.CaptureEventPublisher;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -74,6 +75,13 @@ public class PeekabootTracingAutoConfiguration {
         TraceJournal journal = traceJournal.getIfAvailable();
         return new TraceStoreEventListener(
                 journal != null ? journal : errorDigestRecorder.liveInputs(), traceStore, applicationContext);
+    }
+
+    /** What capture publishes through, so that no listener of the application hears a span, a line or a request. */
+    @Bean
+    @ConditionalOnMissingBean
+    public CaptureEventPublisher peekabootCaptureEventPublisher(TraceStoreEventListener listener) {
+        return new CaptureEventPublisher(listener);
     }
 
     /** Storage on, and traces not switched off on their own; nested, since each element keeps one boolean-property condition. */

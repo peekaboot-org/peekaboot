@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.peekaboot.backend.tracing.capture.PeekabootLogbackAppender;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 
@@ -26,10 +27,13 @@ class LogbackAppenderRegistrar implements ApplicationListener<ContextClosedEvent
     private static final Set<PeekabootLogbackAppender> LIVE_APPENDERS = ConcurrentHashMap.newKeySet();
 
     private final ApplicationContext applicationContext;
+    private final ApplicationEventPublisher capture;
     private PeekabootLogbackAppender appender;
 
-    LogbackAppenderRegistrar(ApplicationContext applicationContext) {
+    /** @param capture what the appender publishes to; the context would hand each line to the application's listeners */
+    LogbackAppenderRegistrar(ApplicationContext applicationContext, ApplicationEventPublisher capture) {
         this.applicationContext = applicationContext;
+        this.capture = capture;
     }
 
     @PostConstruct
@@ -38,7 +42,7 @@ class LogbackAppenderRegistrar implements ApplicationListener<ContextClosedEvent
             return;
         }
 
-        appender = new PeekabootLogbackAppender(applicationContext);
+        appender = new PeekabootLogbackAppender(capture);
         appender.setContext(loggerContext);
         appender.start();
 
@@ -48,8 +52,8 @@ class LogbackAppenderRegistrar implements ApplicationListener<ContextClosedEvent
     }
 
     /**
-     * Detaches before the context destroys a bean, since a line reaching the store's listener
-     * after that would make the closing context rebuild it.
+     * Detaches before the context destroys a bean, so the store takes no line a bean logs while it
+     * is destroyed.
      */
     @Override
     public void onApplicationEvent(ContextClosedEvent event) {

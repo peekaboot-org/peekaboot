@@ -11,10 +11,10 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
 
 /**
- * The store's single write entry point: one {@code @EventListener} per event type the capture side
- * publishes, and the run's ready event, each handed on as a {@link TraceInput} to the trace journal
- * where one runs, else straight into the store. A discard is handed on only for a trace that holds
- * the excluded request and nothing else.
+ * The store's single write entry point: one method per event the capture side publishes, which
+ * {@link CaptureEventPublisher} calls, and an {@code @EventListener} for the run's ready event, each
+ * handed on as a {@link TraceInput} to the trace journal where one runs, else straight into the
+ * store. A discard is handed on only for a trace that holds the excluded request and nothing else.
  */
 public class TraceStoreEventListener {
 
@@ -29,22 +29,18 @@ public class TraceStoreEventListener {
         this.ownContext = ownContext;
     }
 
-    @EventListener
     public void onSpanData(SpanDataEvent event) {
         inputs.accept(new TraceInput.SpanArrived(event.spanData()));
     }
 
-    @EventListener
     public void onLogCaptured(LogCapturedEvent event) {
         inputs.accept(new TraceInput.LogCaptured(event));
     }
 
-    @EventListener
     public void onRequestCompleted(RequestCompletedEvent event) {
         inputs.accept(new TraceInput.RequestCompleted(event));
     }
 
-    @EventListener
     public void onTraceDiscarded(TraceDiscardedEvent event) {
         if (holdsOnlyTheExcludedRequest(event)) {
             inputs.accept(new TraceInput.TraceDiscarded(event.traceId()));

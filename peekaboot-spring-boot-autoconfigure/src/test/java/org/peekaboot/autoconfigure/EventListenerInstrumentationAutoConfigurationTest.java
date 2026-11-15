@@ -4,10 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.listener.RecordingListener;
 import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.listener.EventListenerObservationPostProcessor;
 import org.springframework.aop.support.AopUtils;
@@ -176,21 +173,6 @@ class EventListenerInstrumentationAutoConfigurationTest {
         @Bean
         RecordingHandler recordingHandler() {
             return new RecordingHandler();
-        }
-    }
-
-    static class RecordingHandler implements ObservationHandler<Observation.Context> {
-
-        final List<String> started = new CopyOnWriteArrayList<>();
-
-        @Override
-        public boolean supportsContext(Observation.Context context) {
-            return true;
-        }
-
-        @Override
-        public void onStart(Observation.Context context) {
-            started.add(context.getName());
         }
     }
 }

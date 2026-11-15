@@ -4,6 +4,7 @@ import io.micrometer.tracing.Tracer;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.capture.RequestCaptureFilter;
+import org.peekaboot.backend.tracing.store.CaptureEventPublisher;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +14,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -39,12 +39,9 @@ public class TraceCaptureAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnBean({Tracer.class, TraceStore.class})
     public FilterRegistrationBean<RequestCaptureFilter> peekabootRequestCaptureFilter(
-            Tracer tracer,
-            ApplicationEventPublisher eventPublisher,
-            MaskingEngine maskingEngine,
-            PeekabootPaths peekabootPaths) {
+            Tracer tracer, CaptureEventPublisher capture, MaskingEngine maskingEngine, PeekabootPaths peekabootPaths) {
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher, maskingEngine, peekabootPaths));
+        registration.setFilter(new RequestCaptureFilter(tracer, capture, maskingEngine, peekabootPaths));
         registration.addUrlPatterns("/*");
         // inside Boot's ServerHttpObservationFilter (HIGHEST_PRECEDENCE + 1), so the server
         // span is current, and ahead of Spring Security, so rejected requests are captured too
@@ -60,8 +57,9 @@ public class TraceCaptureAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        LogbackAppenderRegistrar peekabootLogbackAppenderRegistrar(ApplicationContext applicationContext) {
-            return new LogbackAppenderRegistrar(applicationContext);
+        LogbackAppenderRegistrar peekabootLogbackAppenderRegistrar(
+                ApplicationContext applicationContext, CaptureEventPublisher capture) {
+            return new LogbackAppenderRegistrar(applicationContext, capture);
         }
     }
 }

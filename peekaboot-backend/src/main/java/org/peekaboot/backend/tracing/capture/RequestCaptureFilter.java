@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
- * Filter that captures HTTP request/response details and publishes them via Spring events.
+ * Filter that captures HTTP request/response details and publishes them as a {@code RequestCompletedEvent}.
  * This enables the Request tab in the trace detail view. It also sets the Server-Timing header
  * the toolbar's idle mode reads a trace id from. It never asks the container for parameters
  * the application did not read.

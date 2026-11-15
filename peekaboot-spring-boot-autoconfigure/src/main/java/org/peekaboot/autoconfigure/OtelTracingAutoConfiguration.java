@@ -5,11 +5,11 @@ import io.opentelemetry.sdk.trace.SpanProcessor;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.journal.TraceJournal;
+import org.peekaboot.backend.tracing.store.CaptureEventPublisher;
 import org.springframework.boot.autoconfigure.AbstractDependsOnBeanFactoryPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 
 /** Guarded by class name: the OpenTelemetry SDK is only an optional dependency of peekaboot-backend. */
@@ -20,9 +20,8 @@ public class OtelTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public OtelSpanExporter peekabootOtelSpanExporter(
-            ApplicationEventPublisher eventPublisher, PeekabootPaths peekabootPaths) {
-        return new OtelSpanExporter(eventPublisher, peekabootPaths);
+    public OtelSpanExporter peekabootOtelSpanExporter(CaptureEventPublisher capture, PeekabootPaths peekabootPaths) {
+        return new OtelSpanExporter(capture, peekabootPaths);
     }
 
     /**
