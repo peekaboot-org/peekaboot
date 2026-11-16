@@ -27,12 +27,12 @@
         </Or>
     </Match>
 
-    <!-- The container markers the runtime detection reads - /.dockerenv, /run/.containerenv
-         and /proc/1/cgroup - are absolute by definition: they are where the container
-         runtimes put them, not paths the application chooses. The reading code takes them as
-         parameters so tests can point it at temporary files. Scoped to the one class
-         SpotBugs actually reports: MachineInfo and ProcessInfo hold absolute literals of
-         their own and raise nothing, measured with the filter emptied. -->
+    <!-- The container markers the runtime detection reads - /.dockerenv, /run/.containerenv,
+         /proc/1/cgroup and /proc/1/mountinfo - are absolute by definition: they are where the
+         container runtimes and the kernel put them, not paths the application chooses. The
+         reading code takes them as parameters so tests can point it at temporary files.
+         Scoped to the one class SpotBugs actually reports: MachineInfo and ProcessInfo hold
+         absolute literals of their own and raise nothing, measured with the filter emptied. -->
     <Match>
         <Class name="org.peekaboot.backend.domain.runtime.ContainerRuntime$Signals"/>
         <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
