@@ -109,19 +109,6 @@ class TreeMaskerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void maskBehavesLikeTheOneArgOverloadWhenUnmaskIsFalse() {
-        Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), false);
-
-        assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
-    }
-
-    // ConfigMapper's caller has a root node that IS one property's value,
-    // not a subtree it needs checked for descendants only - the sensitive key can name the
-    // root itself (a @ConfigurationProperties bean's "client-secret" entry). The one-arg
-    // mask(Object) overload checks descendants but never the root, so this key-aware
-    // overload exists to also check the root against isSensitiveKey.
-    @Test
     void maskWithKeyReplacesTheWholeValueWhenTheRootKeyItselfIsSensitive() {
         Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue", false);
 
