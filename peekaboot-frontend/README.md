@@ -87,10 +87,10 @@ JavaScript sets (`trace-detail/tabs/spans.js`) and CSS reads. stylelint cannot s
 `setProperty` call, so the three rules using that token report as unknown without it. Any
 new token on that side of the contract goes in the same file.
 
-`package.json` denies `unrs-resolver`'s postinstall script. It is a fallback for platforms
-whose prebuilt binding is missing; the binding installs as a normal optional dependency
-here, and npm 11 blocks the script by default anyway. Denying it explicitly is what stops
-npm warning about it on every build.
+`.npmrc` sets `ignore-scripts=true`, so `npm ci` runs no dependency's install script. The
+lockfile holds one, `unrs-resolver`'s postinstall, a fallback for platforms whose prebuilt
+binding is missing; the binding installs as a normal optional dependency here. `package.json`
+denies it by name as well, which keeps npm from warning about it if the `.npmrc` line goes.
 
 ## The three shared layers
 
