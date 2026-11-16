@@ -143,19 +143,6 @@ class ActuatorTabsIT extends PlaywrightTestBase {
         assertThat(groupNameClasses("environment", "#property-sources")).containsOnly("pk-group__name");
     }
 
-    private String hash() {
-        return (String) page.evaluate("() => window.location.hash");
-    }
-
-    private List<String> groupNameClasses(String tab, String list) {
-        dashboard.openTab(tab);
-        List<String> classes = page.locator(list + " .pk-group__name").all().stream()
-                .map(name -> name.getAttribute("class"))
-                .toList();
-        assertThat(classes).as("the %s tab renders groups", tab).isNotEmpty();
-        return classes;
-    }
-
     @Test
     void scheduledTasksTabGroupsByScheduleType() {
         openDashboard();
@@ -259,5 +246,18 @@ class ActuatorTabsIT extends PlaywrightTestBase {
         assertThat(focus)
                 .as("whether the focused link is still in the document, and whether a traces link has the focus")
                 .isEqualTo(List.of(false, true));
+    }
+
+    private String hash() {
+        return (String) page.evaluate("() => window.location.hash");
+    }
+
+    private List<String> groupNameClasses(String tab, String list) {
+        dashboard.openTab(tab);
+        List<String> classes = page.locator(list + " .pk-group__name").all().stream()
+                .map(name -> name.getAttribute("class"))
+                .toList();
+        assertThat(classes).as("the %s tab renders groups", tab).isNotEmpty();
+        return classes;
     }
 }

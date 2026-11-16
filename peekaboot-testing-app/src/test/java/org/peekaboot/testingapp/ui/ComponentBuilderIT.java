@@ -137,27 +137,6 @@ class ComponentBuilderIT extends PlaywrightTestBase {
     }
 
     /**
-     * Runs {@code body}, a function body over the components module {@code m}, with an empty
-     * {@code container} in the document, {@code render(groups, revision)} listing groups shaped
-     * {@code {id, name, count}} into it, and {@code part(id, name)} finding one group's
-     * {@code header} or {@code list}.
-     */
-    private Object evalGroupList(String body) {
-        return evalBuilders("""
-                const container = document.body.appendChild(document.createElement('div'));
-                const render = (groups, revision) => m.groupList(container, groups, {
-                    key: g => g.id,
-                    header: g => ({name: g.name, count: g.count}),
-                    items: (g, list) => list.append(`${g.name} ${revision}`),
-                    revision
-                });
-                const part = (id, name) => container.querySelector(`[data-group-key="${id}"] .pk-group__${name}`);
-                const alpha = {id: 'a', name: 'Alpha', count: '1 item'};
-                const beta = {id: 'b', name: 'Beta', count: '1 item'};
-                """ + body);
-    }
-
-    /**
      * A refresh must not close the group the reader opened, nor take focus off its header, and a
      * group nobody opened stays closed.
      */
@@ -217,24 +196,6 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 .isNull();
     }
 
-    /**
-     * Runs {@code body}, a function body over the components module {@code m}, with an empty
-     * {@code target} in the document and {@code render(items, revision)} showing items shaped
-     * {@code {id, label}} as a card table of one column.
-     */
-    private Object evalCardTable(String body) {
-        return evalBuilders("""
-                const target = document.body.appendChild(document.createElement('div'));
-                const row = item => {
-                    const tr = document.createElement('tr');
-                    tr.append(m.textCell(item.label));
-                    return tr;
-                };
-                const render = (items, revision) =>
-                    m.cardTable(target, ['Label'], items, {key: item => item.id, row, revision});
-                """ + body);
-    }
-
     @Test
     void cardTableKeepsARowWhoseDataDidNotChange() {
         assertThat(evalCardTable("""
@@ -258,28 +219,6 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 return [target.querySelector('table') === table, target.querySelector('tbody tr') === before,
                     target.querySelectorAll('tbody tr').length].join('|');
                 """)).isEqualTo("true|false|1");
-    }
-
-    /**
-     * Runs {@code body}, a function body over the keyed module {@code m}, with an empty
-     * {@code parent} in the document and {@code options} whose {@code build} turns an
-     * {@code {id, label}} item into {@code <div><button>label</button></div>} and counts its
-     * calls in {@code builds}.
-     */
-    private Object evalKeyed(String body) {
-        return importModule("shared/keyed.js", """
-                (async () => {
-                    const parent = document.body.appendChild(document.createElement('div'));
-                    let builds = 0;
-                    const build = item => {
-                        builds++;
-                        const row = document.createElement('div');
-                        row.appendChild(document.createElement('button')).textContent = item.label;
-                        return row;
-                    };
-                    const options = {key: item => item.id, build};
-                    const labels = () => [...parent.children].map(child => child.textContent).join(',');
-                """ + body + "})()");
     }
 
     @Test
@@ -409,23 +348,6 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 .isEqualTo("HTTP 404");
     }
 
-    /**
-     * Runs {@code body}, an async function body over a {@code client} whose requests wait in
-     * {@code calls} until the body resolves or rejects them, with {@code settle()} letting
-     * pending work run.
-     */
-    private Object evalClientOverHeldRequests(String body) {
-        return importModule(
-                "shared/api.js",
-                "(async () => {"
-                        + " const calls = [];"
-                        + " window.fetch = () => new Promise((resolve, reject) => calls.push({resolve, reject}));"
-                        + " const settle = () => new Promise(resolve => setTimeout(resolve));"
-                        + " const client = m.createClient({basePath: '/peekaboot'});"
-                        + body
-                        + "})()");
-    }
-
     /** The poll a manual refresh overtook can still lose its connection, and its caller has newer data by then. */
     @Test
     void aRequestThatFailsAfterANewerOneStartedResolvesToNull() {
@@ -508,16 +430,6 @@ class ComponentBuilderIT extends PlaywrightTestBase {
             """);
 
         assertThat(result).isEqualTo("true|true");
-    }
-
-    /**
-     * Runs {@code body}, an async function body over the self-fetching-tab module {@code m},
-     * with {@code seen} for what the tab rendered and a detached {@code container}.
-     */
-    private Object evalSelfFetchingTab(String body) {
-        return importModule(
-                "shared/self-fetching-tab.js",
-                "(async () => { const seen = []; const container = document.createElement('div');" + body + "})()");
     }
 
     /** A result the tab cannot render is a failed load, so it gets the error state like one. */
@@ -619,5 +531,93 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 .isEqualTo("<p class=\"pk-empty\">&lt;b&gt;</p>");
         assertThat(evalBuilders("return m.loadingBlock('Loading x').outerHTML;"))
                 .isEqualTo("<div class=\"pk-loading\"><div class=\"pk-spinner\"></div><p>Loading x</p></div>");
+    }
+
+    /**
+     * Runs {@code body}, a function body over the components module {@code m}, with an empty
+     * {@code container} in the document, {@code render(groups, revision)} listing groups shaped
+     * {@code {id, name, count}} into it, and {@code part(id, name)} finding one group's
+     * {@code header} or {@code list}.
+     */
+    private Object evalGroupList(String body) {
+        return evalBuilders("""
+                const container = document.body.appendChild(document.createElement('div'));
+                const render = (groups, revision) => m.groupList(container, groups, {
+                    key: g => g.id,
+                    header: g => ({name: g.name, count: g.count}),
+                    items: (g, list) => list.append(`${g.name} ${revision}`),
+                    revision
+                });
+                const part = (id, name) => container.querySelector(`[data-group-key="${id}"] .pk-group__${name}`);
+                const alpha = {id: 'a', name: 'Alpha', count: '1 item'};
+                const beta = {id: 'b', name: 'Beta', count: '1 item'};
+                """ + body);
+    }
+
+    /**
+     * Runs {@code body}, a function body over the components module {@code m}, with an empty
+     * {@code target} in the document and {@code render(items, revision)} showing items shaped
+     * {@code {id, label}} as a card table of one column.
+     */
+    private Object evalCardTable(String body) {
+        return evalBuilders("""
+                const target = document.body.appendChild(document.createElement('div'));
+                const row = item => {
+                    const tr = document.createElement('tr');
+                    tr.append(m.textCell(item.label));
+                    return tr;
+                };
+                const render = (items, revision) =>
+                    m.cardTable(target, ['Label'], items, {key: item => item.id, row, revision});
+                """ + body);
+    }
+
+    /**
+     * Runs {@code body}, a function body over the keyed module {@code m}, with an empty
+     * {@code parent} in the document and {@code options} whose {@code build} turns an
+     * {@code {id, label}} item into {@code <div><button>label</button></div>} and counts its
+     * calls in {@code builds}.
+     */
+    private Object evalKeyed(String body) {
+        return importModule("shared/keyed.js", """
+                (async () => {
+                    const parent = document.body.appendChild(document.createElement('div'));
+                    let builds = 0;
+                    const build = item => {
+                        builds++;
+                        const row = document.createElement('div');
+                        row.appendChild(document.createElement('button')).textContent = item.label;
+                        return row;
+                    };
+                    const options = {key: item => item.id, build};
+                    const labels = () => [...parent.children].map(child => child.textContent).join(',');
+                """ + body + "})()");
+    }
+
+    /**
+     * Runs {@code body}, an async function body over a {@code client} whose requests wait in
+     * {@code calls} until the body resolves or rejects them, with {@code settle()} letting
+     * pending work run.
+     */
+    private Object evalClientOverHeldRequests(String body) {
+        return importModule(
+                "shared/api.js",
+                "(async () => {"
+                        + " const calls = [];"
+                        + " window.fetch = () => new Promise((resolve, reject) => calls.push({resolve, reject}));"
+                        + " const settle = () => new Promise(resolve => setTimeout(resolve));"
+                        + " const client = m.createClient({basePath: '/peekaboot'});"
+                        + body
+                        + "})()");
+    }
+
+    /**
+     * Runs {@code body}, an async function body over the self-fetching-tab module {@code m},
+     * with {@code seen} for what the tab rendered and a detached {@code container}.
+     */
+    private Object evalSelfFetchingTab(String body) {
+        return importModule(
+                "shared/self-fetching-tab.js",
+                "(async () => { const seen = []; const container = document.createElement('div');" + body + "})()");
     }
 }

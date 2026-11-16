@@ -1288,15 +1288,6 @@ class SpansTabIT extends TraceOverlayTestBase {
         overlay.waitUntil("root => (" + tooltipOpacity + ")(root) === '1'");
     }
 
-    private String storeATraceWithASpanEvent() {
-        String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TraceShapes.httpRoot(traceId, "/events-fixture")
-                .at(0, 40)
-                .event("exception", 20)
-                .build());
-        return traceId;
-    }
-
     /**
      * Task 10: the listing row for an async subtree, and its link back to the enclosing
      * trace. /orders/enrich dispatches {@code EnrichmentService.enrich} on a task executor
@@ -1610,5 +1601,14 @@ class SpansTabIT extends TraceOverlayTestBase {
                                 "NOT YET INVENTED|pk-badge pk-badge--error|invented\ninvented worse\ninvented again"),
                         "messages",
                         List.of("slow", "repeated", "invented", "repeated again", "invented worse", "invented again")));
+    }
+
+    private String storeATraceWithASpanEvent() {
+        String traceId = TestSpans.newTraceId();
+        traceStore.addSpan(TraceShapes.httpRoot(traceId, "/events-fixture")
+                .at(0, 40)
+                .event("exception", 20)
+                .build());
+        return traceId;
     }
 }

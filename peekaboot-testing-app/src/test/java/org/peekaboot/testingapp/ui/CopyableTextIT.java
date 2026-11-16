@@ -111,19 +111,6 @@ class CopyableTextIT extends PlaywrightTestBase {
         assertThat(page.textContent(STATUS_REGION)).isEmpty();
     }
 
-    /** Stops the page's timers, so feedback stays up until the test runs the clock on. */
-    private void holdFeedback() {
-        page.clock().install();
-        page.clock().pauseAt(System.currentTimeMillis() + 60_000);
-    }
-
-    /** Clicks the control, waits for its feedback and returns what the region should then read. */
-    private String copyAndAwaitFeedback(String control) {
-        page.evaluate("control => document.querySelector(control).click()", control);
-        page.waitForSelector(control + ".pk-copy--copied, " + control + ".pk-copy--failed");
-        return page.isVisible(control + ".pk-copy--copied") ? "Copied" : "Copy failed";
-    }
-
     /**
      * The listener now claims every .pk-copy, and the empty id placeholder is one: it copies
      * nothing, shows no feedback and leaves the click to whatever contains it.
@@ -143,5 +130,18 @@ class CopyableTextIT extends PlaywrightTestBase {
                                     () => resolve([rowClicks, row.querySelector('.pk-copy--empty').className]), 100));
                         })()
                         """)).isEqualTo(List.of(1, "pk-copy pk-copy--empty"));
+    }
+
+    /** Stops the page's timers, so feedback stays up until the test runs the clock on. */
+    private void holdFeedback() {
+        page.clock().install();
+        page.clock().pauseAt(System.currentTimeMillis() + 60_000);
+    }
+
+    /** Clicks the control, waits for its feedback and returns what the region should then read. */
+    private String copyAndAwaitFeedback(String control) {
+        page.evaluate("control => document.querySelector(control).click()", control);
+        page.waitForSelector(control + ".pk-copy--copied, " + control + ".pk-copy--failed");
+        return page.isVisible(control + ".pk-copy--copied") ? "Copied" : "Copy failed";
     }
 }

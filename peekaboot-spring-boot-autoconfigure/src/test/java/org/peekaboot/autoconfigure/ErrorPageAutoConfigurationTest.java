@@ -391,19 +391,6 @@ class ErrorPageAutoConfigurationTest {
                 });
     }
 
-    /** What the resolver answers a browser that asked {@code host} for a page whose handler gave up on its gateway. */
-    private static String pageFor(PeekabootErrorExceptionResolver resolver, String host) throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
-        request.addHeader("Accept", "text/html");
-        request.addHeader("Host", host);
-        ModelAndView page = resolver.resolveException(
-                request,
-                new MockHttpServletResponse(),
-                null,
-                new ResponseStatusException(HttpStatus.BAD_GATEWAY, "gateway unreachable"));
-        return rendered(page.getView(), request);
-    }
-
     /** An application that brings its own replaces Peekaboot's, like every other Peekaboot bean. */
     @Test
     void backsOffForAnApplicationsOwnExceptionResolver() {
@@ -424,6 +411,19 @@ class ErrorPageAutoConfigurationTest {
                 .withBean("ownViewResolver", PeekabootErrorViewResolver.class, () -> own)
                 .run(context -> assertThat(context.getBean(PeekabootErrorViewResolver.class))
                         .isSameAs(own));
+    }
+
+    /** What the resolver answers a browser that asked {@code host} for a page whose handler gave up on its gateway. */
+    private static String pageFor(PeekabootErrorExceptionResolver resolver, String host) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders");
+        request.addHeader("Accept", "text/html");
+        request.addHeader("Host", host);
+        ModelAndView page = resolver.resolveException(
+                request,
+                new MockHttpServletResponse(),
+                null,
+                new ResponseStatusException(HttpStatus.BAD_GATEWAY, "gateway unreachable"));
+        return rendered(page.getView(), request);
     }
 
     /**

@@ -25,6 +25,22 @@ class StackTraceFoldingTest {
     private static final List<String> EXCLUSIONS = List.of("org.springframework", "org.apache.catalina");
     private static final List<String> APP = List.of("com.example");
 
+    /**
+     * Both the JDK and Logback indent a suppressed exception's own frames with an extra tab -
+     * {@code recursiveAppend} nests one deeper than the enclosing trace - so the try-with-
+     * resources close-failure shape needs its own fixture rather than a single leading tab.
+     */
+    private static final String SUPPRESSED_TRACE = """
+            java.lang.IllegalStateException: gateway unreachable
+            \tat com.example.orders.OrderService.reconcile(OrderService.java:42)
+            \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)
+            \tSuppressed: java.io.IOException: close failed
+            \t\tat org.apache.catalina.connector.OutputBuffer.close(OutputBuffer.java:296)
+            \t\tat com.example.orders.Gateway.close(Gateway.java:20)
+            \t\t... 3 more
+            \tat com.example.orders.OrderService.<init>(OrderService.java:10)
+            """;
+
     @Test
     void collapsesConsecutiveExcludedFramesIntoOneRun() {
         FoldedTrace folded = StackTraceFolding.fold(TRACE, EXCLUSIONS, APP);
@@ -142,22 +158,6 @@ class StackTraceFoldingTest {
 
         assertThat(folded.lines()).containsExactly("a", "b", "c");
     }
-
-    /**
-     * Both the JDK and Logback indent a suppressed exception's own frames with an extra tab -
-     * {@code recursiveAppend} nests one deeper than the enclosing trace - so the try-with-
-     * resources close-failure shape needs its own fixture rather than a single leading tab.
-     */
-    private static final String SUPPRESSED_TRACE = """
-            java.lang.IllegalStateException: gateway unreachable
-            \tat com.example.orders.OrderService.reconcile(OrderService.java:42)
-            \tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)
-            \tSuppressed: java.io.IOException: close failed
-            \t\tat org.apache.catalina.connector.OutputBuffer.close(OutputBuffer.java:296)
-            \t\tat com.example.orders.Gateway.close(Gateway.java:20)
-            \t\t... 3 more
-            \tat com.example.orders.OrderService.<init>(OrderService.java:10)
-            """;
 
     /** The whole suppressed block was invisible to the classifier before frames widened past one leading tab. */
     @Test

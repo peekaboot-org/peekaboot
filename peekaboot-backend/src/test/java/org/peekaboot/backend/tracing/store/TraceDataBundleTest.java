@@ -575,13 +575,6 @@ class TraceDataBundleTest {
                 .isTrue();
     }
 
-    private static SpanData failedChild() {
-        return span("child")
-                .parent("root")
-                .exception("java.lang.IllegalStateException", "boom")
-                .build();
-    }
-
     @Test
     void aBundleWithoutAsyncSpansListsNoAsyncEntries() {
         TraceDataBundle bundle = bundle("trace1", 500, NO_CAP);
@@ -1015,6 +1008,13 @@ class TraceDataBundleTest {
         bundle.setRequest(RequestCompletedEvents.minimal("trace1"));
 
         assertThat(bundle.liesUnder("S")).isFalse();
+    }
+
+    private static SpanData failedChild() {
+        return span("child")
+                .parent("root")
+                .exception("java.lang.IllegalStateException", "boom")
+                .build();
     }
 
     /**

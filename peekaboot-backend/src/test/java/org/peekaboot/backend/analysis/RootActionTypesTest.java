@@ -126,13 +126,6 @@ class RootActionTypesTest {
         assertThat(RootActionTypes.scheduledTarget(rootSpan)).isNull();
     }
 
-    static Stream<Map<String, String>> tagsShortOfTheTaskPair() {
-        return Stream.of(
-                Map.of(),
-                Map.of("code.function", "reconcileOrders"),
-                Map.of("code.namespace", "org.peekaboot.testingapp.order.OrderReconciler"));
-    }
-
     @Test
     void aMissingRootNamesNoTarget() {
         assertThat(RootActionTypes.scheduledTarget(null)).isNull();
@@ -272,6 +265,13 @@ class RootActionTypesTest {
         var rootSpan = redisCommand("root", "PING").tag("db.system", "mongodb").build();
 
         assertThat(RootActionTypes.of(rootSpan)).isEqualTo(RootActionType.DATABASE);
+    }
+
+    static Stream<Map<String, String>> tagsShortOfTheTaskPair() {
+        return Stream.of(
+                Map.of(),
+                Map.of("code.function", "reconcileOrders"),
+                Map.of("code.namespace", "org.peekaboot.testingapp.order.OrderReconciler"));
     }
 
     private static Stream<Arguments> rootActionTypeGrid() {

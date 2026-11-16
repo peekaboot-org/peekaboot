@@ -233,16 +233,6 @@ class ErrorDigestRecorderTest {
                 .satisfies(entry -> assertThat(entry.lastTraceId()).isEqualTo("t1"));
     }
 
-    private static InMemoryTraceStore countingLookups(AtomicInteger lookups) {
-        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
-            @Override
-            public Optional<TraceDataBundle> getTrace(String traceId) {
-                lookups.incrementAndGet();
-                return super.getTrace(traceId);
-            }
-        };
-    }
-
     /**
      * A request that calls its own application is complete while the inner request roots it, incomplete
      * once the application's client span is stored, and complete again with the outer root. It counts
@@ -341,5 +331,15 @@ class ErrorDigestRecorderTest {
         }
         assertThat(failing.getTraceCount(TraceBucket.ALL)).isEqualTo(1);
         assertThat(digest.entries()).isEmpty();
+    }
+
+    private static InMemoryTraceStore countingLookups(AtomicInteger lookups) {
+        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            public Optional<TraceDataBundle> getTrace(String traceId) {
+                lookups.incrementAndGet();
+                return super.getTrace(traceId);
+            }
+        };
     }
 }

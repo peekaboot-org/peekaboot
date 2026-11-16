@@ -321,12 +321,6 @@ class OverviewMachineIT extends PlaywrightTestBase {
         assertConnectionParams(toggle, params, false);
     }
 
-    private static void assertConnectionParams(Locator toggle, Locator params, boolean open) {
-        assertThat(toggle.textContent()).isEqualTo("Connection Params");
-        assertThat(toggle.getAttribute("aria-expanded")).isEqualTo(String.valueOf(open));
-        assertThat(params.isVisible()).isEqualTo(open);
-    }
-
     /**
      * The testing app has two datasources, so a params id that repeats would point the
      * second card's toggle at the first card's params.
@@ -439,5 +433,11 @@ class OverviewMachineIT extends PlaywrightTestBase {
 
         assertThat(page.textContent("#components-grid .pk-component-grid__details"))
                 .isEqualTo("total: 12 jobs\nfree: 1.50 GB");
+    }
+
+    private static void assertConnectionParams(Locator toggle, Locator params, boolean open) {
+        assertThat(toggle.textContent()).isEqualTo("Connection Params");
+        assertThat(toggle.getAttribute("aria-expanded")).isEqualTo(String.valueOf(open));
+        assertThat(params.isVisible()).isEqualTo(open);
     }
 }

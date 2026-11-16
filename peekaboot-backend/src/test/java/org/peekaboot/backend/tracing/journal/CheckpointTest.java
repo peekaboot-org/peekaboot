@@ -559,15 +559,6 @@ class CheckpointTest {
                         bucketLine(TraceBucket.ALL, "a", "b", "c"));
     }
 
-    private static TraceInput slowOrNot(String traceId, String spanId, Duration duration) {
-        return new TraceInput.SpanArrived(span(spanId)
-                .in(traceId)
-                .named(spanId)
-                .kind(Span.Kind.SERVER)
-                .at(START, duration)
-                .build());
-    }
-
     /**
      * A span that outlived its async entry span stays async once the span cap evicts the entry; a fold
      * carries that, so the trace keeps the duration and the Slow listing it had.
@@ -879,5 +870,14 @@ class CheckpointTest {
                     .isEqualTo(contentOf(bundle));
         }
         assertThat(messages(after.untracedLogs())).isEqualTo(messages(before.untracedLogs()));
+    }
+
+    private static TraceInput slowOrNot(String traceId, String spanId, Duration duration) {
+        return new TraceInput.SpanArrived(span(spanId)
+                .in(traceId)
+                .named(spanId)
+                .kind(Span.Kind.SERVER)
+                .at(START, duration)
+                .build());
     }
 }

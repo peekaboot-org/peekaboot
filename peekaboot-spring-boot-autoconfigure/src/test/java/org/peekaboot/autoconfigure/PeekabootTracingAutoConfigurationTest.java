@@ -390,27 +390,6 @@ class PeekabootTracingAutoConfigurationTest {
                 });
     }
 
-    /** The span waits in its batch, which flushes only when its provider or processor shuts down. */
-    private static String endSpan(SdkTracerProvider provider) {
-        Span span = provider.get("peekaboot-test")
-                .spanBuilder("ended before the close")
-                .startSpan();
-        span.end();
-        return span.getSpanContext().getTraceId();
-    }
-
-    /** A live line seen in the store means the restore is done, since the gate holds live inputs until then. */
-    private static void assertTheNextContextHolds(WebApplicationContextRunner persisted, String traceId) {
-        persisted.run(context -> {
-            TraceStore store = context.getBean(TraceStore.class);
-            context.getBean(CaptureEventPublisher.class).publishEvent(TraceFixtures.untracedLog("live"));
-            await().atMost(Duration.ofSeconds(5))
-                    .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
-
-            assertThat(store.getTrace(traceId)).isPresent();
-        });
-    }
-
     // --- TracingInterceptorAutoConfiguration ---
 
     @Test
@@ -544,6 +523,27 @@ class PeekabootTracingAutoConfigurationTest {
         contextRunner.withUserConfiguration(UserTraceStoreConfig.class).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(TraceStore.class)).isSameAs(UserTraceStoreConfig.STORE);
+        });
+    }
+
+    /** The span waits in its batch, which flushes only when its provider or processor shuts down. */
+    private static String endSpan(SdkTracerProvider provider) {
+        Span span = provider.get("peekaboot-test")
+                .spanBuilder("ended before the close")
+                .startSpan();
+        span.end();
+        return span.getSpanContext().getTraceId();
+    }
+
+    /** A live line seen in the store means the restore is done, since the gate holds live inputs until then. */
+    private static void assertTheNextContextHolds(WebApplicationContextRunner persisted, String traceId) {
+        persisted.run(context -> {
+            TraceStore store = context.getBean(TraceStore.class);
+            context.getBean(CaptureEventPublisher.class).publishEvent(TraceFixtures.untracedLog("live"));
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> store.untracedLogs().stream().anyMatch(log -> "live".equals(log.message())));
+
+            assertThat(store.getTrace(traceId)).isPresent();
         });
     }
 

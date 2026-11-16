@@ -182,12 +182,6 @@ class TraceReplayTest {
         assertThat(RestoredStores.idsIn(store, TraceBucket.ALL)).containsExactly("c", "b");
     }
 
-    private static List<String> listing(InMemoryTraceStore store, TraceBucket bucket) {
-        return store.getTraces(bucket, Integer.MAX_VALUE).stream()
-                .map(listed -> listed.bundle().traceId() + "@" + listed.listedAt() + "/" + listed.sequence())
-                .toList();
-    }
-
     /** A crash in the middle of a write leaves the last line without its line break; that is expected and says nothing. */
     @Test
     void aLineCutShortByACrashIsSkippedQuietly() {
@@ -433,5 +427,11 @@ class TraceReplayTest {
                         .getFirst()
                         .creationOrder())
                 .isEqualTo(10);
+    }
+
+    private static List<String> listing(InMemoryTraceStore store, TraceBucket bucket) {
+        return store.getTraces(bucket, Integer.MAX_VALUE).stream()
+                .map(listed -> listed.bundle().traceId() + "@" + listed.listedAt() + "/" + listed.sequence())
+                .toList();
     }
 }

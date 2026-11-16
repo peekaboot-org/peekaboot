@@ -91,17 +91,6 @@ class LoopbackOnlyAccessTest {
         assertThat(access.permits(crossSite)).isFalse();
     }
 
-    static Stream<Named<MockHttpServletRequest>> crossSiteRequests() {
-        return Stream.of(
-                named("a fetch from another site", fetched("GET", "cross-site", "cors", "empty")),
-                named("a form another site posts", fetched("POST", "cross-site", "navigate", "document")),
-                named("a frame on another site", fetched("GET", "cross-site", "navigate", "iframe")),
-                named("a fetch that claims a document", fetched("GET", "cross-site", "no-cors", "document")),
-                named("a site this rule does not know", fetched("GET", "cross-origin", "navigate", "document")),
-                named("another site's Origin", local("Origin", "http://evil.example")),
-                named("an opaque Origin", local("Origin", "null")));
-    }
-
     /** The link hands the linking page nothing, and a dashboard nobody can link to is no use. */
     @Test
     void permitsALinkFollowedFromAnotherSite() {
@@ -232,6 +221,17 @@ class LoopbackOnlyAccessTest {
         assertThat(access.permitsDebugDetail(get("127.0.0.1", "localhost"))).isTrue();
         assertThat(access.permitsDebugDetail(get("10.0.0.5", "localhost"))).isFalse();
         assertThat(access.permitsDebugDetail(get("127.0.0.1", "evil.example"))).isFalse();
+    }
+
+    static Stream<Named<MockHttpServletRequest>> crossSiteRequests() {
+        return Stream.of(
+                named("a fetch from another site", fetched("GET", "cross-site", "cors", "empty")),
+                named("a form another site posts", fetched("POST", "cross-site", "navigate", "document")),
+                named("a frame on another site", fetched("GET", "cross-site", "navigate", "iframe")),
+                named("a fetch that claims a document", fetched("GET", "cross-site", "no-cors", "document")),
+                named("a site this rule does not know", fetched("GET", "cross-origin", "navigate", "document")),
+                named("another site's Origin", local("Origin", "http://evil.example")),
+                named("an opaque Origin", local("Origin", "null")));
     }
 
     private static MockHttpServletRequest get(@Nullable String remoteAddress, @Nullable String host) {

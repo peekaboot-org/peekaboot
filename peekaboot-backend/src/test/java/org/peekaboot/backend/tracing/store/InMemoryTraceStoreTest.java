@@ -372,18 +372,6 @@ class InMemoryTraceStoreTest {
         assertThat(counting.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS);
     }
 
-    private static InMemoryTraceStore countingSlowRemovals(AtomicInteger slowRemovals) {
-        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
-            @Override
-            void unfile(TraceBucket bucket, String traceId) {
-                if (bucket == TraceBucket.SLOW) {
-                    slowRemovals.incrementAndGet();
-                }
-                super.unfile(bucket, traceId);
-            }
-        };
-    }
-
     /** A restore lists a trace in Slow without classifying it, and the trace must still be able to leave. */
     @Test
     void aTraceARestoreListedSlowLeavesSlowWhenItsNextSpanShowsItIsNot() {
@@ -844,25 +832,6 @@ class InMemoryTraceStoreTest {
         assertThat(store.bucketsOf("t1")).containsExactly(TraceBucket.ERRORS, TraceBucket.SLOW);
     }
 
-    /** A store whose writer, about to file a trace in {@code bucket}, reports it and waits for {@code release}. */
-    private static InMemoryTraceStore pausingBeforeItFilesIn(
-            TraceBucket bucket, CountDownLatch reached, CountDownLatch release) {
-        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
-            @Override
-            void file(TraceBucket filedIn, TraceDataBundle bundle) {
-                if (filedIn == bucket) {
-                    reached.countDown();
-                    Latches.awaitQuietly(release);
-                }
-                super.file(filedIn, bundle);
-            }
-        };
-    }
-
-    private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {
-        return TraceStores.with(p -> p.setSlowTraceThresholdMs(slowTraceThresholdMs));
-    }
-
     /** The run reports ready after its first traces exist; they learn its start all the same. */
     @Test
     void aTraceNamesTheStartItsRunReportsLater() {
@@ -1003,6 +972,37 @@ class InMemoryTraceStoreTest {
         assertThat(captured.logs()).isEmpty();
         assertThat(captured.droppedLogs()).isEqualTo(1);
         assertThat(store.bucketsOf("t1")).contains(TraceBucket.ERRORS);
+    }
+
+    private static InMemoryTraceStore countingSlowRemovals(AtomicInteger slowRemovals) {
+        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            void unfile(TraceBucket bucket, String traceId) {
+                if (bucket == TraceBucket.SLOW) {
+                    slowRemovals.incrementAndGet();
+                }
+                super.unfile(bucket, traceId);
+            }
+        };
+    }
+
+    /** A store whose writer, about to file a trace in {@code bucket}, reports it and waits for {@code release}. */
+    private static InMemoryTraceStore pausingBeforeItFilesIn(
+            TraceBucket bucket, CountDownLatch reached, CountDownLatch release) {
+        return new InMemoryTraceStore(new PeekabootTracingProperties()) {
+            @Override
+            void file(TraceBucket filedIn, TraceDataBundle bundle) {
+                if (filedIn == bucket) {
+                    reached.countDown();
+                    Latches.awaitQuietly(release);
+                }
+                super.file(filedIn, bundle);
+            }
+        };
+    }
+
+    private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {
+        return TraceStores.with(p -> p.setSlowTraceThresholdMs(slowTraceThresholdMs));
     }
 
     /** The ids {@code store} lists in {@code bucket}, in listing order. */

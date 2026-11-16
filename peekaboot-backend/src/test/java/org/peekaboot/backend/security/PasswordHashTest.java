@@ -8,6 +8,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class PasswordHashTest {
 
+    /**
+     * Fixed output of {@code PasswordHash.of("pinned").format()}; a hash written by an older run
+     * has to stay verifiable, so this string is the on-disk format and must never be regenerated.
+     */
+    private static final String PINNED_ENCODING =
+            "pbkdf2-sha256$210000$BLJpzweGy0jZ4WaX/4QmIQ==$28GVXiO3pjmx60VND7xjChOJMvmv7UZbMfjYO29tu30=";
+
     @Test
     void matches_acceptsThePasswordItWasBuiltFrom() {
         var hash = PasswordHash.of("correct-horse");
@@ -72,13 +79,6 @@ class PasswordHashTest {
         assertThat(text).contains("pbkdf2-sha256").contains("210000");
         assertThat(text).doesNotContain(salt).doesNotContain(digest);
     }
-
-    /**
-     * Fixed output of {@code PasswordHash.of("pinned").format()}; a hash written by an older run
-     * has to stay verifiable, so this string is the on-disk format and must never be regenerated.
-     */
-    private static final String PINNED_ENCODING =
-            "pbkdf2-sha256$210000$BLJpzweGy0jZ4WaX/4QmIQ==$28GVXiO3pjmx60VND7xjChOJMvmv7UZbMfjYO29tu30=";
 
     @Test
     void parse_verifiesAPinnedEncoding() {

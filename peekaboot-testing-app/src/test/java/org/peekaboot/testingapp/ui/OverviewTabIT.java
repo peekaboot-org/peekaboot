@@ -119,16 +119,6 @@ class OverviewTabIT extends PlaywrightTestBase {
         assertThat(components).extracting(component -> component.get(0)).contains("UP");
     }
 
-    @SuppressWarnings("unchecked")
-    private List<String> dotStyle(String selector) {
-        return (List<String>) page.locator(selector).first().evaluate("""
-                dot => {
-                    const style = getComputedStyle(dot);
-                    return [style.backgroundColor, style.width, style.animationName];
-                }
-                """);
-    }
-
     /**
      * A live JVM always holds some heap and never all of it, so a fill outside (0, 100] means
      * the real percentage never reached the primitive - a bare meter() with no argument
@@ -340,5 +330,15 @@ class OverviewTabIT extends PlaywrightTestBase {
 
         page.waitForRequest("**/api/insights/config**", () -> page.click(Dashboard.tabButton("overview")));
         page.waitForSelector("#insights-tiles .pk-insight-tile");
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> dotStyle(String selector) {
+        return (List<String>) page.locator(selector).first().evaluate("""
+                dot => {
+                    const style = getComputedStyle(dot);
+                    return [style.backgroundColor, style.width, style.animationName];
+                }
+                """);
     }
 }
