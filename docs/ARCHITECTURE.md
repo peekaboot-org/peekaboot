@@ -611,7 +611,9 @@ Server-Timing: trace;desc="00-<traceId>-<spanId>-<traceFlags>"
 Setting it before the chain runs ensures the header is present even when downstream
 handling commits the response early. The toolbar's own idle-mode script, used on pages like
 Swagger UI that have no request of their own to report, reads this header off `fetch()`
-responses to pick up a trace id for a call it didn't otherwise see. It skips Swagger UI's own
+responses to pick up a trace id for a call it didn't otherwise see. The page gets back the promise
+its own `fetch` returned; the bar reads the response on a separate branch and logs what it cannot
+read. It skips Swagger UI's own
 calls, under the Swagger UI and `springdoc.api-docs.path` prefixes the `IdleMode` blob names
 (`ignoredPathPrefixes`); the excluded prefixes need no entry, since they never carry the header.
 Nothing stops any other tool that can read response headers from doing the same.
@@ -1013,7 +1015,7 @@ the other. `ErrorPageAutoConfiguration` imports `MaskingConfiguration` as well, 
 page masks with. `peekaboot.stack-trace.fold=false` empties the exclusion list rather than travelling
 as a flag, so `TraceLogMapper` and `PeekabootErrorView` ask the same question with nothing
 to match: `hiddenFrames` comes back empty, and the page renders no reveal control because
-nothing was hidden. The browser classifies nothing on either surface; `log-entry.js`
+nothing was hidden. The browser classifies nothing on either surface; `shared/log-entry.js`
 renders the ranges it is given, the same way `StackTraceHtml` does server-side.
 
 The error page's reveal script ships twice, inline in a `<script>` tag and linked via
@@ -1040,7 +1042,7 @@ inventory of every module under `META-INF/peekaboot/ui/`.
   `assets/tokens.css`/`base.css`/`components.css` directly, the toolbar's and overlay's shadow
   roots via `attachSharedStyles()`. A doubled selector (`:root, :host { ... }`) lets the
   identical stylesheet apply in both contexts, so no surface carries its own palette,
-  `escapeHtml`, duration thresholds or collapsible-group CSS
+  element builder, duration thresholds or collapsible-group CSS
 - **Shadow DOM**: toolbar and trace-detail overlay isolated from host app styles
 - **Bundled webfont**: Geist and Geist Mono ship inside the frontend jar and are served from
   it, never a CDN. The dashboard picks them up from an `@font-face` rule in `tokens.css`; the
@@ -2304,8 +2306,10 @@ threshold with the Slow bucket.
 
 ### The insights SSE stream
 
-`InsightsSsePublisher` fans the collector's ticks and roll-ups out to every open dashboard over
-`/peekaboot/api/insights/stream`. A tick carries series values only; tiles are read from
+`InsightsSsePublisher` fans the collector's ticks and roll-ups out over
+`/peekaboot/api/insights/stream` to every dashboard that has its Insights tab on screen. The tab
+closes its stream when the reader leaves it and opens a new one on return, re-reading every level
+it had loaded. A tick carries series values only; tiles are read from
 `/peekaboot/api/insights/config`, not streamed. One dispatch thread renders each event once
 and offers it to every `Subscriber`'s bounded send lane, whose own sender thread performs the
 blocking write, so one wedged peer drops its own events instead of stalling the stream. A peer

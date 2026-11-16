@@ -3,8 +3,8 @@
 Maven is the system of record. One reactor. Static-analysis tools, dependency and output
 checks and a coverage floor run as gates across the build lifecycle (see
 [Quality gates](#quality-gates)). No codegen beyond annotation processing. One module,
-`peekaboot-frontend`, downloads a pinned Node to lint its JS, CSS and HTML; nothing else
-in the build needs it and nothing uses the machine's own Node.
+`peekaboot-frontend`, downloads a pinned Node to lint its JS, CSS and HTML and to run its unit
+tests; nothing else in the build needs it and nothing uses the machine's own Node.
 
 A parallel Gradle build covers the same modules, tests and gates (see
 [the Gradle build](#the-parallel-gradle-build) below). CI runs Maven, and Gradle only on `dev`
@@ -103,7 +103,7 @@ fraction of it.
 | `peekaboot-parent` | pom | yes | Shared build config, dependency management (the `spring-boot-dependencies` BOM) |
 | `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | Shared test helpers, consumed at test scope by the other modules' suites. See its [README](peekaboot-test-support/README.md) |
 | `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class and therefore the configuration metadata. Its web/servlet/logback/Hikari/OTel deps are `<optional>`: the host app supplies them, and the auto-configuration conditions guard their use |
-| `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only, outside every default static location, so a consumer with Peekaboot off serves none of it. Plain ES modules and CSS copied as-is: no build step, no test sources. Empty `-javadoc` jar (below) |
+| `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only, outside every default static location, so a consumer with Peekaboot off serves none of it. Plain ES modules and CSS copied as-is: no build step. Its unit tests are Node tests under `src/test/js`. Empty `-javadoc` jar (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration classes, `AutoConfiguration.imports` and `spring.factories` |
 | `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator, no sources. Its jar holds the licence and the notice and nothing else. Empty `-sources` and `-javadoc` jars (below) |
 | `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
@@ -265,7 +265,7 @@ worth having on both sides.
 | Bug patterns, bytecode | `verify` | `spotbugs-maven-plugin` | `config/spotbugs-exclude.xml` | main classes |
 | Complexity metrics | `verify` | `maven-checkstyle-plugin` (checkstyle) | `config/checkstyle.xml` | main only |
 | Code smells | `verify` | `maven-pmd-plugin` (PMD) | `config/pmd-ruleset.xml` | main Java |
-| Frontend lint | `verify` | `frontend-maven-plugin` (ESLint, stylelint, html-validate) | `eslint.config.mjs`, `stylelint.config.mjs`, `.htmlvalidate.json` in `peekaboot-frontend/` | that module's JS, CSS and HTML, `vendor/` excluded |
+| Frontend gate | `verify` | `frontend-maven-plugin` (ESLint, stylelint, html-validate, `node --test`) | `eslint.config.mjs`, `stylelint.config.mjs`, `.htmlvalidate.json` in `peekaboot-frontend/` | that module's JS, CSS and HTML, `vendor/` excluded, and its Node tests under `src/test/js` |
 | Coverage floor | `verify` | `jacoco-maven-plugin` | inline in `peekaboot-coverage/pom.xml` | all measured classes, reactor-wide |
 | Dependency upper bounds | `validate` | `maven-enforcer-plugin` | inline in the parent POM | every module's resolved closure |
 | Optional-dependency leaks | `validate` | `maven-enforcer-plugin` | inline in `peekaboot-spring-boot-starter/pom.xml` | the starter's transitive closure |
@@ -279,10 +279,11 @@ POM and build script, because the root `<plugins>` block reaches modules that ha
 `package.json` for `npm ci` to read, and its tool versions live in that module's
 `package.json` and lockfile, which both build systems install from.
 
-`-Dpeekaboot.frontend.lint.skip=true` turns the frontend gate off. It is the switch CI's
-`install-reactor-snapshots` and `maven-deploy-snapshot` steps use; `-DskipTests` and
-`-Dmaven.test.skip` do not reach it, because frontend-maven-plugin honours those only in the
-`test` and `integration-test` phases.
+`-Dpeekaboot.frontend.lint.skip=true` turns the frontend gate off. That includes the Node tests,
+which run in the same plugin. It is the switch CI's `install-reactor-snapshots` and
+`maven-deploy-snapshot` steps use; `-DskipTests` and `-Dmaven.test.skip` do not reach it, because
+frontend-maven-plugin honours those only in the `test` and `integration-test` phases. So
+`-DskipTests` does not skip the Node tests either: they are bound to `verify`.
 
 Each config file explains its own exclusions; the short version:
 
@@ -305,11 +306,16 @@ Each config file explains its own exclusions; the short version:
   collaborators, 26 are `@ConfigurationProperties` accessors and 3 are framework contracts.
   No store or service leaks a live collection. `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped
   to `ContainerRuntime$Signals`, the only class that raises it.
-- **The frontend gate** runs ESLint, stylelint and html-validate from
-  `peekaboot-frontend/package.json`. It went in after a missing `import` passed every other
-  gate and surfaced as 26 Playwright timeouts. PMD's `pmd-javascript` module was never an
-  option: its Rhino parser throws `NullPointerException` on the destructuring the frontend
-  uses throughout. Three things about it are load-bearing rather than taste. ESLint runs
+- **The frontend gate** runs ESLint, stylelint and html-validate, then the Node tests under
+  `src/test/js` (`npm run test:js`, Gradle `testJs`), from `peekaboot-frontend/package.json`.
+  `package.json` carries `"type": "module"` so Node loads the served `.js` sources as ES modules
+  without a warning per file. ESLint also lints the tests (`src/test/js/**/*.mjs`), and it
+  refuses an assignment to `innerHTML` or `outerHTML` and a call of `insertAdjacentHTML`
+  (`no-restricted-syntax` in `eslint.config.mjs`): the UI builds every element with `el()` from
+  `shared/dom.js` and parses no markup string. The gate went in after a missing `import` passed
+  every other gate and surfaced as 26 Playwright timeouts. PMD's `pmd-javascript` module was
+  never an option: its Rhino parser throws `NullPointerException` on the destructuring the
+  frontend uses throughout. Three things about it are load-bearing rather than taste. ESLint runs
   the frontend's modules under `sourceType: "module"`, without which an unimported
   identifier reads as a possible implicit global and `no-undef` says nothing; the three
   files a `<script>` tag loads without `type="module"` are listed and linted as scripts.
@@ -761,7 +767,8 @@ there, which is where signing and the upload to Central happen.
 The workflow passes it `-Darguments="-DskipTests -DskipITs -Djacoco.skip=true"`. Failsafe
 ignores `-DskipTests`, so `-DskipITs` is what keeps the Playwright suite out. That tree passed
 `verify` in `preparationGoals`, so a second run would only repeat the Playwright suite. The
-static-analysis gates, both dependency checks and the configuration-metadata check still run.
+static-analysis gates, the frontend's Node tests, both dependency checks and the
+configuration-metadata check still run.
 
 The changelog reaches the tagged commit because that commit is a plain `git commit` over
 the whole index: maven-scm stages the POMs and then commits everything staged. So the
@@ -947,9 +954,12 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
 ## Things that will bite you
 
 - Local builds reformat your sources mid-build. Expect a dirty tree; that is by design.
-- `-DskipTests` skips only the unit tests. Failsafe ignores it, so the testing app's ITs
-  still run, and the coverage check then fails on their partial data. Build without tests
-  with `-DskipTests -DskipITs -Djacoco.skip=true`.
+- `-DskipTests` skips only the Java unit tests. The frontend's Node tests run in `verify` and
+  ignore it. Failsafe ignores it too, so the testing app's ITs still run, and the coverage check
+  then fails on their partial data. Build without tests with
+  `-DskipTests -DskipITs -Djacoco.skip=true`.
+- After a frontend file was moved or deleted, build with `clean`: the jar is packed from
+  `target/classes`, which keeps the old file.
 - `git-commit-id-maven-plugin` is declared only in `peekaboot-testing-app`, the one runnable
   application, and nowhere in the parent. `git.properties` lands at the classpath root and
   Spring resolves `classpath:git.properties` to a single resource, so a library shipping one
