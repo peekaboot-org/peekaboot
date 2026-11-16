@@ -48,7 +48,8 @@ run and how to override the detection are in
 - A dashboard for health, environment, config, Flyway, Liquibase (from 1.1.0), loggers,
   scheduled tasks and metrics, read in-process. Peekaboot adds nothing under `/actuator/**`;
   the starter brings Spring Boot Actuator, whose default serves `/actuator/health`.
-- In-memory request tracing via Micrometer and OpenTelemetry, with no collector to run.
+- Request tracing via Micrometer and OpenTelemetry, with no collector to run. On a local run
+  the traces also survive a restart, in `~/.peekaboot`.
 - Every SQL statement a request runs is timed, listed and highlighted, and shown formatted
   with its bind parameters on request. From 1.1.0 each one is labelled with the DataSource it
   ran on. The starter brings the JDBC instrumentation, so there is none to wire up yourself.
