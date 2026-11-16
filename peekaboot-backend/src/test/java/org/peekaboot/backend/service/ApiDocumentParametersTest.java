@@ -10,8 +10,8 @@ import java.util.stream.Stream;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.api.ApiDocument;
+import org.peekaboot.backend.domain.api.TraceView;
 import org.peekaboot.backend.domain.trace.TraceOutcome;
-import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import tools.jackson.databind.JsonNode;
 

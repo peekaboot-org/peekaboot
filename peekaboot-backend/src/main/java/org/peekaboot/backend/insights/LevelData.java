@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.peekaboot.backend.config.PeekabootJson;
-import org.peekaboot.backend.domain.trace.TraceView;
+import org.peekaboot.backend.domain.api.TraceView;
 
 /**
  * Point-in-time copy of one level's ring contents: {@link TickLevelData} for level 0's samples,

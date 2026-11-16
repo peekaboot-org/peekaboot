@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.domain.api.IssueSeverity;
 
 class RepeatedQueryIssueJsonTest {
 

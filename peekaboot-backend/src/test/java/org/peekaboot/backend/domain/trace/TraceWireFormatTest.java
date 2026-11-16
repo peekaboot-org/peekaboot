@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootJson;
+import org.peekaboot.backend.domain.api.IssueSeverity;
 
 /** The enums and the typed tag map replaced strings the frontend already reads; the JSON must not have moved. */
 class TraceWireFormatTest {

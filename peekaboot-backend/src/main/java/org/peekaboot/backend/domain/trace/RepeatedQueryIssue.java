@@ -1,6 +1,7 @@
 package org.peekaboot.backend.domain.trace;
 
 import java.util.List;
+import org.peekaboot.backend.domain.api.IssueSeverity;
 
 /**
  * One statement a span ran at least the repeated-query threshold's number of times.

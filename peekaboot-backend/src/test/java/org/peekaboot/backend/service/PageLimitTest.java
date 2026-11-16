@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.peekaboot.backend.domain.trace.TraceView;
+import org.peekaboot.backend.domain.api.TraceView;
 import org.peekaboot.backend.problem.ApiProblemException;
 
 class PageLimitTest {

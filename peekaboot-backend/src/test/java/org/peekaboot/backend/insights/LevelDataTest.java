@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.TraceView;
+import org.peekaboot.backend.domain.api.TraceView;
 
 class LevelDataTest {
 

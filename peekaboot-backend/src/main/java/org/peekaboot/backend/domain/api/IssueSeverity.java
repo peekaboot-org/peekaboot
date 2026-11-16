@@ -1,8 +1,8 @@
-package org.peekaboot.backend.domain.trace;
+package org.peekaboot.backend.domain.api;
 
 import com.fasterxml.jackson.annotation.JsonValue;
 
-/** How serious a {@link TraceIssue} is; serialised as the lowercase word the frontend reads. */
+/** How serious a finding is, on a trace issue or an insights problem; serialised as the lowercase word the frontend reads. */
 public enum IssueSeverity {
     WARNING("warning"),
     ERROR("error");

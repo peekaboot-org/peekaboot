@@ -3,7 +3,7 @@ package org.peekaboot.backend.analysis;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
-import org.peekaboot.backend.domain.trace.IssueSeverity;
+import org.peekaboot.backend.domain.api.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.IssueUnit;
 import org.peekaboot.backend.domain.trace.SpanIssue;

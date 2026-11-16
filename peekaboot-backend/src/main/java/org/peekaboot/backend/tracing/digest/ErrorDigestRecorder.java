@@ -3,7 +3,7 @@ package org.peekaboot.backend.tracing.digest;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
-import org.peekaboot.backend.domain.trace.TraceView;
+import org.peekaboot.backend.domain.api.TraceView;
 import org.peekaboot.backend.mapper.trace.TraceResources;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;

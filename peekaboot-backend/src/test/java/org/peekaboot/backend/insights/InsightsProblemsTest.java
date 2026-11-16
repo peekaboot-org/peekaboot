@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.domain.trace.IssueSeverity;
+import org.peekaboot.backend.domain.api.IssueSeverity;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.Unit;
 

@@ -51,7 +51,7 @@ public class TraceInsightsService {
      * One page of a bucket's rows that match every filter the request names, newest first, at most
      * {@code limit}. Every parameter is read and checked before the store is consulted, so a bad one is
      * refused even while tracing is off. What each filter matches is on {@link TraceFilter}. {@code view}
-     * names a {@link org.peekaboot.backend.domain.trace.TraceView}, the summary alone where absent;
+     * names a {@link org.peekaboot.backend.domain.api.TraceView}, the summary alone where absent;
      * {@code limit} is 1 to 10000, at most 100 where the view is full, and 100 where absent.
      *
      * <p>{@code next} names the page's last row while older matching rows exist, and is null on the

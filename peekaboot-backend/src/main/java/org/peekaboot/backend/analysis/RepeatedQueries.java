@@ -4,7 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.peekaboot.backend.domain.trace.IssueSeverity;
+import org.peekaboot.backend.domain.api.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.IssueUnit;
 import org.peekaboot.backend.domain.trace.RepeatedQueryIssue;

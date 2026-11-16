@@ -1,5 +1,7 @@
 package org.peekaboot.backend.domain.trace;
 
+import org.peekaboot.backend.domain.api.IssueSeverity;
+
 /**
  * One threshold a span reached.
  *

@@ -1,7 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import java.util.List;
-import org.peekaboot.backend.domain.trace.IssueSeverity;
+import org.peekaboot.backend.domain.api.IssueSeverity;
 import org.peekaboot.backend.insights.config.Unit;
 
 /**

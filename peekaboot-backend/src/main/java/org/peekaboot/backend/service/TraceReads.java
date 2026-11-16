@@ -1,8 +1,8 @@
 package org.peekaboot.backend.service;
 
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.domain.api.TraceView;
 import org.peekaboot.backend.domain.trace.TraceResource;
-import org.peekaboot.backend.domain.trace.TraceView;
 import org.peekaboot.backend.mapper.trace.TraceResources;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
