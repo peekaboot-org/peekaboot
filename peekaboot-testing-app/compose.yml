@@ -30,7 +30,7 @@ services:
     ports:
       - '6379'
   httpbin:
-    image: 'ghcr.io/mccutchen/go-httpbin:2.25.0'
+    image: 'ghcr.io/mccutchen/go-httpbin:2.26.0'
     ports:
       - '127.0.0.1:18093:8080'
     labels:
