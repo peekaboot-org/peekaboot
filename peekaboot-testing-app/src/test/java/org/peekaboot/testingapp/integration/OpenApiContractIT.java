@@ -7,27 +7,16 @@ import com.networknt.schema.InputFormat;
 import com.networknt.schema.SchemaLocation;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.dialect.Dialects;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
@@ -338,11 +327,11 @@ class OpenApiContractIT extends TestingAppITBase {
 
     /** The test profile closes a level-1 interval every 1.5 seconds, so both events arrive within the wait. */
     @Test
-    void theEventStreamSendsWhatTheDocumentDescribes() throws Exception {
-        Map<String, String> events = firstEventData(Set.of("tick", "rollup"), Duration.ofSeconds(10));
-
-        contract.assertSchemaMatches("InsightsTick", events.get("tick"));
-        contract.assertSchemaMatches("InsightsRollup", events.get("rollup"));
+    void theEventStreamSendsWhatTheDocumentDescribes() {
+        try (InsightsTicks stream = InsightsTicks.on(port)) {
+            contract.assertSchemaMatches("InsightsTick", stream.nextData("tick"));
+            contract.assertSchemaMatches("InsightsRollup", stream.nextData("rollup"));
+        }
     }
 
     /** The application documents its own API with springdoc, which reads Peekaboot's controllers too. */
@@ -403,44 +392,6 @@ class OpenApiContractIT extends TestingAppITBase {
         });
         if (node.isArray()) {
             node.valueStream().forEach(element -> collectRefs(element, refs));
-        }
-    }
-
-    /**
-     * The data of the first event of each name, read off a real stream. The JDK client has no read
-     * timeout, so the read runs off the test thread and the wait is bounded here; closing the body
-     * ends the read.
-     */
-    private Map<String, String> firstEventData(Set<String> names, Duration bound) throws Exception {
-        try (HttpClient client = HttpClient.newHttpClient()) {
-            HttpResponse<InputStream> response = client.send(
-                    HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/peekaboot/api/insights/stream"))
-                            .header("Accept", "text/event-stream")
-                            .build(),
-                    HttpResponse.BodyHandlers.ofInputStream());
-            assertThat(response.statusCode()).isEqualTo(200);
-            try (InputStream body = response.body()) {
-                return CompletableFuture.supplyAsync(() -> readEvents(body, names))
-                        .get(bound.toMillis(), TimeUnit.MILLISECONDS);
-            }
-        }
-    }
-
-    private static Map<String, String> readEvents(InputStream body, Set<String> names) {
-        Map<String, String> data = new HashMap<>();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
-            String event = null;
-            String line;
-            while (!data.keySet().containsAll(names) && (line = reader.readLine()) != null) {
-                if (line.startsWith("event:")) {
-                    event = line.substring("event:".length()).strip();
-                } else if (line.startsWith("data:") && event != null && names.contains(event)) {
-                    data.putIfAbsent(event, line.substring("data:".length()));
-                }
-            }
-            return data;
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
     }
 }

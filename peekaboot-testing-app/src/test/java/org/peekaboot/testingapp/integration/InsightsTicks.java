@@ -12,7 +12,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -20,20 +22,24 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The insights stream's tick events, read off the wire as they arrive. The collector sends a tick
- * once its sample is in the rings, so a test that has seen one reads the data endpoint knowing the
- * sample is served. A subscriber is sent only the ticks taken after it connected.
+ * The insights stream's events, read off the wire as they arrive, each name on a queue of its own.
+ * {@link #next()} and {@link #nextMatching} read its ticks: the collector sends a tick once its
+ * sample is in the rings, so a test that has seen one reads the data endpoint knowing the sample is
+ * served. A subscriber is sent only the events that follow its connect.
  */
 final class InsightsTicks implements AutoCloseable {
 
+    private static final String TICK = "tick";
+    private static final String BOUND = PeekabootApi.ASYNC_TIMEOUT.toSeconds() + "s";
+
     private final HttpClient client;
     private final InputStream body;
-    private final BlockingQueue<JsonNode> ticks = new LinkedBlockingQueue<>();
+    private final Map<String, BlockingQueue<String>> dataByEvent = new ConcurrentHashMap<>();
 
     private InsightsTicks(HttpClient client, InputStream body) {
         this.client = client;
         this.body = body;
-        // the JDK client has no read timeout, so the read runs off the test thread and next() bounds the wait
+        // the JDK client has no read timeout, so the read runs off the test thread and each wait is bounded here
         Thread.ofVirtual().name("insights-ticks").start(this::read);
     }
 
@@ -70,22 +76,31 @@ final class InsightsTicks implements AutoCloseable {
 
     /** The next tick {@code tick} accepts; the ones before it are skipped. One bound covers the whole wait. */
     JsonNode nextMatching(Predicate<JsonNode> tick) {
-        String bound = PeekabootApi.ASYNC_TIMEOUT.toSeconds() + "s";
-        long deadline = System.nanoTime() + PeekabootApi.ASYNC_TIMEOUT.toNanos();
+        long deadline = deadline();
         JsonNode skipped = null;
         while (true) {
-            JsonNode next = takeUntil(deadline);
-            if (next == null) {
+            String data = takeUntil(TICK, deadline);
+            if (data == null) {
                 throw new AssertionError(
                         skipped == null
-                                ? "no insights tick within " + bound
-                                : "no insights tick matched within " + bound + "; the last one: " + skipped);
+                                ? noneWithinBound(TICK)
+                                : "no insights tick matched within " + BOUND + "; the last one: " + skipped);
             }
+            JsonNode next = PeekabootApi.readJson(data);
             if (tick.test(next)) {
                 return next;
             }
             skipped = next;
         }
+    }
+
+    /** The data of the next event named {@code event}, as the stream sent it. Events of other names stay queued. */
+    String nextData(String event) {
+        String data = takeUntil(event, deadline());
+        if (data == null) {
+            throw new AssertionError(noneWithinBound(event));
+        }
+        return data;
     }
 
     /** Closes the body, which ends the read, and drops the socket now instead of when the client is collected. */
@@ -100,13 +115,25 @@ final class InsightsTicks implements AutoCloseable {
         }
     }
 
-    private @Nullable JsonNode takeUntil(long deadline) {
+    private static long deadline() {
+        return System.nanoTime() + PeekabootApi.ASYNC_TIMEOUT.toNanos();
+    }
+
+    private static String noneWithinBound(String event) {
+        return "no insights " + event + " within " + BOUND;
+    }
+
+    private @Nullable String takeUntil(String event, long deadline) {
         try {
-            return ticks.poll(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
+            return dataOf(event).poll(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while waiting for an insights tick", e);
+            throw new AssertionError("interrupted while waiting for an insights " + event, e);
         }
+    }
+
+    private BlockingQueue<String> dataOf(String event) {
+        return dataByEvent.computeIfAbsent(event, name -> new LinkedBlockingQueue<>());
     }
 
     private void read() {
@@ -116,12 +143,12 @@ final class InsightsTicks implements AutoCloseable {
             while ((line = reader.readLine()) != null) {
                 if (line.startsWith("event:")) {
                     event = line.substring("event:".length()).strip();
-                } else if (line.startsWith("data:") && "tick".equals(event)) {
-                    ticks.add(PeekabootApi.readJson(line.substring("data:".length())));
+                } else if (line.startsWith("data:") && event != null) {
+                    dataOf(event).add(line.substring("data:".length()));
                 }
             }
         } catch (IOException closed) {
-            // close() ends the read by closing the body under it; a stream that broke shows as a missing tick
+            // close() ends the read by closing the body under it; a stream that broke shows as a missing event
         }
     }
 }
