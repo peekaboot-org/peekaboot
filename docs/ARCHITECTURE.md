@@ -2087,84 +2087,33 @@ clicks across to Queries for the one shipped image of `QueryExtractor`'s output.
 
 ### Trace Domain
 
-What the API serves:
+What the API serves is declared on the records under `domain/trace`, `domain/log` and
+`domain/errors` and in `openapi.json`, and `OpenApiContractIT` holds the document to what the
+running application answers (see *API contract*). When a component is null and how a list is
+ordered is on each record's Javadoc.
 
-```
-TraceListResponse                # GET /peekaboot/api/traces
-├── traces: List<TraceResource>
-├── bucketCounts, filteredBucketCounts
-├── next                         # the cursor for the following page; null on the last page
-
-TraceResource                    # GET /peekaboot/api/traces/{traceId}, and one listing row
-├── summary: TraceSummary
-│   ├── traceId, startTime, durationMs, complete, rootActionType, rootOperation
-│   ├── request: {method, route, path, statusCode}   # null for a root that is no HTTP request
-│   ├── outcome, buckets, reasons
-│   ├── cause: {type, message, applicationFrame, spanId}   # null: no failure, an evicted one, or one naming nothing
-│   ├── issues
-│   ├── hotspots: List<{spanId, name, selfMs}>   # at most three, most self time first
-│   ├── counts: {spans, queries {count, totalDurationMs}, logs {count, errorCount, warnCount},
-│   │            droppedSpans, droppedLogs}
-│   └── subtree: SubtreeView     # null for a whole trace
-└── data: TraceDetail            # null on a listing row unless view=full
-    ├── rootSpan: SpanNode, orphans: List<SpanNode>
-    ├── logs: List<TraceLog>
-    ├── queries: List<QueryInfo> # each with its statement
-    └── httpExchange: HttpExchange   # null on a subtree row
-
-LogSearchResponse                # GET /peekaboot/api/logs
-├── logs: List<TraceLog>         # newest first, in the store's sequence; traceId and spanId null on an untraced line
-└── next                         # the cursor for the following page; null on the last page
-
-RouteListResponse                # GET /peekaboot/api/routes
-├── window: {from, to, traceCount}   # the earliest and latest start of the requests counted, and their number
-└── routes: List<RouteStats>     # busiest first; see Route Statistics
-
-ErrorDigestResponse              # GET /peekaboot/api/errors
-└── errors: List<ErrorDigestEntry>   # seen latest first, at most 500; see Error digest in GLOSSARY.md
-    └── type, route, applicationFrame, count, firstSeen, lastSeen, lastMessage, lastTraceId,
-        traceAvailable, runs     # traceAvailable: the store still holds lastTraceId
-```
-
-What the store holds:
-
-```
-TraceData
-├── traceId: String
-├── startTime, duration      # see Async Subtree Timing
-├── rootSpan: SpanData       # chosen once by the bundle; null while in flight
-├── complete: boolean        # sticky once a parentless span was stored
-├── failed: boolean          # sticky; a span failed or answered 5xx, or an ERROR log arrived
-├── spans: List<SpanData>    # creation order
-└── droppedSpans: int        # real spans the cap evicted
-
-SpanData
-├── traceId, spanId, parentId
-├── remoteParent: boolean             # parent propagated from another process
-├── name, kind
-├── startTime, endTime                # duration() derives from these
-├── tags: Map<String, String>
-├── events: List<Event>
-├── exception: CapturedExceptionInfo  # null unless the span failed
-└── creationOrder: long
-```
+What the store holds is `TraceData` and its `SpanData`, read out in one go by
+`TraceDataBundle.snapshot()`. Their Javadoc says which flags are sticky and when the root is
+null; *Trace Assembly and Enrichment* has the rules behind them.
 
 ### The insights data
 
 `GET /peekaboot/api/insights/data` is `InsightsDataReader`, a bean of its own beside
-`InsightsService`, which reads the rings through the collector. `InsightsDataQuery` reads the
-parameters: `level` (required), `view` (`TraceView`, the summary by default), `series` and
-`since`. `SeriesRings.levelData` copies only the samples taken at or after `since`, counted under
-the rings lock; the newest keeps its date, so every timestamp still derives from `endEpochMs`,
-`intervalMs` and `count`. Each series gets a `SeriesSummary` over that window: `AggregateStats.of`
-over level 0's samples, and `AggregateStats.ofAggregates` over the windows above it. There the
-median and the p95 are nearest rank over the windows' own median and p95, each window counted
-once per sample, while the extremes and the average stay exact. The full view adds the samples
-and a `timestamps` array; the Insights tab asks for it, since it charts every sample.
-`InsightsProblems` checks the window against the eight `ProblemRule`s over every series, whatever
-`series` narrows, and both views list what it found. A rule reads the bundled panels' series ids
-and is skipped where one of them is absent or holds no sample; `SLOW_HTTP` shares the slow-trace
-threshold with the Slow bucket.
+`InsightsService`, which reads the rings through the collector. `SeriesRings.levelData` copies
+only the samples taken at or after the request's `since`, counted under the rings lock; the
+newest keeps its date, so every timestamp still derives from `endEpochMs`, `intervalMs` and
+`count`.
+
+Each series gets a `SeriesSummary` over that window: `AggregateStats.of` over level 0's samples,
+and `AggregateStats.ofAggregates` over the windows above it. There the median and the p95 are
+nearest rank over the windows' own median and p95, each window counted once per sample, while
+the extremes and the average stay exact. The full view adds the samples and a `timestamps`
+array; the Insights tab asks for it, since it charts every sample.
+
+`InsightsProblems` checks the window against the eight `ProblemRule`s over every series,
+whatever `series` narrows, and both views list what it found. A rule reads the bundled panels'
+series ids and is skipped where one of them is absent or holds no sample; `SLOW_HTTP` shares the
+slow-trace threshold with the Slow bucket.
 
 ### The insights SSE stream
 
@@ -2196,56 +2145,28 @@ interrupt.
 
 ### Insights Domain
 
-```
-ActuatorInsightsResponse
-├── application: ApplicationInfo
-├── runtime: RuntimeInfo (os, memory, storage, process, machine)
-├── dataSources: List<DataSourceInfo>
-├── health: HealthInfo
-├── environment: EnvironmentInfo
-├── loggers: LoggersInfo
-├── flyway: FlywayInfo
-├── liquibase: LiquibaseInfo
-├── config: ConfigInfo
-├── scheduledTasks: ScheduledTasksInfo
-└── server: ServerInfo
-```
+`ActuatorInsightsResponse` carries one record per dashboard section, declared under `domain/`
+and in `openapi.json`. What the records do not say:
 
 `LiquibaseInfo` flattens every `SpringLiquibase` bean of every context into one list sorted by
 `orderExecuted`; Liquibase records no execution time, so unlike `MigrationInfo` it carries none.
 
-`RuntimeInfo.machine` (`MachineInfo`, computed once and cached) describes the deployment
-environment. It carries the logical processor count, total physical memory and the JVM's max
-heap, plus the CPU model and physical-core/SMT topology (`CpuTopology`, both only where cheaply
-readable, from `/proc/cpuinfo` on Linux, with no forking). It carries the machine's non-local
-IP addresses with their reverse-resolved hostnames (`NetworkAddress`, up interfaces only,
-loopback and link-local skipped). Those lookups run in parallel on virtual threads against a
-shared ~1s budget; one that misses the budget, or only echoes the literal address, leaves the
-hostname `null`. And it names the `ContainerRuntime` the process runs under: docker
-(`/.dockerenv`), podman (`/run/.containerenv`), kubernetes (`KUBERNETES_SERVICE_HOST`), a
-generic container (a `/proc/1/cgroup` marker, a `container` environment variable, or a runtime's
-bind mount of `/etc/hostname`, `/etc/hosts` or `/etc/resolv.conf` in `/proc/1/mountinfo`), or
-none. Every fact is best-effort: whatever the host doesn't let the JVM read stays `null`/empty and
-the dashboard renders no row for it. The JDK's processor count and total memory are
-container-aware, reporting a limited container's share rather than the host's. `ContainerRuntime.current()` is the one detection in the codebase, and
+`RuntimeInfo.machine` (`MachineInfo`) and `RuntimeInfo.process` (`ProcessInfo`) are each computed
+once and cached, since their values are static for the JVM's lifetime, and neither forks a
+process: the CPU model and topology come from `/proc/cpuinfo`, the real uid and gid from
+`/proc/self/status`. That file is read rather than a directory stat'ed because no file's owner,
+the working directory's included, reliably shares the credentials the process runs under.
+
+Every fact is best-effort: whatever the host doesn't let the JVM read stays `null`/empty and the
+dashboard renders no row for it. The JDK's processor count and total memory are container-aware,
+reporting a limited container's share rather than the host's. The machine's reverse hostname
+lookups run in parallel on virtual threads against a shared ~1s budget; one that misses the
+budget, or only echoes the literal address, leaves the hostname `null`.
+`ContainerRuntime.current()` is the one container detection in the codebase, and
 `LocalDevDetector` consumes the same cached result.
 
-`RuntimeInfo.process` (`ProcessInfo`, computed once through a holder class, since the values
-are static for the JVM's lifetime) is the identity the JVM runs under: `username` from
-`System.getProperty("user.name")`, `pid` from `ProcessHandle.current().pid()`, plus `uid`,
-`gid` and `parentProcesses`. The ids are the **real** uid and gid, taken as the first of the
-four on `/proc/self/status`'s `Uid:` and `Gid:` lines. That is a plain file read with no
-forking, and it yields `null` wherever the file or the line is absent, which is anything but
-Linux. The file is read rather than a directory stat'ed because no file's owner, the working
-directory's included, reliably shares the credentials the process runs under.
-`parentProcesses` walks `ProcessHandle.parent()` as far up as the JVM is allowed to see,
-recording each ancestor's pid and its command reduced to a basename.
-
-`dataSources` comes from `DataSourceMetadataList`, which reads each DataSource with
-`DataSourceMetadata.read`. A read opens a real `Connection` and reads `DatabaseMetaData`:
-`getURL()`, `getUserName()`, `getDatabaseProductName()`, `getDatabaseProductVersion()` and
-`getDriverName()`. The URL is then parsed by `net.osslabz.jdbc.JdbcUrlParser` into hosts, database
-name, database product and connection parameters. `databaseProduct` is therefore what the *URL*
+`dataSources` comes from `DataSourceMetadataList`. A read opens a real `Connection` for its
+`DatabaseMetaData` and parses the URL that reports. `databaseProduct` is therefore what the *URL*
 names, so a MariaDB reached over a `jdbc:mysql:` URL reports MySQL; `databaseProductName` is the
 driver's own answer and can disagree.
 
