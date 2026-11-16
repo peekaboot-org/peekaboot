@@ -421,9 +421,12 @@ class TraceTreeMapperSpanContentTest extends TraceTreeMapperTestBase {
         assertThat(statement.omittedParameterSets()).isZero();
     }
 
-    /** Only a set of issue types leaves this mapping, so it masks no tag and no statement and maps no exception. */
+    /**
+     * Only a set of issue types leaves this mapping, so it masks no tag and maps no exception. A
+     * statement is masked, since a summary compares statements by their masked text.
+     */
     @Test
-    void anIssueMappingCarriesTagsAndStatementsAsStoredAndNoException() {
+    void anIssueMappingCarriesTagsAsStoredStatementsMaskedAndNoException() {
         var root = span("root")
                 .kind(Span.Kind.SERVER)
                 .at(0, 100)
@@ -440,7 +443,7 @@ class TraceTreeMapperSpanContentTest extends TraceTreeMapperTestBase {
         SpanNode mappedQuery = mappedRoot.children().getFirst();
 
         assertThat(mappedRoot.tags()).isSameAs(traceData.rootSpan().tags());
-        assertThat(mappedQuery.statement().text()).isEqualTo("SELECT 1 /* ;token=abc123 */");
+        assertThat(mappedQuery.statement().text()).isEqualTo("SELECT 1 /* ;token=****** */");
         assertThat(mappedQuery.exception()).isNull();
     }
 

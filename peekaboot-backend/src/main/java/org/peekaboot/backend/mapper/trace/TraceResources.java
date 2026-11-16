@@ -44,8 +44,8 @@ public final class TraceResources {
 
     /**
      * The types of the issues the whole trace raises, judged as its summary's are, without mapping
-     * that summary. The spans are read once; no log is, and nothing is masked, since only the types
-     * leave.
+     * that summary. The spans are read once and no log is. Only the types leave, so nothing is masked
+     * but the statements, which a summary compares by their masked text.
      */
     public Set<IssueType> issueTypes(TraceDataBundle bundle) {
         return traceRows.issueTypes(bundle);

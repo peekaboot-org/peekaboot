@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
@@ -13,10 +14,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RouteListResponse;
 import org.peekaboot.backend.domain.trace.RouteStats;
+import org.peekaboot.backend.domain.trace.TraceIssue;
 import org.peekaboot.backend.mapper.trace.SqlFormatter;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.stacktrace.StackTraceRules;
@@ -197,6 +203,34 @@ class TraceRoutesTest {
         assertThat(issues.get(IssueType.VERY_SLOW)).isEqualTo(1);
         assertThat(issues.get(IssueType.SLOW)).isEqualTo(1);
         assertThat(issues.get(IssueType.REPEATED_QUERY)).isZero();
+    }
+
+    /**
+     * A summary compares statements by their masked text, so five that differ only in a value the mask
+     * hides are one repeated statement there. The route counts the request for it too.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"SELECT 1", "SELECT 1 /* ;token=abc# */"})
+    void aRouteCountsARepeatedQueryWhereTheSummaryNamesOne(String statement) {
+        for (int i = 0; i < 5; i++) {
+            store.addSpan(jdbcQuery("query" + i, statement.replace("#", String.valueOf(i)))
+                    .in("t1")
+                    .parent("root-t1")
+                    .at(i, 1)
+                    .build());
+        }
+        add("t1", "GET", "/r", 200, 10);
+
+        Set<IssueType> inTheSummary = service.getTrace("t1").orElseThrow().summary().issues().stream()
+                .map(TraceIssue::type)
+                .collect(Collectors.toSet());
+        Set<IssueType> onTheRoute = routeOf("GET", "/r").issueCounts().entrySet().stream()
+                .filter(counted -> counted.getValue() == 1)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
+        assertThat(inTheSummary).containsExactly(IssueType.REPEATED_QUERY);
+        assertThat(onTheRoute).isEqualTo(inTheSummary);
     }
 
     /** An async task is part of the request that started it. It has no row of its own, and its failure fails the request. */

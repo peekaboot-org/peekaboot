@@ -459,7 +459,7 @@ class TraceResourcesTest {
         assertThat(served).contains("token=******").doesNotContain("abc123");
     }
 
-    /** The routes count issue types off a mapping that masks nothing, and it judges as a summary's does. */
+    /** The routes count issue types off a mapping of their own, and it judges as a summary's does. */
     @Test
     void theIssueTypesAreTheOnesTheSummaryLists() {
         addATraceRaisingEveryVerdict();

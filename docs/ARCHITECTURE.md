@@ -1718,8 +1718,9 @@ builds the tree and nothing else.
    query text masked, statements laid out, row counts paired. A summary row maps with
    `forSummary()`: the exception masked and folded, a statement as its masked text alone, no row
    count, and the tags as stored, since a summary serves none. `/routes` maps with
-   `forIssues()`: the tags as stored, no exception, a statement as its stored text, no row
-   count. Only a set of issue types leaves that mapping. An async row takes
+   `forIssues()`: the tags as stored, no exception, no row count, and a statement as its masked
+   text alone, so the statements that repeat in a summary repeat here. Only a set of issue types
+   leaves that mapping. An async row takes
    `TraceTreeMapper.mapSubtree` instead, which counts its own subtree's spans and queries and
    names no request. Every `SpanNode.issues` list is empty.
    **It attaches no issues and correlates no logs.**
@@ -1835,9 +1836,9 @@ names the newest request at or above the slow-trace threshold, the rule of the `
 `issueCounts` counts the requests carrying each issue type.
 
 Only the issue types need the spans: `TraceResources.issueTypes` maps the trace with
-`forIssues()`, which masks nothing and reads no log, and runs the `IssueDetector`. No bucket is
-read. The percentiles are nearest rank over every request, as `AggregateStats` computes the
-Insights ones.
+`forIssues()`, which masks only the statements and reads no log, and runs the `IssueDetector`.
+No bucket is read. The percentiles are nearest rank over every request, as `AggregateStats`
+computes the Insights ones.
 
 The window covers the complete HTTP requests All holds at the moment of the call. Nothing is kept
 between calls.

@@ -128,10 +128,10 @@ final class SpanContents {
 
     /**
      * An issue is judged on timing, tags and which statements repeat, and only its type leaves the
-     * mapping, so nothing is masked. Statements compare as stored: two that differ only in a value
-     * the mask hides outside a literal repeat in a summary and not here.
+     * mapping. A statement is masked all the same: a summary compares statements by their masked
+     * text, and the same ones have to repeat here.
      */
-    private static final class IssueSpans implements SpanContent {
+    private final class IssueSpans implements SpanContent {
 
         @Override
         public Map<String, String> tags(SpanData span) {
@@ -145,7 +145,7 @@ final class SpanContents {
 
         @Override
         public @Nullable SqlStatement statement(SpanData span) {
-            return SqlStatements.asStored(span);
+            return sqlStatements.textOnly(span);
         }
 
         @Override
