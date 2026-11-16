@@ -1375,21 +1375,9 @@ still belongs at the proxy in front of it.
 
 ### OpenTelemetry Bridge
 
-When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered
-(`OtelTracingAutoConfiguration`; the class condition is on the auto-configuration, not the bean
-method):
-
-```java
-@AutoConfiguration(after = PeekabootTracingAutoConfiguration.class)
-@ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
-// ... the servlet guard, peekaboot.enabled and peekaboot.tracing.enabled
-public class OtelTracingAutoConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    public OtelSpanExporter peekabootOtelSpanExporter(...) { ... }
-}
-```
+When the OpenTelemetry SDK's `SpanExporter` is on the classpath, `OtelTracingAutoConfiguration`
+registers `OtelSpanExporter`. The class condition is on the auto-configuration, not the bean
+method.
 
 `OtelSpanExporter` is `TraceStore`'s only span source, so an application without the
 OpenTelemetry SDK has a store that exists (`features.tracing`, gated only by
@@ -1492,13 +1480,6 @@ the request thread. That part reaches beyond the request: every later request th
 served inherited the leftover context and was captured into that same trace.
 `TracingHandlerInterceptorTest` pins the scope, `NestedDispatchTraceCaptureIT` the captured
 shape. Nesting is strictly LIFO on one thread, which is what lets a plain stack be right here.
-
-`TracingInterceptorAutoConfiguration` registers two beans: the interceptor, and an anonymous
-`WebMvcConfigurer` named `peekabootTracingInterceptorConfigurer` that adds it with
-`addPathPatterns("/**")` and `excludePathPatterns(peekabootPaths.excludePatterns())`, which is
-where the exclusion prefixes reach the interceptor. That configurer's
-`@ConditionalOnMissingBean` matches by *name*, not by type: a type check on `WebMvcConfigurer`
-would let any of the application's own configurers back the registration off.
 
 ### Async Task Spans
 
@@ -1662,14 +1643,12 @@ no header-injection code anywhere in the repo.
 
 ### Log Capture
 
-`PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event to
-`CaptureEventPublisher`, which calls `TraceStoreEventListener`; it hands it on, through the trace
-journal while storage is on, to `TraceStore`, which stores by traceId, and `TraceLogMapper` maps
-them into the trace's flat log list on read (see *Trace Assembly and Enrichment*). One logger is
-left out:
-`SecurityPostureListener`'s, which writes the startup security report and with it the generated
-dashboard password. `append` returns for it before anything is read, so the line reaches the
-application's log and never the store, `/peekaboot/api/logs` or the trace journal.
+A captured line takes the path every capture event takes (see *Tracing Flow*), and
+`TraceLogMapper` maps a trace's lines into its flat log list on read (see
+*Trace Assembly and Enrichment*). One logger is left out: `SecurityPostureListener`'s, which
+writes the startup security report and with it the generated dashboard password. `append`
+returns for it before anything is read, so the line reaches the application's log and never the
+store, `/peekaboot/api/logs` or the trace journal.
 
 A line's message is capped at `CapturedText.MAX_LENGTH` (16,000 characters) and then ends with
 `... N characters omitted`. The cut ends before the last whitespace within 1,024 characters of the
@@ -1677,10 +1656,10 @@ limit. Where that stretch holds no whitespace it ends before the last quote or c
 an `@` follows before the limit, which keeps a URL's credentials together for the mask. A text
 with no such boundary in that stretch is cut at the limit.
 
-The appender is attached by the
-`LogbackAppenderRegistrar` bean, which `TraceCaptureAutoConfiguration` registers while tracing
-is on, whatever the toolbar switch says. Capture stops at `ContextClosedEvent`, before the
-context destroys any bean, so the store takes no line a bean logs while it is destroyed.
+The appender is attached by the `LogbackAppenderRegistrar` bean, which
+`TraceCaptureAutoConfiguration` registers while tracing is on, whatever the toolbar switch says.
+Capture stops at `ContextClosedEvent`, before the context destroys any bean, so the store takes
+no line a bean logs while it is destroyed.
 
 A line without a trace id, written at startup, on a thread outside any trace, or by Tomcat after
 a request's trace ended, goes into the `UntracedLogRing`, the newest
@@ -1720,45 +1699,37 @@ logger context before resetting it, which drops even reset-resistant listeners.
 ### Trace Assembly and Enrichment
 
 The API serves a trace as a `TraceResource`, a `TraceSummary` and a `TraceDetail` (`summary`
-and `data` on the wire). `GET /peekaboot/api/traces/{traceId}` answers one.
-`GET /peekaboot/api/traces` answers a `TraceListResponse` whose rows carry `data: null` unless
-the request says `view=full`. A `view=full` page holds at most 100 rows (`PageLimit.MAX_FULL`),
-the default `limit`. A larger `limit` is refused with a 400 on `limit`, after the range check
-every `limit` gets. `TraceInsightsService` lists the rows, parses `view` and hands each
-row to `TraceResources.row`, and the single trace's bundle to `TraceResources.trace`.
+and `data` on the wire), from `GET /peekaboot/api/traces/{traceId}` and as each row of
+`GET /peekaboot/api/traces`, where `data` is null unless the request says `view=full`. A
+`view=full` page holds at most 100 rows (`PageLimit.MAX_FULL`), the default `limit`. A larger
+`limit` is refused with a 400 on `limit`, after the range check every `limit` gets.
 
-`TraceResources` builds both in three steps, and the split is easy to get wrong.
-`TraceTreeMapper` builds the tree and nothing else.
+`TraceRows` builds both in three steps, and the split is easy to get wrong. `TraceTreeMapper`
+builds the tree and nothing else.
 
 1. `TraceTreeMapper.map(traceData, content)` builds the `TraceTree` from a
-   `TraceDataBundle.snapshot()`. It re-parents orphans under the root the snapshot names, or
-   serves the stored subtrees as `TraceTree.orphans` when it names none, classifies the root
-   action type, reads the request off the root, its path masked (`TraceRequests`), and counts the
-   spans and the queries. What a span carries beside its place and its timing comes from the
-   `SpanContent` it is handed, which `SpanContents` builds. A `view=full` row maps with
-   `served(traceData)`: tags, exceptions and query text masked, statements laid out, row counts
-   paired. A summary row maps with `forSummary()`: the exception masked and folded, a statement as
-   its masked text alone, no row count, and the tags as stored, since a summary serves none.
-   `/routes` maps with `forIssues()`: the tags as stored, no exception, a statement as its stored
-   text, no row count. Only a set of issue types leaves that mapping. An async row takes
+   `TraceDataBundle.snapshot()`: the spans in their places, the root action type, the request
+   off the root, its path masked (`TraceRequests`), and the span and query counts. What a span
+   carries beside its place and its timing comes from the `SpanContent` it is handed, which
+   `SpanContents` builds. A `view=full` row maps with `served(traceData)`: tags, exceptions and
+   query text masked, statements laid out, row counts paired. A summary row maps with
+   `forSummary()`: the exception masked and folded, a statement as its masked text alone, no row
+   count, and the tags as stored, since a summary serves none. `/routes` maps with
+   `forIssues()`: the tags as stored, no exception, a statement as its stored text, no row
+   count. Only a set of issue types leaves that mapping. An async row takes
    `TraceTreeMapper.mapSubtree` instead, which counts its own subtree's spans and queries and
    names no request. Every `SpanNode.issues` list is empty.
    **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in.
-3. `TraceRows` reads what only the stored bundle knows into `TraceFacts`: the store's failure
-   flag, one read of the logs with the dropped log count (`TraceDataBundle.capturedLogs()`, under
-   one lock), the ERROR logs among them mapped for the wire, and the dropped span count.
-   `TraceSummaries` turns the tree and the facts into the summary: the reasons `TraceReasons`
-   reads off the spans and the ERROR logs, the outcome `TraceOutcome.of(complete, failed)`, the
-   cause `TraceCauses` picks from the same spans and ERROR logs, every issue in tree order and the
-   counts. The summary is built naming no bucket. `TraceReads` sets the ones
-   `TraceStore.bucketsOf` names after the mapping (`TraceResource.withBuckets`); the error digest
-   records its summary without any. `TraceDetails` builds the data only when the view asks for
-   it: the tree, the flat log list, `QueryExtractor`'s queries and, for a whole trace, the
-   `HttpExchange` from `HttpExchangeMapper`, its path masked. With the data, `TraceLogMapper`
-   maps every log once and the reasons take their ERROR entries by index
-   (`TraceLogMapper.errorsAmong`). A log's span resolves
-   through redirects that move while spans arrive, so a row resolves each span id once
+3. `TraceRows` reads what only the stored bundle knows into `TraceFacts`, the logs and their
+   dropped count in one read under one lock (`TraceDataBundle.capturedLogs()`), and
+   `TraceSummaries` turns the tree and the facts into the summary, its issues in tree order.
+   The summary is built naming no bucket. `TraceReads` sets the ones `TraceStore.bucketsOf`
+   names after the mapping (`TraceResource.withBuckets`); the error digest records its summary
+   without any. `TraceDetails` builds the data only when the view asks for it, the
+   `HttpExchange`'s path masked. With the data, `TraceLogMapper` maps every log once and the
+   reasons take their ERROR entries by index (`TraceLogMapper.errorsAmong`). A log's span
+   resolves through redirects that move while spans arrive, so a row resolves each span id once
    (`TraceLogMapper.resolvingOnce`) and its subtree, its reasons and its list agree on it.
 
 `TraceTree` is internal. It is what steps 1 and 2 hand on and is never served as it is. Step 2
@@ -2105,18 +2076,12 @@ would break its JSON, so nothing after the filter bounds it. An unbounded litera
 would cost time on the application's query thread, bloat the in-memory trace store, and ride along
 on any OTLP export.
 
-Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
-(`trace-detail/tabs/spans.js`) names each row by `span.name`, OpenTelemetry's own span-name
-summary such as `SELECT customer_order`, and shows the statement in the span's query panel.
-The Queries tab (`trace-detail/tabs/queries.js`) lists each query with its own `statement`, the one its span carries. Both show the SQL
-`DbSpans.sql` picks from the tags listed above, with the bind parameters from
-`peekaboot.query.parameters`, and render it through `shared/sql-view.js`. That view highlights
-the SQL with `shared/sql.js`'s own tokenizer and shows it raw by default. On request it shows
-the formatted text, which the backend's `SqlFormatter` lays out from the raw SQL and masks like
-the rest of the statement, with the parameters substituted in the browser. The overlay opens
-on Spans by default (`trace-detail.js`'s `initial: 'spans'`), and `ScreenshotCapture`
-photographs both, so `trace-detail-queries-*` is the shipped image demonstrating
-`QueryExtractor`'s output.
+Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab names each
+row by `span.name`, OpenTelemetry's own span-name summary such as `SELECT customer_order`, and
+shows the statement in the span's query panel. The Queries tab lists each query with its own
+`statement`, the one its span carries. Both render it through `shared/sql-view.js`, which
+substitutes the parameters in the browser. The overlay opens on Spans, so `ScreenshotCapture`
+clicks across to Queries for the one shipped image of `QueryExtractor`'s output.
 
 ## Data Models
 
