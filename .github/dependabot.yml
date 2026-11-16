@@ -47,8 +47,9 @@ updates:
       interval: "daily"
     cooldown:
       default-days: 7
-  # The ITs start these images too (integration/TestImages reads compose.yml), so a bump is
-  # tested on its own pull request. The auto-merge workflow does not list this ecosystem.
+  # The ITs start the MySQL, Redis and go-httpbin images from this file
+  # (integration/TestImages), so a bump of those is tested on its own pull request. Nothing
+  # in the build starts Postgres. The auto-merge workflow does not list this ecosystem.
   - package-ecosystem: "docker-compose"
     directory: "/peekaboot-testing-app"
     schedule:
