@@ -93,8 +93,7 @@ jobs:
       - name: install-git-cliff
         uses: ./.github/actions/install-git-cliff
 
-      # git-cliff picks the version here and groups the same subjects into the notes below,
-      # so one tool's reading of the history settles both. The dispatch input overrides it for
+      # git-cliff picks the version from the commit subjects. The dispatch input overrides it for
       # the case where it reads the bump wrong, and takes the same checks either way. Through
       # `env`, never `${{ }}` inside the script: an input interpolated there is a shell
       # injection for anyone with write access.
@@ -119,15 +118,12 @@ jobs:
           # Every later script reads it from env, which never interpolates into shell text.
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
-      # Rendered before the tag exists, so --tag has to name the version being released, and
-      # staged so that release:prepare's own commit carries it. Regenerated whole rather than
-      # prepended: deterministic, and no header_marker to manage. A broken render fails the
-      # job here, before anything is signed or published.
-      - name: render-changelog
+      # The notes are written by hand under a `## x.y.z` heading before the release. Without
+      # them the job stops here, before anything is built, signed or published. The date goes
+      # into the heading now and is staged, so release:prepare's own commit carries it.
+      - name: stamp-changelog
         run: |
-          .github/release-notes/render.sh --tag "${VERSION}" \
-            --output CHANGELOG.md
-          grep -q "^## ${VERSION} " CHANGELOG.md
+          .github/release-notes/stamp.sh "${VERSION}" "$(date -u +%F)"
           git add CHANGELOG.md
 
       # Staged beside the changelog so release:prepare's own commit carries it, which puts the
@@ -213,13 +209,14 @@ jobs:
           gh auth setup-git
           .github/release/publish-refs.sh branches "${VERSION}"
 
-      - name: render-release-notes
+      # The release body is the written section. The tag before this one closes the compare
+      # link; `^` steps off the release commit, which carries the new tag itself.
+      - name: extract-release-notes
         run: |
-          .github/release-notes/render.sh --latest \
-            --output release-notes.md
-          # A tag_pattern that stops matching makes git-cliff render all history as
-          # "## Unreleased" and still exit 0, which would publish as the release body.
-          grep -q "^## ${VERSION} " release-notes.md
+          .github/release-notes/section.sh "${VERSION}" > release-notes.md
+          previous="$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' "${VERSION}^")"
+          printf '\n**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/%s...%s\n' \
+            "$previous" "${VERSION}" >> release-notes.md
 
       # --verify-tag: fails rather than creating the tag if push-release-tag's push is missing.
       - name: create-release-notes
@@ -243,16 +240,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # The only block here that pipes, hence the only one setting pipefail: the default
-      # shell is `bash -e` without it, so a failed render would still exit 0 and leave jq
-      # writing a zero-byte file, which the next step publishes as an empty release list.
-      # The length check guards the same silent success the two render steps above grep for.
+      # A heading the stamp did not reach leaves the new release out of the data, and the
+      # site would publish without it.
       - name: render-site-release-data
         run: |
-          set -o pipefail
-          .github/release-notes/render.sh --context \
-            | jq -f .github/release-notes/site.jq > releases.json
-          jq -e 'length > 0' releases.json > /dev/null
+          jq -Rs -f .github/release-notes/site.jq CHANGELOG.md > releases.json
+          jq -e --arg version "${VERSION}" '.[0].version == $version' releases.json > /dev/null
 
       # The token goes to checkout as an input and reaches git as an auth header, so it is
       # never part of a URL. The clone keeps it for publish-site's pushes.

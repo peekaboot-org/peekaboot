@@ -18,7 +18,4 @@ if [ ! -f "$CONFIG" ]; then
     exit 1
 fi
 
-# The notes begin with 1.3.0. The releases before it listed every commit and are left out.
-readonly LAST_RELEASE_LEFT_OUT="1.2.0"
-
-exec git-cliff --config "$CONFIG" "$@" -- "$LAST_RELEASE_LEFT_OUT..HEAD"
+exec git-cliff --config "$CONFIG" "$@"

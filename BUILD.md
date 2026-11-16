@@ -676,17 +676,18 @@ alone (see [Snapshots](#snapshots)). `maven-release-plugin` is configured in the
 `pluginManagement`, outside both, so `release:prepare` runs with neither.
 
 A local build activates neither profile nor a `deploy` goal, so it never signs or publishes
-anything. Releases start by hand: run the `release` workflow from the Actions tab with `dev`
-selected, and it fails immediately if dispatched from anything else. Leave `releaseVersion`
-empty unless git-cliff reads the bump wrong. The run does:
+anything. Releases start by hand. First write the release's notes into `CHANGELOG.md` and
+push them to `dev` (see [Release notes](#release-notes)). Then run the `release` workflow
+from the Actions tab with `dev` selected. It fails immediately if dispatched from anything
+else. Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does:
 
 1. A preflight that fails the run before anything is built when `dev` moved since the
    dispatch, when a release tag is not on `dev`, when no commit but the next development
    version follows the last tag, or when `main` is not an ancestor of `dev` and so could not
    fast-forward.
-2. The release version resolved with `git-cliff --bumped-version`. `CHANGELOG.md` regenerated
-   whole against it and staged, and `README.md`'s dependency snippet rewritten to it and
-   staged. See [Release notes](#release-notes).
+2. The release version resolved with `git-cliff --bumped-version`. The run stops when
+   `CHANGELOG.md` has no notes under that version's heading. Otherwise the date is stamped
+   into the heading and staged, and `README.md`'s dependency snippet rewritten and staged.
 3. `./mvnw release:prepare -DreleaseVersion=<x.y.z>`, whose own commit picks the staged
    changelog up, so version bump, changelog and tag are one commit. Its `clean verify` is the
    release's one full build. It commits and tags on the runner and pushes nothing.
@@ -694,8 +695,8 @@ empty unless git-cliff reads the bump wrong. The run does:
    builds it and uploads, and a wait until the release is on repo1.
 5. `main` fast-forwarded to the tagged commit, so it names exactly what was published, and
    `dev` pushed. Nothing merges back, because `main` originates no commits of its own.
-6. Grouped release notes for the new tag rendered by git-cliff into the release body, and
-   the `unreleased` draft deleted.
+6. The version's section of `CHANGELOG.md` published as the release body, and the
+   `unreleased` draft deleted.
 7. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
    committed to that repo's `dev`, its `main` fast-forwarded so Pages rebuilds, and the same
    bare version tagged there.
@@ -779,7 +780,7 @@ configuration-metadata check still run.
 
 The changelog reaches the tagged commit because that commit is a plain `git commit` over
 the whole index: maven-scm stages the POMs and then commits everything staged. So the
-workflow renders and stages `CHANGELOG.md` before prepare runs, and
+workflow stamps and stages `CHANGELOG.md` before prepare runs, and
 `checkModificationExcludes` stops the modification check refusing the staged file. No
 version of maven-scm documents that, so `verify-release-commit` greps the new tag and
 fails the job before the tag is pushed.
@@ -853,38 +854,45 @@ so that push needs one of the ruleset's bypass actors. Nothing in the run rewrit
 
 ### Release notes
 
-Everything lives in `.github/release-notes/`. `cliff.toml` classifies commits by
-conventional-commit type into numbered groups and holds the markdown template, `site.jq`
-reshapes git-cliff's `--context` JSON into the website's data file, and `test/` holds a
-fixture repo with golden files.
+The notes of a release are written by hand, from the commits since the last tag. They are
+consolidated and grouped by what a user of the library sees, which no generator does from
+commit subjects. `CHANGELOG.md` holds them, newest first, one section per version.
+
+Before a release, add the section at the top under a `## x.y.z` heading without a date. The
+version is the one this prints:
+
+```bash
+.github/release-notes/render.sh --bumped-version
+```
+
+The release job stamps the date into the heading (`stamp.sh`), publishes the section as the
+GitHub release body (`section.sh`) and hands every dated section to the website (`site.jq`).
+A section without a date is not released yet and stays off the website. The job refuses a
+version with no heading or with nothing under it.
+
+The notes begin with 1.3.0. The releases before it listed every commit, and their notes are
+no longer shown.
+
+git-cliff still does two things. It derives the next version from the commit subjects, and
+it renders the commits since the last tag as the `Unreleased` draft and the push preview,
+which is the list the notes are written from. `cliff.toml` classifies those commits by
+conventional-commit type into numbered groups and holds the template.
 
 `render.sh` is the only place git-cliff is invoked, and it refuses to run without the
 config. That guard earns its keep: `git-cliff --config <missing>` merely warns, falls back
-to its own built-in grouping and still exits 0, so a mistyped path would publish wrongly
-grouped notes with nothing failing.
+to its own built-in grouping and still exits 0.
 
-A feature, fix or performance change is one commit. Its subject is the entry and its body the
-description, printed as `- **Subject.** Body`. The body is written for the person upgrading
-and says what behaves differently and which property or endpoint it concerns.
+Commits sharing a subject collapse to one entry even when their bodies differ, because in
+conventional mode git-cliff's `commit.message` holds only the description. Merge commits
+and the `[release]` commits drop out via `filter_unconventional`, neither being conventional.
 
-Wrapped lines are joined, because GitHub breaks a release body at every newline. A second
-paragraph stays under its bullet, and trailers are left out. A body is printed for a commit
-in Features, Bug fixes or Performance and for any breaking commit. Everywhere else a body
-explains the code, or is Dependabot's, and stays out.
-
-The notes begin with 1.3.0. `render.sh` hands git-cliff the range after 1.2.0, so no earlier
-release appears in `CHANGELOG.md`, on the website or in a draft. 1.3.0 itself lists subjects
-alone, because its bodies were not written for the notes. `cliff.toml` and `site.jq` both
-carry that exception.
-
-Merge commits and the `[release]` commits drop out via `filter_unconventional`, neither being
-conventional. `filter_commits` is on with no `.*` catch-all, so an unrecognised type is
-dropped rather than bucketed. Catching it is the push gate's job.
+`filter_commits` is on with no `.*` catch-all, so an unrecognised type is dropped rather than
+bucketed. Catching it is the push gate's job.
 
 The push gate is `osslabz/github-actions/commit-subject-check`, which `build-on-push` runs
 with `default-branch: dev`. It rejects any non-merge subject in the pushed range that is not a
 conventional commit, and skips a forced push and a dispatched run, which have no meaningful
-range. The subjects matter beyond the notes, because git-cliff derives the release version
+range. The subjects matter beyond the draft, because git-cliff derives the release version
 from them too. A subject it cannot parse is a change it cannot weigh. The gate does not
 enforce the 50-character subject limit, because Dependabot's own `build(deps): bump ...` lines
 routinely exceed it.
@@ -895,13 +903,6 @@ harness work lands under Tests. The runtime dependency allow-list must stay abov
 generic `^build`, or every dependency bump lands in "Build, CI and chores". Group
 numbers must stay zero-padded to two digits, because git-cliff sorts group names as strings.
 An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`.
-
-The website shows released versions only. `site.jq` builds a "Breaking changes" section from
-the `breaking` flag, then groups `01`-`04`, features, bug fixes, performance and dependency
-upgrades, each entry with its description as a list of paragraphs. `site.jq` hardcodes that
-cutoff, so renumbering those groups means editing both files. A breaking commit appears
-under Breaking changes alone on the website. Reverts and the internal groups stay in the
-GitHub release notes and `CHANGELOG.md`.
 
 "Dependency upgrades" lists only bumps of what a release puts on a user's classpath: the
 Spring Boot line, datasource-micrometer, jdbc-url-parser and cron-utils. The `04` parser names
@@ -919,11 +920,9 @@ The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
 .github/release-notes/test/run.sh
 ```
 
-Its expectations are golden files rendered from a fixture repo with fixed commit dates, so
-they do not drift as `dev` grows. The fixture carries both spellings of a breaking change, a
-breaking change of an internal type, user-facing types scoped to the test harness, a runtime
-and a build-only dependency bump, a repeated subject, a release older than the notes, bodies
-that wrap or end in trailers, a non-conventional subject, and two tags cut in the same second.
+The draft and the bumped version are checked against a fixture repo with fixed commit dates,
+so the expectations do not drift as `dev` grows. `section.sh`, `stamp.sh` and `site.jq` are
+checked against a fixture changelog with a dated, an undated and an empty section.
 
 ### How the next version is chosen
 

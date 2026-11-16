@@ -12,7 +12,4 @@
 - Commit subjects are [Conventional Commits](https://www.conventionalcommits.org/), and the
   type decides the next version. See
   [How the next version is chosen](BUILD.md#how-the-next-version-is-chosen).
-- A feature or fix is one commit. Its subject and body are its entry in the release notes, so
-  the body says what changed for the person upgrading. See
-  [Release notes](BUILD.md#release-notes).
 - Branch from `dev` and open the pull request against `dev`.

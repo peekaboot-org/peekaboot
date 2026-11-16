@@ -1,142 +1,20 @@
 [
   {
-    "version": "1.5.0",
-    "date": "2026-03-01",
-    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.5.0",
-    "groups": [
-      {
-        "title": "Bug fixes",
-        "entries": [
-          {
-            "text": "Correct the rename",
-            "scope": null,
-            "breaking": false,
-            "detail": null,
-            "description": []
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "version": "1.4.0",
-    "date": "2026-03-01",
-    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.4.0",
-    "groups": [
-      {
-        "title": "Breaking changes",
-        "entries": [
-          {
-            "text": "Drop the legacy endpoint",
-            "scope": null,
-            "breaking": true,
-            "detail": "/v1 is gone, use /v2",
-            "description": [
-              "The /v1 endpoint answered with the old payload."
-            ]
-          },
-          {
-            "text": "Rename the field",
-            "scope": "api",
-            "breaking": true,
-            "detail": null,
-            "description": []
-          },
-          {
-            "text": "Key traces by id",
-            "scope": "store",
-            "breaking": true,
-            "detail": null,
-            "description": [
-              "A custom store has to implement findById."
-            ]
-          }
-        ]
-      },
-      {
-        "title": "Features",
-        "entries": [
-          {
-            "text": "Add the second thing",
-            "scope": null,
-            "breaking": false,
-            "detail": null,
-            "description": [
-              "The second thing lists every entry and says how many it left out.",
-              "Set thing.limit to list more."
-            ]
-          }
-        ]
-      },
-      {
-        "title": "Bug fixes",
-        "entries": [
-          {
-            "text": "Keep the order stable",
-            "scope": null,
-            "breaking": false,
-            "detail": null,
-            "description": [
-              "Two entries of the same age swapped places."
-            ]
-          }
-        ]
-      },
-      {
-        "title": "Performance",
-        "entries": [
-          {
-            "text": "Cache the lookups",
-            "scope": null,
-            "breaking": false,
-            "detail": null,
-            "description": []
-          }
-        ]
-      },
-      {
-        "title": "Dependency upgrades",
-        "entries": [
-          {
-            "text": "Bump com.cronutils:cron-utils from 9.2.1 to 9.2.2",
-            "scope": "deps",
-            "breaking": false,
-            "detail": null,
-            "description": []
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "version": "1.3.0",
+    "version": "1.1.0",
     "date": "2026-02-01",
-    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.3.0",
-    "groups": [
-      {
-        "title": "Features",
-        "entries": [
-          {
-            "text": "Add the first thing",
-            "scope": null,
-            "breaking": false,
-            "detail": null,
-            "description": []
-          }
-        ]
-      },
-      {
-        "title": "Bug fixes",
-        "entries": [
-          {
-            "text": "Correct the first thing",
-            "scope": null,
-            "breaking": false,
-            "detail": null,
-            "description": []
-          }
-        ]
-      }
-    ]
+    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.1.0",
+    "notes": "### Upgrading from 1.0.0\n- Rename `old.key` to `new.key`.\n\n### New\n- The second thing lists every entry.\n\n  It says how many it left out."
+  },
+  {
+    "version": "1.0.5",
+    "date": "2026-01-15",
+    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.0.5",
+    "notes": ""
+  },
+  {
+    "version": "1.0.0",
+    "date": "2026-01-01",
+    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.0.0",
+    "notes": "First release."
   }
 ]
