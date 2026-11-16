@@ -96,7 +96,8 @@ A span counts as a query when it is a CLIENT span with any `db.*` or `jdbc.query
 ## The automated UI suite (`src/test`)
 
 The Playwright tests and every test that boots a Spring context live here, all in `*IT`
-classes, so they run under failsafe at `verify`. `mvn test` runs one plain unit test here,
+classes, so they run under failsafe at `verify`. `mvn test` runs two plain unit test classes
+here. `ColourVisionTest` checks the contrast arithmetic `ComponentPrimitiveIT` measures with.
 `ComposeImagesTest`: every image in `compose.yml` must carry a tag past its major version. The
 ITs read their images from that file (`integration/TestImages`).
 The ITs activate the `test` profile, which swaps PostgreSQL for in-memory H2 and disables
