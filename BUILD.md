@@ -788,10 +788,11 @@ reactor build runs one version of each.
 
 The workflow never forces a push and never deletes a ref, so a run that stops leaves what it
 made public. The Portal's deployments and this listing say where it stopped; a failed run
-prints the listing in its summary.
+prints the listing in its summary. `<release>` is the version being released, which is also
+the tag's name.
 
 ```bash
-git ls-remote origin 'refs/tags/<version>' refs/heads/dev refs/heads/main
+git ls-remote origin 'refs/tags/<release>' refs/heads/dev refs/heads/main
 ```
 
 A run that is dispatched or re-run while a release tag is not on `dev` stops at `preflight`.
@@ -807,8 +808,8 @@ A run that is dispatched or re-run while a release tag is not on `dev` stops at 
 Deleting the tag:
 
 ```bash
-git push origin :refs/tags/<version>
-git tag -d <version>
+git push origin :refs/tags/<release>
+git tag -d <release>
 ```
 
 Run the second line in every clone that fetched the tag, or a later `git push --tags` brings
@@ -816,17 +817,23 @@ it back. The next run tags a new commit under the same name, so delete a tag onl
 Central has nothing under that version. No ruleset covers tags, so the delete needs write
 access and nothing else.
 
-Finishing by hand, in a clean clone on `dev`. `<before>` is the snapshot version `dev` had
-before the release (`git show '<version>^:pom.xml'`). `<next>` is the release version with its
-patch raised by one, which is what `release:prepare` derives.
+Finishing by hand, in a clean clone on `dev`. `<before>` is the version `dev` had before the
+release, without its `-SNAPSHOT` (`git show '<release>^:pom.xml'`). `<next>` is the release
+version with its patch raised by one, which is what `release:prepare` derives. `<version>` is
+the pom's own tag and stays as written.
 
 ```bash
-git merge --ff-only '<version>^{commit}'      # dev moved: git merge --no-ff '<version>^{commit}'
-git diff '<version>^' '<version>' -- pom.xml 'peekaboot-*/pom.xml' | git apply -R --index
+git merge --ff-only '<release>^{commit}'      # dev moved: git merge --no-ff '<release>^{commit}'
+git diff '<release>^' '<release>' -- pom.xml 'peekaboot-*/pom.xml' | git apply -R --index
 sed -i 's|<version><before>-SNAPSHOT</version>|<version><next>-SNAPSHOT</version>|' pom.xml peekaboot-*/pom.xml
-git commit -a -m '[release] prepare for next development iteration'
-.github/release/publish-refs.sh branches <version>
+grep -q '<version><next>-SNAPSHOT</version>' pom.xml &&
+  git commit -a -m '[release] prepare for next development iteration' &&
+  .github/release/publish-refs.sh branches <release>
 ```
+
+A `sed` that matches nothing exits 0 and would leave `dev` on the old snapshot version. The
+`grep` stands before the commit and the push for that reason: when it fails, nothing is
+committed or pushed. Correct `<before>` and run the block again from the `sed` line.
 
 Then the steps after `publish-release-branches`, by hand and with the commands of
 [`release.yml`](.github/workflows/release.yml): the release notes, the site, and
