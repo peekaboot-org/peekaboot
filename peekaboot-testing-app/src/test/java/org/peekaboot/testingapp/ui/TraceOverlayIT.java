@@ -73,7 +73,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      * total reads.
      */
     private String storeSlowTraceWithAShortTotal(long thresholdMs) {
-        String traceId = "overlay-slow-async-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("http get /orders/enrich")
                 .kind(Span.Kind.SERVER)
@@ -95,7 +95,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      * starts the given threshold's length later.
      */
     private String storeLongTraceWithoutASlowSpan(long thresholdMs) {
-        String traceId = "overlay-long-quick-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("http get /api/person/all")
                 .kind(Span.Kind.SERVER)
@@ -591,7 +591,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
     /** A trace read before its root arrived says so in the header, and its Spans tab shows what did arrive. */
     @Test
     void anInFlightTraceSaysSoAndShowsTheSpansThatArrived() {
-        String traceId = "overlay-in-flight-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "query")
                 .parent("handler-not-yet-exported")
                 .named("SELECT person")

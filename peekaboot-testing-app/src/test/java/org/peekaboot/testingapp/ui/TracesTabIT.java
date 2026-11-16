@@ -853,7 +853,7 @@ class TracesTabIT extends PlaywrightTestBase {
      */
     @Test
     void aTruncatedTraceSaysSoInTheListingAndInTheOverlay() {
-        String traceId = "tabs-truncated-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         // The children go in first: the store drops the oldest span past the cap, and the root
         // is what the listing and the overlay hang everything else from.
         for (int i = 0; i < tracingProperties.getMaxSpansPerTrace(); i++) {

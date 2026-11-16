@@ -52,9 +52,9 @@ class TracePersistenceIT {
     private static final String HTTP_ROWS = "/peekaboot/api/traces?rootActionType=HTTP_REQUEST&limit=1";
 
     private final String tag = "restart " + UUID.randomUUID();
-    private final String cutOffTraceId = UUID.randomUUID().toString().replace("-", "");
+    private final String cutOffTraceId = TestSpans.newTraceId();
     // a trace with spans but no root never lists, so the one the listing shows has logged a line and nothing more
-    private final String listedCutOffTraceId = UUID.randomUUID().toString().replace("-", "");
+    private final String listedCutOffTraceId = TestSpans.newTraceId();
 
     @TempDir
     Path storageDir;

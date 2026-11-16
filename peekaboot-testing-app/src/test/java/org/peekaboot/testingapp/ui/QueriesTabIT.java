@@ -18,7 +18,7 @@ class QueriesTabIT extends TraceOverlayTestBase {
      * written straight to the store.
      */
     private String storeAsyncQueryTrace() {
-        String traceId = "overlay-async-query-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("http get /orders/enrich")
                 .kind(Span.Kind.SERVER)

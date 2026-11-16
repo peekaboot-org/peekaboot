@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.tracing.event.CapturedExceptionInfo;
 import org.peekaboot.backend.tracing.event.SpanData;
@@ -29,6 +30,11 @@ public final class TestSpans {
 
     public static SpanBuilder span(String traceId, String spanId) {
         return new SpanBuilder(traceId, spanId);
+    }
+
+    /** A fresh trace id of the shape a real one has: 32 lower-case hex digits. */
+    public static String newTraceId() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     public static final class SpanBuilder {

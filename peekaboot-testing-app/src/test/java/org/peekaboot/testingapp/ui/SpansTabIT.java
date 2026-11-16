@@ -43,7 +43,7 @@ class SpansTabIT extends TraceOverlayTestBase {
      * the trace id.
      */
     private String storeDeepQueryTrace() {
-        String traceId = "overlay-deep-query-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("http get /orders")
                 .kind(Span.Kind.SERVER)
@@ -712,7 +712,7 @@ class SpansTabIT extends TraceOverlayTestBase {
     @Test
     void theNameColumnNeverExceeds40PercentOfTheGanttsWidth() {
         page.setViewportSize(1280, 800);
-        String traceId = "overlay-long-name-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("x".repeat(200))
                 .kind(Span.Kind.SERVER)
@@ -1332,7 +1332,7 @@ class SpansTabIT extends TraceOverlayTestBase {
     }
 
     private String storeATraceWithASpanEvent() {
-        String traceId = "overlay-event-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("GET /events-fixture")
                 .kind(Span.Kind.SERVER)

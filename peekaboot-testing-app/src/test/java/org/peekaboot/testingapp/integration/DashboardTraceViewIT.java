@@ -24,17 +24,16 @@ class DashboardTraceViewIT extends TestingAppITBase {
 
     @Test
     void anInjectedTraceIsServedWithItsSpansAndTags() {
-        String traceId = "dashboard-trace-view-" + System.nanoTime();
-        String rootSpanId = "root" + System.nanoTime();
-        traceStore.addSpan(TestSpans.span(traceId, rootSpanId)
+        String traceId = TestSpans.newTraceId();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("GET /persons")
                 .kind(Span.Kind.SERVER)
                 .at(0, 100)
                 .tag("http.method", "GET")
                 .tag("url.path", "/persons")
                 .build());
-        traceStore.addSpan(TestSpans.span(traceId, "db" + rootSpanId)
-                .parent(rootSpanId)
+        traceStore.addSpan(TestSpans.span(traceId, "db")
+                .parent("root")
                 .named("SELECT * FROM person")
                 .kind(Span.Kind.CLIENT)
                 .at(10, 80)
@@ -45,7 +44,7 @@ class DashboardTraceViewIT extends TestingAppITBase {
         JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}", traceId);
 
         assertThat(trace.path("data").path("rootSpan").path("spanId").asString())
-                .isEqualTo(rootSpanId);
+                .isEqualTo("root");
         assertThat(trace.path("data")
                         .path("rootSpan")
                         .path("tags")

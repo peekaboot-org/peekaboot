@@ -103,7 +103,7 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
      */
     @Test
     void sqlCarryingACredentialShapedValueComesBackMaskedFromTheTraceApi() {
-        String traceId = "masking-test-sql-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("GET /masking-test/sql-fixture")
                 .kind(Span.Kind.SERVER)
@@ -138,7 +138,7 @@ class RequestAndQueryMaskingIT extends TestingAppITBase {
     /** A bind value is masked by the same value rules as the SQL around it. */
     @Test
     void aCredentialShapedBindParameterComesBackMaskedFromTheTraceApi() {
-        String traceId = "masking-test-params-" + System.nanoTime();
+        String traceId = TestSpans.newTraceId();
         traceStore.addSpan(TestSpans.span(traceId, "root")
                 .named("GET /masking-test/params-fixture")
                 .kind(Span.Kind.SERVER)
