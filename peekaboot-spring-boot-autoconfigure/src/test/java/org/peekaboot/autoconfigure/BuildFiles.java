@@ -9,6 +9,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 import javax.xml.xpath.XPathNodes;
+import org.peekaboot.testsupport.Checkout;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -21,7 +22,7 @@ final class BuildFiles {
 
     /** The reactor root, reached from this module rather than from an assumed working directory. */
     static Path reactorRoot() {
-        return Path.of("..").toAbsolutePath().normalize();
+        return Checkout.ancestorHolding(BuildFiles.class, ".mvn");
     }
 
     /** The stripped text {@code expression} selects below {@code context}; empty where it selects nothing. */

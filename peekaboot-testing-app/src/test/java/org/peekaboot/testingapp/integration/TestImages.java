@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.peekaboot.testsupport.Checkout;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.core.io.FileSystemResource;
 
@@ -40,7 +41,8 @@ final class TestImages {
 
     private static Map<String, String> readComposeImages() {
         YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
-        yaml.setResources(new FileSystemResource("compose.yml"));
+        yaml.setResources(new FileSystemResource(
+                Checkout.ancestorHolding(TestImages.class, "compose.yml").resolve("compose.yml")));
         Properties compose = requireNonNull(yaml.getObject(), "compose.yml read as nothing");
         return compose.stringPropertyNames().stream()
                 .map(SERVICE_IMAGE::matcher)

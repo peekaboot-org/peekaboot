@@ -3,7 +3,7 @@
 Shared test helpers for the sibling modules' test suites. It builds with the rest of the
 reactor and is never published, so nothing an application depends on comes from here.
 
-It holds two classes (`org.peekaboot.testsupport`):
+It holds three classes (`org.peekaboot.testsupport`):
 
 - `LogCapture`, the logback `ListAppender` wrapper that `peekaboot-backend`,
   `peekaboot-spring-boot-autoconfigure` and `peekaboot-testing-app` tests use to assert on
@@ -11,6 +11,11 @@ It holds two classes (`org.peekaboot.testsupport`):
 - `IntentionalLogFilter`, a logback appender filter for the console appender of
   `peekaboot-testing-app`'s `logback-test.xml`. It hides one deliberate line (logger name plus
   message regex) from the console while the root logger's Peekaboot appender still receives it.
+- `Checkout`, which finds a directory of the checkout from a test's own classes. The tests of
+  `peekaboot-spring-boot-autoconfigure` and `peekaboot-testing-app` that read a pom,
+  `compose.yml` or another file of the build use it, so they do not depend on the working
+  directory. `Checkout.ancestorHolding(anchor, entry)` walks up from where `anchor` was loaded
+  to the nearest directory that holds `entry`. `.mvn` marks the reactor root.
 
 ## Why it is a module of its own
 

@@ -11,13 +11,16 @@ import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.peekaboot.testsupport.Checkout;
 
 /**
  * Every published jar carries the licence and the notice under {@code META-INF/}. An {@code *IT}
- * because it needs the packaged jars; the originals are read from {@code ../}, the reactor root
- * seen from the module directory, as {@code BuildFiles.reactorRoot()} does.
+ * because it needs the packaged jars; the originals lie in the reactor root, the directory above
+ * this module that holds {@code .mvn}.
  */
 class PublishedJarLicenceIT {
+
+    private static final Path REACTOR_ROOT = Checkout.ancestorHolding(PublishedJarLicenceIT.class, ".mvn");
 
     @ParameterizedTest(name = "{0}")
     @ValueSource(
@@ -28,8 +31,9 @@ class PublishedJarLicenceIT {
                 "peekaboot-spring-boot-starter"
             })
     void aPublishedJarCarriesTheLicenceAndTheNotice(String artifact) throws IOException {
-        assertThat(bytesOf(artifact, "META-INF/LICENSE")).isEqualTo(Files.readAllBytes(Path.of("..", "LICENSE")));
-        assertThat(bytesOf(artifact, "META-INF/NOTICE")).isEqualTo(Files.readAllBytes(Path.of("..", "NOTICE")));
+        assertThat(bytesOf(artifact, "META-INF/LICENSE"))
+                .isEqualTo(Files.readAllBytes(REACTOR_ROOT.resolve("LICENSE")));
+        assertThat(bytesOf(artifact, "META-INF/NOTICE")).isEqualTo(Files.readAllBytes(REACTOR_ROOT.resolve("NOTICE")));
     }
 
     private static byte[] bytesOf(String artifact, String name) throws IOException {
