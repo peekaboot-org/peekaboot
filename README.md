@@ -18,6 +18,8 @@ migrations, logs, schedules, metrics and traces in one dashboard, with no extern
 Peek, because it lets you look inside a running application. Boot, because that's where it
 lives. And peek-a-boo, because that's how it behaves. Add one dependency and your app's
 internals show up on a local run. Deploy the same jar and Peekaboot stays off.
+[What the starter still brings](https://www.peekaboot.org/docs/in-production/#class-path) stays
+on the classpath.
 
 ## Quick start
 
@@ -44,7 +46,8 @@ run and how to override the detection are in
   the span, query and log counts with query time and error and warning counts, and a link to
   the full trace.
 - A dashboard for health, environment, config, Flyway, Liquibase (from 1.1.0), loggers,
-  scheduled tasks and metrics, read in-process with nothing exposed under `/actuator/**`.
+  scheduled tasks and metrics, read in-process. Peekaboot adds nothing under `/actuator/**`;
+  the starter brings Spring Boot Actuator, whose default serves `/actuator/health`.
 - In-memory request tracing via Micrometer and OpenTelemetry, with no collector to run.
 - Every SQL statement a request runs is timed, listed and highlighted, and shown formatted
   with its bind parameters on request. From 1.1.0 each one is labelled with the DataSource it

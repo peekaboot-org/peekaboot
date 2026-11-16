@@ -321,7 +321,7 @@ org.peekaboot.backend/
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on the API's handlers; UiSecurityHeadersInterceptor: a Content-Security-Policy, X-Frame-Options: DENY and nosniff on the UI's resource handlers; PeekabootHandlers tells Peekaboot's controllers and UI resource handlers from the host's), PeekabootJson (+ its message converter), PeekabootPaths
 ├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on the API's handlers), QueryParameterBinding, PeekabootApiController (the OpenAPI document and the API's index)
-├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read once at startup), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
+├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read on first use, on a virtual thread, never during context refresh; a failed read is retried after 30 s), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── actuator/           # ActuatorInsightsResponse: the dashboard's aggregate DTO, one field per section below
@@ -669,6 +669,10 @@ no endpoint at all. There is no discovery step and no HTTP call; a source that r
 (`flyway` without a Flyway bean, `liquibase` without a `SpringLiquibase` bean, `health`
 without a `HealthEndpoint` bean, `loggers` without a `LoggingSystem` bean) reports that it
 has nothing rather than failing.
+
+The `info` endpoint object is built over the application's `InfoContributor` beans plus four
+contributors Peekaboot constructs for itself (`InfoReading`): env, java, os and process. None is a
+bean, so the application's `/actuator/info` never carries them.
 
 `ActuatorSourcesAutoConfiguration` builds `env` and `configprops` as
 `new EnvironmentEndpoint(environment, sanitizingFunctions, Show.ALWAYS)` and
@@ -1086,8 +1090,8 @@ span with no Peekaboot UI to show them.
 guard, because the ready/stopped summaries, the run history and the storage directory must work
 in a plain non-web application. Only the lifecycle API's `LifecycleController` bean is
 servlet-gated on its own. `PeekabootDefaultsEnvironmentPostProcessor` splits the same way:
-activation and storage detection are web-type independent, while `peekaboot-defaults.yml` and
-the dev-toolbar defaults are skipped off-servlet.
+activation, storage detection and the off defaults are web-type independent, while
+`peekaboot-defaults.yml` and the dev-toolbar defaults are skipped off-servlet.
 
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
 `TracingInterceptorAutoConfiguration`, `AsyncInstrumentationAutoConfiguration`,
@@ -1202,7 +1206,7 @@ YAML 1.1 already parses that as the boolean `true`.
 
 ### Default Properties
 
-`PeekabootDefaultsEnvironmentPostProcessor` loads three yml resources with lowest precedence,
+`PeekabootDefaultsEnvironmentPostProcessor` loads four yml resources with lowest precedence,
 all overridable by an app's own `application.yml`:
 
 - `peekaboot-defaults.yml`. Enables full observability, but only when Peekaboot is enabled
@@ -1213,6 +1217,11 @@ all overridable by an app's own `application.yml`:
   run. The dev-toolbar defaults sit behind the same check.
 - `peekaboot-no-push-defaults.yml`. Applies unconditionally, even when Peekaboot itself is
   disabled, to keep telemetry from leaving the process by default.
+- `peekaboot-off-defaults.yml`. Applies only while `peekaboot.enabled` resolves `false`, on
+  every web type. Sets `jdbc.datasource-proxy.enabled` to `false` (datasource-micrometer
+  default `true`), so the JDBC instrumentation the starter brings wraps no DataSource of an
+  application that has Peekaboot off. An application that uses datasource-micrometer for its
+  own tracing sets the key to `true`.
 - `peekaboot-dev-toolbar-defaults.yml`. Applied only when the dev toolbar resolves on. Sets
   `management.opentelemetry.tracing.export.schedule-delay` to `200ms` (Spring default `5s`),
   trading export throughput for latency so a trace is readable in the toolbar while the
@@ -1227,13 +1236,15 @@ the instances Peekaboot builds. Peekaboot has no reason to touch any of these
 settings. Health is the one exception. Its bean is borrowed rather than built, and
 `management.endpoint.health.access=none` still removes it, as described above.
 
-`peekaboot-defaults.yml`'s `management.info.*`, `management.tracing.*` and
-`management.observations.*` defaults turn on the `InfoContributor` beans the `info`
-source reads and configure trace sampling and `@Observed` support. None of them
-decides value visibility. `management.info.<x>.enabled=false` is the one host lever
-left over dashboard content: it removes an `InfoContributor` bean outright and so
-narrows the Overview tab, and an explicit host setting wins because Peekaboot's
-own four `management.info.*` defaults apply at lowest precedence.
+`peekaboot-defaults.yml`'s `management.tracing.*` and `management.observations.*` defaults
+configure trace sampling and `@Observed` support. Neither decides value visibility. The file sets
+no `management.info.*` property: the `info` source adds its four contributors itself (see
+*In-Process Actuator Invocation*), so Java, OS and process always show on the Overview and the
+application's `/actuator/info` is the same with Peekaboot on and off.
+
+The build card still follows the application's build contributor and git its git contributor,
+so `management.info.build.enabled=false` and `management.info.git.enabled=false` narrow the
+Overview.
 
 `peekaboot.unmasking.enabled` is the only visibility switch. `MaskingEngine` masks every
 sensitive value it sees; `unmasking.enabled` combined with the request's `unmask`
@@ -1245,10 +1256,11 @@ How those sources are contributed matters. Boot moves `defaultProperties`, the s
 post-processor has run, so a source merely appended last would outrank it. Where that source
 exists Peekaboot folds its entries into it, underneath the application's own, so
 `SpringApplicationBuilder.properties("peekaboot.enabled=false")` wins like any other setting.
-Where it does not, Peekaboot's four named sources are appended last, in this order:
-`peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
-`peekabootDevToolbarDefaults`. A fifth source, `peekabootDetectedLaunch`, sits first. It answers
-no property, so its place gives it no precedence.
+Where it does not, Peekaboot's named sources are appended last, in this order:
+`peekabootDetection` and `peekabootNoPushDefaults` always, then `peekabootOffDefaults` while
+Peekaboot is off, or `peekabootDefaults` and `peekabootDevToolbarDefaults` while it is on. One
+more source, `peekabootDetectedLaunch`, sits first. It answers no property, so its place gives it
+no precedence.
 
 `peekabootDetection` is where all five launch-context-detected values land, since none of them
 needs a yml resource of its own (see *Conditional Loading*). Four follow a local run:
@@ -1911,6 +1923,8 @@ JDBC/datasource instrumentation on the classpath already emits a span for it, ta
 `peekaboot-spring-boot-starter` depends on. An uninstrumented DataSource emits no query
 spans, and nothing downstream can tell that apart from an endpoint that runs no queries, so
 the starter carries the instrumentation rather than leaving both cases reading as `0`.
+While `peekaboot.enabled` resolves `false` that instrumentation is switched off, through
+`peekaboot-off-defaults.yml` (see *Default Properties*).
 `DbSpans.isQuery` is the one definition of a query span:
 the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag. `jdbc.*` alone is
 not enough, since datasource-proxy's connection and result-set spans carry
@@ -2166,14 +2180,20 @@ directory's included, reliably shares the credentials the process runs under.
 `parentProcesses` walks `ProcessHandle.parent()` as far up as the JVM is allowed to see,
 recording each ancestor's pid and its command reduced to a basename.
 
-`dataSources` comes from `DataSourceMetadata.fromDataSource`, which opens a real `Connection`
-per DataSource and reads `DatabaseMetaData`: `getURL()`, `getUserName()`,
-`getDatabaseProductName()`, `getDatabaseProductVersion()` and `getDriverName()`. The URL is
-then parsed by `net.osslabz.jdbc.JdbcUrlParser` into hosts, database name, database product and
-connection parameters. `databaseProduct` is therefore what the *URL* names, so a MariaDB
-reached over a `jdbc:mysql:` URL reports MySQL; `databaseProductName` is the driver's own
-answer and can disagree. Any exception at all is logged at WARN and yields `Optional.empty()`,
-so a DataSource that cannot hand out a connection costs its card and nothing else.
+`dataSources` comes from `DataSourceMetadataList`, which reads each DataSource with
+`DataSourceMetadata.read`. A read opens a real `Connection` and reads `DatabaseMetaData`:
+`getURL()`, `getUserName()`, `getDatabaseProductName()`, `getDatabaseProductVersion()` and
+`getDriverName()`. The URL is then parsed by `net.osslabz.jdbc.JdbcUrlParser` into hosts, database
+name, database product and connection parameters. `databaseProduct` is therefore what the *URL*
+names, so a MariaDB reached over a `jdbc:mysql:` URL reports MySQL; `databaseProductName` is the
+driver's own answer and can disagree.
+
+No read runs while the context refreshes. The ready banner is the first reader and waits at most
+two seconds; every later reader gets what has been read so far and never waits. Each read runs on
+a virtual thread named `peekaboot-datasource-metadata`. A read that fails, with an exception or an
+`Error`, is logged at WARN the first time and at DEBUG after that, costs the DataSource its card
+and nothing else, and is repeated by the next reader once 30 seconds have passed. A DataSource
+that has answered is never connected again.
 
 ## Testing
 

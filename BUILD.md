@@ -348,15 +348,31 @@ running a different pool.
 
 `bannedDependencies` with `searchTransitive` on `peekaboot-spring-boot-starter` is where
 that becomes checkable, because the starter is what a consumer actually depends on. It
-bans `jakarta.servlet:jakarta.servlet-api`, `org.springframework:spring-webmvc`,
-`org.springframework.boot:spring-boot-web-server`, `com.zaxxer:HikariCP` and
-`org.hibernate.orm:hibernate-core`. The others
-cannot be banned, because the starter's own dependencies bring them: logback through
+bans every coordinate the two modules mark `<optional>` and the starter's own dependencies
+do not bring:
+
+- `jakarta.servlet:jakarta.servlet-api`
+- `org.springframework:spring-webmvc`
+- `org.springframework.boot:spring-boot-webmvc`
+- `org.springframework.boot:spring-boot-web-server`
+- `org.springframework.boot:spring-boot-tomcat`
+- `org.apache.tomcat.embed:tomcat-embed-core`
+- `com.zaxxer:HikariCP`
+- `org.hibernate.orm:hibernate-core`
+- `org.flywaydb:flyway-core`
+- `org.liquibase:liquibase-core`
+- `org.springframework.boot:spring-boot-flyway`
+- `org.springframework.boot:spring-boot-liquibase`
+
+The others cannot be banned, because the starter's own dependencies bring them: logback through
 `spring-boot-starter-logging`, `spring-boot-health` and `micrometer-observation` through
 `spring-boot-starter-actuator`, the OpenTelemetry SDK and
-`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. Re-check
-the split after a dependency change with
-`./mvnw -pl peekaboot-spring-boot-starter -am dependency:tree`.
+`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`, and
+`datasource-micrometer` through `datasource-micrometer-spring-boot`.
+
+`StarterOptionalDependencyContractTest` fails when an `<optional>` dependency is in neither
+list, and when the Gradle list differs from the pom's. Re-check the split after a dependency
+change with `./mvnw -pl peekaboot-spring-boot-starter -am dependency:tree`.
 
 ### The configuration-metadata check
 
