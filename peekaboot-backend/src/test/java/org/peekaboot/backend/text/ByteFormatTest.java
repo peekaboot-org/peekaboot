@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+@Isolated("sets the JVM's default Locale")
 class ByteFormatTest {
 
     @ParameterizedTest
@@ -23,9 +25,9 @@ class ByteFormatTest {
     }
 
     /**
-     * {@code Locale.setDefault} is JVM-global. Safe here because the backend's surefire runs
-     * its classes one at a time on one thread (the pom sets no parallelism), and the default
-     * is restored in {@code finally}; see TESTING.md.
+     * {@code Locale.setDefault} is JVM-global. The class is {@code @Isolated} for it;
+     * {@code TestSourceConventionsTest} holds every such writer to that. The default is
+     * restored in {@code finally}; see TESTING.md.
      */
     @Test
     void writesTheDecimalPointWhateverTheDefaultLocale() {

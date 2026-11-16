@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.testsupport.FailingWriteResponse;
 import org.peekaboot.testsupport.LogCapture;
@@ -45,6 +46,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
+@Isolated("installs the JVM's default uncaught-exception handler")
 class InsightsSsePublisherTest {
 
     /** Every publisher a test builds, stopped afterwards so no sender or dispatch thread outlives its test. */
@@ -947,9 +949,9 @@ class InsightsSsePublisherTest {
     /**
      * Collects what the JVM's default handler would otherwise print for a sender thread that
      * dies on an exception. The handler is JVM-global, so every thread in the module's JVM
-     * reaches it and only the sender's exceptions are kept; installing it is safe because
-     * peekaboot-backend's surefire runs its classes one at a time on one thread, and close()
-     * puts the previous handler back.
+     * reaches it and only the sender's exceptions are kept. The class is {@code @Isolated} for
+     * it; {@code TestSourceConventionsTest} holds every such writer to that. close() puts the
+     * previous handler back.
      */
     private static final class UncaughtExceptions implements AutoCloseable {
 

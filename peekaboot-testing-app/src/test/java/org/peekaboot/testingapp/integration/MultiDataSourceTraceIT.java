@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.TimeZone;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.peekaboot.testingapp.TestingAppTest;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.order.NewOrder;
@@ -37,6 +38,7 @@ import tools.jackson.databind.JsonNode;
  * container, since what is under test is that it stays apart from the primary.
  */
 @StartsContainers
+@Isolated("sets the JVM's default TimeZone")
 @TestingAppTest
 class MultiDataSourceTraceIT {
 

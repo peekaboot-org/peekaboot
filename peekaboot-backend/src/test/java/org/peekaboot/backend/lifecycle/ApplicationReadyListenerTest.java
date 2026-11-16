@@ -23,6 +23,7 @@ import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.peekaboot.backend.config.ApplicationIdentity;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.datasource.DataSourceMetadata;
@@ -42,6 +43,7 @@ import org.springframework.context.event.SimpleApplicationEventMulticaster;
 import org.springframework.core.env.Environment;
 import org.springframework.mock.env.MockEnvironment;
 
+@Isolated("sets the JVM's default Locale")
 class ApplicationReadyListenerTest {
 
     /** The security posture reports below this banner, an order an async multicaster's executor need not keep. */
@@ -139,9 +141,9 @@ class ApplicationReadyListenerTest {
      * number to a log parser. A pool without a configured maximum (HotSpot's non-heap by
      * default) says so rather than printing a limit of zero.
      *
-     * <p>{@code Locale.setDefault} is JVM-global. It is safe here because the backend's
-     * surefire runs its classes one at a time on one thread (the pom sets no parallelism), and
-     * the default is restored in {@code finally}; see TESTING.md.
+     * <p>{@code Locale.setDefault} is JVM-global. The class is {@code @Isolated} for it;
+     * {@code TestSourceConventionsTest} holds every such writer to that. The default is
+     * restored in {@code finally}; see TESTING.md.
      */
     @Test
     void banner_reportsMemoryInLocaleIndependentHumanUnits() {
