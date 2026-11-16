@@ -147,19 +147,17 @@ class TracePersistenceIT {
                         entry -> entry.path("count").asInt() == count);
     }
 
-    /**
-     * A request that ended just before a graceful close restores as it ended. Its spans still wait in the
-     * exporter's batch at the close, which only the tracer provider's destruction exports, so the journal
-     * must close after that. The first run's API is gone by then, so its store is read directly.
-     */
-    @Test
-    void aRequestThatEndedJustBeforeTheCloseRestoresComplete() {
+    /** What a run that held its spans until the close left behind, read the moment close() returned. */
+    private record HeldRun(
+            String traceId,
+            List<String> exportedBeforeClose,
+            List<String> exportedWhenCloseReturned,
+            TraceData heldAtClose) {}
+
+    private HeldRun runHoldingSpansUntilTheClose() {
         AtomicBoolean closing = new AtomicBoolean();
         List<String> exportedBeforeClose = new CopyOnWriteArrayList<>();
         List<String> exportedAtClose = new CopyOnWriteArrayList<>();
-        String id;
-        TraceStore firstStore;
-        Duration closeTook;
         try (ConfigurableApplicationContext first = bootHoldingSpans(
                 storageDir,
                 event -> {
@@ -169,21 +167,45 @@ class TracePersistenceIT {
                 },
                 new RecordingSpanExporter(
                         traceId -> (closing.get() ? exportedAtClose : exportedBeforeClose).add(traceId)))) {
-            firstStore = first.getBean(TraceStore.class);
-            id = tracesOf(first).get("/persons");
-            long closeStarted = System.nanoTime();
+            TraceStore firstStore = first.getBean(TraceStore.class);
+            String id = tracesOf(first).get("/persons");
             first.close();
-            closeTook = Duration.ofNanos(System.nanoTime() - closeStarted);
+            // an export that outlasted the tracer provider's wait lands after this line, so it is not in the copy
+            List<String> exportedWhenCloseReturned = List.copyOf(exportedAtClose);
+            return new HeldRun(
+                    id,
+                    exportedBeforeClose,
+                    exportedWhenCloseReturned,
+                    firstStore.getTrace(id).orElseThrow().snapshot());
         }
-        // the tracer provider waits 10 s for its last export, so a close near that means the export outlasted it
-        assertThat(closeTook).as("the first application's close").isLessThan(Duration.ofSeconds(5));
-        assertThat(exportedBeforeClose).as("traces exported before the close").doesNotContain(id);
-        assertThat(exportedAtClose).as("traces exported at the close").contains(id);
-        TraceData heldAtClose = firstStore.getTrace(id).orElseThrow().snapshot();
-        assertThat(heldAtClose.complete()).as("the first run's trace").isTrue();
+    }
+
+    /** The batch leaves with the tracer provider's destruction: nothing before the close, all of it by the time the close returns. */
+    @Test
+    void spansHeldInTheBatchAreExportedDuringTheClose() {
+        HeldRun run = runHoldingSpansUntilTheClose();
+
+        assertThat(run.exportedBeforeClose())
+                .as("traces exported before the close")
+                .doesNotContain(run.traceId());
+        assertThat(run.exportedWhenCloseReturned())
+                .as("traces exported when the close returned")
+                .contains(run.traceId());
+        assertThat(run.heldAtClose().complete()).as("the first run's trace").isTrue();
+    }
+
+    /**
+     * A request that ended just before a graceful close restores as it ended. Its spans still wait in the
+     * exporter's batch at the close, which only the tracer provider's destruction exports, so the journal
+     * must close after that. The first run's API is gone by then, so its store is read directly.
+     */
+    @Test
+    void aRequestThatEndedJustBeforeTheCloseRestoresComplete() {
+        HeldRun run = runHoldingSpansUntilTheClose();
 
         try (ConfigurableApplicationContext second = boot(storageDir)) {
-            JsonNode restored = tracesOf(second).awaitTrace(id, trace -> !"IN_PROGRESS".equals(outcome(trace)));
+            JsonNode restored =
+                    tracesOf(second).awaitTrace(run.traceId(), trace -> !"IN_PROGRESS".equals(outcome(trace)));
 
             assertThat(outcome(restored)).isEqualTo("OK");
             assertThat(restored.path("summary").path("complete").asBoolean(false))
@@ -192,8 +214,9 @@ class TracePersistenceIT {
             collectSpanIds(restored.path("data").path("rootSpan"), restoredSpanIds);
             restored.path("data").path("orphans").forEach(orphan -> collectSpanIds(orphan, restoredSpanIds));
             assertThat(restoredSpanIds)
-                    .containsExactlyInAnyOrderElementsOf(
-                            heldAtClose.spans().stream().map(SpanData::spanId).toList());
+                    .containsExactlyInAnyOrderElementsOf(run.heldAtClose().spans().stream()
+                            .map(SpanData::spanId)
+                            .toList());
         }
     }
 
