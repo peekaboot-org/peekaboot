@@ -15,19 +15,24 @@
   the assertion depends on ordering or duration.
 - Live threads: wait for the condition the assertion needs (Awaitility; a sample count, say),
   never a fixed `Thread.sleep`. Where a test would otherwise sit out a production timeout, the
-  class offers a package-private seam instead (`LifecycleEventLog(file, loadWait)`).
+  class offers a package-private seam instead
+  (`LifecycleEventLog(file, loadWait, recordWhenLoadedExecutor)`, with
+  `LifecycleEventLog.LOAD_WAIT` and `RECORD_ON_VIRTUAL_THREAD` as the production values).
 - Wall clocks and host facts come through seams, never through `System.currentTimeMillis()`
   read inside the class under test. Wall time is a `java.time.Clock`: `LifecycleRuns`,
   `LifecycleEventRecorder`, `DashboardCredentialsResolver`, `CredentialCache`,
   `ApplicationStoppedListener` and `ServerInfo.current(Locale, Clock)` take one, and where a
-  timestamp is rendered, the clock's zone is the one it renders in. A `LongSupplier` is kept
-  only where a test scripts a sequence of readings: `InsightsCollector` takes one, which also
-  dates its captures, and `IntervalBoundary` takes that clock plus a `Sleeper`, so a schedule
-  is asserted exactly. `InsightsSnapshotStore` takes an `IntervalBoundary` built on a fixed
-  clock, which dates the file and paces the writer alike. `ContainerRuntime`, `NetworkAddress`, `MachineInfo` and `ProcessInfo`
-  each read the host through a package-private `Signals` record a test states outright. A test
-  that computes its expected value with the same call the production code makes proves
-  nothing; it gets a seam instead.
+  timestamp is rendered, the clock's zone is the one it renders in. `LifecycleRuns` takes the
+  `RunningProcess` beside its clock, so a test also states which process is the running one.
+  `SecurityPosture.armed` reads no clock and takes the zone a stored password's date is printed
+  in. Production passes `ZoneId.systemDefault()`, a test `ZoneOffset.UTC`. A `LongSupplier` is
+  kept only where a test scripts a sequence of readings: `InsightsCollector` takes one, which
+  also dates its captures, and `IntervalBoundary` takes that clock plus a `Sleeper`, so a
+  schedule is asserted exactly. `InsightsSnapshotStore` takes an `IntervalBoundary` built on a
+  fixed clock, which dates the file and paces the writer alike. `ContainerRuntime`,
+  `NetworkAddress`, `MachineInfo` and `ProcessInfo` each read the host through a package-private
+  `Signals` record a test states outright. A test that computes its expected value with the same
+  call the production code makes proves nothing; it gets a seam instead.
 - A JVM-wide default (`Locale.setDefault`, `TimeZone.setDefault`, the default
   uncaught-exception handler, a system property, `System.out`) is written only by a class that
   is `@Isolated`, with the reason as the annotation's value, and is put back in `finally` or on
@@ -61,6 +66,8 @@ Two kinds, split by lifecycle:
   no server, and what it proves (`spring.factories` registration and default-property
   precedence) belongs in the fast gate.
 - `*IT`: anything that boots a server, run by failsafe at `integration-test`.
+  `PublishedJarLicenceIT` in the testing app boots nothing. It is an `*IT` because it reads the
+  packaged jars, which exist from `package` on.
 
 `peekaboot-backend`'s suite uses no `@SpringBootTest` and no embedded server; a bare
 `AnnotationConfigApplicationContext` covers the cases that need a real container: a bean-name
@@ -69,13 +76,24 @@ lookup (`ServerUrlResolverTest`), Spring's `@EnableAsync` proxies
 (`EventListenerObservationContextTest`) and an async event multicaster
 (`LifecycleEventRecorderTest`).
 
+`StorageLockTest` is the one backend test that starts a second JVM. It launches
+`src/test/resources/storage/HoldLock.java` as a single source file
+(`java HoldLock.java <lock file>`), waits for its `locked` line and ends it by closing its
+standard input, so nothing in it depends on timing.
+
+`PeekabootTracingAutoConfigurationTest` starts the same program for its two second-instance
+tests, through `WritingInstance` in the autoconfigure test tree, which finds `HoldLock.java`
+under `BuildFiles.reactorRoot()`. Moving that file breaks both tests.
+
 `peekaboot-spring-boot-autoconfigure` has context-runner unit tests for its
 auto-configurations, plus the `*IT`s that boot its own `TestApplication`: `StartupBannerIT` and
 `HostActuatorInfoIT` through `SpringApplicationBuilder`, the others as `@SpringBootTest`.
 
 Everything Playwright lives in `peekaboot-testing-app` under `org.peekaboot.testingapp.ui`,
 which boots the sample app and drives the real dashboard/toolbar/overlay in a headless browser.
-`peekaboot-frontend` has no test sources of its own; that suite covers it.
+`peekaboot-frontend` tests its pure modules on Node (`src/test/js/*.test.mjs`, run by `verify`
+and by Gradle's `check`). `-Dpeekaboot.frontend.lint.skip=true` skips them with the lint;
+`-DskipTests` does not. The Playwright suite covers everything that needs a browser.
 
 ### Testing auto-configuration
 
@@ -93,6 +111,11 @@ contextRunner
     });
 ```
 
+A `FilteredClassLoader` hides a class from the conditions and still links it through its
+parent, so it cannot show a configuration that fails to load without a jar.
+`SpringMvcAbsentTest` starts `SpringMvcAbsentLaunch` through a `URLClassLoader` over the test
+class path without the Spring MVC jars.
+
 For ordering, use a real OpenTelemetry stack rather than a mock `Tracer`:
 `DevToolbarAutoConfigurationIT` is a `@SpringBootTest(classes = TestApplication.class,
 webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
@@ -104,7 +127,9 @@ webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
 JDBC-shaped query span, `resultSet(id, rowCount)` for the row-count span datasource-proxy
 exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair and
 `jdbcConnection` for the pool acquisition datasource-micrometer exports, and `asyncTask` for the
-span Peekaboot's async decorator exports. A query fixture's bind parameters are its
+span Peekaboot's async decorator exports. Two plain spans never fold. A fixture that needs a
+fold uses the `jdbcQuery`/`jdbcDuplicate` pair or tags both spans `db.system`. A query
+fixture's bind parameters are its
 `QueryParameterTags.PARAMETERS_TAG` tag, in the JSON `QueryParameterObservationFilter` writes
 (`.tag(QueryParameterTags.PARAMETERS_TAG, "[[\"42\"]]")`); `SpanNodes.node(id).statement(...)`
 takes the mapped `SqlStatement`.
@@ -142,14 +167,30 @@ build the guard's `DashboardCredentials` in each origin, for one user at one fix
 rather than the events, and `noSnapshot()` the snapshot source with nothing persisted.
 `InsightsCollectorBuilder.collector(registry)` builds the collector with those defaults. Both sit
 in the `insights` test package because the collector's constructor and its snapshot source are
-package-private. `Latches.awaitQuietly(latch)` waits inside code that cannot
+package-private.
+`InsightsCollectors.ticks(collector)` and `windows(collector, level)` read a level's whole ring
+as its own type, `TickLevelData` for level 0 and `WindowLevelData` above it.
+`Latches.awaitQuietly(latch)` waits inside code that cannot
 throw, such as a gauge a test parks in, for ten seconds at most, then fails with an
 `AssertionError`.
 `FailingWriteResponse` is the `MockHttpServletResponse` whose writes fail the way a container's
 do (first write, or every write), and `PosixPermissions` reads a path's mode for the tests that
-pin owner-only storage. `Requests.get(path)`/`request(method, path)` build the servlet request a
+pin owner-only storage.
+`StorageDirectories` (test tree, package `org.peekaboot.backend.storage`) builds a switched-on
+`StorageDirectory` whose writer the test decides: `writer(root)` and `secondInstance(root)`.
+Tests outside that package use it in place of the package-private constructor.
+`Requests.get(path)`/`request(method, path)` build the servlet request a
 filter test sends, and `CurrentSpans.stub(tracer, traceId)` makes a mocked `Tracer` report a
-current span. OpenTelemetry `SpanData` comes from the SDK's own
+current span.
+`DetectedLaunches` (autoconfigure tests) states the launch kind for a context no detection ran
+on: `DetectedLaunches.as(kind)` with a context runner's `withInitializer`,
+`DetectedLaunches.LocalDevelopment` with `@ContextConfiguration(initializers = ...)` from
+another package.
+`LocalServer.rawGet(path, headers)` (autoconfigure ITs) sends one GET over a socket of its own,
+for a request that names its own `Host`, which `RestClient` and the JDK's clients refuse to
+send. It returns the status line, the headers and the body as one string, with a chunked body's
+framing removed.
+OpenTelemetry `SpanData` comes from the SDK's own
 `opentelemetry-sdk-testing` (`TestSpanData.builder()`), not a hand-rolled implementation.
 A test names only what it asserts on. A new record component is added to the builder once, not
 to every test class. The domain records carry no test-only constructors, and a test does not
@@ -175,19 +216,26 @@ class's own classes and never at the working directory.
 The trace journal's tests write journal and snapshot files the way a crash, an older version or a
 hand edit leaves them (`JournalTexts`, in the journal's test package), and encode every event line
 with the production `JournalCodec`, whose format `JournalCodecTest` pins line by line. A test that
-restarts a journal waits for the restored trace to appear, since the restore runs on the journal's
-own thread.
+restarts a journal waits for the restore to finish (`awaitRestored`): it hands in a live line
+and waits for it in the store, which the restore gate lets through only once the restore is
+done. Waiting for one restored trace would pass while the rest is still replaying.
 
 `Monitors` (backend test support) reads from the JVM which thread holds the monitor another
-thread waits for. A concurrency test holds a lock itself, starts the threads it interleaves, and
-waits on `Monitors.isWaitingFor(waiter, owner)` before it asserts, so the interleaving is pinned
-without a delay. Platform threads only: the thread MXBean does not report virtual threads.
+thread waits for. A concurrency test stops a writer inside the lock under test, on a latch in a
+step the test overrides or in the callback that runs under the lock, starts the thread that
+must wait, and waits on `Monitors.isWaitingFor(waiter, owner)` before it asserts, so the
+interleaving is pinned without a delay. Platform threads only: the thread MXBean does not report
+virtual threads.
 
 `MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123..."`) on purpose.
 The file is full of strings shaped exactly like the credentials the engine detects, and
 GitHub's push protection scans for the same shapes. The concatenation folds at compile time,
 so the value under test is unchanged. It just never appears contiguously in the source. A new
 provider fixture is written the same way and never tidied back together.
+
+`ValuePatternCostTest` measures a pattern's cost by counting the characters the matcher reads
+through a counting `CharSequence`, for an input and for twice that input. It never reads a
+clock.
 
 ## Accessibility
 `AccessibilityIT` pins the regressions this project has had (a control that lost its
@@ -202,18 +250,28 @@ scoped to its own host: the consumer's markup is not Peekaboot's to answer for.
 ## Backend to frontend contracts
 The frontend is plain ES modules, so a Java enum and its JS mirror drift silently.
 `SharedModuleIT`'s `*MirrorTheBackend*` tests pin `ROOT_ACTION_TYPES`, `TASK_TYPES`,
-`MIGRATION_STATES`, `ISSUE_SEVERITIES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
-`MigrationState`, `IssueSeverity` (its wire words) and Logback's levels, the keys the frontend reads off
-`/api/features` to the `Features` record. `ToolbarDataProviderTest` pins the toolbar blob's
-`features` names to the same record. A vocabulary that gains a JS mirror gets a row there.
+`MIGRATION_STATES`, `CHANGE_SET_EXEC_TYPES`, `ISSUE_SEVERITIES` and `LOG_LEVELS` to
+`RootActionType`, `TaskType`, `MigrationState`, `ChangeSetExecType`, `IssueSeverity` (its wire
+words) and Logback's levels. `featureKeysReadByTheFrontendMirrorTheBackendRecord` collects every
+`features.<key>` read from the served modules outside `vendor/` and fails on one the `Features`
+record does not publish. `ToolbarDataProviderTest` pins the toolbar blob's `features` names to
+the same record. A vocabulary that gains a JS mirror gets a row there.
+
 `SharedModuleIT` also pins `format.js`'s `formatLongDuration` against `UptimeFormat.humanize`
-unit by unit.
+unit by unit. `SpansTabIT` renders `spans.js` on payloads `TracePayloads` builds from
+`SpanNode`, `TraceSummary` and `TraceDetail` and writes with `PeekabootJson.MAPPER`, so a
+component renamed on the backend fails the test that shows it.
 
 JS with no Java counterpart is tested in the class of its module: `FormatModuleIT`,
 `SeverityModuleIT` (`severity.js` and `http-status.js`), `SqlModuleIT`, `UrlStateModuleIT`, and
 `InsightsStoreModuleIT`, which drives `dashboard/tabs/insights-store.js` (the browser's mirror
 of the insights rings) and `insights-stream.js` directly. A module without a class of its own
 stays in `SharedModuleIT`.
+
+What needs no browser is pinned by the Node tests in `peekaboot-frontend/src/test/js`:
+`format.js`'s unit ladder, its decimals in a locale and `formatMeasurementValue` in
+`format.test.mjs`, each call with its locale named, `markup.js`'s `highlightParts` in
+`markup.test.mjs`, and `url-filter.js`'s `urlState` in `url-filter.test.mjs`.
 
 `SqlStatement`'s JSON (`text`, `formatted`, `parameters`) has no mirror to pin;
 `SqlStatementViewIT` renders a real one from the testing app's person lookup, and
@@ -250,8 +308,10 @@ prints none. No stack traces.
   `ThresholdFilter` at `WARN` on the console appender, so a test that boots an application does
   not print its startup log. The threshold sits on the appender, never on a logger or the
   root: Peekaboot's appender on the root logger must keep receiving INFO events, which tests
-  assert through Peekaboot's trace API. `peekaboot-backend` and `peekaboot-test-support` carry
-  no `logback-test.xml`, and their tests print nothing.
+  assert through Peekaboot's trace API. `peekaboot-backend`'s `logback-test.xml` puts the same
+  `WARN` threshold on its console appender and leaves the root logger at `DEBUG`, so a test that
+  captures log events still receives them. `peekaboot-test-support` carries none, and its tests
+  print nothing.
 - Where a test's subject is the JavaScript itself, `page.onPageError` collects browser errors
   into a list the test asserts on. Classes whose subject fails invisibly (the charts, the
   lifecycle table) opt into `PlaywrightTestBase.captureBrowserSignals()`, which collects every
@@ -287,14 +347,18 @@ prints none. No stack traces.
   `IntentionalLogFilter` entries (`peekaboot-test-support`). Each entry hides one line the tests
   provoke on purpose. An entry matches the logger and the whole message, so the same class
   logging anything else still prints.
-- Seven of those lines are asserted through Peekaboot's own trace API: `PersonController`'s
-  `?error=true` error (`LogCaptureIT`), the `Scheduler` error (`TraceDeepLinkIT`), the
-  `OrderController` `/boom` error (`OrderTraceCaptureIT`), `OrderReconciler`'s warning
-  (`TracesTabIT`), `PartnerFeedImporter`'s warning and error (`LogsTabIT`) and the override
-  page's `PeekabootErrorExceptionResolver` error (`ErrorPageContentNegotiationIT`). A filter on the console appender leaves Peekaboot's appender on the root
-  logger receiving the event. `LogCapture` detaches the logger from the root, so Peekaboot would
-  never see the line. A logger level would hide it from Peekaboot too.
-- Two more entries cover product warnings. The `SecurityPostureListener`
+- Most of those lines are asserted on a trace, through Peekaboot's own trace API:
+  `PersonController`'s `?error=true` error (`LogCaptureIT`), the `Scheduler` error
+  (`TraceDeepLinkIT`), the `OrderController` `/boom` error (`OrderTraceCaptureIT`),
+  `OrderReconciler`'s warning (`TracesTabIT`), `PartnerFeedImporter`'s warning and error
+  (`LogsTabIT`), `OutcomeFixtureController`'s two errors (`TraceSummaryIT` and `TracesTabIT`)
+  and the override page's `PeekabootErrorExceptionResolver` error
+  (`ErrorPageContentNegotiationIT`). A filter on the console appender leaves Peekaboot's
+  appender on the root logger receiving the event. `LogCapture` detaches the logger from the
+  root, so Peekaboot would never see the line. A logger level would hide it from Peekaboot too.
+- One entry covers the untraced lines `LogSearchIT` writes at WARN and ERROR on purpose and
+  finds through the log search.
+- Two entries cover product warnings. The `SecurityPostureListener`
   banner is logged once per context, by whichever class happens to load it first. Only
   `SecurityPostureListenerTest` asserts the banner. `SeriesSampler` warns about the
   `absent-subsystem` panel that `insights-test-panels.yml` adds on purpose, a few ticks after each
