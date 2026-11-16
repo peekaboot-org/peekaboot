@@ -136,6 +136,16 @@ class TraceCaptureAutoConfigurationTest {
                 .isEqualTo(before);
     }
 
+    /** Capture starts with the registrar bean, so the store takes a line a later bean logs while it is created. */
+    @Test
+    void capturesALineABeanLogsWhileTheContextCreatesItsBeans() {
+        contextRunner
+                .withUserConfiguration(TracerOnlyConfig.class, StartupLogger.class)
+                .run(context -> assertThat(context.getBean(TraceStore.class).untracedLogs())
+                        .extracting(LogCapturedEvent::message)
+                        .contains(context.getBean(StartupLogger.class).message));
+    }
+
     /** Capture ends at ContextClosedEvent, so the store takes no line a bean logs while it is destroyed. */
     @Test
     void stopsCapturingOnceTheContextStartsClosing() {
@@ -361,6 +371,18 @@ class TraceCaptureAutoConfigurationTest {
     @Configuration
     @EnableConfigurationProperties(PeekabootProperties.class)
     static class MinimalPropertiesConfig {}
+
+    /** Created after the registrar, which it depends on, and logs one line while it is. */
+    @DependsOn("peekabootLogbackAppenderRegistrar")
+    static class StartupLogger {
+
+        final String message = "logged while created " + UUID.randomUUID();
+
+        @PostConstruct
+        void logWhileCreated() {
+            LoggerFactory.getLogger(StartupLogger.class).info(message);
+        }
+    }
 
     /** Destroyed before the registrar, which it depends on, and logs one line while it is. */
     @DependsOn("peekabootLogbackAppenderRegistrar")
