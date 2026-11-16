@@ -188,8 +188,8 @@ class LogsTabIT extends TraceOverlayTestBase {
      * field. A walk that loses track of where a hidden run ends - rendering its frames once
      * inside the {@code <details>} and again as loose frames below it - or one that drops a
      * line still satisfies the counts above, but not an exact, in-order, no-duplicates
-     * comparison against every line the server actually sent. There are no JS unit tests in
-     * this project, so this is the only thing standing between a broken walk and a shipped
+     * comparison against every line the server actually sent. No Node test covers the
+     * stack-trace walk, so this is the only thing standing between a broken walk and a shipped
      * regression.
      *
      * <p>What this cannot pin: whether a frame's {@code applicationFrame} flag was read off
