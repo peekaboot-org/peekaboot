@@ -1030,35 +1030,18 @@ change together. Changing one without its pair is how an accessibility regressio
 
 Auto-configuration classes that wire everything together. The `@AutoConfiguration` classes
 are registered in
-`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`; the
+`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, which
+`RegisteredAutoConfigurations` reads for the tests that check every one of them at once. The
 hooks that run before or outside the application context are registered in
-`META-INF/spring.factories`.
+`META-INF/spring.factories`:
 
-| Class | Registered via | Purpose |
-|-------|----------------|---------|
-| `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, web config |
-| `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
-| `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration, which asks the access rule whether a request may see the bar, and the `TomcatForwardResponseCustomizer` bean |
-| `TraceCaptureAutoConfiguration` | `.imports` | Request capture filter registration and the `LogbackAppenderRegistrar` bean, both feeding the trace store |
-| `ErrorPageAutoConfiguration` | `.imports` | Peekaboot's error page, registered in the fallback slot or, where `peekaboot.error-page.override` is set, in the two places that outrank an application's own (see *Error Page*) |
-| `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
-| `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
-| `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` and Spring MVC |
-| `HibernateStatisticsMetricsAutoConfiguration` | `.imports` | `HibernateStatisticsMeterBinder`: the four `hibernate.*` meters the insights panels read, bound from each session factory's statistics with hibernate-micrometer's names and tags; steps aside where `org.hibernate.orm.micrometer.HibernateMetrics` is present, since Boot then binds them |
-| `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
-| `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
-| `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
-| `AsyncInstrumentationAutoConfiguration` | `.imports` | The task decorator and the failure post-processor (see *Async Task Spans*) |
-| `EventListenerInstrumentationAutoConfiguration` | `.imports` | The post-processor that puts a span around the application's `@EventListener` methods (see *Event Listener Spans*) |
-| `QueryParameterAutoConfiguration` | `.imports` | `QueryParameterObservationFilter`, which records each JDBC query's bind parameters on its span (see *Query Extraction*); only with datasource-micrometer on the classpath |
-| `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
-| `PeekabootObservationAutoConfiguration` | `.imports` | The `ObservationPredicate` that takes the dashboard's own requests out of the request metrics and the traces; independent of `peekaboot.tracing.enabled` |
-| `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration, the handler-level check and its choice between the guard, the loopback rule and no check (`DashboardAccessConfiguration`), and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar.enabled`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`; deployment detection for `peekaboot.security.enabled`; the `peekabootDetectedLaunch` source (`DetectedLaunch`), which carries the launch kind itself; the default property values; the `peekabootBlankSwitches` source, where `BooleanSwitches.treatBlanksAsUnset` makes a blank switch read as unset; and the check that no switch holds a value the conditions and the binder read differently (see *Conditional Loading*, *Default Properties* and *Automatic Dashboard Security*) |
-| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
-| `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
-| `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
-| `LocalDevDetector` | (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
+- `PeekabootDefaultsEnvironmentPostProcessor` detects the launch and contributes the default
+  properties (see *Conditional Loading*, *Default Properties* and
+  *Automatic Dashboard Security*).
+- `PeekabootEndpointExposureOutcomeContributor` reports `health` as web-exposed while Peekaboot
+  is on (see *In-Process Actuator Invocation*).
+- `LogbackCaptureReinstaller` re-attaches the log-capture appender after Boot re-initialises
+  Logback (see *Log Capture*).
 
 Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean`, apart from
 the two `DependsOnTraceJournal` post-processors in `OtelTracingAutoConfiguration`, which add a
@@ -1093,23 +1076,14 @@ and `ActuatorInsightsService` builds that mapper, so the one override point for 
 the service itself. They are stateless and need at most the engine, and ten
 `@ConditionalOnMissingBean` methods nobody overrode bought nothing but wiring.
 
-The trace mappers follow the same rule: `TraceResources`, which `TraceInsightsService` builds,
-holds `TraceRequests` and `TraceRows`, and `TraceRows` holds `TraceTreeMapper`, `IssueDetector`,
-`TraceLogMapper`, `TraceSummaries` and `TraceDetails`, built from the `MaskingEngine`, the
-`SqlFormatter`, `PeekabootTracingProperties` and `StackTraceRules`.
+The trace mappers follow the same rule: `TraceInsightsService` builds `TraceResources`, which
+builds every mapper below it, so that is the one place the masking policy enters the trace
+pipeline.
 
 ### Conditional Loading
 
 Most of the auto-configuration classes carry `@ConditionalOnPeekabootServlet`, directly or
 through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the master switch:
-`PeekabootAutoConfiguration`, `PeekabootPathsAutoConfiguration`,
-`PeekabootObservationAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
-`DevToolbarAutoConfiguration`, `ErrorPageAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
-`AsyncInstrumentationAutoConfiguration`, `EventListenerInstrumentationAutoConfiguration`,
-`PeekabootTracingAutoConfiguration`,
-`OtelTracingAutoConfiguration`, `QueryParameterAutoConfiguration`, `TraceCaptureAutoConfiguration`,
-`InsightsAutoConfiguration`, `HibernateStatisticsMetricsAutoConfiguration` and
-`PeekabootSecurityAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -1117,31 +1091,17 @@ through `@ConditionalOnPeekabootTracing`. It composes the servlet guard and the 
 @interface ConditionalOnPeekabootServlet {}
 ```
 
-Each adds its own on top: `PeekabootAutoConfiguration` the `HealthEndpoint` and
-`WebMvcConfigurer` classes, `ActuatorSourcesAutoConfiguration` the `HealthEndpoint` class,
-`PeekabootObservationAutoConfiguration` the `ObservationPredicate` and
-`ServerRequestObservationContext` classes, `DevToolbarAutoConfiguration`
-`peekaboot.dev-toolbar.enabled`, `TracingInterceptorAutoConfiguration` the `WebMvcConfigurer`
-class and an `ObservationRegistry` bean, `AsyncInstrumentationAutoConfiguration` an
-`ObservationRegistry` bean and `peekaboot.tracing.async`,
-`EventListenerInstrumentationAutoConfiguration` an `ObservationRegistry` bean and
-`peekaboot.tracing.event-listeners`, `InsightsAutoConfiguration` the `SseEmitter` class, a
-`MeterRegistry` bean and `peekaboot.insights.enabled`,
-`HibernateStatisticsMetricsAutoConfiguration` that bean and that switch plus an
-`EntityManagerFactory` bean and no hibernate-micrometer, `OtelTracingAutoConfiguration` the
-OpenTelemetry SDK's `SpanExporter` class, and `QueryParameterAutoConfiguration`
-datasource-micrometer's `QueryContext` class.
+Each adds its own conditions on top. Class-level ones guard what the starter's closure leaves
+optional: `spring-boot-health`, the OpenTelemetry SDK and datasource-micrometer's tracing
+observation support, which the starter brings but a host can exclude. Spring MVC is the other
+case. The starter does not bring it, and the configurations whose beans name its types carry a
+class condition, so a servlet application without it still starts.
 
-Class-level conditions guard only what the starter's closure leaves optional: `spring-boot-health`,
-the OpenTelemetry SDK and datasource-micrometer's tracing observation support, which the starter
-brings but a host can exclude. Spring MVC is the other case. The starter does not bring it, and
-the configurations whose beans name its types carry a class condition, so a servlet application
-without it still starts.
 HikariCP, Logback, Flyway, Liquibase and Hibernate are optional too, each guarded a level down
 on a nested `@Configuration`, except that `HibernateStatisticsMetricsAutoConfiguration` guards
-Hibernate at class level, having nothing to bind without it. `InfoEndpoint` and `ObservationRegistry` arrive with hard
-dependencies of this module and the backend, so no consumer of the starter can be without
-them.
+Hibernate at class level, having nothing to bind without it. `InfoEndpoint` and
+`ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
+consumer of the starter can be without them.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
 controllers, services and actuator wiring, all as explicit `@Bean` methods.
@@ -1181,17 +1141,15 @@ servlet-gated on its own. `PeekabootDefaultsEnvironmentPostProcessor` splits the
 activation, storage detection and the off defaults are web-type independent, while
 `peekaboot-defaults.yml` and the dev-toolbar defaults are skipped off-servlet.
 
-`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
-`TracingInterceptorAutoConfiguration`, `AsyncInstrumentationAutoConfiguration`,
-`EventListenerInstrumentationAutoConfiguration`, `QueryParameterAutoConfiguration` and
-`TraceCaptureAutoConfiguration` carry `@ConditionalOnPeekabootTracing` instead, which adds `peekaboot.tracing.enabled` (default on).
-It nests `@ConditionalOnPeekabootServlet` rather than repeating its property condition: Boot
-keeps one `@ConditionalOnBooleanProperty` per meta-annotation path, and `ComposedConditionsTest`
-pins that both match exactly where the copied stacks did. Handler, view, async, event listener
-and query observations and the request and log capture are tracing, and
-with it off there is no store for them to land in. `DevToolbarAutoConfiguration` does not read
-that property at all, so with `peekaboot.tracing.enabled=false` the toolbar is still injected
-into every page with nothing captured behind it.
+The tracing configurations carry `@ConditionalOnPeekabootTracing` instead, which adds
+`peekaboot.tracing.enabled` (default on). It nests `@ConditionalOnPeekabootServlet` rather than
+repeating its property condition: Boot keeps one `@ConditionalOnBooleanProperty` per
+meta-annotation path, and `ComposedConditionsTest` pins that both match exactly where the copied
+stacks did. Handler, view, async, event listener and query observations and the request and log
+capture are tracing, and with it off there is no store for them to land in.
+`DevToolbarAutoConfiguration` does not read that property at all, so with
+`peekaboot.tracing.enabled=false` the toolbar is still injected into every page with nothing
+captured behind it.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or `peekaboot.dev-toolbar.enabled`. Both
 default from `PeekabootDefaultsEnvironmentPostProcessor` into a `peekabootDetection` property
@@ -1208,49 +1166,24 @@ state*): on for a detected local run, off otherwise, with an explicit setting al
 `peekaboot.stack-trace.fold` is not among them: folding only decides what a trace shows first,
 so it defaults to `true` on every launch.
 
-`LocalDevDetector` starts from the heuristics Spring Boot DevTools itself uses and adds two
-signals of its own, checked in order:
+`LocalDevDetector` starts from the heuristics Spring Boot DevTools itself uses: the `main`
+thread on the JVM's system class loader, with no test-framework or AOT frame on the stack. Those
+hold for every exploded-classpath launch, so two signals of its own decide: `java.class.path`
+must contain a build tool's output directory, and `ContainerRuntime.current()` must report
+`NONE`. The class's Javadoc has the checks and their order. What a change is most likely to undo:
 
-1. A native image resolves to `false` before anything else is checked.
-2. If the context class loader is DevTools' `RestartClassLoader` (the `restartedMain` thread
-   DevTools relaunches on), the thread-name, class-loader and stack-trace checks in step 3 are
-   skipped. DevTools only reaches that relaunch after its own gate has required a thread named
-   `main`, a loader whose class name contains `AppClassLoader` and a stack free of the identical
-   set of frames. Its loader test is by name, so it is looser than step 3's. The class-path check
-   in step 4
-   still applies: DevTools' own class-path signal accepts any directory on the class path, not
-   just a build tool's output directory, so it says yes for a Jib image or an `extract` layout
-   too. With the container check alongside it, a Jib image or Boot's `extract` layout that
-   ships DevTools as a runtime dependency still resolves `false`.
-3. Otherwise the result is `true` only when *all* of these hold. The thread is named `main`.
-   Its context class loader is the JVM's system class loader, compared as an object and not by
-   its class name, not Spring Boot's
-   `LaunchedClassLoader` (a packaged, executable jar) and not a servlet container's webapp
-   loader (a deployed war). And the call stack carries no `org.junit.runners.`,
-   `org.junit.platform.`, `org.springframework.boot.test.`, Boot AOT processor or
-   `cucumber.runtime.` frames. That last check is what tells a `@SpringBootTest` run apart from
-   a genuine local launch, which shares the thread name and the class loader.
-4. Those three hold for *every* exploded-classpath launch, so two more signals decide
-   (`LocalDevDetector.LaunchSignals`, read from the JVM and the host, injectable in tests).
-   `LaunchSignals` also carries the system class loader that step 3 compares with.
-   `java.class.path` must contain a build tool's output directory, and
-   `ContainerRuntime.current()` must report `NONE`. An entry counts as an output directory
-   when, with backslashes turned to slashes and a trailing slash dropped, it ends in
-   `/target/classes`, `/build/classes/{java,kotlin,groovy,scala}/main` or `/bin/main`, or
-   contains IntelliJ's `/out/production/`. `ContainerRuntime.detect` checks its markers in
-   this order and stops at the first hit: a `KUBERNETES_SERVICE_HOST` environment variable,
-   `/.dockerenv`, `/run/.containerenv`, then the three signals of a generic container:
-   `/proc/1/cgroup` naming `docker`, `kubepods` or `containerd`, a non-blank `container`
-   environment variable, or a `/proc/1/mountinfo` line whose mount point (the fifth field) is
-   `/etc/hostname`, `/etc/hosts` or `/etc/resolv.conf`. Runtime names are not matched in
-   mountinfo, because a host lists the overlay mounts of its own containers there. A cgroup or
-   mountinfo file that is missing or cannot be read counts as no signal.
-   A jar's `Class-Path` manifest attribute counts as part of the class path, resolved
-   relative to the jar, because IntelliJ's "JAR manifest" command-line shortening leaves one
-   temp jar on `java.class.path` and moves every real entry into its manifest. An IDE,
-   `spring-boot:run` and `bootRun` always put an output directory there, directly or through
-   that manifest; a Jib image (`/app/classes`) and Boot's `extract` layout (a thin jar whose
-   `Class-Path` manifest names only `lib/*.jar`) never do.
+- The system class loader is compared as an object. A match on its class name would also take a
+  servlet container's webapp loader.
+- A launch DevTools restarted (`RestartClassLoader`) skips the thread and loader checks, which
+  DevTools' own gate has already made, and keeps the other two. DevTools' class-path signal
+  accepts any directory, so without them a Jib image or Boot's `extract` layout that ships
+  DevTools as a runtime dependency would read as local.
+- A jar's `Class-Path` manifest attribute counts as part of the class path, because IntelliJ's
+  "JAR manifest" command-line shortening leaves one temp jar on `java.class.path` and moves every
+  real entry into its manifest.
+- Runtime names are not matched in `/proc/1/mountinfo`, because a host lists the overlay mounts
+  of its own containers there. A mount point of `/etc/hostname`, `/etc/hosts` or
+  `/etc/resolv.conf` is the signal.
 
 So an IDE run, `mvn spring-boot:run` and `gradle bootRun` default to on. A `java -jar` of the
 packaged artifact, a war in a servlet container, a native image, an AOT-processed build, a
@@ -1319,14 +1252,11 @@ all overridable by an app's own `application.yml`:
   trading export throughput for latency so a trace is readable in the toolbar while the
   developer is still looking at the page.
 
-`peekaboot-defaults.yml` carries no `management.endpoint.*` property. Peekaboot builds
-`env`, `configprops`, `info`, `loggers`, `scheduledtasks`, `flyway` and `liquibase` as endpoint
-instances of its own (see *In-Process Actuator Invocation*), so none of the
-application's exposure or access settings decide whether the dashboard sees one of
-them, and `env`/`configprops`'s own `show-values` and `roles` settings never reach
-the instances Peekaboot builds. Peekaboot has no reason to touch any of these
-settings. Health is the one exception. Its bean is borrowed rather than built, and
-`management.endpoint.health.access=none` still removes it, as described above.
+`peekaboot-defaults.yml` carries no `management.endpoint.*` property. Peekaboot builds its
+endpoint instances itself and borrows only the health bean (see
+*In-Process Actuator Invocation*), so none of the application's exposure, access, `show-values`
+or `roles` settings decide what the dashboard sees, and Peekaboot has no reason to touch them.
+`management.endpoint.health.access=none` still removes the borrowed bean.
 
 `peekaboot-defaults.yml`'s `management.tracing.*` and `management.observations.*` defaults
 configure trace sampling and `@Observed` support. Neither decides value visibility. The file sets
