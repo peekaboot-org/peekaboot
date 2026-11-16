@@ -1658,6 +1658,9 @@ with no such boundary in that stretch is cut at the limit.
 
 The appender is attached by the `LogbackAppenderRegistrar` bean, which
 `TraceCaptureAutoConfiguration` registers while tracing is on, whatever the toolbar switch says.
+Capture starts when the registrar bean is created, so lines the beans created after it log at
+startup are captured as untraced lines.
+
 Capture stops at `ContextClosedEvent`, before the context destroys any bean, so the store takes
 no line a bean logs while it is destroyed.
 
