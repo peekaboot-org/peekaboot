@@ -32,12 +32,12 @@ class MigrationStateTest {
         "DELETED, IGNORED",
         "UNDONE, IGNORED"
     })
-    void fromString_shouldParseState(String input, MigrationState expected) {
+    void fromStringParsesState(String input, MigrationState expected) {
         assertThat(MigrationState.fromString(input)).isEqualTo(expected);
     }
 
     @Test
-    void fromString_shouldHandleNull() {
+    void fromStringHandlesNull() {
         assertThat(MigrationState.fromString(null)).isEqualTo(MigrationState.UNKNOWN);
     }
 }

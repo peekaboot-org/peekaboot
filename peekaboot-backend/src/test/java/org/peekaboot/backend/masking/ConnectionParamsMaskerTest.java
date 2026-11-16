@@ -13,7 +13,7 @@ class ConnectionParamsMaskerTest {
     private final ConnectionParamsMasker masker = new ConnectionParamsMasker(new MaskingEngine());
 
     @Test
-    void mask_replacesSensitiveValuesAndKeepsTheRestInOrder() {
+    void maskReplacesSensitiveValuesAndKeepsTheRestInOrder() {
         Map<String, JdbcProperty> params = new LinkedHashMap<>();
         params.put("ssl", new JdbcProperty(PropertySource.QUERY, "true"));
         params.put("password", new JdbcProperty(PropertySource.QUERY, "s3cret"));
@@ -26,14 +26,14 @@ class ConnectionParamsMaskerTest {
     }
 
     @Test
-    void mask_returnsEveryValueVerbatimWhenUnmasked() {
+    void maskReturnsEveryValueVerbatimWhenUnmasked() {
         Map<String, JdbcProperty> params = Map.of("password", new JdbcProperty(PropertySource.QUERY, "s3cret"));
 
         assertThat(masker.mask(params, true)).containsEntry("password", "s3cret");
     }
 
     @Test
-    void mask_toleratesAbsentParamsAndAbsentValues() {
+    void maskToleratesAbsentParamsAndAbsentValues() {
         Map<String, JdbcProperty> params = new LinkedHashMap<>();
         params.put("password", null);
 

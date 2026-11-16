@@ -13,7 +13,7 @@ class CredentialCacheTest {
     private static final String HEADER = "Basic b3JkZXJzLWFkbWluOnMzY3JldA==";
 
     @Test
-    void isKnownGood_isFalseUntilTheHeaderIsRemembered() {
+    void isKnownGoodIsFalseUntilTheHeaderIsRemembered() {
         var cache = new CredentialCache(Duration.ofMinutes(5), Clock.systemUTC());
 
         assertThat(cache.isKnownGood(HEADER)).isFalse();
@@ -24,7 +24,7 @@ class CredentialCacheTest {
     }
 
     @Test
-    void isKnownGood_distinguishesHeaders() {
+    void isKnownGoodDistinguishesHeaders() {
         var cache = new CredentialCache(Duration.ofMinutes(5), Clock.systemUTC());
         cache.remember(HEADER);
 
@@ -32,7 +32,7 @@ class CredentialCacheTest {
     }
 
     @Test
-    void isKnownGood_forgetsAnEntryOnceItsTtlHasPassed() {
+    void isKnownGoodForgetsAnEntryOnceItsTtlHasPassed() {
         var clock = new MovableClock(Instant.parse("2026-09-11T08:00:00Z"));
         var cache = new CredentialCache(Duration.ofMinutes(5), clock);
         cache.remember(HEADER);
@@ -45,7 +45,7 @@ class CredentialCacheTest {
     }
 
     @Test
-    void remember_evictsTheLeastRecentlyUsedEntryAtTheBound() {
+    void rememberEvictsTheLeastRecentlyUsedEntryAtTheBound() {
         var cache = new CredentialCache(Duration.ofMinutes(5), Clock.systemUTC());
         for (int i = 0; i < CredentialCache.MAX_ENTRIES; i++) {
             cache.remember("Basic header-" + i);

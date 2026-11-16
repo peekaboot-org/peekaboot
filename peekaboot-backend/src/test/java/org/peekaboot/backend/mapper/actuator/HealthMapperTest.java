@@ -17,7 +17,7 @@ class HealthMapperTest {
     private final HealthMapper mapper = new HealthMapper(new MaskingEngine());
 
     @Test
-    void map_shouldExtractStatusAndComponents() {
+    void mapExtractsStatusAndComponents() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of("db", new HealthResponse.ComponentDescriptor("UP", Map.of("database", "PostgreSQL"), null)));
@@ -31,7 +31,7 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldMapPerComponentStatusIndependentlyOfAggregateStatus() {
+    void mapMapsPerComponentStatusIndependentlyOfAggregateStatus() {
         // Aggregate status is UP even though the "cache" component itself is DOWN,
         // proving per-component status is read from the component, not copied
         // from the top-level aggregate.
@@ -51,7 +51,7 @@ class HealthMapperTest {
      * itself stays in the list with its aggregate status.
      */
     @Test
-    void map_shouldFlattenACompositesChildrenUnderTheParentName() {
+    void mapFlattensACompositesChildrenUnderTheParentName() {
         // insertion-ordered like Spring's TreeMap-backed composite, so the flat order is checkable
         Map<String, HealthResponse.ComponentDescriptor> children = new LinkedHashMap<>();
         children.put("primary", new HealthResponse.ComponentDescriptor("UP", Map.of("database", "PostgreSQL"), null));
@@ -72,14 +72,14 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullInput() {
+    void mapHandlesNullInput() {
         HealthInfo result = mapper.map(null, false);
         assertThat(result.status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(result.components()).isEmpty();
     }
 
     @Test
-    void map_shouldExtractComponentDetails() {
+    void mapExtractsComponentDetails() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(
@@ -98,7 +98,7 @@ class HealthMapperTest {
      * unlike the built-in indicators, its shape isn't controlled by Peekaboot at all.
      */
     @Test
-    void map_shouldMaskASensitiveKeyInComponentDetails() {
+    void mapMasksASensitiveKeyInComponentDetails() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(
@@ -116,7 +116,7 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+    void mapReturnsRealValueWhenUnmaskIsTrue() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(
@@ -131,7 +131,7 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldLeaveNonStringDetailValuesUntouched() {
+    void mapLeavesNonStringDetailValuesUntouched() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(

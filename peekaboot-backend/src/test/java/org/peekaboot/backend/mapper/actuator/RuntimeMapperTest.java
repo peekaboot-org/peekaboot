@@ -15,7 +15,7 @@ class RuntimeMapperTest {
     private final RuntimeMapper mapper = new RuntimeMapper();
 
     @Test
-    void map_shouldExtractOsInfo() {
+    void mapExtractsOsInfo() {
         InfoResponse info = new InfoResponse(null, null, new InfoResponse.OsDescriptor("amd64", "Linux", "5.15"), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os().name()).isEqualTo("Linux");
@@ -24,7 +24,7 @@ class RuntimeMapperTest {
     }
 
     @Test
-    void map_shouldExtractDiskSpaceFromHealth() {
+    void mapExtractsDiskSpaceFromHealth() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(
@@ -38,7 +38,7 @@ class RuntimeMapperTest {
 
     /** The process and machine facts are the JVM's own, so they are there whatever the actuator said. */
     @Test
-    void map_shouldHandleNullInputs() {
+    void mapHandlesNullInputs() {
         RuntimeInfo result = mapper.map(null, null);
         assertThat(result.os()).isNull();
         assertThat(result.memory()).isNull();
@@ -48,7 +48,7 @@ class RuntimeMapperTest {
     }
 
     @Test
-    void map_shouldExtractMemoryInfo() {
+    void mapExtractsMemoryInfo() {
         InfoResponse info = new InfoResponse(
                 null,
                 null,
@@ -65,14 +65,14 @@ class RuntimeMapperTest {
     }
 
     @Test
-    void map_shouldHandleMissingOsInfo() {
+    void mapHandlesMissingOsInfo() {
         InfoResponse info = new InfoResponse(null, null, null, null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
     }
 
     @Test
-    void map_shouldUseFallbackPathForDiskSpace() {
+    void mapUsesFallbackPathForDiskSpace() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(
@@ -84,7 +84,7 @@ class RuntimeMapperTest {
     }
 
     @Test
-    void map_shouldReturnNullMemoryWhenHeapUsedAndMaxAreBothZero() {
+    void mapReturnsNullMemoryWhenHeapUsedAndMaxAreBothZero() {
         InfoResponse info = new InfoResponse(
                 null,
                 null,
@@ -96,7 +96,7 @@ class RuntimeMapperTest {
     }
 
     @Test
-    void map_shouldSkipDiskEntryWhenTotalIsZeroOrNegative() {
+    void mapSkipsDiskEntryWhenTotalIsZeroOrNegative() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(
@@ -108,7 +108,7 @@ class RuntimeMapperTest {
     }
 
     @Test
-    void map_shouldReturnNullOsInfoWhenAllFieldsAreNull() {
+    void mapReturnsNullOsInfoWhenAllFieldsAreNull() {
         InfoResponse info = new InfoResponse(null, null, new InfoResponse.OsDescriptor(null, null, null), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
@@ -116,7 +116,7 @@ class RuntimeMapperTest {
 
     /** A JVM without -Xmx reports an unbounded heap as -1; the share is then zero, never negative. */
     @Test
-    void map_shouldReportAnUnboundedHeapAsAZeroShare() {
+    void mapReportsAnUnboundedHeapAsAZeroShare() {
         InfoResponse info = new InfoResponse(
                 null,
                 null,
@@ -130,7 +130,7 @@ class RuntimeMapperTest {
     }
 
     @Test
-    void map_shouldReturnNullMemoryWhenOnlyNonHeapIsKnown() {
+    void mapReturnsNullMemoryWhenOnlyNonHeapIsKnown() {
         InfoResponse info = new InfoResponse(
                 null,
                 null,
@@ -144,7 +144,7 @@ class RuntimeMapperTest {
 
     /** A custom disk indicator may render its sizes as text; a total that is not a number is no total. */
     @Test
-    void map_shouldSkipDiskEntryWhoseTotalIsNotANumber() {
+    void mapSkipsDiskEntryWhoseTotalIsNotANumber() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 class MemoryInfoTest {
 
     @Test
-    void of_shouldCalculatePercentage() {
+    void ofCalculatesPercentage() {
         MemoryInfo info = MemoryInfo.of(500_000_000L, 1_000_000_000L, 100_000_000L);
 
         assertThat(info.heapUsed()).isEqualTo(500_000_000L);
@@ -17,13 +17,13 @@ class MemoryInfoTest {
     }
 
     @Test
-    void of_shouldHandleZeroMax() {
+    void ofHandlesZeroMax() {
         MemoryInfo info = MemoryInfo.of(0L, 0L, 0L);
         assertThat(info.heapUsedPercent()).isEqualTo(0.0);
     }
 
     @Test
-    void of_shouldRoundToTwoDecimals() {
+    void ofRoundsToTwoDecimals() {
         MemoryInfo info = MemoryInfo.of(333_333_333L, 1_000_000_000L, 0L);
         assertThat(info.heapUsedPercent()).isEqualTo(33.33);
     }

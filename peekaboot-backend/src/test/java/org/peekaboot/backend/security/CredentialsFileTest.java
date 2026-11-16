@@ -21,7 +21,7 @@ import org.peekaboot.testsupport.LogCapture;
 class CredentialsFileTest {
 
     @Test
-    void write_thenRead_roundTripsTheCredentials(@TempDir Path dir) {
+    void writeThenReadRoundTripsTheCredentials(@TempDir Path dir) {
         var file = new CredentialsFile(dir.resolve("security.properties"));
 
         assertThat(file.write(Credentials.generated("s3cret"))).isTrue();
@@ -32,7 +32,7 @@ class CredentialsFileTest {
     }
 
     @Test
-    void write_overwritesAnExistingFile(@TempDir Path dir) {
+    void writeOverwritesAnExistingFile(@TempDir Path dir) {
         var file = new CredentialsFile(dir.resolve("security.properties"));
         file.write(Credentials.generated("s3cret"));
 
@@ -43,7 +43,7 @@ class CredentialsFileTest {
     }
 
     @Test
-    void write_createsMissingParentDirectories(@TempDir Path dir) {
+    void writeCreatesMissingParentDirectories(@TempDir Path dir) {
         var file = new CredentialsFile(dir.resolve("a/b/security.properties"));
 
         assertThat(file.write(Credentials.generated("s3cret"))).isTrue();
@@ -52,7 +52,7 @@ class CredentialsFileTest {
 
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
-    void write_leavesTheFileReadableOnlyByItsOwner(@TempDir Path dir) throws IOException {
+    void writeLeavesTheFileReadableOnlyByItsOwner(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
 
         new CredentialsFile(path).write(Credentials.generated("s3cret"));
@@ -65,7 +65,7 @@ class CredentialsFileTest {
 
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
-    void write_tightensThePermissionsOfAPreExistingFile(@TempDir Path dir) throws IOException {
+    void writeTightensThePermissionsOfAPreExistingFile(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
         Files.createFile(path);
         Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-r--r--"));
@@ -81,7 +81,7 @@ class CredentialsFileTest {
     /** The default path sits in the storage directory; an explicit one may sit anywhere, so neither may be written through. */
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
-    void write_neverWritesThroughASymlinkPlantedAtThePath(@TempDir Path dir) throws IOException {
+    void writeNeverWritesThroughASymlinkPlantedAtThePath(@TempDir Path dir) throws IOException {
         var victim = dir.resolve("victim");
         Files.writeString(victim, "untouched");
         Files.setPosixFilePermissions(victim, PosixFilePermissions.fromString("rw-r--r--"));
@@ -99,7 +99,7 @@ class CredentialsFileTest {
 
     /** A second name for the file must keep the old content: the write replaces the file rather than writing into it. */
     @Test
-    void write_replacesTheFileRatherThanWritingIntoIt(@TempDir Path dir) throws IOException {
+    void writeReplacesTheFileRatherThanWritingIntoIt(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
         Files.writeString(path, "previous");
         var otherName = Files.createLink(dir.resolve("other-name"), path);
@@ -113,7 +113,7 @@ class CredentialsFileTest {
 
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
-    void write_createsMissingParentDirectoriesReadableOnlyByTheOwner(@TempDir Path dir) throws IOException {
+    void writeCreatesMissingParentDirectoriesReadableOnlyByTheOwner(@TempDir Path dir) throws IOException {
         var path = dir.resolve("a/b/security.properties");
 
         new CredentialsFile(path).write(Credentials.generated("s3cret"));
@@ -123,7 +123,7 @@ class CredentialsFileTest {
     }
 
     @Test
-    void write_leavesNoTemporaryBehind(@TempDir Path dir) throws IOException {
+    void writeLeavesNoTemporaryBehind(@TempDir Path dir) throws IOException {
         new CredentialsFile(dir.resolve("security.properties")).write(Credentials.generated("s3cret"));
 
         try (var entries = Files.list(dir)) {
@@ -133,7 +133,7 @@ class CredentialsFileTest {
 
     /** The username is resolved on every run, so the file records it only for a human reading it. */
     @Test
-    void write_recordsWhomTheCredentialsAreFor(@TempDir Path dir) throws IOException {
+    void writeRecordsWhomTheCredentialsAreFor(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
 
         new CredentialsFile(path).write(Credentials.generated("s3cret"));
@@ -144,7 +144,7 @@ class CredentialsFileTest {
     /** Nothing reads the stored username, so a file without one still keeps its password. */
     @ParameterizedTest
     @ValueSource(strings = {"", "username=\n", "username=  \n"})
-    void read_keepsThePasswordOfAFileWithoutAUsername(String usernameLine, @TempDir Path dir) throws IOException {
+    void readKeepsThePasswordOfAFileWithoutAUsername(String usernameLine, @TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
         writeOwnerOnly(
                 path,
@@ -159,7 +159,7 @@ class CredentialsFileTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"rw-r-----", "rw----r--", "rw--w----", "rw-----w-", "rw---x---", "rw------x"})
-    void read_refusesAFileItsGroupOrOthersCanAccess(String mode, @TempDir Path dir) throws IOException {
+    void readRefusesAFileItsGroupOrOthersCanAccess(String mode, @TempDir Path dir) throws IOException {
         PosixPermissions.assumeSupported();
         var path = dir.resolve("security.properties");
         var file = new CredentialsFile(path);
@@ -175,7 +175,7 @@ class CredentialsFileTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"rw-------", "r--------"})
-    void read_usesAnOwnerOnlyFile(String mode, @TempDir Path dir) throws IOException {
+    void readUsesAnOwnerOnlyFile(String mode, @TempDir Path dir) throws IOException {
         PosixPermissions.assumeSupported();
         var path = dir.resolve("security.properties");
         var file = new CredentialsFile(path);
@@ -193,13 +193,13 @@ class CredentialsFileTest {
     }
 
     @Test
-    void read_isEmptyWhenTheFileIsAbsent(@TempDir Path dir) {
+    void readIsEmptyWhenTheFileIsAbsent(@TempDir Path dir) {
         assertThat(new CredentialsFile(dir.resolve("security.properties")).read())
                 .isEmpty();
     }
 
     @Test
-    void read_isEmptyWhenTheEntryIsUnparseable(@TempDir Path dir) throws IOException {
+    void readIsEmptyWhenTheEntryIsUnparseable(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
         writeOwnerOnly(path, "username=orders-admin\npassword=not-a-hash\ncreated=2026-09-11T08:15:30Z\n");
 
@@ -211,7 +211,7 @@ class CredentialsFileTest {
     }
 
     @Test
-    void read_isEmptyWhenTheCreationInstantIsUnparseable(@TempDir Path dir) throws IOException {
+    void readIsEmptyWhenTheCreationInstantIsUnparseable(@TempDir Path dir) throws IOException {
         var path = dir.resolve("security.properties");
         writeOwnerOnly(
                 path,
@@ -225,7 +225,7 @@ class CredentialsFileTest {
     }
 
     @Test
-    void write_reportsFailureWhenTheDirectoryCannotBeCreated(@TempDir Path dir) throws IOException {
+    void writeReportsFailureWhenTheDirectoryCannotBeCreated(@TempDir Path dir) throws IOException {
         var blocker = dir.resolve("blocker");
         Files.writeString(blocker, "not a directory");
 
@@ -240,23 +240,23 @@ class CredentialsFileTest {
     }
 
     @Test
-    void unpersisted_hasNoPath() {
+    void unpersistedHasNoPath() {
         assertThat(CredentialsFile.unpersisted().path()).isEmpty();
     }
 
     @Test
-    void unpersisted_readIsEmpty() {
+    void anUnpersistedReadIsEmpty() {
         assertThat(CredentialsFile.unpersisted().read()).isEmpty();
     }
 
     @Test
-    void unpersisted_writeReturnsFalse() {
+    void anUnpersistedWriteReturnsFalse() {
         assertThat(CredentialsFile.unpersisted().write(Credentials.generated("s3cret")))
                 .isFalse();
     }
 
     @Test
-    void unpersisted_writeLogsNoWarning() {
+    void anUnpersistedWriteLogsNoWarning() {
         try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
             CredentialsFile.unpersisted().write(Credentials.generated("s3cret"));
 

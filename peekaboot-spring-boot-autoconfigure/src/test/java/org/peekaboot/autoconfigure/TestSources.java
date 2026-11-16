@@ -17,6 +17,9 @@ final class TestSources {
             + "|Thread\\.setDefaultUncaughtExceptionHandler\\("
             + "|System\\.(setProperty|clearProperty|setOut|setErr|setIn)\\(");
 
+    private static final Pattern LEGACY_TEST_NAME =
+            Pattern.compile("\\bvoid\\s+([a-z][A-Za-z0-9]*_[A-Za-z0-9_]+|should[A-Z][A-Za-z0-9]*)\\s*\\(");
+
     private TestSources() {}
 
     /** Every Java file under a module's {@code src/test/java}, in path order. */
@@ -47,6 +50,18 @@ final class TestSources {
                 .toList();
         return code.stream().anyMatch(line -> JVM_DEFAULT_WRITE.matcher(line).find())
                 && code.stream().noneMatch(line -> line.contains("@Isolated"));
+    }
+
+    /**
+     * The names of {@code source}'s {@code void} methods that are no sentence: the
+     * {@code method_condition} form and the {@code should...} form.
+     */
+    static List<String> legacyTestNames(String source) {
+        return LEGACY_TEST_NAME
+                .matcher(source)
+                .results()
+                .map(match -> match.group(1))
+                .toList();
     }
 
     private static boolean isComment(String strippedLine) {

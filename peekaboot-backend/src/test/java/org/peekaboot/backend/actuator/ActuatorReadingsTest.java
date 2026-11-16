@@ -12,7 +12,7 @@ import org.peekaboot.testsupport.LogCapture;
 class ActuatorReadingsTest {
 
     @Test
-    void readAll_keysEachSourceByItsId() {
+    void readAllKeysEachSourceByItsId() {
         ActuatorReadings readings = new ActuatorReadings(List.of(
                 new InsightsSource("spring", () -> Map.of("bootVersion", "4.1.1")),
                 new InsightsSource("info", () -> Map.of("app", "demo"))));
@@ -23,7 +23,7 @@ class ActuatorReadingsTest {
 
     /** A source whose backing bean is absent says so with null rather than failing. */
     @Test
-    void readAll_leavesOutASourceThatReadsNullWithoutLogging() {
+    void readAllLeavesOutASourceThatReadsNullWithoutLogging() {
         try (LogCapture capture = LogCapture.attach(ActuatorReadings.class, Level.DEBUG)) {
             ActuatorReadings readings = new ActuatorReadings(
                     List.of(new InsightsSource("health", () -> null), new InsightsSource("info", () -> Map.of())));
@@ -34,7 +34,7 @@ class ActuatorReadingsTest {
     }
 
     @Test
-    void readAll_leavesOutASourceThatFailsAndWarnsWithTheCauseOnceOnly() {
+    void readAllLeavesOutASourceThatFailsAndWarnsWithTheCauseOnceOnly() {
         try (LogCapture capture = LogCapture.attach(ActuatorReadings.class, Level.DEBUG)) {
             ActuatorReadings readings = new ActuatorReadings(List.of(
                     new InsightsSource("loggers", () -> {

@@ -57,7 +57,7 @@ class ActuatorInsightsServiceTest {
                             "expression", "0 0 * * * *", "runnable", Map.of("target", "com.example.Task.run")))));
 
     @Test
-    void getInsights_shouldMapAllSections() {
+    void getInsightsMapsAllSections() {
         ActuatorInsightsService service = service(Map.of(
                 "health", Map.of("status", "UP", "components", Map.of()),
                 "info",
@@ -118,7 +118,7 @@ class ActuatorInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldMapDataSourcesFromInjectedMetadata() {
+    void getInsightsMapsDataSourcesFromInjectedMetadata() {
         DataSourceMetadata metadata = new DataSourceMetadata(
                 "primaryDS", "sa", List.of(), "app", DatabaseProduct.H2, Map.of(), "H2", "2", "H2 JDBC Driver");
         ActuatorInsightsService service = service(Map.of(), new DataSourceMetadataList(List.of(metadata)));
@@ -131,7 +131,7 @@ class ActuatorInsightsServiceTest {
 
     /** The list reads its DataSources after the service is built, so the service asks it on every request. */
     @Test
-    void getInsights_shouldShowDataSourcesThatResolveAfterConstruction() {
+    void getInsightsShowsDataSourcesThatResolveAfterConstruction() {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:insights-resolved-later");
         ActuatorInsightsService service =
@@ -144,7 +144,7 @@ class ActuatorInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldMapLiquibaseChangeSets() {
+    void getInsightsMapsLiquibaseChangeSets() {
         ActuatorInsightsService service = service(Map.of(
                 "liquibase",
                 Map.of(
@@ -173,7 +173,7 @@ class ActuatorInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldHandleMissingData() {
+    void getInsightsHandlesMissingData() {
         ActuatorInsightsService service = service(Map.of());
 
         ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);
@@ -186,14 +186,14 @@ class ActuatorInsightsServiceTest {
 
     /** The mappers are built inside the service, so the engine it is handed is the one that masks. */
     @Test
-    void getInsights_shouldMaskThroughTheEngineItWasGiven() {
+    void getInsightsMasksThroughTheEngineItWasGiven() {
         ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT);
 
         assertThat(servedPassword(service.getInsights(Locale.ENGLISH, false))).isEqualTo("******");
     }
 
     @Test
-    void getInsights_shouldDescribeSchedulesInTheRequestLocale() {
+    void getInsightsDescribesSchedulesInTheRequestLocale() {
         ActuatorInsightsService service = service(HOURLY_CRON_TASK);
 
         assertThat(scheduleDescription(service.getInsights(Locale.GERMAN, false)))
@@ -202,7 +202,7 @@ class ActuatorInsightsServiceTest {
 
     /** Boot's info.git reads the first git.properties on the classpath, here a dependency's. */
     @Test
-    void getInsights_shouldShowTheApplicationsOwnGitFactsOverInfoGit() {
+    void getInsightsShowsTheApplicationsOwnGitFactsOverInfoGit() {
         Properties own = new Properties();
         own.setProperty("branch", "main");
         own.setProperty("commit.id.abbrev", "own1234");
@@ -217,7 +217,7 @@ class ActuatorInsightsServiceTest {
 
     /** A section that does not bind is left out like a failed read, so it cannot blank the other tabs. */
     @Test
-    void getInsights_shouldKeepTheOtherSectionsWhenOneFailsToParse() {
+    void getInsightsKeepsTheOtherSectionsWhenOneFailsToParse() {
         ActuatorInsightsService service = service(Map.of(
                 "health", Map.of("status", Map.of("code", "UP")),
                 "env", Map.of("activeProfiles", List.of("dev"))));
@@ -235,28 +235,28 @@ class ActuatorInsightsServiceTest {
 
     /** The request's unmask is never a bypass on its own: while the property is off, every request reads masked. */
     @Test
-    void insightsFor_shouldStayMaskedWhateverTheRequestAsksWhileUnmaskingIsOff() {
+    void insightsForStaysMaskedWhateverTheRequestAsksWhileUnmaskingIsOff() {
         ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT, new PeekabootProperties());
 
         assertThat(servedPassword(service.insightsFor(null, true))).isEqualTo("******");
     }
 
     @Test
-    void insightsFor_shouldUnmaskOnlyWhenThePropertyAndTheRequestBothSaySo() {
+    void insightsForUnmasksOnlyWhenThePropertyAndTheRequestBothSaySo() {
         ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT, unmaskingEnabled());
 
         assertThat(servedPassword(service.insightsFor(null, true))).isEqualTo("hunter2");
     }
 
     @Test
-    void insightsFor_shouldStayMaskedWhenOnlyThePropertyIsSet() {
+    void insightsForStaysMaskedWhenOnlyThePropertyIsSet() {
         ActuatorInsightsService service = service(PASSWORD_IN_THE_ENVIRONMENT, unmaskingEnabled());
 
         assertThat(servedPassword(service.insightsFor(null, false))).isEqualTo("******");
     }
 
     @Test
-    void insightsFor_shouldDescribeACronTaskInTheRequestedLanguage() {
+    void insightsForDescribesACronTaskInTheRequestedLanguage() {
         ActuatorInsightsService service = service(HOURLY_CRON_TASK);
 
         assertThat(scheduleDescription(service.insightsFor("de", false)))
@@ -267,7 +267,7 @@ class ActuatorInsightsServiceTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(strings = "  ")
-    void insightsFor_shouldDescribeACronTaskInEnglishWhereNoLocaleIsNamed(String locale) {
+    void insightsForDescribesACronTaskInEnglishWhereNoLocaleIsNamed(String locale) {
         ActuatorInsightsService service = service(HOURLY_CRON_TASK);
 
         assertThat(scheduleDescription(service.insightsFor(locale, false)))
@@ -275,7 +275,7 @@ class ActuatorInsightsServiceTest {
     }
 
     @Test
-    void insightsFor_shouldRefuseAnIllFormedLocale() {
+    void insightsForRefusesAnIllFormedLocale() {
         ActuatorInsightsService service = service(Map.of());
 
         assertThatThrownBy(() -> service.insightsFor("!!", false))

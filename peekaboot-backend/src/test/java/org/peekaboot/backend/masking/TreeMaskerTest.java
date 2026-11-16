@@ -12,7 +12,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldReplaceWholeValueForATopLevelSensitiveKey() {
+    void maskReplacesWholeValueForATopLevelSensitiveKey() {
         Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), false);
 
         assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
@@ -20,7 +20,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldReplaceANestedObjectEntirelyWhenItsKeyIsSensitive() {
+    void maskReplacesANestedObjectEntirelyWhenItsKeyIsSensitive() {
         Map<String, Object> tree = Map.of(
                 "connectionParams",
                 Map.of(
@@ -37,7 +37,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldApplyValuePatternRulesToStringLeavesUnderInnocuousKeys() {
+    void maskAppliesValuePatternRulesToStringLeavesUnderInnocuousKeys() {
         Object masked = treeMasker.mask(Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"), false);
 
         assertThat(((Map<String, Object>) masked).get("url")).isEqualTo("jdbc:postgresql://******@localhost/db");
@@ -45,7 +45,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldRecurseIntoLists() {
+    void maskRecursesIntoLists() {
         Object masked =
                 treeMasker.mask(Map.of("items", List.of(Map.of("password", "hunter2"), Map.of("name", "ok"))), false);
 
@@ -58,7 +58,7 @@ class TreeMaskerTest {
     // not only the leaves whose own key happens to be sensitive.
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldReplaceAListUnderAPluralSensitiveKey() {
+    void maskReplacesAListUnderAPluralSensitiveKey() {
         Object masked = treeMasker.mask(Map.of("passwords", List.of("hunter2", "hunter3")), false);
 
         assertThat((Map<String, Object>) masked).containsEntry("passwords", "******");
@@ -66,7 +66,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldReplaceANestedMapUnderAPluralSensitiveKey() {
+    void maskReplacesANestedMapUnderAPluralSensitiveKey() {
         Object masked = treeMasker.mask(Map.of("secrets", Map.of("db", "hunter2")), false);
 
         assertThat((Map<String, Object>) masked).containsEntry("secrets", "******");
@@ -74,19 +74,19 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldLeaveNonStringScalarsUntouched() {
+    void maskLeavesNonStringScalarsUntouched() {
         Object masked = treeMasker.mask(Map.of("port", 8080, "enabled", true), false);
 
         assertThat((Map<String, Object>) masked).containsEntry("port", 8080).containsEntry("enabled", true);
     }
 
     @Test
-    void mask_shouldReturnNullForNullNode() {
+    void maskReturnsNullForNullNode() {
         assertThat(treeMasker.mask(null, false)).isNull();
     }
 
     @Test
-    void maskMap_masksLikeMaskAndKeepsTheMapType() {
+    void maskMapMasksLikeMaskAndKeepsTheMapType() {
         Map<String, Object> masked =
                 treeMasker.maskMap(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP", "nested", Map.of("password", "x")), false);
 
@@ -94,7 +94,7 @@ class TreeMaskerTest {
     }
 
     @Test
-    void maskMap_handsTheMapBackUnchangedWhenUnmaskIsTrue() {
+    void maskMapHandsTheMapBackUnchangedWhenUnmaskIsTrue() {
         Map<String, Object> build = Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP");
 
         assertThat(treeMasker.maskMap(build, true)).isSameAs(build);
@@ -102,7 +102,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldReturnTreeUnchangedWhenUnmaskIsTrue() {
+    void maskReturnsTreeUnchangedWhenUnmaskIsTrue() {
         Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), true);
 
         assertThat((Map<String, Object>) masked).containsEntry("apiKey", "AKIAABCDEFGHIJKLMNOP");
@@ -110,7 +110,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_shouldBehaveLikeTheOneArgOverloadWhenUnmaskIsFalse() {
+    void maskBehavesLikeTheOneArgOverloadWhenUnmaskIsFalse() {
         Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), false);
 
         assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
@@ -122,7 +122,7 @@ class TreeMaskerTest {
     // mask(Object) overload checks descendants but never the root, so this key-aware
     // overload exists to also check the root against isSensitiveKey.
     @Test
-    void mask_withKey_shouldReplaceTheWholeValueWhenTheRootKeyItselfIsSensitive() {
+    void maskWithKeyReplacesTheWholeValueWhenTheRootKeyItselfIsSensitive() {
         Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue", false);
 
         assertThat(masked).isEqualTo("******");
@@ -130,7 +130,7 @@ class TreeMaskerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mask_withKey_shouldStillRecurseIntoDescendantsWhenTheRootKeyIsInnocuous() {
+    void maskWithKeyStillRecursesIntoDescendantsWhenTheRootKeyIsInnocuous() {
         Map<String, Object> google = Map.of("clientId", "abc123", "clientSecret", "GOCSPX-SuperSecretValue");
 
         Object masked = treeMasker.mask("registration", Map.of("google", google), false);
@@ -147,7 +147,7 @@ class TreeMaskerTest {
      */
     @Test
     @SuppressWarnings("unchecked")
-    void mask_withKey_shouldJudgeANestedKeyByItsPathSoAWholeKeyRuleDoesNotFireOnASegment() {
+    void maskWithKeyJudgesANestedKeyByItsPathSoAWholeKeyRuleDoesNotFireOnASegment() {
         Map<String, Object> cookie = Map.of("sameSite", "Lax", "httpOnly", true);
         Map<String, Object> servlet = Map.of("session", Map.of("cookie", cookie));
 
@@ -158,12 +158,12 @@ class TreeMaskerTest {
     }
 
     @Test
-    void mask_withKey_shouldStillApplyAWholeKeyRuleToTheRootKey() {
+    void maskWithKeyStillAppliesAWholeKeyRuleToTheRootKey() {
         assertThat(treeMasker.mask("cookie", "session=abc123", false)).isEqualTo("******");
     }
 
     @Test
-    void mask_withKeyAndUnmask_shouldReturnTheNodeVerbatimWhenUnmaskIsTrueEvenForASensitiveRootKey() {
+    void maskWithKeyAndUnmaskReturnsTheNodeVerbatimWhenUnmaskIsTrueEvenForASensitiveRootKey() {
         Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue", true);
 
         assertThat(masked).isEqualTo("GOCSPX-SuperSecretValue");

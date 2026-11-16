@@ -16,7 +16,7 @@ class LoggersMapperTest {
     private final LoggersMapper mapper = new LoggersMapper();
 
     @Test
-    void map_shouldGroupLoggersByPackage() {
+    void mapGroupsLoggersByPackage() {
         Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers = new LinkedHashMap<>();
         loggers.put("com.example.service.UserService", new LoggersResponse.LoggerLevelsDescriptor(null, "INFO"));
         loggers.put("com.example.controller.UserController", new LoggersResponse.LoggerLevelsDescriptor(null, "DEBUG"));
@@ -40,7 +40,7 @@ class LoggersMapperTest {
     }
 
     @Test
-    void map_shouldCountConfiguredLoggers() {
+    void mapCountsConfiguredLoggers() {
         Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers = new LinkedHashMap<>();
         loggers.put("com.example.Foo", new LoggersResponse.LoggerLevelsDescriptor("DEBUG", "INFO"));
         loggers.put("com.example.Bar", new LoggersResponse.LoggerLevelsDescriptor(null, "INFO"));
@@ -67,7 +67,7 @@ class LoggersMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullInput() {
+    void mapHandlesNullInput() {
         LoggersInfo result = mapper.map(null);
         assertThat(result.packages()).isEmpty();
         assertThat(result.totalCount()).isZero();
@@ -75,14 +75,14 @@ class LoggersMapperTest {
     }
 
     @Test
-    void map_shouldHandleEmptyLoggers() {
+    void mapHandlesEmptyLoggers() {
         LoggersResponse loggersData = new LoggersResponse(Map.of());
         LoggersInfo result = mapper.map(loggersData);
         assertThat(result.packages()).isEmpty();
     }
 
     @Test
-    void map_shouldHandleSinglePartPackageName() {
+    void mapHandlesSinglePartPackageName() {
         Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers =
                 Map.of("ROOT", new LoggersResponse.LoggerLevelsDescriptor(null, "INFO"));
         LoggersResponse loggersData = new LoggersResponse(loggers);
@@ -94,7 +94,7 @@ class LoggersMapperTest {
 
     /** The group is the first two segments; a logger named by exactly two is its own group. */
     @Test
-    void map_shouldGroupATwoSegmentLoggerUnderItsOwnName() {
+    void mapGroupsATwoSegmentLoggerUnderItsOwnName() {
         Map<String, LoggersResponse.LoggerLevelsDescriptor> loggers = new LinkedHashMap<>();
         loggers.put("com.example", new LoggersResponse.LoggerLevelsDescriptor("DEBUG", "DEBUG"));
         loggers.put("com.example.Foo", new LoggersResponse.LoggerLevelsDescriptor(null, "DEBUG"));

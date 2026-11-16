@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 class StorageInfoTest {
 
     @Test
-    void of_shouldCalculateUsedPercent() {
+    void ofCalculatesUsedPercent() {
         StorageInfo info = StorageInfo.of("/", 500_000_000_000L, 200_000_000_000L);
 
         assertThat(info.path()).isEqualTo("/");
@@ -17,13 +17,13 @@ class StorageInfoTest {
     }
 
     @Test
-    void of_shouldHandleZeroTotal() {
+    void ofHandlesZeroTotal() {
         StorageInfo info = StorageInfo.of("/", 0L, 0L);
         assertThat(info.usedPercent()).isEqualTo(0.0);
     }
 
     @Test
-    void of_shouldRoundToTwoDecimals() {
+    void ofRoundsToTwoDecimals() {
         StorageInfo info = StorageInfo.of("/", 1_000_000_000L, 666_666_667L);
         assertThat(info.usedPercent()).isEqualTo(33.33);
     }

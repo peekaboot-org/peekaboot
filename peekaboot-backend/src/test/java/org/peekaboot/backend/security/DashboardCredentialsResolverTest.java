@@ -19,7 +19,7 @@ import org.peekaboot.testsupport.LogCapture;
 class DashboardCredentialsResolverTest {
 
     @Test
-    void resolve_prefersTheConfiguredPasswordOverAStoredOne(@TempDir Path dir) {
+    void resolvePrefersTheConfiguredPasswordOverAStoredOne(@TempDir Path dir) {
         var file = new CredentialsFile(dir.resolve("security.properties"));
         var generated =
                 new DashboardCredentialsResolver(new PeekabootProperties.Security(), file, "orders-service").resolve();
@@ -37,7 +37,7 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void resolve_persistsNothingForAConfiguredPassword(@TempDir Path dir) {
+    void resolvePersistsNothingForAConfiguredPassword(@TempDir Path dir) {
         var security = new PeekabootProperties.Security();
         security.setPassword("from-the-vault");
         var file = new CredentialsFile(dir.resolve("security.properties"));
@@ -49,7 +49,7 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void resolve_datesConfiguredAndGeneratedCredentialsByTheClock(@TempDir Path dir) {
+    void resolveDatesConfiguredAndGeneratedCredentialsByTheClock(@TempDir Path dir) {
         var clock = Clock.fixed(Instant.parse("2026-09-11T08:00:00Z"), ZoneOffset.UTC);
         var security = new PeekabootProperties.Security();
         security.setPassword("from-the-vault");
@@ -69,7 +69,7 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void resolve_generatesAndPersistsWhenNothingIsConfiguredOrStored(@TempDir Path dir) {
+    void resolveGeneratesAndPersistsWhenNothingIsConfiguredOrStored(@TempDir Path dir) {
         var file = new CredentialsFile(dir.resolve("security.properties"));
 
         var credentials =
@@ -83,7 +83,7 @@ class DashboardCredentialsResolverTest {
 
     /** The whole point of the file: the password survives a restart. */
     @Test
-    void resolve_reusesTheStoredPasswordOnASecondRun(@TempDir Path dir) {
+    void resolveReusesTheStoredPasswordOnASecondRun(@TempDir Path dir) {
         var file = new CredentialsFile(dir.resolve("security.properties"));
         var first =
                 new DashboardCredentialsResolver(new PeekabootProperties.Security(), file, "orders-service").resolve();
@@ -98,7 +98,7 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void resolve_replacesAnExposedFileWithAnOwnerOnlyOne(@TempDir Path dir) throws IOException {
+    void resolveReplacesAnExposedFileWithAnOwnerOnlyOne(@TempDir Path dir) throws IOException {
         PosixPermissions.assumeSupported();
         var path = dir.resolve("security.properties");
         var file = new CredentialsFile(path);
@@ -124,7 +124,7 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void resolve_reportsAnUnpersistedGenerationWhenTheFileCannotBeWritten(@TempDir Path dir) throws Exception {
+    void resolveReportsAnUnpersistedGenerationWhenTheFileCannotBeWritten(@TempDir Path dir) throws Exception {
         var blocker = dir.resolve("blocker");
         java.nio.file.Files.writeString(blocker, "not a directory");
         var file = new CredentialsFile(blocker.resolve("security.properties"));
@@ -144,7 +144,7 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void resolve_reportsGeneratedUnpersistedWhenThereIsNoCredentialsFile() {
+    void resolveReportsGeneratedUnpersistedWhenThereIsNoCredentialsFile() {
         var credentials = new DashboardCredentialsResolver(
                         new PeekabootProperties.Security(), CredentialsFile.unpersisted(), "orders-service")
                 .resolve();
@@ -155,24 +155,24 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void usernameFor_suffixesTheApplicationName() {
+    void usernameForSuffixesTheApplicationName() {
         assertThat(DashboardCredentialsResolver.usernameFor("orders-service")).isEqualTo("orders-service-admin");
     }
 
     @Test
-    void usernameFor_lowerCasesAndReplacesEverythingOutsideTheAllowedSet() {
+    void usernameForLowerCasesAndReplacesEverythingOutsideTheAllowedSet() {
         assertThat(DashboardCredentialsResolver.usernameFor("Orders Service!")).isEqualTo("orders-service--admin");
         assertThat(DashboardCredentialsResolver.usernameFor("com.acme:orders")).isEqualTo("com.acme-orders-admin");
     }
 
     @Test
-    void usernameFor_fallsBackWhenThereIsNoApplicationName() {
+    void usernameForFallsBackWhenThereIsNoApplicationName() {
         assertThat(DashboardCredentialsResolver.usernameFor(null)).isEqualTo("peekaboot-admin");
         assertThat(DashboardCredentialsResolver.usernameFor("   ")).isEqualTo("peekaboot-admin");
     }
 
     @Test
-    void resolve_prefersTheConfiguredUsername(@TempDir Path dir) {
+    void resolvePrefersTheConfiguredUsername(@TempDir Path dir) {
         var security = new PeekabootProperties.Security();
         security.setUsername("ops");
 
@@ -184,7 +184,7 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void generatePassword_drawsTwentySixCharactersFromTheUnambiguousAlphabet() {
+    void generatePasswordDrawsTwentySixCharactersFromTheUnambiguousAlphabet() {
         var password = DashboardCredentialsResolver.generatePassword();
 
         assertThat(password).matches("[23456789abcdefghijkmnpqrstuvwxyz]{26}");

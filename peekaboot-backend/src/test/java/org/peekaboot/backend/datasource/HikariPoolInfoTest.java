@@ -12,7 +12,7 @@ class HikariPoolInfoTest {
     private final HikariPoolInfo poolInfo = new HikariPoolInfo();
 
     @Test
-    void settingsOf_readsAHikariPoolsSizingAndTimeout() {
+    void settingsOfReadsAHikariPoolsSizingAndTimeout() {
         // an unsealed HikariDataSource answers its config MXBean without ever opening the pool
         try (HikariDataSource hikari = new HikariDataSource()) {
             hikari.setMinimumIdle(3);
@@ -24,7 +24,7 @@ class HikariPoolInfoTest {
     }
 
     @Test
-    void settingsOf_isEmptyForAnyOtherDataSource() {
+    void settingsOfIsEmptyForAnyOtherDataSource() {
         assertThat(poolInfo.settingsOf(mock(DataSource.class))).isEmpty();
     }
 }

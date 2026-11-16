@@ -23,7 +23,7 @@ class SecurityPostureListenerTest {
     private static final ApplicationReadyEvent EVENT = mock(ApplicationReadyEvent.class);
 
     @Test
-    void onApplicationEvent_logsAWarnPostureAtWarn() {
+    void onApplicationEventLogsAWarnPostureAtWarn() {
         var posture = SecurityPosture.disabledOnADeployment("/peekaboot", false);
         var expectedText = posture.report().orElseThrow().text();
 
@@ -38,7 +38,7 @@ class SecurityPostureListenerTest {
     }
 
     @Test
-    void onApplicationEvent_logsAnInfoPostureAtInfo() {
+    void onApplicationEventLogsAnInfoPostureAtInfo() {
         var posture = SecurityPosture.armed(
                 "/peekaboot", Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC);
         var expectedText = posture.report().orElseThrow().text();
@@ -54,7 +54,7 @@ class SecurityPostureListenerTest {
     }
 
     @Test
-    void onApplicationEvent_logsNothingForAQuietPosture() {
+    void onApplicationEventLogsNothingForAQuietPosture() {
         try (var logs = LogCapture.attach(SecurityPostureListener.class)) {
             new SecurityPostureListener(SecurityPosture.quiet()).onApplicationEvent(EVENT);
 

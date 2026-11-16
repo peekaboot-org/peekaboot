@@ -25,7 +25,7 @@ class ToolbarDataProviderTest {
     }
 
     @Test
-    void shouldGenerateValidJson() {
+    void generatesValidJson() {
         String json = provider.getToolbarSummaryJson("/peekaboot", "POST", "/api/data", 201, "trace123");
 
         JsonNode parsed = PeekabootJson.MAPPER.readTree(json);
@@ -38,7 +38,7 @@ class ToolbarDataProviderTest {
 
     /** A request served outside any span (tracing off, an excluded path) still gets a bar; the key is there, null. */
     @Test
-    void shouldCarryAMissingTraceIdAsJsonNull() {
+    void carriesAMissingTraceIdAsJsonNull() {
         String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null);
 
         JsonNode parsed = PeekabootJson.MAPPER.readTree(json);
@@ -47,7 +47,7 @@ class ToolbarDataProviderTest {
     }
 
     @Test
-    void shouldEscapeAngleBracketsToPreventScriptTagBreakout() {
+    void escapesAngleBracketsToPreventScriptTagBreakout() {
         // The JSON is embedded verbatim inside a <script> tag; a literal
         // </script> in the payload would terminate the tag and inject markup.
         String json = provider.getToolbarSummaryJson(
@@ -68,14 +68,14 @@ class ToolbarDataProviderTest {
 
     /** The base path is whatever the filter resolved for this request - context path included. */
     @Test
-    void shouldCarryTheBasePathItIsGiven() {
+    void carriesTheBasePathItIsGiven() {
         assertThat(provider.getToolbarSummaryJson("/app/peekaboot", "GET", "/app/users", 200, null))
                 .contains("\"basePath\":\"/app/peekaboot\"");
         assertThat(provider.getIdleModeJson("/app/peekaboot", List.of())).contains("\"basePath\":\"/app/peekaboot\"");
     }
 
     @Test
-    void shouldGenerateIdleModeJson() {
+    void generatesIdleModeJson() {
         JsonNode parsed = PeekabootJson.MAPPER.readTree(
                 provider.getIdleModeJson("/peekaboot", List.of("/swagger-ui/", "/v3/api-docs")));
 
@@ -87,7 +87,7 @@ class ToolbarDataProviderTest {
 
     /** The overlay the bar opens colours by these, so they have to be the configured ones, in both modes. */
     @Test
-    void shouldCarryTheEffectiveThresholds() {
+    void carriesTheEffectiveThresholds() {
         tracingProperties.setSlowSpanThresholdMs(250);
         tracingProperties.setVerySlowSpanThresholdMs(900);
         tracingProperties.setSlowQueryThresholdMs(75);
@@ -106,7 +106,7 @@ class ToolbarDataProviderTest {
 
     /** The overlay reads the blob's features as it reads /api/features, so every name has to be one that endpoint publishes. */
     @Test
-    void shouldNameEachFeatureAsTheFeaturesEndpointDoes() {
+    void namesEachFeatureAsTheFeaturesEndpointDoes() {
         List<String> published = Arrays.stream(Features.class.getRecordComponents())
                 .map(RecordComponent::getName)
                 .toList();

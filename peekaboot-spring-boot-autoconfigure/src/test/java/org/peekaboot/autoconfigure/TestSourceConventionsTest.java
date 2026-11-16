@@ -17,7 +17,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * A test that writes a JVM-wide default changes it for every class running beside it, so its
  * class is {@code @Isolated}. A module that runs its classes one at a time never shows a missing
- * annotation, so this scan of every module's test sources does.
+ * annotation, so this scan of every module's test sources does. Test names are sentences, so the
+ * scan also fails on a {@code method_condition} or {@code should...} name.
  */
 class TestSourceConventionsTest {
 
@@ -82,12 +83,10 @@ class TestSourceConventionsTest {
     @Test
     void everyTestSourceThatWritesAJvmDefaultIsIsolated() throws IOException {
         Path root = reactorRoot();
-        List<Path> sources = TestSources.all();
+        List<Path> sources = sourcesBesidesThisOne();
         List<String> offenders = new ArrayList<>();
         for (Path source : sources) {
-            // This class's literals are the calls.
-            if (!source.endsWith("TestSourceConventionsTest.java")
-                    && TestSources.writesAJvmDefaultUnisolated(Files.readString(source))) {
+            if (TestSources.writesAJvmDefaultUnisolated(Files.readString(source))) {
                 offenders.add(root.relativize(source).toString());
             }
         }
@@ -101,6 +100,48 @@ class TestSourceConventionsTest {
         assertThat(offenders)
                 .as("test sources that write a JVM-wide default and are not @Isolated; see docs/TESTING.md")
                 .isEmpty();
+    }
+
+    @Test
+    void aMethodUnderscoreConditionNameIsLegacy() {
+        assertThat(TestSources.legacyTestNames("    void mask_shouldReplaceTheValue() {}"))
+                .containsExactly("mask_shouldReplaceTheValue");
+    }
+
+    @Test
+    void aShouldNameIsLegacy() {
+        assertThat(TestSources.legacyTestNames("    void shouldDoTheThing() {}"))
+                .containsExactly("shouldDoTheThing");
+    }
+
+    @Test
+    void aSentenceNameIsNot() {
+        assertThat(TestSources.legacyTestNames("    void aSnapshotDatedInTheFutureIsDeletedUnread() {}"))
+                .isEmpty();
+        assertThat(TestSources.legacyTestNames("    void shouldersTheLoad() {}"))
+                .isEmpty();
+    }
+
+    @Test
+    void noTestSourceKeepsALegacyTestName() throws IOException {
+        Path root = reactorRoot();
+        List<String> offenders = new ArrayList<>();
+        for (Path source : sourcesBesidesThisOne()) {
+            for (String name : TestSources.legacyTestNames(Files.readString(source))) {
+                offenders.add(root.relativize(source) + ": " + name);
+            }
+        }
+
+        assertThat(offenders)
+                .as("tests named method_condition or should...; docs/TESTING.md asks for a sentence")
+                .isEmpty();
+    }
+
+    // This class's samples are what the scans look for.
+    private static List<Path> sourcesBesidesThisOne() throws IOException {
+        return TestSources.all().stream()
+                .filter(source -> !source.endsWith("TestSourceConventionsTest.java"))
+                .toList();
     }
 
     private static String writer(String call) {

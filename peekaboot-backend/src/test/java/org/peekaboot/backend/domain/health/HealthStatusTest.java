@@ -19,12 +19,12 @@ class HealthStatusTest {
         "invalid, UNKNOWN",
         "'', UNKNOWN"
     })
-    void fromString_shouldParseStatus(String input, HealthStatus expected) {
+    void fromStringParsesStatus(String input, HealthStatus expected) {
         assertThat(HealthStatus.fromString(input)).isEqualTo(expected);
     }
 
     @Test
-    void fromString_shouldHandleNull() {
+    void fromStringHandlesNull() {
         assertThat(HealthStatus.fromString(null)).isEqualTo(HealthStatus.UNKNOWN);
     }
 }

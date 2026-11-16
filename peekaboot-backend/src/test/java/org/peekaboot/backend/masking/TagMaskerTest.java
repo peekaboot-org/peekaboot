@@ -11,7 +11,7 @@ class TagMaskerTest {
     private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
 
     @Test
-    void mask_shouldReplaceValueForASensitiveKey() {
+    void maskReplacesValueForASensitiveKey() {
         Map<String, String> tags = Map.of("http.request.header.authorization", "Bearer abc123");
 
         Map<String, String> masked = tagMasker.mask(tags);
@@ -20,7 +20,7 @@ class TagMaskerTest {
     }
 
     @Test
-    void mask_shouldLeaveOrdinaryTagsUntouched() {
+    void maskLeavesOrdinaryTagsUntouched() {
         Map<String, String> tags = Map.of("http.method", "GET");
 
         Map<String, String> masked = tagMasker.mask(tags);
@@ -29,7 +29,7 @@ class TagMaskerTest {
     }
 
     @Test
-    void mask_shouldApplyValuePatternRulesToNonSensitiveKeys() {
+    void maskAppliesValuePatternRulesToNonSensitiveKeys() {
         Map<String, String> tags = Map.of("http.url", "https://admin:hunter2@example.com/api");
 
         Map<String, String> masked = tagMasker.mask(tags);
@@ -38,7 +38,7 @@ class TagMaskerTest {
     }
 
     @Test
-    void mask_shouldPreserveInsertionOrder() {
+    void maskPreservesInsertionOrder() {
         Map<String, String> tags = new LinkedHashMap<>();
         tags.put("b", "2");
         tags.put("a", "1");
@@ -49,12 +49,12 @@ class TagMaskerTest {
     }
 
     @Test
-    void mask_shouldReturnEmptyMapUnchanged() {
+    void maskReturnsEmptyMapUnchanged() {
         assertThat(tagMasker.mask(Map.of())).isEmpty();
     }
 
     @Test
-    void mask_shouldReturnNullUnchanged() {
+    void maskReturnsNullUnchanged() {
         assertThat(tagMasker.mask(null)).isNull();
     }
 }

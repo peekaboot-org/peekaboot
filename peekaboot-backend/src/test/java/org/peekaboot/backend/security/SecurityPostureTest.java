@@ -19,7 +19,7 @@ class SecurityPostureTest {
     private static final String DASHBOARD_BEHIND_A_SERVLET_PATH = "/app/peekaboot";
 
     @Test
-    void armed_printsTheGeneratedPasswordOnce() {
+    void armedPrintsTheGeneratedPasswordOnce() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
@@ -34,7 +34,7 @@ class SecurityPostureTest {
 
     /** One headline whatever else is on the class path: the guard answers for the path on its own. */
     @Test
-    void armed_saysTheGuardChallengesEveryRequest() {
+    void armedSaysTheGuardChallengesEveryRequest() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
@@ -46,7 +46,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_namesThePathTheGuardActuallyCovers() {
+    void armedNamesThePathTheGuardActuallyCovers() {
         var report = SecurityPosture.armed(
                         DASHBOARD_BEHIND_A_SERVLET_PATH,
                         Credentials.generated("hunter2"),
@@ -61,7 +61,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_namesTheSwitchThatHandsThePathToYourOwnSecurity() {
+    void armedNamesTheSwitchThatHandsThePathToYourOwnSecurity() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
@@ -74,7 +74,7 @@ class SecurityPostureTest {
 
     /** An armed guard is the intended setup, so it is a note, not an alarm. */
     @Test
-    void armed_onlyInformsWhileTheToolbarIsOff() {
+    void armedOnlyInformsWhileTheToolbarIsOff() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
@@ -84,7 +84,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_datesALoadedPasswordInTheZoneItIsGiven() {
+    void armedDatesALoadedPasswordInTheZoneItIsGiven() {
         var loaded = Credentials.loaded("hunter2");
 
         var inPagoPago = SecurityPosture.armed(DASHBOARD, loaded, FILE, false, false, ZoneId.of("Pacific/Pago_Pago"))
@@ -99,7 +99,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_saysNothingAboutAFileForAConfiguredPassword() {
+    void armedSaysNothingAboutAFileForAConfiguredPassword() {
         var configured = Credentials.configured("from-the-vault");
 
         var report = SecurityPosture.armed(DASHBOARD, configured, FILE, false, false, ZoneOffset.UTC)
@@ -110,7 +110,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_warnsThatAWriteFailureWillChangeThePassword() {
+    void armedWarnsThatAWriteFailureWillChangeThePassword() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.unpersisted("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
@@ -120,7 +120,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_saysStorageIsOffWhenThereIsNoCredentialsFile() {
+    void armedSaysStorageIsOffWhenThereIsNoCredentialsFile() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.unpersisted("hunter2"), null, false, false, ZoneOffset.UTC)
                 .report()
@@ -134,7 +134,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_warnsAboutTheToolbarWhenItIsOn() {
+    void armedWarnsAboutTheToolbarWhenItIsOn() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, true, false, ZoneOffset.UTC)
                 .report()
@@ -149,7 +149,7 @@ class SecurityPostureTest {
      * on ordinary application pages.
      */
     @Test
-    void armed_warnsWhenTheToolbarIsOn() {
+    void armedWarnsWhenTheToolbarIsOn() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, true, false, ZoneOffset.UTC)
                 .report()
@@ -159,7 +159,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void disabledOnADeployment_isOneWarningLineWithNoBanner() {
+    void disabledOnADeploymentIsOneWarningLineWithNoBanner() {
         var report =
                 SecurityPosture.disabledOnADeployment(DASHBOARD, false).report().orElseThrow();
 
@@ -168,7 +168,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void disabledOnADeployment_saysYourOwnSecurityMustAuthenticateTheDashboard() {
+    void disabledOnADeploymentSaysYourOwnSecurityMustAuthenticateTheDashboard() {
         var report =
                 SecurityPosture.disabledOnADeployment(DASHBOARD, false).report().orElseThrow();
 
@@ -178,7 +178,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void disabledOnADeployment_namesThePathYourOwnSecurityMustCover() {
+    void disabledOnADeploymentNamesThePathYourOwnSecurityMustCover() {
         var report = SecurityPosture.disabledOnADeployment(DASHBOARD_BEHIND_A_SERVLET_PATH, false)
                 .report()
                 .orElseThrow();
@@ -188,7 +188,7 @@ class SecurityPostureTest {
 
     /** Both warnings fire only on a launch detected as a deployment. */
     @Test
-    void disabledOnADeployment_saysItIsADeployment() {
+    void disabledOnADeploymentSaysItIsADeployment() {
         var report =
                 SecurityPosture.disabledOnADeployment(DASHBOARD, true).report().orElseThrow();
 
@@ -199,7 +199,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void remoteAccessOnALocalRun_isOneWarningLineNamingTheSwitchAndThePath() {
+    void remoteAccessOnALocalRunIsOneWarningLineNamingTheSwitchAndThePath() {
         var report = SecurityPosture.remoteAccessOnALocalRun(DASHBOARD_BEHIND_A_SERVLET_PATH)
                 .report()
                 .orElseThrow();
@@ -214,13 +214,13 @@ class SecurityPostureTest {
     }
 
     @Test
-    void quiet_reportsNothing() {
+    void quietReportsNothing() {
         assertThat(SecurityPosture.quiet().report()).isEmpty();
     }
 
     /** The error page serves stack traces to anyone, outside the guard; an operator running at WARN has to hear it. */
     @Test
-    void armed_warnsWhenTheErrorPageIsOnADeployment() {
+    void armedWarnsWhenTheErrorPageIsOnADeployment() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, false, true, ZoneOffset.UTC)
                 .report()
@@ -231,7 +231,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_saysNothingAboutTheErrorPageWhileItIsOff() {
+    void armedSaysNothingAboutTheErrorPageWhileItIsOff() {
         var report = SecurityPosture.armed(
                         DASHBOARD, Credentials.generated("hunter2"), FILE, false, false, ZoneOffset.UTC)
                 .report()
@@ -241,7 +241,7 @@ class SecurityPostureTest {
     }
 
     @Test
-    void disabledOnADeployment_addsTheErrorPageWarningAsASecondLine() {
+    void disabledOnADeploymentAddsTheErrorPageWarningAsASecondLine() {
         var report =
                 SecurityPosture.disabledOnADeployment(DASHBOARD, true).report().orElseThrow();
 

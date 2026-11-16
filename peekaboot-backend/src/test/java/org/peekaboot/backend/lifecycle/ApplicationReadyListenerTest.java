@@ -48,7 +48,7 @@ class ApplicationReadyListenerTest {
 
     /** The security posture reports below this banner, an order an async multicaster's executor need not keep. */
     @Test
-    void banner_isLoggedAboveTheSecurityPostureUnderAnAsyncMulticaster() {
+    void bannerIsLoggedAboveTheSecurityPostureUnderAnAsyncMulticaster() {
         ApplicationReadyEvent event = ReadyEvents.webApplication(8083);
         Deque<Runnable> held = new ArrayDeque<>();
         SimpleApplicationEventMulticaster multicaster = new SimpleApplicationEventMulticaster();
@@ -79,7 +79,7 @@ class ApplicationReadyListenerTest {
 
     /** The first line names the application and its profiles; the build line is the coordinates a deploy is checked against. */
     @Test
-    void banner_namesTheApplicationItsProfilesAndItsBuild() {
+    void bannerNamesTheApplicationItsProfilesAndItsBuild() {
         Properties build = new Properties();
         build.setProperty("name", "orders");
         build.setProperty("group", "com.acme");
@@ -101,7 +101,7 @@ class ApplicationReadyListenerTest {
 
     /** Without build-info on the classpath the banner says so instead of printing "unknown:unknown:unknown". */
     @Test
-    void banner_saysWhenBuildInfoIsUnavailable() {
+    void bannerSaysWhenBuildInfoIsUnavailable() {
         String report = banner().render(ReadyEvents.webApplication(8083));
 
         assertThat(report)
@@ -111,7 +111,7 @@ class ApplicationReadyListenerTest {
 
     /** Without build-info the application is still named, by spring.application.name. */
     @Test
-    void banner_namesTheApplicationWithoutBuildInfo() {
+    void bannerNamesTheApplicationWithoutBuildInfo() {
         String report =
                 banner().identity(new ApplicationIdentity(null, "orders")).render(ReadyEvents.webApplication(8083));
 
@@ -121,7 +121,7 @@ class ApplicationReadyListenerTest {
     }
 
     @Test
-    void banner_linksTheDashboardBelowTheServiceUrlAndSwaggerUi() {
+    void bannerLinksTheDashboardBelowTheServiceUrlAndSwaggerUi() {
         String report = banner().render(ReadyEvents.webApplicationServingDashboard(8083));
 
         assertThat(report)
@@ -130,7 +130,7 @@ class ApplicationReadyListenerTest {
     }
 
     @Test
-    void banner_omitsTheDashboardWhenPeekabootDoesNotServeIt() {
+    void bannerOmitsTheDashboardWhenPeekabootDoesNotServeIt() {
         String report = banner().render(ReadyEvents.webApplication(8083));
 
         assertThat(report).contains(" Service URL:").doesNotContain("Peekaboot Dashboard");
@@ -146,7 +146,7 @@ class ApplicationReadyListenerTest {
      * restored in {@code finally}; see TESTING.md.
      */
     @Test
-    void banner_reportsMemoryInLocaleIndependentHumanUnits() {
+    void bannerReportsMemoryInLocaleIndependentHumanUnits() {
         Locale defaultLocale = Locale.getDefault();
         Locale.setDefault(Locale.GERMANY);
         try {
@@ -166,7 +166,7 @@ class ApplicationReadyListenerTest {
      * any credential parameter, so no live DataSource in this module can yield one.
      */
     @Test
-    void banner_masksSensitiveConnectionParams() {
+    void bannerMasksSensitiveConnectionParams() {
         DataSourceMetadata metadata = new DataSourceMetadata(
                 "primary",
                 "app",
@@ -188,7 +188,7 @@ class ApplicationReadyListenerTest {
     }
 
     @Test
-    void banner_reportsThePoolSettingsOfAHikariDataSource() throws SQLException {
+    void bannerReportsThePoolSettingsOfAHikariDataSource() throws SQLException {
         DataSourceMetadata metadata = h2Metadata("primary");
         try (HikariDataSource hikari = new HikariDataSource()) {
             hikari.setMinimumIdle(3);
@@ -211,7 +211,7 @@ class ApplicationReadyListenerTest {
      * simply skip the pool lines, not fail the ApplicationReadyEvent.
      */
     @Test
-    void banner_omitsThePoolLinesWithoutAPoolInfoContributor() throws SQLException {
+    void bannerOmitsThePoolLinesWithoutAPoolInfoContributor() throws SQLException {
         DataSourceMetadata metadata = h2Metadata("primary");
 
         String report = banner().metadata(metadata)
@@ -223,7 +223,7 @@ class ApplicationReadyListenerTest {
 
     /** A database that is down is still a database: its line says so instead of "No database configured". */
     @Test
-    void banner_namesADataSourceThatHasNotAnswered() throws SQLException {
+    void bannerNamesADataSourceThatHasNotAnswered() throws SQLException {
         DataSource down = mock(DataSource.class);
         when(down.getConnection()).thenThrow(new SQLException("db down"));
         try (LogCapture ignored = LogCapture.attach(DataSourceMetadataList.class)) {
@@ -238,7 +238,7 @@ class ApplicationReadyListenerTest {
 
     /** The pool's sizing is configuration, known without a connection. */
     @Test
-    void banner_stillReportsThePoolOfADataSourceThatHasNotAnswered() {
+    void bannerStillReportsThePoolOfADataSourceThatHasNotAnswered() {
         try (HikariDataSource hikari = new UnreachableHikariDataSource();
                 LogCapture ignored = LogCapture.attach(DataSourceMetadataList.class)) {
             hikari.setMinimumIdle(3);
@@ -260,7 +260,7 @@ class ApplicationReadyListenerTest {
      * line's label. The process tree depends on how the test JVM was launched, so it is left out.
      */
     @Test
-    void banner_framesItsLinesInGroups() {
+    void bannerFramesItsLinesInGroups() {
         DataSourceMetadata metadata = new DataSourceMetadata(
                 "primary",
                 "app",
@@ -323,7 +323,7 @@ class ApplicationReadyListenerTest {
      * parent has logged its own banner already and must not log a second one for the child.
      */
     @Test
-    void banner_isNotLoggedForAnotherContextsReadyEvent() {
+    void bannerIsNotLoggedForAnotherContextsReadyEvent() {
         ApplicationReadyListener listener = banner().listenerOf(mock(ApplicationContext.class));
 
         try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {

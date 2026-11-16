@@ -22,7 +22,7 @@ class QueryExtractorTest {
     private final SqlStatements sqlStatements = new SqlStatements(new MaskingEngine(), SqlFormatter.NONE);
 
     @Test
-    void extract_shouldFindQueryWithDbStatementTag() {
+    void extractFindsQueryWithDbStatementTag() {
         var querySpan = query("span1")
                 .named("SELECT users")
                 .at(0, 100)
@@ -41,7 +41,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldFindQueryWithJdbcQueryTag() {
+    void extractFindsQueryWithJdbcQueryTag() {
         var querySpan = jdbcQuery("span1", "INSERT INTO orders (user_id) VALUES (?)")
                 .tag("peer.service", "orders_db")
                 .order(20)
@@ -58,7 +58,7 @@ class QueryExtractorTest {
 
     /** A statement batch is one span carrying jdbc.query[0..N], so it lists as one query. */
     @Test
-    void extract_shouldListABatchAsOneQuery() {
+    void extractListsABatchAsOneQuery() {
         var batchSpan = query("span1")
                 .tags(Map.of(
                         "jdbc.query[10]", "INSERT INTO t VALUES (10)",
@@ -75,7 +75,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldDetectSqlFromSpanName() {
+    void extractDetectsSqlFromSpanName() {
         // a query span (db.* tagged) whose instrumentation put the statement in the name only
         var querySpan = span("span1")
                 .named("SELECT * FROM products")
@@ -94,7 +94,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldMatchResultSetToQuery() {
+    void extractMatchesResultSetToQuery() {
         var querySpan = jdbcQuery("query1", "SELECT * FROM users").order(10).build();
 
         var resultSetSpan = resultSet("rs1", 42)
@@ -111,7 +111,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldNotAttributeRowCountToEarlierQueryWithoutResultSet() {
+    void extractDoesNotAttributeRowCountToEarlierQueryWithoutResultSet() {
         var update = jdbcQuery("q1", "UPDATE users SET active = true").order(10).build();
         var select = jdbcQuery("q2", "SELECT * FROM users").order(20).build();
         var rs = resultSet("rs1", 42)
@@ -130,7 +130,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldMatchMultipleResultSetsToQueries() {
+    void extractMatchesMultipleResultSetsToQueries() {
         var query1 = jdbcQuery("q1", "SELECT * FROM users").order(10).build();
         var rs1 = resultSet("rs1", 10)
                 .tag("peer.service", "sample_app_db")
@@ -155,7 +155,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldNotMatchResultSetToQueryIfCreationOrderIsLower() {
+    void extractDoesNotMatchResultSetToQueryIfCreationOrderIsLower() {
         var resultSetSpan = resultSet("rs1", 99)
                 .tag("peer.service", "sample_app_db")
                 .order(5)
@@ -171,7 +171,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldReturnNullRowCountWhenNoResultSet() {
+    void extractReturnsNullRowCountWhenNoResultSet() {
         var querySpan = query("span1")
                 .tags(Map.of("db.statement", "UPDATE users SET active = true", "db.system", "postgresql"))
                 .order(10)
@@ -186,7 +186,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldIgnoreNonQuerySpans() {
+    void extractIgnoresNonQuerySpans() {
         var httpSpan = span("span1")
                 .named("GET /api/users")
                 .kind(Span.Kind.CLIENT)
@@ -222,7 +222,7 @@ class QueryExtractorTest {
      * summary counts it and the Queries tab lists it, with nothing to show for its text.
      */
     @Test
-    void extract_shouldListAQuerySpanWithoutAStatement() {
+    void extractListsAQuerySpanWithoutAStatement() {
         var querySpan =
                 query("span1").tags(Map.of("db.system", "postgresql")).order(10).build();
 
@@ -233,7 +233,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldIgnoreTheServerSideOfADbTaggedExchange() {
+    void extractIgnoresTheServerSideOfADbTaggedExchange() {
         var serverSpan = span("span1")
                 .kind(Span.Kind.SERVER)
                 .tags(Map.of("db.statement", "SELECT 1"))
@@ -245,7 +245,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldListQueriesInCreationOrder() {
+    void extractListsQueriesInCreationOrder() {
         var query1 = jdbcQuery("q1", "SELECT 1").order(10).build();
         var query2 = jdbcQuery("q2", "SELECT 2").order(20).build();
         var query3 = jdbcQuery("q3", "SELECT 3").order(30).build();
@@ -259,7 +259,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldFindDbSystemFromDatasourceName() {
+    void extractFindsDbSystemFromDatasourceName() {
         var querySpan = query("span1")
                 .tags(Map.of("jdbc.query[0]", "SELECT 1", "jdbc.datasource.name", "primary_db"))
                 .order(10)
@@ -275,7 +275,7 @@ class QueryExtractorTest {
 
     /** Two DataSources on one engine share a system; the name is what tells their queries apart. */
     @Test
-    void extract_shouldCarryTheDataSourceNameBesideTheSystem() {
+    void extractCarriesTheDataSourceNameBesideTheSystem() {
         var querySpan = query("span1")
                 .tags(Map.of(
                         "db.query.text", "SELECT 1",
@@ -294,7 +294,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldFallBackToTheDatasourceProxyNameWithoutAPool() {
+    void extractFallsBackToTheDatasourceProxyNameWithoutAPool() {
         var querySpan = query("span1")
                 .tags(Map.of("db.query.text", "SELECT 1", "jdbc.datasource.name", "orders-db"))
                 .order(10)
@@ -309,7 +309,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldIgnoreHikarisGeneratedPoolName() {
+    void extractIgnoresHikarisGeneratedPoolName() {
         var querySpan = query("span1")
                 .tags(Map.of(
                         "db.query.text", "SELECT 1",
@@ -327,7 +327,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldLeaveTheDataSourceNameNullForAGeneratedPoolNameAlone() {
+    void extractLeavesTheDataSourceNameNullForAGeneratedPoolNameAlone() {
         var querySpan = query("span1")
                 .tags(Map.of("db.query.text", "SELECT 1", "jdbc.datasource.pool", "HikariPool-1"))
                 .order(10)
@@ -342,7 +342,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldLeaveTheDataSourceNameNullWhenNoTagNamesOne() {
+    void extractLeavesTheDataSourceNameNullWhenNoTagNamesOne() {
         var querySpan = query("span1")
                 .tags(Map.of("db.query.text", "SELECT 1", "db.system", "postgresql"))
                 .order(10)
@@ -357,14 +357,14 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldHandleTraceWithEmptySpans() {
+    void extractHandlesTraceWithEmptySpans() {
         var traceData = new TraceData("trace1", null, null, null, null, false, false, false, List.of(), Set.of(), 0);
         List<QueryInfo> queries = extract(traceData);
         assertThat(queries).isEmpty();
     }
 
     @Test
-    void extract_shouldReturnNullRowCountWhenRowCountIsMalformed() {
+    void extractReturnsNullRowCountWhenRowCountIsMalformed() {
         var querySpan = jdbcQuery("q1", "SELECT * FROM users").order(10).build();
         var resultSetSpan = span("rs1")
                 .named("result-set")
@@ -383,7 +383,7 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldPreferDbSystemNameOverDbSystem() {
+    void extractPrefersDbSystemNameOverDbSystem() {
         var querySpan = query("span1")
                 .tags(Map.of(
                         "db.query.text", "SELECT 1",

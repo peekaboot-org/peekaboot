@@ -46,21 +46,21 @@ class TraceStoreEventListenerTest {
     }
 
     @Test
-    void onSpanData_forwardsSpanToStore() {
+    void onSpanDataForwardsSpanToStore() {
         listener.onSpanData(new SpanDataEvent(span("span1").order(1).build()));
 
         assertThat(store.getTrace("trace1")).isPresent();
     }
 
     @Test
-    void onLogCaptured_forwardsLogToStore() {
+    void onLogCapturedForwardsLogToStore() {
         listener.onLogCaptured(log("trace1").build());
 
         assertThat(store.getTrace("trace1").orElseThrow().capturedLogs().logs()).hasSize(1);
     }
 
     @Test
-    void onRequestCompleted_forwardsRequestToStore() {
+    void onRequestCompletedForwardsRequestToStore() {
         RequestCompletedEvent event = RequestCompletedEvents.minimal("trace1");
 
         listener.onRequestCompleted(event);
@@ -69,7 +69,7 @@ class TraceStoreEventListenerTest {
     }
 
     @Test
-    void onTraceDiscarded_removesTheTraceFromTheStore() {
+    void onTraceDiscardedRemovesTheTraceFromTheStore() {
         listener.onSpanData(new SpanDataEvent(span("span1").build()));
 
         listener.onTraceDiscarded(new TraceDiscardedEvent("trace1", null));

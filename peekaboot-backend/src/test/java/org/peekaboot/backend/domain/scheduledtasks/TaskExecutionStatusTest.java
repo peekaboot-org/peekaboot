@@ -19,12 +19,12 @@ class TaskExecutionStatusTest {
         "invalid, UNKNOWN",
         "'', UNKNOWN"
     })
-    void fromString_shouldParseStatus(String input, TaskExecutionStatus expected) {
+    void fromStringParsesStatus(String input, TaskExecutionStatus expected) {
         assertThat(TaskExecutionStatus.fromString(input)).isEqualTo(expected);
     }
 
     @Test
-    void fromString_shouldHandleNull() {
+    void fromStringHandlesNull() {
         assertThat(TaskExecutionStatus.fromString(null)).isEqualTo(TaskExecutionStatus.UNKNOWN);
     }
 }

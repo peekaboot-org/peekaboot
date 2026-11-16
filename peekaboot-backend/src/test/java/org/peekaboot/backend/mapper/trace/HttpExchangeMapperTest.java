@@ -15,7 +15,7 @@ class HttpExchangeMapperTest {
     private final HttpExchangeMapper mapper = new HttpExchangeMapper(new MaskingEngine());
 
     @Test
-    void map_mapsAllFieldsWhenPresent() {
+    void mapMapsAllFieldsWhenPresent() {
         RequestCompletedEvent event = RequestCompletedEvents.request("trace-1")
                 .method("POST")
                 .path("/api/users")
@@ -43,7 +43,7 @@ class HttpExchangeMapperTest {
     }
 
     @Test
-    void map_masksACredentialInThePath() {
+    void mapMasksACredentialInThePath() {
         HttpExchange exchange = mapper.map(
                 RequestCompletedEvents.request("t1").path("/reset;token=abc123").build());
 
@@ -51,7 +51,7 @@ class HttpExchangeMapperTest {
     }
 
     @Test
-    void map_defaultsNullQueryParamsToEmptyMap() {
+    void mapDefaultsNullQueryParamsToEmptyMap() {
         HttpExchange exchange = mapper.map(
                 RequestCompletedEvents.request("trace-1").queryParams(null).build());
 
@@ -59,7 +59,7 @@ class HttpExchangeMapperTest {
     }
 
     @Test
-    void map_defaultsNullFormParamsToEmptyMap() {
+    void mapDefaultsNullFormParamsToEmptyMap() {
         HttpExchange exchange = mapper.map(
                 RequestCompletedEvents.request("trace-1").formParams(null).build());
 
@@ -67,7 +67,7 @@ class HttpExchangeMapperTest {
     }
 
     @Test
-    void map_defaultsNullRequestHeadersToEmptyMap() {
+    void mapDefaultsNullRequestHeadersToEmptyMap() {
         HttpExchange exchange = mapper.map(
                 RequestCompletedEvents.request("trace-1").requestHeaders(null).build());
 
@@ -75,7 +75,7 @@ class HttpExchangeMapperTest {
     }
 
     @Test
-    void map_defaultsNullResponseHeadersToEmptyMap() {
+    void mapDefaultsNullResponseHeadersToEmptyMap() {
         HttpExchange exchange = mapper.map(
                 RequestCompletedEvents.request("trace-1").responseHeaders(null).build());
 

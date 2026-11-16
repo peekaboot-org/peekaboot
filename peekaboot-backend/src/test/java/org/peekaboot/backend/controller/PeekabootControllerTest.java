@@ -36,7 +36,7 @@ class PeekabootControllerTest {
     class GetFeatures {
 
         @Test
-        void shouldReturnTheFeaturesItWasBuiltWith() {
+        void returnsTheFeaturesItWasBuiltWith() {
             assertThat(controller.getFeatures()).isSameAs(FEATURES);
         }
     }
@@ -45,7 +45,7 @@ class PeekabootControllerTest {
     class GetInsights {
 
         @Test
-        void shouldReturnResponseFromService() {
+        void returnsResponseFromService() {
             ActuatorInsightsResponse expected =
                     new ActuatorInsightsResponse(null, null, null, null, null, null, null, null, null, null, null);
             when(actuatorInsightsService.insightsFor("de-DE", true)).thenReturn(expected);
@@ -60,7 +60,7 @@ class PeekabootControllerTest {
     class GetMetrics {
 
         @Test
-        void shouldReturnMetricsFromService() {
+        void returnsMetricsFromService() {
             MetricsInfo expected = MetricsInfo.empty();
             when(metricsService.getMetrics("jvm.")).thenReturn(expected);
 

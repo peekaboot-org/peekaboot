@@ -16,7 +16,7 @@ class EnvironmentMapperTest {
     private final EnvironmentMapper mapper = new EnvironmentMapper(new MaskingEngine());
 
     @Test
-    void map_shouldExtractActiveProfiles() {
+    void mapExtractsActiveProfiles() {
         EnvResponse env = new EnvResponse(List.of("dev", "local"), List.of());
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.activeProfiles()).containsExactly("dev", "local");
@@ -24,7 +24,7 @@ class EnvironmentMapperTest {
 
     /** The endpoint types values as it finds them (a YAML port is an Integer); the dashboard shows text. */
     @Test
-    void map_shouldExtractPropertySources() {
+    void mapExtractsPropertySources() {
         EnvResponse env = new EnvResponse(
                 List.of(),
                 List.of(new EnvResponse.PropertySource(
@@ -39,21 +39,21 @@ class EnvironmentMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullInput() {
+    void mapHandlesNullInput() {
         EnvironmentInfo result = mapper.map(null, false);
         assertThat(result.activeProfiles()).isEmpty();
         assertThat(result.propertySources()).isEmpty();
     }
 
     @Test
-    void map_shouldHandleEmptyProfiles() {
+    void mapHandlesEmptyProfiles() {
         EnvResponse env = new EnvResponse(List.of(), List.of());
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.activeProfiles()).isEmpty();
     }
 
     @Test
-    void map_shouldFallBackToUnknownNameWhenPropertySourceNameIsNull() {
+    void mapFallsBackToUnknownNameWhenPropertySourceNameIsNull() {
         EnvResponse env = new EnvResponse(
                 List.of(),
                 List.of(new EnvResponse.PropertySource(
@@ -64,7 +64,7 @@ class EnvironmentMapperTest {
     }
 
     @Test
-    void map_shouldReturnNullValueWhenPropertyValueIsNull() {
+    void mapReturnsNullValueWhenPropertyValueIsNull() {
         EnvResponse env = new EnvResponse(
                 List.of(),
                 List.of(new EnvResponse.PropertySource(
@@ -74,7 +74,7 @@ class EnvironmentMapperTest {
     }
 
     @Test
-    void map_shouldMaskSensitiveKeyValue() {
+    void mapMasksSensitiveKeyValue() {
         EnvResponse env = new EnvResponse(
                 List.of(),
                 List.of(new EnvResponse.PropertySource(
@@ -85,7 +85,7 @@ class EnvironmentMapperTest {
     }
 
     @Test
-    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+    void mapReturnsRealValueWhenUnmaskIsTrue() {
         EnvResponse env = new EnvResponse(
                 List.of(),
                 List.of(new EnvResponse.PropertySource(

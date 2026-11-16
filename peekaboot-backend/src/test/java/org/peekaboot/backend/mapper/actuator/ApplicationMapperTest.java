@@ -27,7 +27,7 @@ class ApplicationMapperTest {
     }
 
     @Test
-    void map_shouldExtractBuildInfo() {
+    void mapExtractsBuildInfo() {
         InfoResponse info = new InfoResponse(Map.of("artifact", "my-app", "version", "1.0.0"), null, null, null);
         ApplicationInfo result = mapper.map(info, null, null, false);
         assertThat(result.build()).containsEntry("artifact", "my-app");
@@ -36,7 +36,7 @@ class ApplicationMapperTest {
 
     /** {@code info.build} is a free-form map the consuming app fills itself, so its values are masked like any other. */
     @Test
-    void map_shouldMaskASensitiveKeyInBuildInfo() {
+    void mapMasksASensitiveKeyInBuildInfo() {
         InfoResponse info = new InfoResponse(Map.of("artifact", "my-app", "apiKey", "hunter2"), null, null, null);
 
         ApplicationInfo result = mapper.map(info, null, null, false);
@@ -45,7 +45,7 @@ class ApplicationMapperTest {
     }
 
     @Test
-    void map_shouldReturnBuildInfoVerbatimWhenUnmaskIsTrue() {
+    void mapReturnsBuildInfoVerbatimWhenUnmaskIsTrue() {
         InfoResponse info = new InfoResponse(Map.of("apiKey", "hunter2"), null, null, null);
 
         assertThat(mapper.map(info, null, null, true).build()).containsEntry("apiKey", "hunter2");
@@ -53,7 +53,7 @@ class ApplicationMapperTest {
 
     /** The commit time in git-commit-id's default format, served as an instant. */
     @Test
-    void map_shouldExtractGitInfo() {
+    void mapExtractsGitInfo() {
         GitProperties git =
                 git("branch", "main", "commit.id.abbrev", "abc1234", "commit.time", "2024-01-01T11:00:00+0100");
 
@@ -65,7 +65,7 @@ class ApplicationMapperTest {
 
     /** A remote URL can carry the token it was cloned with, and a committer's address is personal data. */
     @Test
-    void map_shouldLeaveEveryOtherGitEntryBehind() {
+    void mapLeavesEveryOtherGitEntryBehind() {
         GitProperties git = git(
                 "branch", "main",
                 "commit.id.abbrev", "abc1234",
@@ -77,7 +77,7 @@ class ApplicationMapperTest {
     }
 
     @Test
-    void map_shouldShortenACommitIdWithoutAnAbbreviation() {
+    void mapShortensACommitIdWithoutAnAbbreviation() {
         assertThat(mapper.map(null, git("commit.id", "1a2b3c4d5e6f7a8b"), null, false)
                         .git())
                 .isEqualTo(new GitInfo(null, new GitInfo.Commit("1a2b3c4", null)));
@@ -85,7 +85,7 @@ class ApplicationMapperTest {
 
     /** git-commit-id's {@code commitIdGenerationMode=full}, the testing app's, writes {@code commit.id.full} beside the abbreviation. */
     @Test
-    void map_shouldShowTheAbbreviationOfAFullModeFile() {
+    void mapShowsTheAbbreviationOfAFullModeFile() {
         GitProperties git = git("commit.id.full", "1a2b3c4d5e6f7a8b", "commit.id.abbrev", "1a2b3c4");
 
         assertThat(mapper.map(null, git, null, false).git())
@@ -93,34 +93,34 @@ class ApplicationMapperTest {
     }
 
     @Test
-    void map_shouldFallBackToTheFullIdWhenTheAbbreviationIsMissing() {
+    void mapFallsBackToTheFullIdWhenTheAbbreviationIsMissing() {
         assertThat(mapper.map(null, git("commit.id.full", "1a2b3c4d5e6f7a8b"), null, false)
                         .git())
                 .isEqualTo(new GitInfo(null, new GitInfo.Commit("1a2b3c4d5e6f7a8b", null)));
     }
 
     @Test
-    void map_shouldLeaveTheIdAbsentWhenTheCommitCarriesNone() {
+    void mapLeavesTheIdAbsentWhenTheCommitCarriesNone() {
         assertThat(mapper.map(null, git("commit.time", "2024-01-01T11:00:00+0100"), null, false)
                         .git())
                 .isEqualTo(new GitInfo(null, new GitInfo.Commit(null, Instant.parse("2024-01-01T10:00:00Z"))));
     }
 
     @Test
-    void map_shouldLeaveTheCommitAbsentWhenGitCarriesNone() {
+    void mapLeavesTheCommitAbsentWhenGitCarriesNone() {
         assertThat(mapper.map(null, git("branch", "main"), null, false).git()).isEqualTo(new GitInfo("main", null));
     }
 
     /** git-commit-id still writes the build time and version where it finds no repository. */
     @Test
-    void map_shouldLeaveGitAbsentWhenTheFileNamesNeitherBranchNorCommit() {
+    void mapLeavesGitAbsentWhenTheFileNamesNeitherBranchNorCommit() {
         GitProperties git = git("build.time", "1704103200000", "build.version", "1.0.0");
 
         assertThat(mapper.map(null, git, null, false).git()).isNull();
     }
 
     @Test
-    void map_shouldLeaveTheVendorAbsentWhenJavaCarriesNone() {
+    void mapLeavesTheVendorAbsentWhenJavaCarriesNone() {
         InfoResponse info = new InfoResponse(null, new InfoResponse.JavaDescriptor(null, "21.0.1"), null, null);
 
         ApplicationInfo result = mapper.map(info, null, null, false);
@@ -130,7 +130,7 @@ class ApplicationMapperTest {
     }
 
     @Test
-    void map_shouldExtractJavaInfo() {
+    void mapExtractsJavaInfo() {
         InfoResponse info = new InfoResponse(
                 null,
                 new InfoResponse.JavaDescriptor(
@@ -143,7 +143,7 @@ class ApplicationMapperTest {
     }
 
     @Test
-    void map_shouldExtractSpringVersions() {
+    void mapExtractsSpringVersions() {
         SpringInfo spring = new SpringInfo("3.2.0", "6.1.2");
         ApplicationInfo result = mapper.map(null, null, spring, false);
         assertThat(result.springBootVersion()).isEqualTo("3.2.0");
@@ -151,7 +151,7 @@ class ApplicationMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullInputs() {
+    void mapHandlesNullInputs() {
         ApplicationInfo result = mapper.map(null, null, null, false);
         assertThat(result.build()).isEmpty();
         assertThat(result.git()).isNull();

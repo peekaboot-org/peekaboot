@@ -18,7 +18,7 @@ class ConfigMapperTest {
     private final ConfigMapper mapper = new ConfigMapper(new MaskingEngine());
 
     @Test
-    void map_shouldGroupByPrefix() {
+    void mapGroupsByPrefix() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(Map.of(
@@ -38,7 +38,7 @@ class ConfigMapperTest {
     }
 
     @Test
-    void map_shouldFallBackToUnknownPrefixWhenPrefixIsNull() {
+    void mapFallsBackToUnknownPrefixWhenPrefixIsNull() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(Map.of(
@@ -51,7 +51,7 @@ class ConfigMapperTest {
     }
 
     @Test
-    void map_shouldMaskSensitiveProperties() {
+    void mapMasksSensitiveProperties() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(Map.of(
@@ -68,7 +68,7 @@ class ConfigMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullInput() {
+    void mapHandlesNullInput() {
         ConfigInfo result = mapper.map(null, false);
         assertThat(result.groups()).isEmpty();
     }
@@ -79,7 +79,7 @@ class ConfigMapperTest {
      * masks, by its leaf key, on the way.
      */
     @Test
-    void map_shouldFlattenANestedTreeToDottedKeysAndMaskSensitiveLeaves() {
+    void mapFlattensANestedTreeToDottedKeysAndMaskSensitiveLeaves() {
         Map<String, Object> google = new LinkedHashMap<>();
         google.put("clientId", "abc123");
         google.put("clientSecret", "GOCSPX-SuperSecretValue");
@@ -104,7 +104,7 @@ class ConfigMapperTest {
 
     /** A sensitive key masks its whole subtree, arriving as that one key rather than per-leaf. */
     @Test
-    void map_shouldMaskAWholeSubtreeUnderASensitiveKey() {
+    void mapMasksAWholeSubtreeUnderASensitiveKey() {
         Map<String, Object> credentials = new LinkedHashMap<>();
         credentials.put("user", "admin");
         credentials.put("token", "tok-123");
@@ -127,7 +127,7 @@ class ConfigMapperTest {
      * cookie rule must not collapse it, however deep the tree nests it.
      */
     @Test
-    void map_shouldKeepSessionCookieConfigurationVisible() {
+    void mapKeepsSessionCookieConfigurationVisible() {
         Map<String, Object> cookie = new LinkedHashMap<>();
         cookie.put("name", "JSESSIONID");
         cookie.put("sameSite", "Lax");
@@ -150,7 +150,7 @@ class ConfigMapperTest {
 
     /** List elements are indexed the way Spring's own property syntax writes them. */
     @Test
-    void map_shouldIndexListElementsLikeSpringPropertyKeys() {
+    void mapIndexesListElementsLikeSpringPropertyKeys() {
         Map<String, Object> server = new LinkedHashMap<>();
         server.put("host", "a.example.org");
         List<Object> servers = List.of(server, "plain");
@@ -169,7 +169,7 @@ class ConfigMapperTest {
 
     /** An empty container still shows up as the property it is, rather than vanishing. */
     @Test
-    void map_shouldKeepAnEmptyContainerAsASingleProperty() {
+    void mapKeepsAnEmptyContainerAsASingleProperty() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(
@@ -183,7 +183,7 @@ class ConfigMapperTest {
     }
 
     @Test
-    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+    void mapReturnsRealValueWhenUnmaskIsTrue() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(Map.of(
@@ -196,7 +196,7 @@ class ConfigMapperTest {
 
     /** A parent and a child context each bind the same prefix; the Config tab shows one group, not two. */
     @Test
-    void map_shouldMergeBeansSharingAPrefixAcrossContexts() {
+    void mapMergesBeansSharingAPrefixAcrossContexts() {
         Map<String, ConfigPropsResponse.ConfigContext> contexts = new LinkedHashMap<>();
         contexts.put(
                 "parent",
@@ -216,7 +216,7 @@ class ConfigMapperTest {
     }
 
     @Test
-    void map_shouldKeepANullPropertyValueAsNull() {
+    void mapKeepsANullPropertyValueAsNull() {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("address", null);
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
@@ -233,7 +233,7 @@ class ConfigMapperTest {
 
     /** A context without beans and a bean without properties bind as empty; neither is an error. */
     @Test
-    void map_shouldTreatAbsentBeansAndPropertiesAsEmpty() {
+    void mapTreatsAbsentBeansAndPropertiesAsEmpty() {
         Map<String, ConfigPropsResponse.ConfigContext> contexts = new LinkedHashMap<>();
         contexts.put("empty", new ConfigPropsResponse.ConfigContext(null));
         contexts.put(

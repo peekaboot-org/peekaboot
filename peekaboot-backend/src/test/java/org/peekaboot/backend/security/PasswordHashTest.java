@@ -16,14 +16,14 @@ class PasswordHashTest {
             "pbkdf2-sha256$210000$BLJpzweGy0jZ4WaX/4QmIQ==$28GVXiO3pjmx60VND7xjChOJMvmv7UZbMfjYO29tu30=";
 
     @Test
-    void matches_acceptsThePasswordItWasBuiltFrom() {
+    void matchesAcceptsThePasswordItWasBuiltFrom() {
         var hash = PasswordHash.of("correct-horse");
 
         assertThat(hash.matches("correct-horse")).isTrue();
     }
 
     @Test
-    void matches_rejectsAnyOtherPassword() {
+    void matchesRejectsAnyOtherPassword() {
         var hash = PasswordHash.of("correct-horse");
 
         assertThat(hash.matches("correct-horsf")).isFalse();
@@ -31,13 +31,13 @@ class PasswordHashTest {
     }
 
     @Test
-    void of_saltsEveryHashSeparately() {
+    void ofSaltsEveryHashSeparately() {
         assertThat(PasswordHash.of("same").format())
                 .isNotEqualTo(PasswordHash.of("same").format());
     }
 
     @Test
-    void parse_roundTripsAFormattedHash() {
+    void parseRoundTripsAFormattedHash() {
         var hash = PasswordHash.of("correct-horse");
 
         var parsed = PasswordHash.parse(hash.format()).orElseThrow();
@@ -47,12 +47,12 @@ class PasswordHashTest {
     }
 
     @Test
-    void format_namesTheAlgorithmAndTheIterationCount() {
+    void formatNamesTheAlgorithmAndTheIterationCount() {
         assertThat(PasswordHash.of("correct-horse").format()).startsWith("pbkdf2-sha256$210000$");
     }
 
     @Test
-    void parse_rejectsAnythingItDoesNotUnderstand() {
+    void parseRejectsAnythingItDoesNotUnderstand() {
         assertThat(PasswordHash.parse("")).isEmpty();
         assertThat(PasswordHash.parse("plaintext")).isEmpty();
         assertThat(PasswordHash.parse("pbkdf2-sha256$210000$onlythree")).isEmpty();
@@ -66,7 +66,7 @@ class PasswordHashTest {
     }
 
     @Test
-    void toString_redactsTheSaltAndTheHash() {
+    void toStringRedactsTheSaltAndTheHash() {
         var hash = PasswordHash.of("correct-horse");
         var formatted = hash.format();
         var secondDollar = formatted.indexOf('$', formatted.indexOf('$') + 1);
@@ -81,14 +81,14 @@ class PasswordHashTest {
     }
 
     @Test
-    void parse_verifiesAPinnedEncoding() {
+    void parseVerifiesAPinnedEncoding() {
         assertThat(PasswordHash.parse(PINNED_ENCODING).orElseThrow().matches("pinned"))
                 .isTrue();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"-1", "0", "1", "209999", "210001", "2000000000"})
-    void parse_rejectsAnIterationCountItDoesNotWrite(String iterations) {
+    void parseRejectsAnIterationCountItDoesNotWrite(String iterations) {
         var encoded = PINNED_ENCODING.replace("$210000$", "$" + iterations + "$");
 
         assertThat(PasswordHash.parse(encoded)).isEmpty();

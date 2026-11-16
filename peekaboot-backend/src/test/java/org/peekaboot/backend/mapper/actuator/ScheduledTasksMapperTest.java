@@ -18,7 +18,7 @@ class ScheduledTasksMapperTest {
     private final ScheduledTasksMapper mapper = new ScheduledTasksMapper(new MaskingEngine());
 
     @Test
-    void map_shouldExtractCronTasks() {
+    void mapExtractsCronTasks() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(new ScheduledTasksResponse.CronTask(
                         "0 0 * * * *",
@@ -42,7 +42,7 @@ class ScheduledTasksMapperTest {
     }
 
     @Test
-    void map_shouldExtractFixedDelayTasks() {
+    void mapExtractsFixedDelayTasks() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(new ScheduledTasksResponse.FixedTask(
@@ -67,7 +67,7 @@ class ScheduledTasksMapperTest {
     }
 
     @Test
-    void map_shouldExtractFixedRateTasks() {
+    void mapExtractsFixedRateTasks() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(),
@@ -89,14 +89,14 @@ class ScheduledTasksMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullInput() {
+    void mapHandlesNullInput() {
         ScheduledTasksInfo result = mapper.map(null, Locale.ENGLISH);
         assertThat(result.tasks()).isEmpty();
         assertThat(result.cronCount()).isZero();
     }
 
     @Test
-    void map_shouldHandleFailedStatus() {
+    void mapHandlesFailedStatus() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(new ScheduledTasksResponse.FixedTask(
@@ -120,7 +120,7 @@ class ScheduledTasksMapperTest {
     // A failed task's message routinely echoes what failed: a JDBC URL, a request line.
     // It runs through the value rules like any other free text on the dashboard.
     @Test
-    void map_shouldMaskACredentialInsideTheExceptionMessage() {
+    void mapMasksACredentialInsideTheExceptionMessage() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(new ScheduledTasksResponse.FixedTask(
@@ -144,7 +144,7 @@ class ScheduledTasksMapperTest {
     }
 
     @Test
-    void map_shouldSortByTypeAndTarget() {
+    void mapSortsByTypeAndTarget() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(
                         createCronTask("0 0 * * * *", "b.Scheduler.cronB"),
@@ -167,7 +167,7 @@ class ScheduledTasksMapperTest {
      * outright rather than leaving the frontend to infer it from a missing timestamp.
      */
     @Test
-    void map_fixedTasks_shouldCarryTheIntervalWithoutAScheduleOrADescription() {
+    void fixedTasksCarryTheIntervalWithoutAScheduleOrADescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b")),
@@ -186,7 +186,7 @@ class ScheduledTasksMapperTest {
     }
 
     @Test
-    void map_cronTask_shouldPopulateScheduleDescription() {
+    void aCronTaskPopulatesItsScheduleDescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(createCronTask("0 0 * * * *", "com.example.Scheduler.hourlyTask")),
                 List.of(),
@@ -203,7 +203,7 @@ class ScheduledTasksMapperTest {
 
     /** A trigger that is neither a cron expression nor a fixed interval has only its own description to show. */
     @Test
-    void map_shouldListACustomTriggerTask() {
+    void mapListsACustomTriggerTask() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(),
@@ -237,7 +237,7 @@ class ScheduledTasksMapperTest {
 
     /** A trigger describes itself with toString(), which can echo the address it polls. */
     @Test
-    void map_shouldMaskACredentialInsideACustomTrigger() {
+    void mapMasksACredentialInsideACustomTrigger() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(),
@@ -257,7 +257,7 @@ class ScheduledTasksMapperTest {
 
     /** Boot omits the runnable for a task it cannot describe; the row still has a name. */
     @Test
-    void map_shouldNameAnUnknownTargetWhenTheRunnableIsMissing() {
+    void mapNamesAnUnknownTargetWhenTheRunnableIsMissing() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(new ScheduledTasksResponse.FixedTask(1000L, null, null, null)),
@@ -271,7 +271,7 @@ class ScheduledTasksMapperTest {
 
     /** Two rows of one type are ordered by target, so a target the runnable leaves out would end the sort. */
     @Test
-    void map_shouldNameAnUnknownTargetWhenTheRunnableNamesNone() {
+    void mapNamesAnUnknownTargetWhenTheRunnableNamesNone() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(), List.of(createFixedTask(1000L, null), createFixedTask(2000L, null)), List.of(), List.of());
 
@@ -282,7 +282,7 @@ class ScheduledTasksMapperTest {
 
     /** An exception reported with only one of its two halves is rendered as that half, with no dangling separator. */
     @Test
-    void map_shouldRenderAnExceptionCarryingOnlyAMessageOrOnlyAType() {
+    void mapRendersAnExceptionCarryingOnlyAMessageOrOnlyAType() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(

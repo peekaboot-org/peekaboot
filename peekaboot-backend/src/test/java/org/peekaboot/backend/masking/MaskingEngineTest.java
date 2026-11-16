@@ -52,7 +52,7 @@ class MaskingEngineTest {
                     "app.certificate-password",
                     "app.certificate-private-key",
                 })
-        void isSensitiveKey_shouldMatchEachKeyNameRule(String key) {
+        void isSensitiveKeyMatchesEachKeyNameRule(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
@@ -83,7 +83,7 @@ class MaskingEngineTest {
                     "maxTokens",
                     "spring.cloud.kubernetes.secrets.enabled",
                 })
-        void isSensitiveKey_shouldMatchThePluralOfARuleWord(String key) {
+        void isSensitiveKeyMatchesThePluralOfARuleWord(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
@@ -92,7 +92,7 @@ class MaskingEngineTest {
         // MaskingRules.KEY_NAME_EXCEPTIONS for why none of them is exempted.
         @ParameterizedTest
         @ValueSource(strings = {"XDG_SESSION_ID", "SSH_AUTH_SOCK", "CREDENTIALS_DIRECTORY"})
-        void isSensitiveKey_shouldMatchTheSensitiveAdjacentEnvironmentVariables(String key) {
+        void isSensitiveKeyMatchesTheSensitiveAdjacentEnvironmentVariables(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
@@ -116,13 +116,13 @@ class MaskingEngineTest {
                     "jwt",
                     "JWT",
                 })
-        void isSensitiveKey_shouldMatchTheAbbreviatedAndProviderKeyNames(String key) {
+        void isSensitiveKeyMatchesTheAbbreviatedAndProviderKeyNames(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
         // The accepted cost of bare "pass", like max-tokens above: it also names a pass-through.
         @Test
-        void isSensitiveKey_shouldMatchPassWhereItNamesNoPassword() {
+        void isSensitiveKeyMatchesPassWhereItNamesNoPassword() {
             assertThat(engine.isSensitiveKey("app.pass-through.enabled")).isTrue();
         }
     }
@@ -138,7 +138,7 @@ class MaskingEngineTest {
                     "sun.java.command",
                     "spring.application.json",
                 })
-        void isSensitiveKey_shouldMatchEachLegacySpringPattern(String key) {
+        void isSensitiveKeyMatchesEachLegacySpringPattern(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
     }
@@ -173,7 +173,7 @@ class MaskingEngineTest {
                     "app.design.theme",
                     "spring.signal.handler",
                 })
-        void isSensitiveKey_shouldNotMatchNegativeCases(String key) {
+        void isSensitiveKeyDoesNotMatchNegativeCases(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
 
@@ -192,7 +192,7 @@ class MaskingEngineTest {
                     "server.servlet.session.cookie.path",
                     "server.servlet.session.cookie.domain",
                 })
-        void isSensitiveKey_shouldNotMatchCookieConfigurationKeys(String key) {
+        void isSensitiveKeyDoesNotMatchCookieConfigurationKeys(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
 
@@ -201,14 +201,14 @@ class MaskingEngineTest {
         // partial match rather than falling back to a substring check.
         @ParameterizedTest
         @ValueSource(strings = {"passwordless", "app.passwordless.enabled"})
-        void isSensitiveKey_shouldNotMatchPasswordAsAPrefixOfALongerWord(String key) {
+        void isSensitiveKeyDoesNotMatchPasswordAsAPrefixOfALongerWord(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
 
         // "oauth2" must not match the bare "auth" rule - it is one token, not "auth"
         // followed by a separator, so a whole-token check must reject it.
         @Test
-        void isSensitiveKey_shouldNotMatchAuthAsASubstringOfOauth2() {
+        void isSensitiveKeyDoesNotMatchAuthAsASubstringOfOauth2() {
             assertThat(engine.isSensitiveKey("spring.security.oauth2.client.registration.google.client-id"))
                     .isFalse();
         }
@@ -226,7 +226,7 @@ class MaskingEngineTest {
                     "encrypt.key-store.location",
                     "encrypt.key-store.alias",
                 })
-        void isSensitiveKey_shouldNotMatchWordsAndGroupsAroundTheNewRules(String key) {
+        void isSensitiveKeyDoesNotMatchWordsAndGroupsAroundTheNewRules(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
     }
@@ -248,7 +248,7 @@ class MaskingEngineTest {
                     "app.TOKEN_URL",
                     "app.api-key-url",
                 })
-        void isSensitiveKey_shouldNotJudgeAnAddressKeyByItsName(String key) {
+        void isSensitiveKeyDoesNotJudgeAnAddressKeyByItsName(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
 
@@ -256,14 +256,14 @@ class MaskingEngineTest {
         // and "uri"/"url" in the middle of a name says nothing about the value.
         @ParameterizedTest
         @ValueSource(strings = {"token", "authorization", "app.token-uri.password", "app.url-token"})
-        void isSensitiveKey_shouldStillMatchAKeyThatDoesNotEndInAnAddress(String key) {
+        void isSensitiveKeyStillMatchesAKeyThatDoesNotEndInAnAddress(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
         // The legacy Spring patterns match the whole key, not its vocabulary: a
         // vcap.services binding's URI carries that binding's own password.
         @Test
-        void isSensitiveKey_shouldStillMatchAVcapServicesBindingUri() {
+        void isSensitiveKeyStillMatchesAVcapServicesBindingUri() {
             assertThat(engine.isSensitiveKey("vcap.services.mydb.credentials.uri"))
                     .isTrue();
         }
@@ -271,7 +271,7 @@ class MaskingEngineTest {
         // Only the name is exempt; a credential inside such a URL is still caught by its
         // shape, exactly as under any other innocuous key.
         @Test
-        void mask_shouldStillMaskAnAccessTokenCarriedInsideAnAddressKeysValue() {
+        void maskStillMasksAnAccessTokenCarriedInsideAnAddressKeysValue() {
             String masked = engine.mask(
                     "spring.security.oauth2.client.provider.keycloak.token-uri",
                     "https://idp.example.com/realms/acme/protocol/openid-connect/token?access_token=s3cr3tvalue");
@@ -286,7 +286,7 @@ class MaskingEngineTest {
 
         @ParameterizedTest
         @ValueSource(strings = {"api-key", "API_KEY", "api.key", "Api-Key"})
-        void isSensitiveKey_shouldMatchRegardlessOfSeparatorStyle(String key) {
+        void isSensitiveKeyMatchesRegardlessOfSeparatorStyle(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
@@ -295,7 +295,7 @@ class MaskingEngineTest {
         // "apiKey" is deliberately not used here: it would pass even without camelCase
         // handling because "apikey" (all lowercase, no separator) is itself a listed rule.
         @Test
-        void isSensitiveKey_shouldMatchACamelCaseCompoundNameWithNoSeparator() {
+        void isSensitiveKeyMatchesACamelCaseCompoundNameWithNoSeparator() {
             assertThat(engine.isSensitiveKey("clientSecret")).isTrue();
         }
 
@@ -303,18 +303,18 @@ class MaskingEngineTest {
         // convention; a bare lower-case "pwd" is the JDBC/form-field spelling of a
         // password (";pwd=" on a SQL Server URL, "?pwd=" on a login form) and masks.
         @Test
-        void isSensitiveKey_shouldExemptOnlyTheShellsUpperCaseSpellingOfPwd() {
+        void isSensitiveKeyExemptsOnlyTheShellsUpperCaseSpellingOfPwd() {
             assertThat(engine.isSensitiveKey("PWD")).isFalse();
             assertThat(engine.isSensitiveKey("pwd")).isTrue();
         }
 
         @Test
-        void isSensitiveKey_shouldReturnFalseForNullKey() {
+        void isSensitiveKeyReturnsFalseForNullKey() {
             assertThat(engine.isSensitiveKey(null)).isFalse();
         }
 
         @Test
-        void isSensitiveKey_shouldReturnFalseForBlankKey() {
+        void isSensitiveKeyReturnsFalseForBlankKey() {
             assertThat(engine.isSensitiveKey("  ")).isFalse();
         }
     }
@@ -327,12 +327,12 @@ class MaskingEngineTest {
         // binding means the caller does not control how an external property source spells
         // a key, so a rule word with a stray internal capital must still match.
         @Test
-        void isSensitiveKey_shouldMatchAMixedCaseSpellingOfCredentials() {
+        void isSensitiveKeyMatchesAMixedCaseSpellingOfCredentials() {
             assertThat(engine.isSensitiveKey("spring.datasource.CredenTials")).isTrue();
         }
 
         @Test
-        void isSensitiveKey_shouldMatchAMixedCaseSpellingOfAnotherSingleWordRule() {
+        void isSensitiveKeyMatchesAMixedCaseSpellingOfAnotherSingleWordRule() {
             assertThat(engine.isSensitiveKey("app.SeCreT")).isTrue();
         }
     }
@@ -341,7 +341,7 @@ class MaskingEngineTest {
     class ValuePatterns {
 
         @Test
-        void maskValue_shouldMaskJwt() {
+        void maskValueMasksJwt() {
             String jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
                     + ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0"
                     + ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
@@ -353,7 +353,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskPemPrivateKey() {
+        void maskValueMasksPemPrivateKey() {
             String value = "-----BEGIN RSA PRIVATE KEY-----";
 
             String result = engine.maskValue(value);
@@ -362,7 +362,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskPemPrivateKeyBody() {
+        void maskValueMasksPemPrivateKeyBody() {
             String body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDb\n".repeat(5);
             String value = "-----BEGIN RSA PRIVATE KEY-----\n" + body + "-----END RSA PRIVATE KEY-----";
 
@@ -370,7 +370,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskEachOfTwoAdjacentPemKeysSeparately() {
+        void maskValueMasksEachOfTwoAdjacentPemKeysSeparately() {
             String value = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----"
                     + " between "
                     + "-----BEGIN PRIVATE KEY-----\nBBBB\n-----END PRIVATE KEY-----";
@@ -379,14 +379,14 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskToEndOfValueWhenPemFooterIsMissing() {
+        void maskValueMasksToEndOfValueWhenPemFooterIsMissing() {
             String value = "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIBt3\n";
 
             assertThat(engine.maskValue(value)).isEqualTo("******");
         }
 
         @Test
-        void maskValue_shouldMaskAwsAccessKey() {
+        void maskValueMasksAwsAccessKey() {
             // AWS's own documentation placeholder, not a real key.
             String value = "aws_access_key_id=AKIAIOSFODNN7EXAMPLE";
 
@@ -396,7 +396,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskGithubClassicToken() {
+        void maskValueMasksGithubClassicToken() {
             String value = "ghp_16C7e42F292c6912E7710c838347Ae178B4a";
 
             String result = engine.maskValue(value);
@@ -405,7 +405,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskGithubFineGrainedToken() {
+        void maskValueMasksGithubFineGrainedToken() {
             String value =
                     "github_pat_11AAAAAAA0abcdefghijkl_" + "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890AB";
 
@@ -415,7 +415,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskGcpApiKey() {
+        void maskValueMasksGcpApiKey() {
             // Obviously fake, unlike a real GCP key: EXAMPLE plus zero-padding.
             String value = "key=AIzaEXAMPLE0000000000000000000000000000";
 
@@ -425,7 +425,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskSlackToken() {
+        void maskValueMasksSlackToken() {
             // Split literal, deliberately: this file is full of strings shaped exactly
             // like the credentials the engine detects, and GitHub's push protection scans
             // for the same shapes. Concatenation is folded at compile time, so the value
@@ -438,7 +438,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskStripeLiveKey() {
+        void maskValueMasksStripeLiveKey() {
             // Split literal, deliberately: this file is full of strings shaped exactly
             // like the credentials the engine detects, and GitHub's push protection scans
             // for the same shapes. Concatenation is folded at compile time, so the value
@@ -451,7 +451,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskOpenAiProjectKey() {
+        void maskValueMasksOpenAiProjectKey() {
             String value = "sk-proj-EXAMPLEabcdefghijklmnopqrstuvwxyz1234567890";
 
             String result = engine.maskValue(value);
@@ -460,7 +460,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAnthropicKey() {
+        void maskValueMasksAnthropicKey() {
             String value = "sk-ant-EXAMPLEabcdefghijklmnopqrstuvwxyz1234567890";
 
             String result = engine.maskValue(value);
@@ -474,7 +474,7 @@ class MaskingEngineTest {
         // for why the tightened tail character class is what lets this coexist with the
         // infra-identifier negative case below.
         @Test
-        void maskValue_shouldMaskLegacyOpenAiKey() {
+        void maskValueMasksLegacyOpenAiKey() {
             String value = "sk-EXAMPLEabcdefghijklmnopqrstuvwxyz1234567890";
 
             String result = engine.maskValue(value);
@@ -488,7 +488,7 @@ class MaskingEngineTest {
         // sk-proj-shaped value should still mask, and mask exactly once, whichever of
         // the three sk- rules ends up firing for it.
         @Test
-        void maskValue_shouldMaskAnOpenAiProjectKeyExactlyOnceWithTheLegacyPatternAlsoActive() {
+        void maskValueMasksAnOpenAiProjectKeyExactlyOnceWithTheLegacyPatternAlsoActive() {
             String key = "sk-proj-" + "A".repeat(40);
             String value = "key=" + key + "&ok=1";
 
@@ -504,7 +504,7 @@ class MaskingEngineTest {
          * masks or leaving a fragment of the token behind.
          */
         @Test
-        void maskValue_shouldMaskAnOverlappingSpanOnceWhenTwoRulesClaimIt() {
+        void maskValueMasksAnOverlappingSpanOnceWhenTwoRulesClaimIt() {
             String token = "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a";
             String value = "https://ci:" + token + "@github.example.com/org/repo.git";
 
@@ -515,7 +515,7 @@ class MaskingEngineTest {
 
         // The query rule's value span ends inside the PEM header, and the PEM span runs on past it.
         @Test
-        void maskValue_shouldMaskAPartialOverlapThroughToTheLaterSpansEnd() {
+        void maskValueMasksAPartialOverlapThroughToTheLaterSpansEnd() {
             String value = "https://h/x?secret=abc-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY----- tail";
 
             assertThat(engine.maskValue(value)).isEqualTo("https://h/x?secret=****** tail");
@@ -523,13 +523,13 @@ class MaskingEngineTest {
 
         // The quoted-option span holds the URL's userinfo span, which ends earlier: the outer end stands.
         @Test
-        void maskValue_shouldKeepTheOuterSpanWhereALaterOneEndsInsideIt() {
+        void maskValueKeepsTheOuterSpanWhereALaterOneEndsInsideIt() {
             assertThat(engine.maskValue("password=\"https://u:p@h/x\" ok")).isEqualTo("password=\"******\" ok");
         }
 
         // The GitHub rule's span and the query rule's start together; the query value runs on past the token.
         @Test
-        void maskValue_shouldMaskToTheLongerOfTwoSpansThatStartTogether() {
+        void maskValueMasksToTheLongerOfTwoSpansThatStartTogether() {
             String token = "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a";
 
             assertThat(engine.maskValue("https://h/x?token=" + token + ".rest&ok=1"))
@@ -538,14 +538,14 @@ class MaskingEngineTest {
 
         // The second key starts where the first one ends: nothing overlaps, so each has its own mask.
         @Test
-        void maskValue_shouldMaskTwoSpansThatOnlyTouchSeparately() {
+        void maskValueMasksTwoSpansThatOnlyTouchSeparately() {
             String key = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----";
 
             assertThat(engine.maskValue(key + key)).isEqualTo("************");
         }
 
         @Test
-        void maskValue_shouldMaskOnlyUserinfoInJdbcUrl() {
+        void maskValueMasksOnlyUserinfoInJdbcUrl() {
             String value = "jdbc:postgresql://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";
 
             String result = engine.maskValue(value);
@@ -557,7 +557,7 @@ class MaskingEngineTest {
         // A scheme is case-insensitive (RFC 3986), and a JDBC URL pasted from a Windows
         // tool or an upper-cased env var spells it that way.
         @Test
-        void maskValue_shouldMaskUserinfoBehindAnUpperCaseScheme() {
+        void maskValueMasksUserinfoBehindAnUpperCaseScheme() {
             String value = "JDBC:POSTGRESQL://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";
 
             String result = engine.maskValue(value);
@@ -567,7 +567,7 @@ class MaskingEngineTest {
 
         /** The common Redis shape: no user at all, only a password in front of the '@'. */
         @Test
-        void maskValue_shouldMaskUserinfoWithAnEmptyUser() {
+        void maskValueMasksUserinfoWithAnEmptyUser() {
             String value = "redis://:S3cr3tPassw0rd@cache.example.com:6379/0";
 
             String result = engine.maskValue(value);
@@ -588,14 +588,14 @@ class MaskingEngineTest {
                     "https://user:pa?ss@host.example.com/path            | https://******@host.example.com/path",
                     "postgres://app:pa#ss@db.example.com:5432/app        | postgres://******@db.example.com:5432/app"
                 })
-        void maskValue_shouldMaskUserinfoWhosePasswordHoldsUrlDelimiters(String value, String masked) {
+        void maskValueMasksUserinfoWhosePasswordHoldsUrlDelimiters(String value, String masked) {
             assertThat(engine.maskValue(value)).isEqualTo(masked);
         }
 
         /** Digits and a delimiter are a port only when no '@' follows before the next '/', ':' or space. */
         @ParameterizedTest
         @ValueSource(chars = {'?', '#', ',', ';', '"', '\'', '<', '>', ')', ']', '}'})
-        void maskValue_shouldMaskAPasswordThatStartsWithDigitsAndADelimiter(char delimiter) {
+        void maskValueMasksAPasswordThatStartsWithDigitsAndADelimiter(char delimiter) {
             String value = "amqp://user:5672" + delimiter + "S3cr3t@mq.example.com:5672/vhost";
 
             String result = engine.maskValue(value);
@@ -615,7 +615,7 @@ class MaskingEngineTest {
                     "{\"homepage\":\"https://example.com\",\"contact\":\"bob@example.com\"}",
                     "{\"u\":\"http://h\",\"t\":\"12:30\",\"e\":\"a@b\"}"
                 })
-        void maskValue_shouldLeaveAUrlWithoutUserinfoAloneWhateverFollowsIt(String value) {
+        void maskValueLeavesAUrlWithoutUserinfoAloneWhateverFollowsIt(String value) {
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
@@ -624,7 +624,7 @@ class MaskingEngineTest {
          * them, so the generic userinfo rule never sees it; only the password is masked.
          */
         @Test
-        void maskValue_shouldMaskOnlyThePasswordInAnOracleThinUrl() {
+        void maskValueMasksOnlyThePasswordInAnOracleThinUrl() {
             assertThat(engine.maskValue("jdbc:oracle:thin:scott/S3cr3tPassw0rd@//db.example.com:1521/ORCL"))
                     .isEqualTo("jdbc:oracle:thin:scott/******@//db.example.com:1521/ORCL");
             assertThat(engine.maskValue("jdbc:oracle:thin:scott/S3cr3tPassw0rd@db.example.com:1521:ORCL"))
@@ -639,7 +639,7 @@ class MaskingEngineTest {
          * it - the canonical case the value patterns exist for.
          */
         @Test
-        void maskValue_shouldMaskOnlyThePasswordValueInAJdbcUrlQueryParameter() {
+        void maskValueMasksOnlyThePasswordValueInAJdbcUrlQueryParameter() {
             String value = "jdbc:mysql://localhost:3306/mydb?user=root&password=hunter2";
 
             String result = engine.maskValue(value);
@@ -651,7 +651,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAnApiKeyInAUrlQueryParameter() {
+        void maskValueMasksAnApiKeyInAUrlQueryParameter() {
             String value = "https://api.example.com/v1/data?api_key=abc123&format=json";
 
             String result = engine.maskValue(value);
@@ -684,7 +684,7 @@ class MaskingEngineTest {
                     "auth",
                     "authorization"
                 })
-        void maskValue_shouldMaskEachUrlQueryCredentialParameterName(String paramName) {
+        void maskValueMasksEachUrlQueryCredentialParameterName(String paramName) {
             String value = "https://example.com/callback?" + paramName + "=s3cr3t&ok=1";
 
             String result = engine.maskValue(value);
@@ -694,7 +694,7 @@ class MaskingEngineTest {
 
         /** The shape a client span's {@code http.url} tag carries for a token exchange. */
         @Test
-        void maskValue_shouldMaskOnlyTheSensitivePairsInAUrlWithSeveralParameters() {
+        void maskValueMasksOnlyTheSensitivePairsInAUrlWithSeveralParameters() {
             String value =
                     "https://oauth.example.com/token?client_id=abc&client_secret=s3cr3t&grant_type=client_credentials";
 
@@ -707,7 +707,7 @@ class MaskingEngineTest {
 
         /** SQL Server's JDBC URL separates its properties with semicolons rather than ?/&. */
         @Test
-        void maskValue_shouldMaskASemicolonDelimitedJdbcProperty() {
+        void maskValueMasksASemicolonDelimitedJdbcProperty() {
             String value =
                     "jdbc:sqlserver://db.example.com:1433;databaseName=orders;user=app;password=hunter2;encrypt=true";
 
@@ -719,7 +719,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldNotMaskAnOrdinaryQueryParameter() {
+        void maskValueDoesNotMaskAnOrdinaryQueryParameter() {
             String value = "https://example.com/search?query=widgets&page=2";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
@@ -728,7 +728,7 @@ class MaskingEngineTest {
         // Bare "key" is deliberately not a key-name rule (see MaskingRules); the query
         // rule inherits that decision rather than keeping a vocabulary of its own.
         @Test
-        void maskValue_shouldLeaveABareKeyQueryParameterAlone() {
+        void maskValueLeavesABareKeyQueryParameterAlone() {
             String value = "https://maps.example.com/geocode?key=abc123&address=Berlin";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
@@ -736,7 +736,7 @@ class MaskingEngineTest {
 
         /** The shape of an Azure SAS URL: only {@code sig} carries the secret. */
         @Test
-        void maskValue_shouldMaskOnlyTheSigParameterOfAnAzureSasUrl() {
+        void maskValueMasksOnlyTheSigParameterOfAnAzureSasUrl() {
             String value = "https://acct.blob.core.windows.net/c/blob.txt?sv=2024-11-04&se=2026-01-01&sig=s3cr3t";
 
             String result = engine.maskValue(value);
@@ -747,7 +747,7 @@ class MaskingEngineTest {
 
         // "sig" matches as an exact token only, never as a prefix of a longer word.
         @Test
-        void maskValue_shouldNotMaskQueryParametersMerelyStartingWithSig() {
+        void maskValueDoesNotMaskQueryParametersMerelyStartingWithSig() {
             String value = "https://example.com/render?design=flat&signal=9&sigma=0.5";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
@@ -756,14 +756,14 @@ class MaskingEngineTest {
         // The PWD exemption is for the shell variable as a whole key; a parameter name
         // inside a value (an ODBC connection string's ";PWD=") is judged without it.
         @Test
-        void maskValue_shouldMaskAnUpperCasePwdParameterInsideAValue() {
+        void maskValueMasksAnUpperCasePwdParameterInsideAValue() {
             assertThat(engine.maskValue("Server=db;UID=sa;PWD=hunter2")).isEqualTo("Server=db;UID=sa;PWD=******");
             assertThat(engine.maskValue("https://example.com/login?PWD=hunter2"))
                     .isEqualTo("https://example.com/login?PWD=******");
         }
 
         @Test
-        void maskValue_shouldMaskAnAzureStorageAccountKeyInAConnectionString() {
+        void maskValueMasksAnAzureStorageAccountKeyInAConnectionString() {
             String value =
                     "DefaultEndpointsProtocol=https;AccountName=acme;AccountKey=abc123==;EndpointSuffix=core.windows.net";
 
@@ -775,7 +775,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void mask_shouldMaskAQuotedPasswordInAJaasConfig() {
+        void maskMasksAQuotedPasswordInAJaasConfig() {
             String value = "org.apache.kafka.common.security.plain.PlainLoginModule required"
                     + " username=\"alice\" password=\"alice-secret\";";
 
@@ -787,7 +787,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAQuotedValueThroughAnEscapedQuote() {
+        void maskValueMasksAQuotedValueThroughAnEscapedQuote() {
             String value = "x required password=\"ab\\\"cd\" mechanism=\"PLAIN\";";
 
             String result = engine.maskValue(value);
@@ -796,7 +796,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAQuotedValueThatEndsInAnEscapedBackslash() {
+        void maskValueMasksAQuotedValueThatEndsInAnEscapedBackslash() {
             String value = "x required username=\"alice\" password=\"abc\\\\\";";
 
             String result = engine.maskValue(value);
@@ -805,7 +805,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldEndAQuotedValueAtTheQuoteAfterAnEscapedBackslash() {
+        void maskValueEndsAQuotedValueAtTheQuoteAfterAnEscapedBackslash() {
             String value = "x required password=\"abc\\\\\" user=\"u\";";
 
             String result = engine.maskValue(value);
@@ -814,7 +814,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAQuotedValueThroughAnEscapedBackslashAndAnEscapedQuote() {
+        void maskValueMasksAQuotedValueThroughAnEscapedBackslashAndAnEscapedQuote() {
             String value = "x required password=\"ab\\\\\\\"cd\" mechanism=\"PLAIN\";";
 
             String result = engine.maskValue(value);
@@ -823,7 +823,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAQuotedValueWithNoClosingQuoteToTheEnd() {
+        void maskValueMasksAQuotedValueWithNoClosingQuoteToTheEnd() {
             String value = "x required username=\"alice\" password=\"correct horse";
 
             String result = engine.maskValue(value);
@@ -832,7 +832,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAnUnclosedQuotedValueThroughAnEscapedQuoteAtItsEnd() {
+        void maskValueMasksAnUnclosedQuotedValueThroughAnEscapedQuoteAtItsEnd() {
             String value = "x required password=\"correct horse\\\"";
 
             String result = engine.maskValue(value);
@@ -841,7 +841,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskAnUnclosedQuotedValueThatEndsInABackslash() {
+        void maskValueMasksAnUnclosedQuotedValueThatEndsInABackslash() {
             String value = "x required password=\"correct horse\\";
 
             String result = engine.maskValue(value);
@@ -850,7 +850,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldLeaveAQuotedOptionWithAnInnocuousNameAlone() {
+        void maskValueLeavesAQuotedOptionWithAnInnocuousNameAlone() {
             String value = "x required username=\"alice\" mechanism=\"PLAIN\";";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
@@ -873,7 +873,7 @@ class MaskingEngineTest {
                     "xoxs" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx",
                     "rk_live" + "_4eC39HqLyjWDarjtT1zdp7dcEXAMPLE",
                 })
-        void maskValue_shouldMaskEveryProviderPrefixTheRulesName(String value) {
+        void maskValueMasksEveryProviderPrefixTheRulesName(String value) {
             assertThat(engine.maskValue(value)).isEqualTo("******");
         }
     }
@@ -887,24 +887,24 @@ class MaskingEngineTest {
     class QueryStringMasking {
 
         @Test
-        void maskQueryString_shouldMaskSensitivePairsAndLeaveTheRestAlone() {
+        void maskQueryStringMasksSensitivePairsAndLeaveTheRestAlone() {
             assertThat(engine.maskQueryString("api_key=xyz&q=widgets")).isEqualTo("api_key=******&q=widgets");
         }
 
         @Test
-        void maskQueryString_shouldPreserveAPairWithNoValue() {
+        void maskQueryStringPreservesAPairWithNoValue() {
             assertThat(engine.maskQueryString("debug&q=widgets")).isEqualTo("debug&q=widgets");
         }
 
         @Test
-        void maskQueryString_shouldReturnNullAndBlankInputUnchanged() {
+        void maskQueryStringReturnsNullAndBlankInputUnchanged() {
             assertThat(engine.maskQueryString(null)).isNull();
             assertThat(engine.maskQueryString(" ")).isEqualTo(" ");
         }
 
         /** The key is judged decoded, so an encoded spelling of a sensitive name still masks. */
         @Test
-        void maskQueryString_shouldDecodeTheKeyBeforeJudgingIt() {
+        void maskQueryStringDecodesTheKeyBeforeJudgingIt() {
             assertThat(engine.maskQueryString("api%5Fkey=xyz&q=a%20b")).isEqualTo("api_key=******&q=a+b");
         }
 
@@ -914,7 +914,7 @@ class MaskingEngineTest {
          * the whole request capture being lost.
          */
         @Test
-        void maskQueryString_shouldTolerateAMalformedPercentSequence() {
+        void maskQueryStringToleratesAMalformedPercentSequence() {
             assertThat(engine.maskQueryString("q=100%")).isEqualTo("q=******");
             assertThat(engine.maskQueryString("a=%zz&password=x")).isEqualTo("a=******&password=******");
         }
@@ -929,7 +929,7 @@ class MaskingEngineTest {
     class CommandLineOptionValues {
 
         @Test
-        void maskValue_shouldMaskTheValueOfASystemPropertyOptionWithASensitiveKey() {
+        void maskValueMasksTheValueOfASystemPropertyOptionWithASensitiveKey() {
             String value = "-Xmx1g -Dspring.datasource.password=hunter2 -Dserver.port=8080";
 
             String result = engine.maskValue(value);
@@ -938,7 +938,7 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskTheValueOfADoubleDashOptionWithASensitiveKey() {
+        void maskValueMasksTheValueOfADoubleDashOptionWithASensitiveKey() {
             String value = "--spring.datasource.password=hunter2 --server.port=8080";
 
             String result = engine.maskValue(value);
@@ -947,14 +947,14 @@ class MaskingEngineTest {
         }
 
         @Test
-        void mask_shouldMaskOptionValuesInsideAnInnocuouslyNamedEnvironmentVariable() {
+        void maskMasksOptionValuesInsideAnInnocuouslyNamedEnvironmentVariable() {
             String result = engine.mask("JAVA_TOOL_OPTIONS", "-Dapp.api-key=abc123 -Dspring.profiles.active=prod");
 
             assertThat(result).isEqualTo("-Dapp.api-key=****** -Dspring.profiles.active=prod");
         }
 
         @Test
-        void maskValue_shouldLeaveOptionsWithInnocuousKeysAlone() {
+        void maskValueLeavesOptionsWithInnocuousKeysAlone() {
             String value = "-Dserver.port=8080 -Dspring.profiles.active=local --debug=true";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
@@ -963,7 +963,7 @@ class MaskingEngineTest {
         // An option only starts at a word boundary: "-D" glued onto a preceding token is
         // part of that token (a path segment, an identifier), not a JVM flag.
         @Test
-        void maskValue_shouldNotTreatADashDInsideAWordAsAnOption() {
+        void maskValueDoesNotTreatADashDInsideAWordAsAnOption() {
             String value = "build-Dpassword=1";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
@@ -974,35 +974,35 @@ class MaskingEngineTest {
     class ValuesThatSurviveUntouched {
 
         @Test
-        void maskValue_shouldNotTouchAGitSha() {
+        void maskValueDoesNotTouchAGitSha() {
             String value = "a94a8fe5ccb19ba61c4c0873d391e987982fbbd";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
         @Test
-        void maskValue_shouldNotTouchAUuid() {
+        void maskValueDoesNotTouchAUuid() {
             String value = "550e8400-e29b-41d4-a716-446655440000";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
         @Test
-        void maskValue_shouldNotTouchABase64EncodedAsset() {
+        void maskValueDoesNotTouchABase64EncodedAsset() {
             String value = "aGVsbG8gd29ybGQgdGhpcyBpcyBhIGJhc2U2NCBlbmNvZGVkIHN0cmluZw==";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
         @Test
-        void maskValue_shouldNotTouchAnIsoTimestamp() {
+        void maskValueDoesNotTouchAnIsoTimestamp() {
             String value = "2026-08-23T15:17:00Z";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
         @Test
-        void maskValue_shouldNotTouchAPlainUrlWithNoCredentials() {
+        void maskValueDoesNotTouchAPlainUrlWithNoCredentials() {
             String value = "https://example.com/api/v1/resource?query=1";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
@@ -1015,19 +1015,19 @@ class MaskingEngineTest {
         // char class is tightened to [A-Za-z0-9] (no "-"/"_") specifically to achieve
         // this separation.
         @Test
-        void maskValue_shouldNotTouchAnSkPrefixedInfraIdentifier() {
+        void maskValueDoesNotTouchAnSkPrefixedInfraIdentifier() {
             String value = "sk-cluster-prod-eu-west-1a-worker-nodes";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
         @Test
-        void maskValue_shouldReturnNullForNullValue() {
+        void maskValueReturnsNullForNullValue() {
             assertThat(engine.maskValue(null)).isNull();
         }
 
         @Test
-        void maskValue_shouldReturnEmptyStringForEmptyValue() {
+        void maskValueReturnsEmptyStringForEmptyValue() {
             assertThat(engine.maskValue("")).isEmpty();
         }
     }
@@ -1036,21 +1036,21 @@ class MaskingEngineTest {
     class MaskKeyValuePair {
 
         @Test
-        void mask_shouldReplaceWholeValueWhenKeyIsSensitive() {
+        void maskReplacesWholeValueWhenKeyIsSensitive() {
             String result = engine.mask("database.password", "hunter2");
 
             assertThat(result).isEqualTo("******");
         }
 
         @Test
-        void mask_shouldLeaveValueUntouchedWhenNeitherKeyNorValueIsSensitive() {
+        void maskLeavesValueUntouchedWhenNeitherKeyNorValueIsSensitive() {
             String result = engine.mask("server.port", "8080");
 
             assertThat(result).isEqualTo("8080");
         }
 
         @Test
-        void mask_shouldMaskOnlyTheCredentialSpanWhenKeyIsInnocuousButValueIsNot() {
+        void maskMasksOnlyTheCredentialSpanWhenKeyIsInnocuousButValueIsNot() {
             String url = "jdbc:postgresql://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";
 
             String result = engine.mask("spring.datasource.url", url);
@@ -1059,26 +1059,26 @@ class MaskingEngineTest {
         }
 
         @Test
-        void mask_shouldReturnNullWhenValueIsNull() {
+        void maskReturnsNullWhenValueIsNull() {
             assertThat(engine.mask("database.password", null)).isNull();
         }
 
         @Test
-        void mask_shouldFallBackToValueRulesWhenKeyIsNull() {
+        void maskFallsBackToValueRulesWhenKeyIsNull() {
             String result = engine.mask(null, "aws_access_key_id=AKIAIOSFODNN7EXAMPLE");
 
             assertThat(result).isEqualTo("aws_access_key_id=******");
         }
 
         @Test
-        void mask_shouldTreatAHeaderNameLikeAnyOtherKey() {
+        void maskTreatsAHeaderNameLikeAnyOtherKey() {
             String result = engine.mask("X-Api-Key", "abc123");
 
             assertThat(result).isEqualTo("******");
         }
 
         @Test
-        void mask_shouldLeaveAnInnocuousHeaderUntouched() {
+        void maskLeavesAnInnocuousHeaderUntouched() {
             String result = engine.mask("X-Request-Id", "550e8400-e29b-41d4-a716-446655440000");
 
             assertThat(result).isEqualTo("550e8400-e29b-41d4-a716-446655440000");
@@ -1087,14 +1087,14 @@ class MaskingEngineTest {
         // Narrowing cookie/set-cookie to whole-key matches must not stop them masking
         // the actual HTTP headers they exist for.
         @Test
-        void mask_shouldMaskTheCookieHeader() {
+        void maskMasksTheCookieHeader() {
             String result = engine.mask("Cookie", "session=abc123");
 
             assertThat(result).isEqualTo("******");
         }
 
         @Test
-        void mask_shouldMaskTheSetCookieHeader() {
+        void maskMasksTheSetCookieHeader() {
             String result = engine.mask("Set-Cookie", "session=abc123; Path=/; HttpOnly");
 
             assertThat(result).isEqualTo("******");
@@ -1102,7 +1102,7 @@ class MaskingEngineTest {
 
         // The OpenTelemetry header-capture attributes carry the same two headers on a span.
         @Test
-        void mask_shouldMaskTheHeaderCaptureAttributesOfTheCookieHeaders() {
+        void maskMasksTheHeaderCaptureAttributesOfTheCookieHeaders() {
             assertThat(engine.mask("http.request.header.cookie", "session=abc123"))
                     .isEqualTo("******");
             assertThat(engine.mask("http.response.header.set-cookie", "session=abc123; Path=/"))
@@ -1113,7 +1113,7 @@ class MaskingEngineTest {
         // application's Config tab; pinned by name rather than relying on the generic "password"
         // rule to keep covering it.
         @Test
-        void mask_shouldNeverSurfaceThePeekabootSecurityPasswordValue() {
+        void maskNeverSurfacesThePeekabootSecurityPasswordValue() {
             String result = engine.mask("peekaboot.security.password", "hunter2");
 
             assertThat(result).isEqualTo("******").doesNotContain("hunter2");
@@ -1124,21 +1124,21 @@ class MaskingEngineTest {
     class MaskWithUnmaskFlag {
 
         @Test
-        void mask_shouldReturnValueVerbatimWhenUnmaskIsTrueEvenForASensitiveKey() {
+        void maskReturnsValueVerbatimWhenUnmaskIsTrueEvenForASensitiveKey() {
             String result = engine.mask("database.password", "hunter2", true);
 
             assertThat(result).isEqualTo("hunter2");
         }
 
         @Test
-        void mask_shouldBehaveLikeTheTwoArgOverloadWhenUnmaskIsFalse() {
+        void maskBehavesLikeTheTwoArgOverloadWhenUnmaskIsFalse() {
             String result = engine.mask("database.password", "hunter2", false);
 
             assertThat(result).isEqualTo("******");
         }
 
         @Test
-        void mask_shouldStillReturnNullForANullValueWhenUnmaskIsTrue() {
+        void maskStillReturnsNullForANullValueWhenUnmaskIsTrue() {
             assertThat(engine.mask("database.password", null, true)).isNull();
         }
     }

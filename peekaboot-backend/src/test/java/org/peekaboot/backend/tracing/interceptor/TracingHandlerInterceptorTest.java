@@ -62,7 +62,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void preHandle_shouldStartHandlerObservation() {
+    void preHandleStartsHandlerObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
 
@@ -75,7 +75,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void postHandle_shouldStopHandlerAndStartViewObservation() {
+    void postHandleStopsHandlerAndStartViewObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
         ModelAndView modelAndView = new ModelAndView("users/list");
@@ -96,7 +96,7 @@ class TracingHandlerInterceptorTest {
 
     /** A handler may return a View instance rather than a name; it renders all the same. */
     @Test
-    void postHandle_shouldStartViewObservationForAViewInstance() {
+    void postHandleStartsViewObservationForAViewInstance() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
         ModelAndView modelAndView = new ModelAndView(new RedirectView("/users"));
@@ -111,7 +111,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void postHandle_shouldNotStartViewObservation_whenNoView() {
+    void postHandleDoesNotStartViewObservationWhenNoView() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
 
@@ -124,7 +124,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void afterCompletion_shouldStopViewObservation() {
+    void afterCompletionStopsViewObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
         ModelAndView modelAndView = new ModelAndView("users/list");
@@ -144,7 +144,7 @@ class TracingHandlerInterceptorTest {
 
     /** A template that throws mid-render fails after postHandle opened the view span; the error lands on that span. */
     @Test
-    void afterCompletion_recordsAViewRenderingExceptionOnTheViewObservation() {
+    void afterCompletionRecordsAViewRenderingExceptionOnTheViewObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
         RuntimeException exception = new RuntimeException("template blew up");
@@ -168,7 +168,7 @@ class TracingHandlerInterceptorTest {
 
     /** postHandle is skipped when the handler throws; afterCompletion records the error and still stops the observation. */
     @Test
-    void afterCompletion_recordsTheHandlerExceptionAndStopsTheObservation() {
+    void afterCompletionRecordsTheHandlerExceptionAndStopsTheObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
         RuntimeException exception = new RuntimeException("Handler error");
@@ -185,7 +185,7 @@ class TracingHandlerInterceptorTest {
 
     /** A resolver that answers the handler's exception hands afterCompletion none; the handler span still fails with it. */
     @Test
-    void afterCompletion_recordsAFailureAResolverAnsweredOnTheHandlerObservation() {
+    void afterCompletionRecordsAFailureAResolverAnsweredOnTheHandlerObservation() {
         Object handler = new Object();
         IllegalStateException failure = new IllegalStateException("answered by a resolver");
 
@@ -202,7 +202,7 @@ class TracingHandlerInterceptorTest {
 
     /** The error page can render where Peekaboot's tracing is off, so no interceptor ran. */
     @Test
-    void failHandler_isANoOpWhereTheInterceptorNeverRan() {
+    void failHandlerIsANoOpWhereTheInterceptorNeverRan() {
         TracingHandlerInterceptor.failHandler(request, new IllegalStateException("answered by a resolver"));
 
         assertThat(request.getAttributeNames().hasMoreElements()).isFalse();
@@ -210,7 +210,7 @@ class TracingHandlerInterceptorTest {
 
     /** A forwarded handler's failure is its own dispatch's; the forwarding dispatch's spans stay OK. */
     @Test
-    void failHandler_failsOnlyTheInnermostDispatchsHandler() {
+    void failHandlerFailsOnlyTheInnermostDispatchsHandler() {
         List<Throwable> handlerErrors = new ArrayList<>();
         observationRegistry.observationConfig().observationHandler(new ObservationHandler<>() {
             @Override
@@ -249,7 +249,7 @@ class TracingHandlerInterceptorTest {
 
     /** The handler span ended when the handler handed off, so an async failure leaves it OK, as without a resolver. */
     @Test
-    void failHandler_onTheAsyncRedispatchLeavesTheEndedHandlerSpanAlone() {
+    void failHandlerOnTheAsyncRedispatchLeavesTheEndedHandlerSpanAlone() {
         Object handler = new Object();
 
         interceptor.preHandle(request, response, handler);
@@ -268,7 +268,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void preHandle_shouldResolveHandlerMethodName() throws NoSuchMethodException {
+    void preHandleResolvesHandlerMethodName() throws NoSuchMethodException {
         request.setRequestURI("/api/users");
         HandlerMethod handlerMethod =
                 new HandlerMethod(new TestController(), TestController.class.getMethod("getUsers"));
@@ -283,7 +283,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void preHandle_shouldOpenScopeSoChildObservationsNestUnderHandler() {
+    void preHandleOpensScopeSoChildObservationsNestUnderHandler() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
 
@@ -303,7 +303,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void afterConcurrentHandlingStarted_shouldStopHandlerObservation() {
+    void afterConcurrentHandlingStartedStopsHandlerObservation() {
         request.setRequestURI("/api/async");
         Object handler = new Object();
 
@@ -319,7 +319,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void preHandle_onAsyncDispatch_shouldNotStartSecondObservation() {
+    void preHandleOnAsyncDispatchDoesNotStartSecondObservation() {
         request.setRequestURI("/api/async");
         Object handler = new Object();
 
@@ -343,7 +343,7 @@ class TracingHandlerInterceptorTest {
      * thread, and the next request that thread serves inherits the trace context.
      */
     @Test
-    void nestedDispatch_shouldLeaveNoScopeOpenOnTheThread() {
+    void nestedDispatchLeavesNoScopeOpenOnTheThread() {
         forwardThroughNestedDispatch();
 
         assertThat(observationRegistry.getCurrentObservationScope())
@@ -352,7 +352,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void nestedDispatch_shouldStopBothDispatchesObservations() {
+    void nestedDispatchStopsBothDispatchesObservations() {
         forwardThroughNestedDispatch();
 
         assertThat(stoppedObservations)

@@ -10,7 +10,7 @@ class CronDescriberTest {
     private final CronDescriber describer = new CronDescriber();
 
     @Test
-    void describe_everyHour_englishLocale() {
+    void describesEveryHourInEnglish() {
         String result = describer.describe("0 0 * * * *", Locale.ENGLISH);
 
         assertThat(result).isNotNull();
@@ -18,7 +18,7 @@ class CronDescriberTest {
     }
 
     @Test
-    void describe_everyMinute_germanLocale() {
+    void describesEveryMinuteInGerman() {
         String result = describer.describe("0 * * * * *", Locale.GERMAN);
 
         // "Minute" reads the same in both languages; the article is what proves the locale reached cron-utils
@@ -26,7 +26,7 @@ class CronDescriberTest {
     }
 
     @Test
-    void describe_spring53LastDayOfMonth_isSupported() {
+    void describeSpring53LastDayOfMonthIsSupported() {
         // 'L' (last day of month) is valid @Scheduled syntax since Spring 5.3
         String result = describer.describe("0 0 0 L * *", Locale.ENGLISH);
 
@@ -34,21 +34,21 @@ class CronDescriberTest {
     }
 
     @Test
-    void describe_nullExpression_returnsNull() {
+    void describeNullExpressionReturnsNull() {
         String result = describer.describe(null, Locale.ENGLISH);
 
         assertThat(result).isNull();
     }
 
     @Test
-    void describe_blankExpression_returnsNull() {
+    void describeBlankExpressionReturnsNull() {
         String result = describer.describe("   ", Locale.ENGLISH);
 
         assertThat(result).isNull();
     }
 
     @Test
-    void describe_invalidExpression_returnsNull() {
+    void describeInvalidExpressionReturnsNull() {
         String result = describer.describe("invalid cron expression", Locale.ENGLISH);
 
         assertThat(result).isNull();
