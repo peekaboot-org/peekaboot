@@ -1,3 +1,260 @@
+## 1.3.0 - 2026-11-16
+
+### Features
+- Answer only loopback on a local run
+- Give remote clients no bar or stack trace
+- Apply the loopback rule beneath wrappers
+- Load older traces on request
+- Filter meters by a name prefix
+
+### Bug fixes
+- Enforce the guard on Peekaboot's handlers
+- Stop reading the launch from a property
+- Keep the security banner out of capture
+- Bound concurrent password checks
+- Clean the username the guard logs
+- Refuse a credentials file others can read
+- Send security headers with the UI
+- Honour reset and write listeners in the bar
+- Leave partial content without a toolbar
+- Write the toolbar in ASCII
+- Back off without Spring MVC
+- Read the system class loader by identity
+- Ask Spring whether the client hung up
+- Keep the launch source out of binding
+- Leave the host's /actuator/info alone
+- Read DataSource metadata after startup
+- Leave DataSources unwrapped while off
+- Mask more key names and quoted options
+- Mask a quoted value ending in a backslash
+- Mask URL credentials whole, in linear time
+- Mask a URL password that starts like a port
+- Never parse a form body for the capture
+- Cap captured header and parameter values
+- Mask a quoted value with no closing quote
+- Mask overlapping matches to the later end
+- Mask the error page's message and trace
+- Guard the capture's async listener
+- Isolate a failing meter to its own series
+- Roll up only the ticks before the boundary
+- Restart an insights thread an error ended
+- Give each atomic write its own temp file
+- Keep an atomic write interruptible
+- Keep a second instance from writing history
+- Free the loaded snapshot once handed over
+- Report a storage write outage per episode
+- Write the insights snapshot every 5 minutes
+- Take coarse percentiles from finer ones
+- Close the stream of a dropped SSE client
+- Baseline each meter from its own reading
+- Refuse colliding insights series ids
+- Fail on a missing insights config-location
+- Record no stop for a run that never started
+- Call only this process's run running
+- Keep a start however long history loads
+- Load lifecycle history in time order
+- Read a damaged lifecycle file line by line
+- Survive a malformed git.properties escape
+- Detect cgroup v2 containers by their mounts
+- End a dropped SSE stream on Tomcat too
+- Stop leaking an SSE sender on shutdown
+- Keep a dead insights thread out of a new run
+- Drop a failed request a newer one overtook
+- Keep focus and open groups across a refresh
+- Render only the tab that is showing
+- Close the insights stream while hidden
+- Keep rows and cards in place on refresh
+- Retry the features request on refresh
+- Name a health component's status in text
+- Keep the hash when a trace view reopens
+- Show the error when a tab's load fails
+- Name a repeatable Flyway migration
+- Close accessibility gaps in the overlay
+- Reach restart details from the keyboard
+- Draw the chart selection in dark theme
+- Round durations and sizes into the next unit
+- Format decimals in the dashboard language
+- Keep the bar's errors out of the host's fetch
+- Replace history on arrow-key tab moves
+- Write chart test hooks only on change
+- Show a text health detail as it was sent
+- Keep a batch when one span fails to store
+- Leave no trace of a probe with traceparent
+- Cap tag values, log messages and bind text
+- Keep a cut text from splitting a credential
+- End a cut text before a quote or comma
+- Keep a cut text from unmasking a URL password
+- Warn once when the journal thread dies
+- Skip a journal line the store refuses
+- Run the trace journal on a platform thread
+- Refuse a span that names itself as parent
+- Refuse trace caps below their floor
+- Fold only JDBC twins that failed alike
+- Keep capture off the application's events
+- Read a span without tags as no HTTP request
+- Keep a second instance off the trace files
+- Mask the request path of a trace
+- Cap a full-view trace page at 100 rows
+- Serve a trace nested past 250 spans
+- Serve an infinite value as null
+- Match a job's target, not any suffix
+- Refuse a route that is no pattern
+- Refuse an ill-formed locale
+- Sort a scheduled task without a target
+- List custom-trigger scheduled tasks
+- Ship the licence and notice in every jar
+
+### Performance
+- Look a digested trace up once
+- Leave Slow alone for a trace not in it
+- Skip a fold that has nothing to fold
+- Map a summary row without span content
+- Count routes from the listing facts
+- Map only a page's rows in full
+- Walk a mapped trace once
+- Bound the lines a log search reads
+- Keep route issue counts equal to summaries
+- Replace an unusable snapshot in the fold
+
+### Documentation
+- Bring the guard's Javadoc up to date
+- Bring the insights glossary up to date
+- Correct Javadoc the fixes left stale
+- Describe the tab lifecycle
+- State the listing rules in the OpenAPI
+- Follow the API fixes in the glossary
+- Say what a log search's next names
+- Describe the local run's 403 in the OpenAPI
+- Say when form parameters are captured
+- Correct stale sentences on API records
+- Add SECURITY.md and CONTRIBUTING.md
+- Describe the build and CI as they run
+- Correct ARCHITECTURE.md's listings
+- Say no IT starts the Postgres image
+- Follow the dashboard guard fixes
+- Follow the masking and capture fixes
+- Follow the host-impact fixes
+- Follow the insights and lifecycle fixes
+- Follow the tracing core fixes
+- Follow the API and mapper fixes
+- Follow the frontend fixes
+- Follow the site on persisted traces
+- Cut the storage section's format retellings
+- Cut the package tree to its packages
+- Cut the backend section's enumerations
+- Cut the auto-configuration listings
+- Cut the tracing section's call sequences
+- Cut the data models to their rules
+- Cut the ordering annotation's listing
+- Name both unit tests of the testing app
+- Say which jars carry the licence files
+- Explain the script denial after .npmrc
+- Guard the by-hand release's pom rewrite
+- Bring TESTING.md in line with the tests
+- Follow the review fixes in TESTING.md
+- Name JUnit 6 in BUILD.md
+- Say when log capture starts
+
+### Internal changes
+- Move the guard's check out of its filter
+- Pass the posture its time zone
+- Hand consumers the metadata list
+- Assemble the event in RequestDetails
+- Address window statistics by an enum
+- Split level data by its two shapes
+- Load insights panels outside the service
+- Share the background load of the stores
+- Give the lifecycle log one constructor
+- Reconcile tab filters through one helper
+- Build every element without innerHTML
+- Reuse the small button for span toggles
+- Move the log entry to shared
+- Convert OTel spans outside the exporter
+- Split the replay controls off TraceStore
+- Move duplicate folds out of the bundle
+- Drop test hooks and dead trace code
+- Mark the nullable trace components
+- Stop the journal writer by a marker
+- Split row assembly from TraceResources
+- Split section mapping from the service
+- Slim the dashboard controller
+- Bind query records in one advice
+- Drop the unused buckets parameter
+- Map an empty trace on the common path
+- Read the log page token like the row's
+- Move trace analysis to its own package
+- Drop the redundant insights binder
+- Move TraceView and IssueSeverity
+- Mark the remaining nullable trace fields
+
+### Tests
+- Send a rejected header twice
+- Read browser lists without unchecked casts
+- Pin the order of the listener hand-over
+- Pin every switch to its four definitions
+- Resolve against a stored password
+- Tie each loopback refusal to its switch
+- Let the path exclusion tests fail
+- Let the capture's no-publish checks fail
+- Tell the coarse percentiles apart
+- Inject the SSE stop grace
+- Pin the problem rules to the bundled panels
+- Read the feature keys from the frontend
+- Build span payloads from backend records
+- Accept a duration of ten seconds or more
+- Pin owner-only journal and digest files
+- Wait for the restore before asserting
+- Wait for the probe's trace to be discarded
+- Give RootActionTypes its own test class
+- Pin what an issue mapping carries
+- Hold the testing app's gates to the root
+- Assert the export order of a close
+- Drop the elapsed-time assertion on lookups
+- Wait on the insights stream's ticks
+- Read the insights stream in one place
+- Find the checkout without the working dir
+- Isolate tests that write a JVM default
+- Hold the refused port for the whole lookup
+- Take test trace ids from a UUID
+- Share the trace shapes the UI tests store
+- Split the trace service tests by feature
+- Split the tree mapper tests by feature
+- Split the shared-module tests by module
+- Move interleaved helpers below the tests
+- Name the backend's tests as sentences
+- Conjugate the second verb in four names
+- Drop plan references from test Javadoc
+- Name the test that reaches the guard
+- Say what the Node tests leave uncovered
+- Pin the capture of startup log lines
+- Pin the journal guard for late exporters
+- Drop a duplicate TreeMasker test
+
+### Build, CI and chores
+- **deps**: Bump actions/setup-java in /.github/actions/prepare-build
+- **deps-dev**: Bump eslint-plugin-import-x in /peekaboot-frontend
+- **deps**: Bump gradle-wrapper from 9.8.2 to 9.9.0
+- **deps-dev**: Bump html-validate in /peekaboot-frontend
+- Ban every optional dependency leak
+- Run frontend unit tests on Node
+- Ban innerHTML in the frontend lint
+- Script the release's ref pushes
+- Keep the Central token out of the test step
+- Warn when repo1 is unreachable
+- Skip npm lifecycle scripts
+- Stop release:prepare pushing
+- Push the tag first and the branches last
+- Read the IT images from compose.yml
+- Drop a redundant Hibernate test dependency
+- Restate the EI_EXPOSE_REP measurement
+- Say which image bumps the ITs exercise
+- List the fourth container marker
+- Align release.yml's setup-java pin
+- Tell Gradle which files its tests read
+- Tell Gradle which poms its tests read
+
+**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.2.0...1.3.0
+
 ## 1.2.0 - 2026-11-10
 
 ### Features
