@@ -105,6 +105,14 @@ final class JournalFiles {
         return journalId != null && !journalId.equals(header(snapshot(), true).absorbed()) && holdsALine(journal());
     }
 
+    /**
+     * True when the snapshot's header is of another version or damaged. A read then visits neither
+     * file, so no journal line is folded until a fold has replaced the snapshot.
+     */
+    boolean holdsAForeignSnapshot() throws IOException {
+        return header(snapshot(), true).foreign();
+    }
+
     /** Replaces the snapshot in one step, through the same mechanism as every file a store replaces whole. */
     void replaceSnapshot(OwnerOnlyFiles.Content content) throws IOException {
         OwnerOnlyFiles.replaceAtomically(snapshot(), content);

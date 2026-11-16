@@ -263,7 +263,9 @@ reaches it.
 A fold (`Checkpoint`) runs after the restore, at shutdown, and when the journal passes its size
 limit. One that finds no journal line the snapshot lacks (`JournalFiles.holdsUnfoldedLines`), as
 after a clean stop, leaves the snapshot as it is and only starts the next journal, so a clean
-restart decodes the files once. Otherwise it replays the files into an empty store with the live
+restart decodes the files once. A snapshot of another version that the restore could not delete
+(`JournalFiles.holdsAForeignSnapshot`) is replaced by an empty one even then, since no fold reads
+a journal beside it. Otherwise it replays the files into an empty store with the live
 store's caps and copies, in arrival order and as written, the lines of what that store keeps: the
 spans and logs each trace's caps
 kept, its last request, and the newest `max-untraced-logs` lines written outside any trace. A

@@ -11,6 +11,7 @@ import static org.peekaboot.backend.tracing.journal.JournalTexts.journalHeader;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.line;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.runLine;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.snapshotHeader;
+import static org.peekaboot.backend.tracing.journal.JournalTexts.snapshotHeaderOfAnotherVersion;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.untracedLine;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.checkpoint;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.contentOf;
@@ -19,9 +20,13 @@ import static org.peekaboot.backend.tracing.journal.RestoredStores.messages;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.refusing;
 import static org.peekaboot.backend.tracing.journal.RestoredStores.restored;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import io.micrometer.tracing.Span;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,6 +34,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -38,6 +44,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceInput;
 import org.peekaboot.backend.tracing.store.TraceRemnant;
+import org.peekaboot.testsupport.LogCapture;
 
 class CheckpointTest {
 
@@ -801,6 +808,58 @@ class CheckpointTest {
         assertThat(files.journalId()).isNotEqualTo(journalId);
     }
 
+    /** Before a directory's first fold there is no snapshot, and a fold with nothing to fold writes none. */
+    @Test
+    void aFoldWithNothingToFoldAndNoSnapshotWritesNone() throws IOException {
+        JournalFiles files = new JournalFiles(dir);
+
+        checkpoint(files).fold().close();
+
+        assertThat(files.snapshot()).doesNotExist();
+        assertThat(files.journalId()).isNotNull();
+    }
+
+    /**
+     * No restore reads a snapshot of another version, or the journal beside it, so a fold that left it
+     * there would leave every later fold with nothing to read. It is replaced though no line is folded.
+     */
+    @Test
+    void aFoldWithNothingToFoldReplacesASnapshotOfAnotherVersion() throws IOException {
+        JournalFiles files = new JournalFiles(dir);
+        JournalTexts.write(files.snapshot(), snapshotHeaderOfAnotherVersion(), line(spanned("old", "o1")));
+        JournalTexts.write(files.journal(), journalHeader("j1"));
+
+        checkpoint(files).fold().close();
+
+        assertThat(JournalTexts.lines(files.snapshot()).getFirst()).isEqualTo(snapshotHeader("j1"));
+        assertThat(body(files.snapshot())).isEmpty();
+        assertThat(files.journalId()).isNotEqualTo("j1");
+    }
+
+    /**
+     * A restore deletes a snapshot of another version. Where that fails, the start's fold finds the
+     * snapshot still there beside a journal with nothing to fold, and the run's lines follow in the next
+     * journal. The fold at the stop keeps them.
+     */
+    @Test
+    void aRunKeepsItsLinesAfterARestoreThatCouldNotDeleteTheSnapshot() throws IOException {
+        PosixPermissions.assumeSupported();
+        JournalFiles files = new JournalFiles(dir);
+        JournalTexts.write(files.snapshot(), snapshotHeaderOfAnotherVersion(), line(spanned("old", "o1")));
+        JournalTexts.write(files.journal(), journalHeader("j1"));
+        TraceInput span = spanned("a", "a1");
+        restoreUnableToDelete(files);
+
+        try (OpenJournal journal = checkpoint(files).fold()) {
+            journal.write(new JournalLine.RunLine(T2));
+            journal.write(JournalCodec.lineOf(span));
+        }
+        checkpoint(files).fold().close();
+
+        assertThat(body(files.snapshot())).containsExactly(runLine(T2), line(span));
+        assertThat(restored(files, properties -> {}).getTrace("a")).isPresent();
+    }
+
     /** A crash after the snapshot moved into place and before the next journal started: nothing is replayed twice. */
     @Test
     void aCrashBeforeTheNextJournalReplaysNothingTwice() throws IOException {
@@ -870,6 +929,23 @@ class CheckpointTest {
                     .isEqualTo(contentOf(bundle));
         }
         assertThat(messages(after.untracedLogs())).isEqualTo(messages(before.untracedLogs()));
+    }
+
+    /**
+     * A restore in a directory that lets no file be deleted, which says so at DEBUG after its one INFO. The
+     * directory takes writes again afterwards, as after a failure that passed.
+     */
+    private static void restoreUnableToDelete(JournalFiles files) throws IOException {
+        Files.setPosixFilePermissions(files.directory(), PosixFilePermissions.fromString("r-x------"));
+        try (LogCapture capture = LogCapture.attach(TraceReplay.class, Level.DEBUG)) {
+            TraceReplay.restore(files, TraceStores.withDefaults());
+
+            assertThat(capture.appender().list)
+                    .extracting(ILoggingEvent::getLevel)
+                    .containsExactly(Level.INFO, Level.DEBUG);
+        } finally {
+            Files.setPosixFilePermissions(files.directory(), PosixFilePermissions.fromString("rwx------"));
+        }
     }
 
     private static TraceInput slowOrNot(String traceId, String spanId, Duration duration) {

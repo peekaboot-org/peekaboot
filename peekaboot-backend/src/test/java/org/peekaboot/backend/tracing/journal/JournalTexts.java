@@ -23,6 +23,11 @@ final class JournalTexts {
         return JournalCodec.encode(new JournalLine.SnapshotHeader(JournalCodec.VERSION, absorbed));
     }
 
+    /** The header of a snapshot no restore of this version reads. */
+    static String snapshotHeaderOfAnotherVersion() {
+        return JournalCodec.encode(new JournalLine.SnapshotHeader(JournalCodec.VERSION + 1, null));
+    }
+
     static String journalHeader(String id) {
         return JournalCodec.encode(new JournalLine.JournalHeader(JournalCodec.VERSION, id));
     }

@@ -3,6 +3,7 @@ package org.peekaboot.backend.tracing.journal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.journalHeader;
 import static org.peekaboot.backend.tracing.journal.JournalTexts.snapshotHeader;
+import static org.peekaboot.backend.tracing.journal.JournalTexts.snapshotHeaderOfAnotherVersion;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -168,6 +169,35 @@ class JournalFilesTest {
         JournalTexts.writeCutShort(files.journal(), journalHeader("j1"), "{\"type\":\"discard\",\"tra");
 
         assertThat(files.holdsUnfoldedLines()).isFalse();
+    }
+
+    @Test
+    void aSnapshotOfAnotherVersionIsForeign() throws IOException {
+        JournalTexts.write(files.snapshot(), snapshotHeaderOfAnotherVersion(), DISCARD_A);
+
+        assertThat(files.holdsAForeignSnapshot()).isTrue();
+    }
+
+    @Test
+    void aSnapshotWithADamagedHeaderIsForeign() throws IOException {
+        JournalTexts.write(files.snapshot(), "{\"type\":\"snap", DISCARD_A);
+
+        assertThat(files.holdsAForeignSnapshot()).isTrue();
+    }
+
+    /** As before the first fold of a directory, and after a restore deleted files it could not use. */
+    @Test
+    void aMissingSnapshotIsNotForeign() throws IOException {
+        JournalTexts.write(files.journal(), journalHeader("j1"));
+
+        assertThat(files.holdsAForeignSnapshot()).isFalse();
+    }
+
+    @Test
+    void aSnapshotOfThisVersionIsNotForeign() throws IOException {
+        JournalTexts.write(files.snapshot(), snapshotHeader("j0"), DISCARD_A);
+
+        assertThat(files.holdsAForeignSnapshot()).isFalse();
     }
 
     @Test

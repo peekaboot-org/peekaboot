@@ -34,6 +34,8 @@ import org.peekaboot.backend.tracing.store.TraceStore;
  *
  * <p>A journal with no line the snapshot lacks, as a clean stop leaves it, is not folded. The snapshot
  * stays as it is and only the next journal starts, so the start after a clean stop decodes the files once.
+ * A snapshot of another version, left behind by a restore that could not delete it, is replaced by an
+ * empty one all the same, or every later fold would read nothing beside it.
  */
 final class Checkpoint implements JournalWriter.Folding {
 
@@ -48,7 +50,7 @@ final class Checkpoint implements JournalWriter.Folding {
 
     @Override
     public OpenJournal fold() throws IOException {
-        if (!files.holdsUnfoldedLines()) {
+        if (!files.holdsUnfoldedLines() && !files.holdsAForeignSnapshot()) {
             return files.startJournal();
         }
         RestorableTraceStore kept = emptyStore.get();
