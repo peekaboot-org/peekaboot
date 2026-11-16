@@ -29,6 +29,7 @@ import org.peekaboot.backend.domain.trace.TraceSummary;
 import org.peekaboot.backend.stacktrace.StackTraceFolding.Range;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.testingapp.integration.TestSpans;
+import org.peekaboot.testingapp.integration.TraceShapes;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -43,51 +44,7 @@ class SpansTabIT extends TraceOverlayTestBase {
      * the trace id.
      */
     private String storeDeepQueryTrace() {
-        String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TestSpans.span(traceId, "root")
-                .named("http get /orders")
-                .kind(Span.Kind.SERVER)
-                .at(0, 40)
-                .tag("http.method", "GET")
-                .tag("url.path", "/orders")
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "handler")
-                .parent("root")
-                .named("spring.handler")
-                .at(1, 38)
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "client")
-                .parent("handler")
-                .named("http get")
-                .kind(Span.Kind.CLIENT)
-                .at(2, 30)
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "server")
-                .parent("client")
-                .named("http get /api/person/{id}")
-                .kind(Span.Kind.SERVER)
-                .at(3, 28)
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "inner-handler")
-                .parent("server")
-                .named("spring.handler")
-                .at(4, 26)
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "query")
-                .parent("inner-handler")
-                .named("SELECT customer_order")
-                .kind(Span.Kind.CLIENT)
-                .at(5, 2)
-                .tag("db.system.name", "postgresql")
-                .tag("db.query.text", "select * from customer_order")
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "result-set")
-                .parent("inner-handler")
-                .named("result-set")
-                .kind(Span.Kind.CLIENT)
-                .at(7, 1)
-                .tag("jdbc.row-count", "8")
-                .build());
+        String traceId = stored(TraceShapes::deepQuery);
         traceStore.addLog(new LogCapturedEvent(
                 traceId,
                 "query",
@@ -1333,12 +1290,8 @@ class SpansTabIT extends TraceOverlayTestBase {
 
     private String storeATraceWithASpanEvent() {
         String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TestSpans.span(traceId, "root")
-                .named("GET /events-fixture")
-                .kind(Span.Kind.SERVER)
+        traceStore.addSpan(TraceShapes.httpRoot(traceId, "/events-fixture")
                 .at(0, 40)
-                .tag("http.method", "GET")
-                .tag("url.path", "/events-fixture")
                 .event("exception", 20)
                 .build());
         return traceId;

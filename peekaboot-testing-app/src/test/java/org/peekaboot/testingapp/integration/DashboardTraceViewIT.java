@@ -25,13 +25,7 @@ class DashboardTraceViewIT extends TestingAppITBase {
     @Test
     void anInjectedTraceIsServedWithItsSpansAndTags() {
         String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TestSpans.span(traceId, "root")
-                .named("GET /persons")
-                .kind(Span.Kind.SERVER)
-                .at(0, 100)
-                .tag("http.method", "GET")
-                .tag("url.path", "/persons")
-                .build());
+        traceStore.addSpan(TraceShapes.httpRoot(traceId, "/persons").at(0, 100).build());
         traceStore.addSpan(TestSpans.span(traceId, "db")
                 .parent("root")
                 .named("SELECT * FROM person")

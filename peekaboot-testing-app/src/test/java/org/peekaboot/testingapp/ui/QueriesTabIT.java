@@ -2,12 +2,10 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
-import org.peekaboot.testingapp.integration.TestSpans;
+import org.peekaboot.testingapp.integration.TraceShapes;
 
 /** The trace-detail overlay's Queries tab, and the links from its entries back to the span tree. */
 class QueriesTabIT extends TraceOverlayTestBase {
@@ -18,39 +16,7 @@ class QueriesTabIT extends TraceOverlayTestBase {
      * written straight to the store.
      */
     private String storeAsyncQueryTrace() {
-        String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TestSpans.span(traceId, "root")
-                .named("http get /orders/enrich")
-                .kind(Span.Kind.SERVER)
-                .at(0, 20)
-                .tag("http.method", "GET")
-                .tag("url.path", "/orders/enrich")
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "handler")
-                .parent("root")
-                .named("spring.handler")
-                .at(1, 18)
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "async-task")
-                .parent("handler")
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .at(5, 200)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "enrich")
-                .parent("async-task")
-                .named("enrich order")
-                .at(6, 190)
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "async-query")
-                .parent("enrich")
-                .named("SELECT customer_order")
-                .kind(Span.Kind.CLIENT)
-                .at(10, 5)
-                .tag("db.system.name", "h2")
-                .tag("db.query.text", "select * from customer_order")
-                .build());
-        return traceId;
+        return stored(TraceShapes::asyncQuery);
     }
 
     /**

@@ -3,7 +3,6 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import io.micrometer.tracing.Span;
 import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.nio.charset.StandardCharsets;
@@ -237,12 +236,7 @@ class TracePersistenceIT {
             log.info("{} one", tag);
             log.info("{} two", tag);
             CaptureEventPublisher capture = first.getBean(CaptureEventPublisher.class);
-            capture.publishEvent(new SpanDataEvent(TestSpans.span(cutOffTraceId, "query")
-                    .parent("handler-never-exported")
-                    .named("SELECT person")
-                    .kind(Span.Kind.CLIENT)
-                    .at(5, 2)
-                    .build()));
+            capture.publishEvent(new SpanDataEvent(TraceShapes.orphanQuery(cutOffTraceId)));
             capture.publishEvent(new LogCapturedEvent(
                     listedCutOffTraceId,
                     null,

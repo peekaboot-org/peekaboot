@@ -1,8 +1,12 @@
 package org.peekaboot.testingapp.ui;
 
 import com.microsoft.playwright.Response;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
+import org.peekaboot.testingapp.integration.TestSpans;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
@@ -16,6 +20,13 @@ abstract class TraceOverlayTestBase extends PlaywrightTestBase {
 
     @Autowired
     protected TraceStore traceStore;
+
+    /** Writes the spans {@code shape} makes of a new trace id to the store, and returns the id. */
+    protected String stored(Function<String, List<SpanData>> shape) {
+        String traceId = TestSpans.newTraceId();
+        shape.apply(traceId).forEach(traceStore::addSpan);
+        return traceId;
+    }
 
     protected void openOverlayFromToolbar() {
         openPersonsPage();

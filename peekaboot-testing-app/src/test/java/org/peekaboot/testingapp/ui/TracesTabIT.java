@@ -29,6 +29,7 @@ import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.integration.OrderFixtures;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
+import org.peekaboot.testingapp.integration.TraceShapes;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
@@ -863,13 +864,8 @@ class TracesTabIT extends PlaywrightTestBase {
                     .at(1, 1)
                     .build());
         }
-        traceStore.addSpan(TestSpans.span(traceId, "root")
-                .named("GET /truncated-fixture")
-                .kind(Span.Kind.SERVER)
-                .at(0, 40)
-                .tag("http.method", "GET")
-                .tag("url.path", "/truncated-fixture")
-                .build());
+        traceStore.addSpan(
+                TraceShapes.httpRoot(traceId, "/truncated-fixture").at(0, 40).build());
 
         openDashboard();
         dashboard.openTracesTab();

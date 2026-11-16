@@ -6,7 +6,6 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
-import io.micrometer.tracing.Span;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -19,9 +18,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
-import org.peekaboot.backend.tracing.tags.AsyncTaskMarker;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
+import org.peekaboot.testingapp.integration.TraceShapes;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
@@ -73,21 +72,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      * total reads.
      */
     private String storeSlowTraceWithAShortTotal(long thresholdMs) {
-        String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TestSpans.span(traceId, "root")
-                .named("http get /orders/enrich")
-                .kind(Span.Kind.SERVER)
-                .at(0, 10)
-                .tag("http.method", "GET")
-                .tag("url.path", "/orders/enrich")
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "async")
-                .parent("root")
-                .named(AsyncTaskMarker.CONTEXTUAL_NAME)
-                .at(5, thresholdMs)
-                .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE)
-                .build());
-        return traceId;
+        return stored(traceId -> TraceShapes.slowAsyncUnderAShortRequest(traceId, thresholdMs));
     }
 
     /**
@@ -95,21 +80,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      * starts the given threshold's length later.
      */
     private String storeLongTraceWithoutASlowSpan(long thresholdMs) {
-        String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TestSpans.span(traceId, "root")
-                .named("http get /api/person/all")
-                .kind(Span.Kind.SERVER)
-                .at(0, 10)
-                .tag("http.method", "GET")
-                .tag("url.path", "/api/person/all")
-                .build());
-        traceStore.addSpan(TestSpans.span(traceId, "late")
-                .parent("root")
-                .named("http get")
-                .kind(Span.Kind.CLIENT)
-                .at(thresholdMs, 10)
-                .build());
-        return traceId;
+        return stored(traceId -> TraceShapes.lateCallUnderAShortRequest(traceId, thresholdMs));
     }
 
     /**
@@ -592,12 +563,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
     @Test
     void anInFlightTraceSaysSoAndShowsTheSpansThatArrived() {
         String traceId = TestSpans.newTraceId();
-        traceStore.addSpan(TestSpans.span(traceId, "query")
-                .parent("handler-not-yet-exported")
-                .named("SELECT person")
-                .kind(Span.Kind.CLIENT)
-                .at(5, 2)
-                .build());
+        traceStore.addSpan(TraceShapes.orphanQuery(traceId));
 
         openTraceDeepLink(traceId, "/spans");
 
