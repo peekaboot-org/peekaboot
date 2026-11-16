@@ -11,27 +11,26 @@ def is_user_facing: test("^<!-- 0[1-4] -->");
 # Matches the release body's `upper_first`, so both renderings read the same.
 def upper_first: (.[0:1] | ascii_upcase) + .[1:];
 
-# jq's unique_by sorts by the key, which would alphabetise entries that git-cliff
-# deliberately ordered oldest-first. This keeps first-occurrence order.
-def dedup_by_message:
-  reduce .[] as $commit ({ seen: {}, out: [] };
-    if .seen[$commit.message] then .
-    else .seen[$commit.message] = true | .out += [$commit]
-    end)
-  | .out;
-
 # A `!` marker with no BREAKING CHANGE footer leaves breaking_description equal to the
 # message, which would just repeat the entry. Same rule as the release-body template.
 def breaking_detail:
   ((.breaking_description // "") | split("\n")[0]) as $detail
   | if $detail != "" and $detail != .message then $detail else null end;
 
-def to_entries_list:
-  dedup_by_message
-  | map({ text: (.message | upper_first),
-          scope: .scope,
-          breaking: .breaking,
-          detail: breaking_detail });
+# The commit body as paragraphs with their wrapped lines joined. Same rule as the release-body
+# template: features, fixes, performance and anything breaking are described, and 1.3.0
+# predates bodies written for the notes.
+def description($version):
+  if $version != "1.3.0" and (.breaking or (.group | test("^<!-- 0[1-3] -->")))
+  then (.body // "") | split("\n\n") | map(gsub("\n"; " ")) | map(select(. != ""))
+  else [] end;
+
+def to_entries_list($version):
+  map({ text: (.message | upper_first),
+        scope: .scope,
+        breaking: .breaking,
+        detail: breaking_detail,
+        description: description($version) });
 
 # Newest first. `sort_by(-.timestamp)` rather than `sort_by(.timestamp) | reverse`:
 # two tags cut in the same second carry the same timestamp, and reverse would invert
@@ -39,20 +38,19 @@ def to_entries_list:
 [ .[] | select(.version != null) ]
 | sort_by(-.timestamp)
 | map(
-    { version: .version,
-      date: (.timestamp | todate | split("T")[0]),
-      url: ("https://github.com/peekaboot-org/peekaboot/releases/tag/" + .version),
-      # A first release has no predecessor to diff against, so listing its commits means
-      # listing every commit since the repository began. The page renders a sentence.
-      initial: (.previous.version == null),
-      groups: (if .previous.version == null then [] else ((
-        [ { title: "Breaking changes",
-            entries: ([ .commits[] | select(.breaking) ] | to_entries_list) } ]
-        | map(select(.entries | length > 0))
-      ) + (
-        # A breaking commit is listed under Breaking changes only. group_by sorts by the key,
-        # so the <!-- NN --> prefixes order the sections.
-        [ .commits[] | select((.group | is_user_facing) and (.breaking | not)) ]
-        | group_by(.group)
-        | map({ title: (.[0].group | strip_group_prefix), entries: to_entries_list })
-      )) end) })
+    .version as $version
+    | { version: .version,
+        date: (.timestamp | todate | split("T")[0]),
+        url: ("https://github.com/peekaboot-org/peekaboot/releases/tag/" + .version),
+        groups: ((
+          [ { title: "Breaking changes",
+              entries: ([ .commits[] | select(.breaking) ] | to_entries_list($version)) } ]
+          | map(select(.entries | length > 0))
+        ) + (
+          # A breaking commit is listed under Breaking changes only. group_by sorts by the key,
+          # so the <!-- NN --> prefixes order the sections.
+          [ .commits[] | select((.group | is_user_facing) and (.breaking | not)) ]
+          | group_by(.group)
+          | map({ title: (.[0].group | strip_group_prefix),
+                  entries: to_entries_list($version) })
+        )) })

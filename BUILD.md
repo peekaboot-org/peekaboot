@@ -863,11 +863,23 @@ config. That guard earns its keep: `git-cliff --config <missing>` merely warns, 
 to its own built-in grouping and still exits 0, so a mistyped path would publish wrongly
 grouped notes with nothing failing.
 
-Commits sharing a subject collapse to one entry even when their bodies differ, because in
-conventional mode git-cliff's `commit.message` holds only the description. Merge commits and
-the `[release]` commits drop out via `filter_unconventional`, neither being conventional.
-`filter_commits` is on with no `.*` catch-all, so an unrecognised type is dropped rather than
-bucketed. Catching it is the push gate's job.
+A feature, fix or performance change is one commit. Its subject is the entry and its body the
+description, printed as `- **Subject.** Body`. The body is written for the person upgrading
+and says what behaves differently and which property or endpoint it concerns.
+
+Wrapped lines are joined, because GitHub breaks a release body at every newline. A second
+paragraph stays under its bullet, and trailers are left out. A body is printed for a commit
+in Features, Bug fixes or Performance and for any breaking commit. Everywhere else a body
+explains the code, or is Dependabot's, and stays out.
+
+The notes begin with 1.3.0. `render.sh` hands git-cliff the range after 1.2.0, so no earlier
+release appears in `CHANGELOG.md`, on the website or in a draft. 1.3.0 itself lists subjects
+alone, because its bodies were not written for the notes. `cliff.toml` and `site.jq` both
+carry that exception.
+
+Merge commits and the `[release]` commits drop out via `filter_unconventional`, neither being
+conventional. `filter_commits` is on with no `.*` catch-all, so an unrecognised type is
+dropped rather than bucketed. Catching it is the push gate's job.
 
 The push gate is `osslabz/github-actions/commit-subject-check`, which `build-on-push` runs
 with `default-branch: dev`. It rejects any non-merge subject in the pushed range that is not a
@@ -882,16 +894,14 @@ Parser order in `cliff.toml` is load-bearing, because the first matching parser 
 harness work lands under Tests. The runtime dependency allow-list must stay above the
 generic `^build`, or every dependency bump lands in "Build, CI and chores". Group
 numbers must stay zero-padded to two digits, because git-cliff sorts group names as strings.
-An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`. The parsers at the top of the list
-name a commit by its sha. Each is a commit typed `fix:` or `feat:` that changed nothing a user
-could hit, such as a test or CI fix. History is not rewritten, so the generator regroups or
-skips them, and the harness checks every one of them on the real history.
+An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`.
 
 The website shows released versions only. `site.jq` builds a "Breaking changes" section from
 the `breaking` flag, then groups `01`-`04`, features, bug fixes, performance and dependency
-upgrades. `site.jq` hardcodes that cutoff, so renumbering those groups means editing both
-files. A breaking commit appears under Breaking changes alone on the website. Reverts and the
-internal groups stay in the GitHub release notes and `CHANGELOG.md`.
+upgrades, each entry with its description as a list of paragraphs. `site.jq` hardcodes that
+cutoff, so renumbering those groups means editing both files. A breaking commit appears
+under Breaking changes alone on the website. Reverts and the internal groups stay in the
+GitHub release notes and `CHANGELOG.md`.
 
 "Dependency upgrades" lists only bumps of what a release puts on a user's classpath: the
 Spring Boot line, datasource-micrometer, jdbc-url-parser and cron-utils. The `04` parser names
@@ -912,8 +922,8 @@ The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
 Its expectations are golden files rendered from a fixture repo with fixed commit dates, so
 they do not drift as `dev` grows. The fixture carries both spellings of a breaking change, a
 breaking change of an internal type, user-facing types scoped to the test harness, a runtime
-and a build-only dependency bump, a subject repeated with a different body, a non-conventional
-subject, and two tags cut in the same second.
+and a build-only dependency bump, a repeated subject, a release older than the notes, bodies
+that wrap or end in trailers, a non-conventional subject, and two tags cut in the same second.
 
 ### How the next version is chosen
 

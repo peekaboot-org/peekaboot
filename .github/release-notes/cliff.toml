@@ -3,20 +3,26 @@
 
 [changelog]
 body = """
+{# A description is the commit body, one paragraph per bullet line and the rest indented under
+   it. GitHub breaks a release body at every newline, so wrapped lines are joined. #}\
+{% macro description(commit) %}\
+**{{ commit.message | upper_first }}.**\
+{% for paragraph in commit.body | split(pat="\n\n") %}\
+{% if loop.first %} {% else %}
+
+  {% endif %}\
+{{ paragraph | replace(from="\n", to=" ") | trim }}\
+{% endfor %}\
+{% endmacro description %}\
 {% if version %}\
 ## {{ version }} - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else %}\
 ## Unreleased
 {% endif %}
-{# A tagged release with no predecessor has nothing to diff against, so its notes would
-   otherwise be every commit since the repository began. An UNRELEASED section with no
-   predecessor is different: that is the work going into the first release, and listing it
-   is the point. #}\
-{% if version and not previous.version %}\
-Initial release.
-
-{% else %}\
-{% set breaking = commits | filter(attribute="breaking", value=true) | unique(attribute="message") %}\
+{# 1.3.0 predates bodies written for the notes, so it lists subjects alone. site.jq has the
+   same rule. #}\
+{% set describes_changes = version != "1.3.0" %}\
+{% set breaking = commits | filter(attribute="breaking", value=true) %}\
 {% if breaking | length > 0 %}\
 ### Breaking changes
 {% for commit in breaking %}\
@@ -29,19 +35,24 @@ Initial release.
 {% endif %}\
 {% for group, group_commits in commits | group_by(attribute="group") %}\
 ### {{ group | striptags | trim }}
-{% for commit in group_commits | unique(attribute="message") %}\
+{% for commit in group_commits %}\
+{# Features, fixes, performance and anything breaking are described. A body anywhere else
+   explains the code, or is a bot's. #}\
+{% set is_described = commit.breaking or commit.group is matching("^<!-- 0[1-3] -->") %}\
 - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
 {% if commit.breaking %}[**breaking**] {% endif %}\
+{% if describes_changes and is_described and commit.body %}\
+{{ self::description(commit=commit) }}
+{% else %}\
 {{ commit.message | upper_first }}
+{% endif %}\
 {% endfor %}
 {% endfor %}\
-{% if previous.version %}\
 **Full changelog**: <REPO>/compare/{{ previous.version }}...{% if version %}{{ version }}{% else %}dev{% endif %}
 
-{% endif %}\
-{% endif %}\
 """
-trim = true
+# git-cliff trims every line, which would pull a second paragraph out of its bullet.
+trim = false
 postprocessors = [
     { pattern = '<REPO>', replace = "https://github.com/peekaboot-org/peekaboot" },
 ]
@@ -58,17 +69,6 @@ tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
 # because git-cliff sorts group names as strings. site.jq shows groups 01-04 on the website,
 # so renumbering those means editing it too.
 commit_parsers = [
-    # Commits typed fix: or feat: that change nothing a user could hit. History is not rewritten.
-    # ca362a2e and 76fc2537 changed tests only.
-    { sha = "ca362a2ec9ef976392c84fe7dc6fc986509289c3", group = "<!-- 08 -->Tests" },
-    { sha = "76fc25377de62e302c41447826f85580ccae0d8d", group = "<!-- 08 -->Tests" },
-    # f5449589 is the wording follow-up of 6d1ba5aa, which carries the entry.
-    { sha = "f5449589da9d6b7187d462028897cf0139850236", skip = true },
-    # 07169ce4, efe80824 and 1fb67d2d changed release tooling and CI, 68b4f1f1 the testing app's port.
-    { sha = "07169ce4c348171a3ddb44060d964232fab34cea", group = "<!-- 09 -->Build, CI and chores" },
-    { sha = "efe80824ac0ff830809bf26b97eb5af5caf6dd74", group = "<!-- 09 -->Build, CI and chores" },
-    { sha = "68b4f1f15698ca9ef483782e847eff199c19e21b", group = "<!-- 09 -->Build, CI and chores" },
-    { sha = "1fb67d2dbfe425c7d454f20d46852d57fe5e3e6f", group = "<!-- 09 -->Build, CI and chores" },
     { message = '^(feat|fix|perf)\((testing-app|test)\)', group = "<!-- 08 -->Tests" },
     { message = '^feat', group = "<!-- 01 -->Features" },
     { message = '^fix', group = "<!-- 02 -->Bug fixes" },

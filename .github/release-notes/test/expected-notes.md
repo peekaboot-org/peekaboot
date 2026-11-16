@@ -1,18 +1,18 @@
 ## Unreleased
 
 ### Features
-- Add something after the last tag
+- **Add something after the last tag.** It shows up in the draft with its description.
 
-**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.2.0...dev
+**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.5.0...dev
 
-## 1.2.0 - 2026-02-01
+## 1.5.0 - 2026-03-01
 
 ### Bug fixes
 - Correct the rename
 
-**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.1.0...1.2.0
+**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.4.0...1.5.0
 
-## 1.1.0 - 2026-02-01
+## 1.4.0 - 2026-03-01
 
 ### Breaking changes
 - Drop the legacy endpoint. /v1 is gone, use /v2
@@ -20,9 +20,14 @@
 - **store**: Key traces by id
 
 ### Features
-- [**breaking**] Drop the legacy endpoint
+- [**breaking**] **Drop the legacy endpoint.** The /v1 endpoint answered with the old payload.
 - **api**: [**breaking**] Rename the field
-- Add the second thing
+- **Add the second thing.** The second thing lists every entry and says how many it left out.
+
+  Set thing.limit to list more.
+
+### Bug fixes
+- **Keep the order stable.** Two entries of the same age swapped places.
 
 ### Performance
 - Cache the lookups
@@ -37,7 +42,8 @@
 - Explain the new endpoint
 
 ### Internal changes
-- **store**: [**breaking**] Key traces by id
+- **store**: [**breaking**] **Key traces by id.** A custom store has to implement findById.
+- Tidy the helpers
 - Tidy the helpers
 
 ### Tests
@@ -49,9 +55,15 @@
 - **deps**: Bump org.apache.maven.plugins:maven-surefire-plugin
 - **deps-dev**: Bump com.example:plugin
 
-**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.0.0...1.1.0
+**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.3.0...1.4.0
 
-## 1.0.0 - 2026-01-01
+## 1.3.0 - 2026-02-01
 
-Initial release.
+### Features
+- Add the first thing
+
+### Bug fixes
+- Correct the first thing
+
+**Full changelog**: https://github.com/peekaboot-org/peekaboot/compare/1.2.0...1.3.0
 
