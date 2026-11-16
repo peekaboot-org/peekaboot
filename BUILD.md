@@ -155,7 +155,12 @@ same tool versions, reading the same `config/` files, plus the reactor-wide cove
 `buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` plays the role of
 `peekaboot-parent`: shared compiler, gate, JaCoCo and test-split config. Each module's
 `build.gradle.kts` declares only its dependencies; `peekaboot-testing-app` adds the Spring
-Boot and git-properties plugins. Gradle has no counterpart to a Maven parent, so what the
+Boot and git-properties plugins. Two modules also declare files their tests read as task
+inputs, so an incremental build runs those tests again when one changes:
+`peekaboot-spring-boot-autoconfigure` every module's test sources, which
+`TestSourceConventionsTest` scans, and `peekaboot-testing-app` its `compose.yml`, which
+`TestImages` reads. Maven runs every test on every build and needs neither. Gradle has no
+counterpart to a Maven parent, so what the
 Maven module's `spring-boot-starter-parent` proves (see [The reactor](#the-reactor)) has
 no Gradle equivalent; the module shares the conventions. It adds the Boot BOM as an enforced
 platform, so its transitives settle at the BOM's versions, as `spring-boot-starter-parent`

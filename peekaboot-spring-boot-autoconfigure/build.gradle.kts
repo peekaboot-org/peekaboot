@@ -52,3 +52,14 @@ dependencies {
     // QueryParameterAutoConfigurationTest proves the class condition with and without QueryContext
     testImplementation("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
 }
+
+// TestSourceConventionsTest scans every module's test sources. Declared as inputs, or a change
+// to one in another module would leave this task up to date and the scan not run.
+tasks.test {
+    val reactorTestSources = rootProject.subprojects.map {
+        fileTree(it.projectDir.resolve("src/test/java")) { include("**/*.java") }
+    }
+    inputs.files(reactorTestSources)
+        .withPropertyName("reactorTestSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}

@@ -124,3 +124,9 @@ tasks.named<Test>("integrationTest") {
     systemProperty("junit.jupiter.execution.parallel.config.fixed.parallelism", threads)
     systemProperty("junit.jupiter.execution.parallel.config.fixed.max-pool-size", threads)
 }
+
+// TestImages reads the images the tests start from compose.yml. Declared as an input, or a bump
+// there alone would leave both test tasks up to date.
+tasks.withType<Test>().configureEach {
+    inputs.file("compose.yml").withPropertyName("composeFile").withPathSensitivity(PathSensitivity.RELATIVE)
+}
