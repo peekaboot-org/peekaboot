@@ -8,12 +8,17 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.observation.ObservationRegistry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.SpanProcessor;
+import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
+import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,12 +38,14 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.peekaboot.testsupport.LogCapture;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.handler.MappedInterceptor;
@@ -378,6 +385,42 @@ class PeekabootTracingAutoConfigurationTest {
         assertTheNextContextHolds(persisted, traceId.get());
     }
 
+    /**
+     * A provider that looks Peekaboot's exporter up at its first export creates no journal by being
+     * created. Only its dependency on the journal has the context destroy it first.
+     */
+    @Test
+    void theSpansAProviderWithLateExportersFlushesAtCloseReachTheNextContext() {
+        WebApplicationContextRunner persisted = storageRunner.withPropertyValues(
+                "peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir);
+        AtomicReference<String> traceId = new AtomicReference<>();
+
+        persisted
+                .withUserConfiguration(HostTracerProviderWithLateExportersConfig.class)
+                .run(context -> traceId.set(endSpanAfterAFirstExport(context.getBean(SdkTracerProvider.class))));
+
+        assertTheNextContextHolds(persisted, traceId.get());
+    }
+
+    /** As with a provider: a span processor bean that looks its exporters up late depends on the journal too. */
+    @Test
+    void theSpansAProcessorWithLateExportersFlushesAtCloseReachTheNextContext() {
+        WebApplicationContextRunner persisted = storageRunner.withPropertyValues(
+                "peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + storageDir);
+        AtomicReference<String> traceId = new AtomicReference<>();
+
+        persisted
+                .withUserConfiguration(HostSpanProcessorWithLateExportersConfig.class)
+                .run(context -> {
+                    SdkTracerProvider unmanaged = SdkTracerProvider.builder()
+                            .addSpanProcessor(context.getBean(SpanProcessor.class))
+                            .build();
+                    traceId.set(endSpanAfterAFirstExport(unmanaged));
+                });
+
+        assertTheNextContextHolds(persisted, traceId.get());
+    }
+
     /** With no journal running, a host's provider depends on nothing it would miss. */
     @Test
     void aHostTracerProviderStartsWhileNoJournalRuns() {
@@ -535,6 +578,13 @@ class PeekabootTracingAutoConfigurationTest {
         return span.getSpanContext().getTraceId();
     }
 
+    /** The first export looks the exporters up, as a running application's has. The span ended after it waits for the close. */
+    private static String endSpanAfterAFirstExport(SdkTracerProvider provider) {
+        endSpan(provider);
+        assertThat(provider.forceFlush().join(5, TimeUnit.SECONDS).isSuccess()).isTrue();
+        return endSpan(provider);
+    }
+
     /** A live line seen in the store means the restore is done, since the gate holds live inputs until then. */
     private static void assertTheNextContextHolds(WebApplicationContextRunner persisted, String traceId) {
         persisted.run(context -> {
@@ -617,6 +667,57 @@ class PeekabootTracingAutoConfigurationTest {
             return BatchSpanProcessor.builder(exporter)
                     .setScheduleDelay(NO_SCHEDULED_EXPORT)
                     .build();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class HostTracerProviderWithLateExportersConfig {
+        @Bean
+        SdkTracerProvider hostTracerProvider(ObjectProvider<SpanExporter> exporters) {
+            return SdkTracerProvider.builder()
+                    .addSpanProcessor(BatchSpanProcessor.builder(new ExportersLookedUpLate(exporters))
+                            .setScheduleDelay(NO_SCHEDULED_EXPORT)
+                            .build())
+                    .build();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class HostSpanProcessorWithLateExportersConfig {
+        @Bean
+        SpanProcessor hostSpanProcessor(ObjectProvider<SpanExporter> exporters) {
+            return BatchSpanProcessor.builder(new ExportersLookedUpLate(exporters))
+                    .setScheduleDelay(NO_SCHEDULED_EXPORT)
+                    .build();
+        }
+    }
+
+    /**
+     * Hands each batch to the exporter beans it looks up at its first export, the way a host breaks a
+     * dependency cycle between its tracing beans and an exporter. Creating its holder creates no exporter.
+     */
+    private static final class ExportersLookedUpLate implements SpanExporter {
+
+        private final SingletonSupplier<SpanExporter> exporters;
+
+        ExportersLookedUpLate(ObjectProvider<SpanExporter> exporters) {
+            this.exporters = SingletonSupplier.of(
+                    () -> SpanExporter.composite(exporters.orderedStream().toList()));
+        }
+
+        @Override
+        public CompletableResultCode export(Collection<SpanData> spans) {
+            return exporters.obtain().export(spans);
+        }
+
+        @Override
+        public CompletableResultCode flush() {
+            return exporters.obtain().flush();
+        }
+
+        @Override
+        public CompletableResultCode shutdown() {
+            return CompletableResultCode.ofSuccess();
         }
     }
 
