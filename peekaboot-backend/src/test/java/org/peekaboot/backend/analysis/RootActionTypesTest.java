@@ -142,9 +142,9 @@ class RootActionTypesTest {
 
     /**
      * Peekaboot sets the marker itself, so it is the more specific signal wherever it appears.
-     * The combination should be unreachable - guard 2 in AsyncTaskDecorator keeps the decorator
-     * off scheduled tasks - and
-     * {@code AsyncTraceCaptureIT.aScheduledTaskIsObservedExactlyOnceAndStaysAScheduledJob} is
+     * The combination should be unreachable - the scheduled-execution guard in AsyncTaskDecorator
+     * keeps the decorator off scheduled tasks - and
+     * {@code AsyncTraceCaptureIT.aJobScheduledFromObservedWorkIsStillHandedToSpringUnwrapped} is
      * what fails if it stops being.
      */
     @Test
