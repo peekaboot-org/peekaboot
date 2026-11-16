@@ -394,74 +394,48 @@ store through `CaptureEventPublisher`, never onto the application's event bus.
 
 ### Package Structure
 
+What each package is for. The classes are left to the packages themselves.
+
 ```
 org.peekaboot.backend/
-├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
-│   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
-├── analysis/               # The rules a trace is judged by: RootActionTypes (what started it), DbSpans (the one "is this a query span" predicate), SpanWalk, IssueDetector (+ RepeatedQueries, SqlNormalizer), TraceReasons, TraceCauses, Hotspots. mapper.trace and service call in; it imports neither
-├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on the API's handlers; UiSecurityHeadersInterceptor: a Content-Security-Policy, X-Frame-Options: DENY and nosniff on the UI's resource handlers; PeekabootHandlers tells Peekaboot's controllers and UI resource handlers from the host's), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on the API's handlers), QueryParameterBinding (an advice: a record of query parameters binds from the query string alone), PeekabootApiController (the OpenAPI document and the API's index)
-├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read on first use, on a virtual thread, never during context refresh; a failed read is retried after 30 s), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
-├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
-├── domain/                 # Domain models, one sub-package per dashboard concern
-│   ├── actuator/           # ActuatorInsightsResponse: the dashboard's aggregate DTO, one field per section below
-│   ├── api/                # ApiDocument (the bundled OpenAPI document, served with the request's own server), OpenApiDocument, ApiIndex
-│   ├── application/, config/, datasource/, environment/, flyway/, health/, liquibase/,
-│   ├── loggers/, metrics/, runtime/, scheduledtasks/, server/
-│   ├── errors/             # ErrorDigestParameters, ErrorDigestResponse, ErrorDigestEntry: the error digest's request and entries
-│   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
-│   ├── log/                # LogSearchParameters, LogSearchResponse: the log search's request and page
-│   ├── property/           # PropertyGroup, Property: the one shape the Environment and Config sections share
-│   └── trace/              # TraceResource, TraceSummary, TraceDetail, TraceListResponse, TraceTree, SpanNode, HttpExchange, IssueType, ...
-├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
-│                           # (peekaboot.error-page.override), StackTraceHtml
-├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, InsightsDataResponse): InsightsCollector, InsightsPanels (the bundled panels with the operator's file merged on top, disabled panels dropped, series namespaced), InsightsDataReader (the data endpoint's reading of one level, `LevelData` its window and summaries, `TickLevelData` for level 0 and `WindowLevelData` above it), StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
-│   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
-│   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
-├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info and the application's own git info
-│   └── web/                # LifecycleController: /peekaboot/api/lifecycle/*
-├── mapper/                 # Data transformation
-│   ├── actuator/           # Actuator → domain mappers, ActuatorInsightsMapper (builds the section mappers and assembles the response), CronDescriber (cron expressions in words, for ScheduledTasksMapper)
-│   └── trace/              # TraceTreeMapper, QueryExtractor, SpanContent and SpanContents (what a span carries, per view),
-│                           # TraceResources, TraceRows (assembles a row), TraceRequests (the request off the root, its path masked), TraceSummaries, TraceDetails, TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
-├── masking/                # MaskingEngine (one bean, from MaskingConfiguration), MaskingRules, TagMasker, TreeMasker,
-│                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
-├── problem/                # ApiProblem, ApiProblemException, ApiProblemHandler, RequestParameters: the RFC 9457 errors of /peekaboot/api/**
-├── security/               # DashboardAccess (the one question the enforcement points ask, and whether a page outside the
-│                           # dashboard may show debug detail), CredentialsAccess (the HTTP Basic check and the 401),
-│                           # LoopbackOnlyAccess (a local run without the guard answers this machine only), Refusals (the
-│                           # problem answer the 401 and the 403 share), DashboardAuthenticationFilter (asks for
-│                           # /peekaboot/*), DashboardAccessInterceptor (asks again at every Peekaboot handler, whatever
-│                           # path served it), DerivationGate (at most two PBKDF2 runs at once, one per header), and the
-│                           # credential they check: PasswordHash (PBKDF2), CredentialsFile, DashboardCredentialsResolver,
-│                           # CredentialCache, SecurityPosture
-├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, ErrorDigestService, TraceReads, ...
-├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page, the Logs tab and a span's details panel fold a stack trace
-├── storage/                # StorageDirectory resolves peekaboot.storage.dir; StorageLock keeps a directory to one writing process; OwnerOnlyFiles does owner-only, symlink-safe writes; WriteOutage limits a store's write warning to one per outage; BackgroundLoad is the off-startup read both the insights snapshot and the lifecycle log wait on (see Persisted state)
-├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
-├── tracing/                # In-memory tracing
-│   ├── async/              # AsyncTaskDecorator, AsyncTaskFailurePostProcessor, AsyncTaskFailureInterceptor, RunningAsyncTask
-│   ├── bridge/otel/        # OtelSpanExporter, OtelSpanConverter
-│   ├── capture/            # RequestCaptureFilter (+ ParameterReads, RequestDetails), PeekabootLogbackAppender: the request and log sources beside the span bridge
-│   ├── config/             # PeekabootTracingProperties
-│   ├── digest/             # The error digest: ErrorDigest, DigestedError, ErrorDigestRecorder (records live failures)
-│   │                       # ErrorDigestFile (errors.jsonl)
-│   ├── event/              # What capture hands the store, and the store keeps: SpanData (+ SpanDataEvent), LogCapturedEvent,
-│   │                       # RequestCompletedEvent, TraceDiscardedEvent, CapturedText (the cap on a captured tag value,
-│   │                       # message or log message)
-│   ├── interceptor/        # TracingHandlerInterceptor
-│   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
-│   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
-│   ├── store/              # TraceStore, RestorableTraceStore (what the journal's replay needs on top),
-│   │                       # InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot), TraceRun, AsyncMembership,
-│   │                       # DuplicateFolds, Window, ListingRoots, ListedTrace, UntracedLogRing, SpanDuplicateMatcher,
-│   │                       # TraceBucket, CaptureEventPublisher, TraceStoreEventListener, TraceInput, TraceInputs
-│   ├── journal/            # The trace journal: JournalLine and JournalCodec (the line format), JournalFiles,
-│   │                       # JournalWriter, TraceReplay, RestoreGate, Checkpoint, TraceJournal (the bean)
-│   └── tags/               # The span-tag vocabulary capture, store and mappers share: AsyncTaskMarker,
-│                           # EventListenerMarker, QueryParameterTags (Peekaboot's own keys), HttpSpanTags,
-│                           # Tags (reading foreign conventions)
-└── ui/                     # InlinedStylesheets, Placeholders: shared by the server-rendered toolbar and error page
+├── actuator/         # reads every InsightsSource bean into one raw map
+│   └── parsed/       # typed records for the actuator responses
+├── analysis/         # how a trace is judged; mapper.trace and service call in, it imports neither
+├── config/           # properties, application identity, MVC wiring, the JSON mapper, the URL space
+├── controller/       # the controllers of /peekaboot/api and the checks on query parameters
+├── datasource/       # what each DataSource connects to, read off the startup path
+├── devtoolbar/       # the filter that renders the toolbar into HTML responses
+├── domain/           # the records the API serves, one sub-package per dashboard concern
+├── errorpage/        # the error page and the two resolvers of peekaboot.error-page.override
+├── insights/         # the metric ring buffers: collector, panels, snapshot, payloads
+│   ├── config/       # the insights properties and the panels file
+│   └── web/          # /peekaboot/api/insights/*
+├── lifecycle/        # the ready and stopped banners, the lifecycle log, build and git info
+│   └── web/          # /peekaboot/api/lifecycle/*
+├── mapper/
+│   ├── actuator/     # actuator records to domain records
+│   └── trace/        # a stored trace to the trace the API serves
+├── masking/          # the one place "is this key or value sensitive" is decided
+├── problem/          # the RFC 9457 errors of /peekaboot/api/**
+├── security/         # the dashboard guard, the loopback rule and the credentials they check
+├── service/          # what the controllers call: insights, traces, routes, log search, error digest
+├── stacktrace/       # how every surface folds a stack trace
+├── storage/          # the directory, its one-writer lock, owner-only writes (see Persisted state)
+├── text/             # count, byte and uptime formats, the banner frame, lenient enum lookup
+├── tracing/
+│   ├── async/        # the span around a task handed to an executor
+│   ├── bridge/otel/  # finished OpenTelemetry spans into the store
+│   ├── capture/      # the request and log sources beside the span bridge
+│   ├── config/       # the tracing properties
+│   ├── digest/       # the error digest and errors.jsonl
+│   ├── event/        # what capture hands the store, and the store keeps
+│   ├── interceptor/  # the handler and view observations
+│   ├── journal/      # the trace journal: line format, writer, replay, fold
+│   ├── listener/     # the span around an @EventListener method
+│   ├── query/        # a query's bind parameters onto its span
+│   ├── store/        # the trace store, its buckets and what feeds it
+│   └── tags/         # the span-tag vocabulary capture, store and mappers share
+└── ui/               # what the server-rendered toolbar and error page share
 ```
 
 ### Tracing Flow
