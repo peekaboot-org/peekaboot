@@ -1,9 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
-import java.time.Duration;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -95,8 +93,6 @@ class LifecycleApiIT extends TestingAppITBase {
      * instead of asserted on the first response.
      */
     private JsonNode awaitFirst(String path, String listField) {
-        return await().atMost(Duration.ofSeconds(5))
-                .pollInterval(Duration.ofMillis(20))
-                .until(() -> api.getJson(path).path(listField), node -> !node.isEmpty());
+        return api.awaitJson(path, body -> !body.path(listField).isEmpty()).path(listField);
     }
 }

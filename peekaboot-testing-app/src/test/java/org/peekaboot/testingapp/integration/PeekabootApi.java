@@ -1,5 +1,11 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.awaitility.Awaitility.await;
+
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+import org.awaitility.core.ConditionTimeoutException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -12,6 +18,12 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Peekaboot's HTTP surface on the running app, read the way the dashboard reads it. */
 final class PeekabootApi {
+
+    /** How long a test waits for a fact that arrives asynchronously. */
+    static final Duration ASYNC_TIMEOUT = Duration.ofSeconds(15);
+
+    /** How often a test looks while it waits. */
+    static final Duration POLL_INTERVAL = Duration.ofMillis(50);
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -90,6 +102,25 @@ final class PeekabootApi {
                 .retrieve()
                 .body(String.class);
         return readJson(body);
+    }
+
+    /** Polls {@code path} until {@code ready} holds and returns that answer; fails naming the path and the last answer. */
+    JsonNode awaitJson(String path, Predicate<JsonNode> ready) {
+        AtomicReference<JsonNode> lastAnswer = new AtomicReference<>();
+        try {
+            return await().atMost(ASYNC_TIMEOUT)
+                    .pollInterval(POLL_INTERVAL)
+                    .until(
+                            () -> {
+                                JsonNode answer = getJson(path);
+                                lastAnswer.set(answer);
+                                return answer;
+                            },
+                            ready);
+        } catch (ConditionTimeoutException e) {
+            throw new AssertionError(
+                    path + " never became ready within " + ASYNC_TIMEOUT + "; last answer: " + lastAnswer.get(), e);
+        }
     }
 
     static JsonNode readJson(String json) {

@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.integration;
 
 import static org.awaitility.Awaitility.await;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -39,9 +38,6 @@ class TraceApiClient {
     /** The trace's root has arrived: {@code complete} is the API's own word for it, so nothing is inferred from the tree. */
     static final Predicate<JsonNode> COMPLETE =
             trace -> trace.path("summary").path("complete").asBoolean(false);
-
-    private static final Duration TIMEOUT = Duration.ofSeconds(15);
-    private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
 
     private final PeekabootApi api;
 
@@ -95,8 +91,8 @@ class TraceApiClient {
         String uri = "/peekaboot/api/traces/" + traceId;
         AtomicReference<JsonNode> lastSeen = new AtomicReference<>();
         try {
-            return await().atMost(TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
+            return await().atMost(PeekabootApi.ASYNC_TIMEOUT)
+                    .pollInterval(PeekabootApi.POLL_INTERVAL)
                     .until(
                             () -> {
                                 JsonNode trace = fetchOrNull(uri);
@@ -106,7 +102,8 @@ class TraceApiClient {
                             trace -> trace != null && ready.test(trace));
         } catch (ConditionTimeoutException e) {
             throw new AssertionError(
-                    "trace " + traceId + " never became ready within " + TIMEOUT + "; last response: " + lastSeen.get(),
+                    "trace " + traceId + " never became ready within " + PeekabootApi.ASYNC_TIMEOUT
+                            + "; last response: " + lastSeen.get(),
                     e);
         }
     }
@@ -191,8 +188,8 @@ class TraceApiClient {
         // written on Awaitility's poll thread, read on the test thread once the wait gave up
         AtomicReference<List<String>> lastListing = new AtomicReference<>(List.of());
         try {
-            return await().atMost(TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
+            return await().atMost(PeekabootApi.ASYNC_TIMEOUT)
+                    .pollInterval(PeekabootApi.POLL_INTERVAL)
                     .until(
                             () -> {
                                 List<String> listed = new ArrayList<>();
@@ -208,7 +205,9 @@ class TraceApiClient {
                             trace -> trace != null);
         } catch (ConditionTimeoutException e) {
             throw new AssertionError(
-                    description + " was not listed within " + TIMEOUT + "; the listing held: " + lastListing.get(), e);
+                    description + " was not listed within " + PeekabootApi.ASYNC_TIMEOUT + "; the listing held: "
+                            + lastListing.get(),
+                    e);
         }
     }
 
