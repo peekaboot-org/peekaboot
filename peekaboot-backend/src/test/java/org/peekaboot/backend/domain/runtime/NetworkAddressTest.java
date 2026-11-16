@@ -7,7 +7,9 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.peekaboot.backend.domain.runtime.NetworkAddress.Nic;
 import org.peekaboot.backend.domain.runtime.NetworkAddress.Signals;
 
@@ -25,6 +27,16 @@ class NetworkAddressTest {
 
     private static Signals signals(List<Nic> nics) {
         return new Signals(() -> nics, address -> "host-for-" + address.getHostAddress(), TEST_BUDGET);
+    }
+
+    /** A lookup that never answers: only the interrupt of the discovery's {@code shutdownNow} ends it. */
+    private static String stalled() {
+        try {
+            new CountDownLatch(1).await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return "too-late";
     }
 
     @Test
@@ -67,29 +79,16 @@ class NetworkAddressTest {
     }
 
     @Test
+    // a discovery that waited for the stalled lookup would never return
+    @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void aLookupMissingTheBudgetRendersWithoutAHostname() {
         Signals signals = new Signals(
                 () -> List.of(new Nic(true, List.of(ip("10.1.2.3"), ip("192.168.0.7")))),
-                address -> {
-                    if (address.getHostAddress().equals("10.1.2.3")) {
-                        return "fast-host";
-                    }
-                    try {
-                        Thread.sleep(Duration.ofSeconds(30));
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                    return "too-late";
-                },
+                address -> address.getHostAddress().equals("10.1.2.3") ? "fast-host" : stalled(),
                 Duration.ofMillis(200));
 
-        long start = System.nanoTime();
-        List<NetworkAddress> addresses = NetworkAddress.discover(signals);
-        Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
-
-        assertThat(addresses)
+        assertThat(NetworkAddress.discover(signals))
                 .containsExactly(new NetworkAddress("10.1.2.3", "fast-host"), new NetworkAddress("192.168.0.7", null));
-        assertThat(elapsed).isLessThan(Duration.ofSeconds(2));
     }
 
     @Test
