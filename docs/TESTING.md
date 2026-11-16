@@ -1,12 +1,12 @@
 # Testing Conventions
 
 ## Structure
-- JUnit 5 + AssertJ everywhere. No JUnit `assertEquals` in new code.
-- One behaviour per test. Helpers and fixtures sit all above or all below the tests, never
-  interleaved.
-- Test names are sentences about behaviour (`aSnapshotDatedInTheFutureIsDeletedUnread`).
-  `method_shouldX` is legacy. Keep a class internally consistent; new classes take the
-  sentence form.
+- JUnit 6 + AssertJ everywhere. No JUnit `assertEquals` in new code.
+- One behaviour per test. Helpers and fixtures sit above the first test or below the last,
+  never between two tests.
+- Test names are sentences about behaviour (`aSnapshotDatedInTheFutureIsDeletedUnread`). The
+  method under test may be the subject (`maskReplacesAListUnderAPluralSensitiveKey`).
+  `TestSourceConventionsTest` fails on a `method_condition` or `should...` name.
 - No getter/setter round-trips for `@ConfigurationProperties` classes. They prove Java field
   assignment. Assert a default only where it protects something (a safe fallback, parity with
   a constant in main code), or that a bound property reaches the bean consuming it
@@ -28,11 +28,14 @@
   each read the host through a package-private `Signals` record a test states outright. A test
   that computes its expected value with the same call the production code makes proves
   nothing; it gets a seam instead.
-- `Locale.setDefault` is JVM-global. `ApplicationReadyListenerTest` and `ByteFormatTest` set
-  it to prove a banner reads the same under any default, restore it in `finally`, and say so in
-  their Javadoc. That is safe only because `peekaboot-backend`'s surefire runs its classes one
-  at a time on one thread (the pom configures no parallelism). Turn parallel execution on for
-  that module and those two tests have to lose the global write first.
+- A JVM-wide default (`Locale.setDefault`, `TimeZone.setDefault`, the default
+  uncaught-exception handler, a system property, `System.out`) is written only by a class that
+  is `@Isolated`, with the reason as the annotation's value, and is put back in `finally` or on
+  close. `@Isolated` is JUnit's global lock, so no other class runs beside it. A `@ResourceLock`
+  on the one resource would not give that, because a test that only reads the default declares
+  nothing. `TestSourceConventionsTest` fails on a writer without it.
+  `ApplicationReadyListenerTest` and `ByteFormatTest` set the locale to prove a banner reads the
+  same under any default, and `MultiDataSourceTraceIT` sets the time zone.
 - The default uncaught-exception handler is JVM-global the same way.
   `InsightsSsePublisherTest`'s `UncaughtExceptions` installs one to prove nothing escapes the SSE
   sender thread, and restores the previous handler on close. It keeps only what a thread named
@@ -60,14 +63,19 @@ Two kinds, split by lifecycle:
 - `*IT`: anything that boots a server, run by failsafe at `integration-test`.
 
 `peekaboot-backend`'s suite uses no `@SpringBootTest` and no embedded server; a bare
-`AnnotationConfigApplicationContext` covers the one case where a bean-name lookup needs a real
-container (`ServerUrlResolverTest`). `peekaboot-spring-boot-autoconfigure` has context-runner
-unit tests for its auto-configurations, plus the `*IT`s that boot its own `TestApplication`
-(`DevToolbarAutoConfigurationIT` and `PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT`
-through `SpringApplicationBuilder`). Everything Playwright lives in `peekaboot-testing-app`
-under `org.peekaboot.testingapp.ui`, which boots the sample app and drives the real
-dashboard/toolbar/overlay in a headless browser. `peekaboot-frontend` has no test sources of
-its own; that suite covers it.
+`AnnotationConfigApplicationContext` covers the cases that need a real container: a bean-name
+lookup (`ServerUrlResolverTest`), Spring's `@EnableAsync` proxies
+(`AsyncTaskFailurePostProcessorTest`), listeners the container calls
+(`EventListenerObservationContextTest`) and an async event multicaster
+(`LifecycleEventRecorderTest`).
+
+`peekaboot-spring-boot-autoconfigure` has context-runner unit tests for its
+auto-configurations, plus the `*IT`s that boot its own `TestApplication`: `StartupBannerIT` and
+`HostActuatorInfoIT` through `SpringApplicationBuilder`, the others as `@SpringBootTest`.
+
+Everything Playwright lives in `peekaboot-testing-app` under `org.peekaboot.testingapp.ui`,
+which boots the sample app and drives the real dashboard/toolbar/overlay in a headless browser.
+`peekaboot-frontend` has no test sources of its own; that suite covers it.
 
 ### Testing auto-configuration
 
@@ -148,9 +156,21 @@ to every test class. The domain records carry no test-only constructors, and a t
 wrap a builder in a positional helper of its own (`createSpan(id, 150, OK, tags, children)`):
 that hides the defaults the builder exists to make explicit. `peekaboot-testing-app` cannot
 reach `Spans` (the backend publishes no test jar), so its `integration/TestSpans` is the same
-builder shape for the ITs that write spans straight to the store. `peekaboot-spring-boot-autoconfigure`
-needs only a few fixed shapes, so its `TraceFixtures` names them (`addRootSpan`, `query`,
-`rootSpanLasting`, `vendorFrameLog`) instead.
+builder shape for the ITs that write spans straight to the store. `TestSpans.newTraceId()` is a
+trace id of the real shape. `integration/TraceShapes` names the spans and the whole traces more
+than one IT stores (`httpRoot`, `handler`, `asyncTask`, `query`, `orphanQuery`; `deepQuery`,
+`asyncQuery`, `slowAsyncUnderAShortRequest`, `lateCallUnderAShortRequest`). It cannot live in
+`peekaboot-test-support`, which the backend's own tests depend on.
+`TraceOverlayTestBase.stored(shape)` writes one of the whole traces under a new trace id and
+returns the id.
+`peekaboot-spring-boot-autoconfigure` needs only a few fixed shapes, so its `TraceFixtures`
+names them (`addRootSpan`, `query`, `rootSpanLasting`, `vendorFrameLog`) instead.
+
+`TraceInsightsServiceTestBase` holds the store, the service and the helpers its feature classes
+share. `TraceTreeMapperTestBase` holds the two mappers and the calls on them. A test that reads
+a file of the checkout finds it with `Checkout.ancestorHolding(anchor, entry)`
+(`peekaboot-test-support`) and passes its own class as the anchor: the search starts at that
+class's own classes and never at the working directory.
 
 The trace journal's tests write journal and snapshot files the way a crash, an older version or a
 hand edit leaves them (`JournalTexts`, in the journal's test package), and encode every event line
@@ -185,13 +205,19 @@ The frontend is plain ES modules, so a Java enum and its JS mirror drift silentl
 `MIGRATION_STATES`, `ISSUE_SEVERITIES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
 `MigrationState`, `IssueSeverity` (its wire words) and Logback's levels, the keys the frontend reads off
 `/api/features` to the `Features` record. `ToolbarDataProviderTest` pins the toolbar blob's
-`features` names to the same record. A vocabulary that gains a JS mirror gets a row there. The same suite pins
-`format.js`'s `formatLongDuration` against `UptimeFormat.humanize` unit by unit, and drives
-`dashboard/tabs/insights-store.js` (the browser's mirror of the insights rings) directly, so
-the JS with no Java counterpart is covered too. `SqlStatement`'s JSON (`text`, `formatted`,
-`parameters`) has no mirror to pin; `SqlStatementViewIT` renders a real one from the testing
-app's person lookup, and `SqlViewModuleIT` covers the view's branches against hand-built
-statements.
+`features` names to the same record. A vocabulary that gains a JS mirror gets a row there.
+`SharedModuleIT` also pins `format.js`'s `formatLongDuration` against `UptimeFormat.humanize`
+unit by unit.
+
+JS with no Java counterpart is tested in the class of its module: `FormatModuleIT`,
+`SeverityModuleIT` (`severity.js` and `http-status.js`), `SqlModuleIT`, `UrlStateModuleIT`, and
+`InsightsStoreModuleIT`, which drives `dashboard/tabs/insights-store.js` (the browser's mirror
+of the insights rings) and `insights-stream.js` directly. A module without a class of its own
+stays in `SharedModuleIT`.
+
+`SqlStatement`'s JSON (`text`, `formatted`, `parameters`) has no mirror to pin;
+`SqlStatementViewIT` renders a real one from the testing app's person lookup, and
+`SqlViewModuleIT` covers the view's branches against hand-built statements.
 
 ## Real collaborators over mocks
 Mock only when the real dependency is expensive, non-deterministic, or external: servlet
@@ -419,6 +445,11 @@ poll over HTTP with Awaitility. `ROOT_SPAN_EXPORTED` on both is the completeness
 SERVER root classifies HTTP_REQUEST, that root is the last span of a request to end, and the
 exporter hands spans over in the order they ended. The listing shows a trace once its request
 or a log is stored, before any span, so a test asserting on spans waits for them first.
+
+`PeekabootApi.awaitJson(path, ready)` is the HTTP wait for any other endpoint, on the bound the
+trace waits use, `PeekabootApi.ASYNC_TIMEOUT`. Where the application sends a signal, a test
+waits on it and does not poll: `InsightsTicks.on(port)` reads the insights stream, and `next()`
+returns each tick as it arrives, its sample already in the rings.
 
 Two shared things have no lock and need care instead. The JVM-wide Logback context is one. Boot
 assumes one application per JVM. Closing a context marks Logback uninitialised, and the next
