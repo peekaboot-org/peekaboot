@@ -437,7 +437,7 @@ back. Set `CI=1` locally to reproduce that.
 
 ## Tests
 
-Surefire and failsafe, JUnit 5 + AssertJ. Conventions, the pristine-output policy
+Surefire and failsafe, JUnit 6 + AssertJ. Conventions, the pristine-output policy
 and the Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md). This section
 covers only the build mechanics.
 
