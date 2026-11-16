@@ -636,9 +636,9 @@ class TraceDataBundleTest {
 
     /**
      * A cycle has no span without a parent, so it reads as in flight;
-     * {@code TraceTreeMapperTest.aTraceThatIsOnlyACycleStillShowsEverySpan} shows the mapper still
-     * serves every span. It does not occur in production, but the rule must hold for every shape
-     * the fold can leave.
+     * {@code TraceTreeMapperShapeTest.aTraceThatIsOnlyACycleStillShowsEverySpan} shows the mapper
+     * still serves every span. It does not occur in production, but the rule must hold for every
+     * shape the fold can leave.
      */
     @Test
     void aTraceThatIsOnlyACycleHasNoRoot() {
