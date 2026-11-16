@@ -63,3 +63,17 @@ tasks.test {
         .withPropertyName("reactorTestSources")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
+
+// BuildVersionLockstepTest, RuntimeDependencyAllowListTest and
+// StarterOptionalDependencyContractTest hold the poms, the Gradle scripts, gradle.properties and
+// cliff.toml to each other. Declared as inputs, or an edit to one that changes no classpath
+// would leave this task up to date and the three not run.
+tasks.test {
+    val reactorBuildFiles = rootProject.fileTree(rootDir) {
+        include("pom.xml", "*/pom.xml", "*.gradle.kts", "*/*.gradle.kts", "buildSrc/src/**/*.gradle.kts")
+        include("gradle.properties", ".github/release-notes/cliff.toml")
+    }
+    inputs.files(reactorBuildFiles)
+        .withPropertyName("reactorBuildFiles")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
