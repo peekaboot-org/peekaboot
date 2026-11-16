@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.tracing.event.SpanData;
 import org.peekaboot.backend.tracing.tags.QueryParameterTags;
@@ -67,21 +68,25 @@ public final class DbSpans {
 
     /** datasource-proxy's result-set span: the one that carries the row count of the query before it. */
     public static boolean isResultSet(SpanData span) {
-        return RESULT_SET_SPAN_NAME.equals(span.name())
-                && span.tags() != null
-                && span.tags().containsKey(ROW_COUNT_TAG);
+        Map<String, String> tags = span.tags();
+        return tags != null && isResultSet(span.name(), tags);
     }
 
     /** The parsed row count of a result-set span; null for any other span, or a count that does not parse. */
     public static Long rowCount(SpanData span) {
-        if (!isResultSet(span)) {
+        Map<String, String> tags = span.tags();
+        if (tags == null || !isResultSet(span.name(), tags)) {
             return null;
         }
         try {
-            return Long.parseLong(span.tags().get(ROW_COUNT_TAG));
+            return Long.parseLong(tags.get(ROW_COUNT_TAG));
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private static boolean isResultSet(String name, Map<String, String> tags) {
+        return RESULT_SET_SPAN_NAME.equals(name) && tags.containsKey(ROW_COUNT_TAG);
     }
 
     /** datasource-micrometer's connection observation, named by {@code JdbcObservationDocumentation.CONNECTION}. */
@@ -117,18 +122,25 @@ public final class DbSpans {
     /**
      * The database a query span names, with the same priority as {@link #sql}: the current
      * OpenTelemetry {@code db.system.name} ahead of its superseded spelling {@code db.system},
-     * then datasource-proxy's datasource name or peer service. Null when nothing named one.
+     * then datasource-proxy's datasource name or peer service. Null when nothing named one, as
+     * without a tag map.
      */
-    public static String system(Map<String, String> tags) {
+    public static @Nullable String system(@Nullable Map<String, String> tags) {
+        if (tags == null) {
+            return null;
+        }
         return Tags.first(tags, "db.system.name", "db.system", "jdbc.datasource.name", "peer.service");
     }
 
     /**
-     * The Hikari pool name, else datasource-proxy's datasource name; null when neither is tagged.
-     * A pool name Hikari generated ({@code HikariPool-1}) names nothing, so it is skipped, the way
-     * datasource-micrometer skips it when it names a DataSource.
+     * The Hikari pool name, else datasource-proxy's datasource name; null when neither is tagged,
+     * as without a tag map. A pool name Hikari generated ({@code HikariPool-1}) names nothing, so it
+     * is skipped, the way datasource-micrometer skips it when it names a DataSource.
      */
-    public static String dataSourceName(Map<String, String> tags) {
+    public static @Nullable String dataSourceName(@Nullable Map<String, String> tags) {
+        if (tags == null) {
+            return null;
+        }
         String pool = tags.get("jdbc.datasource.pool");
         if (pool != null && !GENERATED_POOL_NAME.matcher(pool).matches()) {
             return pool;

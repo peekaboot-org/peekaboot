@@ -51,12 +51,13 @@ final class SpanContents {
      * holds only on a query span, the one shape {@code statement} is populated for.
      */
     private Map<String, String> maskedTags(SpanData spanData) {
-        if (spanData.tags() == null) {
+        Map<String, String> tags = spanData.tags();
+        if (tags == null) {
             return Map.of();
         }
         boolean servedAsQuery = DbSpans.isQuery(spanData);
         Map<String, String> kept = new LinkedHashMap<>();
-        spanData.tags().forEach((key, value) -> {
+        tags.forEach((key, value) -> {
             if (!servedAsQuery || !DbSpans.isStatementTag(key)) {
                 kept.put(key, value);
             }

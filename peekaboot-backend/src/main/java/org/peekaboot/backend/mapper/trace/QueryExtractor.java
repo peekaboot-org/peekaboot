@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import java.util.List;
+import java.util.Map;
 import org.peekaboot.backend.analysis.DbSpans;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.tracing.event.SpanData;
@@ -22,8 +23,9 @@ public class QueryExtractor {
     }
 
     private QueryInfo extractQuery(SpanData span, TraceQueries queries) {
-        String dbSystem = DbSpans.system(span.tags());
-        String dataSourceName = DbSpans.dataSourceName(span.tags());
+        Map<String, String> tags = span.tags();
+        String dbSystem = DbSpans.system(tags);
+        String dataSourceName = DbSpans.dataSourceName(tags);
 
         return new QueryInfo(
                 span.spanId(),

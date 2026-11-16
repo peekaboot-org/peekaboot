@@ -35,8 +35,9 @@ record Window(@Nullable Instant start, @Nullable Instant end) {
 
     /** Whether {@code span} sits on either edge: the only spans whose removal can shrink this window. */
     boolean isBoundedBy(SpanData span) {
-        return (span.startTime() != null && span.startTime().equals(start))
-                || (span.endTime() != null && span.endTime().equals(end));
+        Instant spanStart = span.startTime();
+        Instant spanEnd = span.endTime();
+        return (spanStart != null && spanStart.equals(start)) || (spanEnd != null && spanEnd.equals(end));
     }
 
     /** Null until both a start and an end have been folded in. */

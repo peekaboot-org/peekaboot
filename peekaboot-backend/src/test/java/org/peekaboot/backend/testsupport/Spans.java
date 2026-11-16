@@ -97,6 +97,43 @@ public final class Spans {
                 .tag(AsyncTaskMarker.TAG_KEY, AsyncTaskMarker.TAG_VALUE);
     }
 
+    /**
+     * {@code span} with no tag map at all. The exporter always builds one; a journal line may lack it, and
+     * the record takes it.
+     */
+    public static SpanData withoutTagMap(SpanData span) {
+        return new SpanData(
+                span.traceId(),
+                span.spanId(),
+                span.parentId(),
+                span.remoteParent(),
+                span.name(),
+                span.kind(),
+                span.startTime(),
+                span.endTime(),
+                null,
+                span.events(),
+                span.exception(),
+                span.creationOrder());
+    }
+
+    /** {@code span} with neither a start nor an end, as a journal line may leave it. */
+    public static SpanData withoutTimes(SpanData span) {
+        return new SpanData(
+                span.traceId(),
+                span.spanId(),
+                span.parentId(),
+                span.remoteParent(),
+                span.name(),
+                span.kind(),
+                null,
+                null,
+                span.tags(),
+                span.events(),
+                span.exception(),
+                span.creationOrder());
+    }
+
     public static final class SpanBuilder {
 
         private final String spanId;

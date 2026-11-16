@@ -16,7 +16,8 @@ import org.peekaboot.backend.tracing.event.SpanData;
  *                      has arrived
  * @param duration      the window the bundle's non-async spans have covered, or every span's
  *                      while all of them are async; {@link TraceDataBundle#synchronousWindow()}.
- *                      What may lower it is in "Async Subtree Timing" in docs/ARCHITECTURE.md
+ *                      Null until a start and an end have arrived, as for a trace of log lines
+ *                      alone. What may lower it is in "Async Subtree Timing" in docs/ARCHITECTURE.md
  * @param rootSpan      the span the tree hangs from: the earliest-created stored span without a
  *                      parent, else the earliest-created one continuing a remote caller's trace;
  *                      null while neither is stored
@@ -38,7 +39,7 @@ public record TraceData(
         String traceId,
         @Nullable Instant run,
         @Nullable Instant startTime,
-        Duration duration,
+        @Nullable Duration duration,
         @Nullable SpanData rootSpan,
         boolean complete,
         boolean interrupted,

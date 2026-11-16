@@ -2,6 +2,7 @@ package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.testsupport.Spans.withoutTimes;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -41,5 +42,15 @@ class WindowTest {
         assertThat(window.isBoundedBy(first)).isTrue();
         assertThat(window.isBoundedBy(last)).isTrue();
         assertThat(window.isBoundedBy(span("inside").at(5, 50).build())).isFalse();
+    }
+
+    /** A span without times stretched no edge, so it sits on none, not even on those of a window still empty. */
+    @Test
+    void isNotBoundedByASpanWithoutTimes() {
+        SpanData untimed = withoutTimes(span("untimed").build());
+
+        assertThat(Window.EMPTY.isBoundedBy(untimed)).isFalse();
+        assertThat(Window.EMPTY.including(span("a").at(0, 100).build()).isBoundedBy(untimed))
+                .isFalse();
     }
 }

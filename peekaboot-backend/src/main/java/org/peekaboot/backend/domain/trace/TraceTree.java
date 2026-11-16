@@ -27,7 +27,7 @@ public record TraceTree(
         RootActionType rootActionType,
         String rootOperation,
         TraceSummary.@Nullable Request request,
-        SpanNode rootSpan,
+        @Nullable SpanNode rootSpan,
         List<SpanNode> orphans,
         int spanCount,
         TraceSummary.QueryCounts queries,

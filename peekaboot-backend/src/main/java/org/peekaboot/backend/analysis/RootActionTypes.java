@@ -53,8 +53,11 @@ public final class RootActionTypes {
      * for a method declared on a top-level class.
      */
     public static @Nullable String scheduledTarget(@Nullable SpanData rootSpan) {
-        Map<String, String> tags = rootSpan == null || rootSpan.tags() == null ? Map.of() : rootSpan.tags();
-        return hasScheduledTaskTags(tags) ? tags.get(CODE_NAMESPACE) + "." + tags.get(CODE_FUNCTION) : null;
+        Map<String, String> tags = rootSpan == null ? null : rootSpan.tags();
+        if (tags == null || !hasScheduledTaskTags(tags)) {
+            return null;
+        }
+        return tags.get(CODE_NAMESPACE) + "." + tags.get(CODE_FUNCTION);
     }
 
     /**

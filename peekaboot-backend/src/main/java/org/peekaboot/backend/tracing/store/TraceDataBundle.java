@@ -481,10 +481,10 @@ public class TraceDataBundle {
      * detail header and the Slow classification all read, so background work a caller never
      * waited for does not lengthen the work that triggered it. Falls back to the full window
      * for a bundle whose every span is async, where that work is the whole trace and its own
-     * duration is the honest answer. What may lower it is in "Async Subtree Timing" in
-     * docs/ARCHITECTURE.md.
+     * duration is the honest answer. Null until a start and an end have arrived. What may lower
+     * it is in "Async Subtree Timing" in docs/ARCHITECTURE.md.
      */
-    public Duration synchronousWindow() {
+    public @Nullable Duration synchronousWindow() {
         synchronized (spansLock) {
             Duration synchronous = asyncMembership.syncWindow().duration();
             return synchronous != null ? synchronous : fullWindow.duration();

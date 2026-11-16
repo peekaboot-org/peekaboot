@@ -5,6 +5,7 @@ import static org.peekaboot.backend.testsupport.Spans.asyncTask;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.redisCommand;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.testsupport.Spans.withoutTagMap;
 
 import io.micrometer.tracing.Span;
 import java.util.Map;
@@ -122,6 +123,14 @@ class RootActionTypesTest {
                 .named("task orderReconciler.reconcileOrders")
                 .tags(tags)
                 .build();
+
+        assertThat(RootActionTypes.scheduledTarget(rootSpan)).isNull();
+    }
+
+    @Test
+    void aRootWithoutATagMapNamesNoTarget() {
+        var rootSpan = withoutTagMap(
+                span("root").named("task orderReconciler.reconcileOrders").build());
 
         assertThat(RootActionTypes.scheduledTarget(rootSpan)).isNull();
     }

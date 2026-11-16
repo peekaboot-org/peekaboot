@@ -286,6 +286,14 @@ class TraceTreeMapperShapeTest extends TraceTreeMapperTestBase {
         assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
+    /** The store holds no duration until a span with both ends arrives, as for a trace of log lines alone. */
+    @Test
+    void aTraceWithoutADurationLastsZeroMilliseconds() {
+        var traceData = new TraceData("trace1", null, null, null, null, false, false, false, List.of(), Set.of(), 0);
+
+        assertThat(map(mapper, traceData).durationMs()).isZero();
+    }
+
     /** A replayed trace holds the window its remnant carried before any span, and the listing reads that window too. */
     @Test
     void anEmptyTraceKeepsTheWindowTheStoreHolds() {

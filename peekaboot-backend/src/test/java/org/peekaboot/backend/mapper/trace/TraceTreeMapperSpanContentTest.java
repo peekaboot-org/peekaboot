@@ -6,6 +6,7 @@ import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.resultSet;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.testsupport.Spans.withoutTagMap;
 
 import io.micrometer.tracing.Span;
 import java.time.Instant;
@@ -63,6 +64,15 @@ class TraceTreeMapperSpanContentTest extends TraceTreeMapperTestBase {
             assertThat(child.tags()).containsEntry("db.system", "postgresql");
             assertThat(child.tags()).containsEntry("db.name", "mydb");
         }
+    }
+
+    @Test
+    void aSpanWithoutATagMapIsServedWithNoTags() {
+        var root = withoutTagMap(span("root").kind(Span.Kind.SERVER).at(0, 100).build());
+
+        TraceTree result = map(mapper, TraceDatas.of("trace1", root));
+
+        assertThat(result.rootSpan().tags()).isEmpty();
     }
 
     @Test

@@ -22,7 +22,8 @@ public class IssueDetector {
     }
 
     public TraceTree detectIssues(TraceTree trace) {
-        SpanNode root = trace.rootSpan() == null ? null : withClientError(processSpan(trace.rootSpan()));
+        SpanNode rootSpan = trace.rootSpan();
+        SpanNode root = rootSpan == null ? null : withClientError(processSpan(rootSpan));
         List<SpanNode> orphans = trace.orphans().stream().map(this::processSpan).toList();
         return trace.withSpans(root, orphans);
     }

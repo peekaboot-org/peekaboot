@@ -45,9 +45,10 @@ public final class TraceReasons {
             reasons.add(new TraceReason(Kind.ERROR_LOG, log.spanId(), log.message()));
         }
         if (tree.durationMs() >= slowTraceThresholdMs) {
+            SpanNode root = tree.rootSpan();
             reasons.add(new TraceReason(
                     Kind.SLOW,
-                    tree.rootSpan() != null ? tree.rootSpan().spanId() : null,
+                    root != null ? root.spanId() : null,
                     "Took " + tree.durationMs() + " ms, at or above the " + slowTraceThresholdMs
                             + " ms slow-trace threshold."));
         }

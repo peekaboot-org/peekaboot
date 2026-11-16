@@ -8,7 +8,8 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A finished span, as {@code OtelSpanExporter} converts it from the SDK's.
+ * A finished span, as {@code OtelSpanExporter} converts it from the SDK's. The exporter always sets
+ * both times and the tag map. A journal line may lack any of the three, and reads back with null there.
  *
  * @param remoteParent the parent span context came from another process, so it will never be
  *                     exported here unless this application called itself
@@ -20,9 +21,9 @@ public record SpanData(
         boolean remoteParent,
         String name,
         Span.@Nullable Kind kind,
-        Instant startTime,
-        Instant endTime,
-        Map<String, String> tags,
+        @Nullable Instant startTime,
+        @Nullable Instant endTime,
+        @Nullable Map<String, String> tags,
         List<Event> events,
         @Nullable CapturedExceptionInfo exception,
         long creationOrder) {

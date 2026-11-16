@@ -3,6 +3,7 @@ package org.peekaboot.backend.analysis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
 import static org.peekaboot.backend.testsupport.Spans.span;
+import static org.peekaboot.backend.testsupport.Spans.withoutTagMap;
 
 import io.micrometer.tracing.Span;
 import java.util.List;
@@ -135,6 +136,16 @@ class DbSpansTest {
     }
 
     @Test
+    void systemIsNullWithoutATagMap() {
+        assertThat(DbSpans.system(null)).isNull();
+    }
+
+    @Test
+    void dataSourceNameIsNullWithoutATagMap() {
+        assertThat(DbSpans.dataSourceName(null)).isNull();
+    }
+
+    @Test
     void dataSourceNamePrefersTheHikariPool() {
         assertThat(DbSpans.dataSourceName(Map.of("jdbc.datasource.pool", "orders-db", "jdbc.datasource.name", "H2")))
                 .isEqualTo("orders-db");
@@ -203,6 +214,19 @@ class DbSpansTest {
                         .build()))
                 .isNull();
         assertThat(DbSpans.rowCount(span("s1").named("result-set").build())).isNull();
+    }
+
+    @Test
+    void aSpanNamedLikeAResultSetWithoutATagMapIsNone() {
+        assertThat(DbSpans.isResultSet(
+                        withoutTagMap(span("s1").named("result-set").build())))
+                .isFalse();
+    }
+
+    @Test
+    void aSpanWithoutATagMapHasNoRowCount() {
+        assertThat(DbSpans.rowCount(withoutTagMap(span("s1").named("result-set").build())))
+                .isNull();
     }
 
     @Test

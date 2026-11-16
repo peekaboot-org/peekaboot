@@ -1,5 +1,6 @@
 package org.peekaboot.backend.mapper.trace;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -69,7 +70,8 @@ public class TraceTreeMapper {
             orphans = mapOrphans(spans, spanById, childrenByParentId, content, traceData.asyncSpanIds());
         }
 
-        long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
+        Duration duration = traceData.duration();
+        long durationMs = duration != null ? duration.toMillis() : 0L;
         String rootOperation = rootSpanData != null ? rootSpanData.name() : null;
         RootActionType rootActionType = RootActionTypes.of(rootSpanData);
 
