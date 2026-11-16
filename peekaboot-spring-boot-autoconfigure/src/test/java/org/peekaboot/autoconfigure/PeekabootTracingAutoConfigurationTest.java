@@ -18,7 +18,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,6 +42,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.function.SingletonSupplier;
@@ -54,6 +54,8 @@ class PeekabootTracingAutoConfigurationTest {
 
     /** A batch that never exports on its own schedule within a test. */
     private static final Duration NO_SCHEDULED_EXPORT = Duration.ofHours(1);
+
+    private static final int FIRST_EXPORT_BATCH = 2;
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -397,7 +399,8 @@ class PeekabootTracingAutoConfigurationTest {
 
         persisted
                 .withUserConfiguration(HostTracerProviderWithLateExportersConfig.class)
-                .run(context -> traceId.set(endSpanAfterAFirstExport(context.getBean(SdkTracerProvider.class))));
+                .run(context ->
+                        traceId.set(endSpanAfterAFirstExport(context, context.getBean(SdkTracerProvider.class))));
 
         assertTheNextContextHolds(persisted, traceId.get());
     }
@@ -415,7 +418,7 @@ class PeekabootTracingAutoConfigurationTest {
                     SdkTracerProvider unmanaged = SdkTracerProvider.builder()
                             .addSpanProcessor(context.getBean(SpanProcessor.class))
                             .build();
-                    traceId.set(endSpanAfterAFirstExport(unmanaged));
+                    traceId.set(endSpanAfterAFirstExport(context, unmanaged));
                 });
 
         assertTheNextContextHolds(persisted, traceId.get());
@@ -578,10 +581,20 @@ class PeekabootTracingAutoConfigurationTest {
         return span.getSpanContext().getTraceId();
     }
 
-    /** The first export looks the exporters up, as a running application's has. The span ended after it waits for the close. */
-    private static String endSpanAfterAFirstExport(SdkTracerProvider provider) {
-        endSpan(provider);
-        assertThat(provider.forceFlush().join(5, TimeUnit.SECONDS).isSuccess()).isTrue();
+    /**
+     * The first export looks the exporters up, as a running application's has. A full batch brings it on:
+     * BatchSpanProcessor can answer the flush of its shutdown with a forceFlush that has just completed.
+     * The span ended after it waits for the close.
+     */
+    private static String endSpanAfterAFirstExport(ApplicationContext context, SdkTracerProvider provider) {
+        String exported = "";
+        for (int span = 0; span < FIRST_EXPORT_BATCH; span++) {
+            exported = endSpan(provider);
+        }
+        String lastOfTheBatch = exported;
+        TraceStore store = context.getBean(TraceStore.class);
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> store.getTrace(lastOfTheBatch).isPresent());
         return endSpan(provider);
     }
 
@@ -677,6 +690,7 @@ class PeekabootTracingAutoConfigurationTest {
             return SdkTracerProvider.builder()
                     .addSpanProcessor(BatchSpanProcessor.builder(new ExportersLookedUpLate(exporters))
                             .setScheduleDelay(NO_SCHEDULED_EXPORT)
+                            .setMaxExportBatchSize(FIRST_EXPORT_BATCH)
                             .build())
                     .build();
         }
@@ -688,6 +702,7 @@ class PeekabootTracingAutoConfigurationTest {
         SpanProcessor hostSpanProcessor(ObjectProvider<SpanExporter> exporters) {
             return BatchSpanProcessor.builder(new ExportersLookedUpLate(exporters))
                     .setScheduleDelay(NO_SCHEDULED_EXPORT)
+                    .setMaxExportBatchSize(FIRST_EXPORT_BATCH)
                     .build();
         }
     }
