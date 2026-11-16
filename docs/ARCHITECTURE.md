@@ -62,8 +62,9 @@ memory rather than taking the host application down over an unwritable `$HOME`.
 One process writes a storage directory. `StorageLock` holds an OS file lock on `.lock` until the
 JVM exits, so every Spring context of that JVM writes, also one started after a DevTools restart.
 A second process on the same `peekaboot.storage.dir` gets no file from
-`StorageDirectory.file(...)`: it logs one warning and keeps its insights history, lifecycle log
-and generated password in memory, and it does not take over when the first process stops.
+`StorageDirectory.file(...)`: it logs one warning and keeps its insights history, lifecycle log,
+traces, error digest and generated password in memory, and it does not take over when the first
+process stops.
 
 A directory that cannot be locked is written as before, and the stores report what they cannot
 write. Give each instance its own `peekaboot.storage.dir`.
@@ -191,20 +192,28 @@ switched off still shows one start marker for the run in progress.
 ### `traces.journal.jsonl` and `traces.snapshot.jsonl`
 
 `TraceJournal`, the `peekabootTraceJournal` bean, runs while `peekaboot.storage.enabled` is on and
-`peekaboot.storage.traces.enabled` is not false. `TraceStoreEventListener` hands it every input as
-a `TraceInput`; each passes the `RestoreGate` to `ErrorDigestRecorder.liveInputs()`, the store and
-then the error digest, and is then offered to the writer. Its one virtual thread restores the
-files, then runs the writer, which flushes every `peekaboot.storage.traces.flush-interval` (1 s by
-default) and folds past `peekaboot.storage.traces.max-journal-size` (64 MB by default). At shutdown
-`ContextClosedEvent` detaches the log capture. OpenTelemetry exports the spans still in its batch
-only when the context destroys an `SdkTracerProvider` or `SpanProcessor` bean, so
+`peekaboot.storage.traces.enabled` is not false. It also needs this process to be the one that
+writes the storage directory: the bean method asks `StorageDirectory.file(...)` and returns null
+where it gets no file. `TraceStoreEventListener` then hands its inputs to
+`ErrorDigestRecorder.liveInputs()`, as it does with storage off, and nothing is restored.
+
+`TraceStoreEventListener` hands the journal every input as a `TraceInput`; each passes the
+`RestoreGate` to `ErrorDigestRecorder.liveInputs()`, the store and then the error digest, and is
+then offered to the writer. Its one thread, the platform daemon thread `peekaboot-trace-journal`,
+restores the files, then runs the writer, which flushes every
+`peekaboot.storage.traces.flush-interval` (1 s by default) and folds past
+`peekaboot.storage.traces.max-journal-size` (64 MB by default). A platform thread, since the
+restore and the folds are CPU-bound and would hold a virtual thread's carrier; a daemon, so a fold
+still running after the close's wait does not hold the JVM.
+
+At shutdown `ContextClosedEvent` detaches the log capture. OpenTelemetry exports the spans still
+in its batch only when the context destroys an `SdkTracerProvider` or `SpanProcessor` bean, so
 `OtelTracingAutoConfiguration` makes every such bean, the host's own too, depend on the journal;
 Spring destroys them first. OpenTelemetry waits at most 10 s for that last export
 (`SdkTracerProvider.close`, `SpanProcessor.close`), and Boot hands every `SpanExporter` bean the
 same batch, so a host exporter slower than that can hold Peekaboot's last spans past the journal's
 close; they miss the journal. The journal's destroy method then stops the writer and waits up to
-10 s for its last fold. That path logs nothing unless a write fails, so nothing goes through the
-closing context.
+10 s for its last fold. That path logs nothing unless its last write or fold fails.
 
 The trace store's inputs (`TraceInput`): every span, log line, completed request and discarded
 trace the store takes, and each run's start, one JSON object per line (`JournalLine`,
@@ -224,6 +233,13 @@ back until then and writes them after the run line. A run that stops before it i
 line with `startedAt: null`. A write that fails logs one WARN, the last the writer logs that run,
 and ends writing for the run; the store keeps going in memory.
 
+A `VirtualMachineError` in the restore or in a step of the writer, an `OutOfMemoryError` from a
+fold's second store say, ends writing the same way with a WARN of its own
+(`Peekaboot traces: the journal in <dir> stopped (...)`), and the thread lives on to drain its
+queue. When the restore dies of one the gate still opens, and the writer folds nothing, writes
+nothing and leaves `errors.jsonl` alone for the run, so both files are read again at the next
+start.
+
 Each file starts with a header line carrying the schema version (`JournalCodec.VERSION`). Every
 fold starts a fresh journal under a new id, and the snapshot's header names the journal it
 absorbed (`JournalFiles`), so a crash between writing the snapshot and starting the next journal
@@ -235,20 +251,25 @@ methods (`addSpan`, `addLog`, `setRequest`, `discard`), so buckets, eviction, th
 untraced ring and every number the store assigns come out as they did live. They come out in the
 order the writer received them, which for two inputs from two threads at once can differ from the
 order the store took them. Summaries and issues are computed by the code running now. Each run
-line begins a run (`TraceStore.beginRun`); one naming the run in progress continues it. The live
+line begins a run (`RestorableTraceStore.beginRun`); one naming the run in progress continues it.
+A line the store throws on is skipped and counted, and the replay goes on with the next. The live
 run begins last, which ends the last restored run: its incomplete traces read `INTERRUPTED`, and
 every live span sorts after every restored one. The replay runs before the writer starts, on its
 thread. `RestoreGate` holds live inputs back meanwhile and hands them to the live inputs in
 arrival order once it is done. Past 10,000 it drops an input, the run's start aside. A held input
-that throws is skipped; the writer took it when it was held, so the throw can repeat in the fold
-and in the next restore. The restore's end logs one WARN with each count. The gate holds writers
+that throws is skipped; the writer took it when it was held, so its line is in the journal. A
+fold's store throws on it the same way and the fold leaves the line out; a restore that meets it
+first skips and counts it. The restore's end logs one WARN with each count. The gate holds writers
 only, so for the first moments after startup a reader sees the store partly restored. A trace from
 before the restart can answer 404, and a listing or a log search can miss it, until the replay
 reaches it.
 
 A fold (`Checkpoint`) runs after the restore, at shutdown, and when the journal passes its size
-limit. It replays the files into an empty store with the live store's caps and copies, in arrival
-order and as written, the lines of what that store keeps: the spans and logs each trace's caps
+limit. One that finds no journal line the snapshot lacks (`JournalFiles.holdsUnfoldedLines`), as
+after a clean stop, leaves the snapshot as it is and only starts the next journal, so a clean
+restart decodes the files once. Otherwise it replays the files into an empty store with the live
+store's caps and copies, in arrival order and as written, the lines of what that store keeps: the
+spans and logs each trace's caps
 kept, its last request, and the newest `max-untraced-logs` lines written outside any trace. A
 discard, or an eviction from every bucket, ends a trace's bundle, and the trace's next line begins
 another, so the lines before that are not copied. A trace whose caps dropped anything, or whose
@@ -257,8 +278,11 @@ bundle began. It carries the dropped counts, whether the trace is complete and f
 its spans covered, and which kept spans are async, since a span whose async entry span was evicted
 would otherwise arrive synchronous. A restore seeds the trace with it before the kept lines arrive,
 so the snapshot stays within the caps and the restored trace reads as the store held it, in the run
-it began in. The fold reads nothing from the live store, which runs ahead of the files by the
-writer's queue. A run line stays where a line of its run stays after it.
+it began in. A snapshot written under larger caps shrinks at the next fold, not at startup. The
+fold reads nothing from the live store, which runs ahead of the files by the writer's queue. A run
+line stays where a line of its run stays after it. A line the replayed store throws on is left out
+and is in none of the fold's counts (`FoldTally`), so it costs no other line and no later fold or
+restore meets it.
 
 The replay of fewer lines evicts in another order, so buckets are not left to the caps. The
 snapshot ends with one bucket line (`JournalLine.BucketLine`) for each bucket, Errors and Slow
@@ -272,18 +296,22 @@ log numbers: a replay of fewer lines numbers them anew, which is one reason a cu
 restart is refused.
 
 The files are a cache, so a restore says what was wrong with them once, at INFO: files of another
-schema version or with a damaged header (both deleted), the count of lines it could not read, or a
+schema version or with a damaged header (both deleted), the count of lines it could not read,
+beside it the count of lines the store refused and the first refusal where there were any, or a
 file it could not read at all.
 
 ### `errors.jsonl`
 
-The error digest (`ErrorDigest`), written by the trace journal's writer, so it is on disk under
-exactly the switches the traces are: `peekaboot.storage.enabled` on and
-`peekaboot.storage.traces.enabled` not false. Otherwise the digest lives in memory for the run.
+The error digest (`ErrorDigest`), written by the trace journal's writer, so it is on disk exactly
+when the traces are: `peekaboot.storage.enabled` on, `peekaboot.storage.traces.enabled` not false,
+and this process the one that writes the directory. Otherwise the digest lives in memory for the
+run.
 `ErrorDigestFile` writes a header line with the format's version, then one `DigestedError` a line,
 and replaces the file whole through `OwnerOnlyFiles.replaceAtomically`, on a flush that finds the
 digest changed (`ErrorDigest.changedSince`, which reads the count and the entries under one lock)
-and once more at the writer's stop. At startup the journal's thread reads it back after the traces'
+and once more at the writer's stop. In a run whose restore died of a `VirtualMachineError` the
+writer leaves the file alone, since the digest was not read back and a write would replace the
+stored one. At startup the journal's thread reads it back after the traces'
 replay and before the restore gate opens, so the live inputs the gate held count on top of the
 restored entries. The replay never reaches `ErrorDigestRecorder`, so a restored failure counts
 once, in the run that captured it.
@@ -343,7 +371,8 @@ seconds' divergence from "ready" that the banner's own label names.
 
 ## Architecture Overview
 
-Everything runs inside the host application's own process and on its own event bus.
+Everything runs inside the host application's own process. What capture publishes goes to the
+store through `CaptureEventPublisher`, never onto the application's event bus.
 
 ```
   DevToolbarFilter ──┐                                 ┌── RequestCaptureFilter
@@ -351,10 +380,10 @@ Everything runs inside the host application's own process and on its own event b
                              tracer.currentSpan()
 
   OtelSpanExporter          ──► SpanDataEvent          ┐
-  PeekabootLogbackAppender  ──► LogCapturedEvent       ├─► ApplicationEventPublisher
-  RequestCaptureFilter      ──► RequestCompletedEvent  ┘    (Spring's own)
+  PeekabootLogbackAppender  ──► LogCapturedEvent       ├─► CaptureEventPublisher
+  RequestCaptureFilter      ──► RequestCompletedEvent  ┘    (Peekaboot's own)
                                                                    │
-                                                                   ▼   @EventListener
+                                                                   ▼   direct call
                                                        TraceStoreEventListener
                                                                    │
                                                                    ▼
@@ -415,19 +444,21 @@ org.peekaboot.backend/
 ├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
 ├── tracing/                # In-memory tracing
 │   ├── async/              # AsyncTaskDecorator, AsyncTaskFailurePostProcessor, AsyncTaskFailureInterceptor, RunningAsyncTask
-│   ├── bridge/otel/        # OtelSpanExporter
+│   ├── bridge/otel/        # OtelSpanExporter, OtelSpanConverter
 │   ├── capture/            # RequestCaptureFilter (+ ParameterReads, RequestDetails), PeekabootLogbackAppender: the request and log sources beside the span bridge
 │   ├── config/             # PeekabootTracingProperties
 │   ├── digest/             # The error digest: ErrorDigest, DigestedError, ErrorDigestRecorder (records live failures)
 │   │                       # ErrorDigestFile (errors.jsonl)
 │   ├── event/              # What capture hands the store, and the store keeps: SpanData (+ SpanDataEvent), LogCapturedEvent,
-│   │                       # RequestCompletedEvent, TraceDiscardedEvent
+│   │                       # RequestCompletedEvent, TraceDiscardedEvent, CapturedText (the cap on a captured tag value,
+│   │                       # message or log message)
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   ├── listener/           # EventListenerObservationPostProcessor, EventListenerPointcut, EventListenerObservationInterceptor
 │   ├── query/              # QueryParameterObservationFilter, SqlLiterals: a query's bind parameters onto its span
-│   ├── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
-│   │                       # TraceRun, AsyncMembership, Window, ListingRoots, ListedTrace, UntracedLogRing,
-│   │                       # SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener, TraceInput, TraceInputs
+│   ├── store/              # TraceStore, RestorableTraceStore (what the journal's replay needs on top),
+│   │                       # InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot), TraceRun, AsyncMembership,
+│   │                       # DuplicateFolds, Window, ListingRoots, ListedTrace, UntracedLogRing, SpanDuplicateMatcher,
+│   │                       # TraceBucket, CaptureEventPublisher, TraceStoreEventListener, TraceInput, TraceInputs
 │   ├── journal/            # The trace journal: JournalLine and JournalCodec (the line format), JournalFiles,
 │   │                       # JournalWriter, TraceReplay, RestoreGate, Checkpoint, TraceJournal (the bean)
 │   └── tags/               # The span-tag vocabulary capture, store and mappers share: AsyncTaskMarker,
@@ -438,9 +469,9 @@ org.peekaboot.backend/
 
 ### Tracing Flow
 
-1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent`. A span failed when its status is ERROR. `DispatcherServlet.processDispatchResult` clears the error request attributes after an error view renders, before `ServerHttpObservationFilter` reads them, so an exception a view renders never reaches the server span that way. Where `peekaboot.error-page.override` answers an exception with a 5xx page, `ServerRequestFailure` fails the server span with that exception itself. Through `TracingHandlerInterceptor.failHandler` it also fails the handler span of the dispatch that threw, so the trace's cause names the handler span, as it does where the exception escapes. A 4xx the page answers leaves the server span OK. So does a page rendered on the ERROR dispatch, which runs after the server span has ended, and so does an application's own view. Their 5xx still fails the trace through its HTTP status
-2. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and hands each event on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else `ErrorDigestRecorder.liveInputs()`, which applies it to the store and then records the trace in the error digest where the input made it complete and failed. The journal hands its live inputs to the same recorder, and replays its files into the store directly, so a restored trace never counts again. The store (`InMemoryTraceStore`) is three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
-3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event but those of the `SecurityPostureListener` logger (see *Log Capture*). One without a `traceId` goes to the store's untraced ring instead of a trace
+1. **Span capture**: `OtelSpanExporter` receives finished spans from the OpenTelemetry SDK and publishes a `SpanDataEvent` through `CaptureEventPublisher`. A span whose conversion or listener throws is left out, with one WARN per exporter, and the rest of its batch is stored. A span failed when its status is ERROR. `DispatcherServlet.processDispatchResult` clears the error request attributes after an error view renders, before `ServerHttpObservationFilter` reads them, so an exception a view renders never reaches the server span that way. Where `peekaboot.error-page.override` answers an exception with a 5xx page, `ServerRequestFailure` fails the server span with that exception itself. Through `TracingHandlerInterceptor.failHandler` it also fails the handler span of the dispatch that threw, so the trace's cause names the handler span, as it does where the exception escapes. A 4xx the page answers leaves the server span OK. So does a page rendered on the ERROR dispatch, which runs after the server span has ended, and so does an application's own view. Their 5xx still fails the trace through its HTTP status
+2. **Storage**: `CaptureEventPublisher` calls `TraceStoreEventListener` for each capture event, on the publishing thread, and the listener hands each on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else `ErrorDigestRecorder.liveInputs()`, which applies it to the store and then records the trace in the error digest where the input made it complete and failed. The journal hands its live inputs to the same recorder, and replays its files into the store directly, so a restored trace never counts again. The store (`InMemoryTraceStore`) is three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, the one event it hears through `@EventListener`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
+3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event but those of the `SecurityPostureListener` logger through the same publisher (see *Log Capture*). One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request and the page reuses. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)
 6. **Thresholds**: `IssueDetector` raises SLOW and VERY_SLOW on a span's self time (`SpanNode.selfMs`, its duration minus what its children cover, from `SelfTimes`) and SLOW_QUERY on a query's whole duration, at `PeekabootTracingProperties`' thresholds. REPEATED_QUERY sits on the span that ran the same normalised statement at least `repeated-query-threshold` times (default 5) as its direct children (`RepeatedQueries`). CLIENT_ERROR, a warning, sits on a server root that answered 4xx (`HttpSpanTags.clientErrorStatus`) and leaves the outcome and Errors alone. `PeekabootAutoConfiguration` binds the thresholds whether or not tracing is on. Failing raises no issue of its own, since a failed span's `status` and error fields already say so. The threshold issues apply to a failed span as to any other. `TraceReasons` derives a trace's reasons from the store's admission rules; `outcome` is `ERROR` once complete when the store's sticky failure flag (`TraceData.failed`) is set or one of its reasons is a failure, or for a subtree row once its own reasons hold a failure. The SLOW badge follows the `SLOW` reason. `GET /peekaboot/api/features` publishes the time thresholds (`Features`), so the frontend colours by the same numbers instead of keeping a copy
@@ -1055,6 +1086,12 @@ DataSources the way Boot's `db` health contributor does, `defaultCandidate = fal
 included: plain `Map<String, DataSource>` injection skips those, and Boot's how-to declares a
 second DataSource that way.
 
+The trace store is declared as its class, `InMemoryTraceStore`, with a condition that names
+`TraceStore`: the trace journal takes a `RestorableTraceStore`, and Spring matches that against
+the declared type of a bean that does not exist yet. An application's own store is found for
+certain only when it is declared as a `RestorableTraceStore` or a class that implements it;
+declared as `TraceStore` it is found only if it was created before the journal.
+
 The ten actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
 `mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the
 `MaskingEngine`, so the one override point for that pipeline is the service itself. They
@@ -1459,15 +1496,25 @@ The exporter still skips the other excluded prefixes (the actuator, the static a
 `/error`) span by span, judging each SERVER span's path tag against the same `PeekabootPaths`
 prefixes the filters and the interceptor use. Only SERVER spans are judged: the prefixes
 describe inbound requests, so an outbound call whose remote path happens to start with one (a
-health check against another service, say) stays in its trace. A child of such a request
-carries no path tag, so skipping a *root* also publishes a `TraceDiscardedEvent`;
-`TraceStoreEventListener` turns that into `TraceStore.discard`, which drops the trace from all
-three buckets. Everything else becomes a `SpanData` published as a `SpanDataEvent`. An error is
-recorded only for a span whose status code is `ERROR`, as a `CapturedExceptionInfo` read off
-the span's last `exception` event (`exception.type`, `exception.message`,
-`exception.stacktrace`, the trace capped at `CapturedStackTraces.MAX_LINES` like a log's). The
-status description fills in a missing message, and a span that failed without an exception
-event carries only that.
+health check against another service, say) stays in its trace.
+
+A child of such a request carries no path tag and is stored before the request's own span
+arrives, so skipping that span has to undo it. A skipped span without a parent publishes a
+`TraceDiscardedEvent`, which `TraceStoreEventListener` turns into `TraceStore.discard`: the trace
+leaves all three buckets. A skipped span that continues a remote caller (a probe that sent a
+`traceparent` header) publishes one that names the span, and the listener discards only while
+everything stored for the trace lies under that span (`TraceDataBundle.liesUnder`), so a request
+that called its own excluded path keeps its trace. A skipped span under a local parent publishes
+nothing. Everything else becomes a `SpanData` published as a `SpanDataEvent`. Both events go
+through `CaptureEventPublisher`.
+
+An error is recorded only for a span whose status code is `ERROR`, as a `CapturedExceptionInfo`
+read off the span's last `exception` event (`exception.type`, `exception.message`,
+`exception.stacktrace`, the message capped at `CapturedText.MAX_LENGTH` and the trace at
+`CapturedStackTraces.MAX_LINES`, like a log's). The status description, capped the same way,
+fills in a missing message, and a span that failed without an exception event carries only that.
+Every tag value is capped at `CapturedText.MAX_LENGTH`, except `peekaboot.query.parameters`, which
+its writer bounds and a cut would break.
 
 `tracing/bridge/otel` is the only bridge. There is no Brave/Zipkin one, so an application wired
 to Micrometer Tracing's Brave bridge instead of the OpenTelemetry SDK captures nothing. The
@@ -1641,9 +1688,10 @@ never fails over Peekaboot.
 What is left alone:
 
 - Beans in `org.peekaboot.backend.`, `org.peekaboot.autoconfigure.` and `org.springframework.`.
-  `TraceStoreEventListener` stores every captured log line, so observing it would raise a span per
-  log line inside the trace being captured. Other `org.peekaboot` packages, the testing app's
-  among them, are observed.
+  These are Peekaboot's and Spring's own listeners, not the application's work. Captured spans,
+  lines and requests reach no listener method, since `CaptureEventPublisher` calls
+  `TraceStoreEventListener` directly. Other `org.peekaboot` packages, the testing app's among
+  them, are observed.
 - Methods the application already annotates with `@Observed`, and classes it annotates with it.
 - Static listener methods, which are called without the bean.
 - Classes a proxy would break, logged at debug and left wholly unobserved: a final or sealed
@@ -1687,19 +1735,25 @@ no header-injection code anywhere in the repo.
 
 ### Log Capture
 
-`PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event;
-`TraceStoreEventListener` hands it on, through the trace journal while storage is on, to
-`TraceStore`, which stores by traceId, and `TraceLogMapper` maps them into the trace's flat log
-list on read (see *Trace Assembly and Enrichment*). One logger is left out:
+`PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event to
+`CaptureEventPublisher`, which calls `TraceStoreEventListener`; it hands it on, through the trace
+journal while storage is on, to `TraceStore`, which stores by traceId, and `TraceLogMapper` maps
+them into the trace's flat log list on read (see *Trace Assembly and Enrichment*). One logger is
+left out:
 `SecurityPostureListener`'s, which writes the startup security report and with it the generated
 dashboard password. `append` returns for it before anything is read, so the line reaches the
 application's log and never the store, `/peekaboot/api/logs` or the trace journal.
 
+A line's message is capped at `CapturedText.MAX_LENGTH` (16,000 characters) and then ends with
+`... N characters omitted`. The cut ends before the last whitespace within 1,024 characters of the
+limit. Where that stretch holds no whitespace it ends before the last quote or comma there, unless
+an `@` follows before the limit, which keeps a URL's credentials together for the mask. A text
+with no such boundary in that stretch is cut at the limit.
+
 The appender is attached by the
 `LogbackAppenderRegistrar` bean, which `TraceCaptureAutoConfiguration` registers while tracing
 is on, whatever the toolbar switch says. Capture stops at `ContextClosedEvent`, before the
-context destroys any bean, because a line reaching the store's listener after that would make
-the closing context rebuild it.
+context destroys any bean, so the store takes no line a bean logs while it is destroyed.
 
 A line without a trace id, written at startup, on a thread outside any trace, or by Tomcat after
 a request's trace ended, goes into the `UntracedLogRing`, the newest
@@ -1785,18 +1839,20 @@ are its trace's.
 
 A trace that is not complete reads `IN_PROGRESS` while its run is in progress and `INTERRUPTED`
 once a later run began (`TraceData.interrupted`), since the process its root belonged to has
-stopped. Only a restore begins runs (`TraceStore.beginRun`), so only a restored trace can be
-interrupted. `beginRun` also raises the creation order of every span of the new run past every
+stopped. Only a restore begins runs (`RestorableTraceStore.beginRun`), so only a restored trace
+can be interrupted. `beginRun` also raises the creation order of every span of the new run past every
 order stored before it (`SpanData.numberedAfter`): the exporter numbers spans from 1 in every
 application context, and without the raise every live position would sort below the restored ones.
 
 The store files a trace in its buckets in the same step that stores the span or the ERROR line
 that files it, under the bundle's span lock (`TraceDataBundle.addSpan(span, fileInBuckets)`).
 Every reader maps the trace first and reads its buckets afterwards (`TraceReads`), so a response
-never names fewer buckets than its data puts the trace in. The locks nest in one order: a
-bundle's span lock, then All's monitor, then Errors' or Slow's. Nothing holds a bucket's monitor
-while it waits for a bundle, and nothing holds Errors' or Slow's while it waits for All's, so the
-nesting cannot deadlock (`InMemoryTraceStoreTest.nothingWaitsForABundleWhileHoldingABucket`).
+never names fewer buckets than its data puts the trace in. Locks nest in two orders: a bundle's
+span lock, then Errors' or Slow's monitor (`classify`, `addLog`); and All's monitor, then Errors'
+or Slow's (`resolveBundle` looks the trace up in them inside All's `computeIfAbsent`). Nothing
+waits for anything while it holds Errors' or Slow's, and nothing takes All's monitor under a span
+lock, so the nesting cannot deadlock
+(`InMemoryTraceStoreTest.nothingWaitsForABundleWhileHoldingABucket`).
 A span arriving between the mapping and the bucket read can still name a bucket the mapped data
 does not explain yet, an async entry can take the trace out of Slow, and a full bucket can evict
 it. The next poll agrees.
@@ -1869,18 +1925,32 @@ between calls.
 ### Span Deduplication
 
 Deduplication runs primarily on write, in `TraceDataBundle.addSpan`. As each span arrives,
-`SpanDuplicateMatcher.isDuplicate` collapses a child span into its parent when they share a
-name and their tags match once `peer.service` and `jdbc.datasource.name` are ignored. That is
-the shape a single operation instrumented by more than one layer produces, for example a JDBC
-driver-level span and a `datasource-proxy` span for the same query. The removed span's own
-children are re-parented onto the nearest surviving ancestor so the tree stays connected.
+`SpanDuplicateMatcher.isDuplicate` collapses a child span into its parent when both are datasource
+spans, both failed or neither did, and they share a name and their tags match once `peer.service`
+and `jdbc.datasource.name` are ignored. A datasource span is one that carries a tag key starting
+with `jdbc.` or `db.`, which every datasource-micrometer convention and its OpenTelemetry query
+convention list. That is the shape a single JDBC call instrumented by two datasource decorators
+produces.
+
+A method that calls itself under `@Observed` keeps its nested spans, and a twin that failed under
+a parent that did not is kept with its exception, so the trace still fails and still says why in
+either arrival order. The removed span's own children are re-parented onto the nearest surviving
+ancestor so the tree stays connected.
+
+The redirect table, its reverse index and the children index live in `DuplicateFolds`, which one
+bundle owns and calls under its span lock. A span whose parent id is its own id is refused with an
+`IllegalArgumentException` (`span <id> names itself as its parent`) before the store numbers it
+or gives its trace a bundle: it would fold into itself and its redirect would never resolve. A
+restore counts such a line among the ones the store refused, and the next fold leaves it out.
 
 `peekaboot.tracing.max-spans-per-trace` (default 500) then caps the already-deduplicated span
 count, so the cap counts real, distinct work rather than a double-instrumented call as two
 spans against it. A trace still over the cap drops its oldest spans to make room and counts
 them in `summary.counts.droppedSpans`, on both `GET /peekaboot/api/traces` and
 `GET /peekaboot/api/traces/{traceId}`. A count above zero shows as a `TRUNCATED` badge in the
-trace list and the detail overlay.
+trace list and the detail overlay. The cap is at least 1: a lower value fails the binding
+(`peekaboot.tracing.max-spans-per-trace must be at least 1 (0 configured)`) and the application
+does not start.
 
 The fold checks both arrival directions on every insertion (see `TraceDataBundle`'s class
 Javadoc for why it has to), but `addSpan` returns as soon as the arriving span duplicates its
@@ -1891,8 +1961,10 @@ alone. It needs three nesting levels, where `SpanDuplicateMatcher.SERVICE_IDENTI
 carries one key per datasource decorator and only two decorators exist. And it needs a span to
 arrive after its own parent, which the `BatchSpanProcessor`'s child-before-parent end ordering
 forbids. Adding a third service-identifier key, or making `SpanDuplicateMatcher.isDuplicate`
-non-transitive, brings it within reach. The answer to that is a few lines in `TraceDataBundle`,
-never a second deduplication pass beside the write-time one.
+non-transitive, brings it within reach. The datasource test holds per span and the failure state
+is an equality, so neither breaks transitivity. The answer to that is a few lines in
+`TraceDataBundle.addSpan` and `DuplicateFolds`, never a second deduplication pass beside the
+write-time one.
 
 ### Async Subtree Timing
 
@@ -1913,7 +1985,9 @@ admitted it by once the span cap has dropped its earliest spans. The synchronous
 recomputation therefore starts from the window of every span the cap evicted while it counted as
 synchronous, never from nothing. A window recomputed from the stored spans alone would shrink as
 spans are evicted and take the trace out of Slow on lost spans. Two arrivals do lower the
-duration, and the Slow bucket follows it down. A late async entry shows that spans already
+duration, and the Slow bucket follows it down. Only a trace the store filed in Slow is looked for
+there: the bundle remembers it, so the spans of a trace that never ran slow never take the Slow
+bucket's monitor. A late async entry shows that spans already
 counted were background work. The first synchronous span of a bundle that held only async spans
 ends the fallback to the full window, so an orphaned task's minutes give way to the request that
 dispatched it.
@@ -1927,8 +2001,8 @@ Membership lives in `AsyncMembership`, maintained span by span in `TraceDataBund
 arriving span enters it when it carries the marker or its resolved parent is already in it, and
 folds into the synchronous window otherwise. A span that enters takes its stored descendants
 along. Spans are stored child-before-parent, so a marked span's descendants have been counting as
-synchronous until it turns up. The walk follows `childrenByParentId` down from the entering span,
-plus the children of each folded-away duplicate `redirectsPointingAt` lists for it, and stops at
+synchronous until it turns up. The walk follows `DuplicateFolds.resolvedChildIdsOf` down from the
+entering span, which also returns the children of each duplicate folded into it, and stops at
 spans already in the set, whose own descendants entered with them. Each span is walked once, and a
 trace with no marked span pays nothing. A min/max pair cannot drop one span, so the synchronous
 window is refolded over the stored spans only when a span on one of its edges leaves it. That
@@ -1958,9 +2032,9 @@ store's `numbering`. Each JVM draws a random first numbering and counts up from 
 it creates. A restart creates a new store and renumbers every row, so a cursor from before it is
 refused with a 400 on `cursor`.
 
-Ancestry resolves parents through `resolve(...)`, the redirect table span deduplication leaves
-behind, exactly as `rootOf` does. A span hanging off a deduplicated span names a parent id that is no
-longer stored, so skipping the redirect would leave it outside the subtree it belongs to and back
+Ancestry resolves parents through `DuplicateFolds.resolve(...)`, the redirect table span
+deduplication leaves behind, exactly as `rootOf` does. A span hanging off a deduplicated span
+names a parent id that is no longer stored, so skipping the redirect would leave it outside the subtree it belongs to and back
 in the synchronous window. A duplicate folded into a span that is already async brings its stored
 children into the subtree the same way.
 
@@ -2057,7 +2131,7 @@ Excluding `org.peekaboot.autoconfigure.QueryParameterAutoConfiguration` via
 `spring.autoconfigure.exclude` turns bind-value capture off, leaving every other Peekaboot
 feature untouched.
 
-Two caps bound what a single query can add. `SqlLiterals.MAX_LITERAL_LENGTH` (1000) cuts a
+Three caps bound what a single query can add. `SqlLiterals.MAX_LITERAL_LENGTH` (1000) cuts a
 literal past that many source characters, or bytes for a `byte[]`. A `byte[]` is capped before
 hex-encoding, so the cap bounds the source data rather than the doubled hex output. The cut
 literal ends with the count dropped as a trailing SQL block comment,
@@ -2070,11 +2144,17 @@ query text in place of a placeholder.
 past that many entries rather than rendering and serialising all of them. It records how many
 it dropped as a second key, `peekaboot.query.omitted-parameter-sets`
 (`QueryParameterTags.OMITTED_PARAMETER_SETS_TAG`), absent when it dropped none. The statement
-serves that count as `omittedParameterSets`, and the browser words it. Both caps exist
-because the capture is always on, unlike datasource-micrometer's own `jdbc.params`, which is
-off by default. Nothing else on the ingestion path bounds a tag's size, so an unbounded literal
-or batch would cost time on the application's query thread, bloat the in-memory trace store,
-and ride along on any OTLP export.
+serves that count as `omittedParameterSets`, and the browser words it.
+`QueryParameterObservationFilter.MAX_PARAMETER_CHARACTERS` (16,000) bounds the literals of one
+statement together. A batch past it keeps the leading sets that fit and counts the rest in the
+same key. A first set past it keeps its leading literals and ends with
+`/* N parameters omitted */`.
+
+The caps exist because the capture is always on, unlike datasource-micrometer's own
+`jdbc.params`, which is off by default. `OtelSpanConverter` passes this tag whole, since a cut
+would break its JSON, so nothing after the filter bounds it. An unbounded literal, set or batch
+would cost time on the application's query thread, bloat the in-memory trace store, and ride along
+on any OTLP export.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) names each row by `span.name`, OpenTelemetry's own span-name
@@ -2269,10 +2349,10 @@ Test categories, each module's suite and how to test an auto-configuration are i
 
 1. **No external dependencies for tracing**: works without Zipkin, Jaeger or other collectors
 2. **Micrometer-based**: Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
-3. **Spring events**: `ApplicationEventPublisher` instead of a custom event bus
-4. **Bucketed storage**: three insertion-ordered maps, each capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so a qualifying trace outlives its own eviction from All. [Traces](https://www.peekaboot.org/docs/traces/#the-three-buckets) has the bucket sizing and the slow-trace threshold, [HTTP API](https://www.peekaboot.org/docs/api/#trace-list) the `bucket=all|errors|slow` filter
+3. **Capture stays off the application's events**: the exporter, the appender and the request filter publish to `CaptureEventPublisher`, which calls `TraceStoreEventListener` directly. An application's listeners never hear a captured span, line or request, the event-listener instrumentation never spans one, and an async multicaster cannot reorder them. From Spring's event bus the store's listener takes `ApplicationReadyEvent` and the appender's registrar `ContextClosedEvent`, nothing else
+4. **Bucketed storage**: three insertion-ordered maps, each capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so a qualifying trace outlives its own eviction from All. `max-traces` is at least 1; `max-error-traces` and `max-slow-traces` may be 0, which lists no trace in that bucket while the trace still says it failed or ran slow. A value below the floor fails the binding and stops startup. [Traces](https://www.peekaboot.org/docs/traces/#the-three-buckets) has the bucket sizing and the slow-trace threshold, [HTTP API](https://www.peekaboot.org/docs/api/#trace-list) the `bucket=all|errors|slow` filter
 5. **Actuator not web-exposed**: all data read in-process from endpoint instances Peekaboot constructs itself, except `HealthEndpoint`, which is borrowed from the application; `PeekabootEndpointExposureOutcomeContributor` makes only that borrowed bean available without `management.endpoints.web.exposure` (see *In-Process Actuator Invocation*)
-6. **Plain bounded maps for storage**: memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library
+6. **Plain bounded maps for storage**: memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library. `max-logs-per-trace` may be 0: a trace then keeps no line, counts each as dropped, and an ERROR line still files it in Errors
 7. **Shadow DOM**: the toolbar cannot interfere with the host application
 8. **Lowest-priority defaults**: applications can always override Peekaboot settings
 9. **One token sheet for four surfaces**: the dashboard, the toolbar, the trace overlay and the error page all load the same `tokens.css`, so every colour is defined once and no component hardcodes one. This keeps the CSS honest; it is not a supported theming API, and nothing outside the project is expected to replace the file. See [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md) for the fill/text pairing rule that constrains any change to it
@@ -2280,7 +2360,8 @@ Test categories, each module's suite and how to test an auto-configuration are i
 ## Auto-Configuration Ordering
 
 `PeekabootTracingAutoConfiguration` runs after `PeekabootStorageAutoConfiguration`, whose
-`StorageDirectory` its nested `TraceJournalConfiguration` needs (`@ConditionalOnBean`).
+`StorageDirectory` its nested `TraceJournalConfiguration` needs (`@ConditionalOnBean`). The
+journal's bean method asks that directory for a file and returns null on a second instance.
 
 `DevToolbarAutoConfiguration` and `TraceCaptureAutoConfiguration` require specific ordering to
 ensure the `Tracer` bean exists, whichever of Boot's tracing bridges registers it:
