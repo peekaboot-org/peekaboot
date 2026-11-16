@@ -2200,17 +2200,9 @@ Test categories, each module's suite and how to test an auto-configuration are i
 `StorageDirectory` its nested `TraceJournalConfiguration` needs (`@ConditionalOnBean`). The
 journal's bean method asks that directory for a file and returns null on a second instance.
 
-`DevToolbarAutoConfiguration` and `TraceCaptureAutoConfiguration` require specific ordering to
-ensure the `Tracer` bean exists, whichever of Boot's tracing bridges registers it:
-
-```java
-@AutoConfiguration(
-        after = {PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class},
-        afterName = {
-            "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration",
-            "org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration"
-        })
-```
+`DevToolbarAutoConfiguration` and `TraceCaptureAutoConfiguration` are ordered after both of
+Boot's tracing bridge auto-configurations, OpenTelemetry's and Brave's, so the `Tracer` bean
+exists whichever of them registers it.
 
 The string-based `afterName` attribute is used where the referenced auto-configuration lives
 in a module this one does not compile against at all: Boot's two tracing bridge modules
