@@ -218,9 +218,9 @@ close; they miss the journal. The journal's destroy method then stops the writer
 The trace store's inputs (`TraceInput`): every span, log line, completed request and discarded
 trace the store takes, and each run's start, one JSON object per line (`JournalLine`,
 `JournalCodec`), as the store holds them. Request and response headers, the query string and
-parameters arrive capped and masked from capture (`RequestCaptureFilter`). Span attributes, SQL with its bind
-parameters, log messages and stack traces are written raw and masked when read, as on the live
-store.
+parameters arrive capped and masked from capture (`RequestCaptureFilter`). The request path, span
+attributes, SQL with its bind parameters, log messages and stack traces are written raw and masked
+when read, as on the live store.
 
 `JournalWriter` appends them on one writer thread behind a bounded queue (10,000 inputs). A full
 queue drops the input, the run's start aside, so neither the exporter nor a logging thread waits,
@@ -402,8 +402,9 @@ store through `CaptureEventPublisher`, never onto the application's event bus.
 org.peekaboot.backend/
 ├── actuator/               # ActuatorReadings: every InsightsSource bean read into one raw map
 │   └── parsed/             # Typed beans for actuator responses (ActuatorResponseParser)
+├── analysis/               # The rules a trace is judged by: RootActionTypes (what started it), DbSpans (the one "is this a query span" predicate), SpanWalk, IssueDetector (+ RepeatedQueries, SqlNormalizer), TraceReasons, TraceCauses, Hotspots. mapper.trace and service call in; it imports neither
 ├── config/                 # PeekabootProperties, ApplicationIdentity, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on the API's handlers; UiSecurityHeadersInterceptor: a Content-Security-Policy, X-Frame-Options: DENY and nosniff on the UI's resource handlers; PeekabootHandlers tells Peekaboot's controllers and UI resource handlers from the host's), PeekabootJson (+ its message converter), PeekabootPaths
-├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on the API's handlers), QueryParameterBinding, PeekabootApiController (the OpenAPI document and the API's index)
+├── controller/             # PeekabootController (actuator data, metrics, features), TraceController (traces, routes), LogController (log search), ErrorDigestController (the error digest), QueryParameterGuard (refuses unknown or repeated parameters on the API's handlers), QueryParameterBinding (an advice: a record of query parameters binds from the query string alone), PeekabootApiController (the OpenAPI document and the API's index)
 ├── datasource/             # DataSourceMetadata + DataSourceMetadataList (read on first use, on a virtual thread, never during context refresh; a failed read is retried after 30 s), HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 ├── devtoolbar/             # DevToolbarFilter (+ ContentBufferingResponseWrapper), ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
@@ -424,9 +425,9 @@ org.peekaboot.backend/
 ├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info and the application's own git info
 │   └── web/                # LifecycleController: /peekaboot/api/lifecycle/*
 ├── mapper/                 # Data transformation
-│   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
-│   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate), RootActionTypes,
-│                           # TraceResources, TraceSummaries, TraceDetails, TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
+│   ├── actuator/           # Actuator → domain mappers, ActuatorInsightsMapper (builds the section mappers and assembles the response), CronDescriber (cron expressions in words, for ScheduledTasksMapper)
+│   └── trace/              # TraceTreeMapper, QueryExtractor, SpanContent and SpanContents (what a span carries, per view),
+│                           # TraceResources, TraceRows (assembles a row), TraceRequests (the request off the root, its path masked), TraceSummaries, TraceDetails, TraceLogMapper, HttpExchangeMapper, SqlFormatter, HibernateSqlFormatter, SqlStatements, RowCounts, TraceQueries, ...
 ├── masking/                # MaskingEngine (one bean, from MaskingConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── problem/                # ApiProblem, ApiProblemException, ApiProblemHandler, RequestParameters: the RFC 9457 errors of /peekaboot/api/**
@@ -473,7 +474,7 @@ org.peekaboot.backend/
 2. **Storage**: `CaptureEventPublisher` calls `TraceStoreEventListener` for each capture event, on the publishing thread, and the listener hands each on as a `TraceInput` to `TraceInputs`: the trace journal while storage is on, which records it after the store took it, else `ErrorDigestRecorder.liveInputs()`, which applies it to the store and then records the trace in the error digest where the input made it complete and failed. The journal hands its live inputs to the same recorder, and replays its files into the store directly, so a restored trace never counts again. The store (`InMemoryTraceStore`) is three insertion-ordered bounded maps: the All, Errors and Slow buckets. The listener also takes its own context's `ApplicationReadyEvent`, the one event it hears through `@EventListener`, whose timestamp names the run in progress (`TraceStore.markRunStarted`), the same instant the lifecycle log stamps the run with. Every bundle keeps the `TraceRun` it was created in.
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and publishes every event but those of the `SecurityPostureListener` logger through the same publisher (see *Log Capture*). One without a `traceId` goes to the store's untraced ring instead of a trace
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
-5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request and the page reuses. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)
+5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW). `TraceFilter` admits each listing row on the facts `TraceDataBundle.listingRoots()` reads under one lock (root, start, synchronous duration, completeness, failure), and an async row's `outcome` and duration on its own summary, which `RowResources` maps once per request in the summary view whatever the request asked for. A summary page serves those mappings. A `view=full` page maps its own rows again in full, so a filter lays out no row the page leaves out, and a span that lands between the two reads shows in the full row alone. A `path` filter reads the path masked, as the summary serves it (`RowResources.pathOf`, `TraceResources.requestOf`), so nothing matches on what the response hides. The other two buckets' filtered counts take a pass of their own over fresh listing facts, so a trace that changes between passes can be counted under a filter the page did not list it under, or the other way round. `TraceResources` then assembles and enriches each page row (see *Trace Assembly and Enrichment*)
 6. **Thresholds**: `IssueDetector` raises SLOW and VERY_SLOW on a span's self time (`SpanNode.selfMs`, its duration minus what its children cover, from `SelfTimes`) and SLOW_QUERY on a query's whole duration, at `PeekabootTracingProperties`' thresholds. REPEATED_QUERY sits on the span that ran the same normalised statement at least `repeated-query-threshold` times (default 5) as its direct children (`RepeatedQueries`). CLIENT_ERROR, a warning, sits on a server root that answered 4xx (`HttpSpanTags.clientErrorStatus`) and leaves the outcome and Errors alone. `PeekabootAutoConfiguration` binds the thresholds whether or not tracing is on. Failing raises no issue of its own, since a failed span's `status` and error fields already say so. The threshold issues apply to a failed span as to any other. `TraceReasons` derives a trace's reasons from the store's admission rules; `outcome` is `ERROR` once complete when the store's sticky failure flag (`TraceData.failed`) is set or one of its reasons is a failure, or for a subtree row once its own reasons hold a failure. The SLOW badge follows the `SLOW` reason. `GET /peekaboot/api/features` publishes the time thresholds (`Features`), so the frontend colours by the same numbers instead of keeping a copy
 
 ### Servlet Filters
@@ -621,8 +622,8 @@ The backend implements a Backend-for-Frontend pattern:
 
 1. **Raw actuator data**: `ActuatorReadings` invokes actuator endpoints in-process (see below)
 2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed records. A section the service could not read is null, and so is one that does not bind to its record, each section parsing on its own; inside a section, a collection the response left out binds as empty (the records' compact constructors), so the mappers guard the section and nothing below it
-3. **Domain mapping**: individual mappers transform to domain models
-4. **Aggregation**: `ActuatorInsightsService` combines all data for the dashboard
+3. **Domain mapping**: `ActuatorInsightsMapper` hands each section to its own mapper and assembles the response
+4. **Request policy**: `ActuatorInsightsService.insightsFor` reads the locale and decides on unmasking, then reads, parses and maps
 
 `ConfigMapper` flattens a nested `@ConfigurationProperties` value to one property per leaf under
 a dotted key (`hikari.maximumPoolSize`), indexing list elements the way Spring's own property
@@ -649,11 +650,14 @@ rings as a path *prefix*. [`GLOSSARY.md`](GLOSSARY.md#the-word-insights) draws t
 ### JSON on the wire
 
 Peekaboot's REST responses and its insights SSE events are serialised by
-`PeekabootJson.MAPPER`, a plain default Jackson mapper, never by the application's own Jackson
-bean. The dashboard reads camelCase names, tests some fields with `!== null` (`loggers.js`)
-and parses every `Instant` as an ISO-8601 string. An application that sets
+`PeekabootJson.MAPPER`, a Jackson mapper with every default but one, never by the application's
+own Jackson bean. The dashboard reads camelCase names, tests some fields with `!== null`
+(`loggers.js`) and parses every `Instant` as an ISO-8601 string. An application that sets
 `spring.jackson.property-naming-strategy`, `default-property-inclusion=non_null` or
 `datatype.datetime.write-dates-as-timestamps` must not silently reshape that.
+
+JSON has no NaN and no infinity. Every number that can be either (a meter statistic, an insights
+sample, summary or tile) passes `PeekabootJson.finiteOrNull` and reads `null`.
 
 Every point in time a response carries is an `Instant` on its record, so it reaches the browser
 as ISO-8601 to the nanosecond, named without a unit (`startTime`, `timestamp`, `startedAt`).
@@ -669,10 +673,17 @@ which the Overview renders in the dashboard's chosen zone like every other time.
 `PeekabootJsonMessageConverter` (registered first by `PeekabootWebConfig`) claims every return
 value whose class lives under `org.peekaboot.backend.`. The scope has to be the value's type,
 because Spring MVC picks converters per return value, not per controller.
-`InsightsAutoConfiguration` hands the same mapper to `InsightsSsePublisher`. The default mapper
-writes byte for byte what an unconfigured Boot application writes, so a host with default
-Jackson settings sees the same bytes either way
-(`PeekabootJsonMessageConverterTest.writesCamelCaseNullsAndIsoInstants` pins the wire shape).
+`InsightsAutoConfiguration` hands the same mapper to `InsightsSsePublisher`.
+
+The mapper writes byte for byte what an unconfigured Boot application writes
+(`PeekabootJsonTest.writesExactlyWhatBootsDefaultMapperWrites` in the autoconfigure module), so a
+host with default Jackson settings sees the same bytes either way
+(`PeekabootJsonMessageConverterTest.writesCamelCaseNullsAndIsoInstants` pins the wire shape). Its
+one departure from the defaults is on the factory: the write nesting limit of 500 is lifted,
+because a span takes two levels, itself and its `children`, and a chain of 250 spans is within
+`max-spans-per-trace` (`TraceResourcesTest.aSpanChainAsDeepAsTheSpanCapMapsAndSerialises`).
+Peekaboot writes only its own acyclic records.
+
 Every Peekaboot response goes through it, `PeekabootController.getFeatures()`'s `Features`
 record and the `ApiProblem` error bodies included, both under that package prefix.
 
@@ -699,6 +710,13 @@ Every listing parameter arrives as written, bound into a record of strings
 and a number outside its range with that range, where a default or a clamp would answer a typo
 with the wrong list.
 
+A `route` that does not start with `/` is refused too (`RequestParameters.routePattern`): every
+route a trace or a digest entry names starts with one (`HttpSpanTags.route`), so such a value
+could only list nothing. A `locale` that is no well-formed language tag is refused as well
+(`RequestParameters.locale`, read in `ActuatorInsightsService.insightsFor`), where
+`Locale.forLanguageTag` would have answered in an empty locale without a word. A `limit` above 100
+with `view=full` is refused on `limit` (`PageLimit.MAX_FULL`).
+
 A parameter an endpoint does not take is refused before its handler runs, so a misspelled
 `buckett` is a 400 naming it with the names the endpoint takes, and so is any parameter sent more
 than once, such as `limit=1&limit=2`. `QueryParameterGuard`, an interceptor bound to the API's
@@ -708,8 +726,11 @@ endpoint takes off its handler method: a named `@RequestParam`, the components o
 which its request cache adds to the URL a login sends a browser back to, is let through on every
 endpoint. A handler argument of any other kind fails the request, since the guard cannot tell what
 it reads, and `ApiProblemIT` sends an unknown parameter to every endpoint the application maps.
-The controllers that bind a record also turn off Spring's fallback to a same-named request header
-(`QueryParameterBinding`), so only the query string sets a parameter.
+
+`QueryParameterBinding`, an advice scoped to `org.peekaboot.backend` like `ApiProblemHandler`,
+turns off Spring's fallback to a same-named request header for every Peekaboot controller, so only
+the query string sets a parameter and an endpoint that binds a record declares no binder. The
+application's own controllers keep the fallback (`QueryParameterBindingTest`).
 
 ### API contract
 
@@ -725,9 +746,14 @@ through `PeekabootJson.MAPPER` inside the `OpenApiDocument` record, like every P
 `OpenApiContractIT` holds the document to the running application. Its paths must equal the
 application's mappings under `/peekaboot/api`, each operation's query parameters must equal the
 names `QueryParameterGuard` lists in its refusal, and real answers of every endpoint, the event
-stream's data included, must validate against the schemas. `ApiContract` validates with
-networknt's JSON Schema validator in the OpenAPI 3.1 dialect, so a field added to a record
-without its schema fails the build.
+stream's data included, must validate against the schemas. It reads the full-view trace list to
+its last page, a hundred rows at a time, so every stored row's `data` is held to the document.
+`ApiContract` validates with networknt's JSON Schema validator in the OpenAPI 3.1 dialect, so a
+field added to a record without its schema fails the build.
+
+Every operation documents the two refusals an endpoint can answer before its handler runs, the
+guard's `401` and a local run's `403`. `AutoSecuredDashboardIT` and `LocalRunRefusalIT` hold a
+real one of each to the document.
 
 `GET /peekaboot/api` is the index drawn from the same document. It lists each path behind the
 request's prefix with its operation's `summary` as its purpose, and the document's own path. An
@@ -768,7 +794,7 @@ constructors, and Boot's `Sanitizer` still runs them regardless of `Show.ALWAYS`
 A host `SanitizingFunction` bean still masks a value before Peekaboot sees it.
 Short of that, what decides whether a value reaches the dashboard unmasked is
 `MaskingEngine` alone, gated by `peekaboot.unmasking.enabled` and the request's
-`unmask` parameter (`PeekabootController.resolveUnmask`). Spring Boot 4.1 registers no
+`unmask` parameter (`ActuatorInsightsService.insightsFor`). Spring Boot 4.1 registers no
 `SanitizingFunction` of its own, and with `Show.ALWAYS` its `Sanitizer` returns every
 value no function changed, so without a host bean Boot masks nothing on this path.
 
@@ -1093,11 +1119,13 @@ certain only when it is declared as a `RestorableTraceStore` or a class that imp
 declared as `TraceStore` it is found only if it was created before the journal.
 
 The ten actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
-`mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the
-`MaskingEngine`, so the one override point for that pipeline is the service itself. They
-are stateless and need at most the engine, and ten `@ConditionalOnMissingBean` methods
-nobody overrode bought nothing but wiring. The trace mappers follow the same rule:
-`TraceResources`, which `TraceInsightsService` builds, holds `TraceTreeMapper`, `IssueDetector`,
+`mapper/actuator`) are not beans. `ActuatorInsightsMapper` builds them from the `MaskingEngine`
+and `ActuatorInsightsService` builds that mapper, so the one override point for that pipeline is
+the service itself. They are stateless and need at most the engine, and ten
+`@ConditionalOnMissingBean` methods nobody overrode bought nothing but wiring.
+
+The trace mappers follow the same rule: `TraceResources`, which `TraceInsightsService` builds,
+holds `TraceRequests` and `TraceRows`, and `TraceRows` holds `TraceTreeMapper`, `IssueDetector`,
 `TraceLogMapper`, `TraceSummaries` and `TraceDetails`, built from the `MaskingEngine`, the
 `SqlFormatter`, `PeekabootTracingProperties` and `StackTraceRules`.
 
@@ -1343,7 +1371,7 @@ Overview.
 
 `peekaboot.unmasking.enabled` is the only visibility switch. `MaskingEngine` masks every
 sensitive value it sees; `unmasking.enabled` combined with the request's `unmask`
-parameter (`PeekabootController.resolveUnmask`) is what reveals one. Neither half
+parameter (`ActuatorInsightsService.insightsFor`) is what reveals one. Neither half
 suffices alone.
 
 How those sources are contributed matters. Boot moves `defaultProperties`, the source
@@ -1466,8 +1494,8 @@ public class OtelTracingAutoConfiguration {
 
 `OtelSpanExporter` is `TraceStore`'s only span source, so an application without the
 OpenTelemetry SDK has a store that exists (`features.tracing`, gated only by
-`peekaboot.tracing.enabled`) but can never receive one. `PeekabootController` exposes that
-gap as `features.tracingSpansPossible`. False is a hard guarantee that the bean this section
+`peekaboot.tracing.enabled`) but can never receive one. `PeekabootAutoConfiguration` publishes
+that gap as `features.tracingSpansPossible`. False is a hard guarantee that the bean this section
 describes was never created. True only means the bridge exists, not that anything downstream
 (sampling, the rest of the host's OpenTelemetry wiring) will actually produce a span. While it
 is false the Traces tab fetches nothing and names the dependency to add in place of its list.
@@ -1767,13 +1795,17 @@ a bucket, between a read of the buckets and a read of the ring. With several con
 as in a test suite, every context's appender hangs off the one root logger, so each context's
 ring also holds the other contexts' untraced lines.
 
-`GET /peekaboot/api/logs` searches every line the store holds (`LogSearchService`). Its
+`GET /peekaboot/api/logs` searches every line the store holds (`LogSearchService`). One request
+reads the newest 10,000 of the lines its other filters admit (`MAX_LINES_READ`) and hands out a
+`next` where older ones are left. Its
 candidates are each bundle any bucket lists (`TraceStore.storedTraces()`, every bucket read under
 its own lock), one `capturedLogs()` read per bundle with one span resolver, and one read of the
 untraced ring. The store numbers each line it keeps (`LogCapturedEvent.sequence`, one count
 across traces and the ring), and that number orders the search newest first and is what its
 cursor names. Each candidate is mapped and masked once, by the same `TraceLogMapper.map` a
-trace's logs go through, and only until the page is full, since `q` reads the masked text.
+trace's logs go through, and only until the page is full, since `q` reads the masked text. A
+search that stops at the 10,000th line names the oldest line it read, so a page can be short or
+empty and still carry a `next`.
 
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot does
 that on the first start in a JVM and on the first start after any application closed or failed
@@ -1791,33 +1823,42 @@ logger context before resetting it, which drops even reset-resistant listeners.
 The API serves a trace as a `TraceResource`, a `TraceSummary` and a `TraceDetail` (`summary`
 and `data` on the wire). `GET /peekaboot/api/traces/{traceId}` answers one.
 `GET /peekaboot/api/traces` answers a `TraceListResponse` whose rows carry `data: null` unless
-the request says `view=full`. `TraceInsightsService` lists the rows, parses `view` and hands each
+the request says `view=full`. A `view=full` page holds at most 100 rows (`PageLimit.MAX_FULL`),
+the default `limit`. A larger `limit` is refused with a 400 on `limit`, after the range check
+every `limit` gets. `TraceInsightsService` lists the rows, parses `view` and hands each
 row to `TraceResources.row`, and the single trace's bundle to `TraceResources.trace`.
 
 `TraceResources` builds both in three steps, and the split is easy to get wrong.
 `TraceTreeMapper` builds the tree and nothing else.
 
-1. `TraceTreeMapper.map(traceData, queries)` builds the `TraceTree` from a
+1. `TraceTreeMapper.map(traceData, content)` builds the `TraceTree` from a
    `TraceDataBundle.snapshot()`. It re-parents orphans under the root the snapshot names, or
-   serves the stored subtrees as `TraceTree.orphans` when it names none, masks tags,
-   exceptions and query text, classifies the root action type, reads the request off the root
-   (`TraceRequests`) and counts the spans and the queries. An async row takes
+   serves the stored subtrees as `TraceTree.orphans` when it names none, classifies the root
+   action type, reads the request off the root, its path masked (`TraceRequests`), and counts the
+   spans and the queries. What a span carries beside its place and its timing comes from the
+   `SpanContent` it is handed, which `SpanContents` builds. A `view=full` row maps with
+   `served(traceData)`: tags, exceptions and query text masked, statements laid out, row counts
+   paired. A summary row maps with `forSummary()`: the exception masked and folded, a statement as
+   its masked text alone, no row count, and the tags as stored, since a summary serves none.
+   `/routes` maps with `forIssues()`: the tags as stored, no exception, a statement as its stored
+   text, no row count. Only a set of issue types leaves that mapping. An async row takes
    `TraceTreeMapper.mapSubtree` instead, which counts its own subtree's spans and queries and
    names no request. Every `SpanNode.issues` list is empty.
    **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in.
-3. `TraceResources` reads what only the stored bundle knows into `TraceFacts`: the buckets it
-   is handed (`TraceReads` hands it none and sets the ones `TraceStore.bucketsOf` names after the
-   mapping), the store's failure flag, one read of the logs with the
-   dropped log count (`TraceDataBundle.capturedLogs()`, under one lock), the ERROR logs among
-   them mapped for the wire, and the dropped span count. `TraceSummaries` turns the tree and
-   the facts into the summary: the reasons `TraceReasons` reads off the spans and the ERROR
-   logs, the outcome `TraceOutcome.of(complete, failed)`, the cause `TraceCauses` picks from
-   the same spans and ERROR logs, every issue in tree order and the counts. `TraceDetails`
-   builds the data only when the view asks for it: the tree, the flat log list,
-   `QueryExtractor`'s queries and, for a whole trace, the `HttpExchange` from
-   `HttpExchangeMapper`. With the data, `TraceLogMapper` maps every log once and the reasons
-   take their ERROR entries by index (`TraceLogMapper.errorsAmong`). A log's span resolves
+3. `TraceRows` reads what only the stored bundle knows into `TraceFacts`: the store's failure
+   flag, one read of the logs with the dropped log count (`TraceDataBundle.capturedLogs()`, under
+   one lock), the ERROR logs among them mapped for the wire, and the dropped span count.
+   `TraceSummaries` turns the tree and the facts into the summary: the reasons `TraceReasons`
+   reads off the spans and the ERROR logs, the outcome `TraceOutcome.of(complete, failed)`, the
+   cause `TraceCauses` picks from the same spans and ERROR logs, every issue in tree order and the
+   counts. The summary is built naming no bucket. `TraceReads` sets the ones
+   `TraceStore.bucketsOf` names after the mapping (`TraceResource.withBuckets`); the error digest
+   records its summary without any. `TraceDetails` builds the data only when the view asks for
+   it: the tree, the flat log list, `QueryExtractor`'s queries and, for a whole trace, the
+   `HttpExchange` from `HttpExchangeMapper`, its path masked. With the data, `TraceLogMapper`
+   maps every log once and the reasons take their ERROR entries by index
+   (`TraceLogMapper.errorsAmong`). A log's span resolves
    through redirects that move while spans arrive, so a row resolves each span id once
    (`TraceLogMapper.resolvingOnce`) and its subtree, its reasons and its list agree on it.
 
@@ -1884,7 +1925,9 @@ whose parent is not in the trace onto that root, so a subtree whose parent has n
 yet does not silently vanish. Without a root, `mapOrphans` serves each span whose parent is not
 stored as the head of one `TraceTree.orphans` subtree, earliest start first. A trace that is
 nothing but a cycle has no such span, so its earliest-created span heads the one subtree, its
-parent edge cut to end the walk. A complete trace whose root the cap evicted is served the same
+parent edge cut to end the walk. A trace without spans takes the same path and has neither root
+nor orphans; its start and duration are the window the store holds, which is empty unless a
+replayed remnant carried one. A complete trace whose root the cap evicted is served the same
 way: `complete: true`, `rootSpan: null`, every stored span under `orphans`. With a root,
 `orphans` is `[]`. `TraceSummary.outcome` is `IN_PROGRESS` while the trace is not complete (`INTERRUPTED` once its
 run ended, see above), else `ERROR` or `OK` by the verdict above. What moves the window is in *Async Subtree Timing*. The
@@ -1904,9 +1947,8 @@ schedule* in [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md)).
 ### Route Statistics
 
 `GET /peekaboot/api/routes` folds the All bucket's complete HTTP requests into one row per method
-and route pattern (`RouteAggregation`). It reads each bundle's listing facts first and maps a
-summary only for a complete trace whose root is an HTTP request. A server root without any HTTP
-tag names no request, so no row counts it.
+and route pattern (`RouteAggregation`). It reads each bundle's listing facts and maps no summary.
+A server root without any HTTP tag names no request, so no row counts it.
 
 Every row keeps the route tag as recorded. Under Boot's default static-resource mapping
 (`spring.web.resources.add-mappings`), the static-resource handler maps `/**`, so a GET no
@@ -1914,10 +1956,15 @@ controller matched lands in the `GET /**` row, and an unmapped POST lands in `PO
 The `route: null` row holds the requests recorded without a route tag, or with only a placeholder
 such as `NOT_FOUND`.
 
-Every number on a row comes from the summaries the listing serves. `errorCount` counts the `ERROR`
-outcome, `latestSlowTraceId` names the newest request with a `SLOW` reason, and `issueCounts`
-counts the requests carrying each issue type. The percentiles are nearest rank over every request,
-as `AggregateStats` computes the Insights ones.
+Every number on a row comes from the listing facts, which say what the summaries the listing
+serves say. `errorCount` counts the `ERROR` outcome (`TraceFilter.outcomeOf`), `latestSlowTraceId`
+names the newest request at or above the slow-trace threshold, the rule of the `SLOW` reason, and
+`issueCounts` counts the requests carrying each issue type.
+
+Only the issue types need the spans: `TraceResources.issueTypes` maps the trace with
+`forIssues()`, which masks nothing and reads no log, and runs the `IssueDetector`. No bucket is
+read. The percentiles are nearest rank over every request, as `AggregateStats` computes the
+Insights ones.
 
 The window covers the complete HTTP requests All holds at the moment of the call. Nothing is kept
 between calls.
@@ -2081,7 +2128,9 @@ the order and the reasons are here:
 
 `SqlStatements` builds one `SqlStatement` per query span. `TraceQueries` keeps it the first time
 it is read, so `SpanNode.statement` and `QueryInfo.statement` are one object and each statement is
-formatted and masked once per response. `text` is the
+formatted and masked once per response. A summary row builds no `TraceQueries`.
+`SqlStatements.textOnly` gives it the masked text the REPEATED_QUERY issue compares and serves,
+with no layout and no parameters. `text` is the
 masked SQL. `formatted` is the raw SQL laid out by `HibernateSqlFormatter` (Hibernate's `format_sql`
 style, `FormatStyle.BASIC`, each statement of a batch on its own) and then masked.
 
@@ -2092,9 +2141,10 @@ the masked literals of `peekaboot.query.parameters`, empty when the tag is absen
 is absent or not a count. Formatting runs before masking so masking sees the values it sees in the raw text.
 
 The statement tags and the parameter tags are dropped from `SpanNode.tags` rather than served a
-second time beside the statement. A datasource-proxy result-set span's `jdbc.row-count` tag is
-served parsed as `SpanNode.rowCount` (null when it does not parse), on the query span it belongs to.
-`RowCounts` pairs the two by creation order, and both mappers read that one pairing through `TraceQueries`.
+second time beside the statement. A summary's tree keeps them and is never served. A
+datasource-proxy result-set span's `jdbc.row-count` tag is served parsed as `SpanNode.rowCount`
+(null when it does not parse), on the query span it belongs to. `RowCounts` pairs the two by
+creation order, and both mappers read that one pairing through `TraceQueries`.
 
 The Spans tab therefore reads facts the backend decided instead of
 re-deriving them from tag and span names. `DbSpans.system` mirrors this priority for
