@@ -46,11 +46,9 @@ while another process holds that lock, `StorageDirectory.file(...)` returns empt
 that asks it writes.
 
 Every file a store replaces whole goes through `OwnerOnlyFiles.replaceAtomically`, the single
-implementation of the mechanism: it creates the parent directory, writes to a temporary of its
-own beside the target (`<file name>.<random>.tmp`), moves that over the target with `ATOMIC_MOVE`
-(a plain replace where the file system offers none), and deletes the temporary if the write
-fails. A temporary a killed process left behind is removed by a later write of the same file, once
-it is more than an hour older than that write.
+implementation of the mechanism: a temporary of the call's own beside the target, moved over it
+in one step, so a reader sees the previous file or the whole new one and two processes never move
+each other's unfinished write into place.
 
 The trace journal appends, so it opens its file through `OwnerOnlyFiles.newOutputStream`, which
 removes whatever sat at the path and creates the file with `CREATE_NEW`, so a symlink planted
@@ -71,14 +69,12 @@ write. Give each instance its own `peekaboot.storage.dir`.
 
 ### `insights.snapshot`
 
-The insights ring buffers' contents: every level's geometry (`intervalMs`, `size`,
-`endEpochMs`, `count`) and, per series, one ring per level. Level 0 has a single `values`
-column; every coarser level has eight aggregate columns (`min`, `max`, `avg`, `median`, `p90`,
-`p95`, `p99`, `samples`). `samples` is carried alongside the seven the API exposes because the
-next roll-up weights its average by it. `InsightsSnapshotCodec` reads and writes that as a
-small versioned binary format: magic `"PKIN"`, a schema version, then the header and body.
-Version 2 holds percent series from 0 to 100 and time gauges in milliseconds, as the sampler
-serves them; a version 1 file holds ratios and seconds and is dropped like any unknown version.
+The insights ring buffers' contents, every level's geometry and one ring per series and level, in
+the small versioned binary format `InsightsSnapshotCodec` reads and writes. A coarser level
+stores `samples` beside the seven aggregates the API exposes, because the next roll-up weights
+its average by it. Version 2 holds percent series from 0 to 100 and time gauges in milliseconds,
+as the sampler serves them; a version 1 file holds ratios and seconds and is dropped like any
+unknown version.
 
 `InsightsSnapshotStore` owns the file. It writes through `OwnerOnlyFiles.replaceAtomically` on
 each boundary of `peekaboot.insights.persistence.interval` (default: five minutes), and once
