@@ -33,9 +33,12 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 /**
- * Exercises the shared ES modules in a real browser, imported from the running
- * app. Chromium blocks module imports over file://, so the served origin is
- * what makes this possible.
+ * Pins the frontend's copies of the backend's vocabularies and lists, and exercises the ES
+ * modules without a test class of their own, in a real browser with each module imported from
+ * the running app. Chromium blocks module imports over file://, so the served origin is what
+ * makes this possible. What format.js, severity.js, http-status.js and the insights store
+ * compute on their own is tested in {@link FormatModuleIT}, {@link SeverityModuleIT} and
+ * {@link InsightsStoreModuleIT}.
  *
  * <p>The {@code *MirrorTheBackend*} tests are the contract tests for the vocabularies that
  * exist on both sides of the wire: the frontend is plain ES modules with no build step, so
@@ -44,45 +47,6 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 class SharedModuleIT extends PlaywrightTestBase {
 
     private static final Pattern FEATURE_READ = Pattern.compile("\\bfeatures\\??\\.([A-Za-z]+)");
-
-    private Object evalModule(String module, String expression) {
-        return importModule("shared/" + module, expression);
-    }
-
-    /** Runs {@code body}, a function body over the insights store module {@code m}, and returns what it returns. */
-    private Object evalInsightsStore(String body) {
-        return importModule("dashboard/tabs/insights-store.js", "(() => {" + body + "})()");
-    }
-
-    /**
-     * Runs {@code body}, an async function body over a connected insights stream {@code stream},
-     * with {@code emit(type, data)} firing a server event, {@code respond(body)} answering the
-     * oldest open /api/insights/data request, and {@code settle()} letting pending work run.
-     */
-    private Object evalInsightsStream(String body) {
-        return importModule(
-                "dashboard/tabs/insights-stream.js",
-                "(async () => {"
-                        + " let source;"
-                        + " window.EventSource = class {"
-                        + "   static CLOSED = 2;"
-                        + "   constructor() { source = this; this.readyState = 1; this.listeners = {}; }"
-                        + "   addEventListener(type, listener) { (this.listeners[type] ??= []).push(listener); }"
-                        + "   close() {}"
-                        + " };"
-                        + " const emit = (type, data) => source.listeners[type]"
-                        + "   .forEach(listener => listener({data: JSON.stringify(data), target: source}));"
-                        + " const dataRequests = [];"
-                        + " const respond = body => dataRequests.shift()(body);"
-                        + " const settle = () => new Promise(resolve => setTimeout(resolve));"
-                        + " const client = {basePath: '', get: path => path === '/api/insights/data'"
-                        + "   ? new Promise(resolve => dataRequests.push(resolve)) : Promise.resolve({events: []})};"
-                        + " const stream = m.createInsightsStream({client, sizeOf: () => 5,"
-                        + "   onDirty() {}, onResynced() {}, onClosed() {}, onOpen() {}});"
-                        + " stream.connect();"
-                        + body
-                        + "})()");
-    }
 
     private static List<String> names(Enum<?>[] constants) {
         return Arrays.stream(constants).map(Enum::name).toList();
@@ -155,131 +119,6 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo("de-DE");
     }
 
-    @Test
-    void formatDurationScalesByMagnitude() {
-        assertThat(evalModule("format.js", "m.formatDurationMs(0.4)")).isEqualTo("<1ms");
-        assertThat(evalModule("format.js", "m.formatDurationMs(250)")).isEqualTo("250ms");
-        assertThat(evalModule("format.js", "m.formatDurationMs(1500)")).isEqualTo("1.50s");
-        assertThat(evalModule("format.js", "m.formatDurationMs(90000)")).isEqualTo("1.50m");
-        assertThat(evalModule("format.js", "m.formatDurationMs(null)")).isEqualTo("-");
-    }
-
-    /** Class and method, never the method alone: the same method name recurs across classes. */
-    @Test
-    void shortTargetKeepsTheLastTwoSegments() {
-        assertThat(evalModule("format.js", "m.shortTarget('org.example.TaskService.processItems')"))
-                .isEqualTo("TaskService.processItems");
-        assertThat(evalModule("format.js", "m.shortTarget('Task.run')")).isEqualTo("Task.run");
-        assertThat(evalModule("format.js", "m.shortTarget('run')")).isEqualTo("run");
-    }
-
-    @Test
-    void formatDurationRejectsNegativeValues() {
-        assertThat(evalModule("format.js", "m.formatDurationMs(-5)")).isEqualTo("-");
-    }
-
-    /** A timeline axis split into quarters, in one unit chosen by its length. */
-    @Test
-    void formatTimelineTicksLabelsEveryQuarterInOneUnit() {
-        assertThat(evalModule("format.js", "m.formatTimelineTicks(0.05)"))
-                .isEqualTo(List.of("0ms", "0.01ms", "0.03ms", "0.04ms", "0.05ms"));
-        assertThat(evalModule("format.js", "m.formatTimelineTicks(0.4)"))
-                .isEqualTo(List.of("0ms", "0.1ms", "0.2ms", "0.3ms", "0.4ms"));
-        assertThat(evalModule("format.js", "m.formatTimelineTicks(3)"))
-                .isEqualTo(List.of("0ms", "0.8ms", "1.5ms", "2.3ms", "3.0ms"));
-        assertThat(evalModule("format.js", "m.formatTimelineTicks(37)"))
-                .isEqualTo(List.of("0ms", "9ms", "19ms", "28ms", "37ms"));
-        assertThat(evalModule("format.js", "m.formatTimelineTicks(1200)"))
-                .isEqualTo(List.of("0s", "0.30s", "0.60s", "0.90s", "1.20s"));
-        assertThat(evalModule("format.js", "m.formatTimelineTicks(240000)"))
-                .isEqualTo(List.of("0m", "1.00m", "2.00m", "3.00m", "4.00m"));
-    }
-
-    /** formatDurationMs rounds a 3ms trace's quarters to "<1ms 2ms 2ms"; the axis needs every label distinct. */
-    @Test
-    void formatTimelineTicksNeverRepeatALabel() {
-        assertThat(evalModule(
-                        "format.js",
-                        "[0.001, 0.004, 0.01, 0.3, 0.9, 1, 2, 3, 4, 7, 999, 1000, 1001, 59999, 60000, 123456]"
-                                + ".filter(total => new Set(m.formatTimelineTicks(total)).size !== 5)"))
-                .isEqualTo(List.of());
-    }
-
-    @Test
-    void formatIntervalClimbsTheUnitLadderWithOneDecimal() {
-        assertThat(evalModule("format.js", "m.formatInterval(250)")).isEqualTo("250ms");
-        assertThat(evalModule("format.js", "m.formatInterval(1500)")).isEqualTo("1.5s");
-        assertThat(evalModule("format.js", "m.formatInterval(90000)")).isEqualTo("1.5m");
-        assertThat(evalModule("format.js", "m.formatInterval(3600000)")).isEqualTo("1h");
-        assertThat(evalModule("format.js", "m.formatInterval(172800000)")).isEqualTo("2d");
-    }
-
-    @Test
-    void formatBytesScalesByMagnitude() {
-        assertThat(evalModule("format.js", "m.formatBytes(0)")).isEqualTo("0 B");
-        assertThat(evalModule("format.js", "m.formatBytes(1536)")).isEqualTo("1.50 KB");
-        assertThat(evalModule("format.js", "m.formatBytes(-1)")).isEqualTo("-");
-    }
-
-    @Test
-    void formatBytesHandlesFractionalValuesBelowOne() {
-        // Math.log(0.5)/Math.log(1024) is negative, so the exponent must be clamped
-        // at zero instead of indexing BYTE_UNITS with -1.
-        assertThat(evalModule("format.js", "m.formatBytes(0.5)")).isEqualTo("0.50 B");
-    }
-
-    @Test
-    void formatHostsRendersHostnamePortAndFallbacks() {
-        // API host objects carry "hostname" (net.osslabz.jdbc.Host), not "host"
-        assertThat(evalModule("format.js", "m.formatHosts([{hostname: '127.0.0.1', port: 5432}])"))
-                .isEqualTo("127.0.0.1:5432");
-        assertThat(evalModule(
-                        "format.js", "m.formatHosts([{hostname: 'db1', port: 5432}, {hostname: 'db2', port: 5433}])"))
-                .isEqualTo("db1:5432, db2:5433");
-        assertThat(evalModule("format.js", "m.formatHosts([{hostname: 'db.local'}])"))
-                .isEqualTo("db.local");
-        assertThat(evalModule("format.js", "m.formatHosts(null)")).isEqualTo("unknown");
-        assertThat(evalModule("format.js", "m.formatHosts([])")).isEqualTo("unknown");
-    }
-
-    @Test
-    void querySeverityFollowsTheQueryThreshold() {
-        String features = "{slowQueryThresholdMs: 80}";
-        assertThat(evalModule("severity.js", "m.querySeverity(null, " + features + ")"))
-                .isEqualTo("");
-        assertThat(evalModule("severity.js", "m.querySeverity(79, " + features + ")"))
-                .isEqualTo("");
-        assertThat(evalModule("severity.js", "m.querySeverity(80, " + features + ")"))
-                .isEqualTo("slow");
-    }
-
-    @Test
-    void durationSeverityReadsThePublishedThresholds() {
-        String features = "{slowSpanThresholdMs: 200, verySlowSpanThresholdMs: 300}";
-        assertThat(evalModule("severity.js", "m.durationSeverity(null, " + features + ")"))
-                .isEqualTo("");
-        assertThat(evalModule("severity.js", "m.durationSeverity(150, " + features + ")"))
-                .isEqualTo("");
-        assertThat(evalModule("severity.js", "m.durationSeverity(250, " + features + ")"))
-                .isEqualTo("slow");
-        assertThat(evalModule("severity.js", "m.durationSeverity(350, " + features + ")"))
-                .isEqualTo("very-slow");
-    }
-
-    @Test
-    void durationSeverityAtExactlyTheThresholdIsAlreadySlow() {
-        // Pins the boundary itself (ms >= threshold, matching IssueDetector's >=) so an
-        // off-by-one in the comparison fails here instead of only showing up on values
-        // well past it.
-        String features = "{slowSpanThresholdMs: 100, verySlowSpanThresholdMs: 500}";
-        assertThat(evalModule("severity.js", "m.durationSeverity(99, " + features + ")"))
-                .isEqualTo("");
-        assertThat(evalModule("severity.js", "m.durationSeverity(100, " + features + ")"))
-                .isEqualTo("slow");
-        assertThat(evalModule("severity.js", "m.durationSeverity(500, " + features + ")"))
-                .isEqualTo("very-slow");
-    }
-
     /**
      * Every key the served modules read off a features object is a component of the backend's
      * Features record. The reads are collected from the module sources, so a key renamed on
@@ -305,43 +144,6 @@ class SharedModuleIT extends PlaywrightTestBase {
 
         assertThat(read).contains("tracing", "tracingSpansPossible", "maskLiteral");
         assertThat(published).containsAll(read);
-    }
-
-    /**
-     * The tier is read off the backend's own severity word, so an issue type the frontend has never
-     * heard of still colours, as long as it is measured in milliseconds. A count or a status says
-     * nothing about how long the span took.
-     */
-    @Test
-    void issueSeverityReportsTheWorstOfASpansLatencyIssues() {
-        assertThat(evalModule(
-                        "severity.js", "m.issueSeverity([{type: 'SLOW_QUERY', severity: 'warning', unit: 'ms'}])"))
-                .isEqualTo("slow");
-        assertThat(
-                        evalModule(
-                                "severity.js",
-                                "m.issueSeverity([{type: 'SLOW', severity: 'warning', unit: 'ms'}, {type: 'VERY_SLOW', severity: 'error', unit: 'ms'}])"))
-                .isEqualTo("very-slow");
-        assertThat(evalModule(
-                        "severity.js", "m.issueSeverity([{type: 'NOT_YET_INVENTED', severity: 'error', unit: 'ms'}])"))
-                .isEqualTo("very-slow");
-        assertThat(evalModule(
-                        "severity.js",
-                        "m.issueSeverity([{type: 'REPEATED_QUERY', severity: 'warning', unit: 'queries'}])"))
-                .isEqualTo("");
-        assertThat(evalModule(
-                        "severity.js",
-                        "m.issueSeverity([{type: 'CLIENT_ERROR', severity: 'warning', unit: 'status'}])"))
-                .isEqualTo("");
-        assertThat(evalModule("severity.js", "m.issueSeverity([])")).isEqualTo("");
-        assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
-    }
-
-    /** An issue with no duration to colour shows as a badge in its severity's tier; an unknown word stays muted. */
-    @Test
-    void issueBadgeVariantFollowsTheSeverityWord() {
-        assertThat(evalModule("severity.js", "['warning', 'error', 'unheard-of'].map(m.issueBadgeVariant)"))
-                .isEqualTo(List.of("warn", "error", "muted"));
     }
 
     @Test
@@ -373,15 +175,6 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("severity.js", "m.CHANGE_SET_EXEC_TYPES")).isEqualTo(names(ChangeSetExecType.values()));
     }
 
-    @Test
-    void changeSetExecTypeVariantMarksOnlyAFailureAsAnError() {
-        assertThat(evalModule(
-                        "severity.js",
-                        "['EXECUTED', 'RERAN', 'FAILED', 'SKIPPED', 'MARK_RAN', 'UNKNOWN', 'NEW_TYPE', undefined]"
-                                + ".map(type => m.changeSetExecTypeVariant(type))"))
-                .isEqualTo(List.of("ok", "ok", "error", "muted", "muted", "muted", "muted", "muted"));
-    }
-
     /**
      * PeekabootLogbackAppender ships {@code event.getLevel().toString()}, so the levels a
      * captured line can carry are Logback's - all of them except OFF and ALL, which are
@@ -399,25 +192,6 @@ class SharedModuleIT extends PlaywrightTestBase {
                         Level.INFO.toString(),
                         Level.DEBUG.toString(),
                         Level.TRACE.toString());
-    }
-
-    @Test
-    void logLevelVariantGivesTheThreeLoudLevelsTheirOwnTier() {
-        assertThat(evalModule("severity.js", "m.logLevelVariant('ERROR')")).isEqualTo("error");
-        assertThat(evalModule("severity.js", "m.logLevelVariant('WARN')")).isEqualTo("warn");
-        assertThat(evalModule("severity.js", "m.logLevelVariant('INFO')")).isEqualTo("info");
-        assertThat(evalModule("severity.js", "m.logLevelVariant('DEBUG')")).isEqualTo("muted");
-        assertThat(evalModule("severity.js", "m.logLevelVariant('TRACE')")).isEqualTo("muted");
-        assertThat(evalModule("severity.js", "m.logLevelVariant(undefined)")).isEqualTo("muted");
-    }
-
-    @Test
-    void healthSeverityMapsActuatorStatuses() {
-        assertThat(evalModule("severity.js", "m.healthSeverity('UP')")).isEqualTo("ok");
-        assertThat(evalModule("severity.js", "m.healthSeverity('DOWN')")).isEqualTo("error");
-        assertThat(evalModule("severity.js", "m.healthSeverity('OUT_OF_SERVICE')"))
-                .isEqualTo("error");
-        assertThat(evalModule("severity.js", "m.healthSeverity('WHATEVER')")).isEqualTo("muted");
     }
 
     /**
@@ -550,115 +324,6 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo("{}");
     }
 
-    @Test
-    void formatDateTimeHandlesUnparseableValueWithoutSayingInvalidDate() {
-        Object result = evalModule("format.js", "m.formatDateTime('not-a-timestamp')");
-        assertThat(result).isEqualTo("not-a-timestamp");
-        assertThat((String) result).doesNotContain("Invalid Date");
-    }
-
-    @Test
-    void formatTimeOfDayHandlesUnparseableValueWithoutSayingInvalidDate() {
-        Object result = evalModule("format.js", "m.formatTimeOfDay('not-a-timestamp')");
-        assertThat(result).isEqualTo("not-a-timestamp");
-        assertThat((String) result).doesNotContain("Invalid Date");
-    }
-
-    @Test
-    void formatDateTimeTreatsEpochZeroAsAValidTimestamp() {
-        assertThat(evalModule("format.js", "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC'})"))
-                .isEqualTo("Jan 1, 1970, 12:00 AM");
-    }
-
-    /**
-     * The dashboard header's "Updated ..." readout passes hour/minute/second only; the
-     * options given are the whole set, so no date-first default prepends the day the
-     * one-line readout has no room for.
-     */
-    @Test
-    void formatDateTimeWithRendersExactlyTheOptionsGiven() {
-        String time = (String) evalModule(
-                "format.js",
-                "m.formatDateTimeWith(0, {hour: '2-digit', minute: '2-digit', second: '2-digit'},"
-                        + " {locale: 'en-US', timeZone: 'UTC'})");
-        assertThat(time).contains("12:00:00");
-        assertThat(time).doesNotContain("1970").doesNotContain("Jan");
-    }
-
-    /** formatTimeOfDay is formatDateTimeWith at millisecond precision: no date, three fraction digits. */
-    @Test
-    void formatTimeOfDayRendersTheTimeToTheMillisecond() {
-        assertThat(evalModule("format.js", "m.formatTimeOfDay(1500, {locale: 'en-US', timeZone: 'UTC'})"))
-                .isEqualTo("00:00:01.500");
-    }
-
-    /**
-     * Java writes an Instant to the nanosecond; every engine keeps only the millisecond. WebKit's
-     * own Date.parse rounds 0.250999999s up at a present-day epoch, where a double runs out of
-     * digits, though not at 1970's.
-     */
-    @Test
-    void instantMsDropsTheDigitsPastTheMillisecond() {
-        assertThat(evalModule("format.js", """
-                        [m.instantMs('2026-10-23T10:00:00.250999999Z') - Date.UTC(2026, 9, 23, 10),
-                         m.instantMs('2026-10-23T10:00:00.2Z') - Date.UTC(2026, 9, 23, 10),
-                         m.instantMs('2026-10-23T12:00:00.999999+02:00') - Date.UTC(2026, 9, 23, 10),
-                         m.instantMs('2026-10-23T10:00:00Z') - Date.UTC(2026, 9, 23, 10),
-                         String(m.instantMs(null)), String(m.instantMs('not-a-timestamp'))]
-                        """)).isEqualTo(List.of(250, 200, 999, 0, "NaN", "NaN"));
-    }
-
-    /** A log row shows the millisecond its nanosecond timestamp falls in, in every engine. */
-    @Test
-    void formatTimeOfDayTruncatesANanosecondTimestamp() {
-        assertThat(evalModule(
-                        "format.js",
-                        "m.formatTimeOfDay('2026-10-23T10:00:01.500999999Z', {locale: 'en-US', timeZone: 'UTC'})"))
-                .isEqualTo("10:00:01.500");
-    }
-
-    @Test
-    void formatTimeOfDayTreatsEpochZeroAsAValidTimestamp() {
-        assertThat(evalModule("format.js", "m.formatTimeOfDay(0, {locale: 'en-US', timeZone: 'UTC'})"))
-                .isEqualTo("00:00:00.000");
-    }
-
-    /**
-     * formatCount()'s plural defaults to singular + 's' (covers "span"/"spans", "log"/"logs")
-     * but takes an explicit override for irregular nouns like "query"/"queries" - without it
-     * a trace's stat line reads "1 queries".
-     */
-    @Test
-    void formatCountPluralisesIrregularNouns() {
-        assertThat(evalModule("format.js", "m.formatCount(1, 'query', {plural: 'queries'})"))
-                .isEqualTo("1 query");
-        assertThat(evalModule("format.js", "m.formatCount(2, 'query', {plural: 'queries'})"))
-                .isEqualTo("2 queries");
-        assertThat(evalModule("format.js", "m.formatCount(1, 'span')")).isEqualTo("1 span");
-        assertThat(evalModule("format.js", "m.formatCount(0, 'span')")).isEqualTo("0 spans");
-    }
-
-    /**
-     * A five-digit count is unreadable as a run of digits, so every count is grouped: in the
-     * locale a surface passes (the dashboard's setting), else in the browser's.
-     */
-    @Test
-    void countsAreGroupedInTheGivenLocaleElseTheBrowsers() {
-        assertThat(evalModule("format.js", "m.formatCount(1234567, 'row')")).isEqualTo("1,234,567 rows");
-        assertThat(evalModule("format.js", "m.formatCount(999, 'row')")).isEqualTo("999 rows");
-        assertThat(evalModule("format.js", "m.formatCount(1234567, 'row', {locale: 'de-DE'})"))
-                .isEqualTo("1.234.567 rows");
-        assertThat(evalModule("format.js", "m.formatNumber(12345)")).isEqualTo("12,345");
-        assertThat(evalModule("format.js", "m.formatNumber(12345, {locale: 'de-DE'})"))
-                .isEqualTo("12.345");
-        assertThat(evalModule("format.js", "m.formatMetricValue(1234567, 'count', {locale: 'de-DE'})"))
-                .isEqualTo("1.234.567");
-        assertThat(evalModule("format.js", "m.formatMetricValue(1234.5, 'count', {locale: 'de-DE'})"))
-                .isEqualTo("1.234,50");
-        assertThat(evalModule("format.js", "m.formatTileValue(12345, 'count', {locale: 'de-DE'})"))
-                .isEqualTo("12.345");
-    }
-
     /**
      * The stat line reads in the overlay's tab order - spans, queries with their time, logs -
      * then the error and warning badges. Each count shows only when there is something to count,
@@ -709,56 +374,6 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(texts).isEqualTo(List.of("2 queries 1,50s", "load 1,50s"));
     }
 
-    @Test
-    void statusLabelSpellsOutTheReasonPhrase() {
-        assertThat(evalModule("http-status.js", "m.statusLabel(200)")).isEqualTo("200 OK");
-        assertThat(evalModule("http-status.js", "m.statusLabel(301)")).isEqualTo("301 Moved Permanently");
-        assertThat(evalModule("http-status.js", "m.statusLabel(404)")).isEqualTo("404 Not Found");
-        assertThat(evalModule("http-status.js", "m.statusLabel(500)")).isEqualTo("500 Internal Server Error");
-    }
-
-    /**
-     * A status arrives from the API as a number but from a span tag as a string; both
-     * spell out the same way, so neither call site has to coerce before asking.
-     */
-    @Test
-    void statusLabelAcceptsANumericString() {
-        assertThat(evalModule("http-status.js", "m.statusLabel('404')")).isEqualTo("404 Not Found");
-    }
-
-    /**
-     * The registry only covers the codes IANA has assigned. A vendor-specific code
-     * still has to render as itself rather than as a blank or an invented phrase.
-     */
-    @Test
-    void statusLabelFallsBackToTheBareCodeWhenNoPhraseIsRegistered() {
-        assertThat(evalModule("http-status.js", "m.statusLabel(599)")).isEqualTo("599");
-    }
-
-    @Test
-    void statusLabelPassesThroughAPlaceholderForATraceWithNoHttpStatus() {
-        assertThat(evalModule("http-status.js", "m.statusLabel('-')")).isEqualTo("-");
-        assertThat(evalModule("http-status.js", "m.statusLabel(null)")).isEqualTo("-");
-    }
-
-    @Test
-    void statusVariantGivesEachResponseFamilyItsOwnBadgeTier() {
-        assertThat(evalModule("http-status.js", "m.statusVariant(204)")).isEqualTo("ok");
-        assertThat(evalModule("http-status.js", "m.statusVariant(301)")).isEqualTo("warn");
-        assertThat(evalModule("http-status.js", "m.statusVariant(404)")).isEqualTo("error-soft");
-        assertThat(evalModule("http-status.js", "m.statusVariant(500)")).isEqualTo("error");
-    }
-
-    /**
-     * A trace with no HTTP exchange at all (a scheduled job, say) has no status to
-     * colour - it must not borrow the 5xx tier just because it is not a 2xx.
-     */
-    @Test
-    void statusVariantIsMutedWhenThereIsNoStatusToColour() {
-        assertThat(evalModule("http-status.js", "m.statusVariant('-')")).isEqualTo("muted");
-        assertThat(evalModule("http-status.js", "m.statusVariant(null)")).isEqualTo("muted");
-    }
-
     /**
      * formatLongDuration mirrors the backend's UptimeFormat unit by unit, so a run's
      * duration reads identically in the log banner and on the Lifecycle tab.
@@ -780,120 +395,6 @@ class SharedModuleIT extends PlaywrightTestBase {
                     .as("%s", uptime)
                     .isEqualTo(UptimeFormat.humanize(uptime));
         }
-    }
-
-    /**
-     * The Insights tab's mirror of the server rings: samples carry no timestamps, so a
-     * tick that skips boundaries has to push nulls for the gap or every older sample
-     * shifts forward in time; the ring is capped at its size; a series the snapshot did
-     * not know starts as an all-null ring; and an event no newer than the ring's end is
-     * one the snapshot already contains.
-     */
-    @Test
-    void insightsStoreAppendsTicksWithGapNullsAndIgnoresStaleOnes() {
-        String setup = "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
-                + " series: {a: {values: [1, 2, 3]}}}, 5);";
-        assertThat(evalInsightsStore(setup
-                        + " m.appendTick(s, {epochMs: 13000, values: {a: 4, b: 7}});"
-                        + " return JSON.stringify([s.series.a, s.series.b, s.count, s.endEpochMs]);"))
-                .isEqualTo("[[2,3,null,null,4],[null,null,null,null,7],5,13000]");
-        assertThat(evalInsightsStore(setup
-                        + " m.appendTick(s, {epochMs: 13000, values: {a: 4}});"
-                        + " m.appendTick(s, {epochMs: 12000, values: {a: 9}});"
-                        + " return JSON.stringify(s.series.a);"))
-                .isEqualTo("[2,3,null,null,4]");
-    }
-
-    @Test
-    void insightsStoreAppendsRollupsPerStat() {
-        assertThat(
-                        evalInsightsStore(
-                                "const r = m.normalizeLevel({level: 1, intervalMs: 60000, endEpochMs: 60000, count: 1,"
-                                        + " series: {a: {stats: {min: [1], max: [3], avg: [2]}}}}, 4);"
-                                        + " m.appendRollup(r, {level: 1, epochMs: 120000, entries: {a: {min: 0, max: 5, avg: 2.5}}});"
-                                        + " return JSON.stringify([r.series.a.min, r.series.a.max, r.series.a.avg, r.series.a.p99, r.count]);"))
-                .isEqualTo("[[1,0],[3,5],[2,2.5],[null],2]");
-    }
-
-    @Test
-    void insightsStoreCountsMissedSamplesCappedAtTheRingSize() {
-        String snapshot = "{endEpochMs: 10000, intervalMs: 1000, size: 5}";
-        assertThat(importModule(
-                        "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 11000})"))
-                .isEqualTo(0);
-        assertThat(importModule(
-                        "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 13000})"))
-                .isEqualTo(2);
-        assertThat(importModule(
-                        "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 20000})"))
-                .isEqualTo(5);
-    }
-
-    /**
-     * A gap longer than the ring itself leaves nothing of the old samples: the mirror is
-     * the newest sample behind a ring's worth of nulls, and the count is the ring size.
-     */
-    @Test
-    void insightsStoreCapsAGapLongerThanTheRingAtTheRingSize() {
-        assertThat(evalInsightsStore(
-                        "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
-                                + " series: {a: {values: [1, 2, 3]}}}, 5);"
-                                + " m.appendTick(s, {epochMs: 99000, values: {a: 4}});"
-                                + " return JSON.stringify([s.series.a, s.count]);"))
-                .isEqualTo("[[null,null,null,null,4],5]");
-    }
-
-    /**
-     * The stream opens before the first snapshot is fetched, and the server may serve that
-     * snapshot before a sample it then streams: an empty ring cannot place a later sample
-     * behind a gap, so a rollup arriving while the request is in flight must still land.
-     */
-    @Test
-    void insightsStreamKeepsARollupThatArrivesWhileAnEmptySnapshotLoads() {
-        assertThat(evalInsightsStream(" const load = stream.ensureLevel(1);"
-                        + " emit('rollup', {level: 1, epochMs: 120000, entries: {a: {avg: 2}}});"
-                        + " respond({level: 1, intervalMs: 60000, endEpochMs: 0, count: 0, series: {}});"
-                        + " await load;"
-                        + " emit('rollup', {level: 1, epochMs: 180000, entries: {a: {avg: 3}}});"
-                        + " const s = stream.level(1);"
-                        + " return JSON.stringify([s.series.a.avg, s.count, s.endEpochMs]);"))
-                .isEqualTo("[[2,3],2,180000]");
-    }
-
-    /** Of the ticks that arrive while a snapshot loads, the ones it already holds are not appended twice. */
-    @Test
-    void insightsStreamAppliesOnlyTheTicksALoadingSnapshotDoesNotHold() {
-        assertThat(evalInsightsStream(" const load = stream.ensureLevel(0);"
-                        + " emit('tick', {epochMs: 11000, values: {a: 2}});"
-                        + " emit('tick', {epochMs: 12000, values: {a: 3}});"
-                        + " respond({level: 0, intervalMs: 1000, endEpochMs: 11000, count: 2,"
-                        + "   series: {a: {values: [1, 2]}}});"
-                        + " await load;"
-                        + " const s = stream.level(0);"
-                        + " return JSON.stringify([s.series.a, s.count, s.endEpochMs]);"))
-                .isEqualTo("[[1,2,3],3,12000]");
-    }
-
-    /**
-     * A reconnect re-snapshots every loaded level; a rollup arriving during that request
-     * must survive the fresh snapshot replacing the one it was applied to.
-     */
-    @Test
-    void insightsStreamKeepsARollupThatArrivesWhileAResyncSnapshotLoads() {
-        assertThat(evalInsightsStream(" const load = stream.ensureLevel(1);"
-                        + " respond({level: 1, intervalMs: 60000, endEpochMs: 120000, count: 1,"
-                        + "   series: {a: {stats: {avg: [2]}}}});"
-                        + " await load;"
-                        + " emit('error', {});"
-                        + " emit('open', {});"
-                        + " await settle();"
-                        + " emit('rollup', {level: 1, epochMs: 240000, entries: {a: {avg: 4}}});"
-                        + " respond({level: 1, intervalMs: 60000, endEpochMs: 180000, count: 2,"
-                        + "   series: {a: {stats: {avg: [2, 3]}}}});"
-                        + " await settle();"
-                        + " const s = stream.level(1);"
-                        + " return JSON.stringify([s.series.a.avg, s.count, s.endEpochMs]);"))
-                .isEqualTo("[[2,3,4],3,240000]");
     }
 
     /**
@@ -954,45 +455,5 @@ class SharedModuleIT extends PlaywrightTestBase {
                 "root => [...root.querySelectorAll('link[rel=\"stylesheet\"]')].map(link => link.getAttribute('href'))");
 
         assertThat(linked).isEqualTo(expected);
-    }
-
-    /**
-     * Every unit a series or tile can carry, so a chart's axis and a tile's readout cannot
-     * silently render a raw number. percent arrives as 0..100 and only gains its sign,
-     * and the two rate units are the only ones with a suffix.
-     */
-    @Test
-    void formatMetricValueRendersEveryUnitItsOwnWay() {
-        assertThat(evalModule("format.js", "m.formatMetricValue(1536, 'bytes')"))
-                .isEqualTo("1.50 KB");
-        assertThat(evalModule("format.js", "m.formatMetricValue(42, 'percent')"))
-                .isEqualTo("42.0%");
-        assertThat(evalModule("format.js", "m.formatMetricValue(1500, 'millis')"))
-                .isEqualTo("1.50s");
-        assertThat(evalModule("format.js", "m.formatMetricValue(12.345, 'persec')"))
-                .isEqualTo("12/s");
-        assertThat(evalModule("format.js", "m.formatMetricValue(2048, 'bytes-persec')"))
-                .isEqualTo("2.00 KB/s");
-        assertThat(evalModule("format.js", "m.formatMetricValue(7, 'count')")).isEqualTo("7");
-        assertThat(evalModule("format.js", "m.formatMetricValue(7, 'no-such-unit')"))
-                .as("an unknown unit falls back to the count format rather than to nothing")
-                .isEqualTo("7");
-        assertThat(evalModule("format.js", "m.formatMetricValue(null, 'bytes')"))
-                .isEqualTo("-");
-        assertThat(evalModule("format.js", "m.formatMetricValue(NaN, 'bytes')")).isEqualTo("-");
-    }
-
-    /** The backend serves a time tile in milliseconds, a duration or an epoch instant, which the formatters take as they are. */
-    @Test
-    void formatTileValueTakesMilliseconds() {
-        assertThat(evalModule("format.js", "m.formatTileValue(1500, 'duration')"))
-                .isEqualTo("1.50s");
-        assertThat(evalModule(
-                        "format.js",
-                        "m.formatTileValue(1762400000000, 'datetime', {locale: 'en-US', timeZone: 'UTC'})"))
-                .isEqualTo(
-                        evalModule("format.js", "m.formatDateTime(1762400000000, {locale: 'en-US', timeZone: 'UTC'})"))
-                .asString()
-                .contains("2025");
     }
 }

@@ -465,7 +465,7 @@ class TraceOverlayIT extends TraceOverlayTestBase {
      * a flat entity with no lazy associations to trigger further queries, so the trace's
      * query count is deterministically 1 regardless of how many orders exist when the test
      * runs - read from the Queries tab, whose "1 query" pluralisation is pinned by
-     * {@code SharedModuleIT.formatCountPluralisesIrregularNouns}.
+     * {@code FormatModuleIT.formatCountPluralisesIrregularNouns}.
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {

@@ -320,6 +320,11 @@ abstract class PlaywrightTestBase {
                 Arrays.asList(contextPath() + "/peekaboot/ui/" + path, arg));
     }
 
+    /** {@link #importModule(String, String)} on {@code shared/<sharedModule>}. */
+    protected Object evalModule(String sharedModule, String expression) {
+        return importModule("shared/" + sharedModule, expression);
+    }
+
     /** Serves the real response for {@code urlGlob} with a Content-Security-Policy header added, its body untouched. */
     protected void serveWithCsp(String urlGlob, String policy) {
         page.route(urlGlob, route -> {

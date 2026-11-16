@@ -127,7 +127,7 @@ class QueriesTabIT extends TraceOverlayTestBase {
      * directly (SharedModuleIT's pk-blank.html pattern) rather than driving a real slow
      * query through the app, and pins the exact boundary (49ms must NOT get the label;
      * 50ms - the threshold itself, IssueDetector compares with >= - must), and that a
-     * threshold one higher moves it (see severity.js's own boundary tests in SharedModuleIT). The pill is trace-stats.js's slowBadge(), the one the Traces tab and
+     * threshold one higher moves it (see severity.js's own boundary tests in SeverityModuleIT). The pill is trace-stats.js's slowBadge(), the one the Traces tab and
      * the overlay header show, beside the duration rather than in its text.
      */
     @Test
