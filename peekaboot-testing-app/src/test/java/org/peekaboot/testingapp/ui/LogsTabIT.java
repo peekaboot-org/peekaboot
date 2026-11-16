@@ -137,7 +137,7 @@ class LogsTabIT extends TraceOverlayTestBase {
 
     /**
      * The testing app's spans are always named, so clicking any .pk-log__span chip
-     * deterministically produces the "name (shortId)" form - see logs.js's task brief for
+     * deterministically produces the "name (shortId)" form - see logs.js for
      * the unnamed/unresolvable fallback ("shortId" alone, full id in the title attribute),
      * which isn't reachable through this app's real trace data.
      */
@@ -178,7 +178,7 @@ class LogsTabIT extends TraceOverlayTestBase {
      * The ERROR log fixture's throwable carries framework frames the exclusion list folds
      * away, so the trace renders with at least one hidden run collapsed behind a
      * {@code <details>} and at least one application frame highlighted - proof the browser
-     * is rendering the ranges Task 6 put on the wire, not inventing its own classification.
+     * is rendering the ranges the backend puts on the wire, not inventing its own classification.
      * Playwright locators pierce the overlay's shadow root, so {@code page.locator} reaches
      * straight in the way {@code AccessibilityIT} already does for other log-row elements.
      *

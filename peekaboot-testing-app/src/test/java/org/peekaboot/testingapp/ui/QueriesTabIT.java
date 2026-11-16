@@ -23,7 +23,7 @@ class QueriesTabIT extends TraceOverlayTestBase {
      * Each Queries-tab entry links back to its span in the Spans tab's tree - the row is
      * scrolled to, focused and temporarily highlighted. The reverse link (a query span's
      * panel jumping to its Queries-tab entry) no longer exists: the statement sits in the
-     * span's own query panel now (see spans.js's task brief), so this is a one-way cross-link.
+     * span's own query panel now (see spans.js's module doc), so this is a one-way cross-link.
      * Also the one test that proves a real jump applies {@code pk-jump-flash} at all -
      * SpansTabIT.jumpFlashOutranksAHoveredRow adds the class by hand, so it never exercises
      * jumpToElement itself.

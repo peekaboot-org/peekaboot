@@ -92,9 +92,9 @@ final class Dashboard {
 
     /**
      * The listed row of one trace's own async subtree, rooted at {@code subtreeRootSpanId}.
-     * A trace with an async subtree lists two rows sharing the same trace id (traces.js's
-     * task 10 brief), and Playwright's strict mode refuses to click or read through a
-     * locator that resolves to both - this selector picks the one row out.
+     * A trace with an async subtree lists two rows sharing the same trace id, and Playwright's
+     * strict mode refuses to click or read through a locator that resolves to both - this
+     * selector picks the one row out.
      */
     static String asyncTraceItem(String traceId, String subtreeRootSpanId) {
         return traceItem(traceId) + "[data-subtree-root-span-id='" + subtreeRootSpanId + "']";

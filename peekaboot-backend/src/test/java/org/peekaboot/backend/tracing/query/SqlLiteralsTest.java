@@ -50,7 +50,7 @@ class SqlLiteralsTest {
     /**
      * A stray giant CLOB bind value should not bloat a trace or its OTLP export. The marker is
      * a trailing SQL block comment, not text spliced after the closing quote, so a truncated
-     * literal substituted into query text (Task 6) still parses.
+     * literal substituted into query text still parses.
      */
     @Test
     void capsALongStringAtTheSourceLengthAndMarksWhatWasDroppedAsATrailingComment() {

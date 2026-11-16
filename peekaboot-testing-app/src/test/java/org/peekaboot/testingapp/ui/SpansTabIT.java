@@ -1289,7 +1289,7 @@ class SpansTabIT extends TraceOverlayTestBase {
     }
 
     /**
-     * Task 10: the listing row for an async subtree, and its link back to the enclosing
+     * The listing row for an async subtree, and its link back to the enclosing
      * trace. /orders/enrich dispatches {@code EnrichmentService.enrich} on a task executor
      * with the testing app's context propagation on (see {@code AsyncTraceCaptureIT}, the
      * only other test that drives this endpoint), so the store ends up with one bundle
@@ -1329,7 +1329,7 @@ class SpansTabIT extends TraceOverlayTestBase {
     }
 
     /**
-     * Task 11: an async subtree renders collapsed by default - its own toggle starts
+     * An async subtree renders collapsed by default - its own toggle starts
      * {@code aria-expanded="false"} with its descendants hidden - while a sibling
      * synchronous span stays visible, and the entry itself carries a visible "background"
      * marker. The entry's own bar stays on the trace's basis, so it sits where the task was
@@ -1415,11 +1415,12 @@ class SpansTabIT extends TraceOverlayTestBase {
     }
 
     /**
-     * Task 11's other half, on the same fixture: {@code ?root=<spanId>} scopes the tab to
-     * one subtree, on that subtree's own basis. Two things this guards: the default-collapse
-     * pass must not collapse the very entry the scoped view is rendering - skipped as the
-     * tab's own first entry - or the isolated view would open on nothing; and the trace's
-     * other spans (the enclosing root and the sibling) must not appear at all.
+     * On the fixture of {@link #anAsyncSubtreeCollapsesByDefaultAndRebasesAgainstItsOwnWindow}:
+     * {@code ?root=<spanId>} scopes the tab to one subtree, on that subtree's own basis. Two
+     * things this guards: the default-collapse pass must not collapse the very entry the
+     * scoped view is rendering - skipped as the tab's own first entry - or the isolated view
+     * would open on nothing; and the trace's other spans (the enclosing root and the sibling)
+     * must not appear at all.
      */
     @Test
     void scopingToAnAsyncEntryRendersOnlyThatSubtreeExpanded() {
@@ -1439,8 +1440,9 @@ class SpansTabIT extends TraceOverlayTestBase {
     }
 
     /**
-     * Task 11's URL half, on a real captured async subtree from the same endpoint Task 10's
-     * row links to: the {@code ?root=<spanId>} deep link that row's own open button lands
+     * On a real captured async subtree, from the endpoint
+     * {@link #anAsyncRowLinksToItsEnclosingTraceAndOpensItsOwnSubtree} drives: the
+     * {@code ?root=<spanId>} deep link the async row's own open button lands
      * on scopes the Spans tab to that span alone - its enclosing request root and
      * spring.handler are excluded - and it carries the "background" marker end to end from
      * the real backend. Then pins {@code url-state.js}'s documented rule rather than
@@ -1463,7 +1465,7 @@ class SpansTabIT extends TraceOverlayTestBase {
         overlay.waitFor("#pk-gantt-rows");
 
         assertThat(page.url())
-                .as("the async row's own open button lands here - Task 10's own pin")
+                .as("the async row's own open button lands here")
                 .contains("#traces/" + traceId + "/spans?root=" + asyncSpanId);
         assertThat(renderedGanttRows())
                 .as("scoped to the async entry alone; its enclosing request root and spring.handler are excluded")

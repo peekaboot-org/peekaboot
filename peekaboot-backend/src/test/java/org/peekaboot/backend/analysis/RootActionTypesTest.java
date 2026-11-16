@@ -143,7 +143,9 @@ class RootActionTypesTest {
     /**
      * Peekaboot sets the marker itself, so it is the more specific signal wherever it appears.
      * The combination should be unreachable - guard 2 in AsyncTaskDecorator keeps the decorator
-     * off scheduled tasks - and the integration test in Task 4 is what fails if it stops being.
+     * off scheduled tasks - and
+     * {@code AsyncTraceCaptureIT.aScheduledTaskIsObservedExactlyOnceAndStaysAScheduledJob} is
+     * what fails if it stops being.
      */
     @Test
     void theAsyncMarkerOutranksTheScheduledTaskTagPair() {
