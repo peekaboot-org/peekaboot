@@ -162,7 +162,7 @@ closing context.
 The trace store's inputs (`TraceInput`): every span, log line, completed request and discarded
 trace the store takes, and each run's start, one JSON object per line (`JournalLine`,
 `JournalCodec`), as the store holds them. Request and response headers, the query string and
-parameters arrive masked from capture (`RequestCaptureFilter`). Span attributes, SQL with its bind
+parameters arrive capped and masked from capture (`RequestCaptureFilter`). Span attributes, SQL with its bind
 parameters, log messages and stack traces are written raw and masked when read, as on the live
 store.
 
@@ -362,7 +362,7 @@ org.peekaboot.backend/
 ├── tracing/                # In-memory tracing
 │   ├── async/              # AsyncTaskDecorator, AsyncTaskFailurePostProcessor, AsyncTaskFailureInterceptor, RunningAsyncTask
 │   ├── bridge/otel/        # OtelSpanExporter
-│   ├── capture/            # RequestCaptureFilter, PeekabootLogbackAppender: the request and log sources beside the span bridge
+│   ├── capture/            # RequestCaptureFilter (+ ParameterReads, RequestDetails), PeekabootLogbackAppender: the request and log sources beside the span bridge
 │   ├── config/             # PeekabootTracingProperties
 │   ├── digest/             # The error digest: ErrorDigest, DigestedError, ErrorDigestRecorder (records live failures)
 │   │                       # ErrorDigestFile (errors.jsonl)
@@ -408,6 +408,13 @@ into the buffered body. `RequestCaptureFilter` is registered by `TraceCaptureAut
 and follows `peekaboot.tracing.enabled`, since the dashboard reads what it captures;
 `DevToolbarFilter` is registered by `DevToolbarAutoConfiguration` and follows
 `peekaboot.dev-toolbar.enabled`.
+
+`RequestCaptureFilter` passes a `ParameterReads` wrapper down the chain and reads form parameters
+only when the application, or a filter behind it, read them, so it never parses a body itself.
+Query parameters come from the query string. `RequestDetails` cuts a name or value over 4,096
+characters at its last whitespace before masking it, and assembles the `RequestCompletedEvent`;
+the filter decides when it is published. A capture that fails, or an async listener the container
+refuses, costs the request its Request tab and a WARN, never the handler's exception.
 
 `DashboardAuthenticationFilter` maps `/peekaboot/*` under the `DispatcherServlet`'s own prefix
 rather than `/*`, at a fixed order of `0`. With `spring.mvc.servlet.path=/app` the dashboard's
@@ -691,6 +698,12 @@ The ones a change is most likely to undo:
 - `sig` is a rule for Azure SAS's abbreviated `?sig=` signature parameter.
 - `cookie` and `set-cookie` match only as the whole key, so
   `server.servlet.session.cookie.*` stays readable.
+- `encrypt.key` and `jwt` mask only as the entire key. As tokens they would mask
+  `encrypt.key-store.*` and `spring.security.oauth2.resourceserver.jwt.*`.
+- Every value pattern reads a bounded number of characters per input character;
+  `ValuePatternCostTest` holds each rule to that.
+- `MaskingEngine.maskValue` merges spans that overlap, so two rules that claim part of the same
+  text mask it once, through to the later end.
 - There is no entropy-based detection. A git SHA, a UUID or a base64 asset would trip it.
 
 The endpoint objects `ActuatorSourcesAutoConfiguration` builds are not beans. A
@@ -813,7 +826,9 @@ the first case either, since Peekaboot's configuration runs ahead of it.
 
 The page shows the status and its reason, the request line, the exception class and message,
 and the stack trace with the application's own frames marked (from
-`AutoConfigurationPackages`). `PeekabootErrorView` asks the application's own `ErrorAttributes`
+`AutoConfigurationPackages`). The message and the trace go through `MaskingEngine.maskValue`
+before folding and escaping, as a failed span's do; the request path is shown as sent.
+`PeekabootErrorView` asks the application's own `ErrorAttributes`
 bean for these, with every `Include` switched on, so the application's own
 `spring.web.error.include-*` settings are neither read nor changed: they govern what the error
 *response* a client receives carries, and this is a page rendered for a developer looking at the
@@ -879,7 +894,8 @@ Both surfaces fold with one `StackTraceRules` bean. `StackTraceRulesConfiguratio
 once from `peekaboot.stack-trace.fold`, `peekaboot.stack-trace.exclude`,
 `logging.exception-conversion-word` and `AutoConfigurationPackages`, and both
 `PeekabootAutoConfiguration` and `ErrorPageAutoConfiguration` import it, so either runs without
-the other. `peekaboot.stack-trace.fold=false` empties the exclusion list rather than travelling
+the other. `ErrorPageAutoConfiguration` imports `MaskingConfiguration` as well, for the engine the
+page masks with. `peekaboot.stack-trace.fold=false` empties the exclusion list rather than travelling
 as a flag, so `TraceLogMapper` and `PeekabootErrorView` ask the same question with nothing
 to match: `hiddenFrames` comes back empty, and the page renders no reveal control because
 nothing was hidden. The browser classifies nothing on either surface; `log-entry.js`
