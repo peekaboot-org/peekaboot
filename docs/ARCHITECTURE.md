@@ -553,14 +553,12 @@ there is no prefix to tell those requests apart by. The bean also carries the re
 the same with and without one.
 
 A trace also carries a basic method/path/status summary (`summary.request`), read off the root
-span's HTTP tags by `HttpSpanTags`, which holds where the request capture never ran. That class knows all
-three naming schemes that reach the store. Boot's default server-request observation uses
-`method`, `status`, `uri` for the route pattern, and `http.url`, the request URI and therefore
-the path shown. The current OpenTelemetry names are `http.request.method`, `url.path` and
-`http.response.status_code`; their superseded spelling is `http.method`, `http.target` and
-`http.status_code`. The overlay reads `summary.request` rather than the tags, so the browser
-never has to know those names. Headers, query/form parameters and the resolved controller
-class/method come from the request capture alone.
+span's HTTP tags by `HttpSpanTags`, which holds where the request capture never ran. That class
+knows all three naming schemes that reach the store: Boot's default server-request observation,
+the current OpenTelemetry names and their superseded spelling. The overlay reads
+`summary.request` rather than the tags, so the browser never has to know those names. Headers,
+query/form parameters and the resolved controller class/method come from the request capture
+alone.
 
 Request/response body content and uploaded file names are not captured.
 `HttpExchange` has no fields for them; a body-capture pass adds the fields it fills, and is its
@@ -740,18 +738,14 @@ words only.
 
 ### In-Process Actuator Invocation
 
-Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a
-list of `InsightsSource` beans, one per source id (`spring`, `health`, `info`,
-`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`, `liquibase`, declared once as
-constants on `ActuatorParsedData`). Each is a record
+Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a list of
+`InsightsSource` beans, one per source id (the constants on `ActuatorParsedData`), each a record
 pairing that id with a `Supplier`. Seven of them read an endpoint object
 `ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
-`HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is
-no endpoint at all. There is no discovery step and no HTTP call; a source that reads
-`null` contributes no entry, which is how an endpoint whose backing bean is absent
-(`flyway` without a Flyway bean, `liquibase` without a `SpringLiquibase` bean, `health`
-without a `HealthEndpoint` bean, `loggers` without a `LoggingSystem` bean) reports that it
-has nothing rather than failing.
+`HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is no endpoint
+at all. There is no discovery step. A source that reads `null` contributes no entry, which is
+how an endpoint whose backing bean is absent (a Flyway bean, a `SpringLiquibase` bean, the
+`HealthEndpoint` bean, a `LoggingSystem` bean) reports that it has nothing rather than failing.
 
 The `info` endpoint object is built over the application's `InfoContributor` beans plus four
 contributors Peekaboot constructs for itself (`InfoReading`): env, java, os and process. None is a
@@ -866,41 +860,45 @@ value suggests, the slot does not give `DefaultErrorAttributes` a chance to reco
 exception first. `DispatcherServlet.processHandlerException` calls
 `WebUtils.exposeErrorRequestAttributes` once a resolver has answered, which sets
 `jakarta.servlet.error.exception` if nothing already has, and `DefaultErrorAttributes.getError`
-falls back to exactly that. This is what lets
-Peekaboot's page win where an application renders its own from a `@ControllerAdvice`: that
-advice resolves inside the REQUEST dispatch, so no ERROR dispatch ever follows it,
-`BasicErrorController` never runs and no `ErrorViewResolver` is ever consulted. It outranks the
-`HandlerExceptionResolverComposite` that holds `ExceptionHandlerExceptionResolver` among Boot's
-own resolvers, so it intercepts the exception first. It returns null, falling through to the
-application's own handling, unless the `Accept` header names `text/html` with a quality above
-zero. A bare `*/*` or a missing header does not count, so Swagger UI, curl and `fetch()` keep
-getting the application's own error response, as does an XHR asking for JSON. It also returns
-null for a response already committed, as Spring's own resolvers do. It returns null as well for
-an exception Peekaboot's own API answers, which `ApiProblemHandler.answers` decides from the
-handler's package and the advice's exception methods. A browser asking an API URL therefore keeps
-the problem body, which goes out for any `Accept` that admits JSON. That check follows causes the way
-Spring's advice lookup does, so it is asked only after the cycle check below. The status is
-Spring's own, asked in Spring's order: a private `ResponseStatusExceptionResolver`, then a private
-`DefaultHandlerExceptionResolver`, both answering against a response wrapper that records
-`sendError` instead of sending it. A `ResponseStatusException` keeps its status and headers, an
-`@ResponseStatus` its reason, a `TypeMismatchException` or an unreadable body its 400, and the
-headers either mapping sets (`Retry-After`, `Allow` on a 405) reach the real response; the
-recorded message becomes `ERROR_MESSAGE`. A cause chain is first walked once with cycle detection:
-a cyclic one never reaches Spring, whose cause walks would never return from it, and only the
-status of a `ResponseStatusException` or a merged `@ResponseStatus` on it counts, without headers
-or reason. Where that mapping answers without a status, a client that
-already hung up, the resolver returns its empty `ModelAndView`, so nothing is written to the dead
-connection. Anything left is a 500, and since the container would have logged it at ERROR had it escaped,
+falls back to exactly that.
+
+The resolver is what lets Peekaboot's page win where an application renders its own from a
+`@ControllerAdvice`: that advice resolves inside the REQUEST dispatch, so no ERROR dispatch ever
+follows it, `BasicErrorController` never runs and no `ErrorViewResolver` is ever consulted. It
+outranks the `HandlerExceptionResolverComposite` that holds `ExceptionHandlerExceptionResolver`
+among Boot's own resolvers, so it intercepts the exception first.
+
+It returns null, falling through to the application's own handling, unless the `Accept` header
+names `text/html` with a quality above zero. A bare `*/*` or a missing header does not count, so
+Swagger UI, curl and `fetch()` keep getting the application's own error response, as does an XHR
+asking for JSON. It also returns null for a response already committed, as Spring's own
+resolvers do. It returns null as well for an exception Peekaboot's own API answers, which
+`ApiProblemHandler.answers` decides from the handler's package and the advice's exception
+methods. A browser asking an API URL therefore keeps the problem body, which goes out for any
+`Accept` that admits JSON. That check follows causes the way Spring's advice lookup does, so it
+is asked only after the cycle check below.
+
+The status is Spring's own, asked in Spring's order: a private
+`ResponseStatusExceptionResolver`, then a private `DefaultHandlerExceptionResolver`, both
+answering against a response wrapper that records `sendError` instead of sending it. A
+`ResponseStatusException` keeps its status and headers, an `@ResponseStatus` its reason, a
+`TypeMismatchException` or an unreadable body its 400, and the headers either mapping sets
+(`Retry-After`, `Allow` on a 405) reach the real response; the recorded message becomes
+`ERROR_MESSAGE`. A cause chain is first walked once with cycle detection: a cyclic one never
+reaches Spring, whose cause walks would never return from it, and only the status of a
+`ResponseStatusException` or a merged `@ResponseStatus` on it counts, without headers or reason.
+Where that mapping answers without a status, a client that already hung up, the resolver returns
+its empty `ModelAndView`, so nothing is written to the dead connection.
+
+Anything left is a 500, and since the container would have logged it at ERROR had it escaped,
 the resolver logs it on its own logger as `Request processing failed: <exception>`, the message
 `FrameworkServlet` gives it. For a 5xx it first fails the request's server span and handler span
 with the exception through `ServerRequestFailure`, because Spring clears the error request
 attributes before its observation filter reads them and passes the handler interceptor no
 exception a resolver answered (see *Tracing Flow*). It sets `RequestDispatcher.ERROR_STATUS_CODE`,
 `ERROR_REQUEST_URI` and `ERROR_METHOD` on the request (nothing else sets that last one on a
-REQUEST dispatch), so
-`PeekabootErrorView` renders the same request line, status and reason it would off a real ERROR
-dispatch, and returns a `ModelAndView` carrying that status and a `PeekabootErrorView` built the
-same way the `ErrorViewResolver`'s is, from the shared `StackTraceRules` and `PeekabootPaths` beans.
+REQUEST dispatch), so `PeekabootErrorView` renders the same request line, status and reason it
+would off a real ERROR dispatch.
 
 All three paths sit behind `@ConditionalOnWebApplication(SERVLET)`,
 `@ConditionalOnClass({DispatcherServlet.class, ErrorAttributes.class})`, `peekaboot.enabled` and
@@ -989,10 +987,9 @@ nothing was hidden. The browser classifies nothing on either surface; `shared/lo
 renders the ranges it is given, the same way `StackTraceHtml` does server-side.
 
 The error page's reveal script ships twice, inline in a `<script>` tag and linked via
-`<script src>`, for the same reason its CSS does (see *Error Page*). A strict `script-src`
+`<script src>`, for the same reason its CSS does (`InlinedStylesheets`). A strict `script-src`
 drops the inline copy, and an authorization gate in front of `/peekaboot/**` drops the linked
-one.
-Either copy only opens every folded `<details>` at once; the per-run disclosures are native
+one. Either copy only opens every folded `<details>` at once; the per-run disclosures are native
 HTML and work with no script running at all.
 
 ## peekaboot-frontend
