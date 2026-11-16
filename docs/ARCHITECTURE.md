@@ -39,25 +39,34 @@ The subdirectory is named from the application's build coordinates rather than i
 history apart. `ApplicationIdentity`, built once by `ApplicationIdentityConfiguration`, holds that
 rule and the guard username's artifact-first one, each falling back to the application name.
 
-`StorageDirectory` only resolves this path; it never touches the disk. While
-`peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and no
-store ever writes. Every file a store replaces whole goes through
-`OwnerOnlyFiles.replaceAtomically`, the single implementation of the mechanism: it creates the
-parent directory, writes to a sibling `*.tmp`, moves that over the target with `ATOMIC_MOVE` (a
-plain replace where the file system offers none), and deletes the temporary if the write fails.
-The trace journal appends, so it opens its file through `OwnerOnlyFiles.newOutputStream`, the
-call `replaceAtomically` creates its temporary with. On a POSIX file system the directory is
-created `rwx------` and every file `rw-------` regardless of the process umask, though an
-existing directory keeps its permissions. The temporary is always created fresh with
-`CREATE_NEW` after removing whatever sat at its path, so a symlink planted there is deleted,
-never followed. Failure handling stays with the stores: on `IOException` each logs and
-continues in memory rather than taking the host application down over an unwritable `$HOME`.
+`StorageDirectory` resolves this path and decides whether this instance writes it. The first
+`file(...)` call while storage is on takes the directory's lock through `StorageLock`, which
+creates the directory and an empty `.lock` in it. While `peekaboot.storage.enabled` is `false`, or
+while another process holds that lock, `StorageDirectory.file(...)` returns empty and no store
+that asks it writes.
 
-Every store assumes one application instance per directory. Two instances pointed at the same
-`peekaboot.storage.dir` overwrite each other's files, and a half-written file is discarded on
-the next read, so the cost is lost history rather than corruption. Peekaboot is a development
-tool and coordinating instances is out of its scope: give each instance its own
-`peekaboot.storage.dir` if you run several against one home directory.
+Every file a store replaces whole goes through `OwnerOnlyFiles.replaceAtomically`, the single
+implementation of the mechanism: it creates the parent directory, writes to a temporary of its
+own beside the target (`<file name>.<random>.tmp`), moves that over the target with `ATOMIC_MOVE`
+(a plain replace where the file system offers none), and deletes the temporary if the write
+fails. A temporary a killed process left behind is removed by a later write of the same file, once
+it is more than an hour older than that write.
+
+The trace journal appends, so it opens its file through `OwnerOnlyFiles.newOutputStream`, which
+removes whatever sat at the path and creates the file with `CREATE_NEW`, so a symlink planted
+there is deleted, never followed. On a POSIX file system the directory is created `rwx------` and
+every file `rw-------` regardless of the process umask, though an existing directory keeps its
+permissions. Failure handling stays with the stores: on `IOException` each logs and continues in
+memory rather than taking the host application down over an unwritable `$HOME`.
+
+One process writes a storage directory. `StorageLock` holds an OS file lock on `.lock` until the
+JVM exits, so every Spring context of that JVM writes, also one started after a DevTools restart.
+A second process on the same `peekaboot.storage.dir` gets no file from
+`StorageDirectory.file(...)`: it logs one warning and keeps its insights history, lifecycle log
+and generated password in memory, and it does not take over when the first process stops.
+
+A directory that cannot be locked is written as before, and the stores report what they cannot
+write. Give each instance its own `peekaboot.storage.dir`.
 
 ### `insights.snapshot`
 
@@ -71,12 +80,17 @@ Version 2 holds percent series from 0 to 100 and time gauges in milliseconds, as
 serves them; a version 1 file holds ratios and seconds and is dropped like any unknown version.
 
 `InsightsSnapshotStore` owns the file. It writes through `OwnerOnlyFiles.replaceAtomically` on
-each boundary of `peekaboot.insights.persistence.interval` (default: one minute), and once
+each boundary of `peekaboot.insights.persistence.interval` (default: five minutes), and once
 more synchronously at shutdown after the collector has stopped, so the final write sees
-quiesced rings. A run that never ticked skips the write rather than
-overwriting a good file with an empty one. With storage off, `InsightsSnapshotStore.create`
-hands the service `SnapshotStore.NONE`, a store that loads, writes and restores nothing, so
-`InsightsService` drives one store the same way in both cases.
+quiesced rings. A killed process loses at most one interval, a normal shutdown nothing. A run
+that never ticked skips the write rather than overwriting a good file with an empty one.
+
+A write that fails logs one WARN and the rings stay in memory. `WriteOutage` keeps the following
+failures quiet until a write succeeds, so a second outage in the same run is reported again.
+
+With storage off, or on a second instance of one storage directory,
+`InsightsSnapshotStore.create` hands the service `SnapshotStore.NONE`, a store that loads, writes
+and restores nothing, so `InsightsService` drives one store the same way in every case.
 
 The snapshot is a cache, never a source of truth, so anything wrong with it costs only the
 history. Five things count as wrong: a bad magic number, a schema version this build doesn't
@@ -92,14 +106,32 @@ ring-size bounds are the ones `InsightsProperties` enforces, so a configuration 
 always be read back.
 
 Loading never delays startup. `InsightsSnapshotStore.beginLoad()` submits the parse to a
-virtual thread and returns. Each of the collector's level threads then runs a one-shot restore
-just before its *first* write, gated by `SnapshotRestoreBarrier` so only the thread that
-arrives first applies the snapshot and a level-1 roll-up can never land ahead of the restore it
-depends on. That thread waits up to 5 seconds for the parse, and a snapshot arriving later is
-discarded rather than layered on top of live samples. Restoring a level's `endEpochMs` is what
-turns the outage into a visible gap on the chart. `fillMissed()` then pads exactly the missed
-interval at that level's next tick or roll-up, capped at the ring size. It is the same code
-that pads a suspended laptop or a stalled sampler.
+virtual thread through `BackgroundLoad` and returns. Each of the collector's level threads then
+runs a one-shot restore just before its *first* write, gated by `SnapshotRestoreBarrier` so only
+the thread that arrives first applies the snapshot and a level-1 roll-up can never land ahead of
+the restore it depends on.
+
+That thread waits up to 5 seconds for the parse. `InsightsSnapshotStore.awaitSnapshot` hands the
+parsed snapshot over once and keeps no copy, since the collector copies it into its rings. A
+snapshot arriving after the wait is dropped when its parse ends rather than layered on top of live
+samples.
+
+Restoring a level's `endEpochMs` is what turns the outage into a visible gap on the chart.
+`fillMissed()` then pads exactly the missed interval at that level's next tick or roll-up, capped
+at the ring size. It is the same code that pads a suspended laptop or a stalled sampler.
+
+A level thread survives a failing tick or roll-up: `runLevel` catches a `RuntimeException` and
+logs it. Anything else ends the thread. Its uncaught-exception handler then logs one ERROR and
+`InsightsCollector` starts a new thread for that level, unless the collector is stopping or a
+restart has already given the level a new thread.
+
+A roll-up reads the finer level by date, not by position. `SeriesRings.tickWindows` and
+`statsWindows` return the entries dated inside the window that ends at the roll-up's boundary:
+fewer when the finer level is behind, none of those a late roll-up finds past the boundary. A
+window with no entries is stored as `AggregateStats.EMPTY`.
+
+A level above 1 takes each of `median`, `p90`, `p95` and `p99` from the finer windows' value of
+the same name by sample-weighted nearest rank, since a window keeps no samples to rank.
 
 A run whose restore did not complete keeps its history, because `InsightsSnapshotStore` refuses
 to write over a file it never claimed. A process that started with a handful of samples cannot
@@ -118,13 +150,25 @@ That is cheap at this size (at most 400 KB for the full 1000) and it removes bot
 partial-line corruption window and a second trim code path. A line that fails to parse is
 skipped on read; the rest of the file still loads.
 
+The file is decoded leniently, so a byte that is not UTF-8 costs its own line and not the read.
+Of a file larger than 4 MiB (`LifecycleEventFile.MAX_READ_BYTES`, ten times a full log) only the
+newest 4 MiB are read, from the first whole line on, and one INFO line says so. The load sorts
+what it read by timestamp, so a file that two instances wrote out of order is served oldest first
+and written back that way with the next event.
+
+A start waits for the load without a limit, on its own virtual thread. A stop waits five seconds
+and is dropped when the history is still not in memory, because a rewrite from a log that never
+read the file would erase it. A write that fails logs one WARN per outage (`WriteOutage`) and the
+event stays in memory, so the next write that succeeds carries it.
+
 A start event carries its epoch timestamp, its pid, and a whitelist of
 `BuildProperties`/`GitProperties` entries, no others, because a git remote URL can carry the
 token it was cloned with and the building user's mail address is personal data. The site names
 every kept entry under
 [what Peekaboot writes to disk](https://www.peekaboot.org/docs/security/#what-peekaboot-writes-to-disk).
 A stop event carries only its own timestamp and pid, since its build belongs to the start it
-follows, which the log still remembers.
+follows, which the log still remembers. `LifecycleEventRecorder` writes a stop only after its own
+ready handed over a start, so a context that closes before it was ready leaves no event.
 
 The git entries come from the application's own `git.properties`, which `ApplicationGitProperties`
 reads at the start or at ready, whichever listener runs first, once the main class is known. The
@@ -135,10 +179,13 @@ classpath directory counts, since only a project being built puts one there and 
 resources apart from classes. One inside a jar counts only at the root the main application
 class was loaded from, `BOOT-INF/classes/` in a Boot jar.
 Where the host sets `spring.info.git.location`, Peekaboot takes Boot's `GitProperties` as it is.
+A `git.properties` that cannot be read, or that `Properties.load` refuses for a malformed unicode
+escape, costs the git facts alone: one WARN, and the run is recorded without them.
 
-The log's in-memory half runs independently of `peekaboot.storage.enabled`. With storage off,
-`LifecycleEventLog` still records the current run's start and stop in memory and serves them
-from there; `LifecycleEventFile` is never consulted. That is why a dashboard with persistence
+The log's in-memory half runs independently of `peekaboot.storage.enabled`. With storage off, or
+on a second instance of one storage directory, `LifecycleEventLog` still records the current
+run's start and stop in memory and serves them from there; `LifecycleEventFile` is never
+consulted. That is why a dashboard with persistence
 switched off still shows one start marker for the run in progress.
 
 ### `traces.journal.jsonl` and `traces.snapshot.jsonl`
@@ -265,7 +312,14 @@ predecessor, so it is never a deployment.
 A run's `stoppedAt` and `ranForMs` are null, not a guess, when its start has no matching
 stop: a `kill -9` writes nothing, so when that run ended is genuinely unknown. `downForMs`, the
 gap since the previous run stopped, is null for the same reason whenever the previous run has
-no recorded stop. Null there means unknowable, not zero. The 1000-event cap means a long-lived
+no recorded stop. Null there means unknowable, not zero.
+
+The newest start with no event after it is `running` only when the answering process recorded it:
+`RunningProcess` holds the JVM's pid and start time, and the start must carry that pid and a
+timestamp at or after that start time. The pid alone is always 1 in a container. A newest start
+another process wrote reads as an unclean exit.
+
+The 1000-event cap means a long-lived
 application's retained history begins mid-cycle, and the oldest surviving event is often a stop
 whose own start already aged out. That orphaned stop is normal, and it carries a real
 timestamp, so the downtime between it and the next start is still reported.
@@ -335,7 +389,7 @@ org.peekaboot.backend/
 │   └── trace/              # TraceResource, TraceSummary, TraceDetail, TraceListResponse, TraceTree, SpanNode, HttpExchange, IssueType, ...
 ├── errorpage/              # PeekabootErrorView (the error page), PeekabootErrorViewResolver and PeekabootErrorExceptionResolver
 │                           # (peekaboot.error-page.override), StackTraceHtml
-├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, InsightsDataResponse): InsightsCollector, InsightsDataReader (the data endpoint's reading of one level, `LevelData` its window and summaries), StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
+├── insights/               # Metric ring buffers and their payloads (InsightsConfigResponse, InsightsDataResponse): InsightsCollector, InsightsPanels (the bundled panels with the operator's file merged on top, disabled panels dropped, series namespaced), InsightsDataReader (the data endpoint's reading of one level, `LevelData` its window and summaries, `TickLevelData` for level 0 and `WindowLevelData` above it), StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
 │   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
 ├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, LifecycleEvents + LifecycleRuns (and their responses), build info and the application's own git info
@@ -357,7 +411,7 @@ org.peekaboot.backend/
 │                           # CredentialCache, SecurityPosture
 ├── service/                # ActuatorInsightsService, TraceInsightsService, LogSearchService, ErrorDigestService, TraceReads, ...
 ├── stacktrace/             # StackTraceRules, StackTraceFolding, ExclusionPatterns: how the error page, the Logs tab and a span's details panel fold a stack trace
-├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
+├── storage/                # StorageDirectory resolves peekaboot.storage.dir; StorageLock keeps a directory to one writing process; OwnerOnlyFiles does owner-only, symlink-safe writes; WriteOutage limits a store's write warning to one per outage; BackgroundLoad is the off-startup read both the insights snapshot and the lifecycle log wait on (see Persisted state)
 ├── text/                   # CountFormat (a count with its unit), ByteFormat, UptimeFormat, BannerFrame (the frame of every log banner), EnumNames (lenient enum lookup)
 ├── tracing/                # In-memory tracing
 │   ├── async/              # AsyncTaskDecorator, AsyncTaskFailurePostProcessor, AsyncTaskFailureInterceptor, RunningAsyncTask
@@ -1151,8 +1205,12 @@ signals of its own, checked in order:
    `/target/classes`, `/build/classes/{java,kotlin,groovy,scala}/main` or `/bin/main`, or
    contains IntelliJ's `/out/production/`. `ContainerRuntime.detect` checks its markers in
    this order and stops at the first hit: a `KUBERNETES_SERVICE_HOST` environment variable,
-   `/.dockerenv`, `/run/.containerenv`, then `/proc/1/cgroup` naming `docker`, `kubepods` or
-   `containerd`. A cgroup file that is missing or cannot be read counts as no container.
+   `/.dockerenv`, `/run/.containerenv`, then the three signals of a generic container:
+   `/proc/1/cgroup` naming `docker`, `kubepods` or `containerd`, a non-blank `container`
+   environment variable, or a `/proc/1/mountinfo` line whose mount point (the fifth field) is
+   `/etc/hostname`, `/etc/hosts` or `/etc/resolv.conf`. Runtime names are not matched in
+   mountinfo, because a host lists the overlay mounts of its own containers there. A cgroup or
+   mountinfo file that is missing or cannot be read counts as no signal.
    A jar's `Class-Path` manifest attribute counts as part of the class path, resolved
    relative to the jar, because IntelliJ's "JAR manifest" command-line shortening leaves one
    temp jar on `java.class.path` and moves every real entry into its manifest. An IDE,
@@ -2102,12 +2160,13 @@ SpanData
 `GET /peekaboot/api/insights/data` is `InsightsDataReader`, a bean of its own beside
 `InsightsService`, which reads the rings through the collector. `InsightsDataQuery` reads the
 parameters: `level` (required), `view` (`TraceView`, the summary by default), `series` and
-`since`. `LevelData.since` keeps the samples taken at or after `since`; the newest keeps its
-date, so every timestamp still derives from `endEpochMs`, `intervalMs` and `count`. Each series
-gets a `SeriesSummary` over that window: `AggregateStats.of` over level 0's samples, and
-`AggregateStats.ofAggregates` over the windows above it, so the median and the p95 come from the
-windows' averages while the extremes stay exact. The full view adds the samples and a
-`timestamps` array; the Insights tab asks for it, since it charts every sample.
+`since`. `SeriesRings.levelData` copies only the samples taken at or after `since`, counted under
+the rings lock; the newest keeps its date, so every timestamp still derives from `endEpochMs`,
+`intervalMs` and `count`. Each series gets a `SeriesSummary` over that window: `AggregateStats.of`
+over level 0's samples, and `AggregateStats.ofAggregates` over the windows above it. There the
+median and the p95 are nearest rank over the windows' own median and p95, each window counted
+once per sample, while the extremes and the average stay exact. The full view adds the samples
+and a `timestamps` array; the Insights tab asks for it, since it charts every sample.
 `InsightsProblems` checks the window against the eight `ProblemRule`s over every series, whatever
 `series` narrows, and both views list what it found. A rule reads the bundled panels' series ids
 and is skipped where one of them is absent or holds no sample; `SLOW_HTTP` shares the slow-trace
@@ -2119,7 +2178,10 @@ threshold with the Slow bucket.
 `/peekaboot/api/insights/stream`. A tick carries series values only; tiles are read from
 `/peekaboot/api/insights/config`, not streamed. One dispatch thread renders each event once
 and offers it to every `Subscriber`'s bounded send lane, whose own sender thread performs the
-blocking write, so one wedged peer drops its own events instead of stalling the stream. The
+blocking write, so one wedged peer drops its own events instead of stalling the stream. A peer
+whose lane overflows is dropped and its stream completed, so its browser reconnects: by the
+dispatch thread while no send is in flight, otherwise by the peer's own sender once its send
+returns. The
 same dispatch thread sends the heartbeat: it polls the event queue with a 15-second timeout,
 and a poll that comes back empty means the stream has been idle that long and gets a
 keep-alive comment instead. A busy stream never needs one. The publisher refuses past
@@ -2132,7 +2194,9 @@ one that is merely wedged.
 On context shutdown the publisher stops the dispatch thread, interrupts every sender and then
 completes each emitter. An interrupt cannot end a write already inside the container's socket
 call, so `completeUnlessSendingWithin(STOP_GRACE)` waits 200 ms for that write and detaches the
-peer rather than blocking shutdown behind it.
+peer rather than blocking shutdown behind it. A sender that was detached, at shutdown, on a
+timeout or on a drop, ends after the send it is in, also when the container's write consumed the
+interrupt.
 
 ### Insights Domain
 
@@ -2163,10 +2227,11 @@ loopback and link-local skipped). Those lookups run in parallel on virtual threa
 shared ~1s budget; one that misses the budget, or only echoes the literal address, leaves the
 hostname `null`. And it names the `ContainerRuntime` the process runs under: docker
 (`/.dockerenv`), podman (`/run/.containerenv`), kubernetes (`KUBERNETES_SERVICE_HOST`), a
-generic container (a `/proc/1/cgroup` marker), or none. Every fact is best-effort: whatever the
-host doesn't let the JVM read stays `null`/empty and the dashboard renders no row for it. The JDK's processor count
-and total memory are container-aware, reporting a limited container's share rather than the
-host's. `ContainerRuntime.current()` is the one detection in the codebase, and
+generic container (a `/proc/1/cgroup` marker, a `container` environment variable, or a runtime's
+bind mount of `/etc/hostname`, `/etc/hosts` or `/etc/resolv.conf` in `/proc/1/mountinfo`), or
+none. Every fact is best-effort: whatever the host doesn't let the JVM read stays `null`/empty and
+the dashboard renders no row for it. The JDK's processor count and total memory are
+container-aware, reporting a limited container's share rather than the host's. `ContainerRuntime.current()` is the one detection in the codebase, and
 `LocalDevDetector` consumes the same cached result.
 
 `RuntimeInfo.process` (`ProcessInfo`, computed once through a holder class, since the values
