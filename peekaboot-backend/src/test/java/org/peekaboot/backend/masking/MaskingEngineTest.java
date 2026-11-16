@@ -887,7 +887,7 @@ class MaskingEngineTest {
     class QueryStringMasking {
 
         @Test
-        void maskQueryStringMasksSensitivePairsAndLeaveTheRestAlone() {
+        void maskQueryStringMasksSensitivePairsAndLeavesTheRestAlone() {
             assertThat(engine.maskQueryString("api_key=xyz&q=widgets")).isEqualTo("api_key=******&q=widgets");
         }
 

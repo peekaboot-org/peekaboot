@@ -75,7 +75,7 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void postHandleStopsHandlerAndStartViewObservation() {
+    void postHandleStopsHandlerAndStartsViewObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
         ModelAndView modelAndView = new ModelAndView("users/list");

@@ -79,7 +79,7 @@ class ConfigMapperTest {
      * masks, by its leaf key, on the way.
      */
     @Test
-    void mapFlattensANestedTreeToDottedKeysAndMaskSensitiveLeaves() {
+    void mapFlattensANestedTreeToDottedKeysAndMasksSensitiveLeaves() {
         Map<String, Object> google = new LinkedHashMap<>();
         google.put("clientId", "abc123");
         google.put("clientSecret", "GOCSPX-SuperSecretValue");

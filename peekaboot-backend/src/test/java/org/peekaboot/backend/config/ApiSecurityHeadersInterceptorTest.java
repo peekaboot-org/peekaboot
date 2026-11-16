@@ -11,7 +11,7 @@ class ApiSecurityHeadersInterceptorTest {
     private final ApiSecurityHeadersInterceptor interceptor = new ApiSecurityHeadersInterceptor();
 
     @Test
-    void preHandleForbidsCachingAndContentSniffingAndLetTheRequestThrough() {
+    void preHandleForbidsCachingAndContentSniffingAndLetsTheRequestThrough() {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         boolean proceed = interceptor.preHandle(new MockHttpServletRequest(), response, new Object());
