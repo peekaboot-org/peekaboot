@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -136,20 +138,20 @@ class ProfileLookupTraceIT {
 
     @Test
     void aProfileServiceRefusingConnectionsReadsAsUnreachable() throws IOException {
-        int closedPort;
-        try (ServerSocket socket = new ServerSocket(0)) {
-            closedPort = socket.getLocalPort();
-        }
-        ProfileClient refused = new ProfileClient(restClientBuilder, "http://127.0.0.1:" + closedPort);
+        // bound and never listening: the port stays ours and every connection to it is refused
+        try (Socket held = new Socket()) {
+            held.bind(new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 0));
+            ProfileClient refused = new ProfileClient(restClientBuilder, "http://127.0.0.1:" + held.getLocalPort());
 
-        try (LogCapture logs = LogCapture.attach(ProfileClient.class)) {
-            assertThat(refused.lookup(withEmail.getId(), withEmail.getEmail(), ProfileCall.LOOKUP))
-                    .isEqualTo(ProfileLookup.unreachable());
+            try (LogCapture logs = LogCapture.attach(ProfileClient.class)) {
+                assertThat(refused.lookup(withEmail.getId(), withEmail.getEmail(), ProfileCall.LOOKUP))
+                        .isEqualTo(ProfileLookup.unreachable());
 
-            assertThat(logs.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).contains("profile lookup for person " + withEmail.getId());
-            });
+                assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                    assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                    assertThat(event.getFormattedMessage()).contains("profile lookup for person " + withEmail.getId());
+                });
+            }
         }
     }
 
