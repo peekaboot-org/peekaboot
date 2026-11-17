@@ -196,8 +196,8 @@ public class InsightsProperties {
 
     public static class Persistence {
 
-        /** How often the rings are written to insights.snapshot. A crash loses at most this much, a normal shutdown nothing. */
-        private Duration interval = Duration.ofMinutes(5);
+        /** How often the changes to the rings are written. A crash loses at most this much, a normal shutdown nothing. */
+        private Duration interval = Duration.ofMinutes(1);
 
         /** How old a snapshot may be and still be loaded; defaults to the coarsest level's span (interval x size). */
         private Duration maxAge;
