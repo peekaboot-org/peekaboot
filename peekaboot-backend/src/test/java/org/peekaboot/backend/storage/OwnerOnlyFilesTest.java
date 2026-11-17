@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
@@ -250,6 +251,58 @@ class OwnerOnlyFilesTest {
         assertThat(victim).doesNotExist();
     }
 
+    @Test
+    void appendsToTheFileThatIsThere() throws IOException {
+        Path file = directory.resolve("journal");
+        Files.writeString(file, "first");
+
+        append(file, "second");
+
+        assertThat(file).hasContent("firstsecond");
+    }
+
+    @Test
+    void refusesToAppendToAMissingFileAndCreatesNone() {
+        Path file = directory.resolve("journal");
+
+        assertThatThrownBy(() -> append(file, "content")).isInstanceOf(NoSuchFileException.class);
+
+        assertThat(file).doesNotExist();
+    }
+
+    @Test
+    void neverAppendsThroughASymlinkPlantedAtThePath() throws IOException {
+        Path victim = directory.resolve("victim");
+        Files.writeString(victim, "untouched");
+        Path file = directory.resolve("journal");
+        Files.createSymbolicLink(file, victim);
+
+        assertThatThrownBy(() -> append(file, "content")).isInstanceOf(IOException.class);
+
+        assertThat(victim).hasContent("untouched");
+    }
+
+    @Test
+    void anInterruptEndsAnAppendInFlight() throws Exception {
+        Path file = directory.resolve("journal");
+        Files.writeString(file, "first");
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread interrupted = Thread.ofPlatform().unstarted(() -> {
+            Thread.currentThread().interrupt();
+            try {
+                append(file, "second");
+            } catch (IOException | RuntimeException e) {
+                failure.set(e);
+            }
+        });
+
+        interrupted.start();
+        interrupted.join();
+
+        assertThat(failure.get()).isInstanceOf(ClosedByInterruptException.class);
+        assertThat(file).hasContent("first");
+    }
+
     private Path temporary(String name, Instant lastModified) throws IOException {
         Path temporary = Files.writeString(directory.resolve(name), "half");
         return Files.setLastModifiedTime(temporary, FileTime.from(lastModified));
@@ -277,6 +330,12 @@ class OwnerOnlyFilesTest {
 
     private static byte[] bytes(String content) {
         return content.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void append(Path file, String content) throws IOException {
+        try (OutputStream out = OwnerOnlyFiles.openForAppend(file)) {
+            out.write(bytes(content));
+        }
     }
 
     private static void write(Path file, String content) throws IOException {

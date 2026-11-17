@@ -29,7 +29,8 @@ import java.util.Set;
  * decide who else can read them. On a file system without POSIX permissions (Windows) the
  * platform defaults apply. A write never follows a symlink planted at its path. A state file
  * opened for writing replaces whatever sat there, a temporary is created under a name nothing
- * else has, and a lock file is refused while a link sits at its path.
+ * else has, and a lock file is refused while a link sits at its path. A file opened for
+ * appending must already exist.
  */
 public final class OwnerOnlyFiles {
 
@@ -50,6 +51,8 @@ public final class OwnerOnlyFiles {
     private static final Set<OpenOption> CREATE_FRESH = Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
     private static final Set<OpenOption> CREATE_MISSING =
             Set.of(StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+
+    private static final Set<OpenOption> APPEND_EXISTING = Set.of(StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS);
 
     private OwnerOnlyFiles() {}
 
@@ -139,6 +142,12 @@ public final class OwnerOnlyFiles {
         } catch (UnsupportedOperationException e) {
             return Files.newOutputStream(file, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         }
+    }
+
+    /** Opens {@code file} to append to it. It must exist: an append never creates a file and never follows a symlink at its path. */
+    public static OutputStream openForAppend(Path file) throws IOException {
+        // a channel, for the same reason as in replaceAtomically
+        return Channels.newOutputStream(Files.newByteChannel(file, APPEND_EXISTING));
     }
 
     /**
