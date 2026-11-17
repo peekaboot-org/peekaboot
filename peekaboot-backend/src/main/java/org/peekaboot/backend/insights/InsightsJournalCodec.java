@@ -121,7 +121,12 @@ final class InsightsJournalCodec {
         if (in.readInt() != checksum(payload)) {
             throw new IOException("insights journal record fails its checksum");
         }
-        return Optional.of(readPayload(new DataInputStream(new ByteArrayInputStream(payload)), header));
+        DataInputStream entries = new DataInputStream(new ByteArrayInputStream(payload));
+        InsightsSnapshot record = readPayload(entries, header);
+        if (entries.available() > 0) {
+            throw new IOException("insights journal record holds " + entries.available() + " bytes after its entries");
+        }
+        return Optional.of(record);
     }
 
     private static void writePayload(DataOutputStream out, Header header, InsightsSnapshot entries) throws IOException {
@@ -170,6 +175,11 @@ final class InsightsJournalCodec {
                     + levels.size() + " the record declares");
         }
         for (int level = 0; level < byLevel.size(); level++) {
+            int columns = byLevel.get(level).length;
+            if (columns != columnsAt(level)) {
+                throw new IOException("insights series " + id + " holds " + columns + " columns at level " + level
+                        + ", not the " + columnsAt(level) + " the format declares");
+            }
             int count = levels.get(level).count();
             for (double[] column : byLevel.get(level)) {
                 if (column.length != count) {

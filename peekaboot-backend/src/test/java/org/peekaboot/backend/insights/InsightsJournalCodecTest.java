@@ -280,6 +280,27 @@ class InsightsJournalCodecTest {
     }
 
     @Test
+    void aLevelWithAnotherNumberOfColumnsIsRefusedRatherThanWritten() {
+        Map<String, List<double[][]>> series = new LinkedHashMap<>(entries().series());
+        series.put("a", List.of(new double[][] {{1.0, Double.NaN}}, Arrays.copyOf(statColumns(10), 7)));
+        InsightsSnapshot contradicting = new InsightsSnapshot(WRITTEN_AT, levels(2, 1), series);
+
+        assertThatThrownBy(() -> InsightsJournalCodec.encodeRecord(HEADER, contradicting))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("series a")
+                .hasMessageContaining("7 columns at level 1");
+    }
+
+    @Test
+    void aPayloadWithBytesLeftAfterItsEntriesIsRefused() throws IOException {
+        byte[] record = framed(concat(handBuiltPayload(2), new byte[Double.BYTES]));
+
+        assertThatThrownBy(() -> decoded(record))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("8 bytes after its entries");
+    }
+
+    @Test
     void aRecordCoveringOtherLevelsThanTheHeaderIsRefusedRatherThanWritten() {
         InsightsSnapshot oneLevel = new InsightsSnapshot(
                 WRITTEN_AT,
