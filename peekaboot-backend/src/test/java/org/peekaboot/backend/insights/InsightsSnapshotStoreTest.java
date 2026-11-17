@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +42,7 @@ import org.peekaboot.testsupport.LogCapture;
 class InsightsSnapshotStoreTest {
 
     private static final List<InsightsSnapshot.Level> GEOMETRY = List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0));
+    private static final Set<String> CONFIGURED_SERIES = Set.of("cpu.process", "heap.used");
     private static final InsightsJournalCodec.Header JOURNAL_HEADER =
             new InsightsJournalCodec.Header(GEOMETRY, List.of("cpu.process"));
     private static final long NOW = Instant.parse("2026-09-09T12:00:00Z").toEpochMilli();
@@ -108,7 +110,7 @@ class InsightsSnapshotStoreTest {
     }
 
     private Optional<InsightsSnapshot> loadWith(InsightsSnapshotStore store) {
-        store.beginLoad();
+        store.beginLoad(CONFIGURED_SERIES);
         return store.awaitSnapshot(Duration.ofSeconds(5));
     }
 
@@ -680,10 +682,43 @@ class InsightsSnapshotStoreTest {
         writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
         InsightsSnapshot largerRings = snapshot(NOW, 10_000, InsightsProperties.MAX_LEVEL_SIZE);
 
-        InsightsJournal.Replay replay = new InsightsJournal(journal(), GEOMETRY).replayOnto(largerRings);
+        InsightsJournal.Replay replay =
+                new InsightsJournal(journal(), GEOMETRY).replayOnto(largerRings, CONFIGURED_SERIES);
 
         assertThat(replay.appliedRecords()).isFalse();
         assertThat(replay.history()).containsSame(largerRings);
+    }
+
+    @Test
+    void aJournalSeriesTheConfigurationLacksIsLeftOutOfTheRestore() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        InsightsJournalCodec.Header withUnconfigured =
+                new InsightsJournalCodec.Header(GEOMETRY, List.of("cpu.process", "gone.series"));
+        Map<String, List<double[][]>> series = new LinkedHashMap<>();
+        series.put("cpu.process", List.<double[][]>of(new double[][] {{3.0}}));
+        series.put("gone.series", List.<double[][]>of(new double[][] {{9.0}}));
+        writeJournal(
+                withUnconfigured,
+                new InsightsSnapshot(NOW, List.of(new InsightsSnapshot.Level(10_000, 90, 30_000, 1)), series));
+
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+
+        assertThat(restored.series()).containsOnlyKeys("cpu.process");
+        assertThat(level0(restored)).containsExactly(1.0, 2.0, 3.0);
+    }
+
+    @Test
+    void aSnapshotSeriesTheConfigurationLacksIsLeftOutOfTheRestore() throws IOException {
+        Map<String, List<double[][]>> series = new LinkedHashMap<>();
+        series.put("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}}));
+        series.put("gone.series", List.<double[][]>of(new double[][] {{5.0, 6.0}}));
+        writeSnapshot(new InsightsSnapshot(NOW, List.of(new InsightsSnapshot.Level(10_000, 90, 20_000, 2)), series));
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+
+        assertThat(restored.series()).containsOnlyKeys("cpu.process");
+        assertThat(level0(restored)).containsExactly(1.0, 2.0, 3.0);
     }
 
     @Test
@@ -776,11 +811,10 @@ class InsightsSnapshotStoreTest {
 
             assertThat(journalLog.appender().list)
                     .singleElement()
-                    .satisfies(
-                            event -> assertThat(event.getFormattedMessage())
-                                    .isEqualTo(
-                                            "Peekaboot insights: " + journal()
-                                                    + " was written for other ring levels than configured; starting with empty history"));
+                    .satisfies(event -> assertThat(event.getFormattedMessage())
+                            .isEqualTo("Peekaboot insights: " + journal()
+                                    + " was written for other ring levels than configured;"
+                                    + " starting with empty history"));
             // a replayed journal would have reached the store's geometry check, which announces its discard
             assertThat(storeLog.appender().list).isEmpty();
         }

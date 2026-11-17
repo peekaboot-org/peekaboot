@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
@@ -106,8 +107,8 @@ final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     @Override
-    public void beginLoad() {
-        historyLoad.begin("peekaboot-insights-restore", () -> publish(load()));
+    public void beginLoad(Set<String> seriesIds) {
+        historyLoad.begin("peekaboot-insights-restore", () -> publish(load(seriesIds)));
     }
 
     /**
@@ -128,7 +129,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
 
     /**
      * The persisted rings, or empty if there are none, they did not arrive in time, or
-     * {@link #beginLoad()} was never called - this must never throw, since it runs on a
+     * {@link #beginLoad} was never called - this must never throw, since it runs on a
      * collector level thread whose contract is to keep ticking regardless. An interrupt
      * restores the thread's flag and returns empty rather than lingering for the full
      * timeout, which is what lets shutdown cut a parked restore short.
@@ -282,7 +283,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
         schedule.runEvery(interval.toMillis(), 0, boundary -> write(false));
     }
 
-    private Optional<InsightsSnapshot> load() {
+    private Optional<InsightsSnapshot> load(Set<String> seriesIds) {
         if (!Files.exists(file) && !Files.exists(journal.file())) {
             return Optional.empty();
         }
@@ -302,7 +303,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
                 return Optional.empty();
             }
         }
-        InsightsJournal.Replay replay = journal.replayOnto(snapshot);
+        InsightsJournal.Replay replay = journal.replayOnto(snapshot, seriesIds);
         Optional<InsightsSnapshot> history = replay.history();
         if (history.isEmpty()) {
             discard();

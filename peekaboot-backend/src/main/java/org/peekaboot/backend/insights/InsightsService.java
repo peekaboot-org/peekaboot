@@ -47,7 +47,7 @@ public final class InsightsService implements SmartLifecycle {
 
     @Override
     public void start() {
-        store.beginLoad();
+        store.beginLoad(collector.seriesIds());
         collector.start();
         store.start(collector::captureAfter, collector::hasRestoredHistory);
         log.info(

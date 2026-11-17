@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -217,6 +218,11 @@ public final class InsightsCollector {
         rings.appendStats(level, epochMs, entries);
 
         listener.onRollUp(level, epochMs, entries);
+    }
+
+    /** The series the rings hold, so a load builds nothing for a series it cannot restore. */
+    Set<String> seriesIds() {
+        return Collections.unmodifiableSet(samplers.keySet());
     }
 
     /** One level's rings as the API reads them; see {@link SeriesRings#levelData(int, Instant)}. */

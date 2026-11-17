@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.slf4j.Logger;
@@ -77,9 +78,10 @@ final class InsightsJournal {
      * The replay ends at the clean end of the file, at a record that cannot be read, or at one
      * that leaves a hole; what came before it stays. A journal whose header cannot be read, or
      * whose replay throws, is deleted and the snapshot used alone. Only a journal and a snapshot
-     * of the configured ring levels are replayed, so no ring is sized by what a file declares.
+     * of the configured ring levels are replayed, so no ring is sized by what a file declares,
+     * and only {@code seriesIds} are kept, so none is built for a series a file merely names.
      */
-    Replay replayOnto(@Nullable InsightsSnapshot snapshot) {
+    Replay replayOnto(@Nullable InsightsSnapshot snapshot, Set<String> seriesIds) {
         Optional<InsightsSnapshot> alone = Optional.ofNullable(snapshot);
         if (!Files.exists(file)) {
             return new Replay(alone, false);
@@ -102,7 +104,7 @@ final class InsightsJournal {
                 return new Replay(alone, false);
             }
             InsightsSnapshot history = snapshot != null ? snapshot : InsightsJournalReplay.emptyHistory(geometry);
-            return applyRecords(in, header, history, snapshot != null);
+            return applyRecords(in, header, history, snapshot != null, seriesIds);
         } catch (IOException e) {
             log.debug("Could not read the insights journal {}", file, e);
             return new Replay(alone, false);
@@ -133,8 +135,12 @@ final class InsightsJournal {
     }
 
     private Replay applyRecords(
-            DataInputStream in, InsightsJournalCodec.Header header, InsightsSnapshot start, boolean hasSnapshot) {
-        InsightsJournalReplay replay = new InsightsJournalReplay(start);
+            DataInputStream in,
+            InsightsJournalCodec.Header header,
+            InsightsSnapshot start,
+            boolean hasSnapshot,
+            Set<String> seriesIds) {
+        InsightsJournalReplay replay = new InsightsJournalReplay(start, seriesIds);
         boolean applied = false;
         try {
             for (Optional<InsightsSnapshot> record = InsightsJournalCodec.readRecord(in, header);

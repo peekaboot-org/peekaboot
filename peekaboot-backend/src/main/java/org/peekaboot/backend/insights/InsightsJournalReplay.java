@@ -6,24 +6,32 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * A history with journal records applied in order. The entries sit in rings of each level's size,
  * so a record costs what it adds, not what the history holds, and the snapshot is built once.
+ * Only the series it is given are kept: one the rings do not have gets no rings, and its values are dropped.
  */
 final class InsightsJournalReplay {
 
     private final InsightsSnapshot.Level[] levels;
+    private final Set<String> seriesIds;
     /** Per series, per level, per column, as {@link InsightsSnapshot#series()} orders them. */
     private final Map<String, DoubleRing[][]> series = new LinkedHashMap<>();
 
     private long writtenAtEpochMs;
     private long entriesCopied;
 
-    InsightsJournalReplay(InsightsSnapshot history) {
+    InsightsJournalReplay(InsightsSnapshot history, Set<String> seriesIds) {
         this.writtenAtEpochMs = history.writtenAtEpochMs();
         this.levels = history.levels().toArray(InsightsSnapshot.Level[]::new);
-        history.series().forEach((id, byLevel) -> series.put(id, rings(byLevel)));
+        this.seriesIds = seriesIds;
+        history.series().forEach((id, byLevel) -> {
+            if (seriesIds.contains(id)) {
+                series.put(id, rings(byLevel));
+            }
+        });
     }
 
     /** No series, every level without an end, dated 0: what a journal applies to without a snapshot. */
@@ -46,7 +54,7 @@ final class InsightsJournalReplay {
         }
 
         for (String id : record.series().keySet()) {
-            if (!series.containsKey(id)) {
+            if (seriesIds.contains(id) && !series.containsKey(id)) {
                 series.put(id, rings(gapsForEveryLevel()));
             }
         }

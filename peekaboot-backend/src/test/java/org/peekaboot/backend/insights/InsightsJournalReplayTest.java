@@ -7,12 +7,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class InsightsJournalReplayTest {
 
     private static final String CPU = "cpu.process";
     private static final int STAT_COLUMNS = InsightsSnapshot.STAT_COLUMNS.size();
+    private static final Set<String> CONFIGURED_SERIES = Set.of(CPU, "a", "b", "c");
 
     private static final List<InsightsSnapshot.Level> TWO_LEVELS =
             List.of(new InsightsSnapshot.Level(10_000, 5, 0, 0), new InsightsSnapshot.Level(60_000, 4, 0, 0));
@@ -151,7 +153,7 @@ class InsightsJournalReplayTest {
     @Test
     void aHoleOnAnyLevelLeavesTheWholeRecordUnapplied() {
         InsightsSnapshot history = twoLevels(1_000, 30_000, new double[] {1, 2, 3}, 60_000, new double[] {10});
-        InsightsJournalReplay replay = new InsightsJournalReplay(history);
+        InsightsJournalReplay replay = new InsightsJournalReplay(history, CONFIGURED_SERIES);
         InsightsSnapshot record = twoLevels(2_000, 40_000, new double[] {4}, 240_000, new double[] {11});
 
         assertThat(replay.apply(record)).isFalse();
@@ -183,7 +185,8 @@ class InsightsJournalReplayTest {
         for (String id : List.of("a", "b", "c")) {
             historySeries.put(id, List.of(new double[1][100], new double[STAT_COLUMNS][50]));
         }
-        InsightsJournalReplay replay = new InsightsJournalReplay(new InsightsSnapshot(1_000, fullRings, historySeries));
+        InsightsJournalReplay replay =
+                new InsightsJournalReplay(new InsightsSnapshot(1_000, fullRings, historySeries), CONFIGURED_SERIES);
         int records = 200;
         for (int entry = 1; entry <= records; entry++) {
             List<InsightsSnapshot.Level> levels = List.of(
@@ -207,6 +210,29 @@ class InsightsJournalReplayTest {
     }
 
     @Test
+    void aSeriesTheConfigurationLacksIsLeftOutBeforeAnythingIsBuiltForIt() {
+        Map<String, List<double[][]>> historySeries = new LinkedHashMap<>();
+        historySeries.put(CPU, List.<double[][]>of(level0Columns(1, 2, 3)));
+        historySeries.put("gone", List.<double[][]>of(level0Columns(7, 8, 9)));
+        Map<String, List<double[][]>> recordSeries = new LinkedHashMap<>();
+        recordSeries.put(CPU, List.<double[][]>of(level0Columns(4)));
+        recordSeries.put("also.gone", List.<double[][]>of(level0Columns(5)));
+        List<InsightsSnapshot.Level> ending30s = List.of(new InsightsSnapshot.Level(10_000, 5, 30_000, 3));
+        List<InsightsSnapshot.Level> ending40s = List.of(new InsightsSnapshot.Level(10_000, 5, 40_000, 1));
+        InsightsJournalReplay replay =
+                new InsightsJournalReplay(new InsightsSnapshot(1_000, ending30s, historySeries), Set.of(CPU));
+
+        assertThat(replay.apply(new InsightsSnapshot(2_000, ending40s, recordSeries)))
+                .isTrue();
+        InsightsSnapshot result = replay.result();
+
+        assertThat(result.series()).containsOnlyKeys(CPU);
+        assertThat(level0(result, CPU)).containsExactly(1, 2, 3, 4);
+        // CPU's three entries in, its one new entry, its four out: nothing for the other two.
+        assertThat(replay.entriesCopied()).isEqualTo(8);
+    }
+
+    @Test
     void anEmptyHistoryHasTheGeometryAndNothingElse() {
         InsightsSnapshot empty = InsightsJournalReplay.emptyHistory(TWO_LEVELS);
 
@@ -219,7 +245,7 @@ class InsightsJournalReplayTest {
 
     /** {@code history} with {@code record} applied, or empty where the record leaves a hole. */
     private static Optional<InsightsSnapshot> applied(InsightsSnapshot history, InsightsSnapshot record) {
-        InsightsJournalReplay replay = new InsightsJournalReplay(history);
+        InsightsJournalReplay replay = new InsightsJournalReplay(history, CONFIGURED_SERIES);
         return replay.apply(record) ? Optional.of(replay.result()) : Optional.empty();
     }
 

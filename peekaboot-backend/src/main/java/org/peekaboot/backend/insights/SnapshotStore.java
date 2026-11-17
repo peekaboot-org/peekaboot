@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -17,7 +18,7 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
     @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
     SnapshotStore NONE = new SnapshotStore() {
         @Override
-        public void beginLoad() {}
+        public void beginLoad(Set<String> seriesIds) {}
 
         @Override
         public void start(RingCapture capture, BooleanSupplier historyRestored) {}
@@ -42,8 +43,11 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
         InsightsSnapshot entriesAfter(long[] persistedEndEpochMs);
     }
 
-    /** Submits the load; returns immediately, so no context refresh ever waits on a file. */
-    void beginLoad();
+    /**
+     * Submits the load of {@code seriesIds}' history, the series the rings hold; returns
+     * immediately, so no context refresh ever waits on a file.
+     */
+    void beginLoad(Set<String> seriesIds);
 
     /**
      * Starts the periodic writer against {@code capture}, the collector's current state.
