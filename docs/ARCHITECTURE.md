@@ -122,7 +122,7 @@ and the rings start empty, exactly as they would with storage off.
 The journal is applied on top of the snapshot by entry date (`InsightsJournalReplay`). A cut or
 damaged record, or one that leaves a hole after the level's end, ends the replay, and what came
 before it stays. An unreadable header or a replay that throws deletes the journal, and the
-snapshot restores alone. A journal written for other ring levels than the snapshot is ignored.
+snapshot restores alone. A journal written for other ring levels than configured is ignored.
 
 Every length read from the file is checked against a plausibility bound before it is used to
 allocate, so a corrupt file cannot provoke an oversized allocation. The level-count and

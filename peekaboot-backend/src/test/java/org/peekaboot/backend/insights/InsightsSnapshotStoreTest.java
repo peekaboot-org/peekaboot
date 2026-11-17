@@ -657,15 +657,9 @@ class InsightsSnapshotStoreTest {
     }
 
     @Test
-    void aJournalForOtherRingLevelsThanTheSnapshotIsNotApplied() throws IOException {
+    void aJournalWithLargerRingsThanConfiguredBesideASnapshotIsNotApplied() throws IOException {
         writeSnapshot(snapshot(NOW, 10_000, 90));
-        InsightsJournalCodec.Header otherLevels = new InsightsJournalCodec.Header(
-                List.of(new InsightsSnapshot.Level(30_000, 90, 0, 0)), List.of("cpu.process"));
-        InsightsSnapshot record = new InsightsSnapshot(
-                NOW,
-                List.of(new InsightsSnapshot.Level(30_000, 90, 60_000, 1)),
-                Map.of("cpu.process", List.<double[][]>of(new double[][] {{3.0}})));
-        writeJournal(otherLevels, record);
+        writeJournalWithLargerRingsThanConfigured();
 
         try (LogCapture capture = LogCapture.attach(InsightsJournal.class, Level.INFO)) {
             assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow()))
@@ -673,10 +667,23 @@ class InsightsSnapshotStoreTest {
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.INFO);
-                assertThat(event.getFormattedMessage()).contains("other ring levels");
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: " + journal()
+                                + " was written for other ring levels than configured; restoring the snapshot alone");
             });
         }
         assertThat(journal()).exists();
+    }
+
+    @Test
+    void aSnapshotOfOtherRingLevelsThanConfiguredHasNoJournalReplayedOntoIt() throws IOException {
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+        InsightsSnapshot largerRings = snapshot(NOW, 10_000, InsightsProperties.MAX_LEVEL_SIZE);
+
+        InsightsJournal.Replay replay = new InsightsJournal(journal(), GEOMETRY).replayOnto(largerRings);
+
+        assertThat(replay.appliedRecords()).isFalse();
+        assertThat(replay.history()).containsSame(largerRings);
     }
 
     @Test
@@ -759,18 +766,28 @@ class InsightsSnapshotStoreTest {
     }
 
     @Test
-    void aJournalForOtherRingLevelsThanConfiguredTakesBothFilesWithIt() throws IOException {
-        InsightsJournalCodec.Header otherLevels = new InsightsJournalCodec.Header(
-                List.of(new InsightsSnapshot.Level(30_000, 90, 0, 0)), List.of("cpu.process"));
-        InsightsSnapshot record = new InsightsSnapshot(
-                NOW,
-                List.of(new InsightsSnapshot.Level(30_000, 90, 60_000, 1)),
-                Map.of("cpu.process", List.<double[][]>of(new double[][] {{3.0}})));
-        writeJournal(otherLevels, record);
+    void aJournalWithLargerRingsThanConfiguredAndNoSnapshotIsNotReplayedAndBlocksNoWrite() throws IOException {
+        writeJournalWithLargerRingsThanConfigured();
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
 
-        assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
-                .isEmpty();
+        try (LogCapture journalLog = LogCapture.attach(InsightsJournal.class, Level.INFO);
+                LogCapture storeLog = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
+            assertThat(loadWith(store)).isEmpty();
+
+            assertThat(journalLog.appender().list)
+                    .singleElement()
+                    .satisfies(
+                            event -> assertThat(event.getFormattedMessage())
+                                    .isEqualTo(
+                                            "Peekaboot insights: " + journal()
+                                                    + " was written for other ring levels than configured; starting with empty history"));
+            // a replayed journal would have reached the store's geometry check, which announces its discard
+            assertThat(storeLog.appender().list).isEmpty();
+        }
         assertThat(journal()).doesNotExist();
+        store.start(ends -> ownSamplesOnly(9.0), () -> false);
+        store.stop();
+        assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(9.0);
     }
 
     @Test
@@ -1179,6 +1196,18 @@ class InsightsSnapshotStoreTest {
                 writtenAt,
                 List.of(new InsightsSnapshot.Level(10_000, 90, end, values.length)),
                 Map.of("cpu.process", List.<double[][]>of(new double[][] {values})));
+    }
+
+    /** One level of the configured interval, with rings far larger than the configured 90. */
+    private void writeJournalWithLargerRingsThanConfigured() throws IOException {
+        int size = InsightsProperties.MAX_LEVEL_SIZE;
+        writeJournal(
+                new InsightsJournalCodec.Header(
+                        List.of(new InsightsSnapshot.Level(10_000, size, 0, 0)), List.of("cpu.process")),
+                new InsightsSnapshot(
+                        NOW,
+                        List.of(new InsightsSnapshot.Level(10_000, size, 30_000, 1)),
+                        Map.of("cpu.process", List.<double[][]>of(new double[][] {{3.0}}))));
     }
 
     private static InsightsSnapshot zeroIntervalEntries(long end, double... values) {

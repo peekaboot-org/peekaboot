@@ -76,7 +76,8 @@ final class InsightsJournal {
      * The journal's records applied on top of {@code snapshot}, or on top of nothing without one.
      * The replay ends at the clean end of the file, at a record that cannot be read, or at one
      * that leaves a hole; what came before it stays. A journal whose header cannot be read, or
-     * whose replay throws, is deleted and the snapshot used alone.
+     * whose replay throws, is deleted and the snapshot used alone. Only a journal and a snapshot
+     * of the configured ring levels are replayed, so no ring is sized by what a file declares.
      */
     Replay replayOnto(@Nullable InsightsSnapshot snapshot) {
         Optional<InsightsSnapshot> alone = Optional.ofNullable(snapshot);
@@ -88,16 +89,19 @@ final class InsightsJournal {
             if (header == null) {
                 return new Replay(alone, false);
             }
-            if (snapshot != null && !InsightsSnapshot.sameGeometry(header.geometry(), snapshot.levels())) {
-                log.info(
-                        "Peekaboot insights: {} was written for other ring levels than {};"
-                                + " restoring the snapshot alone",
-                        file,
-                        file.resolveSibling(InsightsSnapshotStore.FILE_NAME));
+            // The replay sizes its rings by these levels; the store discards a snapshot of others, and this file with
+            // it.
+            if (snapshot != null && !InsightsSnapshot.sameGeometry(snapshot.levels(), geometry)) {
                 return new Replay(alone, false);
             }
-            InsightsSnapshot history =
-                    snapshot != null ? snapshot : InsightsJournalReplay.emptyHistory(header.geometry());
+            if (!InsightsSnapshot.sameGeometry(header.geometry(), geometry)) {
+                log.info(
+                        "Peekaboot insights: {} was written for other ring levels than configured; {}",
+                        file,
+                        snapshot != null ? "restoring the snapshot alone" : "starting with empty history");
+                return new Replay(alone, false);
+            }
+            InsightsSnapshot history = snapshot != null ? snapshot : InsightsJournalReplay.emptyHistory(geometry);
             return applyRecords(in, header, history, snapshot != null);
         } catch (IOException e) {
             log.debug("Could not read the insights journal {}", file, e);
