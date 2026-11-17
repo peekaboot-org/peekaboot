@@ -300,8 +300,9 @@ restart decodes the files once. A snapshot of another version that the restore c
 a journal beside it. Otherwise it replays the files into an empty store with the live
 store's caps and copies, in arrival order and as written, the lines of what that store keeps: the
 spans and logs each trace's caps
-kept, its last request, and the newest `max-untraced-logs` lines written outside any trace. A
-discard, or an eviction from every bucket, ends a trace's bundle, and the trace's next line begins
+kept, its last request, and the newest `max-untraced-logs` lines written outside any trace. Two
+stores of the same caps are in memory while a fold runs. A discard, or an eviction from every
+bucket, ends a trace's bundle, and the trace's next line begins
 another, so the lines before that are not copied. A trace whose caps dropped anything, or whose
 bundle began with a line the fold does not copy, gets one remnant line (`TraceRemnant`) where its
 bundle began. It carries the dropped counts, whether the trace is complete and failed, the windows
@@ -344,7 +345,8 @@ writer leaves the file alone, since the digest was not read back and a write wou
 stored one. At startup the journal's thread reads it back after the traces'
 replay and before the restore gate opens, so the live inputs the gate held count on top of the
 restored entries. The replay never reaches `ErrorDigestRecorder`, so a restored failure counts
-once, in the run that captured it.
+once, in the run that captured it. `ErrorDigestRecorder` logs one WARN per run when it cannot
+record a trace, and the digest misses that entry.
 
 The file is a cache like the trace files: a header of another version deletes it with one INFO, an
 undecodable line costs only itself, and a failed write warns once and ends writing for the run. A
@@ -580,7 +582,9 @@ relative for the same reason: Spring's context-relative redirect would drop the 
 guard, both filters, the error page, the interceptor registration and `OtelSpanExporter`'s span
 skip. The prefix is read from Boot's `DispatcherServletPath`, which lives in `spring-boot-webmvc`;
 a nested configuration conditional on that class reads it, and its `@ConditionalOnMissingClass`
-twin uses the root. A base path of `/` excludes nothing extra:
+twin uses the root. With Spring MVC on the class path but no `DispatcherServletPath` bean, the
+bean logs a WARN and assumes the `DispatcherServlet` is mapped at `/`, so the guard and the
+dashboard sit under `/peekaboot/*`. A base path of `/` excludes nothing extra:
 there is no prefix to tell those requests apart by. The bean also carries the resolved
 `server.servlet.context-path`, because a span's HTTP path tag still has that prefix in front;
 `isExcludedRequestPath` strips it before matching, so actuator and Peekaboot spans are skipped
@@ -819,6 +823,12 @@ The ones a change is most likely to undo:
   `ValuePatternCostTest` holds each rule to that.
 - `MaskingEngine.maskValue` merges spans that overlap, so two rules that claim part of the same
   text mask it once, through to the later end.
+- Some inputs are masked only in part. A PEM block without a footer masks to the end of the
+  value, and so does a quoted `name="value"` option whose closing quote is missing. A quoted
+  value that holds a line break before its closing quote is not masked. In a URL, up to five
+  digits after the colon followed by `/` read as a port, so `user:12345/x@host` has no userinfo
+  to mask. A password that holds `@` together with `/`, `?` or `#` is masked only up to an `@`
+  inside it.
 - There is no entropy-based detection. A git SHA, a UUID or a base64 asset would trip it.
 
 The endpoint objects `ActuatorSourcesAutoConfiguration` builds are not beans. A
@@ -918,9 +928,11 @@ answering against a response wrapper that records `sendError` instead of sending
 `ResponseStatusException` keeps its status and headers, an `@ResponseStatus` its reason, a
 `TypeMismatchException` or an unreadable body its 400, and the headers either mapping sets
 (`Retry-After`, `Allow` on a 405) reach the real response; the recorded message becomes
-`ERROR_MESSAGE`. A cause chain is first walked once with cycle detection: a cyclic one never
-reaches Spring, whose cause walks would never return from it, and only the status of a
-`ResponseStatusException` or a merged `@ResponseStatus` on it counts, without headers or reason.
+`ERROR_MESSAGE`. `spring.mvc.log-resolved-exception` gives that status mapping the same warn log
+category it gives Spring's own resolvers. A cause chain is first walked once with cycle
+detection: a cyclic one never reaches Spring, whose cause walks would never return from it, and
+only the status of a `ResponseStatusException` or a merged `@ResponseStatus` on it counts, without
+headers or reason.
 Where that mapping answers without a status, a client that already hung up, the resolver returns
 its empty `ModelAndView`, so nothing is written to the dead connection.
 
@@ -1145,6 +1157,12 @@ It carries `@ConditionalOnClass(WebMvcConfigurer.class)` for the same type: with
 Spring cannot introspect the configuration class in an application that has no Spring MVC on its
 class path, and the context does not start. `SpringMvcAbsentTest` pins that it starts.
 
+`ServerUrlResolver` builds the service URL the ready banner prints from the web server's port,
+`server.servlet.context-path` and `server.address`. An address that is unset, blank, `0.0.0.0` or
+`::` prints as `localhost`. The scheme is `https` where Spring Boot considers TLS on, so a key
+store or an SSL bundle under `server.ssl` is enough and `server.ssl.enabled=false` keeps `http`.
+The Swagger UI URL follows `springdoc.swagger-ui.path`.
+
 `PeekabootWebConfig` is also the only thing that serves the UI bundle. The bundle lives at
 `classpath:/META-INF/peekaboot/ui/`, outside every static location Boot serves by default,
 and its resource handler exists only while `peekaboot.enabled` is `true`. With Peekaboot off
@@ -1273,9 +1291,15 @@ all overridable by an app's own `application.yml`:
   servlet-only. The web type is `spring.main.web-application-type` where the environment
   carries it, and otherwise the one `SpringApplication.getWebApplicationType()` deduced,
   because Boot binds `spring.main.*` onto the application only after the post-processors have
-  run. The dev-toolbar defaults sit behind the same check.
+  run. The dev-toolbar defaults sit behind the same check. The file also turns
+  `hibernate.generate_statistics` on, which the `hibernate.*` insights panels need.
+  `HibernateStatisticsMeterBinder` binds their meters unless `hibernate-micrometer` is on the
+  class path, where Boot's binder registers the same ones.
 - `peekaboot-no-push-defaults.yml`. Applies unconditionally, even when Peekaboot itself is
-  disabled, to keep telemetry from leaving the process by default.
+  disabled, to keep telemetry from leaving the process by default. It sets
+  `management.otlp.metrics.export.enabled` to `false`, since the starter brings Micrometer's OTLP
+  registry and left alone it pushes metrics to `localhost:4318`. Traces and logs need no
+  equivalent, because Boot creates their OTLP exporters only once an endpoint is configured.
 - `peekaboot-off-defaults.yml`. Applies only while `peekaboot.enabled` resolves `false`, on
   every web type. Sets `jdbc.datasource-proxy.enabled` to `false` (datasource-micrometer
   default `true`), so the JDBC instrumentation the starter brings wraps no DataSource of an
@@ -1360,6 +1384,11 @@ the port reads the dashboard.
 
 The banner is logged and not captured: `PeekabootLogbackAppender` drops the listener's logger, so
 the plain-text password exists in the application's log and nowhere in Peekaboot's own data.
+
+`SecurityPostureListener` logs the armed guard's block at INFO. It logs it at WARN while the dev
+toolbar is on, since the toolbar's requests then raise a credential dialog on ordinary pages, and
+while `peekaboot.error-page.enabled` serves a deployment's error page, which has no guard in
+front of it. A rejected sign-in logs at DEBUG.
 
 Without a registered guard, `peekabootDashboardAccess` depends on the detected launch. On
 `LOCAL_DEV` it is a `LoopbackOnlyAccess`, which admits a request only when all four hold:
@@ -1721,6 +1750,10 @@ cursor names. Each candidate is mapped and masked once, by the same `TraceLogMap
 trace's logs go through, and only until the page is full, since `q` reads the masked text. A
 search that stops at the 10,000th line names the oldest line it read, so a page can be short or
 empty and still carry a `next`.
+
+The store numbers a line before it files it, so threads that log at once can file lines out of
+number order. A line filed while a search pages through can then show up on a later page, below
+the cursor, or miss that page and every later one.
 
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot does
 that on the first start in a JVM and on the first start after any application closed or failed
