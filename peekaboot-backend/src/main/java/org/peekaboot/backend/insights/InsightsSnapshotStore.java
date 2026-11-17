@@ -50,7 +50,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
     /** Whether {@link #awaitSnapshot} has returned, so nobody is left to take a later load; same guard. */
     private boolean waitEnded;
 
-    private volatile Supplier<InsightsSnapshot> capture;
+    private volatile RingCapture capture;
     private volatile BooleanSupplier historyRestored = () -> false;
     private volatile Thread writer;
     private final WriteOutage writeOutage = new WriteOutage();
@@ -153,7 +153,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     @Override
-    public void start(Supplier<InsightsSnapshot> capture, BooleanSupplier historyRestored) {
+    public void start(RingCapture capture, BooleanSupplier historyRestored) {
         this.historyRestored = historyRestored;
         this.capture = capture;
         Thread thread = Thread.ofVirtual().name("peekaboot-insights-snapshot").unstarted(this::runWriter);
@@ -189,13 +189,13 @@ final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     private synchronized void write() throws IOException {
-        Supplier<InsightsSnapshot> source = capture;
+        RingCapture source = capture;
         if (source == null) {
             return;
         }
         // Read before capturing: a restore landing in between would vouch for rings captured without it.
         boolean restoredBeforeCapture = historyRestored.getAsBoolean();
-        InsightsSnapshot snapshot = source.get();
+        InsightsSnapshot snapshot = source.entriesAfter(new long[geometry.size()]);
         if (!replacesWhatIsThere(snapshot, restoredBeforeCapture)) {
             return;
         }

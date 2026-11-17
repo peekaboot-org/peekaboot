@@ -3,7 +3,6 @@ package org.peekaboot.backend.insights;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
 
 /**
  * The persistence side of a collector's rings: loaded in the background, written on a
@@ -21,7 +20,7 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
         public void beginLoad() {}
 
         @Override
-        public void start(Supplier<InsightsSnapshot> capture, BooleanSupplier historyRestored) {}
+        public void start(RingCapture capture, BooleanSupplier historyRestored) {}
 
         @Override
         public void stop() {}
@@ -37,6 +36,12 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
         }
     };
 
+    /** The rings' entries dated after each level's persisted end; all of a level's entries where that end is 0. */
+    @FunctionalInterface
+    interface RingCapture {
+        InsightsSnapshot entriesAfter(long[] persistedEndEpochMs);
+    }
+
     /** Submits the load; returns immediately, so no context refresh ever waits on a file. */
     void beginLoad();
 
@@ -45,7 +50,7 @@ interface SnapshotStore extends InsightsCollector.SnapshotSource {
      * {@code historyRestored} reports whether that collector has taken the persisted rings
      * over, which is what decides whether its state may replace them.
      */
-    void start(Supplier<InsightsSnapshot> capture, BooleanSupplier historyRestored);
+    void start(RingCapture capture, BooleanSupplier historyRestored);
 
     /** Stops the writer and takes the final snapshot; called after the collector has stopped. */
     void stop();

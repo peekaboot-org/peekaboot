@@ -156,7 +156,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void whatOneRunWritesTheNextRunReads() throws IOException {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        writer.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
         InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
@@ -171,7 +171,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void theLoadedHistoryIsHandedOverOnce() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        writer.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
         InsightsSnapshotStore store = store(Duration.ofDays(30));
 
@@ -202,12 +202,12 @@ class InsightsSnapshotStoreTest {
     @Test
     void aRunThatNeverSampledDoesNotReplaceGoodHistory() throws IOException {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        writer.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
         long size = Files.size(directory.resolve(InsightsSnapshotStore.FILE_NAME));
 
         InsightsSnapshotStore empty = store(Duration.ofDays(30));
-        empty.start(InsightsSnapshotStoreTest::neverSampled, () -> false);
+        empty.start(ends -> neverSampled(), () -> false);
         empty.stop();
 
         assertThat(Files.size(directory.resolve(InsightsSnapshotStore.FILE_NAME)))
@@ -223,12 +223,12 @@ class InsightsSnapshotStoreTest {
     @MethodSource("takeOverOutcomes")
     void aRunReplacesThePersistedHistoryOnlyOnceItTookItOver(boolean historyRestored, double[] expected) {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        writer.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
         InsightsSnapshotStore second = store(Duration.ofDays(30));
         assertThat(loadWith(second)).isPresent();
-        second.start(() -> ownSamplesOnly(9.0), () -> historyRestored);
+        second.start(ends -> ownSamplesOnly(9.0), () -> historyRestored);
         second.stop();
 
         assertThat(loadWith(store(Duration.ofDays(30))).orElseThrow())
@@ -240,14 +240,14 @@ class InsightsSnapshotStoreTest {
     @Test
     void aCaptureTakenBeforeTheRestoreLandedDoesNotReplaceTheHistory() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        writer.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
         InsightsSnapshotStore second = store(Duration.ofDays(30));
         assertThat(loadWith(second)).isPresent();
         AtomicBoolean restored = new AtomicBoolean();
         second.start(
-                () -> {
+                ends -> {
                     InsightsSnapshot preRestore = ownSamplesOnly(9.0);
                     restored.set(true);
                     return preRestore;
@@ -264,7 +264,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aWriteThatFailsLeavesNoPartialFileBehind() {
         InsightsSnapshotStore store = store(Duration.ofDays(30));
-        store.start(InsightsSnapshotStoreTest::contradictsItsOwnHeader, () -> false);
+        store.start(ends -> contradictsItsOwnHeader(), () -> false);
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
             store.stop();
@@ -287,7 +287,7 @@ class InsightsSnapshotStoreTest {
                         snapshot(NOW, 10_000, 90))
                 .iterator();
         InsightsSnapshotStore store = store(Duration.ofDays(30));
-        store.start(captures::next, () -> false);
+        store.start(ends -> captures.next(), () -> false);
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
             store.writeNow();
@@ -309,7 +309,7 @@ class InsightsSnapshotStoreTest {
                         contradictsItsOwnHeader(), neverSampled(), contradictsItsOwnHeader(), neverSampled())
                 .iterator();
         InsightsSnapshotStore store = store(Duration.ofDays(30));
-        store.start(captures::next, () -> false);
+        store.start(ends -> captures.next(), () -> false);
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
             store.writeNow();
@@ -341,7 +341,7 @@ class InsightsSnapshotStoreTest {
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
             store.start(
-                    () -> {
+                    ends -> {
                         if (firstCapture.getAndSet(false)) {
                             scheduledWriteInFlight.countDown();
                             while (!Thread.currentThread().isInterrupted()) {
@@ -363,7 +363,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aSnapshotDatedInTheFutureIsDeleted() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW + Duration.ofDays(1).toMillis(), 10_000, 90), () -> false);
+        writer.start(ends -> snapshot(NOW + Duration.ofDays(1).toMillis(), 10_000, 90), () -> false);
         writer.stop();
 
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
@@ -374,7 +374,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aSnapshotOlderThanTheCutoffIsDeleted() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW - Duration.ofDays(31).toMillis(), 10_000, 90), () -> false);
+        writer.start(ends -> snapshot(NOW - Duration.ofDays(31).toMillis(), 10_000, 90), () -> false);
         writer.stop();
 
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
@@ -385,7 +385,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aReshapedRingGeometryDiscardsTheWholeFile() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW, 30_000, 90), () -> false); // level 0 was 10s
+        writer.start(ends -> snapshot(NOW, 30_000, 90), () -> false); // level 0 was 10s
         writer.stop();
 
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
@@ -422,7 +422,7 @@ class InsightsSnapshotStoreTest {
                 Duration.ofHours(1),
                 Duration.ofDays(30),
                 FIXED_SCHEDULE);
-        store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        store.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
 
         store.stop();
 
@@ -438,7 +438,7 @@ class InsightsSnapshotStoreTest {
         Files.writeString(victim, "untouched");
         Files.createSymbolicLink(directory.resolve("insights.snapshot.tmp"), victim);
         InsightsSnapshotStore store = store(Duration.ofDays(30));
-        store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+        store.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
 
         store.stop();
 
@@ -458,7 +458,7 @@ class InsightsSnapshotStoreTest {
                 FIXED_SCHEDULE);
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
-            store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
+            store.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
             store.writeNow();
             store.stop();
 
@@ -507,7 +507,7 @@ class InsightsSnapshotStoreTest {
 
         assertThat(journal()).doesNotExist();
         InsightsSnapshotStore second = store(Duration.ofDays(30));
-        second.start(() -> ownSamplesOnly(9.0), () -> false);
+        second.start(ends -> ownSamplesOnly(9.0), () -> false);
         second.stop();
         assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(9.0);
     }
@@ -519,7 +519,7 @@ class InsightsSnapshotStoreTest {
         InsightsSnapshotStore store = store(Duration.ofDays(30));
         assertThat(loadWith(store)).isPresent();
 
-        store.start(() -> ownSamplesOnly(9.0), () -> false);
+        store.start(ends -> ownSamplesOnly(9.0), () -> false);
         store.stop();
 
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();

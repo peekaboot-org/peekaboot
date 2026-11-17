@@ -229,6 +229,11 @@ public final class InsightsCollector {
         return rings.capture(schedule.now());
     }
 
+    /** See {@link SeriesRings#captureAfter}; dated by the collector's clock. */
+    InsightsSnapshot captureAfter(long[] persistedEndEpochMs) {
+        return rings.captureAfter(schedule.now(), persistedEndEpochMs);
+    }
+
     /** Applies persisted history to the rings, once, ahead of a level thread's first write. */
     void restore(InsightsSnapshot snapshot) {
         rings.restore(snapshot);
