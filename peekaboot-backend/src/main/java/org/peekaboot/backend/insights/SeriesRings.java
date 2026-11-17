@@ -19,7 +19,7 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
  * <p>Written by one collector thread per level, and once by {@link #restore} ahead of their
  * first write; read by the API and the snapshot writer. A tick or roll-up lands as one write
  * under one lock: its gap fill, every series' sample and the stamp that dates them. A restore
- * holds the same lock, and {@link #levelData(int, Instant)}, {@link #capture(long)} and the
+ * holds the same lock, and {@link #levelData(int, Instant)}, {@link #captureAfter} and the
  * roll-up window reads run under it, so a reader sees whole ticks only. Meters are sampled before
  * the write, so the lock covers in-memory appends and nothing slower.
  */
@@ -246,39 +246,48 @@ final class SeriesRings {
                 : statsRings.values().iterator().next()[level].size();
     }
 
-    /**
-     * Everything persistence needs: every level of every series, the {@code samples} column
-     * included. Read under the same lock as {@link #appendTick}, like
-     * {@link #levelData(int, Instant)}, so every level holds whole ticks only, one sample count
-     * for every series, and its {@code endEpochMs} dates the newest of them.
-     */
+    /** Everything persistence needs: {@link #captureAfter} with nothing persisted yet. */
     InsightsSnapshot capture(long writtenAtEpochMs) {
+        return captureAfter(writtenAtEpochMs, new long[intervalMillis.length]);
+    }
+
+    /**
+     * Like {@code capture}, but per level only the entries dated after {@code persistedEndEpochMs[level]}:
+     * {@code (end - persisted) / interval} of them, at most what the ring holds, and all it holds where
+     * persisted is 0. Every level of every series, the {@code samples} column included. Read under the same
+     * lock as {@link #appendTick}, like {@link #levelData(int, Instant)}, so every level holds whole ticks
+     * only, one sample count for every series, and its {@code endEpochMs} dates the newest of them.
+     */
+    InsightsSnapshot captureAfter(long writtenAtEpochMs, long[] persistedEndEpochMs) {
         synchronized (lock) {
-            long[] endEpochMs = new long[intervalMillis.length];
+            int[] counts = new int[intervalMillis.length];
+            List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
             for (int level = 0; level < intervalMillis.length; level++) {
-                endEpochMs[level] = levelEndEpochMs.get(level);
+                long end = levelEndEpochMs.get(level);
+                counts[level] = entriesAfter(level, end, persistedEndEpochMs[level]);
+                levels.add(new InsightsSnapshot.Level(intervalMillis[level], levelSizes[level], end, counts[level]));
             }
             Map<String, List<double[][]>> series = new LinkedHashMap<>();
-            int[] counts = new int[intervalMillis.length];
             for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
                 List<double[][]> byLevel = new ArrayList<>(intervalMillis.length);
-                double[][] level0 = {entry.getValue().toArray()};
-                byLevel.add(level0);
-                counts[0] = level0[0].length;
+                byLevel.add(new double[][] {entry.getValue().last(counts[0])});
                 StatsRing[] rings = statsRings.get(entry.getKey());
                 for (int level = 1; level < intervalMillis.length; level++) {
-                    byLevel.add(rings[level].toColumns());
-                    counts[level] = rings[level].size();
+                    byLevel.add(rings[level].lastColumns(counts[level]));
                 }
                 series.put(entry.getKey(), byLevel);
             }
-            List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
-            for (int level = 0; level < intervalMillis.length; level++) {
-                levels.add(new InsightsSnapshot.Level(
-                        intervalMillis[level], levelSizes[level], endEpochMs[level], counts[level]));
-            }
             return new InsightsSnapshot(writtenAtEpochMs, levels, series);
         }
+    }
+
+    private int entriesAfter(int level, long end, long persistedEnd) {
+        int held = size(level);
+        if (persistedEnd == 0) {
+            return held;
+        }
+        long after = Math.max(0, (end - persistedEnd) / intervalMillis[level]);
+        return (int) Math.min(after, held);
     }
 
     /**
@@ -311,7 +320,7 @@ final class SeriesRings {
     /**
      * Brings a series the snapshot did not supply up to the length the snapshot's other
      * series have. Every level carries one sample count for all series at once - both in
-     * {@link #capture(long)} and in the file - so a series left short would have the next
+     * {@link #captureAfter} and in the file - so a series left short would have the next
      * capture promise more values in its header than it writes. Gaps are also what the
      * window deserves: the series was not being sampled for it, and a gap is exactly what
      * the charts already draw for that.

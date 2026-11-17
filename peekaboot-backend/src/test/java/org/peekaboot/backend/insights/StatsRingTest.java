@@ -40,11 +40,11 @@ class StatsRingTest {
     }
 
     @Test
-    void toColumnsExposesAllEightColumnsInStatColumnsOrder() {
+    void lastColumnsExposesAllEightColumnsInStatColumnsOrder() {
         // every field distinct, so a column swapped with its neighbour cannot pass by accident
         StatsRing ring = new StatsRing(3);
         ring.add(new AggregateStats(1, 2, 3, 4, 5, 6, 7, 42));
-        double[][] columns = ring.toColumns();
+        double[][] columns = ring.lastColumns(ring.size());
         assertThat(columns.length).isEqualTo(8);
         assertThat(columns[InsightsSnapshot.STAT_COLUMNS.indexOf("min")]).containsExactly(1.0);
         assertThat(columns[InsightsSnapshot.STAT_COLUMNS.indexOf("max")]).containsExactly(2.0);
@@ -64,7 +64,7 @@ class StatsRingTest {
         source.add(original);
 
         StatsRing restored = new StatsRing(3);
-        restored.restore(source.toColumns());
+        restored.restore(source.lastColumns(source.size()));
 
         assertThat(restored.size()).isEqualTo(1);
         assertThat(restored.last(1)).containsExactly(original);

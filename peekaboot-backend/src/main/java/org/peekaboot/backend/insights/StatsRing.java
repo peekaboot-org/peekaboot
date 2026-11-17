@@ -45,22 +45,22 @@ final class StatsRing {
     }
 
     /**
-     * Every column, including the {@code samples} column {@link #statistics(int)} leaves
-     * out - persistence needs it, because the next roll-up weights its average
-     * by it. Order matches {@link InsightsSnapshot#STAT_COLUMNS}.
+     * Every column over the newest {@code n} windows, including the {@code samples} column
+     * {@link #statistics(int)} leaves out - persistence needs it, because the next roll-up
+     * weights its average by it. Order matches {@link InsightsSnapshot#STAT_COLUMNS}.
      */
-    double[][] toColumns() {
+    double[][] lastColumns(int n) {
         double[][] columns = new double[InsightsSnapshot.STAT_COLUMNS.size()][];
         int column = 0;
         for (DoubleRing ring : stats.values()) {
-            columns[column] = ring.toArray();
+            columns[column] = ring.last(n);
             column++;
         }
-        columns[column] = samples.toArray();
+        columns[column] = samples.last(n);
         return columns;
     }
 
-    /** Refills an empty ring from {@link #toColumns()} output, oldest entry first. */
+    /** Refills an empty ring from {@link #lastColumns} output, oldest entry first. */
     void restore(double[][] columns) {
         Map<WindowStatistic, double[]> statColumns = new EnumMap<>(WindowStatistic.class);
         int column = 0;
