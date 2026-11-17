@@ -106,14 +106,14 @@ With storage off, or on a second instance of one storage directory,
 and restores nothing, so `InsightsService` drives one store the same way in every case.
 
 The two files are a cache, never a source of truth, so anything wrong with them costs only the
-history.
+history. Five things count as wrong:
 
-Five things count as wrong: a bad magic number, a schema version this build doesn't know, a ring
-geometry that no longer matches `peekaboot.insights.levels`, an age past
-`peekaboot.insights.persistence.max-age` (default: the coarsest level's span), and a date more
-than five minutes in the future (`InsightsSnapshotStore.CLOCK_SKEW`).
-
-A stepped-back clock or a restored backup leaves such a date behind.
+- A bad magic number.
+- A schema version this build doesn't know.
+- A ring geometry that no longer matches `peekaboot.insights.levels`.
+- An age past `peekaboot.insights.persistence.max-age` (default: the coarsest level's span).
+- A date more than five minutes in the future (`InsightsSnapshotStore.CLOCK_SKEW`), which a
+  stepped-back clock or a restored backup leaves behind.
 
 The age, clock-skew and geometry checks judge the snapshot with the journal applied, not the
 snapshot alone. A result that fails them, or a snapshot that cannot be read, deletes both files
@@ -121,8 +121,8 @@ and the rings start empty, exactly as they would with storage off.
 
 The journal is applied on top of the snapshot by entry date (`InsightsJournalReplay`). A cut or
 damaged record, or one that leaves a hole after the level's end, ends the replay, and what came
-before it stays. A journal with a foreign magic number or version is deleted and the snapshot
-restores alone. A journal written for other ring levels than the snapshot is ignored.
+before it stays. An unreadable header or a replay that throws deletes the journal, and the
+snapshot restores alone. A journal written for other ring levels than the snapshot is ignored.
 
 Every length read from the file is checked against a plausibility bound before it is used to
 allocate, so a corrupt file cannot provoke an oversized allocation. The level-count and
@@ -159,11 +159,11 @@ the same name by sample-weighted nearest rank, since a window keeps no samples t
 
 A run whose restore did not complete keeps its history, because `InsightsSnapshotStore` refuses
 to write while either file holds history it never took over. A process that started with a
-handful of samples cannot replace a full retention window. The guard is deliberately blunt: it is keyed on whether the
-restore completed, not on how full the live rings have since become, so a run whose restore
-timed out never persists again however long it then runs. Lifting it once every level's ring is
-as full as the persisted header says would keep the protection and end the starvation. Until
-then the file on disk is only ever as good as the last run that restored it.
+handful of samples cannot replace a full retention window. The guard is deliberately blunt: it
+is keyed on whether the restore completed, not on how full the live rings have since become, so
+a run whose restore timed out never persists again however long it then runs. Lifting it once
+every level's ring is as full as the persisted header says would keep the protection and end the
+starvation. Until then the file on disk is only ever as good as the last run that restored it.
 
 ### `lifecycle.jsonl`
 
