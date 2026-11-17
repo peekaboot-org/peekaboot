@@ -8,6 +8,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,29 @@ class InsightsSnapshotCodecTest {
                         new InsightsSnapshot.Level(10_000, 90, 1_756_000_010_000L, 3),
                         new InsightsSnapshot.Level(60_000, 1440, 1_756_000_060_000L, 2)),
                 Map.of("cpu.process", List.of(new double[][] {ticks}, stats)));
+    }
+
+    /** What {@code /insights/schema-2.snapshot} holds: two series, gaps in both levels, a window without samples. */
+    private static InsightsSnapshot pinnedSnapshot() {
+        Map<String, List<double[][]>> series = new LinkedHashMap<>();
+        series.put("cpu.process", List.of(new double[][] {{12.5, Double.NaN, 37.25}}, windows(0.5, Double.NaN, 0)));
+        series.put("heap.used", List.of(new double[][] {{1024.0, 2048.0, Double.NaN}}, windows(100, 200, 6)));
+        return new InsightsSnapshot(
+                1_756_000_000_000L,
+                List.of(
+                        new InsightsSnapshot.Level(10_000, 90, 1_756_000_010_000L, 3),
+                        new InsightsSnapshot.Level(60_000, 1440, 1_756_000_060_000L, 2)),
+                series);
+    }
+
+    /** Two windows: each statistic counts up from {@code first} and {@code second}, six samples behind the first. */
+    private static double[][] windows(double first, double second, double secondSamples) {
+        double[][] columns = new double[8][];
+        for (int column = 0; column < 7; column++) {
+            columns[column] = new double[] {first + column, second + column};
+        }
+        columns[7] = new double[] {6.0, secondSamples};
+        return columns;
     }
 
     private static byte[] encoded(InsightsSnapshot snapshot) throws IOException {
@@ -63,6 +88,37 @@ class InsightsSnapshotCodecTest {
         assertThat(restored.series().get("cpu.process").get(0)[0]).containsExactly(1.0, Double.NaN, 3.0);
         assertThat(restored.series().get("cpu.process").get(1)).hasDimensions(8, 2);
         assertThat(restored.series().get("cpu.process").get(1)[7]).containsExactly(7.0, Double.NaN);
+    }
+
+    /**
+     * Pins schema 2 as 1.3.0 writes it. The file was generated once by this codec, whose write path is
+     * unchanged since 1.3.0; a byte that changes here strands every history an upgrade carries over.
+     */
+    @Test
+    void aPinnedSchemaTwoFileDecodesToItsValuesAndEncodesBackToTheSameBytes() throws IOException {
+        byte[] pinned;
+        try (InputStream in = InsightsSnapshotCodecTest.class.getResourceAsStream("/insights/schema-2.snapshot")) {
+            pinned = in.readAllBytes();
+        }
+        InsightsSnapshot expected = pinnedSnapshot();
+
+        InsightsSnapshot decoded = decoded(pinned);
+
+        assertThat(decoded.writtenAtEpochMs()).isEqualTo(expected.writtenAtEpochMs());
+        assertThat(decoded.levels()).isEqualTo(expected.levels());
+        assertThat(decoded.series().keySet()).containsExactly("cpu.process", "heap.used");
+        expected.series().forEach((id, byLevel) -> {
+            for (int level = 0; level < byLevel.size(); level++) {
+                double[][] columns = byLevel.get(level);
+                assertThat(decoded.series().get(id).get(level)).hasNumberOfRows(columns.length);
+                for (int column = 0; column < columns.length; column++) {
+                    assertThat(decoded.series().get(id).get(level)[column])
+                            .as("%s, level %d, column %d", id, level, column)
+                            .containsExactly(columns[column]);
+                }
+            }
+        });
+        assertThat(encoded(expected)).isEqualTo(pinned);
     }
 
     /** A misaligned file only fails on the next read, so the write is where it has to fail. */
