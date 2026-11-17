@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -116,8 +117,11 @@ final class InsightsJournalCodec {
         if (length < minimumPayloadBytes(header) || length > maximumPayloadBytes(header)) {
             throw new IOException("implausible record length in insights file: " + length);
         }
-        byte[] payload = new byte[length];
-        in.readFully(payload);
+        // Read as far as the bytes go: the header that bounds the length carries no checksum.
+        byte[] payload = in.readNBytes(length);
+        if (payload.length != length) {
+            throw new EOFException("insights journal record cut after " + payload.length + " of " + length + " bytes");
+        }
         if (in.readInt() != checksum(payload)) {
             throw new IOException("insights journal record fails its checksum");
         }
