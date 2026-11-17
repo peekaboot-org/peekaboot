@@ -1,9 +1,5 @@
 package org.peekaboot.backend.insights;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,7 +10,6 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.storage.BackgroundLoad;
-import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.peekaboot.backend.storage.WriteOutage;
 import org.slf4j.Logger;
@@ -201,7 +196,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
         try {
             // Read before capturing: a restore landing in between would vouch for rings captured without it.
             boolean restoredBeforeCapture = historyRestored.getAsBoolean();
-            boolean fold = stopping || foldNext || journalBytes >= snapshotBytes;
+            boolean fold = stopping || mustFold();
             InsightsSnapshot captured = source.entriesAfter(fold ? new long[geometry.size()] : persistedEnds.clone());
             if (!fold && !continuesJournal(captured)) {
                 fold = true;
@@ -212,15 +207,12 @@ final class InsightsSnapshotStore implements SnapshotStore {
             }
             List<String> seriesIds = List.copyOf(captured.series().keySet());
             if (fold) {
-                snapshotBytes = replaceSnapshot(captured);
+                snapshotBytes = InsightsSnapshotFile.replace(file, captured);
                 step = journal.file();
                 journalBytes = journal.start(seriesIds);
             } else {
                 step = journal.file();
-                if (journal.seriesIds() == null) {
-                    journalBytes = journal.start(seriesIds);
-                }
-                journalBytes += journal.append(captured);
+                appendToJournal(captured, seriesIds);
             }
             persistedEnds = levelEnds(captured);
             foldNext = false;
@@ -228,12 +220,19 @@ final class InsightsSnapshotStore implements SnapshotStore {
         } catch (IOException e) {
             // A failed append can leave a cut record and a failed fold an old journal; only a fold repairs either.
             foldNext = true;
-            if (!stopping && Thread.currentThread().isInterrupted()) {
-                // stop()'s interrupt closed the channel; stop() writes the final snapshot itself
-                return;
-            }
-            reportWriteFailure(step, e);
+            reportWriteFailure(stopping, step, e);
         }
+    }
+
+    private boolean mustFold() {
+        return foldNext || journalBytes >= snapshotBytes;
+    }
+
+    private void appendToJournal(InsightsSnapshot captured, List<String> seriesIds) throws IOException {
+        if (journal.seriesIds() == null) {
+            journalBytes = journal.start(seriesIds);
+        }
+        journalBytes += journal.append(captured);
     }
 
     /** Whether appending {@code captured} keeps the journal this run started readable and in date order. */
@@ -251,25 +250,17 @@ final class InsightsSnapshotStore implements SnapshotStore {
         return true;
     }
 
-    /** The bytes are counted as they are written, so a failing size lookup cannot fail a snapshot that is in place. */
-    private long replaceSnapshot(InsightsSnapshot snapshot) throws IOException {
-        long[] written = new long[1];
-        OwnerOnlyFiles.replaceAtomically(file, stream -> {
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
-                InsightsSnapshotCodec.write(out, snapshot);
-                written[0] = out.size();
-            }
-        });
-        return written[0];
-    }
-
     private static long[] levelEnds(InsightsSnapshot snapshot) {
         return snapshot.levels().stream()
                 .mapToLong(InsightsSnapshot.Level::endEpochMs)
                 .toArray();
     }
 
-    private void reportWriteFailure(Path failedFile, IOException e) {
+    private void reportWriteFailure(boolean stopping, Path failedFile, IOException e) {
+        if (!stopping && Thread.currentThread().isInterrupted()) {
+            // stop()'s interrupt closed the channel; stop() writes the final snapshot itself
+            return;
+        }
         writeOutage.failed(() ->
                 log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", failedFile, e));
     }
@@ -300,7 +291,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
         InsightsSnapshot snapshot = null;
         if (Files.exists(file)) {
             try {
-                snapshot = readSnapshot();
+                snapshot = InsightsSnapshotFile.read(file);
             } catch (IOException | RuntimeException e) {
                 log.info(
                         "Peekaboot insights: ignoring unreadable {} ({}); starting with empty history",
@@ -347,12 +338,6 @@ final class InsightsSnapshotStore implements SnapshotStore {
         } catch (IOException e) {
             log.debug("Could not read the size of the insights snapshot {}", file, e);
             return 0;
-        }
-    }
-
-    private InsightsSnapshot readSnapshot() throws IOException {
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
-            return InsightsSnapshotCodec.readBody(in, InsightsSnapshotCodec.readHeader(in));
         }
     }
 

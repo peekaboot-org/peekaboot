@@ -120,6 +120,25 @@ final class InsightsJournalCodec {
     }
 
     private static void writePayload(DataOutputStream out, Header header, InsightsSnapshot entries) throws IOException {
+        requireMatches(header, entries);
+        out.writeLong(entries.writtenAtEpochMs());
+        for (InsightsSnapshot.Level level : entries.levels()) {
+            out.writeLong(level.endEpochMs());
+            out.writeInt(level.count());
+        }
+        for (String id : header.seriesIds()) {
+            for (double[][] columns : entries.series().get(id)) {
+                for (double[] column : columns) {
+                    for (double value : column) {
+                        out.writeDouble(value);
+                    }
+                }
+            }
+        }
+    }
+
+    /** A record that does not match its header would shift every byte after it, so it is refused before any is written. */
+    private static void requireMatches(Header header, InsightsSnapshot entries) throws IOException {
         List<InsightsSnapshot.Level> levels = entries.levels();
         if (levels.size() != header.geometry().size()) {
             throw new IOException("insights record covers " + levels.size() + " levels, not the "
@@ -130,30 +149,27 @@ final class InsightsJournalCodec {
                 throw new IOException("insights record holds series " + id + ", which the journal header lacks");
             }
         }
-        out.writeLong(entries.writtenAtEpochMs());
-        for (InsightsSnapshot.Level level : levels) {
-            out.writeLong(level.endEpochMs());
-            out.writeInt(level.count());
-        }
         for (String id : header.seriesIds()) {
             List<double[][]> byLevel = entries.series().get(id);
             if (byLevel == null) {
                 throw new IOException("insights record lacks series " + id + ", which the journal header declares");
             }
-            if (byLevel.size() != levels.size()) {
-                throw new IOException("insights series " + id + " covers " + byLevel.size() + " levels, not the "
-                        + levels.size() + " the record declares");
-            }
-            for (int level = 0; level < byLevel.size(); level++) {
-                int count = levels.get(level).count();
-                for (double[] column : byLevel.get(level)) {
-                    if (column.length != count) {
-                        throw new IOException("insights series " + id + " holds " + column.length + " values at level "
-                                + level + ", not the " + count + " the record declares");
-                    }
-                    for (double value : column) {
-                        out.writeDouble(value);
-                    }
+            requireColumnsMatch(id, byLevel, levels);
+        }
+    }
+
+    private static void requireColumnsMatch(String id, List<double[][]> byLevel, List<InsightsSnapshot.Level> levels)
+            throws IOException {
+        if (byLevel.size() != levels.size()) {
+            throw new IOException("insights series " + id + " covers " + byLevel.size() + " levels, not the "
+                    + levels.size() + " the record declares");
+        }
+        for (int level = 0; level < byLevel.size(); level++) {
+            int count = levels.get(level).count();
+            for (double[] column : byLevel.get(level)) {
+                if (column.length != count) {
+                    throw new IOException("insights series " + id + " holds " + column.length + " values at level "
+                            + level + ", not the " + count + " the record declares");
                 }
             }
         }
