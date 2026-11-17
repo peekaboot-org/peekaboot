@@ -3,11 +3,14 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
@@ -30,6 +34,8 @@ import org.peekaboot.testsupport.LogCapture;
 class InsightsSnapshotStoreTest {
 
     private static final List<InsightsSnapshot.Level> GEOMETRY = List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0));
+    private static final InsightsJournalCodec.Header JOURNAL_HEADER =
+            new InsightsJournalCodec.Header(GEOMETRY, List.of("cpu.process"));
     private static final long NOW = Instant.parse("2026-09-09T12:00:00Z").toEpochMilli();
     private static final IntervalBoundary FIXED_SCHEDULE = new IntervalBoundary(() -> NOW, Thread::sleep);
 
@@ -355,7 +361,7 @@ class InsightsSnapshotStoreTest {
     }
 
     @Test
-    void aSnapshotDatedInTheFutureIsDeletedUnread() {
+    void aSnapshotDatedInTheFutureIsDeleted() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
         writer.start(() -> snapshot(NOW + Duration.ofDays(1).toMillis(), 10_000, 90), () -> false);
         writer.stop();
@@ -366,7 +372,7 @@ class InsightsSnapshotStoreTest {
     }
 
     @Test
-    void aSnapshotOlderThanTheCutoffIsDeletedUnread() {
+    void aSnapshotOlderThanTheCutoffIsDeleted() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
         writer.start(() -> snapshot(NOW - Duration.ofDays(31).toMillis(), 10_000, 90), () -> false);
         writer.stop();
@@ -463,5 +469,242 @@ class InsightsSnapshotStoreTest {
                                 + "; history will not survive this restart");
             });
         }
+    }
+
+    @Test
+    void theJournalsRecordsAreAppliedOnTopOfTheSnapshot() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0), entries(NOW, 50_000, 4.0, 5.0));
+
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+
+        assertThat(level0(restored)).containsExactly(1.0, 2.0, 3.0, 4.0, 5.0);
+        assertThat(restored.levels()).singleElement().satisfies(level -> {
+            assertThat(level.endEpochMs()).isEqualTo(50_000);
+            assertThat(level.count()).isEqualTo(5);
+        });
+    }
+
+    @Test
+    void aJournalWithoutASnapshotRestoresOnItsOwn() throws IOException {
+        writeJournal(JOURNAL_HEADER, entries(NOW, 40_000, 7.0, 8.0));
+
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+
+        assertThat(level0(restored)).containsExactly(7.0, 8.0);
+        assertThat(restored.levels()).singleElement().satisfies(level -> {
+            assertThat(level.endEpochMs()).isEqualTo(40_000);
+            assertThat(level.count()).isEqualTo(2);
+        });
+        assertThat(InsightsSnapshot.sameGeometry(restored.levels(), GEOMETRY)).isTrue();
+    }
+
+    @Test
+    void aJournalWithoutRecordsOrSnapshotIsNoHistoryAndBlocksNoWrite() throws IOException {
+        writeJournal(JOURNAL_HEADER);
+
+        assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
+
+        assertThat(journal()).doesNotExist();
+        InsightsSnapshotStore second = store(Duration.ofDays(30));
+        second.start(() -> ownSamplesOnly(9.0), () -> false);
+        second.stop();
+        assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(9.0);
+    }
+
+    @Test
+    void aJournalAloneIsHistoryARunMustTakeOverBeforeWriting() throws IOException {
+        writeJournal(JOURNAL_HEADER, entries(NOW, 40_000, 7.0, 8.0));
+        byte[] before = Files.readAllBytes(journal());
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        assertThat(loadWith(store)).isPresent();
+
+        store.start(() -> ownSamplesOnly(9.0), () -> false);
+        store.stop();
+
+        assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+        assertThat(Files.readAllBytes(journal())).isEqualTo(before);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"a foreign magic,0,0", "a version 2,7,2"})
+    void aForeignJournalIsDeletedAndTheSnapshotRestoredAlone(String ignored, int offset, int value) throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        byte[] bytes = journalBytes(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+        bytes[offset] = (byte) value;
+        Files.write(journal(), bytes);
+
+        try (LogCapture capture = LogCapture.attach(InsightsJournal.class, Level.INFO)) {
+            assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow()))
+                    .containsExactly(1.0, 2.0);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage())
+                        .startsWith("Peekaboot insights: ignoring unreadable " + journal());
+            });
+        }
+        assertThat(journal()).doesNotExist();
+    }
+
+    @Test
+    void aJournalForOtherRingLevelsThanTheSnapshotIsNotApplied() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        InsightsJournalCodec.Header otherLevels = new InsightsJournalCodec.Header(
+                List.of(new InsightsSnapshot.Level(30_000, 90, 0, 0)), List.of("cpu.process"));
+        InsightsSnapshot record = new InsightsSnapshot(
+                NOW,
+                List.of(new InsightsSnapshot.Level(30_000, 90, 60_000, 1)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{3.0}})));
+        writeJournal(otherLevels, record);
+
+        try (LogCapture capture = LogCapture.attach(InsightsJournal.class, Level.INFO)) {
+            assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow()))
+                    .containsExactly(1.0, 2.0);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage()).contains("other ring levels");
+            });
+        }
+        assertThat(journal()).exists();
+    }
+
+    @Test
+    void aRecordCutByAKillEndsTheReplayAndKeepsWhatCameBefore() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        byte[] bytes = journalBytes(JOURNAL_HEADER, entries(NOW, 30_000, 3.0), entries(NOW, 40_000, 4.0));
+        Files.write(journal(), Arrays.copyOf(bytes, bytes.length - 3));
+
+        try (LogCapture capture = LogCapture.attach(InsightsJournal.class, Level.INFO)) {
+            assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow()))
+                    .containsExactly(1.0, 2.0, 3.0);
+
+            assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
+    @Test
+    void aRecordWithAWrongChecksumEndsTheReplay() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        int headerBytes = journalBytes(JOURNAL_HEADER).length;
+        int firstRecordBytes = journalBytes(JOURNAL_HEADER, entries(NOW, 30_000, 3.0)).length - headerBytes;
+        byte[] bytes = journalBytes(
+                JOURNAL_HEADER, entries(NOW, 30_000, 3.0), entries(NOW, 40_000, 4.0), entries(NOW, 50_000, 5.0));
+        bytes[headerBytes + firstRecordBytes + Integer.BYTES]++;
+        Files.write(journal(), bytes);
+
+        assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(1.0, 2.0, 3.0);
+    }
+
+    @Test
+    void aHoleEndsTheReplay() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0), entries(NOW, 60_000, 6.0), entries(NOW, 70_000, 7.0));
+
+        assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(1.0, 2.0, 3.0);
+    }
+
+    @Test
+    void aKillBetweenTheTwoReplacesOfAFoldAppliesNothingTwice() throws IOException {
+        writeSnapshot(snapshotEndingAt50s());
+        long before = NOW - 60_000;
+        writeJournal(JOURNAL_HEADER, entries(before, 40_000, 3.0, 4.0), entries(before, 50_000, 5.0));
+
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+
+        assertThat(level0(restored)).containsExactly(1.0, 2.0, 3.0, 4.0, 5.0);
+        assertThat(restored.levels().get(0).endEpochMs()).isEqualTo(50_000);
+        assertThat(restored.writtenAtEpochMs()).isEqualTo(NOW);
+    }
+
+    @Test
+    void aStaleSnapshotTheJournalBringsUpToDateIsRestored() throws IOException {
+        writeSnapshot(snapshot(NOW - Duration.ofDays(31).toMillis(), 10_000, 90));
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+
+        assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(1.0, 2.0, 3.0);
+    }
+
+    @Test
+    void aHistoryStillTooOldAfterTheJournalTakesBothFilesWithIt() throws IOException {
+        long stale = NOW - Duration.ofDays(31).toMillis();
+        writeSnapshot(snapshot(stale, 10_000, 90));
+        writeJournal(JOURNAL_HEADER, entries(stale, 30_000, 3.0));
+
+        assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
+                .isEmpty();
+        assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+        assertThat(journal()).doesNotExist();
+    }
+
+    @Test
+    void aCorruptSnapshotTakesTheJournalWithIt() throws IOException {
+        Files.writeString(directory.resolve(InsightsSnapshotStore.FILE_NAME), "this is not a snapshot");
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+
+        assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
+
+        assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+        assertThat(journal()).doesNotExist();
+    }
+
+    @Test
+    void aJournalForOtherRingLevelsThanConfiguredTakesBothFilesWithIt() throws IOException {
+        InsightsJournalCodec.Header otherLevels = new InsightsJournalCodec.Header(
+                List.of(new InsightsSnapshot.Level(30_000, 90, 0, 0)), List.of("cpu.process"));
+        InsightsSnapshot record = new InsightsSnapshot(
+                NOW,
+                List.of(new InsightsSnapshot.Level(30_000, 90, 60_000, 1)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{3.0}})));
+        writeJournal(otherLevels, record);
+
+        assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
+                .isEmpty();
+        assertThat(journal()).doesNotExist();
+    }
+
+    private Path journal() {
+        return directory.resolve(InsightsJournal.FILE_NAME);
+    }
+
+    private void writeSnapshot(InsightsSnapshot snapshot) throws IOException {
+        try (DataOutputStream out =
+                new DataOutputStream(Files.newOutputStream(directory.resolve(InsightsSnapshotStore.FILE_NAME)))) {
+            InsightsSnapshotCodec.write(out, snapshot);
+        }
+    }
+
+    private static byte[] journalBytes(InsightsJournalCodec.Header header, InsightsSnapshot... records)
+            throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        InsightsJournalCodec.writeHeader(new DataOutputStream(bytes), header);
+        for (InsightsSnapshot record : records) {
+            bytes.write(InsightsJournalCodec.encodeRecord(header, record));
+        }
+        return bytes.toByteArray();
+    }
+
+    private void writeJournal(InsightsJournalCodec.Header header, InsightsSnapshot... records) throws IOException {
+        Files.write(journal(), journalBytes(header, records));
+    }
+
+    /** A record of {@code values} ending at {@code end}, the entries a journal appends to level 0. */
+    private static InsightsSnapshot entries(long writtenAt, long end, double... values) {
+        return new InsightsSnapshot(
+                writtenAt,
+                List.of(new InsightsSnapshot.Level(10_000, 90, end, values.length)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {values})));
+    }
+
+    private static double[] level0(InsightsSnapshot history) {
+        return history.series().get("cpu.process").get(0)[0];
+    }
+
+    private static InsightsSnapshot snapshotEndingAt50s() {
+        return new InsightsSnapshot(
+                NOW,
+                List.of(new InsightsSnapshot.Level(10_000, 90, 50_000, 5)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0, 3.0, 4.0, 5.0}})));
     }
 }

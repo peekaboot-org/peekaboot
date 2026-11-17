@@ -38,6 +38,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
 
     private final Path file;
     private final List<InsightsSnapshot.Level> geometry;
+    private final InsightsJournal journal;
     private final Duration interval;
     private final Duration maxAge;
     private final IntervalBoundary schedule;
@@ -71,6 +72,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
             IntervalBoundary schedule) {
         this.file = file;
         this.geometry = List.copyOf(geometry);
+        this.journal = new InsightsJournal(file.resolveSibling(InsightsJournal.FILE_NAME), geometry);
         this.interval = interval;
         this.maxAge = maxAge;
         this.schedule = schedule;
@@ -237,33 +239,49 @@ final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     private Optional<InsightsSnapshot> load() {
-        if (!Files.exists(file)) {
+        if (!Files.exists(file) && !Files.exists(journal.file())) {
             return Optional.empty();
         }
         // Set before the parse, so a write that follows a restore this run gave up waiting
         // for still knows there is history on disk it never took over.
         unclaimedHistory = true;
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
-            var header = InsightsSnapshotCodec.readHeader(in);
-            if (isImplausiblyDated(header.writtenAtEpochMs())) {
+        InsightsSnapshot snapshot = null;
+        if (Files.exists(file)) {
+            try {
+                snapshot = readSnapshot();
+            } catch (IOException | RuntimeException e) {
                 log.info(
-                        "Peekaboot insights: {} is not dated within the last {}; starting with empty history",
+                        "Peekaboot insights: ignoring unreadable {} ({}); starting with empty history",
                         file,
-                        maxAge);
+                        e.toString());
                 discard();
                 return Optional.empty();
             }
-            if (!matchesConfiguredGeometry(header.levels())) {
-                log.info("Peekaboot insights: {} was written for other ring levels; starting with empty history", file);
-                discard();
-                return Optional.empty();
-            }
-            return Optional.of(InsightsSnapshotCodec.readBody(in, header));
-        } catch (IOException | RuntimeException e) {
-            log.info(
-                    "Peekaboot insights: ignoring unreadable {} ({}); starting with empty history", file, e.toString());
+        }
+        Optional<InsightsSnapshot> history = journal.replayOnto(snapshot).history();
+        if (history.isEmpty()) {
             discard();
             return Optional.empty();
+        }
+        if (isImplausiblyDated(history.get().writtenAtEpochMs())) {
+            log.info(
+                    "Peekaboot insights: {} is not dated within the last {}; starting with empty history",
+                    file,
+                    maxAge);
+            discard();
+            return Optional.empty();
+        }
+        if (!matchesConfiguredGeometry(history.get().levels())) {
+            log.info("Peekaboot insights: {} was written for other ring levels; starting with empty history", file);
+            discard();
+            return Optional.empty();
+        }
+        return history;
+    }
+
+    private InsightsSnapshot readSnapshot() throws IOException {
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+            return InsightsSnapshotCodec.readBody(in, InsightsSnapshotCodec.readHeader(in));
         }
     }
 
@@ -281,26 +299,18 @@ final class InsightsSnapshotStore implements SnapshotStore {
 
     /** Only shape matters here; how full the rings were and where they ended does not. */
     private boolean matchesConfiguredGeometry(List<InsightsSnapshot.Level> persistedLevels) {
-        if (persistedLevels.size() != geometry.size()) {
-            return false;
-        }
-        for (int level = 0; level < geometry.size(); level++) {
-            InsightsSnapshot.Level persisted = persistedLevels.get(level);
-            InsightsSnapshot.Level configured = geometry.get(level);
-            if (persisted.intervalMs() != configured.intervalMs() || persisted.size() != configured.size()) {
-                return false;
-            }
-        }
-        return true;
+        return InsightsSnapshot.sameGeometry(persistedLevels, geometry);
     }
 
-    /** A file that failed once will fail every start; deleting it keeps that from repeating. */
+    /** A file that failed once will fail every start; deleting both keeps that from repeating. */
     private void discard() {
         unclaimedHistory = false;
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException e) {
-            log.debug("Could not delete the unusable insights snapshot {}", file, e);
+        for (Path unusable : List.of(file, journal.file())) {
+            try {
+                Files.deleteIfExists(unusable);
+            } catch (IOException e) {
+                log.debug("Could not delete the unusable insights file {}", unusable, e);
+            }
         }
     }
 }

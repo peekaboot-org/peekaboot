@@ -19,4 +19,18 @@ record InsightsSnapshot(long writtenAtEpochMs, List<Level> levels, Map<String, L
 
     /** One level's geometry and how much of its ring is filled. */
     record Level(long intervalMs, int size, long endEpochMs, int count) {}
+
+    /** Whether two level lists have the same intervals and sizes; ends and counts play no part. */
+    static boolean sameGeometry(List<Level> a, List<Level> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int level = 0; level < a.size(); level++) {
+            if (a.get(level).intervalMs() != b.get(level).intervalMs()
+                    || a.get(level).size() != b.get(level).size()) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
