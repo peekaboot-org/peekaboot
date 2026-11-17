@@ -41,10 +41,10 @@ class InsightsServicePersistenceTest {
     private static InsightsProperties properties(Duration persistenceInterval) {
         InsightsProperties properties = new InsightsProperties();
         properties.getPersistence().setInterval(persistenceInterval);
-        properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 50)));
-        // The default max-age is derived from this geometry (5s) and would discard the
-        // file as stale on any real pause between the two runs; this test exercises
-        // restoration, not the staleness cutoff.
+        properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 6000)));
+        // The ring spans 10 minutes, so no stall between two runs evicts restored samples.
+        // The default max-age derives from that span and is raised so the file is never
+        // stale between the runs; these tests exercise restoration, not the cutoff.
         properties.getPersistence().setMaxAge(Duration.ofHours(1));
         return properties;
     }
@@ -166,6 +166,7 @@ class InsightsServicePersistenceTest {
      */
     @Test
     void historyWrittenSinceTheLastFoldSurvivesAKill() throws Exception {
+        // A persistence interval equal to the tick interval lets the journal get ahead of the snapshot.
         InsightsService first = service(properties(Duration.ofMillis(100)), storage(true), registryReading(7));
         start(first);
         Path image;
@@ -188,7 +189,8 @@ class InsightsServicePersistenceTest {
         InsightsService second = service(properties(Duration.ofMillis(100)), storage(true, image), registryReading(1));
         start(second);
         try {
-            await().atMost(Duration.ofSeconds(5))
+            await("the second run's own sample on top of the restored history")
+                    .atMost(Duration.ofSeconds(5))
                     .pollInterval(Duration.ofMillis(20))
                     .until(() -> Double.valueOf(1.0).equals(lastNonNull(heapUsedValues(second))));
 
