@@ -33,7 +33,7 @@ final class InsightsSnapshotCodec {
     /** 2 since percent series hold 0 to 100 and time gauges milliseconds; a version 1 file holds ratios and seconds. */
     static final int SCHEMA_VERSION = 2;
 
-    private static final int MAX_SERIES = 10_000;
+    static final int MAX_SERIES = 10_000;
 
     private InsightsSnapshotCodec() {}
 
@@ -123,7 +123,7 @@ final class InsightsSnapshotCodec {
         return new InsightsSnapshot(header.writtenAtEpochMs(), header.levels(), series);
     }
 
-    private static double[] readColumn(DataInputStream in, int count) throws IOException {
+    static double[] readColumn(DataInputStream in, int count) throws IOException {
         double[] values = new double[count];
         for (int i = 0; i < count; i++) {
             values[i] = in.readDouble();
@@ -131,9 +131,9 @@ final class InsightsSnapshotCodec {
         return values;
     }
 
-    private static int bounded(int value, int max, String what) throws IOException {
+    static int bounded(int value, int max, String what) throws IOException {
         if (value < 0 || value > max) {
-            throw new IOException("implausible " + what + " in insights snapshot: " + value);
+            throw new IOException("implausible " + what + " in insights file: " + value);
         }
         return value;
     }
