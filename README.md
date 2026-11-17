@@ -64,7 +64,7 @@ run and how to override the detection are in
 Full docs live at [www.peekaboot.org](https://www.peekaboot.org).
 
 - [Quick start](https://www.peekaboot.org/docs/quick-start/)
-- [Do I want this in production?](https://www.peekaboot.org/docs/in-production/)
+- [Production use](https://www.peekaboot.org/docs/in-production/)
 - [Dev toolbar](https://www.peekaboot.org/docs/dev-toolbar/)
 - [Error page](https://www.peekaboot.org/docs/error-page/)
 - [The dashboard](https://www.peekaboot.org/docs/dashboard/)
@@ -77,8 +77,7 @@ Full docs live at [www.peekaboot.org](https://www.peekaboot.org).
 - [Security](https://www.peekaboot.org/docs/security/)
 - [Troubleshooting](https://www.peekaboot.org/docs/troubleshooting/)
 - [Releases](https://www.peekaboot.org/releases/)
-- [Acknowledgements](https://www.peekaboot.org/docs/acknowledgements/)
-- [Contributing](https://www.peekaboot.org/docs/contributing/)
+- [Contributing](CONTRIBUTING.md)
 
 ## Working on Peekaboot
 
@@ -124,6 +123,25 @@ Further reading:
   built or tested.
 - Spring Boot 4.1.
 - A servlet web application.
+
+## Acknowledgements
+
+Peekaboot's tracing runs on the OpenTelemetry support built into
+[Spring Boot](https://spring.io/projects/spring-boot) 4. The dashboard follows
+[Spring Boot Admin](https://github.com/codecentric/spring-boot-admin) in giving Actuator's data a
+readable UI. The dev toolbar takes its idea and shape from
+[Symfony's profiler and web debug toolbar](https://symfony.com/doc/current/profiler.html). Other
+ecosystems had debug toolbars first, among them
+[Laravel Debugbar](https://github.com/fruitcake/laravel-debugbar),
+[Django Debug Toolbar](https://django-debug-toolbar.readthedocs.io/) and
+[rack-mini-profiler](https://github.com/MiniProfiler/rack-mini-profiler).
+
+The Insights charts are drawn with [uPlot](https://github.com/leeoniya/uPlot), under the MIT
+License. The UI uses the [Geist and Geist Mono](https://github.com/vercel/geist-font) fonts, under
+the SIL Open Font License 1.1. Both ship inside the frontend jar, and [`NOTICE`](NOTICE) lists
+their versions. The starter brings
+[datasource-micrometer](https://github.com/jdbc-observations/datasource-micrometer), under the
+Apache License 2.0. It records the JDBC queries the Traces tab shows.
 
 ## License
 
