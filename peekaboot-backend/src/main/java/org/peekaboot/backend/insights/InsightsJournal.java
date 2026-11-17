@@ -120,23 +120,21 @@ final class InsightsJournal {
 
     private Replay applyRecords(
             DataInputStream in, InsightsJournalCodec.Header header, InsightsSnapshot start, boolean hasSnapshot) {
-        InsightsSnapshot history = start;
+        InsightsJournalReplay replay = new InsightsJournalReplay(start);
         boolean applied = false;
         try {
             for (Optional<InsightsSnapshot> record = InsightsJournalCodec.readRecord(in, header);
                     record.isPresent();
                     record = InsightsJournalCodec.readRecord(in, header)) {
-                Optional<InsightsSnapshot> next = InsightsJournalReplay.apply(history, record.get());
-                if (next.isEmpty()) {
+                if (!replay.apply(record.get())) {
                     log.debug("The insights journal {} leaves a hole; replay ends there", file);
                     break;
                 }
-                history = next.get();
                 applied = true;
             }
         } catch (IOException e) {
             log.debug("The insights journal {} ends at a record that cannot be read", file, e);
         }
-        return new Replay(hasSnapshot || applied ? Optional.of(history) : Optional.empty(), applied);
+        return new Replay(hasSnapshot || applied ? Optional.of(replay.result()) : Optional.empty(), applied);
     }
 }

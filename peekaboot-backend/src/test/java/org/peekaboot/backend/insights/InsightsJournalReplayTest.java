@@ -22,7 +22,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = oneLevel(1_000, 30_000, 1, 2, 3);
         InsightsSnapshot record = oneLevel(2_000, 30_000, 2, 3);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, CPU)).containsExactly(1, 2, 3);
         assertThat(result.levels().get(0).endEpochMs()).isEqualTo(30_000);
@@ -33,7 +33,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = oneLevel(1_000, 30_000, 1, 2, 3);
         InsightsSnapshot record = oneLevel(2_000, 50_000, 3, 4, 5);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, CPU)).containsExactly(1, 2, 3, 4, 5);
         assertThat(result.levels().get(0).endEpochMs()).isEqualTo(50_000);
@@ -45,7 +45,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = oneLevel(1_000, 30_000, 1, 2, 3);
         InsightsSnapshot record = oneLevel(2_000, 60_000, 5, 6);
 
-        assertThat(InsightsJournalReplay.apply(history, record)).isEmpty();
+        assertThat(applied(history, record)).isEmpty();
     }
 
     @Test
@@ -53,7 +53,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = oneLevel(1_000, 30_000, 1, 2, 3);
         InsightsSnapshot record = oneLevel(2_000, 1_000_000, 11, 12, 13, 14, 15);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, CPU)).containsExactly(11, 12, 13, 14, 15);
         assertThat(result.levels().get(0).endEpochMs()).isEqualTo(1_000_000);
@@ -64,7 +64,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = oneLevel(1_000, 100_000, 1, 2, 3, 4, 5);
         InsightsSnapshot record = oneLevel(2_000, 90_000, 9, 9, 9, 9, 9);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, CPU)).containsExactly(1, 2, 3, 4, 5);
         assertThat(result.levels().get(0).endEpochMs()).isEqualTo(100_000);
@@ -75,7 +75,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = oneLevel(1_000, 0);
         InsightsSnapshot record = oneLevel(2_000, 40_000, 7, 8);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, CPU)).containsExactly(7, 8);
         assertThat(result.levels().get(0).endEpochMs()).isEqualTo(40_000);
@@ -87,7 +87,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = oneLevel(1_000, 50_000, 1, 2, 3, 4, 5);
         InsightsSnapshot record = oneLevel(2_000, 70_000, 6, 7);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, CPU)).containsExactly(3, 4, 5, 6, 7);
         assertThat(result.levels().get(0).count()).isEqualTo(5);
@@ -98,7 +98,7 @@ class InsightsJournalReplayTest {
         InsightsSnapshot history = twoLevels(1_000, 30_000, new double[] {1, 2, 3}, 60_000, new double[] {10});
         InsightsSnapshot record = twoLevels(2_000, 40_000, new double[] {4}, 60_000, new double[] {});
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, CPU)).containsExactly(1, 2, 3, 4);
         assertThat(result.levels().get(1).endEpochMs()).isEqualTo(60_000);
@@ -116,7 +116,7 @@ class InsightsJournalReplayTest {
         recordSeries.put("a", List.of(level0Columns(5), statColumns(30)));
         InsightsSnapshot record = new InsightsSnapshot(2_000, levels(40_000, 1, 120_000, 1), recordSeries);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(level0(result, "b")).containsExactly(3, 4, Double.NaN);
         double[][] level1 = result.series().get("b").get(1);
@@ -138,7 +138,7 @@ class InsightsJournalReplayTest {
         recordSeries.put("c", List.of(level0Columns(9), statColumns(40)));
         InsightsSnapshot record = new InsightsSnapshot(2_000, levels(40_000, 1, 120_000, 1), recordSeries);
 
-        InsightsSnapshot result = InsightsJournalReplay.apply(history, record).orElseThrow();
+        InsightsSnapshot result = applied(history, record).orElseThrow();
 
         assertThat(result.series().keySet()).containsExactly("a", "c");
         assertThat(level0(result, "c")).containsExactly(Double.NaN, Double.NaN, Double.NaN, 9);
@@ -151,25 +151,59 @@ class InsightsJournalReplayTest {
     @Test
     void aHoleOnAnyLevelLeavesTheWholeRecordUnapplied() {
         InsightsSnapshot history = twoLevels(1_000, 30_000, new double[] {1, 2, 3}, 60_000, new double[] {10});
-        double[] historyLevel0 = history.series().get(CPU).get(0)[0].clone();
+        InsightsJournalReplay replay = new InsightsJournalReplay(history);
         InsightsSnapshot record = twoLevels(2_000, 40_000, new double[] {4}, 240_000, new double[] {11});
 
-        assertThat(InsightsJournalReplay.apply(history, record)).isEmpty();
+        assertThat(replay.apply(record)).isFalse();
 
-        assertThat(history.series().get(CPU).get(0)[0]).containsExactly(historyLevel0);
-        assertThat(history.levels().get(0).endEpochMs()).isEqualTo(30_000);
-        assertThat(history.series().get(CPU).get(1)[0]).containsExactly(10);
+        InsightsSnapshot result = replay.result();
+        assertThat(level0(result, CPU)).containsExactly(1, 2, 3);
+        assertThat(result.levels().get(0).endEpochMs()).isEqualTo(30_000);
+        assertThat(result.series().get(CPU).get(1)[0]).containsExactly(10);
+        assertThat(result.writtenAtEpochMs()).isEqualTo(1_000);
     }
 
     @Test
     void theResultIsDatedByTheLaterOfHistoryAndRecord() {
         InsightsSnapshot history = oneLevel(5_000, 30_000, 1, 2, 3);
 
-        Optional<InsightsSnapshot> newer = InsightsJournalReplay.apply(history, oneLevel(9_000, 40_000, 4));
-        Optional<InsightsSnapshot> stale = InsightsJournalReplay.apply(history, oneLevel(2_000, 40_000, 4));
+        Optional<InsightsSnapshot> newer = applied(history, oneLevel(9_000, 40_000, 4));
+        Optional<InsightsSnapshot> stale = applied(history, oneLevel(2_000, 40_000, 4));
 
         assertThat(newer.orElseThrow().writtenAtEpochMs()).isEqualTo(9_000);
         assertThat(stale.orElseThrow().writtenAtEpochMs()).isEqualTo(5_000);
+    }
+
+    @Test
+    void aRecordCostsWhatItAddsNotWhatTheHistoryHolds() {
+        List<InsightsSnapshot.Level> fullRings = List.of(
+                new InsightsSnapshot.Level(10_000, 100, 1_000_000, 100),
+                new InsightsSnapshot.Level(60_000, 50, 960_000, 50));
+        Map<String, List<double[][]>> historySeries = new LinkedHashMap<>();
+        for (String id : List.of("a", "b", "c")) {
+            historySeries.put(id, List.of(new double[1][100], new double[STAT_COLUMNS][50]));
+        }
+        InsightsJournalReplay replay = new InsightsJournalReplay(new InsightsSnapshot(1_000, fullRings, historySeries));
+        int records = 200;
+        for (int entry = 1; entry <= records; entry++) {
+            List<InsightsSnapshot.Level> levels = List.of(
+                    new InsightsSnapshot.Level(10_000, 100, 1_000_000 + entry * 10_000L, 1),
+                    new InsightsSnapshot.Level(60_000, 50, 960_000, 0));
+            Map<String, List<double[][]>> recordSeries = new LinkedHashMap<>();
+            for (String id : historySeries.keySet()) {
+                recordSeries.put(id, List.of(level0Columns(entry), new double[STAT_COLUMNS][0]));
+            }
+            assertThat(replay.apply(new InsightsSnapshot(2_000, levels, recordSeries)))
+                    .isTrue();
+        }
+
+        InsightsSnapshot result = replay.result();
+
+        assertThat(level0(result, "a")).hasSize(100).startsWith(101).endsWith(200);
+        long historyEntries = 3L * (100 + 50 * STAT_COLUMNS);
+        long journalEntries = 3L * records;
+        // Each history entry is copied in once and out once, each journal entry once.
+        assertThat(replay.entriesCopied()).isLessThanOrEqualTo(2 * historyEntries + journalEntries);
     }
 
     @Test
@@ -181,6 +215,12 @@ class InsightsJournalReplayTest {
         assertThat(empty.levels())
                 .containsExactly(
                         new InsightsSnapshot.Level(10_000, 5, 0, 0), new InsightsSnapshot.Level(60_000, 4, 0, 0));
+    }
+
+    /** {@code history} with {@code record} applied, or empty where the record leaves a hole. */
+    private static Optional<InsightsSnapshot> applied(InsightsSnapshot history, InsightsSnapshot record) {
+        InsightsJournalReplay replay = new InsightsJournalReplay(history);
+        return replay.apply(record) ? Optional.of(replay.result()) : Optional.empty();
     }
 
     private static InsightsSnapshot oneLevel(long writtenAt, long end, double... values) {
