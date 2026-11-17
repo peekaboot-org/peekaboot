@@ -887,6 +887,7 @@ class InsightsSnapshotStoreTest {
         assertThat(records).hasSize(2);
         assertThat(records.get(0).levels().get(1).count()).isZero();
         assertThat(records.get(0).levels().get(1).endEpochMs()).isZero();
+        assertThat(records.get(1).levels().get(0).count()).isEqualTo(1);
         assertThat(records.get(1).levels().get(1).count()).isEqualTo(1);
         InsightsSnapshotStore reader = new InsightsSnapshotStore(
                 snapshotFile(), twoLevels, Duration.ofHours(1), Duration.ofDays(30), FIXED_SCHEDULE);
