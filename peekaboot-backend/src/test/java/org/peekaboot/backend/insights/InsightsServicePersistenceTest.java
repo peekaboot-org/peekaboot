@@ -8,11 +8,16 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -26,8 +31,16 @@ class InsightsServicePersistenceTest {
     @TempDir
     Path directory;
 
+    @TempDir
+    Path images;
+
     private static InsightsProperties properties() {
+        return properties(new InsightsProperties.Persistence().getInterval());
+    }
+
+    private static InsightsProperties properties(Duration persistenceInterval) {
         InsightsProperties properties = new InsightsProperties();
+        properties.getPersistence().setInterval(persistenceInterval);
         properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 50)));
         // The default max-age is derived from this geometry (5s) and would discard the
         // file as stale on any real pause between the two runs; this test exercises
@@ -37,9 +50,13 @@ class InsightsServicePersistenceTest {
     }
 
     private StorageDirectory storage(boolean enabled) {
+        return storage(enabled, directory);
+    }
+
+    private static StorageDirectory storage(boolean enabled, Path dir) {
         PeekabootProperties.Storage storage = new PeekabootProperties.Storage();
         storage.setEnabled(enabled);
-        storage.setDir(directory.toString());
+        storage.setDir(dir.toString());
         return StorageDirectory.resolve(storage, "orders");
     }
 
@@ -52,12 +69,13 @@ class InsightsServicePersistenceTest {
     }
 
     private InsightsService service(boolean enabled, MeterRegistry registry) {
+        return service(properties(), storage(enabled), registry);
+    }
+
+    private static InsightsService service(
+            InsightsProperties properties, StorageDirectory storage, MeterRegistry registry) {
         return new InsightsService(
-                registry,
-                properties(),
-                new DefaultResourceLoader(),
-                InsightsCollectors.noOpListener(),
-                storage(enabled));
+                registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), storage);
     }
 
     /**
@@ -140,6 +158,85 @@ class InsightsServicePersistenceTest {
         } finally {
             second.stop();
         }
+    }
+
+    /**
+     * Two contexts in one JVM share the storage lock, so the kill is an image of the files taken
+     * at one instant and the first run is stopped afterwards on its own directory.
+     */
+    @Test
+    void historyWrittenSinceTheLastFoldSurvivesAKill() throws Exception {
+        InsightsService first = service(properties(Duration.ofMillis(100)), storage(true), registryReading(7));
+        start(first);
+        Path image;
+        long snapshotEnd;
+        try {
+            Path[] taken = new Path[1];
+            await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(20))
+                    .until(() -> {
+                        Path attempt = Files.createTempDirectory(images, "image");
+                        taken[0] = attempt;
+                        return journalOutrunsSnapshot(attempt);
+                    });
+            image = taken[0];
+            snapshotEnd = level0End(image.resolve(InsightsSnapshotStore.FILE_NAME));
+        } finally {
+            first.stop();
+        }
+
+        InsightsService second = service(properties(Duration.ofMillis(100)), storage(true, image), registryReading(1));
+        start(second);
+        try {
+            await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(20))
+                    .until(() -> Double.valueOf(1.0).equals(lastNonNull(heapUsedValues(second))));
+
+            TickLevelData level = (TickLevelData) second.collector().levelData(0, null);
+            double[] heapUsed = level.values().get("heap.used");
+            List<Long> timestamps = level.timestamps();
+            assertThat(IntStream.range(0, heapUsed.length)
+                            .filter(i -> heapUsed[i] == 7.0 && timestamps.get(i) > snapshotEnd))
+                    .as("samples of the first run dated after the snapshot, which only the journal holds")
+                    .isNotEmpty();
+        } finally {
+            second.stop();
+        }
+    }
+
+    /** Journal first: a fold between the two copies leaves a newer snapshot beside an older journal, which replay skips by date. */
+    private boolean journalOutrunsSnapshot(Path image) {
+        try {
+            Files.copy(directory.resolve(InsightsJournal.FILE_NAME), image.resolve(InsightsJournal.FILE_NAME));
+            Files.copy(
+                    directory.resolve(InsightsSnapshotStore.FILE_NAME), image.resolve(InsightsSnapshotStore.FILE_NAME));
+            return newestJournalLevel0End(image.resolve(InsightsJournal.FILE_NAME))
+                    > level0End(image.resolve(InsightsSnapshotStore.FILE_NAME));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static long level0End(Path snapshotFile) throws IOException {
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(snapshotFile)))) {
+            return InsightsSnapshotCodec.readHeader(in).levels().get(0).endEpochMs();
+        }
+    }
+
+    /** The copy may end inside a record the first run was still appending; the records before it count. */
+    private static long newestJournalLevel0End(Path journalFile) throws IOException {
+        long newest = Long.MIN_VALUE;
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(journalFile)))) {
+            InsightsJournalCodec.Header header = InsightsJournalCodec.readHeader(in);
+            for (Optional<InsightsSnapshot> record = InsightsJournalCodec.readRecord(in, header);
+                    record.isPresent();
+                    record = InsightsJournalCodec.readRecord(in, header)) {
+                newest = Math.max(newest, record.get().levels().get(0).endEpochMs());
+            }
+        } catch (IOException cutByTheCopy) {
+            return newest;
+        }
+        return newest;
     }
 
     /** The store says only whether it persists; the words in the start-up line are the service's. */
