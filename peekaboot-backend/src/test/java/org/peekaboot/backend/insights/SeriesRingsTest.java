@@ -109,25 +109,21 @@ class SeriesRingsTest {
             rings.appendTick(5_000 + tick * 10_000L, Map.of("a", (double) tick, "b", tick * 10.0));
         }
         rings.appendStats(1, 60_000, Map.of("a", AggregateStats.of(new double[] {1.0, 3.0})));
-        InsightsSnapshot everything = rings.capture(1L);
 
         InsightsSnapshot after = rings.captureAfter(1L, new long[levels.size()]);
 
-        assertThat(after.levels()).isEqualTo(everything.levels());
         assertThat(after.levels().get(0).count())
                 .as("the ticks start off the interval grid, so the end alone would count fewer")
                 .isEqualTo(4);
+        assertThat(after.levels().get(0).endEpochMs()).isEqualTo(35_000);
         assertThat(after.levels().get(1).count()).isEqualTo(1);
-        everything.series().forEach((id, byLevel) -> {
-            for (int level = 0; level < byLevel.size(); level++) {
-                double[][] expected = byLevel.get(level);
-                double[][] actual = after.series().get(id).get(level);
-                assertThat(actual).hasNumberOfRows(expected.length);
-                for (int column = 0; column < expected.length; column++) {
-                    assertThat(actual[column]).containsExactly(expected[column]);
-                }
-            }
-        });
+        assertThat(after.levels().get(1).endEpochMs()).isEqualTo(60_000);
+        assertThat(after.series().get("a").get(0)[0]).containsExactly(0.0, 1.0, 2.0, 3.0);
+        assertThat(after.series().get("b").get(0)[0]).containsExactly(0.0, 10.0, 20.0, 30.0);
+        double[][] windows = after.series().get("a").get(1);
+        assertThat(windows).hasNumberOfRows(InsightsSnapshot.STAT_COLUMNS.size());
+        assertThat(windows[InsightsSnapshot.STAT_COLUMNS.indexOf("avg")]).containsExactly(2.0);
+        assertThat(windows[InsightsSnapshot.STAT_COLUMNS.indexOf("samples")]).containsExactly(2.0);
     }
 
     @Test

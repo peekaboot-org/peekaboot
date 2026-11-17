@@ -1050,7 +1050,7 @@ class InsightsSnapshotStoreTest {
 
         store.writeNow();
 
-        InsightsSnapshot expected = rings.capture(NOW);
+        InsightsSnapshot expected = rings.captureAfter(NOW, new long[GEOMETRY.size()]);
         InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
         assertThat(restored.levels().get(0).endEpochMs())
                 .isEqualTo(expected.levels().get(0).endEpochMs());

@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import java.util.Map;
 import java.util.Optional;
+import org.peekaboot.backend.insights.config.InsightsProperties;
 
 /** Collaborators for an {@link InsightsCollector} whose events a test does not read, and reads of its rings. */
 final class InsightsCollectors {
@@ -23,6 +24,12 @@ final class InsightsCollectors {
     /** Persistence off: the collector starts from empty rings. */
     static InsightsCollector.SnapshotSource noSnapshot() {
         return timeout -> Optional.empty();
+    }
+
+    /** Every entry of every ring, as a write with nothing persisted captures them. */
+    static InsightsSnapshot everything(InsightsCollector collector) {
+        // One zero end per level any collector can have; captureAfter reads only its own levels'.
+        return collector.captureAfter(new long[InsightsProperties.MAX_LEVELS]);
     }
 
     /** Level 0's whole ring. */

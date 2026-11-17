@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.peekaboot.backend.insights.InsightsCollectors.everything;
 import static org.peekaboot.backend.insights.InsightsCollectors.ticks;
 import static org.peekaboot.backend.insights.InsightsCollectors.windows;
 import static org.peekaboot.backend.testsupport.SeriesDefs.value;
@@ -35,7 +36,7 @@ class InsightsCollectorRestoreTest {
         source.tick(20_000);
         source.rollUp(1, 60_000);
 
-        InsightsSnapshot snapshot = source.capture();
+        InsightsSnapshot snapshot = everything(source);
         InsightsCollector restored = collector("cpu.process");
         restored.restore(snapshot);
 
@@ -55,7 +56,7 @@ class InsightsCollectorRestoreTest {
         source.tick(20_000);
         source.rollUp(1, 60_000);
 
-        double[][] level1 = source.capture().series().get("cpu.process").get(1);
+        double[][] level1 = everything(source).series().get("cpu.process").get(1);
 
         assertThat(level1[InsightsSnapshot.STAT_COLUMNS.indexOf("samples")]).containsExactly(2.0);
     }
@@ -66,7 +67,7 @@ class InsightsCollectorRestoreTest {
         source.tick(10_000);
 
         InsightsCollector restored = collector("cpu.process");
-        restored.restore(source.capture());
+        restored.restore(everything(source));
 
         assertThat(ticks(restored).values()).containsOnlyKeys("cpu.process");
         assertThat(ticks(restored).values().get("cpu.process")).hasSize(1);
@@ -78,7 +79,7 @@ class InsightsCollectorRestoreTest {
         source.tick(10_000);
 
         InsightsCollector restored = collector("cpu.process", "brand.new");
-        restored.restore(source.capture());
+        restored.restore(everything(source));
 
         assertThat(ticks(restored).values().get("cpu.process")).containsExactly(7.0);
         assertThat(ticks(restored).values().get("brand.new")).containsExactly(Double.NaN);
@@ -97,8 +98,8 @@ class InsightsCollectorRestoreTest {
         source.rollUp(1, 60_000);
 
         InsightsCollector restored = collector("cpu.process", "heap.used", "brand.new");
-        restored.restore(source.capture());
-        InsightsSnapshot captured = restored.capture();
+        restored.restore(everything(source));
+        InsightsSnapshot captured = everything(restored);
 
         InsightsSnapshot decoded = roundTrip(captured);
 
@@ -115,7 +116,7 @@ class InsightsCollectorRestoreTest {
         source.tick(10_000);
 
         InsightsCollector restored = collector("cpu.process");
-        restored.restore(source.capture());
+        restored.restore(everything(source));
         restored.tick(60_000); // four 10s boundaries missed
 
         assertThat(ticks(restored).values().get("cpu.process"))
@@ -126,7 +127,7 @@ class InsightsCollectorRestoreTest {
     void theFirstTickAppliesWhateverThePersistedSnapshotHeld() throws Exception {
         InsightsCollector source = collector(7, InsightsCollectors.noSnapshot(), steppingClock(0));
         source.tick(100_000);
-        InsightsSnapshot persisted = source.capture();
+        InsightsSnapshot persisted = everything(source);
 
         // the first live tick lands on the boundary right after the persisted one and every
         // later tick on the next: no gap for the collector to pad with NaN

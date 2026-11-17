@@ -246,13 +246,8 @@ final class SeriesRings {
                 : statsRings.values().iterator().next()[level].size();
     }
 
-    /** Everything persistence needs: {@link #captureAfter} with nothing persisted yet. */
-    InsightsSnapshot capture(long writtenAtEpochMs) {
-        return captureAfter(writtenAtEpochMs, new long[intervalMillis.length]);
-    }
-
     /**
-     * Like {@code capture}, but per level only the entries dated after {@code persistedEndEpochMs[level]}:
+     * Per level, the entries dated after {@code persistedEndEpochMs[level]}, as persistence writes them:
      * {@code (end - persisted) / interval} of them, at most what the ring holds, and all it holds where
      * persisted is 0. Every level of every series, the {@code samples} column included. Read under the same
      * lock as {@link #appendTick}, like {@link #levelData(int, Instant)}, so every level holds whole ticks

@@ -3,6 +3,7 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.insights.InsightsCollectorBuilder.collector;
+import static org.peekaboot.backend.insights.InsightsCollectors.everything;
 import static org.peekaboot.backend.insights.InsightsCollectors.ticks;
 import static org.peekaboot.backend.insights.InsightsCollectors.windows;
 import static org.peekaboot.backend.testsupport.Latches.awaitQuietly;
@@ -465,7 +466,7 @@ class InsightsCollectorTest {
         int torn = 0;
         while (ticker.isAlive()) {
             boolean ticking = tickNumber.get() > 0;
-            InsightsSnapshot capture = racing.capture();
+            InsightsSnapshot capture = everything(racing);
             InsightsSnapshot.Level level0 = capture.levels().get(0);
             List<double[]> level0Samples = capture.series().values().stream()
                     .map(byLevel -> byLevel.get(0)[0])
@@ -498,7 +499,7 @@ class InsightsCollectorTest {
         MidTick midTick = parkTickInsideSampling();
         InsightsSnapshot snapshot;
         try {
-            snapshot = midTick.collector().capture();
+            snapshot = everything(midTick.collector());
         } finally {
             midTick.finish();
         }
@@ -518,7 +519,7 @@ class InsightsCollectorTest {
         InsightsCollector dated =
                 collector(registry).clock(() -> 1_756_000_000_000L).build();
 
-        assertThat(dated.capture().writtenAtEpochMs()).isEqualTo(1_756_000_000_000L);
+        assertThat(everything(dated).writtenAtEpochMs()).isEqualTo(1_756_000_000_000L);
     }
 
     /**

@@ -224,11 +224,6 @@ public final class InsightsCollector {
         return rings.levelData(level, since);
     }
 
-    /** The rings as persistence writes them, dated by the collector's clock; see {@link SeriesRings#capture(long)}. */
-    InsightsSnapshot capture() {
-        return rings.capture(schedule.now());
-    }
-
     /** See {@link SeriesRings#captureAfter}; dated by the collector's clock. */
     InsightsSnapshot captureAfter(long[] persistedEndEpochMs) {
         return rings.captureAfter(schedule.now(), persistedEndEpochMs);
