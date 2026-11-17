@@ -117,7 +117,8 @@ history. Five things count as wrong:
 
 The age, clock-skew and geometry checks judge the snapshot with the journal applied, not the
 snapshot alone. A result that fails them, or a snapshot that cannot be read, deletes both files
-and the rings start empty, exactly as they would with storage off.
+and the rings start empty, exactly as they would with storage off. Each of these logs one INFO
+line with the reason. So does a parse that has not arrived within the restore's wait.
 
 The journal is applied on top of the snapshot by entry date (`InsightsJournalReplay`). Series the
 configuration no longer has are left out. A cut or damaged record, or one that leaves a hole
@@ -632,6 +633,9 @@ The backend implements a Backend-for-Frontend pattern:
 2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed records. A section the service could not read is null, and so is one that does not bind to its record, each section parsing on its own; inside a section, a collection the response left out binds as empty (the records' compact constructors), so the mappers guard the section and nothing below it
 3. **Domain mapping**: `ActuatorInsightsMapper` hands each section to its own mapper and assembles the response
 4. **Request policy**: `ActuatorInsightsService.insightsFor` reads the locale and decides on unmasking, then reads, parses and maps
+
+The locale reaches two places only: `CronDescriber`, for the description of a cron trigger, and
+`ServerInfo.current`, for the display name of the JVM's default locale.
 
 `ConfigMapper` flattens a nested `@ConfigurationProperties` value to one property per leaf under
 a dotted key (`hikari.maximumPoolSize`), indexing list elements the way Spring's own property
@@ -1589,6 +1593,12 @@ The same decorator bean pool backs both `ThreadPoolTaskExecutorBuilder` and the 
 builders, which is why the scheduled-execution guard matters even for an application that never
 calls `@Async` directly: Peekaboot's decorator is wired into the scheduler regardless.
 
+Only executors Boot builds receive the decorator: `applicationTaskExecutor` and anything made from
+the injected `ThreadPoolTaskExecutorBuilder` or `SimpleAsyncTaskExecutorBuilder`. An executor the
+application constructs by hand gets neither it nor context propagation. Boot's
+`OnExecutorCondition` skips `applicationTaskExecutor` once the application declares any `Executor`
+bean, unless `spring.task.execution.mode=force`.
+
 A task's failure reaches its span by three routes, because two of Spring's paths catch it before
 the decorator could see it thrown:
 
@@ -2178,7 +2188,9 @@ newest keeps its date, so every timestamp still derives from `endEpochMs`, `inte
 Each series gets a `SeriesSummary` over that window: `AggregateStats.of` over level 0's samples,
 and `AggregateStats.ofAggregates` over the windows above it. There the median and the p95 are
 nearest rank over the windows' own median and p95, each window counted once per sample, while
-the extremes and the average stay exact. The full view adds the samples and a `timestamps`
+the extremes and the average stay exact. A window of fewer than 20 samples has its maximum as its
+p95, so at level 1 of the default levels (six samples a window) the p95 never falls below the true
+one. The full view adds the samples and a `timestamps`
 array; the Insights tab asks for it, since it charts every sample.
 
 `InsightsProblems` checks the window against the eight `ProblemRule`s over every series,
