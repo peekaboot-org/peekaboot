@@ -90,7 +90,8 @@ final class InsightsJournal {
             }
             if (snapshot != null && !InsightsSnapshot.sameGeometry(header.geometry(), snapshot.levels())) {
                 log.info(
-                        "Peekaboot insights: {} was written for other ring levels than {}; restoring the snapshot alone",
+                        "Peekaboot insights: {} was written for other ring levels than {};"
+                                + " restoring the snapshot alone",
                         file,
                         file.resolveSibling(InsightsSnapshotStore.FILE_NAME));
                 return new Replay(alone, false);

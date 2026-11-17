@@ -207,7 +207,10 @@ class InsightsServicePersistenceTest {
         }
     }
 
-    /** Journal first: a fold between the two copies leaves a newer snapshot beside an older journal, which replay skips by date. */
+    /**
+     * Journal first: a fold between the two copies leaves a newer snapshot beside an older
+     * journal, which replay skips by date.
+     */
     private boolean journalOutrunsSnapshot(Path image) {
         try {
             Files.copy(directory.resolve(InsightsJournal.FILE_NAME), image.resolve(InsightsJournal.FILE_NAME));

@@ -147,7 +147,10 @@ final class InsightsJournalCodec {
         }
     }
 
-    /** A record that does not match its header would shift every byte after it, so it is refused before any is written. */
+    /**
+     * A record that does not match its header would shift every byte after it, so it is refused
+     * before any is written.
+     */
     private static void requireMatches(Header header, InsightsSnapshot entries) throws IOException {
         List<InsightsSnapshot.Level> levels = entries.levels();
         if (levels.size() != header.geometry().size()) {

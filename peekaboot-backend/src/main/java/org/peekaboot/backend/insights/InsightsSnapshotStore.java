@@ -51,12 +51,12 @@ final class InsightsSnapshotStore implements SnapshotStore {
     private final WriteOutage writeOutage = new WriteOutage();
     private volatile boolean unclaimedHistory;
 
-    /** What the writes persisted so far; all four are guarded by this store's monitor, which {@link #write} holds. */
+    // The four fields below track the writes and are guarded by this store's monitor.
     private long[] persistedEnds;
-
-    private boolean foldNext = true;
     private long snapshotBytes;
     private long journalBytes;
+    /** The next write folds: the start found journal records or no snapshot, or the last write failed. */
+    private boolean foldNext = true;
 
     InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
         this(file, geometry, interval, maxAge, new IntervalBoundary(System::currentTimeMillis, Thread::sleep));
@@ -224,6 +224,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
         }
     }
 
+    /** The caller holds this store's monitor, which guards the fields read here. */
     private boolean mustFold() {
         return foldNext || journalBytes >= snapshotBytes;
     }

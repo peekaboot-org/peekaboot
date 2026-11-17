@@ -51,7 +51,6 @@ public final class OwnerOnlyFiles {
     private static final Set<OpenOption> CREATE_FRESH = Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
     private static final Set<OpenOption> CREATE_MISSING =
             Set.of(StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
-
     private static final Set<OpenOption> APPEND_EXISTING = Set.of(StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS);
 
     private OwnerOnlyFiles() {}
@@ -144,9 +143,12 @@ public final class OwnerOnlyFiles {
         }
     }
 
-    /** Opens {@code file} to append to it. It must exist: an append never creates a file and never follows a symlink at its path. */
+    /**
+     * Opens {@code file} to append to it. It must exist: an append never creates a file and never
+     * follows a symlink at its path.
+     */
     public static OutputStream openForAppend(Path file) throws IOException {
-        // a channel, for the same reason as in replaceAtomically
+        // a channel, since Files.newOutputStream ignores the interrupt a stopping store ends its append with
         return Channels.newOutputStream(Files.newByteChannel(file, APPEND_EXISTING));
     }
 
