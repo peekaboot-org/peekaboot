@@ -71,6 +71,11 @@ final class InsightsJournalCodec {
         for (int level = 0; level < levelCount; level++) {
             long intervalMs = in.readLong();
             int size = InsightsSnapshotCodec.bounded(in.readInt(), InsightsProperties.MAX_LEVEL_SIZE, "ring size");
+            // The header carries no checksum, and the replay divides by the interval and sizes rings by the size.
+            if (intervalMs < 1 || size < 1) {
+                throw new IOException(
+                        "implausible level in insights file: interval " + intervalMs + " ms, size " + size);
+            }
             geometry.add(new InsightsSnapshot.Level(intervalMs, size, 0, 0));
         }
         int seriesCount = InsightsSnapshotCodec.bounded(in.readInt(), InsightsSnapshotCodec.MAX_SERIES, "series count");

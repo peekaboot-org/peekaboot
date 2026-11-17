@@ -75,7 +75,8 @@ final class InsightsJournal {
     /**
      * The journal's records applied on top of {@code snapshot}, or on top of nothing without one.
      * The replay ends at the clean end of the file, at a record that cannot be read, or at one
-     * that leaves a hole; what came before it stays.
+     * that leaves a hole; what came before it stays. A journal whose header cannot be read, or
+     * whose replay throws, is deleted and the snapshot used alone.
      */
     Replay replayOnto(@Nullable InsightsSnapshot snapshot) {
         Optional<InsightsSnapshot> alone = Optional.ofNullable(snapshot);
@@ -100,6 +101,9 @@ final class InsightsJournal {
         } catch (IOException e) {
             log.debug("Could not read the insights journal {}", file, e);
             return new Replay(alone, false);
+        } catch (RuntimeException e) {
+            discardUnreadable(e);
+            return new Replay(alone, false);
         }
     }
 
@@ -108,13 +112,18 @@ final class InsightsJournal {
         try {
             return InsightsJournalCodec.readHeader(in);
         } catch (IOException | RuntimeException e) {
-            log.info("Peekaboot insights: ignoring unreadable {} ({})", file, e.toString());
-            try {
-                Files.deleteIfExists(file);
-            } catch (IOException deleteFailure) {
-                log.debug("Could not delete the unusable insights journal {}", file, deleteFailure);
-            }
+            discardUnreadable(e);
             return null;
+        }
+    }
+
+    /** A journal that failed once fails every start; deleting it keeps that from repeating. */
+    private void discardUnreadable(Exception e) {
+        log.info("Peekaboot insights: ignoring unreadable {} ({})", file, e.toString());
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException deleteFailure) {
+            log.debug("Could not delete the unusable insights journal {}", file, deleteFailure);
         }
     }
 

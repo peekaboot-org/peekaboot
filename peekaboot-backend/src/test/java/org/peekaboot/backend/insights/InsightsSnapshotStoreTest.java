@@ -615,6 +615,48 @@ class InsightsSnapshotStoreTest {
     }
 
     @Test
+    void aJournalWithAZeroIntervalAndNoSnapshotIsDeletedAndBlocksNoWrite() throws IOException {
+        InsightsJournalCodec.Header zeroInterval = new InsightsJournalCodec.Header(
+                List.of(new InsightsSnapshot.Level(0, 90, 0, 0)), List.of("cpu.process"));
+        writeJournal(zeroInterval, zeroIntervalEntries(30_000, 3.0), zeroIntervalEntries(40_000, 4.0));
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+
+        try (LogCapture capture = LogCapture.attach(InsightsJournal.class, Level.INFO)) {
+            assertThat(loadWith(store)).isEmpty();
+
+            assertThat(capture.appender().list)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage())
+                            .startsWith("Peekaboot insights: ignoring unreadable " + journal()));
+        }
+        assertThat(journal()).doesNotExist();
+        store.start(ends -> ownSamplesOnly(9.0), () -> false);
+        store.stop();
+        assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(9.0);
+    }
+
+    @Test
+    void aJournalWhoseReplayThrowsIsDeletedAndTheSnapshotRestoredAlone() throws IOException {
+        // The distance from this end to the record's overflows a long.
+        writeSnapshot(new InsightsSnapshot(
+                NOW,
+                List.of(new InsightsSnapshot.Level(10_000, 90, Long.MIN_VALUE + 1, 2)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}}))));
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+
+        try (LogCapture capture = LogCapture.attach(InsightsJournal.class, Level.INFO)) {
+            assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow()))
+                    .containsExactly(1.0, 2.0);
+
+            assertThat(capture.appender().list)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage())
+                            .startsWith("Peekaboot insights: ignoring unreadable " + journal()));
+        }
+        assertThat(journal()).doesNotExist();
+    }
+
+    @Test
     void aJournalForOtherRingLevelsThanTheSnapshotIsNotApplied() throws IOException {
         writeSnapshot(snapshot(NOW, 10_000, 90));
         InsightsJournalCodec.Header otherLevels = new InsightsJournalCodec.Header(
@@ -1136,6 +1178,13 @@ class InsightsSnapshotStoreTest {
         return new InsightsSnapshot(
                 writtenAt,
                 List.of(new InsightsSnapshot.Level(10_000, 90, end, values.length)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {values})));
+    }
+
+    private static InsightsSnapshot zeroIntervalEntries(long end, double... values) {
+        return new InsightsSnapshot(
+                NOW,
+                List.of(new InsightsSnapshot.Level(0, 90, end, values.length)),
                 Map.of("cpu.process", List.<double[][]>of(new double[][] {values})));
     }
 

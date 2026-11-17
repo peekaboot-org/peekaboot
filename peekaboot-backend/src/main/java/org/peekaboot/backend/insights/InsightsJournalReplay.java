@@ -96,7 +96,7 @@ final class InsightsJournalReplay {
         if (record.count() == history.size() || history.endEpochMs() == 0) {
             return Optional.of(new LevelStep(true, record.count()));
         }
-        long newer = Math.ceilDiv(record.endEpochMs() - history.endEpochMs(), history.intervalMs());
+        long newer = Math.ceilDiv(Math.subtractExact(record.endEpochMs(), history.endEpochMs()), history.intervalMs());
         if (newer > record.count()) {
             return Optional.empty();
         }

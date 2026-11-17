@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -202,6 +203,28 @@ class InsightsJournalCodecTest {
         assertThatThrownBy(() -> InsightsJournalCodec.readHeader(streamOf(bytes)))
                 .isInstanceOf(IOException.class)
                 .hasMessage("unsupported insights journal version 2");
+    }
+
+    static Stream<Arguments> levelsThatCannotHoldEntries() {
+        return Stream.of(
+                Arguments.of(Named.of("interval 0", 12), 0L, Long.BYTES),
+                Arguments.of(Named.of("a negative interval", 12), -10_000L, Long.BYTES),
+                Arguments.of(Named.of("ring size 0", 20), 0L, Integer.BYTES));
+    }
+
+    @ParameterizedTest
+    @MethodSource("levelsThatCannotHoldEntries")
+    void aHeaderLevelThatCannotHoldEntriesIsRefused(int offset, long value, int width) throws IOException {
+        ByteBuffer bytes = ByteBuffer.wrap(header());
+        if (width == Long.BYTES) {
+            bytes.putLong(offset, value);
+        } else {
+            bytes.putInt(offset, (int) value);
+        }
+
+        assertThatThrownBy(() -> InsightsJournalCodec.readHeader(streamOf(bytes.array())))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("implausible level");
     }
 
     @Test
