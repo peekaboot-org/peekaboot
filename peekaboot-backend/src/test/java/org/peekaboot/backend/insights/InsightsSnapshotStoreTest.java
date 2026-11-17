@@ -3,7 +3,9 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -163,8 +165,43 @@ class InsightsSnapshotStoreTest {
 
         assertThat(restored.series().get("cpu.process").get(0)[0]).containsExactly(1.0, 2.0);
         try (Stream<Path> entries = Files.list(directory)) {
-            assertThat(entries).containsExactly(directory.resolve(InsightsSnapshotStore.FILE_NAME));
+            assertThat(entries)
+                    .containsExactlyInAnyOrder(directory.resolve(InsightsSnapshotStore.FILE_NAME), journal());
         }
+    }
+
+    @Test
+    void aFoldLeavesTheSnapshotBesideAJournalWithoutRecords() throws IOException {
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        store.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
+
+        store.stop();
+
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(journal())))) {
+            InsightsJournalCodec.Header header = InsightsJournalCodec.readHeader(in);
+            assertThat(header).isEqualTo(JOURNAL_HEADER);
+            assertThat(InsightsJournalCodec.readRecord(in, header)).isEmpty();
+        }
+    }
+
+    /** The journal is the file that fails when it cannot be replaced, and the warning says so. */
+    @Test
+    void aFoldWhoseJournalCannotBeReplacedNamesTheJournal() throws IOException {
+        Files.createDirectories(journal().resolve("occupied"));
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        store.start(ends -> snapshot(NOW, 10_000, 90), () -> false);
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.stop();
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: cannot write " + journal()
+                                + "; history will not survive this restart");
+            });
+        }
+        assertThat(loadWith(store(Duration.ofDays(30)))).isPresent();
     }
 
     /** The rings hold megabytes; once the collector has them, a second copy here is dead weight for the run. */
@@ -428,6 +465,8 @@ class InsightsSnapshotStoreTest {
 
         assertThat(PosixPermissions.of(stateDirectory)).isEqualTo("rwx------");
         assertThat(PosixPermissions.of(stateDirectory.resolve(InsightsSnapshotStore.FILE_NAME)))
+                .isEqualTo("rw-------");
+        assertThat(PosixPermissions.of(stateDirectory.resolve(InsightsJournal.FILE_NAME)))
                 .isEqualTo("rw-------");
     }
 

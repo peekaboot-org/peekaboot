@@ -1,13 +1,16 @@
 package org.peekaboot.backend.insights;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,13 +22,34 @@ final class InsightsJournal {
     static final String FILE_NAME = "insights.journal";
 
     private final Path file;
+    private final List<InsightsSnapshot.Level> geometry;
+    private volatile @Nullable List<String> seriesIds;
 
     InsightsJournal(Path file, List<InsightsSnapshot.Level> geometry) {
         this.file = file;
+        this.geometry = List.copyOf(geometry);
     }
 
     Path file() {
         return file;
+    }
+
+    /** Replaces the file with a header-only journal for {@code seriesIds}, through replaceAtomically; returns its size in bytes. */
+    long start(List<String> seriesIds) throws IOException {
+        InsightsJournalCodec.Header header = new InsightsJournalCodec.Header(geometry, seriesIds);
+        OwnerOnlyFiles.replaceAtomically(file, stream -> {
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
+                InsightsJournalCodec.writeHeader(out, header);
+            }
+        });
+        this.seriesIds = List.copyOf(seriesIds);
+        return Files.size(file);
+    }
+
+    /** The series table of the journal this run started, or null before start succeeded. */
+    @Nullable
+    List<String> seriesIds() {
+        return seriesIds;
     }
 
     /** What a load found: the history, and whether any journal record was applied to it. */

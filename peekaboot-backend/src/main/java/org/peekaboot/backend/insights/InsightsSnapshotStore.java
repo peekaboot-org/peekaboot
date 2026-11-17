@@ -172,7 +172,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
         if (thread != null) {
             WorkerThreads.stopAndJoin(List.of(thread));
         }
-        writeNow();
+        write(true);
     }
 
     @Override
@@ -181,35 +181,42 @@ final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     void writeNow() {
-        try {
-            write();
-        } catch (IOException e) {
-            reportWriteFailure(e);
-        }
+        write(false);
     }
 
-    private synchronized void write() throws IOException {
+    private synchronized void write(boolean stopping) {
         RingCapture source = capture;
         if (source == null) {
             return;
         }
-        // Read before capturing: a restore landing in between would vouch for rings captured without it.
-        boolean restoredBeforeCapture = historyRestored.getAsBoolean();
-        InsightsSnapshot snapshot = source.entriesAfter(new long[geometry.size()]);
-        if (!replacesWhatIsThere(snapshot, restoredBeforeCapture)) {
-            return;
-        }
-        OwnerOnlyFiles.replaceAtomically(file, stream -> {
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
-                InsightsSnapshotCodec.write(out, snapshot);
+        Path step = file;
+        try {
+            // Read before capturing: a restore landing in between would vouch for rings captured without it.
+            boolean restoredBeforeCapture = historyRestored.getAsBoolean();
+            InsightsSnapshot captured = source.entriesAfter(new long[geometry.size()]);
+            if (!replacesWhatIsThere(captured, restoredBeforeCapture)) {
+                return;
             }
-        });
-        writeOutage.succeeded();
+            OwnerOnlyFiles.replaceAtomically(file, stream -> {
+                try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
+                    InsightsSnapshotCodec.write(out, captured);
+                }
+            });
+            step = journal.file();
+            journal.start(List.copyOf(captured.series().keySet()));
+            writeOutage.succeeded();
+        } catch (IOException e) {
+            if (!stopping && Thread.currentThread().isInterrupted()) {
+                // stop()'s interrupt closed the channel; stop() writes the final snapshot itself
+                return;
+            }
+            reportWriteFailure(step, e);
+        }
     }
 
-    private void reportWriteFailure(IOException e) {
-        writeOutage.failed(
-                () -> log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", file, e));
+    private void reportWriteFailure(Path failedFile, IOException e) {
+        writeOutage.failed(() ->
+                log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", failedFile, e));
     }
 
     /**
@@ -225,17 +232,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
     }
 
     private void runWriter() {
-        schedule.runEvery(interval.toMillis(), 0, boundary -> {
-            try {
-                write();
-            } catch (IOException e) {
-                if (Thread.currentThread().isInterrupted()) {
-                    // stop()'s interrupt closed the channel; stop() writes the final snapshot itself
-                    return;
-                }
-                reportWriteFailure(e);
-            }
-        });
+        schedule.runEvery(interval.toMillis(), 0, boundary -> write(false));
     }
 
     private Optional<InsightsSnapshot> load() {
