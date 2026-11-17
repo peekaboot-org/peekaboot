@@ -56,6 +56,13 @@ final class InsightsSnapshotStore implements SnapshotStore {
     private final WriteOutage writeOutage = new WriteOutage();
     private volatile boolean unclaimedHistory;
 
+    /** What the writes persisted so far; all four are guarded by this store's monitor, which {@link #write} holds. */
+    private long[] persistedEnds;
+
+    private boolean foldNext = true;
+    private long snapshotBytes;
+    private long journalBytes;
+
     InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
         this(file, geometry, interval, maxAge, new IntervalBoundary(System::currentTimeMillis, Thread::sleep));
     }
@@ -76,6 +83,7 @@ final class InsightsSnapshotStore implements SnapshotStore {
         this.interval = interval;
         this.maxAge = maxAge;
         this.schedule = schedule;
+        this.persistedEnds = new long[geometry.size()];
     }
 
     /**
@@ -193,17 +201,25 @@ final class InsightsSnapshotStore implements SnapshotStore {
         try {
             // Read before capturing: a restore landing in between would vouch for rings captured without it.
             boolean restoredBeforeCapture = historyRestored.getAsBoolean();
-            InsightsSnapshot captured = source.entriesAfter(new long[geometry.size()]);
+            boolean fold = stopping || foldNext || journalBytes >= snapshotBytes;
+            InsightsSnapshot captured = source.entriesAfter(fold ? new long[geometry.size()] : persistedEnds.clone());
             if (!replacesWhatIsThere(captured, restoredBeforeCapture)) {
                 return;
             }
-            OwnerOnlyFiles.replaceAtomically(file, stream -> {
-                try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
-                    InsightsSnapshotCodec.write(out, captured);
+            List<String> seriesIds = List.copyOf(captured.series().keySet());
+            if (fold) {
+                snapshotBytes = replaceSnapshot(captured);
+                step = journal.file();
+                journalBytes = journal.start(seriesIds);
+            } else {
+                step = journal.file();
+                if (journal.seriesIds() == null) {
+                    journalBytes = journal.start(seriesIds);
                 }
-            });
-            step = journal.file();
-            journal.start(List.copyOf(captured.series().keySet()));
+                journalBytes += journal.append(captured);
+            }
+            persistedEnds = levelEnds(captured);
+            foldNext = false;
             writeOutage.succeeded();
         } catch (IOException e) {
             if (!stopping && Thread.currentThread().isInterrupted()) {
@@ -212,6 +228,24 @@ final class InsightsSnapshotStore implements SnapshotStore {
             }
             reportWriteFailure(step, e);
         }
+    }
+
+    /** The bytes are counted as they are written, so a failing size lookup cannot fail a snapshot that is in place. */
+    private long replaceSnapshot(InsightsSnapshot snapshot) throws IOException {
+        long[] written = new long[1];
+        OwnerOnlyFiles.replaceAtomically(file, stream -> {
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
+                InsightsSnapshotCodec.write(out, snapshot);
+                written[0] = out.size();
+            }
+        });
+        return written[0];
+    }
+
+    private static long[] levelEnds(InsightsSnapshot snapshot) {
+        return snapshot.levels().stream()
+                .mapToLong(InsightsSnapshot.Level::endEpochMs)
+                .toArray();
     }
 
     private void reportWriteFailure(Path failedFile, IOException e) {
@@ -255,7 +289,8 @@ final class InsightsSnapshotStore implements SnapshotStore {
                 return Optional.empty();
             }
         }
-        Optional<InsightsSnapshot> history = journal.replayOnto(snapshot).history();
+        InsightsJournal.Replay replay = journal.replayOnto(snapshot);
+        Optional<InsightsSnapshot> history = replay.history();
         if (history.isEmpty()) {
             discard();
             return Optional.empty();
@@ -273,7 +308,25 @@ final class InsightsSnapshotStore implements SnapshotStore {
             discard();
             return Optional.empty();
         }
+        takeOver(history.get(), snapshot == null || replay.appliedRecords());
         return history;
+    }
+
+    /** Hands the writes what the load found, so they continue from it instead of rewriting it. */
+    private synchronized void takeOver(InsightsSnapshot history, boolean foldFirst) {
+        persistedEnds = levelEnds(history);
+        foldNext = foldFirst;
+        snapshotBytes = snapshotSize();
+    }
+
+    /** Zero when the size cannot be read, which makes every write a fold until one has replaced the snapshot. */
+    private long snapshotSize() {
+        try {
+            return Files.exists(file) ? Files.size(file) : 0;
+        } catch (IOException e) {
+            log.debug("Could not read the size of the insights snapshot {}", file, e);
+            return 0;
+        }
     }
 
     private InsightsSnapshot readSnapshot() throws IOException {

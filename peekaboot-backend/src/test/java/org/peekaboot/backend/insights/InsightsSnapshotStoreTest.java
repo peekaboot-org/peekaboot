@@ -3,6 +3,7 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -21,6 +23,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Named;
@@ -30,6 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
 
@@ -332,10 +336,16 @@ class InsightsSnapshotStoreTest {
             store.writeNow();
             store.stop();
 
-            assertThat(capture.appender().list).hasSize(2).allSatisfy(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).isEqualTo(cannotWriteWarning());
-            });
+            // the third write is an append, so the journal is the file it fails on
+            assertThat(capture.appender().list)
+                    .extracting(ILoggingEvent::getLevel)
+                    .containsOnly(Level.WARN);
+            assertThat(capture.appender().list)
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .containsExactly(
+                            cannotWriteWarning(),
+                            "Peekaboot insights: cannot write " + journal()
+                                    + "; history will not survive this restart");
         }
     }
 
@@ -701,6 +711,278 @@ class InsightsSnapshotStoreTest {
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
                 .isEmpty();
         assertThat(journal()).doesNotExist();
+    }
+
+    @Test
+    void anAppendWritesOnlyTheEntriesSinceTheLastWrite() throws IOException {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        tick(rings, 10_000, 1.0);
+        tick(rings, 20_000, 2.0);
+        tick(rings, 30_000, 3.0);
+        store.writeNow();
+        tick(rings, 40_000, 4.0);
+        tick(rings, 50_000, 5.0);
+        byte[] snapshotBefore = Files.readAllBytes(snapshotFile());
+        long journalBefore = Files.size(journal());
+
+        store.writeNow();
+
+        assertThat(Files.readAllBytes(snapshotFile())).isEqualTo(snapshotBefore);
+        assertThat(Files.size(journal()) - journalBefore).isEqualTo(4 + 8 + 12 + 2 * 8 + 4);
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+        assertThat(level0(restored)).containsExactly(1.0, 2.0, 3.0, 4.0, 5.0);
+        assertThat(restored.levels().get(0).endEpochMs()).isEqualTo(50_000);
+    }
+
+    /** What 1.3.0 left behind: a snapshot and no journal. */
+    @Test
+    void aStartThatFoundOnlyASnapshotContinuesItThroughTheJournal() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        byte[] snapshotBefore = Files.readAllBytes(snapshotFile());
+        InsightsSnapshotStore store = manualStore(GEOMETRY);
+        SeriesRings rings = restoredRings(store);
+        tick(rings, 30_000, 3.0);
+        store.start(ends -> rings.captureAfter(NOW, ends), () -> true);
+
+        store.writeNow();
+
+        assertThat(Files.readAllBytes(snapshotFile())).isEqualTo(snapshotBefore);
+        assertThat(journalRecords()).singleElement().satisfies(record -> {
+            assertThat(level0(record)).containsExactly(3.0);
+            assertThat(record.levels().get(0).endEpochMs()).isEqualTo(30_000);
+        });
+        assertThat(level0(loadWith(store(Duration.ofDays(30))).orElseThrow())).containsExactly(1.0, 2.0, 3.0);
+    }
+
+    @Test
+    void aFoundJournalWithoutRecordsIsReplacedRatherThanAppendedTo() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        writeJournal(new InsightsJournalCodec.Header(GEOMETRY, List.of("old.series")));
+        InsightsSnapshotStore store = manualStore(GEOMETRY);
+        SeriesRings rings = restoredRings(store);
+        tick(rings, 30_000, 3.0);
+        store.start(ends -> rings.captureAfter(NOW, ends), () -> true);
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class);
+                LogCapture journalCapture = LogCapture.attach(InsightsJournal.class)) {
+            store.writeNow();
+
+            assertThat(capture.appender().list).isEmpty();
+            assertThat(journalCapture.appender().list).isEmpty();
+        }
+        assertThat(journalTable()).containsExactly("cpu.process");
+        assertThat(journalRecords()).hasSize(1);
+    }
+
+    @Test
+    void theFirstWriteFoldsWhenTheStartAppliedJournalRecords() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+        InsightsSnapshotStore store = manualStore(GEOMETRY);
+        SeriesRings rings = restoredRings(store);
+        tick(rings, 40_000, 4.0);
+        store.start(ends -> rings.captureAfter(NOW, ends), () -> true);
+
+        store.writeNow();
+
+        assertThat(journalRecords()).isEmpty();
+        assertThat(level0(snapshotOnDisk())).containsExactly(1.0, 2.0, 3.0, 4.0);
+    }
+
+    @Test
+    void theJournalFoldsOnceItIsAsLargeAsTheSnapshot() throws IOException {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        tick(rings, 10_000, 1.0);
+        store.writeNow();
+        tick(rings, 20_000, 2.0);
+        store.writeNow();
+        assertThat(journalRecords()).hasSize(1);
+        assertThat(Files.size(journal())).isGreaterThanOrEqualTo(Files.size(snapshotFile()));
+        tick(rings, 30_000, 3.0);
+
+        store.writeNow();
+
+        assertThat(journalRecords()).isEmpty();
+        assertThat(level0(snapshotOnDisk())).hasSize(3);
+    }
+
+    @Test
+    void stopFoldsTheJournalIntoTheSnapshot() throws IOException {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        for (int tick = 1; tick <= 5; tick++) {
+            tick(rings, tick * 10_000L, tick);
+        }
+        store.writeNow();
+        tick(rings, 60_000, 6.0);
+        store.writeNow();
+        assertThat(journalRecords()).hasSize(1);
+        assertThat(Files.size(journal())).isLessThan(Files.size(snapshotFile()));
+
+        store.stop();
+
+        assertThat(journalRecords()).isEmpty();
+        assertThat(level0(snapshotOnDisk())).hasSize(6);
+    }
+
+    @Test
+    void aKillAfterAnAppendLosesOnlyWhatCameAfterIt() {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        for (int tick = 1; tick <= 5; tick++) {
+            tick(rings, tick * 10_000L, tick);
+        }
+        store.writeNow();
+        tick(rings, 60_000, 6.0);
+        tick(rings, 70_000, 7.0);
+        store.writeNow();
+        tick(rings, 80_000, 8.0);
+
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+
+        assertThat(level0(restored)).containsExactly(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0);
+        assertThat(restored.levels().get(0).endEpochMs()).isEqualTo(70_000);
+    }
+
+    @Test
+    void aDowntimeLongerThanTheRingIsJournaledAsAFullRing() throws IOException {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        tick(rings, 10_000, 1.0);
+        store.writeNow();
+        long afterDowntime = 10_000 + 200 * 10_000L;
+        tick(rings, afterDowntime, 9.0);
+
+        store.writeNow();
+
+        assertThat(journalRecords())
+                .singleElement()
+                .satisfies(record -> assertThat(record.levels().get(0).count()).isEqualTo(90));
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+        assertThat(level0(restored)).hasSize(90).endsWith(9.0);
+        assertThat(restored.levels().get(0).endEpochMs()).isEqualTo(afterDowntime);
+    }
+
+    @Test
+    void aLevelThatHasNotRolledUpYetIsJournaledOnceItHas() throws IOException {
+        List<InsightsSnapshot.Level> twoLevels =
+                List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0), new InsightsSnapshot.Level(60_000, 10, 0, 0));
+        SeriesRings rings = rings(twoLevels);
+        InsightsSnapshotStore store = startedManualStore(twoLevels, rings, () -> false);
+        for (int tick = 1; tick <= 6; tick++) {
+            tick(rings, tick * 10_000L, tick);
+        }
+        store.writeNow();
+        tick(rings, 70_000, 7.0);
+
+        store.writeNow();
+
+        rings.appendStats(1, 60_000, Map.of("cpu.process", AggregateStats.of(new double[] {1.0, 2.0})));
+        tick(rings, 80_000, 8.0);
+        store.writeNow();
+
+        List<InsightsSnapshot> records = journalRecords();
+        assertThat(records).hasSize(2);
+        assertThat(records.get(0).levels().get(1).count()).isZero();
+        assertThat(records.get(0).levels().get(1).endEpochMs()).isZero();
+        assertThat(records.get(1).levels().get(1).count()).isEqualTo(1);
+        InsightsSnapshotStore reader = new InsightsSnapshotStore(
+                snapshotFile(), twoLevels, Duration.ofHours(1), Duration.ofDays(30), FIXED_SCHEDULE);
+        InsightsSnapshot restored = loadWith(reader).orElseThrow();
+        assertThat(restored.levels().get(1).count()).isEqualTo(1);
+        assertThat(restored.levels().get(1).endEpochMs()).isEqualTo(60_000);
+        assertThat(restored.levels().get(0).count()).isEqualTo(8);
+    }
+
+    @Test
+    void aRunWhoseRestoreNeverLandedWritesNeitherFile() throws IOException {
+        writeSnapshot(snapshot(NOW, 10_000, 90));
+        writeJournal(JOURNAL_HEADER, entries(NOW, 30_000, 3.0));
+        byte[] snapshotBefore = Files.readAllBytes(snapshotFile());
+        byte[] journalBefore = Files.readAllBytes(journal());
+        InsightsSnapshotStore store = manualStore(GEOMETRY);
+        assertThat(loadWith(store)).isPresent();
+        SeriesRings rings = rings(GEOMETRY);
+        store.start(ends -> rings.captureAfter(NOW, ends), () -> false);
+        tick(rings, 40_000, 4.0);
+
+        store.writeNow();
+        store.stop();
+
+        assertThat(Files.readAllBytes(snapshotFile())).isEqualTo(snapshotBefore);
+        assertThat(Files.readAllBytes(journal())).isEqualTo(journalBefore);
+    }
+
+    private Path snapshotFile() {
+        return directory.resolve(InsightsSnapshotStore.FILE_NAME);
+    }
+
+    private static List<InsightsProperties.Level> ringLevels(List<InsightsSnapshot.Level> geometry) {
+        return geometry.stream()
+                .map(level -> InsightsProperties.Level.of(Duration.ofMillis(level.intervalMs()), level.size()))
+                .toList();
+    }
+
+    private static SeriesRings rings(List<InsightsSnapshot.Level> geometry) {
+        return new SeriesRings(ringLevels(geometry), List.of("cpu.process"));
+    }
+
+    private static void tick(SeriesRings rings, long epochMs, double value) {
+        rings.appendTick(epochMs, Map.of("cpu.process", value));
+    }
+
+    /** A store whose writer thread ends at once, so it writes only in writeNow() and stop(). */
+    private InsightsSnapshotStore manualStore(List<InsightsSnapshot.Level> geometry) {
+        return new InsightsSnapshotStore(
+                snapshotFile(),
+                geometry,
+                Duration.ofHours(1),
+                Duration.ofDays(30),
+                new IntervalBoundary(() -> NOW, millis -> {
+                    throw new InterruptedException();
+                }));
+    }
+
+    private InsightsSnapshotStore startedManualStore(
+            List<InsightsSnapshot.Level> geometry, SeriesRings rings, BooleanSupplier historyRestored) {
+        InsightsSnapshotStore store = manualStore(geometry);
+        store.start(ends -> rings.captureAfter(NOW, ends), historyRestored);
+        return store;
+    }
+
+    /** Loads what the store finds on disk into fresh rings, as the collector does. */
+    private SeriesRings restoredRings(InsightsSnapshotStore store) {
+        SeriesRings rings = rings(GEOMETRY);
+        rings.restore(loadWith(store).orElseThrow());
+        return rings;
+    }
+
+    private List<InsightsSnapshot> journalRecords() throws IOException {
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(journal())))) {
+            InsightsJournalCodec.Header header = InsightsJournalCodec.readHeader(in);
+            List<InsightsSnapshot> records = new ArrayList<>();
+            for (Optional<InsightsSnapshot> record = InsightsJournalCodec.readRecord(in, header);
+                    record.isPresent();
+                    record = InsightsJournalCodec.readRecord(in, header)) {
+                records.add(record.get());
+            }
+            return records;
+        }
+    }
+
+    private List<String> journalTable() throws IOException {
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(journal())))) {
+            return InsightsJournalCodec.readHeader(in).seriesIds();
+        }
+    }
+
+    /** The snapshot file alone, without the journal. */
+    private InsightsSnapshot snapshotOnDisk() throws IOException {
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(snapshotFile())))) {
+            return InsightsSnapshotCodec.readBody(in, InsightsSnapshotCodec.readHeader(in));
+        }
     }
 
     private Path journal() {

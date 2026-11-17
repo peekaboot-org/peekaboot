@@ -1,10 +1,11 @@
 package org.peekaboot.backend.insights;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -34,16 +35,32 @@ final class InsightsJournal {
         return file;
     }
 
-    /** Replaces the file with a header-only journal for {@code seriesIds}, through replaceAtomically; returns its size in bytes. */
+    /**
+     * Replaces the file with a header-only journal for {@code seriesIds}, through replaceAtomically;
+     * returns the bytes written. The count comes from what was written, not from the file, so a
+     * failing size lookup cannot report a journal that is in place as failed.
+     */
     long start(List<String> seriesIds) throws IOException {
-        InsightsJournalCodec.Header header = new InsightsJournalCodec.Header(geometry, seriesIds);
-        OwnerOnlyFiles.replaceAtomically(file, stream -> {
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
-                InsightsJournalCodec.writeHeader(out, header);
-            }
-        });
+        ByteArrayOutputStream header = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(header);
+        InsightsJournalCodec.writeHeader(out, new InsightsJournalCodec.Header(geometry, seriesIds));
+        out.flush();
+        OwnerOnlyFiles.replaceAtomically(file, stream -> stream.write(header.toByteArray()));
         this.seriesIds = List.copyOf(seriesIds);
-        return Files.size(file);
+        return header.size();
+    }
+
+    /** Appends one record of entries to the journal this run started; returns the bytes appended. */
+    long append(InsightsSnapshot entries) throws IOException {
+        List<String> table = seriesIds;
+        if (table == null) {
+            throw new IllegalStateException("The insights journal is appended to before this run started it");
+        }
+        byte[] record = InsightsJournalCodec.encodeRecord(new InsightsJournalCodec.Header(geometry, table), entries);
+        try (OutputStream out = OwnerOnlyFiles.openForAppend(file)) {
+            out.write(record);
+        }
+        return record.length;
     }
 
     /** The series table of the journal this run started, or null before start succeeded. */
