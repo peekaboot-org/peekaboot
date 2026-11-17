@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -72,6 +73,20 @@ class InsightsSnapshotStoreTest {
                 Map.of("cpu.process", List.<double[][]>of(new double[][] {{value}})));
     }
 
+    private static InsightsSnapshot cpuOnly() {
+        return new InsightsSnapshot(
+                NOW,
+                List.of(new InsightsSnapshot.Level(10_000, 90, 30_000, 1)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0}})));
+    }
+
+    private static InsightsSnapshot cpuAndHeap() {
+        Map<String, List<double[][]>> series = new LinkedHashMap<>();
+        series.put("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}}));
+        series.put("heap.used", List.<double[][]>of(new double[][] {{3.0, 4.0}}));
+        return new InsightsSnapshot(NOW, List.of(new InsightsSnapshot.Level(10_000, 90, 40_000, 2)), series);
+    }
+
     /** Three samples announced, two carried: the codec refuses it mid-write. */
     private static InsightsSnapshot contradictsItsOwnHeader() {
         return new InsightsSnapshot(
@@ -85,8 +100,11 @@ class InsightsSnapshotStoreTest {
     }
 
     private String cannotWriteWarning() {
-        return "Peekaboot insights: cannot write " + directory.resolve(InsightsSnapshotStore.FILE_NAME)
-                + "; history will not survive this restart";
+        return cannotWriteWarning(directory.resolve(InsightsSnapshotStore.FILE_NAME));
+    }
+
+    private static String cannotWriteWarning(Path failed) {
+        return "Peekaboot insights: cannot write " + failed + "; history will not survive this restart";
     }
 
     private Optional<InsightsSnapshot> loadWith(InsightsSnapshotStore store) {
@@ -895,6 +913,108 @@ class InsightsSnapshotStoreTest {
         assertThat(restored.levels().get(1).count()).isEqualTo(1);
         assertThat(restored.levels().get(1).endEpochMs()).isEqualTo(60_000);
         assertThat(restored.levels().get(0).count()).isEqualTo(8);
+    }
+
+    @Test
+    void aFailedAppendIsFollowedByAFold() throws IOException {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        for (int tick = 1; tick <= 5; tick++) {
+            tick(rings, tick * 10_000L, tick);
+        }
+        store.writeNow();
+        Files.delete(journal());
+        tick(rings, 60_000, 6.0);
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.writeNow();
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo(cannotWriteWarning(journal()));
+            });
+            capture.appender().list.clear();
+            tick(rings, 70_000, 7.0);
+
+            store.writeNow();
+
+            assertThat(capture.appender().list).isEmpty();
+        }
+        assertThat(journalRecords()).isEmpty();
+        assertThat(level0(snapshotOnDisk())).hasSize(7);
+    }
+
+    @Test
+    void aFoldWhoseJournalReplaceFailedFoldsAgain() throws IOException {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        for (int tick = 1; tick <= 5; tick++) {
+            tick(rings, tick * 10_000L, tick);
+        }
+        store.writeNow();
+        tick(rings, 60_000, 6.0);
+        store.writeNow();
+        Files.delete(journal());
+        Files.createDirectories(journal().resolve("occupied"));
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.stop();
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo(cannotWriteWarning(journal()));
+            });
+            assertThat(level0(snapshotOnDisk())).hasSize(6);
+            capture.appender().list.clear();
+            Files.delete(journal().resolve("occupied"));
+            Files.delete(journal());
+            tick(rings, 70_000, 7.0);
+
+            store.writeNow();
+
+            assertThat(capture.appender().list).isEmpty();
+        }
+        assertThat(journalRecords()).isEmpty();
+        assertThat(level0(snapshotOnDisk())).hasSize(7);
+    }
+
+    @Test
+    void aCaptureWithOtherSeriesThanTheJournalFolds() throws IOException {
+        AtomicBoolean wide = new AtomicBoolean();
+        InsightsSnapshotStore store = manualStore(GEOMETRY);
+        store.start(ends -> wide.get() ? cpuAndHeap() : cpuOnly(), () -> false);
+        store.writeNow();
+        assertThat(journalTable()).containsExactly("cpu.process");
+        wide.set(true);
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.writeNow();
+
+            assertThat(capture.appender().list).isEmpty();
+        }
+        assertThat(journalTable()).containsExactly("cpu.process", "heap.used");
+        assertThat(journalRecords()).isEmpty();
+    }
+
+    @Test
+    void aLevelWhoseEndMovedBackFolds() {
+        SeriesRings rings = rings(GEOMETRY);
+        InsightsSnapshotStore store = startedManualStore(GEOMETRY, rings, () -> false);
+        for (int tick = 1; tick <= 5; tick++) {
+            tick(rings, tick * 10_000L, tick);
+        }
+        store.writeNow();
+        tick(rings, 30_000, 9.0);
+
+        store.writeNow();
+
+        InsightsSnapshot expected = rings.capture(NOW);
+        InsightsSnapshot restored = loadWith(store(Duration.ofDays(30))).orElseThrow();
+        assertThat(restored.levels().get(0).endEpochMs())
+                .isEqualTo(expected.levels().get(0).endEpochMs());
+        assertThat(restored.levels().get(0).count())
+                .isEqualTo(expected.levels().get(0).count());
+        assertThat(level0(restored)).containsExactly(level0(expected));
     }
 
     @Test

@@ -203,6 +203,10 @@ final class InsightsSnapshotStore implements SnapshotStore {
             boolean restoredBeforeCapture = historyRestored.getAsBoolean();
             boolean fold = stopping || foldNext || journalBytes >= snapshotBytes;
             InsightsSnapshot captured = source.entriesAfter(fold ? new long[geometry.size()] : persistedEnds.clone());
+            if (!fold && !continuesJournal(captured)) {
+                fold = true;
+                captured = source.entriesAfter(new long[geometry.size()]);
+            }
             if (!replacesWhatIsThere(captured, restoredBeforeCapture)) {
                 return;
             }
@@ -222,12 +226,29 @@ final class InsightsSnapshotStore implements SnapshotStore {
             foldNext = false;
             writeOutage.succeeded();
         } catch (IOException e) {
+            // A failed append can leave a cut record and a failed fold an old journal; only a fold repairs either.
+            foldNext = true;
             if (!stopping && Thread.currentThread().isInterrupted()) {
                 // stop()'s interrupt closed the channel; stop() writes the final snapshot itself
                 return;
             }
             reportWriteFailure(step, e);
         }
+    }
+
+    /** Whether appending {@code captured} keeps the journal this run started readable and in date order. */
+    private boolean continuesJournal(InsightsSnapshot captured) {
+        List<String> table = journal.seriesIds();
+        if (table != null && !table.equals(List.copyOf(captured.series().keySet()))) {
+            return false;
+        }
+        long[] ends = levelEnds(captured);
+        for (int level = 0; level < ends.length; level++) {
+            if (ends[level] < persistedEnds[level]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** The bytes are counted as they are written, so a failing size lookup cannot fail a snapshot that is in place. */
