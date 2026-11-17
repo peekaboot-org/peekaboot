@@ -86,15 +86,17 @@ table every record follows.
 
 `InsightsSnapshotStore` owns both files. On each boundary of
 `peekaboot.insights.persistence.interval` (default: one minute) it appends one record with the
-entries newer than the last write. A fold rewrites the snapshot through
-`OwnerOnlyFiles.replaceAtomically` and starts a header-only journal.
+entries newer than the last write, or folds as described below. A fold rewrites the snapshot
+through `OwnerOnlyFiles.replaceAtomically` and starts a header-only journal.
 
 A write folds at the run's first write, unless the start took over a snapshot and applied no
 journal record. It folds once the journal is as large as the snapshot, after a failed write, and
-when the series or a level's end do not continue the journal. It also folds once more
-synchronously at shutdown, after the collector has stopped, so the final write sees quiesced
-rings. A killed process loses at most one interval, a normal shutdown nothing. A run that never
-ticked skips the write rather than overwriting a good file with an empty one.
+when the series or a level's end do not continue the journal.
+
+It also folds once more synchronously at shutdown, after the collector has stopped, so the final
+write sees quiesced rings. A killed process loses at most one interval, a normal shutdown
+nothing. A run that never ticked skips the write rather than overwriting a good file with an
+empty one.
 
 A write that fails logs one WARN and the rings stay in memory. `WriteOutage` keeps the following
 failures quiet until a write succeeds, so a second outage in the same run is reported again.
@@ -104,14 +106,18 @@ With storage off, or on a second instance of one storage directory,
 and restores nothing, so `InsightsService` drives one store the same way in every case.
 
 The two files are a cache, never a source of truth, so anything wrong with them costs only the
-history. Five things count as wrong: a bad magic number, a schema version this build doesn't
-know, a ring geometry that no longer matches `peekaboot.insights.levels`, an age past
+history.
+
+Five things count as wrong: a bad magic number, a schema version this build doesn't know, a ring
+geometry that no longer matches `peekaboot.insights.levels`, an age past
 `peekaboot.insights.persistence.max-age` (default: the coarsest level's span), and a date more
-than five minutes in the future (`InsightsSnapshotStore.CLOCK_SKEW`), which is what a
-stepped-back clock or a restored backup leaves behind. The age, clock-skew and geometry checks
-judge the snapshot with the journal applied, not the snapshot alone. A result that fails them, or
-a snapshot that cannot be read, deletes both files and the rings start empty, exactly as they
-would with storage off.
+than five minutes in the future (`InsightsSnapshotStore.CLOCK_SKEW`).
+
+A stepped-back clock or a restored backup leaves such a date behind.
+
+The age, clock-skew and geometry checks judge the snapshot with the journal applied, not the
+snapshot alone. A result that fails them, or a snapshot that cannot be read, deletes both files
+and the rings start empty, exactly as they would with storage off.
 
 The journal is applied on top of the snapshot by entry date (`InsightsJournalReplay`). A cut or
 damaged record, or one that leaves a hole after the level's end, ends the replay, and what came
@@ -152,8 +158,8 @@ A level above 1 takes each of `median`, `p90`, `p95` and `p99` from the finer wi
 the same name by sample-weighted nearest rank, since a window keeps no samples to rank.
 
 A run whose restore did not complete keeps its history, because `InsightsSnapshotStore` refuses
-to write while either file holds history it never took over. A process that started with a handful of samples cannot
-replace a full retention window. The guard is deliberately blunt: it is keyed on whether the
+to write while either file holds history it never took over. A process that started with a
+handful of samples cannot replace a full retention window. The guard is deliberately blunt: it is keyed on whether the
 restore completed, not on how full the live rings have since become, so a run whose restore
 timed out never persists again however long it then runs. Lifting it once every level's ring is
 as full as the persisted header says would keep the protection and end the starvation. Until

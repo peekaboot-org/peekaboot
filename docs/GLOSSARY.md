@@ -235,12 +235,12 @@ Once a meter or subtract-meter has stayed unresolved for three ticks, `SeriesSam
 once per outage: at WARN for a series the operator's panel file wrote, at DEBUG for one exactly
 as shipped, since an application may lack a shipped meter. Tiles log no unresolved meter.
 
+Overview's stat tiles bypass all of it. `TileTracker` holds one `volatile double` per tile and
+samples on read.
+
 The insights journal, `insights.journal`, holds what changed in the rings since the last fold. A
 fold rewrites the snapshot whole and starts the journal empty. A crash loses at most one interval
 of `peekaboot.insights.persistence.interval`.
-
-Overview's stat tiles bypass all of it. `TileTracker` holds one `volatile double` per tile and
-samples on read.
 
 ### Target (scheduled tasks)
 `ScheduledTaskInfo.target` is the fully qualified method name of a `@Scheduled` method
