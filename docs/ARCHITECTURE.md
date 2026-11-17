@@ -119,17 +119,22 @@ The age, clock-skew and geometry checks judge the snapshot with the journal appl
 snapshot alone. A result that fails them, or a snapshot that cannot be read, deletes both files
 and the rings start empty, exactly as they would with storage off.
 
-The journal is applied on top of the snapshot by entry date (`InsightsJournalReplay`). A cut or
-damaged record, or one that leaves a hole after the level's end, ends the replay, and what came
-before it stays. An unreadable header or a replay that throws deletes the journal, and the
-snapshot restores alone. A journal written for other ring levels than configured is ignored.
+The journal is applied on top of the snapshot by entry date (`InsightsJournalReplay`). Series the
+configuration no longer has are left out. A cut or damaged record, or one that leaves a hole
+after the level's end, ends the replay, and what came before it stays.
+
+An unreadable header or a replay that throws deletes the journal, and the snapshot restores
+alone. A journal written for other ring levels than configured is ignored.
 
 Every length read from the file is checked against a plausibility bound before it is used to
-allocate, so a corrupt file cannot provoke an oversized allocation. The level-count and
-ring-size bounds are the ones `InsightsProperties` enforces, so a configuration that starts can
-always be read back.
+allocate. The level-count and ring-size bounds are the ones `InsightsProperties` enforces, so a
+configuration that starts can always be read back.
 
-Loading never delays startup. `InsightsSnapshotStore.beginLoad()` submits the parse to a
+A journal record is read only as far as its bytes go, and the replay builds rings only for the
+configured series and levels. What the load allocates follows the files' bytes and the configured
+rings, not the lengths a file declares.
+
+Loading never delays startup. `InsightsSnapshotStore.beginLoad` submits the parse to a
 virtual thread through `BackgroundLoad` and returns. Each of the collector's level threads then
 runs a one-shot restore just before its *first* write, gated by `SnapshotRestoreBarrier` so only
 the thread that arrives first applies the snapshot and a level-1 roll-up can never land ahead of
