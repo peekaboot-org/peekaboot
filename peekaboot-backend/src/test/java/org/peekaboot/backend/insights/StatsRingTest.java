@@ -57,7 +57,7 @@ class StatsRingTest {
     }
 
     @Test
-    void restoreRefillsAnEmptyRingFromToColumnsOutput() {
+    void restoreRefillsAnEmptyRingFromLastColumnsOutput() {
         // every field distinct, so restore() reading a column into the wrong field would fail here
         AggregateStats original = new AggregateStats(1, 2, 3, 4, 5, 6, 7, 42);
         StatsRing source = new StatsRing(3);

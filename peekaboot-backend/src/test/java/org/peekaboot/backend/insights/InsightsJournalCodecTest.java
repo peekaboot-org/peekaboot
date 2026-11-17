@@ -275,8 +275,19 @@ class InsightsJournalCodecTest {
 
         assertThatThrownBy(() -> InsightsJournalCodec.encodeRecord(HEADER, contradicting))
                 .isInstanceOf(IOException.class)
-                .hasMessageContaining("a")
+                .hasMessageContaining("series a")
                 .hasMessageContaining("level 0");
+    }
+
+    @Test
+    void aSeriesCoveringOtherLevelsThanTheRecordIsRefusedRatherThanWritten() {
+        Map<String, List<double[][]>> series = new LinkedHashMap<>(entries().series());
+        series.put("a", List.<double[][]>of(new double[][] {{1.0, Double.NaN}}));
+        InsightsSnapshot contradicting = new InsightsSnapshot(WRITTEN_AT, levels(2, 1), series);
+
+        assertThatThrownBy(() -> InsightsJournalCodec.encodeRecord(HEADER, contradicting))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("series a covers 1 levels");
     }
 
     @Test

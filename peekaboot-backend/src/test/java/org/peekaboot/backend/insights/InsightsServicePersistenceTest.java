@@ -173,7 +173,8 @@ class InsightsServicePersistenceTest {
         long snapshotEnd;
         try {
             Path[] taken = new Path[1];
-            await().atMost(Duration.ofSeconds(5))
+            await("an image whose journal holds entries its snapshot lacks")
+                    .atMost(Duration.ofSeconds(5))
                     .pollInterval(Duration.ofMillis(20))
                     .until(() -> {
                         Path attempt = Files.createTempDirectory(images, "image");
