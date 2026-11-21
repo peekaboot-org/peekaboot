@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -46,18 +47,95 @@ class DataSourceConnectionsTest {
     }
 
     @ParameterizedTest
+    @CsvSource({
+        "jdbc:mysql://ZUSR:S3Cx@db:3306/shop, MYSQL, db, 3306, shop",
+        "jdbc:postgresql://ZUSR:S3Cx@pg/shop, POSTGRESQL, pg, , shop",
+        "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=shop, SQLSERVER, db, , shop",
+        "jdbc:mysql:// ZUSR:S3Cx@db/shop, MYSQL, db, , shop",
+        "jdbc:mysql://ZUSR:S3C)x@db/shop, MYSQL, db, , shop",
+        "jdbc:mysql://ZUSR:S3C:x@db/shop, MYSQL, db, , shop",
+        "jdbc:postgresql://ZUSR%40corp:S3C%40x@db/shop, POSTGRESQL, db, , shop",
+        "jdbc:mysql://ZUSR:S3C%2Fx%3Fy@db/shop, MYSQL, db, , shop",
+        "jdbc:postgresql://ZUSR@db/shop, POSTGRESQL, db, , shop",
+        "jdbc:mysql://ZUSR@db, MYSQL, db, , ''",
+        "jdbc:mysql://ZUSR:S3Cx@[::1]:3306/shop, MYSQL, [::1], 3306, shop",
+        "jdbc:postgresql://ZUSR:S3Cx@[2001:db8::1]/shop, POSTGRESQL, [2001:db8::1], , shop",
+        "jdbc:oracle:thin:@//ZUSR:S3Cx@db:1521/svc, ORACLE, db, 1521, svc"
+    })
+    void aUserInfoInsideTheFirstHostIsCutOff(
+            String url, String product, String hostname, @Nullable Integer port, String database) {
+        assertThat(connectionsOf(url).get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", product, List.of(new HealthConnection.Host(hostname, port)), database, null));
+    }
+
+    @Test
+    void aUserInfoBeforeTheFirstOfSeveralHostsIsCutOff() {
+        assertThat(connectionsOf("jdbc:mysql://ZUSR:S3Cx@db1:3306,db2:3307/shop")
+                        .get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource",
+                        "MYSQL",
+                        List.of(new HealthConnection.Host("db1", 3306), new HealthConnection.Host("db2", 3307)),
+                        "shop",
+                        null));
+    }
+
+    @ParameterizedTest
     @ValueSource(
             strings = {
-                "jdbc:mysql://root:pw@db:3306/shop",
-                "jdbc:postgresql://u:p@pg/db",
-                "jdbc:mysql://u:p@:3306,real:3307/shop",
-                "jdbc:mysql://root:p/w@db/shop",
-                "jdbc:mysql://root:p?w@db/shop",
-                "jdbc:mysql://root:123/w@db/shop",
-                "jdbc:mysql://root:123?w@db/shop"
+                "jdbc:mysql://ZUSR:S3C/x@db/shop",
+                "jdbc:mysql://ZUSR:S3C?x@db/shop",
+                "jdbc:mysql://ZUSR:S3C#x@db/shop",
+                "jdbc:mysql://ZUSR:S3C;x@db/shop",
+                "jdbc:mysql://ZUSR:S3C,x@db/shop",
+                "jdbc:mysql://ZUSR:S3C(x@db/shop",
+                "jdbc:mysql://ZUSR:S3C@x@db/shop",
+                "jdbc:mysql://ZUSR:4242/S3C@db/shop",
+                "jdbc:mysql://ZUSR:4242?S3C@db/shop",
+                "jdbc:mysql://ZUSR:S3C@db@evil/shop",
+                "jdbc:mysql://ZUSR:S3Cx@:3306,real:3307/shop",
+                "jdbc:mysql://db1:3306,ZUSR:S3Cx@db2:3307/shop",
+                "jdbc:mysql:loadbalance://ZUSR:S3Cx@db1,db2/shop",
+                "jdbc:mysql://db/shop?user=ZUSR@corp",
+                "jdbc:mysql://db/shop?password=S3C@x",
+                "jdbc:mysql://ZUSR:S3Cx@db/shop?password=S3C@y",
+                "jdbc:postgresql://ZUSR:S3Cx@db/shop?user=ZUSR@corp",
+                "jdbc:mysql://ZUSR:S3Cx@db/S3C@y",
+                "jdbc:mysql://address=(host=db)(user=ZUSR)(password=S3C@x)/shop",
+                "jdbc:mysql://(host=db,user=ZUSR,password=S3C@x)/shop",
+                "jdbc:sqlserver://db;user=ZUSR@corp;password=S3Cx",
+                "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=x;password={a;databaseName=S3Cy}",
+                "jdbc:oracle:thin:@//ZUSR:S3Cx@db:1521/svc?password=S3Cy"
             })
-    void aUrlThatCarriesCredentialsBeforeItsHostHasNoConnection(String url) {
+    void aUrlWhoseUserInfoCannotBeCutOffCleanlyHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:oracle:thin:ZUSR/S3Cx@db:1521:ORCL",
+                "jdbc:oracle:thin:ZUSR/S3Cx@//db:1521/svc",
+                "jdbc:oracle:thin:ZUSR/S3Cx@db:1521/svc",
+                "jdbc:oracle:thin:ZUSR/S3C//x@db:1521/svc",
+                "jdbc:oracle:thin:\"ZUSR\"/\"S3C@x\"@db:1521/svc"
+            })
+    void anOracleUrlWithAUserAndPasswordHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "jdbc:oracle:thin:@//db:1521/svc, svc",
+        "jdbc:oracle:thin:@db:1521/svc, svc",
+        "jdbc:oracle:thin:@db:1521:ORCL, ORCL",
+        "'jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))', svc"
+    })
+    void describesAnOracleThinUrlByTheHostAfterItsAt(String url, String database) {
+        assertThat(connectionsOf(url).get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", "ORACLE", List.of(new HealthConnection.Host("db", 1521)), database, null));
     }
 
     @ParameterizedTest

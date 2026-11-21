@@ -18,15 +18,17 @@ import org.peekaboot.backend.health.HealthConnectionSource;
 /**
  * Names each DataSource's target from its configured JDBC URL. Never asks a DataSource for a connection.
  *
- * <p>A URL with an {@code @} after its {@code //}, with any host that is no plain host name or IP
- * literal, or with a database or instance that is no plain name or file path, gets no connection:
- * there the parser can cut a user or password into the hostname, port, database or instance.
+ * <p>A user and password before the host are cut off where the URL holds exactly one {@code @} after its
+ * {@code //}, inside the first host. Any other {@code @} after the {@code //}, any host that is no plain
+ * host name or IP literal, or a database or instance that is no plain name or file path gets no
+ * connection: there the parser can cut a user or password into the hostname, port, database or instance.
  */
 public final class DataSourceConnections implements HealthConnectionSource {
 
     private static final Pattern PLAIN_HOST = Pattern.compile("[A-Za-z0-9._-]+|\\[[0-9A-Fa-f:.]+]");
     // "/" for the file paths of H2, Derby, HSQLDB and SQLite; empty where the URL names no database
     private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$/-]*");
+    private static final String FIRST_HOST_ENDS = "/,?;#(";
 
     private final Map<String, DataSource> dataSources;
     private final Function<DataSource, Optional<String>> configuredUrl;
@@ -47,7 +49,7 @@ public final class DataSourceConnections implements HealthConnectionSource {
         Map<String, HealthConnection> connections = new LinkedHashMap<>();
         dataSources.forEach((beanName, dataSource) -> configuredUrl
                 .apply(dataSource)
-                .filter(DataSourceConnections::carriesNoUserInfo)
+                .flatMap(DataSourceConnections::withoutUserInfo)
                 .map(JdbcUrlParser::tryParse)
                 .filter(DataSourceConnections::namesPlainHostsOnly)
                 .map(jdbcUrl -> describe(beanName, jdbcUrl))
@@ -56,9 +58,30 @@ public final class DataSourceConnections implements HealthConnectionSource {
         return connections;
     }
 
-    private static boolean carriesNoUserInfo(String url) {
+    private static Optional<String> withoutUserInfo(String url) {
         int authority = url.indexOf("//");
-        return authority < 0 || url.indexOf('@', authority) < 0;
+        if (authority < 0) {
+            return Optional.of(url);
+        }
+        int firstHost = authority + 2;
+        int at = url.indexOf('@', firstHost);
+        if (at < 0) {
+            return Optional.of(url);
+        }
+        boolean onlyAt = url.indexOf('@', at + 1) < 0;
+        boolean insideFirstHost = at < endOfFirstHost(url, firstHost);
+        return onlyAt && insideFirstHost
+                ? Optional.of(url.substring(0, firstHost) + url.substring(at + 1))
+                : Optional.empty();
+    }
+
+    private static int endOfFirstHost(String url, int firstHost) {
+        for (int i = firstHost; i < url.length(); i++) {
+            if (FIRST_HOST_ENDS.indexOf(url.charAt(i)) >= 0) {
+                return i;
+            }
+        }
+        return url.length();
     }
 
     private static boolean namesPlainHostsOnly(JdbcUrl jdbcUrl) {
