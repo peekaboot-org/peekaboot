@@ -1816,6 +1816,137 @@
           "name": {"type": "string"},
           "value": {"type": ["number", "null"], "description": "`null` where the meter reports NaN or an infinity."}
         }
+      },
+      "HealthReport": {
+        "type": "object",
+        "description": "The application's health in the actuator's nesting, with what Peekaboot knows beside it.",
+        "additionalProperties": false,
+        "required": ["status", "components", "problems", "windowMs", "traces", "failures"],
+        "properties": {
+          "status": {"type": "string", "description": "The actuator's status, verbatim: `UP`, `DOWN`, `OUT_OF_SERVICE`, `UNKNOWN` or one the application defines. `UNKNOWN` where the application's health endpoint is off."},
+          "components": {
+            "type": "object",
+            "additionalProperties": {"$ref": "#/components/schemas/HealthReport.Component"},
+            "description": "Every health contributor by name, as `/actuator/health` nests them."
+          },
+          "problems": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/InsightsProblem"},
+            "description": "The insights problems over level 0. Empty right after a start, while no window has data, and while Insights is off."
+          },
+          "windowMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Level 0's span, interval times size: what `problems`, `traces` and `failures` cover."
+          },
+          "traces": {
+            "anyOf": [{"$ref": "#/components/schemas/HealthReport.Traces"}, {"type": "null"}],
+            "description": "`null` while tracing is off."
+          },
+          "failures": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/HealthReport.Failure"},
+            "description": "The error digest's entries last seen inside the window, seen latest first, at most 10."
+          }
+        }
+      },
+      "HealthReport.Component": {
+        "type": "object",
+        "description": "One health contributor.",
+        "additionalProperties": false,
+        "required": ["status", "details", "components", "connection"],
+        "properties": {
+          "status": {"type": "string", "description": "The actuator's status, verbatim: `UP`, `DOWN`, `OUT_OF_SERVICE`, `UNKNOWN` or one the application defines. `UNKNOWN` where the application's health endpoint is off."},
+          "details": {
+            "type": "object",
+            "additionalProperties": {"description": "Any JSON value, masked as a tree."},
+            "description": "The contributor's details, masked. Empty for a composite."
+          },
+          "components": {
+            "type": "object",
+            "additionalProperties": {"$ref": "#/components/schemas/HealthReport.Component"},
+            "description": "A composite's children. Empty for an indicator."
+          },
+          "connection": {
+            "anyOf": [{"$ref": "#/components/schemas/HealthConnection"}, {"type": "null"}],
+            "description": "What the component connects to, read from configuration, so it is there while the target is down. `null` for a component Peekaboot cannot describe."
+          }
+        }
+      },
+      "HealthReport.Traces": {
+        "type": "object",
+        "description": "The traces of the Errors and Slow buckets that started inside the window.",
+        "additionalProperties": false,
+        "required": ["errors", "slow"],
+        "properties": {
+          "errors": {"type": "integer", "format": "int32", "description": "Traces in the Errors bucket that started inside the window."},
+          "slow": {"type": "integer", "format": "int32", "description": "Traces in the Slow bucket that started inside the window."}
+        }
+      },
+      "HealthReport.Failure": {
+        "type": "object",
+        "description": "One failure the error digest last saw inside the window.",
+        "additionalProperties": false,
+        "required": ["type", "route", "applicationFrame", "lastSeen", "lastMessage", "lastTraceId"],
+        "properties": {
+          "type": {"type": ["string", "null"]},
+          "route": {"type": ["string", "null"]},
+          "applicationFrame": {"type": ["string", "null"]},
+          "lastSeen": {"type": "string", "format": "date-time"},
+          "lastMessage": {"type": ["string", "null"], "description": "Masked."},
+          "lastTraceId": {"type": "string"}
+        }
+      },
+      "HealthConnection": {
+        "description": "What a health component connects to, by the kind of component.",
+        "oneOf": [
+          {"$ref": "#/components/schemas/DataSourceConnection"},
+          {"$ref": "#/components/schemas/RedisConnection"},
+          {"$ref": "#/components/schemas/MailConnection"}
+        ]
+      },
+      "HealthConnection.Host": {
+        "type": "object",
+        "description": "A host and port.",
+        "additionalProperties": false,
+        "required": ["hostname", "port"],
+        "properties": {
+          "hostname": {"type": "string", "description": "Without any user or password the URL carried."},
+          "port": {"type": ["integer", "null"], "format": "int32"}
+        }
+      },
+      "DataSourceConnection": {
+        "type": "object",
+        "description": "The target of a DataSource.",
+        "additionalProperties": false,
+        "required": ["dataSource", "product", "hosts", "database", "instance"],
+        "properties": {
+          "dataSource": {"type": "string", "description": "The DataSource bean's name."},
+          "product": {"type": "string", "description": "The product the JDBC URL names, as a constant such as `POSTGRESQL`."},
+          "hosts": {"type": "array", "items": {"$ref": "#/components/schemas/HealthConnection.Host"}},
+          "database": {"type": ["string", "null"]},
+          "instance": {"type": ["string", "null"], "description": "The SQL Server instance the URL names."}
+        }
+      },
+      "RedisConnection": {
+        "type": "object",
+        "description": "The target of a Redis connection.",
+        "additionalProperties": false,
+        "required": ["hosts", "database"],
+        "properties": {
+          "hosts": {"type": "array", "items": {"$ref": "#/components/schemas/HealthConnection.Host"}},
+          "database": {"type": ["integer", "null"], "format": "int32", "description": "`null` for a cluster."}
+        }
+      },
+      "MailConnection": {
+        "type": "object",
+        "description": "The mail server a `JavaMailSender` sends to.",
+        "additionalProperties": false,
+        "required": ["host", "port"],
+        "properties": {
+          "host": {"type": "string"},
+          "port": {"type": ["integer", "null"], "format": "int32"}
+        }
       }
     }
   }
