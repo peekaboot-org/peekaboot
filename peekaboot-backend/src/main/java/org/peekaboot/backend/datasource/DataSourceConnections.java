@@ -19,7 +19,7 @@ import org.peekaboot.backend.health.HealthConnectionSource;
 /**
  * Names each DataSource's target from its configured JDBC URL. Never asks a DataSource for a connection.
  *
- * <p>Only a URL {@link CredentialFreeJdbcUrl} accepts is parsed. A host that is no plain host name or IP
+ * <p>Only a URL {@link CredentialFreeJdbcUrls} accepts is parsed. A host that is no plain host name or IP
  * literal, or a database or instance that is no plain name or file path, still gives no connection.
  */
 public final class DataSourceConnections implements HealthConnectionSource {
@@ -48,13 +48,23 @@ public final class DataSourceConnections implements HealthConnectionSource {
         Map<String, HealthConnection> connections = new LinkedHashMap<>();
         dataSources.forEach((beanName, dataSource) -> configuredUrl
                 .apply(dataSource)
-                .flatMap(CredentialFreeJdbcUrl::of)
-                .map(JdbcUrlParser::tryParse)
-                .filter(DataSourceConnections::namesPlainHostsOnly)
-                .map(jdbcUrl -> describe(beanName, jdbcUrl))
-                .filter(DataSourceConnections::namesPlainDatabaseAndInstance)
+                .flatMap(url -> describe(beanName, url))
                 .ifPresent(connection -> connections.put(beanName, connection)));
         return connections;
+    }
+
+    private static Optional<DataSourceConnection> describe(String beanName, String configuredUrl) {
+        return CredentialFreeJdbcUrls.of(configuredUrl)
+                .map(JdbcUrlParser::tryParse)
+                .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
+                .filter(DataSourceConnections::namesPlainHostsOnly)
+                .map(jdbcUrl -> describe(beanName, jdbcUrl))
+                .filter(DataSourceConnections::namesPlainDatabaseAndInstance);
+    }
+
+    // SQL Server splits properties on ";" only, so an "&" sits inside a value the parser splits apart
+    private static boolean isSqlServerWithAmpersand(JdbcUrl jdbcUrl, String configuredUrl) {
+        return jdbcUrl.databaseProduct() == DatabaseProduct.SQLSERVER && configuredUrl.indexOf('&') >= 0;
     }
 
     private static boolean namesPlainHostsOnly(JdbcUrl jdbcUrl) {

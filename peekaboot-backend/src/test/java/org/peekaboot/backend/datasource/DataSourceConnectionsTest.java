@@ -195,6 +195,75 @@ class DataSourceConnectionsTest {
     }
 
     @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:sqlserver://db;databaseName=shop;pa\u017F\u017Fword=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;PA\u017F\u017FWORD=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db:1433;pa\u017F\u017Fword=a&database=S3Cx;encrypt=true",
+                "jdbc:sqlserver://db;databaseName=shop;pa\u017F\u017Fword=a&instanceName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;u\u017Fer=a&databaseName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;u\u017FerName=a&databaseName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;u\u017FerName=a&instanceName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;keyStore\u017Fecret=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;key\u017Ftore\u017Fecret=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;trustStorePa\u017F\u017Fword=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;clientKeyPa\u017F\u017Fword=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;AADSecurePrincipal\u017Fecret=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;aadSecurePrincipal\u017Fecret=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;keyVaultProviderClientKey=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;AADSecurePrincipalId=a&databaseName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;keyStorePrincipalId=a&databaseName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;keyVaultProviderClientId=ZUSR&databaseName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;msiClientId=a&databaseName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;applicationName=a&b"
+            })
+    void aSqlServerUrlWithAnAmpersandHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:postgresql://db/shop?pa\u017F\u017Fword=S3Cx",
+                "jdbc:mysql://db/shop?u\u017Fer=ZUSR",
+                "jdbc:h2:mem:shop;U\u017FER=ZUSR",
+                "jdbc:postgresql://db/shop?ApplicationName=caf\u00E9"
+            })
+    void aUrlWithANonAsciiCharacterHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:sqlserver://db\\ZUSR@S3Cx;databaseName=shop",
+                "jdbc:mysql://db\\ZUSR@S3Cx/shop",
+                "jdbc:mysql://ZUSR:S3C\\x@db/shop"
+            })
+    void aUserInfoWithABackslashInItsHostIsNotCutOff(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @Test
+    void aCredentialKeyAfterAParenthesisIsFound() {
+        assertThat(connectionsOf("jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db)(PORT=1521))"
+                        + "(CONNECT_DATA=(SERVICE_NAME=svc)(PASSWORD=S3Cx)))"))
+                .isEmpty();
+    }
+
+    @Test
+    void aCredentialKeyAfterACommaIsFound() {
+        assertThat(connectionsOf("jdbc:postgresql://db/shop?options=a,password=S3Cx"))
+                .isEmpty();
+    }
+
+    @Test
+    void aCredentialKeyAfterWhitespaceIsFound() {
+        assertThat(connectionsOf("jdbc:postgresql://db/shop?sslmode=require password=S3Cx"))
+                .isEmpty();
+    }
+
+    @ParameterizedTest
     @CsvSource({
         "jdbc:postgresql://db/shop?sslmode=require&ApplicationName=shop-app, POSTGRESQL",
         "jdbc:mysql://db/shop?useSSL=true;serverTimezone=UTC, MYSQL",

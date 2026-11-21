@@ -11,12 +11,13 @@ import org.peekaboot.backend.masking.MaskingEngine;
  * Prepares a configured JDBC URL for the parser so that no user or password can reach what it reads.
  *
  * <p>A user and password before the host are cut off where the URL holds exactly one {@code @} after its
- * {@code //}, inside the first host. No form is kept where any other {@code @} follows the {@code //},
- * where a property names a user or a secret, where an opening brace or a {@code %} appears, or where text
- * follows an Oracle descriptor: the parser splits properties on separators the driver does not, so a
- * credential's value could pose as the database or instance.
+ * {@code //}, inside a first host without a {@code \}. No form is kept where the URL holds a character
+ * outside ASCII, where any other {@code @} follows the {@code //}, where a property names a user or a
+ * secret, where an opening brace or a {@code %} appears, or where text follows an Oracle descriptor: the
+ * parser splits properties on separators the driver does not, so a credential's value could pose as the
+ * database or instance.
  */
-final class CredentialFreeJdbcUrl {
+final class CredentialFreeJdbcUrls {
 
     private static final MaskingEngine MASKING = new MaskingEngine();
     private static final String FIRST_HOST_ENDS = "/,?;#(";
@@ -24,13 +25,20 @@ final class CredentialFreeJdbcUrl {
     // as parts of a key too, so sslpassword, password1 and a lower-case keystoresecret count
     private static final List<String> CREDENTIAL_KEY_PARTS = List.of("user", "uid", "pwd", "pass", "secret", "token");
 
-    private CredentialFreeJdbcUrl() {}
+    private CredentialFreeJdbcUrls() {}
 
     static Optional<String> of(String configuredUrl) {
-        return withoutUserInfo(configuredUrl)
-                .filter(CredentialFreeJdbcUrl::holdsNoQuotedOrEncodedText)
-                .filter(CredentialFreeJdbcUrl::namesNoCredentialProperty)
-                .filter(CredentialFreeJdbcUrl::endsWithItsDescriptor);
+        return Optional.of(configuredUrl)
+                .filter(CredentialFreeJdbcUrls::isAscii)
+                .flatMap(CredentialFreeJdbcUrls::withoutUserInfo)
+                .filter(CredentialFreeJdbcUrls::holdsNoQuotedOrEncodedText)
+                .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty)
+                .filter(CredentialFreeJdbcUrls::endsWithItsDescriptor);
+    }
+
+    // the driver matches keys with equalsIgnoreCase, which folds a long s (U+017F) to "s"
+    private static boolean isAscii(String url) {
+        return url.chars().allMatch(c -> c < 0x80);
     }
 
     private static Optional<String> withoutUserInfo(String url) {
@@ -44,8 +52,11 @@ final class CredentialFreeJdbcUrl {
             return Optional.of(url);
         }
         boolean onlyAt = url.indexOf('@', at + 1) < 0;
-        boolean insideFirstHost = at < endOfFirstHost(url, firstHost);
-        return onlyAt && insideFirstHost
+        int firstHostEnd = endOfFirstHost(url, firstHost);
+        boolean insideFirstHost = at < firstHostEnd;
+        // in a SQL Server host\instance the "@" belongs to the instance name
+        boolean namesNoInstance = url.substring(firstHost, firstHostEnd).indexOf('\\') < 0;
+        return onlyAt && insideFirstHost && namesNoInstance
                 ? Optional.of(url.substring(0, firstHost) + url.substring(at + 1))
                 : Optional.empty();
     }
