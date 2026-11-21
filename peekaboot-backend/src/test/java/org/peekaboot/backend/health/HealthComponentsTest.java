@@ -160,6 +160,29 @@ class HealthComponentsTest {
     }
 
     @Test
+    void masksTheDetailsOfACompositesChildren() {
+        Map<String, Object> details = Map.of(
+                "error", "java.sql.SQLException: Connection to jdbc:postgresql://shop:s3cret@db.internal/shop refused");
+        HealthResponse health = response(Map.of(
+                "db",
+                composite(
+                        "DOWN",
+                        Map.of(
+                                "dataSource",
+                                new ComponentDescriptor("DOWN", details, Map.of()),
+                                "inventory",
+                                indicator("UP")))));
+
+        Map<String, Object> masked =
+                components().of(health).get("db").components().get("dataSource").details();
+
+        assertThat(masked)
+                .containsExactly(Map.entry(
+                        "error",
+                        "java.sql.SQLException: Connection to jdbc:postgresql://******@db.internal/shop refused"));
+    }
+
+    @Test
     void withoutHealthThereAreNoComponents() {
         assertThat(components().of(null)).isEmpty();
     }
