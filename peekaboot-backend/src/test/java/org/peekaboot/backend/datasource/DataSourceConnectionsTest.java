@@ -169,8 +169,7 @@ class DataSourceConnectionsTest {
                 "jdbc:oracle:thin:@//db:1521/svc?oracle.jdbc.password=S3Cx",
                 "jdbc:oracle:thin:@//db:1521/svc#S3Cx",
                 "jdbc:oracle:thin:@//db:1521/svc S3Cx",
-                "jdbc:sqlserver://db;databaseName=x;password={a;databaseName=S3Cx}",
-                "jdbc:sqlserver://db;databaseName={shop;S3Cx}",
+                "jdbc:sqlserver://db;databaseName=S3C x",
                 "jdbc:mysql://db/x;password=S3Cx",
                 "jdbc:mysql://db/x\\S3Cx",
                 "jdbc:postgresql://db/ZUSR:S3Cx",
@@ -183,10 +182,26 @@ class DataSourceConnectionsTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "jdbc:sqlserver://db;databaseName=x;password={a;instanceName=S3Cx}",
-                "jdbc:sqlserver://db;databaseName=x;instanceName={S3C x}"
+                "jdbc:sqlserver://db;databaseName=x;instanceName=S3C x",
+                "jdbc:sqlserver://db;databaseName=x;instanceName=S3C:x",
+                "jdbc:sqlserver://db;databaseName=x;instanceName=S3C%x"
             })
     void anInstanceThatIsNoPlainNameHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:sqlserver://db;databaseName=x;password={a;databaseName=S3Cx;z}",
+                "jdbc:sqlserver://db;databaseName=x;password={;databaseName=S3Cx;}",
+                "jdbc:sqlserver://db;databaseName=x;password={a;instanceName=S3Cx;z}",
+                "jdbc:sqlserver://db;databaseName=x;user={ZUSR;instanceName=S3Cx;}",
+                "jdbc:sqlserver://db;databaseName=x;password={a;databaseName=S3Cx}",
+                "jdbc:sqlserver://db;databaseName={shop;S3Cx}",
+                "jdbc:sqlserver://db;databaseName=shop;password={S3C;x}"
+            })
+    void aUrlWithABracedValueHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
     }
 

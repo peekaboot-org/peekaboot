@@ -19,9 +19,10 @@ import org.peekaboot.backend.health.HealthConnectionSource;
  * Names each DataSource's target from its configured JDBC URL. Never asks a DataSource for a connection.
  *
  * <p>A user and password before the host are cut off where the URL holds exactly one {@code @} after its
- * {@code //}, inside the first host. Any other {@code @} after the {@code //}, any host that is no plain
- * host name or IP literal, or a database or instance that is no plain name or file path gets no
- * connection: there the parser can cut a user or password into the hostname, port, database or instance.
+ * {@code //}, inside the first host. Any other {@code @} after the {@code //}, a braced value, any host
+ * that is no plain host name or IP literal, or a database or instance that is no plain name or file path
+ * gets no connection: there the parser can cut a user or password into the hostname, port, database or
+ * instance.
  */
 public final class DataSourceConnections implements HealthConnectionSource {
 
@@ -49,6 +50,7 @@ public final class DataSourceConnections implements HealthConnectionSource {
         Map<String, HealthConnection> connections = new LinkedHashMap<>();
         dataSources.forEach((beanName, dataSource) -> configuredUrl
                 .apply(dataSource)
+                .filter(DataSourceConnections::quotesNoValue)
                 .flatMap(DataSourceConnections::withoutUserInfo)
                 .map(JdbcUrlParser::tryParse)
                 .filter(DataSourceConnections::namesPlainHostsOnly)
@@ -56,6 +58,11 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 .filter(DataSourceConnections::namesPlainDatabaseAndInstance)
                 .ifPresent(connection -> connections.put(beanName, connection)));
         return connections;
+    }
+
+    // a SQL Server password like {a;databaseName=x;b} reads to the parser as a databaseName of x
+    private static boolean quotesNoValue(String url) {
+        return url.indexOf('{') < 0;
     }
 
     private static Optional<String> withoutUserInfo(String url) {
