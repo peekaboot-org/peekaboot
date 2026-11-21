@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.datasource.DelegatingDataSource;
 
 class HikariPoolInfoTest {
 
@@ -26,5 +27,35 @@ class HikariPoolInfoTest {
     @Test
     void settingsOfIsEmptyForAnyOtherDataSource() {
         assertThat(poolInfo.settingsOf(mock(DataSource.class))).isEmpty();
+    }
+
+    @Test
+    void readsTheConfiguredUrlOfAPoolThatNeverStarted() {
+        try (HikariDataSource hikari = new HikariDataSource()) {
+            hikari.setJdbcUrl("jdbc:h2:mem:orders");
+
+            assertThat(poolInfo.jdbcUrlOf(hikari)).contains("jdbc:h2:mem:orders");
+        }
+    }
+
+    @Test
+    void aHikariPoolBehindAProxyIsDescribed() {
+        try (HikariDataSource hikari = new HikariDataSource()) {
+            hikari.setJdbcUrl("jdbc:h2:mem:orders");
+
+            assertThat(poolInfo.jdbcUrlOf(new DelegatingDataSource(hikari))).contains("jdbc:h2:mem:orders");
+        }
+    }
+
+    @Test
+    void aPoolWithoutAConfiguredUrlHasNone() {
+        try (HikariDataSource hikari = new HikariDataSource()) {
+            assertThat(poolInfo.jdbcUrlOf(hikari)).isEmpty();
+        }
+    }
+
+    @Test
+    void aDataSourceThatIsNoHikariPoolHasNoConnection() {
+        assertThat(poolInfo.jdbcUrlOf(new NeverConnectsDataSource())).isEmpty();
     }
 }
