@@ -444,6 +444,7 @@ org.peekaboot.backend/
 ├── devtoolbar/       # the filter that renders the toolbar into HTML responses
 ├── domain/           # the records the API serves, one sub-package per dashboard concern
 ├── errorpage/        # the error page and the two resolvers of peekaboot.error-page.override
+├── health/           # the health report of /peekaboot/api/health: its status code, the targets, recent findings
 ├── insights/         # the metric ring buffers: collector, panels, snapshot, payloads
 │   ├── config/       # the insights properties and the panels file
 │   └── web/          # /peekaboot/api/insights/*
@@ -778,6 +779,47 @@ property as required and allows no other, which is the wire convention that a mi
 unexpected `500` are the application's own error responses, so the document describes them in
 words only.
 
+`/peekaboot/api/health` answers `503` with a report body, so it documents that response with the
+`HealthReport` schema, and `HealthEndpointIT` holds a real `503` to it. `insights/stream`
+documents a `503` as well, for another reason (`ServiceUnavailable`).
+
+### Health Endpoint
+
+`GET /peekaboot/api/health` serves a `HealthReport`: the application's health in the nesting
+`/actuator/health` uses, a `connection` per DataSource, Redis and mail component, the current
+insights problems, the Errors and Slow trace counts and the recent distinct failures.
+`HealthReportService` builds it, `HealthController` serves it, and
+`PeekabootHealthAutoConfiguration` wires both. It imports `HealthStatusCodesConfiguration` and
+`HealthConnectionSourcesConfiguration`, which carry everything that touches Boot's health, Redis
+or mail types. The Redis and mail classes are named by string in nested configurations, so the
+endpoint works where either is absent.
+
+The status code is the application's own for the health status. `HealthStatusCodes` bridges the
+`HttpCodeStatusMapper` of the primary health group, so
+`management.endpoint.health.status.http-mapping` and an application's mapper bean reach it.
+`peekaboot.health.fail-on-problems` turns a 2xx into `503` while a problem of severity `error` is
+current. It never changes a code that already says failure, and `status` stays the actuator's.
+
+`HealthComponents` masks each component's details through `TreeMasker` and joins the
+connections. A top-level indicator takes the connection of its source only when the source
+describes exactly one target. A top-level composite takes none itself and gives each direct child
+the connection of the bean of that name. Deeper levels get none.
+
+Each `HealthConnectionSource` reads configuration and never opens a connection.
+`DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`.
+`RedisHealthConnections` reads each `RedisConnectionFactory` bean, keyed by bean name, through a
+`RedisTargetReader` per client library (`LettuceRedisTargetReader`, `JedisRedisTargetReader`),
+each gated on its library. A Lettuce static master/replica factory is reported as its default
+localhost:6379. `MailHealthConnections` reads each `JavaMailSenderImpl`. Hostnames lose any
+userinfo.
+
+`RecentFindings` takes level 0's span as its window, and counts only what started inside it, so
+nothing that only grows reaches the report. A failure's `lastMessage` is masked again with
+today's rules, since the digest may hold one from before it masked.
+
+The dashboard's requests stay untraced and untimed (see *Tracing Integration*), so the opt-in
+cannot hold itself at `503` through its own request.
+
 ### In-Process Actuator Invocation
 
 Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a list of
@@ -785,7 +827,7 @@ Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a list o
 pairing that id with a `Supplier`. Seven of them read an endpoint object
 `ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
 `HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is no endpoint
-at all. There is no discovery step. A source that reads `null` contributes no entry, which is
+at all. The health endpoint (see *Health Endpoint*) reads the same `health` source. There is no discovery step. A source that reads `null` contributes no entry, which is
 how an endpoint whose backing bean is absent (a Flyway bean, a `SpringLiquibase` bean, the
 `HealthEndpoint` bean, a `LoggingSystem` bean) reports that it has nothing rather than failing.
 
@@ -1147,7 +1189,8 @@ observation support, which the starter brings but a host can exclude. Spring MVC
 case. The starter does not bring it, and the configurations whose beans name its types carry a
 class condition, so a servlet application without it still starts.
 
-HikariCP, Logback, Flyway, Liquibase and Hibernate are optional too, each guarded a level down
+HikariCP, Logback, Flyway, Liquibase, Hibernate, Redis (with Lettuce and Jedis each a level below) and
+mail are optional too, each guarded a level down
 on a nested `@Configuration`, except that `HibernateStatisticsMetricsAutoConfiguration` guards
 Hibernate at class level, having nothing to bind without it. `InfoEndpoint` and
 `ObservationRegistry` arrive with hard dependencies of this module and the backend, so no

@@ -301,6 +301,14 @@ series is absent or holds no sample in the window is skipped, so the list holds 
 reached a threshold; an empty list does not say a skipped rule is healthy. Thresholds and their
 defaults: [peekaboot.insights](https://www.peekaboot.org/docs/configuration/#peekabootinsights).
 
+### Health report
+`HealthReport` holds the actuator's `status`, its `components` in the actuator's nesting, the
+current `problems`, `windowMs`, `traces` (`errors` and `slow`, null while tracing is off) and up to
+ten `failures`. Every component carries `status`, `details`, `components` and `connection`.
+`connection` is a DataSource, Redis or mail target read from configuration, and null for a
+component Peekaboot cannot describe. The window is level 0's span, which `problems`, `traces` and
+`failures` cover. `GET /peekaboot/api/health` serves it.
+
 ### Bucket Counts
 `BucketCounts(all, errors, slow)`. Every listing response carries it twice: `bucketCounts` for
 the whole store and `filteredBucketCounts` for the traces matching every filter this request
