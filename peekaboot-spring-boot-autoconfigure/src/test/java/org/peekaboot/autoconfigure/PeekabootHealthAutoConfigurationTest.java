@@ -3,15 +3,20 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.controller.HealthController;
 import org.peekaboot.backend.datasource.HikariPoolInfo;
 import org.peekaboot.backend.domain.health.DataSourceConnection;
+import org.peekaboot.backend.domain.health.HealthConnection.Host;
+import org.peekaboot.backend.domain.health.MailConnection;
+import org.peekaboot.backend.domain.health.RedisConnection;
 import org.peekaboot.backend.health.HealthReportService;
 import org.peekaboot.backend.health.HealthStatusCodes;
 import org.peekaboot.backend.insights.InsightsDataReader;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointAutoConfiguration;
 import org.springframework.boot.health.autoconfigure.contributor.HealthContributorAutoConfiguration;
@@ -20,10 +25,18 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.health.DataSourceHealthContributorAutoConfiguration;
+import org.springframework.boot.mail.autoconfigure.MailHealthContributorAutoConfiguration;
+import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
+import org.springframework.boot.mail.health.MailHealthIndicator;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 class PeekabootHealthAutoConfigurationTest {
 
@@ -164,6 +177,87 @@ class PeekabootHealthAutoConfigurationTest {
             assertThat(context).hasSingleBean(HealthReportService.class).hasBean("myHealth");
             assertThat(context.getBean(HealthReportService.class)).isSameAs(OwnServiceConfig.SERVICE);
         });
+    }
+
+    @Test
+    void describesTheServerOfTheApplicationsOwnRedisConnectionFactory() {
+        contextRunner
+                .withBean(
+                        "cacheFactory",
+                        RedisConnectionFactory.class,
+                        () -> new LettuceConnectionFactory(new RedisStandaloneConfiguration("cache.internal", 6380)))
+                .withBean(
+                        "redisHealthIndicator",
+                        HealthIndicator.class,
+                        () -> () -> Health.up().build())
+                .withPropertyValues("spring.data.redis.host=properties.example", "spring.data.redis.port=6379")
+                .run(context -> {
+                    assertThat(context).hasBean("peekabootRedisHealthConnections");
+                    assertThat(context.getBean(HealthReportService.class)
+                                    .report()
+                                    .report()
+                                    .components()
+                                    .get("redis")
+                                    .connection())
+                            .isEqualTo(new RedisConnection(List.of(new Host("cache.internal", 6380)), 0));
+                });
+    }
+
+    @Test
+    void leavesRedisOutWithoutSpringDataRedis() {
+        contextRunner
+                .withClassLoader(new FilteredClassLoader(RedisConnectionFactory.class))
+                .run(context -> assertThat(context).hasNotFailed().doesNotHaveBean("peekabootRedisHealthConnections"));
+    }
+
+    @Test
+    void withoutTheLettuceClientOnlyTheJedisReaderIsRegistered() {
+        contextRunner
+                .withClassLoader(new FilteredClassLoader("io.lettuce.core.RedisClient"))
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .doesNotHaveBean("peekabootLettuceRedisTargetReader")
+                        .hasBean("peekabootJedisRedisTargetReader")
+                        .hasBean("peekabootRedisHealthConnections"));
+    }
+
+    @Test
+    void withoutTheJedisClientOnlyTheLettuceReaderIsRegistered() {
+        contextRunner
+                .withClassLoader(new FilteredClassLoader("redis.clients.jedis.Jedis"))
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .doesNotHaveBean("peekabootJedisRedisTargetReader")
+                        .hasBean("peekabootLettuceRedisTargetReader")
+                        .hasBean("peekabootRedisHealthConnections"));
+    }
+
+    @Test
+    void leavesMailOutWithoutSpringsMailSender() {
+        contextRunner
+                .withClassLoader(new FilteredClassLoader(JavaMailSenderImpl.class))
+                .run(context -> assertThat(context).hasNotFailed().doesNotHaveBean("peekabootMailHealthConnections"));
+    }
+
+    @Test
+    void namesTheMailTargetInTheReport() {
+        try (LogCapture mailWarnings = LogCapture.attach(MailHealthIndicator.class)) {
+            contextRunner
+                    .withConfiguration(AutoConfigurations.of(
+                            MailSenderAutoConfiguration.class, MailHealthContributorAutoConfiguration.class))
+                    .withPropertyValues("spring.mail.host=127.0.0.1", "spring.mail.port=1")
+                    .run(context -> {
+                        HealthReportService.HealthAnswer answer =
+                                context.getBean(HealthReportService.class).report();
+                        assertThat(answer.report().components().get("mail").connection())
+                                .isEqualTo(new MailConnection("127.0.0.1", 1));
+                        assertThat(answer.report().components().get("mail").status())
+                                .isEqualTo("DOWN");
+                    });
+            assertThat(mailWarnings.appender().list)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage()).contains("Mail health check failed"));
+        }
     }
 
     private WebApplicationContextRunner withDataSource() {

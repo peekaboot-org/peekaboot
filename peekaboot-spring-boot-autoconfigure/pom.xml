@@ -113,6 +113,36 @@
             <artifactId>spring-boot-micrometer-observation</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- compile-only: the connection factories for the Redis target in the health report; javac
+             needs both client libraries to read their factories -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-redis</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <optional>true</optional>
+            <!-- clashes with the android-json that spring-boot-starter-test brings -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.json</groupId>
+                    <artifactId>json</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- compile-only: JavaMailSenderImpl for the mail target in the health report -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-mail</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- compile-only: the Hibernate meters the insights panels read, bound from a session
              factory's statistics; never brought into an application that has no Hibernate -->
         <dependency>

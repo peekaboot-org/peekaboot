@@ -33,10 +33,22 @@ dependencies {
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
+    // the connection factories for the Redis target in the health report; javac needs both
+    // client libraries to read their factories
+    compileOnly("org.springframework.data:spring-data-redis")
+    compileOnly("io.lettuce:lettuce-core")
+    // org.json clashes with the android-json that spring-boot-starter-test brings
+    compileOnly("redis.clients:jedis") { exclude(group = "org.json", module = "json") }
+    // JavaMailSenderImpl for the mail target in the health report
+    compileOnly("org.springframework.boot:spring-boot-mail")
     // the Hibernate meters the insights panels read, bound from a session factory's statistics;
     // never brought into an application that has no Hibernate
     compileOnly("org.hibernate.orm:hibernate-core")
 
+    // RedisHealthConnectionsTest builds real Lettuce and Jedis factories without starting them
+    testImplementation("org.springframework.data:spring-data-redis")
+    testImplementation("io.lettuce:lettuce-core")
+    testImplementation("redis.clients:jedis") { exclude(group = "org.json", module = "json") }
     // shared test support (LogCapture)
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")

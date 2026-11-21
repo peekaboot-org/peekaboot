@@ -20,11 +20,11 @@ dependencies {
     api("net.ttddyy.observation:datasource-micrometer-opentelemetry:$datasourceMicrometerVersion")
 }
 
-// The servlet stack, the web server, the connection pool, the ORM and the migration tools are
-// compileOnly in the modules that use them, so the host application supplies them and the
-// auto-configuration conditions stay meaningful. Handing a consumer one of them would fire
-// those conditions in an application that never asked for it. Mirrors the Maven enforcer rule
-// on this module.
+// The servlet stack, the web server, the connection pool, the ORM, the migration tools and the
+// Redis and mail clients are compileOnly in the modules that use them, so the host application
+// supplies them and the auto-configuration conditions stay meaningful. Handing a consumer one of
+// them would fire those conditions in an application that never asked for it. Mirrors the Maven
+// enforcer rule on this module.
 val bannedFromConsumers = setOf(
     "jakarta.servlet:jakarta.servlet-api",
     "org.springframework:spring-webmvc",
@@ -38,11 +38,15 @@ val bannedFromConsumers = setOf(
     "org.apache.tomcat.embed:tomcat-embed-core",
     "org.springframework.boot:spring-boot-tomcat",
     "org.springframework.boot:spring-boot-webmvc",
+    "org.springframework.data:spring-data-redis",
+    "io.lettuce:lettuce-core",
+    "redis.clients:jedis",
+    "org.springframework.boot:spring-boot-mail",
 )
 
 val checkOptionalDependencyContract = tasks.register("checkOptionalDependencyContract") {
     description = "Fails if the starter would hand a consumer a servlet stack, a web server, " +
-        "a connection pool, an ORM or a migration tool."
+        "a connection pool, an ORM, a migration tool or a Redis or mail client."
     group = "verification"
     val resolved = configurations.runtimeClasspath.map { conf ->
         conf.incoming.artifacts.artifacts.mapNotNull {

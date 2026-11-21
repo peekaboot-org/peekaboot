@@ -105,8 +105,12 @@
                                         <exclude>org.apache.tomcat.embed:tomcat-embed-core</exclude>
                                         <exclude>org.springframework.boot:spring-boot-tomcat</exclude>
                                         <exclude>org.springframework.boot:spring-boot-webmvc</exclude>
+                                        <exclude>org.springframework.data:spring-data-redis</exclude>
+                                        <exclude>io.lettuce:lettuce-core</exclude>
+                                        <exclude>redis.clients:jedis</exclude>
+                                        <exclude>org.springframework.boot:spring-boot-mail</exclude>
                                     </excludes>
-                                    <message>The starter must not hand a consumer a servlet stack, a web server, a connection pool, an ORM or a migration tool: peekaboot marks those dependencies &lt;optional&gt; so the host application supplies them and the auto-configuration conditions stay meaningful. One of them now reaches the starter transitively - look for an &lt;optional&gt; flag lost in peekaboot-backend or peekaboot-spring-boot-autoconfigure.</message>
+                                    <message>The starter must not hand a consumer a servlet stack, a web server, a connection pool, an ORM, a migration tool or a Redis or mail client: peekaboot marks those dependencies &lt;optional&gt; so the host application supplies them and the auto-configuration conditions stay meaningful. One of them now reaches the starter transitively - look for an &lt;optional&gt; flag lost in peekaboot-backend or peekaboot-spring-boot-autoconfigure.</message>
                                 </bannedDependencies>
                             </rules>
                         </configuration>

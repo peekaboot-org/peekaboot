@@ -376,6 +376,10 @@ do not bring:
 - `org.liquibase:liquibase-core`
 - `org.springframework.boot:spring-boot-flyway`
 - `org.springframework.boot:spring-boot-liquibase`
+- `org.springframework.data:spring-data-redis`
+- `io.lettuce:lettuce-core`
+- `redis.clients:jedis`
+- `org.springframework.boot:spring-boot-mail`
 
 The others cannot be banned, because the starter's own dependencies bring them: logback through
 `spring-boot-starter-logging`, `spring-boot-health` and `micrometer-observation` through

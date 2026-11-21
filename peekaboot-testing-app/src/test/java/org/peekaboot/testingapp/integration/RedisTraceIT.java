@@ -115,6 +115,23 @@ class RedisTraceIT {
                 .contains("get", "set");
     }
 
+    @Test
+    void theHealthReportNamesTheRedisServer() {
+        JsonNode redis =
+                traces.api().getJson("/peekaboot/api/health").path("components").path("redis");
+        assertThat(redis.path("status").asString()).isEqualTo("UP");
+        assertThat(redis.path("connection")
+                        .path("hosts")
+                        .get(0)
+                        .path("hostname")
+                        .asString())
+                .isEqualTo(REDIS.getHost());
+        assertThat(redis.path("connection").path("hosts").get(0).path("port").asInt())
+                .isEqualTo(REDIS.getMappedPort(6379));
+        assertThat(redis.path("connection").path("database").isInt()).isTrue();
+        assertThat(redis.path("connection").path("database").asInt()).isZero();
+    }
+
     /**
      * The dashboard reads the actuator's health in-process, and Boot's reactive Redis health
      * indicator sends INFO with no parent span, so it starts a one-span trace of its own. That
