@@ -3,6 +3,7 @@ package org.peekaboot.backend.actuator.parsed;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -48,8 +49,16 @@ public class ActuatorResponseParser {
                 section(rawData, ActuatorParsedData.SCHEDULEDTASKS, ScheduledTasksResponse.class));
     }
 
-    private <T> T section(Map<String, Object> rawData, String id, Class<T> type) {
-        Object raw = rawData.get(id);
+    /** Binds one health reading as {@link #parse} binds the {@code health} section; null for null. */
+    public @Nullable HealthResponse health(@Nullable Object raw) {
+        return bind(raw, ActuatorParsedData.HEALTH, HealthResponse.class);
+    }
+
+    private <T> @Nullable T section(Map<String, Object> rawData, String id, Class<T> type) {
+        return bind(rawData.get(id), id, type);
+    }
+
+    private <T> @Nullable T bind(@Nullable Object raw, String id, Class<T> type) {
         if (raw == null) {
             return null;
         }

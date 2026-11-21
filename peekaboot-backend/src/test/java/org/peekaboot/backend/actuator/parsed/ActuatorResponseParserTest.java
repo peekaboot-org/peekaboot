@@ -313,4 +313,18 @@ class ActuatorResponseParserTest {
 
         assertThat(response.info().build()).isEmpty();
     }
+
+    @Test
+    void healthBindsOneReadingLikeTheHealthSection() {
+        Object raw = Map.of("status", "DOWN", "components", Map.of("db", Map.of("status", "DOWN")));
+
+        assertThat(parser.health(raw))
+                .isEqualTo(parser.parse(Map.of("health", raw)).health());
+        assertThat(parser.health(raw).status()).isEqualTo("DOWN");
+    }
+
+    @Test
+    void healthOfNullIsNull() {
+        assertThat(parser.health(null)).isNull();
+    }
 }
