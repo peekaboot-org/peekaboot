@@ -93,6 +93,14 @@ class DataSourceConnectionsTest {
     }
 
     @Test
+    void aSqlServerInstanceWithoutAPortHasNoPort() {
+        assertThat(connectionsOf("jdbc:sqlserver://db\\SQLEXPRESS;databaseName=x")
+                        .get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", "SQLSERVER", List.of(new HealthConnection.Host("db", null)), "x", "SQLEXPRESS"));
+    }
+
+    @Test
     void namesTheSqlServerInstanceOfThePropertyForm() {
         DataSourceConnection connection =
                 (DataSourceConnection) connectionsOf("jdbc:sqlserver://db:1433;instanceName=SQLEXPRESS;databaseName=x")

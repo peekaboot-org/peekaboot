@@ -68,10 +68,16 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 beanName,
                 jdbcUrl.databaseProduct().name(),
                 jdbcUrl.hosts().stream()
-                        .map(host -> new HealthConnection.Host(host.hostname(), host.port()))
+                        .map(host -> new HealthConnection.Host(host.hostname(), portOf(host)))
                         .toList(),
                 jdbcUrl.databaseName(),
                 instanceOf(jdbcUrl));
+    }
+
+    // the parser reads a SQL Server instance URL without a port as port 0
+    private static @Nullable Integer portOf(Host host) {
+        Integer port = host.port();
+        return port != null && port > 0 ? port : null;
     }
 
     private static @Nullable String instanceOf(JdbcUrl jdbcUrl) {
