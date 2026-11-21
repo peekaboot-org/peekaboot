@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
+import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcUrl;
 import net.osslabz.jdbc.JdbcUrlParser;
@@ -18,11 +19,8 @@ import org.peekaboot.backend.health.HealthConnectionSource;
 /**
  * Names each DataSource's target from its configured JDBC URL. Never asks a DataSource for a connection.
  *
- * <p>A user and password before the host are cut off where the URL holds exactly one {@code @} after its
- * {@code //}, inside the first host. Any other {@code @} after the {@code //}, a braced value, any host
- * that is no plain host name or IP literal, or a database or instance that is no plain name or file path
- * gets no connection: there the parser can cut a user or password into the hostname, port, database or
- * instance.
+ * <p>Only a URL {@link CredentialFreeJdbcUrl} accepts is parsed. A host that is no plain host name or IP
+ * literal, or a database or instance that is no plain name or file path, still gives no connection.
  */
 public final class DataSourceConnections implements HealthConnectionSource {
 
@@ -30,7 +28,6 @@ public final class DataSourceConnections implements HealthConnectionSource {
     // "/" for the file paths of H2, Derby, HSQLDB and SQLite, "~" for H2's home directory; empty where
     // the URL names no database
     private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$~/-]*");
-    private static final String FIRST_HOST_ENDS = "/,?;#(";
 
     private final Map<String, DataSource> dataSources;
     private final Function<DataSource, Optional<String>> configuredUrl;
@@ -51,45 +48,13 @@ public final class DataSourceConnections implements HealthConnectionSource {
         Map<String, HealthConnection> connections = new LinkedHashMap<>();
         dataSources.forEach((beanName, dataSource) -> configuredUrl
                 .apply(dataSource)
-                .filter(DataSourceConnections::quotesNoValue)
-                .flatMap(DataSourceConnections::withoutUserInfo)
+                .flatMap(CredentialFreeJdbcUrl::of)
                 .map(JdbcUrlParser::tryParse)
                 .filter(DataSourceConnections::namesPlainHostsOnly)
                 .map(jdbcUrl -> describe(beanName, jdbcUrl))
                 .filter(DataSourceConnections::namesPlainDatabaseAndInstance)
                 .ifPresent(connection -> connections.put(beanName, connection)));
         return connections;
-    }
-
-    // a SQL Server password like {a;databaseName=x;b} reads to the parser as a databaseName of x
-    private static boolean quotesNoValue(String url) {
-        return url.indexOf('{') < 0;
-    }
-
-    private static Optional<String> withoutUserInfo(String url) {
-        int authority = url.indexOf("//");
-        if (authority < 0) {
-            return Optional.of(url);
-        }
-        int firstHost = authority + 2;
-        int at = url.indexOf('@', firstHost);
-        if (at < 0) {
-            return Optional.of(url);
-        }
-        boolean onlyAt = url.indexOf('@', at + 1) < 0;
-        boolean insideFirstHost = at < endOfFirstHost(url, firstHost);
-        return onlyAt && insideFirstHost
-                ? Optional.of(url.substring(0, firstHost) + url.substring(at + 1))
-                : Optional.empty();
-    }
-
-    private static int endOfFirstHost(String url, int firstHost) {
-        for (int i = firstHost; i < url.length(); i++) {
-            if (FIRST_HOST_ENDS.indexOf(url.charAt(i)) >= 0) {
-                return i;
-            }
-        }
-        return url.length();
     }
 
     private static boolean namesPlainHostsOnly(JdbcUrl jdbcUrl) {
@@ -124,6 +89,9 @@ public final class DataSourceConnections implements HealthConnectionSource {
     }
 
     private static @Nullable String instanceOf(JdbcUrl jdbcUrl) {
+        if (jdbcUrl.databaseProduct() != DatabaseProduct.SQLSERVER) {
+            return null;
+        }
         List<Host> hosts = jdbcUrl.hosts();
         if (!hosts.isEmpty() && hosts.getFirst().instanceName() != null) {
             return hosts.getFirst().instanceName();

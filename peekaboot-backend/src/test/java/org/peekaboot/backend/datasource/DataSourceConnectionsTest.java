@@ -132,6 +132,92 @@ class DataSourceConnectionsTest {
     }
 
     @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:postgresql://db/shop?password=a;instanceName=S3Cx",
+                "jdbc:postgresql://db/shop?user=u&password=a;instanceName=S3Cx",
+                "jdbc:mysql://db/shop?password=a;instanceName=S3Cx",
+                "jdbc:mysql://db/shop?user=ZUSR;instanceName=ZUSR",
+                "jdbc:mariadb://db/shop?password=a;instanceName=S3Cx",
+                "jdbc:sqlite:/data/x.db?password=a;instanceName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;password=a&instanceName=S3Cx",
+                "jdbc:sqlserver://db:1433;databaseName=shop;password=a&instanceName=S3Cx;encrypt=true",
+                "jdbc:sqlserver://db;databaseName=shop;user=ZUSR&instanceName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;password=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;password=a& databaseName =S3Cx",
+                "jdbc:sqlserver://db;password=a&database=S3Cx",
+                "jdbc:h2:mem:x;PASSWORD=a&instanceName=S3Cx",
+                "jdbc:h2:tcp://db/~/shop;PASSWORD=a&instanceName=S3Cx",
+                "jdbc:h2:~/shop;USER=ZUSR&instanceName=ZUSR",
+                "jdbc:derby:shop;password=a&instanceName=S3Cx",
+                "jdbc:derby://db:1527/shop;password=a&instanceName=S3Cx",
+                "jdbc:hsqldb:hsql://db/shop;password=a&instanceName=S3Cx",
+                "jdbc:hsqldb:mem:x;password=a&instanceName=S3Cx",
+                "jdbc:postgresql://db/shop?user=ZUSR&password=S3Cx",
+                "jdbc:postgresql://db/shop?sslpassword=S3Cx",
+                "jdbc:mysql://db/shop?password1=S3Cx",
+                "jdbc:mysql://db/shop?trustCertificateKeyStorePassword=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;userName=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;PWD=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;UID=ZUSR",
+                "jdbc:sqlserver://db;databaseName=shop;keystoresecret=a&databaseName=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;accesstoken=a&databaseName=S3Cx",
+                "jdbc:h2:mem:x;USER=ZUSR;PASSWORD=S3Cx",
+                "jdbc:oracle:thin:@//db:1521/svc?oracle.net.wallet_password=S3Cx",
+                "jdbc:postgresql://db/shop?credentials=S3Cx",
+                "jdbc:mysql://db/shop?apiKey=S3Cx"
+            })
+    void aUrlWithAUserOrSecretPropertyHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:mysql://db/shop?pass%77ord=S3Cx",
+                "jdbc:sqlserver://db;databaseName=shop;p%61ssword=a&databaseName=S3Cx",
+                "jdbc:postgresql://db/shop?options=-c%20search_path%3Dshop"
+            })
+    void aUrlWithAPercentEncodingAfterItsHostHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db))(CONNECT_DATA=(SID=x)))?password=(SERVICE_NAME=S3Cx)",
+                "jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db))(CONNECT_DATA=(SID=x)))?password=(PORT=4242)",
+                "jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db))(CONNECT_DATA=(SID=x)))?x=(SERVICE_NAME=S3Cx)",
+                "jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db))(CONNECT_DATA=(SID=x))) (PORT=4242)"
+            })
+    void anOracleDescriptorFollowedByMoreTextHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "jdbc:postgresql://db/shop?sslmode=require&ApplicationName=shop-app, POSTGRESQL",
+        "jdbc:mysql://db/shop?useSSL=true;serverTimezone=UTC, MYSQL",
+        "jdbc:sqlserver://db;databaseName=shop;encrypt=true;trustServerCertificate=false, SQLSERVER"
+    })
+    void aUrlWithOtherPropertiesIsDescribed(String url, String product) {
+        assertThat(connectionsOf(url).get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", product, List.of(new HealthConnection.Host("db", null)), "shop", null));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "jdbc:postgresql://db/shop?instanceName=S3Cx, POSTGRESQL, db",
+        "jdbc:mysql://db/shop?instanceName=S3Cx, MYSQL, db"
+    })
+    void onlyASqlServerUrlNamesAnInstance(String url, String product, String hostname) {
+        assertThat(connectionsOf(url).get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", product, List.of(new HealthConnection.Host(hostname, null)), "shop", null));
+    }
+
+    @ParameterizedTest
     @CsvSource({
         "jdbc:oracle:thin:@//db:1521/svc, svc",
         "jdbc:oracle:thin:@db:1521/svc, svc",
@@ -205,7 +291,8 @@ class DataSourceConnectionsTest {
                 "jdbc:sqlserver://db;databaseName=x;user={ZUSR;instanceName=S3Cx;}",
                 "jdbc:sqlserver://db;databaseName=x;password={a;databaseName=S3Cx}",
                 "jdbc:sqlserver://db;databaseName={shop;S3Cx}",
-                "jdbc:sqlserver://db;databaseName=shop;password={S3C;x}"
+                "jdbc:sqlserver://db;databaseName=shop;password={S3C;x}",
+                "jdbc:sqlserver://db;databaseName=x;applicationName={a;databaseName=S3Cx;z}"
             })
     void aUrlWithABracedValueHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
