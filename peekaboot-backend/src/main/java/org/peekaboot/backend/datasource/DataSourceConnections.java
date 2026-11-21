@@ -18,13 +18,15 @@ import org.peekaboot.backend.health.HealthConnectionSource;
 /**
  * Names each DataSource's target from its configured JDBC URL. Never asks a DataSource for a connection.
  *
- * <p>A URL with an {@code @} after its {@code //}, or with any host that is no plain host name or IP
- * literal, gets no connection: there the parser can cut a user or password into the hostname, port or
- * database.
+ * <p>A URL with an {@code @} after its {@code //}, with any host that is no plain host name or IP
+ * literal, or with a database or instance that is no plain name or file path, gets no connection:
+ * there the parser can cut a user or password into the hostname, port, database or instance.
  */
 public final class DataSourceConnections implements HealthConnectionSource {
 
     private static final Pattern PLAIN_HOST = Pattern.compile("[A-Za-z0-9._-]+|\\[[0-9A-Fa-f:.]+]");
+    // "/" for the file paths of H2, Derby, HSQLDB and SQLite; empty where the URL names no database
+    private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$/-]*");
 
     private final Map<String, DataSource> dataSources;
     private final Function<DataSource, Optional<String>> configuredUrl;
@@ -48,7 +50,9 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 .filter(DataSourceConnections::carriesNoUserInfo)
                 .map(JdbcUrlParser::tryParse)
                 .filter(DataSourceConnections::namesPlainHostsOnly)
-                .ifPresent(jdbcUrl -> connections.put(beanName, describe(beanName, jdbcUrl))));
+                .map(jdbcUrl -> describe(beanName, jdbcUrl))
+                .filter(DataSourceConnections::namesPlainDatabaseAndInstance)
+                .ifPresent(connection -> connections.put(beanName, connection)));
         return connections;
     }
 
@@ -61,6 +65,14 @@ public final class DataSourceConnections implements HealthConnectionSource {
         return jdbcUrl.hosts().stream()
                 .allMatch(host -> host.hostname() != null
                         && PLAIN_HOST.matcher(host.hostname()).matches());
+    }
+
+    private static boolean namesPlainDatabaseAndInstance(DataSourceConnection connection) {
+        return isAbsentOrPlainName(connection.database()) && isAbsentOrPlainName(connection.instance());
+    }
+
+    private static boolean isAbsentOrPlainName(@Nullable String name) {
+        return name == null || PLAIN_NAME.matcher(name).matches();
     }
 
     private static DataSourceConnection describe(String beanName, JdbcUrl jdbcUrl) {

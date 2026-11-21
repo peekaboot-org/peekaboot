@@ -82,6 +82,57 @@ class DataSourceConnectionsTest {
                 .containsExactly(new HealthConnection.Host(hostname, 5432));
     }
 
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:oracle:thin:@//db:1521/svc?password=S3Cx",
+                "jdbc:oracle:thin:@db:1521/svc?password=S3Cx",
+                "jdbc:oracle:thin:@db:1521:ORCL?password=S3Cx",
+                "jdbc:oracle:thin:@//db:1521/svc?oracle.jdbc.password=S3Cx",
+                "jdbc:oracle:thin:@//db:1521/svc#S3Cx",
+                "jdbc:oracle:thin:@//db:1521/svc S3Cx",
+                "jdbc:sqlserver://db;databaseName=x;password={a;databaseName=S3Cx}",
+                "jdbc:sqlserver://db;databaseName={shop;S3Cx}",
+                "jdbc:mysql://db/x;password=S3Cx",
+                "jdbc:mysql://db/x\\S3Cx",
+                "jdbc:postgresql://db/ZUSR:S3Cx",
+                "jdbc:postgresql://db/S3C%40x"
+            })
+    void aDatabaseThatIsNoPlainNameHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:sqlserver://db;databaseName=x;password={a;instanceName=S3Cx}",
+                "jdbc:sqlserver://db;databaseName=x;instanceName={S3C x}"
+            })
+    void anInstanceThatIsNoPlainNameHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "jdbc:mysql://db/my$shop-2.0, my$shop-2.0",
+        "jdbc:oracle:thin:@//db:1521/orcl.example.com, orcl.example.com",
+        "jdbc:sqlserver://db;databaseName=Shop_DB, Shop_DB",
+        "jdbc:h2:file:/data/shop, /data/shop",
+        "jdbc:h2:./data/shop, ./data/shop",
+        "jdbc:sqlite:/data/shop.db, /data/shop.db"
+    })
+    void namesAPlainDatabaseNameOrFilePath(String url, String database) {
+        assertThat(((DataSourceConnection) connectionsOf(url).get("dataSource")).database())
+                .isEqualTo(database);
+    }
+
+    @Test
+    void aUrlWithoutADatabaseNamesAnEmptyOne() {
+        assertThat(connectionsOf("jdbc:postgresql://db").get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", "POSTGRESQL", List.of(new HealthConnection.Host("db", null)), "", null));
+    }
+
     @Test
     void namesTheSqlServerInstanceOfTheHostForm() {
         DataSourceConnection connection =
