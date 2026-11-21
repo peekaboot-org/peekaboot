@@ -8,7 +8,7 @@ public sealed interface HealthConnection permits DataSourceConnection, RedisConn
     /**
      * A host and port.
      *
-     * @param hostname without any user or password the URL carried
+     * @param hostname never a user or password
      */
     record Host(String hostname, @Nullable Integer port) {}
 }

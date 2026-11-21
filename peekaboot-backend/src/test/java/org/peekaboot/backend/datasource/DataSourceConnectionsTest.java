@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.domain.health.DataSourceConnection;
 import org.peekaboot.backend.domain.health.HealthConnection;
 import org.peekaboot.backend.health.HealthConnectionSource;
@@ -42,21 +45,41 @@ class DataSourceConnectionsTest {
                 .containsExactly(new HealthConnection.Host("a", 3306), new HealthConnection.Host("b", 3307));
     }
 
-    @Test
-    void aHostnameLosesTheCredentialsTheUrlCarriesBeforeIt() {
-        Map<String, HealthConnection> connections = connectionsOf("jdbc:mysql://root:pw@db:3306/shop");
-
-        assertThat(((DataSourceConnection) connections.get("dataSource")).hosts())
-                .containsExactly(new HealthConnection.Host("db", 3306));
-        assertThat(connections.toString()).doesNotContain("root").doesNotContain("pw");
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:mysql://root:pw@db:3306/shop",
+                "jdbc:postgresql://u:p@pg/db",
+                "jdbc:mysql://u:p@:3306,real:3307/shop",
+                "jdbc:mysql://root:p/w@db/shop",
+                "jdbc:mysql://root:p?w@db/shop",
+                "jdbc:mysql://root:123/w@db/shop",
+                "jdbc:mysql://root:123?w@db/shop"
+            })
+    void aUrlThatCarriesCredentialsBeforeItsHostHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
     }
 
-    @Test
-    void aHostWithoutAHostnameIsLeftOut() {
-        DataSourceConnection connection = (DataSourceConnection)
-                connectionsOf("jdbc:mysql://u:p@:3306,real:3307/shop").get("dataSource");
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:mysql://address=(host=db)(port=3306)(user=root)(password=secret)/shop",
+                "jdbc:mysql://(host=db,user=root,password=secret)/shop",
+                "jdbc:mysql://db:3306,(host=replica,password=secret)/shop"
+            })
+    void aUrlWithAHostThatIsNoPlainHostNameHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
 
-        assertThat(connection.hosts()).containsExactly(new HealthConnection.Host("real", 3307));
+    @ParameterizedTest
+    @CsvSource({
+        "jdbc:postgresql://10.0.0.5:5432/db, 10.0.0.5",
+        "jdbc:postgresql://[::1]:5432/db, [::1]",
+        "jdbc:mysql://shop_db:5432/db, shop_db"
+    })
+    void namesAnIpLiteralOrPlainHostName(String url, String hostname) {
+        assertThat(((DataSourceConnection) connectionsOf(url).get("dataSource")).hosts())
+                .containsExactly(new HealthConnection.Host(hostname, 5432));
     }
 
     @Test
