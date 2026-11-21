@@ -1876,7 +1876,7 @@
         "additionalProperties": false,
         "required": ["status", "details", "components", "connection"],
         "properties": {
-          "status": {"type": "string", "description": "The actuator's status, verbatim: `UP`, `DOWN`, `OUT_OF_SERVICE`, `UNKNOWN` or one the application defines. `UNKNOWN` where the application's health endpoint is off."},
+          "status": {"type": "string", "description": "The contributor's status, verbatim: `UP`, `DOWN`, `OUT_OF_SERVICE`, `UNKNOWN` or one the application defines."},
           "details": {
             "type": "object",
             "additionalProperties": {"description": "Any JSON value, masked as a tree."},
