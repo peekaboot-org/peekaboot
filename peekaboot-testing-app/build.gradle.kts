@@ -45,6 +45,8 @@ dependencies {
     // test scope only, exactly like the Maven build: proves the SecurityFilterChain the
     // website's security page tells readers to write, without securing the sample app.
     testImplementation("org.springframework.boot:spring-boot-starter-security")
+    // test scope only, exactly like the Maven build: gives HealthEndpointIT a mail target to report DOWN.
+    testImplementation("org.springframework.boot:spring-boot-starter-mail")
     testImplementation("com.h2database:h2")
     testImplementation("io.micrometer:micrometer-observation-test")
     // real MySQL and Redis for the ITs whose subject is that engine, in lockstep with pom.xml

@@ -174,4 +174,16 @@ class MultiDataSourceTraceIT {
                 .query(Integer.class)
                 .single();
     }
+
+    @Test
+    void theHealthReportNamesTheMySqlInventory() {
+        JsonNode connection = traces.api()
+                .getJson("/peekaboot/api/health")
+                .at("/components/db/components/inventoryDataSource/connection");
+
+        assertThat(connection.path("product").asString()).isEqualTo("MYSQL");
+        assertThat(connection.at("/hosts/0/hostname").asString()).isEqualTo(MYSQL.getHost());
+        assertThat(connection.at("/hosts/0/port").asInt()).isEqualTo(MYSQL.getMappedPort(3306));
+        assertThat(connection.path("database").asString()).isEqualTo(MYSQL.getDatabaseName());
+    }
 }

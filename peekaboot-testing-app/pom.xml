@@ -170,6 +170,13 @@
             <artifactId>spring-boot-starter-security</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Boot's mail health indicator exists only where a JavaMailSender does. Test scope leaves it
+             out of the executable jar; HealthEndpointIT points it at a closed port to get a DOWN target. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
