@@ -9,8 +9,9 @@ import javax.sql.DataSource;
 /**
  * Reads a Hikari pool's sizing for the ready banner and its configured JDBC URL for the health
  * endpoint. The only backend class that names a HikariCP type: PeekabootLifecycleAutoConfiguration
- * creates it under {@code @ConditionalOnClass(HikariDataSource)} only, so an application on another
- * pool never loads it and {@code ApplicationReadyListener} stays free of Hikari references.
+ * and DataSourceHealthConnectionsConfiguration create it under a HikariDataSource class condition
+ * only, so an application on another pool never loads it and {@code ApplicationReadyListener} stays
+ * free of Hikari references.
  */
 public final class HikariPoolInfo {
 
