@@ -126,6 +126,16 @@ class AutoSecuredDashboardIT {
         assertThat(api().statusOf(path)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void theHealthReportAnswersWithTheGuardsCredentialsAndIsNeverStored() {
+        PeekabootApi signedIn = api().withBasicAuth(credentials.username(), credentials.plaintext());
+
+        assertThat(api().statusOf("/peekaboot/api/health")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(signedIn.statusOf("/peekaboot/api/health")).isEqualTo(HttpStatus.OK);
+        assertThat(signedIn.headersOf("/peekaboot/api/health").getCacheControl())
+                .isEqualTo("no-store");
+    }
+
     /** The guard's refusal is the 401 the document describes. */
     @Test
     void theRefusalIsTheUnauthorizedTheDocumentDescribes() {

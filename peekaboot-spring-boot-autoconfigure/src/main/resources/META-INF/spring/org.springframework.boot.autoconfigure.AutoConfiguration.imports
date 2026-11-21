@@ -16,3 +16,4 @@ org.peekaboot.autoconfigure.HibernateStatisticsMetricsAutoConfiguration
 org.peekaboot.autoconfigure.ActuatorSourcesAutoConfiguration
 org.peekaboot.autoconfigure.PeekabootSecurityAutoConfiguration
 org.peekaboot.autoconfigure.QueryParameterAutoConfiguration
+org.peekaboot.autoconfigure.PeekabootHealthAutoConfiguration

@@ -224,6 +224,7 @@ class OpenApiContractIT extends TestingAppITBase {
                 "/peekaboot/api | /peekaboot/api",
                 "/peekaboot/api/openapi.json | /peekaboot/api/openapi.json",
                 "/peekaboot/api/features | /peekaboot/api/features",
+                "/peekaboot/api/health | /peekaboot/api/health",
                 "/peekaboot/api/traces | /peekaboot/api/traces",
                 "/peekaboot/api/traces | /peekaboot/api/traces?view=full&rootActionType=*&limit=100",
                 "/peekaboot/api/logs | /peekaboot/api/logs?limit=10000",

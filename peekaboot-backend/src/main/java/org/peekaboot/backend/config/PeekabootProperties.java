@@ -31,6 +31,8 @@ public class PeekabootProperties {
 
     private RemoteAccess remoteAccess = new RemoteAccess();
 
+    private Health health = new Health();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -101,6 +103,14 @@ public class PeekabootProperties {
 
     public void setRemoteAccess(RemoteAccess remoteAccess) {
         this.remoteAccess = remoteAccess;
+    }
+
+    public Health getHealth() {
+        return health;
+    }
+
+    public void setHealth(Health health) {
+        this.health = health;
     }
 
     public static class DevToolbar {
@@ -390,6 +400,23 @@ public class PeekabootProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+    }
+
+    public static class Health {
+
+        /**
+         * Answers 503 while an insights problem of severity error is current, whatever the health
+         * status. Off: only the health status decides the code.
+         */
+        private boolean failOnProblems = false;
+
+        public boolean isFailOnProblems() {
+            return failOnProblems;
+        }
+
+        public void setFailOnProblems(boolean failOnProblems) {
+            this.failOnProblems = failOnProblems;
         }
     }
 }

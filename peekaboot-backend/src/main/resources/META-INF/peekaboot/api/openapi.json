@@ -4,8 +4,8 @@
   "info": {
     "title": "Peekaboot API",
     "version": "1",
-    "summary": "The traces, logs, failures, routes and metrics Peekaboot holds for this application.",
-    "description": "Every endpoint answers `GET` only. An optional field is always present, `null` where it has no value. A point in time Peekaboot records is an ISO-8601 string in UTC. `server.currentTime` keeps the JVM's own offset. Epoch milliseconds appear only in the insights endpoints: `epochMs`, `endEpochMs`, `timestamps` and a `datetime` tile's `value`. Any other field ending in `Ms` is a duration in milliseconds.\n\nAn endpoint refuses a query parameter it does not take, and any parameter sent more than once, with a `400` problem naming it. Spring Security's `continue` is accepted everywhere.\n\nA value Peekaboot masked reads `******`, the literal `/peekaboot/api/features` names in `maskLiteral`. The real value exists but is not shown.\n\nWhere Peekaboot's guard is armed, every endpoint needs HTTP Basic credentials: `peekaboot.security.username`, else the build's artifact id or the application name plus `-admin`, else `peekaboot-admin`, and `peekaboot.security.password`, else the password Peekaboot generated and printed on the start that created it. On a local run without the guard, every endpoint answers only the machine the application runs on and any other request with a `403` problem. A `405`, a `406` or an unexpected `500` is the application's own error response.",
+    "summary": "The health, traces, logs, failures, routes and metrics Peekaboot holds for this application.",
+    "description": "Every endpoint answers `GET` only. An optional field is always present, `null` where it has no value. A point in time Peekaboot records is an ISO-8601 string in UTC. `server.currentTime` keeps the JVM's own offset. Epoch milliseconds appear only in the insights endpoints: `epochMs`, `endEpochMs`, `timestamps` and a `datetime` tile's `value`. Any other field ending in `Ms` is a duration in milliseconds.\n\nAn endpoint refuses a query parameter it does not take, and any parameter sent more than once, with a `400` problem naming it. Spring Security's `continue` is accepted everywhere.\n\nA value Peekaboot masked reads `******`, the literal `/peekaboot/api/features` names in `maskLiteral`. The real value exists but is not shown.\n\nWhere Peekaboot's guard is armed, every endpoint needs HTTP Basic credentials: `peekaboot.security.username`, else the build's artifact id or the application name plus `-admin`, else `peekaboot-admin`, and `peekaboot.security.password`, else the password Peekaboot generated and printed on the start that created it. On a local run without the guard, every endpoint answers only the machine the application runs on and any other request with a `403` problem. A `405`, a `406` or an unexpected `500` is the application's own error response. `/peekaboot/api/health` is the one endpoint whose status code follows its content: `503` where the application's health is down, with the report as its body.",
     "license": {"name": "Apache-2.0", "identifier": "Apache-2.0"}
   },
   "externalDocs": {
@@ -57,6 +57,26 @@
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
           "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/peekaboot/api/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Reports the application's health with each component's target, Peekaboot's current problems and its recent failures.",
+        "description": "The status code follows the health status the way `/actuator/health` maps it, `management.endpoint.health.status.http-mapping` included. With `peekaboot.health.fail-on-problems=true` a current problem of severity `error` also answers `503`, and `status` still reads as the actuator reports it. A health check that hangs takes as long as its own timeout.",
+        "responses": {
+          "200": {
+            "description": "Health is up, or in any other status the mapping answers with `200`.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthReport"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "503": {
+            "description": "Health is `DOWN` or `OUT_OF_SERVICE`, or opted in, a problem of severity `error` is current. The body is the same report. A mapping to another code answers that code with this body.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthReport"}}}
+          }
         }
       }
     },
