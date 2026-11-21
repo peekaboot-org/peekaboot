@@ -789,10 +789,12 @@ documents a `503` as well, for another reason (`ServiceUnavailable`).
 `/actuator/health` uses, a `connection` per DataSource, Redis and mail component, the current
 insights problems, the Errors and Slow trace counts and the recent distinct failures.
 `HealthReportService` builds it, `HealthController` serves it, and
-`PeekabootHealthAutoConfiguration` wires both. It imports `HealthStatusCodesConfiguration` and
-`HealthConnectionSourcesConfiguration`, which carry everything that touches Boot's health, Redis
-or mail types. The Redis and mail classes are named by string in nested configurations, so the
-endpoint works where either is absent.
+`PeekabootHealthAutoConfiguration` wires both. That auto-configuration carries a class condition on
+`HealthEndpoint` and Spring MVC. It imports `HealthStatusCodesConfiguration`, which bridges Boot's
+status mapping, and `HealthConnectionSourcesConfiguration`, which imports
+`DataSourceHealthConnectionsConfiguration` and nests one configuration for Redis and one for mail.
+HikariCP, Redis and mail classes are named by string in those class conditions, so the endpoint
+works where any of them is absent.
 
 The status code is the application's own for the health status. `HealthStatusCodes` bridges the
 `HttpCodeStatusMapper` of the primary health group, so
@@ -800,22 +802,26 @@ The status code is the application's own for the health status. `HealthStatusCod
 `peekaboot.health.fail-on-problems` turns a 2xx into `503` while a problem of severity `error` is
 current. It never changes a code that already says failure, and `status` stays the actuator's.
 
-`HealthComponents` masks each component's details through `TreeMasker` and joins the
-connections. A top-level indicator takes the connection of its source only when the source
-describes exactly one target. A top-level composite takes none itself and gives each direct child
-the connection of the bean of that name. Deeper levels get none.
+`HealthComponents` masks each component's details through `TreeMasker` and joins the connections it
+reads from every source on each report. A top-level indicator takes the connection of its source
+only when the source describes exactly one target. A top-level composite takes none itself and
+gives each direct child the connection of the bean of that name. Deeper levels get none.
 
 Each `HealthConnectionSource` reads configuration and never opens a connection.
-`DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`.
-`RedisHealthConnections` reads each `RedisConnectionFactory` bean, keyed by bean name, through a
-`RedisTargetReader` per client library (`LettuceRedisTargetReader`, `JedisRedisTargetReader`),
-each gated on its library. A Lettuce static master/replica factory is reported as its default
-localhost:6379. `MailHealthConnections` reads each `JavaMailSenderImpl`. Hostnames lose any
-userinfo.
+`DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`. A URL
+with an `@` after its `//`, where a user or password before the host puts one, or with any host
+that is no plain host name or IP literal, gets no connection: the parser can cut credentials into
+the hostname, port or database there. A DataSource that throws while being unwrapped, such as a
+routing DataSource without a default target, gets none either. `RedisHealthConnections` reads each
+`RedisConnectionFactory` bean, keyed by bean name, through a `RedisTargetReader` per client library
+(`LettuceRedisTargetReader`, `JedisRedisTargetReader`), each gated on its library. A Lettuce static
+master/replica factory is reported as its default localhost:6379. `MailHealthConnections` reads
+each `JavaMailSenderImpl`.
 
-`RecentFindings` takes level 0's span as its window, and counts only what started inside it, so
-nothing that only grows reaches the report. A failure's `lastMessage` is masked again with
-today's rules, since the digest may hold one from before it masked.
+`RecentFindings` takes level 0's span as its window. It counts the traces that started inside it
+and lists the failures last seen inside it, so nothing that only grows reaches the report. A
+failure's `lastMessage` is masked again with today's rules, since the digest may hold one from
+before it masked.
 
 The dashboard's requests stay untraced and untimed (see *Tracing Integration*), so the opt-in
 cannot hold itself at `503` through its own request.
@@ -827,7 +833,8 @@ Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a list o
 pairing that id with a `Supplier`. Seven of them read an endpoint object
 `ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
 `HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is no endpoint
-at all. The health endpoint (see *Health Endpoint*) reads the same `health` source. There is no discovery step. A source that reads `null` contributes no entry, which is
+at all. The health endpoint (see *Health Endpoint*) reads the same `health` source. There is no
+discovery step. A source that reads `null` contributes no entry, which is
 how an endpoint whose backing bean is absent (a Flyway bean, a `SpringLiquibase` bean, the
 `HealthEndpoint` bean, a `LoggingSystem` bean) reports that it has nothing rather than failing.
 
@@ -1189,12 +1196,11 @@ observation support, which the starter brings but a host can exclude. Spring MVC
 case. The starter does not bring it, and the configurations whose beans name its types carry a
 class condition, so a servlet application without it still starts.
 
-HikariCP, Logback, Flyway, Liquibase, Hibernate, Redis (with Lettuce and Jedis each a level below) and
-mail are optional too, each guarded a level down
-on a nested `@Configuration`, except that `HibernateStatisticsMetricsAutoConfiguration` guards
-Hibernate at class level, having nothing to bind without it. `InfoEndpoint` and
-`ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
-consumer of the starter can be without them.
+HikariCP, Logback, Flyway, Liquibase, Hibernate, Redis (with Lettuce and Jedis each a level below)
+and mail are optional too, each guarded a level down on a nested `@Configuration`, except that
+`HibernateStatisticsMetricsAutoConfiguration` guards Hibernate at class level, having nothing to
+bind without it. `InfoEndpoint` and `ObservationRegistry` arrive with hard dependencies of this
+module and the backend, so no consumer of the starter can be without them.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
 controllers, services and actuator wiring, all as explicit `@Bean` methods.
