@@ -20,6 +20,7 @@ class InsightsDataReaderTest {
 
     private final AtomicReference<Double> heapUsed = new AtomicReference<>(Double.NaN);
     private final AtomicReference<Double> cpu = new AtomicReference<>(0.5);
+    private final AtomicReference<Double> pending = new AtomicReference<>(0.0);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private InsightsService service;
     private InsightsDataReader reader;
@@ -29,6 +30,7 @@ class InsightsDataReaderTest {
         // a supplier, never a weakly held state object: a GC between ticks would turn samples into NaN
         Gauge.builder("jvm.memory.used", heapUsed::get).tag("area", "heap").register(registry);
         Gauge.builder("process.cpu.usage", cpu::get).register(registry);
+        Gauge.builder("hikaricp.connections.pending", pending::get).register(registry);
         InsightsProperties properties = new InsightsProperties();
         service = new InsightsService(
                 registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
@@ -148,6 +150,16 @@ class InsightsDataReaderTest {
             assertThat(problem.rule()).isEqualTo(ProblemRule.SERVER_ERRORS);
             assertThat(problem.value()).isCloseTo(100.0, within(1e-9));
         });
+    }
+
+    @Test
+    void currentProblemsAreLevelZerosOverItsWholeRing() {
+        pending.set(3.0);
+        tickHeap(10, 20);
+
+        assertThat(reader.currentProblems()).extracting(InsightsProblem::rule).contains(ProblemRule.POOL_WAITING);
+        assertThat(reader.currentProblems())
+                .isEqualTo(read("0", null, null, null).problems());
     }
 
     @Test

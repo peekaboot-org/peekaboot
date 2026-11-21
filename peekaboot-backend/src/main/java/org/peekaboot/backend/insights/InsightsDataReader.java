@@ -1,5 +1,6 @@
 package org.peekaboot.backend.insights;
 
+import java.util.List;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 
 /** Reads one level of the collector's rings the way {@code GET /api/insights/data} serves it. */
@@ -33,5 +34,10 @@ public final class InsightsDataReader {
         InsightsDataQuery query = InsightsDataQuery.of(parameters, levelCount);
         LevelData data = collector.levelData(query.level(), query.since());
         return data.toResponse(query.view(), query.seriesAmong(data.seriesIds()), problems.of(data));
+    }
+
+    /** The problems level 0's whole ring shows: what {@link #read} lists for level 0 without a {@code since}. */
+    public List<InsightsProblem> currentProblems() {
+        return problems.of(collector.levelData(0, null));
     }
 }
