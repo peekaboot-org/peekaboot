@@ -81,6 +81,12 @@ class DataSourceConnectionsTest {
                         null));
     }
 
+    @Test
+    void aUserInfoBeforeNoHostLeavesNoHosts() {
+        assertThat(connectionsOf("jdbc:mysql://ZUSR:S3Cx@/shop").get("dataSource"))
+                .isEqualTo(new DataSourceConnection("dataSource", "MYSQL", List.of(), "shop", null));
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {
