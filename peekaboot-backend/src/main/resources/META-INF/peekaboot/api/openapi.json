@@ -1937,7 +1937,7 @@
       },
       "DataSourceConnection": {
         "type": "object",
-        "description": "The target of a DataSource. A user and password before the first host are left out. A DataSource has none where its JDBC URL holds any other `@` after its `//`, a host that is no plain host name or IP literal, or a database or instance with a character other than a letter, digit, `.`, `_`, `$`, `-` or `/`.",
+        "description": "The target of a DataSource. A user and password before the first host are left out. A DataSource has none where its JDBC URL holds any other `@` after its `//`, a braced value such as SQL Server's `password={…}`, a host that is no plain host name or IP literal, or a database or instance with a character other than a letter, digit, `.`, `_`, `$`, `~`, `-` or `/`.",
         "additionalProperties": false,
         "required": ["dataSource", "product", "hosts", "database", "instance"],
         "properties": {
