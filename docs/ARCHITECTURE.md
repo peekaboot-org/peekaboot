@@ -808,18 +808,24 @@ only when the source describes exactly one target. A top-level composite takes n
 gives each direct child the connection of the bean of that name. Deeper levels get none.
 
 Each `HealthConnectionSource` reads configuration and never opens a connection.
-`DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`.
-Where the URL holds exactly one `@` after its `//`, and that `@` comes before the first `/`, `,`,
-`?`, `;`, `#` or `(`, everything from the `//` to the `@` is cut off before parsing. Any other `@`
-after the `//`, a `{` (SQL Server's braced values, where `{a;databaseName=x;b}` reads as a database
-`x`), any host that is no plain host name or IP literal, and a database or instance outside
-`[A-Za-z0-9._$~/-]*` give no connection: the parser can cut credentials into the hostname, port,
-database or instance there. A DataSource that throws while being unwrapped, such as a
-routing DataSource without a default target, gets none either. `RedisHealthConnections` reads each
-`RedisConnectionFactory` bean, keyed by bean name, through a `RedisTargetReader` per client library
-(`LettuceRedisTargetReader`, `JedisRedisTargetReader`), each gated on its library. A Lettuce static
-master/replica factory is reported as its default localhost:6379. `MailHealthConnections` reads
-each `JavaMailSenderImpl`.
+`DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`, and
+parses only what `CredentialFreeJdbcUrl` accepts. Where the URL holds exactly one `@` after its
+`//`, and that `@` comes before the first `/`, `,`, `?`, `;`, `#` or `(`, everything from the `//`
+to the `@` is cut off. After that cut the URL gets no connection where any other `@` follows the
+`//`, where a property key names a user or secret (`MaskingEngine.isSensitiveKey`, or a key holding
+`user`, `uid`, `pwd`, `pass`, `secret` or `token`, matched after `?`, `;`, `&`, `(`, `,` or
+whitespace), where it holds a `{` or a `%`, or where text follows an Oracle descriptor. The parser
+splits properties on both `&` and `;` while each driver splits on one, so a credential's value can
+pose as `instanceName` or `databaseName`; braces quote such values on SQL Server; Connector/J
+decodes `pass%77ord` to `password`; and the Oracle parser reads `SERVICE_NAME` and `PORT` from
+anywhere in the URL. With no user or secret in the URL, nothing the parser misreads can carry one.
+As a second line, a host that is no plain host name or IP literal, or a database or instance
+outside `[A-Za-z0-9._$~/-]*`, gives no connection, and `instance` is read for SQL Server only. A
+DataSource that throws while being unwrapped, such as a routing DataSource without a default
+target, gets none either. `RedisHealthConnections` reads each `RedisConnectionFactory` bean, keyed
+by bean name, through a `RedisTargetReader` per client library (`LettuceRedisTargetReader`,
+`JedisRedisTargetReader`), each gated on its library. A Lettuce static master/replica factory is
+reported as its default localhost:6379. `MailHealthConnections` reads each `JavaMailSenderImpl`.
 
 `RecentFindings` takes level 0's span as its window. It counts the traces that started inside it
 and lists the failures last seen inside it, so nothing that only grows reaches the report. A
