@@ -808,10 +808,12 @@ only when the source describes exactly one target. A top-level composite takes n
 gives each direct child the connection of the bean of that name. Deeper levels get none.
 
 Each `HealthConnectionSource` reads configuration and never opens a connection.
-`DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`. A URL
-with an `@` after its `//`, where a user or password before the host puts one, or with any host
-that is no plain host name or IP literal, gets no connection: the parser can cut credentials into
-the hostname, port or database there. A DataSource that throws while being unwrapped, such as a
+`DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`.
+Where the URL holds exactly one `@` after its `//`, and that `@` comes before the first `/`, `,`,
+`?`, `;`, `#` or `(`, everything from the `//` to the `@` is cut off before parsing. Any other `@`
+after the `//`, any host that is no plain host name or IP literal, and a database or instance
+outside `[A-Za-z0-9._$/-]*` give no connection: the parser can cut credentials into the hostname,
+port, database or instance there. A DataSource that throws while being unwrapped, such as a
 routing DataSource without a default target, gets none either. `RedisHealthConnections` reads each
 `RedisConnectionFactory` bean, keyed by bean name, through a `RedisTargetReader` per client library
 (`LettuceRedisTargetReader`, `JedisRedisTargetReader`), each gated on its library. A Lettuce static
