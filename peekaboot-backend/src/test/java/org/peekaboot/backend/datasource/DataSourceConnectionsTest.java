@@ -212,11 +212,19 @@ class DataSourceConnectionsTest {
         "jdbc:sqlserver://db;databaseName=Shop_DB, Shop_DB",
         "jdbc:h2:file:/data/shop, /data/shop",
         "jdbc:h2:./data/shop, ./data/shop",
+        "jdbc:h2:~/shop, ~/shop",
         "jdbc:sqlite:/data/shop.db, /data/shop.db"
     })
     void namesAPlainDatabaseNameOrFilePath(String url, String database) {
         assertThat(((DataSourceConnection) connectionsOf(url).get("dataSource")).database())
                 .isEqualTo(database);
+    }
+
+    @Test
+    void namesTheHomeDirectoryDatabaseOfAnH2Server() {
+        assertThat(connectionsOf("jdbc:h2:tcp://localhost:9092/~/shop").get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", "H2", List.of(new HealthConnection.Host("localhost", 9092)), "~/shop", null));
     }
 
     @Test

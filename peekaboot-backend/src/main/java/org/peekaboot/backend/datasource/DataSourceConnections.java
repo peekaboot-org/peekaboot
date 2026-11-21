@@ -27,8 +27,9 @@ import org.peekaboot.backend.health.HealthConnectionSource;
 public final class DataSourceConnections implements HealthConnectionSource {
 
     private static final Pattern PLAIN_HOST = Pattern.compile("[A-Za-z0-9._-]+|\\[[0-9A-Fa-f:.]+]");
-    // "/" for the file paths of H2, Derby, HSQLDB and SQLite; empty where the URL names no database
-    private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$/-]*");
+    // "/" for the file paths of H2, Derby, HSQLDB and SQLite, "~" for H2's home directory; empty where
+    // the URL names no database
+    private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$~/-]*");
     private static final String FIRST_HOST_ENDS = "/,?;#(";
 
     private final Map<String, DataSource> dataSources;
