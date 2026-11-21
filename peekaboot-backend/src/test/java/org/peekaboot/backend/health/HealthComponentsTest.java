@@ -134,6 +134,19 @@ class HealthComponentsTest {
     }
 
     @Test
+    void readsTheConnectionsAnewForEachReport() {
+        Map<String, HealthConnection> connections = new LinkedHashMap<>();
+        HealthComponents components = components(source("db", connections));
+        HealthResponse health = response(Map.of("db", indicator("UP")));
+
+        assertThat(components.of(health).get("db").connection()).isNull();
+
+        connections.put("dataSource", SHOP);
+
+        assertThat(components.of(health).get("db").connection()).isEqualTo(SHOP);
+    }
+
+    @Test
     void masksDetailsAsTheDashboardDoes() {
         Map<String, Object> details =
                 Map.of("error", "java.net.ConnectException: redis://cache:s3cret@cache.internal:6379", "password", "x");

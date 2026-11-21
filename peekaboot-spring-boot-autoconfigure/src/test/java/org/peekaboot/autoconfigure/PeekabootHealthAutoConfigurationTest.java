@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import java.util.Map;
+import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -36,6 +39,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 class PeekabootHealthAutoConfigurationTest {
@@ -119,6 +124,19 @@ class PeekabootHealthAutoConfigurationTest {
                     assertThat(dbConnection(context.getBean(HealthReportService.class))
                                     .database())
                             .isEqualTo("healthdb");
+                });
+    }
+
+    @Test
+    void aRoutingDataSourceWithoutADefaultTargetCostsOnlyItsConnection() {
+        contextRunner
+                .withBean("tenantDataSource", DataSource.class, TenantRoutingDataSource::new)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(HealthReportService.class)
+                                    .report()
+                                    .httpStatus())
+                            .isEqualTo(200);
                 });
     }
 
@@ -279,6 +297,20 @@ class PeekabootHealthAutoConfigurationTest {
     private static DataSourceConnection dbConnection(HealthReportService service) {
         return (DataSourceConnection)
                 service.report().report().components().get("db").connection();
+    }
+
+    /** Routes by a tenant key that is unset outside a request, and has no default target. */
+    static final class TenantRoutingDataSource extends AbstractRoutingDataSource {
+
+        TenantRoutingDataSource() {
+            setTargetDataSources(Map.of("tenant-a", new DriverManagerDataSource("jdbc:h2:mem:tenant-a")));
+            afterPropertiesSet();
+        }
+
+        @Override
+        protected @Nullable Object determineCurrentLookupKey() {
+            return null;
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

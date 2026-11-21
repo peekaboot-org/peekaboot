@@ -41,7 +41,8 @@ public final class HikariPoolInfo {
                 return Optional.ofNullable(
                         dataSource.unwrap(HikariDataSource.class).getJdbcUrl());
             }
-        } catch (SQLException e) {
+        } catch (SQLException | RuntimeException e) {
+            // a routing DataSource without a default target throws outside a routing context
             return Optional.empty();
         }
         return Optional.empty();

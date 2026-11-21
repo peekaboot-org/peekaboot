@@ -22,15 +22,11 @@ import org.peekaboot.backend.masking.TreeMasker;
 public final class HealthComponents {
 
     private final TreeMasker masker;
-    private final Map<String, Map<String, HealthConnection>> connectionsByComponent = new LinkedHashMap<>();
+    private final List<HealthConnectionSource> sources;
 
     public HealthComponents(MaskingEngine maskingEngine, List<HealthConnectionSource> sources) {
         this.masker = new TreeMasker(maskingEngine);
-        for (HealthConnectionSource source : sources) {
-            connectionsByComponent
-                    .computeIfAbsent(source.component(), name -> new LinkedHashMap<>())
-                    .putAll(source.connections());
-        }
+        this.sources = List.copyOf(sources);
     }
 
     public Map<String, HealthReport.Component> of(@Nullable HealthResponse health) {
@@ -38,11 +34,22 @@ public final class HealthComponents {
         if (health == null) {
             return components;
         }
+        Map<String, Map<String, HealthConnection>> connectionsByComponent = connectionsByComponent();
         health.components().forEach((name, descriptor) -> {
             Map<String, HealthConnection> connections = connectionsByComponent.getOrDefault(name, Map.of());
             components.put(name, topLevel(descriptor, connections));
         });
         return components;
+    }
+
+    private Map<String, Map<String, HealthConnection>> connectionsByComponent() {
+        Map<String, Map<String, HealthConnection>> connectionsByComponent = new LinkedHashMap<>();
+        for (HealthConnectionSource source : sources) {
+            connectionsByComponent
+                    .computeIfAbsent(source.component(), name -> new LinkedHashMap<>())
+                    .putAll(source.connections());
+        }
+        return connectionsByComponent;
     }
 
     private HealthReport.Component topLevel(ComponentDescriptor descriptor, Map<String, HealthConnection> connections) {

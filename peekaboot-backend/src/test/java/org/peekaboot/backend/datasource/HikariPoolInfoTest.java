@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.zaxxer.hikari.HikariDataSource;
+import java.util.Map;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
+import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 
 class HikariPoolInfoTest {
 
@@ -55,7 +58,26 @@ class HikariPoolInfoTest {
     }
 
     @Test
+    void aRoutingDataSourceWithoutADefaultTargetHasNone() {
+        assertThat(poolInfo.jdbcUrlOf(new TenantRoutingDataSource())).isEmpty();
+    }
+
+    @Test
     void aDataSourceThatIsNoHikariPoolHasNoConnection() {
         assertThat(poolInfo.jdbcUrlOf(new NeverConnectsDataSource())).isEmpty();
+    }
+
+    /** Routes by a tenant key that is unset outside a request, and has no default target. */
+    static final class TenantRoutingDataSource extends AbstractRoutingDataSource {
+
+        TenantRoutingDataSource() {
+            setTargetDataSources(Map.of("tenant-a", new NeverConnectsDataSource()));
+            afterPropertiesSet();
+        }
+
+        @Override
+        protected @Nullable Object determineCurrentLookupKey() {
+            return null;
+        }
     }
 }
