@@ -822,7 +822,7 @@ follows an Oracle descriptor. After parsing, a SQL Server URL with an `&` gets n
 The parser splits properties on both `&` and `;` while each driver splits on one, so a value can
 pose as `instanceName`, `databaseName` or `database`. For the other products the parser reads hosts
 and database from the URL before its properties begin (at `?` for pg, MySQL, MariaDB and SQLite, at
-`;` for H2, Derby and HSQLDB); a `?` or `;` that lands in the database, such as
+`;` for Derby, at `?` or `;` for H2 and HSQLDB); a `?` or `;` that lands in the database, such as
 `jdbc:postgresql://db/shop;x` or Oracle's Easy Connect parameters, fails the name check, and
 `instance` is read for SQL Server only, so no property value reaches the body. On SQL Server, the
 driver splits on `;` alone, so refusing `&` and `{` leaves the parser splitting exactly as the
