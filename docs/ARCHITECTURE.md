@@ -821,18 +821,20 @@ follows an Oracle descriptor. After parsing, a SQL Server URL with an `&` gets n
 
 The parser splits properties on both `&` and `;` while each driver splits on one, so a value can
 pose as `instanceName`, `databaseName` or `database`. For the other products the parser reads hosts
-and database from the URL before its first `?` or `;`, Oracle's Easy Connect database keeps its
-parameters and fails the name check, and `instance` is read for SQL Server only, so no property
-value reaches the body. On SQL Server, the driver splits on `;` alone, so refusing `&` and `{`
-leaves the parser splitting exactly as the driver does. The key rule, `%` (Connector/J decodes
-`pass%77ord` to `password`) and the descriptor rule (the Oracle parser reads `SERVICE_NAME` and
-`PORT` from anywhere in the URL) cover what remains. As a second line, a host that is no plain host
-name or IP literal, or a database or instance outside `[A-Za-z0-9._$~/-]*`, gives no connection. A
-DataSource that throws while being unwrapped, such as a routing DataSource without a default target,
-gets none either. `RedisHealthConnections` reads each `RedisConnectionFactory` bean, keyed by bean
-name, through a `RedisTargetReader` per client library (`LettuceRedisTargetReader`,
-`JedisRedisTargetReader`), each gated on its library. A Lettuce static master/replica factory is
-reported as its default localhost:6379. `MailHealthConnections` reads each `JavaMailSenderImpl`.
+and database from the URL before its properties begin (at `?` for pg, MySQL, MariaDB and SQLite, at
+`;` for H2, Derby and HSQLDB); a `?` or `;` that lands in the database, such as
+`jdbc:postgresql://db/shop;x` or Oracle's Easy Connect parameters, fails the name check, and
+`instance` is read for SQL Server only, so no property value reaches the body. On SQL Server, the
+driver splits on `;` alone, so refusing `&` and `{` leaves the parser splitting exactly as the
+driver does. The key rule, `%` (Connector/J decodes `pass%77ord` to `password`) and the descriptor
+rule (the Oracle parser reads `SERVICE_NAME` and `PORT` from anywhere in the URL) cover what
+remains. As a second line, a host that is no plain host name or IP literal, or a database or
+instance outside `[A-Za-z0-9._$~/-]*`, gives no connection. A DataSource that throws while being
+unwrapped, such as a routing DataSource without a default target, gets none either.
+`RedisHealthConnections` reads each `RedisConnectionFactory` bean, keyed by bean name, through a
+`RedisTargetReader` per client library (`LettuceRedisTargetReader`, `JedisRedisTargetReader`), each
+gated on its library. A Lettuce static master/replica factory is reported as its default
+localhost:6379. `MailHealthConnections` reads each `JavaMailSenderImpl`.
 
 `RecentFindings` takes level 0's span as its window. It counts the traces that started inside it
 and lists the failures last seen inside it, so nothing that only grows reaches the report. A
