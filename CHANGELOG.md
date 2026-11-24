@@ -1,3 +1,79 @@
+## 1.4.0
+
+### Behaviour changes
+
+These need no action unless you relied on the old behaviour.
+
+- **The Insights history is saved every minute again.** `peekaboot.insights.persistence.interval`
+  defaults to `1m`, where 1.3.0 had `5m`. Each write appends only what changed, to
+  `insights.journal` beside `insights.snapshot` in the storage directory. The snapshot is
+  rewritten whole only from time to time and at shutdown. A crash or a kill loses up to one
+  interval of history, and history saved by 1.3.0 is restored. Stop the application cleanly
+  before going back to 1.3.0, which reads only the snapshot and would lose what the journal holds.
+- **The DataSource card and the startup banner hide a target that could hold a credential.**
+  They follow the rules of the health report's `connection` (see New). Where those refuse the
+  JDBC URL, the Overview tab's DataSource card shows `-` for the database, `unknown` for the host
+  and no connection params, and the banner prints `-` and an empty host list. That covers, for
+  example, a URL with a `user=` or `password=` property. To see the target again, move the user
+  and password into `spring.datasource.username` and `spring.datasource.password`.
+- **The DataSource card and the banner read a URL as its driver does.** A host without a port
+  shows the driver's default port, such as `5432` for PostgreSQL. Connection params split on the
+  separator the driver uses, so `jdbc:postgresql://db/shop?a=1;b=2` lists one param `a` with the
+  value `1;b=2`. HSQLDB names of `mem:` and single-segment server URLs show in lowercase. An
+  Oracle descriptor's entries, such as `SERVICE_NAME`, are no longer listed among the params.
+- **Connection params are masked by any secret word in their name.** On the DataSource card and
+  in the banner, a param whose name holds `pass`, `pwd`, `secret`, `token`, `key` or `credential`
+  anywhere reads `******`. That catches run-together names such as `sslpassword`, `PWD` and
+  `keyVaultProviderClientKey`, which 1.3.0 showed in clear. Harmless params such as
+  `keyStoreLocation` are masked too. A URL inside a property value on the Environment and Config
+  tabs is judged the same way, so the `sslpassword` in a `spring.datasource.url` masks there as
+  well. Property names keep whole-word matching, so `passwordless` and `server.ssl.key-store`
+  stay readable.
+- **Masking reads keys and values more closely.** Accents, control characters and invisible
+  joining characters in a key are ignored, so `pássword`, `paſſword` and a `password` with a
+  zero-width space inside it read `******` on every surface. A URL param value now ends at its
+  own separator. A `;` property, as SQL Server and H2 write them, may hold `&`, a query value may
+  hold `;`, and a SQL Server value in `{…}` is masked to its closing brace. 1.3.0 showed the part
+  of such a value after a `&` or `;` in clear. A param after whitespace, as in
+  `;\tpassword=`, is masked too.
+
+### New
+
+- **A health report for uptime monitors.** `GET /peekaboot/api/health` answers the application's
+  health in the nesting `/actuator/health` uses. Each DataSource, Redis and mail component carries
+  a `connection` with its hosts, ports and database, read from configuration, so it is there
+  while the target is down. The report adds the current Insights problems, the Errors and Slow
+  trace counts and up to ten recent failures, over level 0's window, which is 15 minutes with the
+  default levels. The status code follows `/actuator/health`'s mapping, including
+  `management.endpoint.health.status.http-mapping`, so `DOWN` and `OUT_OF_SERVICE` answer `503`.
+  Set `peekaboot.health.fail-on-problems=true` to answer `503` also while a problem of severity
+  `error` (`POOL_WAITING` or `SERVER_ERRORS`) is current. The endpoint is guarded like the rest of
+  `/peekaboot/api`, and component details are masked.
+- **The health report names a DataSource only where its URL holds no credential.** Only Hikari
+  pools are described. A user and password before the first host, which Connector/J and ojdbc
+  accept there, are left out. A DataSource gets `connection: null` where its JDBC URL could hide a
+  credential: a property whose name contains `user`, `uid`, `pwd`, `pass`, `secret` or `token`, a
+  `%` or `{`, a character outside ASCII, an `&` in a SQL Server URL, or a host, database or
+  instance that is no plain name, or a URL its driver rejects, such as a PostgreSQL URL with a
+  user before the host. Put the user and password in `spring.datasource.username` and
+  `spring.datasource.password`. `/peekaboot/api/openapi.json` lists every rule.
+
+### Fixed
+
+- **DataSource credentials.** A user and password written before the host of a MySQL URL, as in
+  `jdbc:mysql://user:pw@db/shop`, showed as part of the host on the Overview tab's DataSource card
+  and in the startup banner. They are no longer shown there or among the connection params. A JDBC
+  URL the parser could not read was logged whole, password included, in the WARN
+  `Failed to extract metadata from DataSource '<name>': …`. That line now names the problem only.
+
+### Dependency upgrades
+
+- **jdbc-url-parser 0.2.0, from 0.1.3.** Peekaboot puts it on your classpath. It reads each URL
+  as the product's driver does: a host without a port gets the driver's default, properties split
+  on the driver's separator, a user and password before the host come back as `AUTHORITY`
+  properties, and a URL the driver rejects throws. If your own code calls it, read its 0.2.0
+  release notes before upgrading.
+
 ## 1.3.0 - 2026-11-16
 
 ### Needs action
