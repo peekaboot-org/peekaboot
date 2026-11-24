@@ -41,22 +41,22 @@ final class CredentialFreeJdbcUrls {
 
     private CredentialFreeJdbcUrls() {}
 
-    static Optional<JdbcUrl> parse(String configuredUrl) {
-        return Optional.of(configuredUrl)
+    static Optional<JdbcUrl> parse(String jdbcUrl) {
+        return Optional.of(jdbcUrl)
                 .filter(CredentialFreeJdbcUrls::isAscii)
                 .flatMap(CredentialFreeJdbcUrls::withoutUserInfo)
                 .filter(CredentialFreeJdbcUrls::holdsNoQuotedOrEncodedText)
                 .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty)
-                .flatMap(cutUrl -> parseNamesItSpellsOut(cutUrl, configuredUrl));
+                .flatMap(cutUrl -> parseNamesItSpellsOut(cutUrl, jdbcUrl));
     }
 
-    private static Optional<JdbcUrl> parseNamesItSpellsOut(String cutUrl, String configuredUrl) {
+    private static Optional<JdbcUrl> parseNamesItSpellsOut(String cutUrl, String jdbcUrl) {
         // a cut-off user or password must not vouch for a name, nor may the cut join two parts into one
-        Predicate<String> spelledOut = name -> spellsOut(cutUrl, name) && spellsOut(configuredUrl, name);
+        Predicate<String> spelledOut = name -> spellsOut(cutUrl, name) && spellsOut(jdbcUrl, name);
         return Optional.ofNullable(JdbcUrlParser.tryParse(cutUrl))
-                .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
-                .filter(jdbcUrl -> namesPlainDatabaseAndInstance(jdbcUrl, spelledOut))
-                .filter(jdbcUrl -> spellsOutEveryHostname(jdbcUrl, spelledOut));
+                .filter(parsed -> !isSqlServerWithAmpersand(parsed, jdbcUrl))
+                .filter(parsed -> namesPlainDatabaseAndInstance(parsed, spelledOut))
+                .filter(parsed -> spellsOutEveryHostname(parsed, spelledOut));
     }
 
     // the driver folds a long s (U+017F) to "s", so a key the credential check cannot read may still be one
@@ -117,8 +117,8 @@ final class CredentialFreeJdbcUrls {
     }
 
     // the health contract refuses an "&" in a SQL Server URL, where it can only sit inside a value
-    private static boolean isSqlServerWithAmpersand(JdbcUrl jdbcUrl, String configuredUrl) {
-        return jdbcUrl.databaseProduct() == DatabaseProduct.SQLSERVER && configuredUrl.indexOf('&') >= 0;
+    private static boolean isSqlServerWithAmpersand(JdbcUrl parsed, String jdbcUrl) {
+        return parsed.databaseProduct() == DatabaseProduct.SQLSERVER && jdbcUrl.indexOf('&') >= 0;
     }
 
     // every host's instance: Oracle names one too, which Host.toString prints

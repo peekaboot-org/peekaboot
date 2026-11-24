@@ -2,6 +2,7 @@ package org.peekaboot.backend.domain.datasource;
 
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.health.HealthStatus;
 
 /**
@@ -15,7 +16,7 @@ public record DataSourceInfo(
         String databaseProduct,
         String driver,
         List<Host> hosts,
-        String databaseName,
+        @Nullable String databaseName,
         String username,
         HealthStatus health,
         Map<String, String> properties) {
