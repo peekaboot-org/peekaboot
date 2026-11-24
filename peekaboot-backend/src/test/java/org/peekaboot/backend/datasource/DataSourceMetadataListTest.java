@@ -169,12 +169,12 @@ class DataSourceMetadataListTest {
         try (LogCapture capture = LogCapture.attach(DataSourceMetadataList.class)) {
             DataSourceMetadataList list = new DataSourceMetadataList(Map.of("legacy", dataSource), clock, INLINE);
             assertThat(list.entries()).isEmpty();
-            assertThat(capture.appender().list)
-                    .singleElement()
-                    .satisfies(
-                            event -> assertThat(event.getFormattedMessage())
-                                    .isEqualTo(
-                                            "Failed to extract metadata from DataSource 'legacy': Unknown or unsupported database type"));
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo(
+                                "Failed to extract metadata from DataSource 'legacy': Unknown or unsupported database type");
+            });
         }
     }
 
