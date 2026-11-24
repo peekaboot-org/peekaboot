@@ -3,6 +3,7 @@ package org.peekaboot.backend.datasource;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.osslabz.jdbc.DatabaseProduct;
@@ -46,10 +47,16 @@ final class CredentialFreeJdbcUrls {
                 .flatMap(CredentialFreeJdbcUrls::withoutUserInfo)
                 .filter(CredentialFreeJdbcUrls::holdsNoQuotedOrEncodedText)
                 .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty)
-                .map(JdbcUrlParser::tryParse)
+                .flatMap(cutUrl -> parseNamesItSpellsOut(cutUrl, configuredUrl));
+    }
+
+    private static Optional<JdbcUrl> parseNamesItSpellsOut(String cutUrl, String configuredUrl) {
+        // a cut-off user or password must not vouch for a name, nor may the cut join two parts into one
+        Predicate<String> spelledOut = name -> spellsOut(cutUrl, name) && spellsOut(configuredUrl, name);
+        return Optional.ofNullable(JdbcUrlParser.tryParse(cutUrl))
                 .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
-                .filter(jdbcUrl -> namesPlainDatabaseAndInstance(jdbcUrl, configuredUrl))
-                .filter(jdbcUrl -> spellsOutEveryHostname(jdbcUrl, configuredUrl));
+                .filter(jdbcUrl -> namesPlainDatabaseAndInstance(jdbcUrl, spelledOut))
+                .filter(jdbcUrl -> spellsOutEveryHostname(jdbcUrl, spelledOut));
     }
 
     // the driver folds a long s (U+017F) to "s", so a key the credential check cannot read may still be one
@@ -115,24 +122,24 @@ final class CredentialFreeJdbcUrls {
     }
 
     // every host's instance: Oracle names one too, which Host.toString prints
-    private static boolean namesPlainDatabaseAndInstance(JdbcUrl jdbcUrl, String configuredUrl) {
-        return isAbsentOrPlainName(jdbcUrl.databaseName(), configuredUrl)
-                && jdbcUrl.hosts().stream().allMatch(host -> isAbsentOrPlainName(host.instanceName(), configuredUrl));
+    private static boolean namesPlainDatabaseAndInstance(JdbcUrl jdbcUrl, Predicate<String> spelledOut) {
+        return isAbsentOrPlainName(jdbcUrl.databaseName(), spelledOut)
+                && jdbcUrl.hosts().stream().allMatch(host -> isAbsentOrPlainName(host.instanceName(), spelledOut));
     }
 
     // ojdbc drops whitespace from a host, so "ZUSR S3Cx" reads as "ZUSRS3Cx"; localhost is the parser's default
-    private static boolean spellsOutEveryHostname(JdbcUrl jdbcUrl, String configuredUrl) {
+    private static boolean spellsOutEveryHostname(JdbcUrl jdbcUrl, Predicate<String> spelledOut) {
         return jdbcUrl.hosts().stream()
                 .map(Host::hostname)
-                .allMatch(hostname -> DEFAULT_HOSTNAME.equals(hostname) || spellsOut(configuredUrl, hostname));
+                .allMatch(hostname -> DEFAULT_HOSTNAME.equals(hostname) || spelledOut.test(hostname));
     }
 
     // drivers rewrite names (whitespace, case, decoding), and the cut can reshape a SQLite path
-    private static boolean isAbsentOrPlainName(@Nullable String name, String configuredUrl) {
-        return name == null || (PLAIN_NAME.matcher(name).matches() && spellsOut(configuredUrl, name));
+    private static boolean isAbsentOrPlainName(@Nullable String name, Predicate<String> spelledOut) {
+        return name == null || (PLAIN_NAME.matcher(name).matches() && spelledOut.test(name));
     }
 
-    private static boolean spellsOut(String configuredUrl, String name) {
-        return configuredUrl.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT));
+    private static boolean spellsOut(String url, String name) {
+        return url.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT));
     }
 }
