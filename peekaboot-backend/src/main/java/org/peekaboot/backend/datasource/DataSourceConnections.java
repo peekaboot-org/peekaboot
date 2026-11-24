@@ -25,7 +25,6 @@ import org.peekaboot.backend.health.HealthConnectionSource;
  */
 public final class DataSourceConnections implements HealthConnectionSource {
 
-    private static final Pattern PLAIN_HOST = Pattern.compile("[A-Za-z0-9._-]+|\\[[0-9A-Fa-f:.]+]");
     // "/" for the file paths of H2, Derby, HSQLDB and SQLite, "~" for H2's home directory; empty where
     // the URL names no database
     private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$~/-]*");
@@ -58,7 +57,6 @@ public final class DataSourceConnections implements HealthConnectionSource {
         return CredentialFreeJdbcUrls.of(configuredUrl)
                 .map(JdbcUrlParser::tryParse)
                 .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
-                .filter(DataSourceConnections::namesPlainHostsOnly)
                 .map(jdbcUrl -> describe(beanName, jdbcUrl))
                 .filter(connection -> namesPlainDatabaseAndInstance(connection, configuredUrl));
     }
@@ -66,12 +64,6 @@ public final class DataSourceConnections implements HealthConnectionSource {
     // SQL Server splits properties on ";" only, so an "&" sits inside a value the parser splits apart
     private static boolean isSqlServerWithAmpersand(JdbcUrl jdbcUrl, String configuredUrl) {
         return jdbcUrl.databaseProduct() == DatabaseProduct.SQLSERVER && configuredUrl.indexOf('&') >= 0;
-    }
-
-    private static boolean namesPlainHostsOnly(JdbcUrl jdbcUrl) {
-        return jdbcUrl.hosts().stream()
-                .allMatch(host -> host.hostname() != null
-                        && PLAIN_HOST.matcher(host.hostname()).matches());
     }
 
     private static boolean namesPlainDatabaseAndInstance(DataSourceConnection connection, String configuredUrl) {
