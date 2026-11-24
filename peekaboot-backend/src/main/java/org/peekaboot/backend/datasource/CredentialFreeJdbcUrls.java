@@ -10,12 +10,12 @@ import org.peekaboot.backend.masking.MaskingEngine;
 /**
  * Prepares a configured JDBC URL for the parser so that no user or password can reach what it reads.
  *
- * <p>A user and password before the host are cut off where the URL holds exactly one {@code @} after its
- * {@code //}, inside a first host without a {@code \}. No form is kept where the URL holds a character
- * outside ASCII, where any other {@code @} follows the {@code //}, where a property names a user or a
- * secret, where an opening brace or a {@code %} appears, or where text follows an Oracle descriptor: the
- * parser splits properties on separators the driver does not, so a credential's value could pose as the
- * database or instance.
+ * <p>A user and password right after the scheme's {@code //} are cut off where the URL holds exactly one
+ * {@code @} after it, inside a first host without a {@code \}. No form is kept where the URL holds a
+ * character outside ASCII, where any other {@code @} follows that {@code //}, where a property names a user
+ * or a secret, or where an opening brace or a {@code %} appears. The health endpoint documents these
+ * refusals and asks for the credentials in {@code spring.datasource.username} and
+ * {@code spring.datasource.password} instead.
  */
 final class CredentialFreeJdbcUrls {
 
@@ -37,11 +37,12 @@ final class CredentialFreeJdbcUrls {
                 .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty);
     }
 
-    // the driver matches keys with equalsIgnoreCase, which folds a long s (U+017F) to "s"
+    // the driver folds a long s (U+017F) to "s", so a key the credential check cannot read may still be one
     private static boolean isAscii(String url) {
         return url.chars().allMatch(c -> c < 0x80);
     }
 
+    // the parser rejects a user before the host as pgjdbc, mssql-jdbc and ojdbc do, so only a cut URL is described
     private static Optional<String> withoutUserInfo(String url) {
         Matcher scheme = SCHEME.matcher(url);
         if (!scheme.lookingAt()) {
@@ -52,6 +53,7 @@ final class CredentialFreeJdbcUrls {
         if (at < 0) {
             return Optional.of(url);
         }
+        // the health contract refuses any other "@" after the "//"
         boolean onlyAt = url.indexOf('@', at + 1) < 0;
         int firstHostEnd = endOfFirstHost(url, firstHost);
         boolean insideFirstHost = at < firstHostEnd;
@@ -71,11 +73,12 @@ final class CredentialFreeJdbcUrls {
         return url.length();
     }
 
-    // SQL Server braces quote a value that holds ";", and Connector/J decodes "pass%77ord" to "password"
+    // the health contract refuses quoted and percent-encoded values; Connector/J reads "p%61ssword" as "password"
     private static boolean holdsNoQuotedOrEncodedText(String url) {
         return url.indexOf('{') < 0 && url.indexOf('%') < 0;
     }
 
+    // the health contract refuses credentials in the URL; they belong in spring.datasource.username and password
     private static boolean namesNoCredentialProperty(String url) {
         Matcher key = PROPERTY_KEY.matcher(url);
         while (key.find()) {

@@ -20,8 +20,9 @@ import org.peekaboot.backend.health.HealthConnectionSource;
 /**
  * Names each DataSource's target from its configured JDBC URL. Never asks a DataSource for a connection.
  *
- * <p>Only a URL {@link CredentialFreeJdbcUrls} accepts is parsed. A host that is no plain host name or IP
- * literal, or a database or instance that is no plain name or file path, still gives no connection.
+ * <p>Only a URL {@link CredentialFreeJdbcUrls} accepts is parsed, and a URL the parser rejects as its driver
+ * would gives no connection. Neither does a SQL Server URL with an {@code &}, nor a database or instance that
+ * is no plain name or file path or that the URL does not spell out.
  */
 public final class DataSourceConnections implements HealthConnectionSource {
 
@@ -61,7 +62,7 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 .filter(connection -> namesPlainDatabaseAndInstance(connection, configuredUrl));
     }
 
-    // SQL Server splits properties on ";" only, so an "&" sits inside a value the parser splits apart
+    // the health contract refuses an "&" in a SQL Server URL, where it can only sit inside a value
     private static boolean isSqlServerWithAmpersand(JdbcUrl jdbcUrl, String configuredUrl) {
         return jdbcUrl.databaseProduct() == DatabaseProduct.SQLSERVER && configuredUrl.indexOf('&') >= 0;
     }
@@ -71,7 +72,7 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 && isAbsentOrPlainName(connection.instance(), configuredUrl);
     }
 
-    // the cut can take text out of a file path, and drivers rewrite names (whitespace, case, decoding)
+    // drivers rewrite names (whitespace, case, decoding), and the cut can reshape a SQLite path
     private static boolean isAbsentOrPlainName(@Nullable String name, String configuredUrl) {
         return name == null
                 || (PLAIN_NAME.matcher(name).matches()
