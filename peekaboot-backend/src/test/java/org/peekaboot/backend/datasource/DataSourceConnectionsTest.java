@@ -307,6 +307,7 @@ class DataSourceConnectionsTest {
         "jdbc:oracle:thin:@//db:1521/svc, svc",
         "jdbc:oracle:thin:@db:1521/svc, svc",
         "jdbc:oracle:thin:@db:1521:ORCL, ORCL",
+        "jdbc:oracle:thin:@//db:1521/svc/inst, svc",
         "'jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))', svc"
     })
     void describesAnOracleThinUrlByTheHostAfterItsAt(String url, String database) {
@@ -367,6 +368,11 @@ class DataSourceConnectionsTest {
         assertThat(connectionsOf(url)).isEmpty();
     }
 
+    @Test
+    void anInstanceThatIsNoPlainNameOnAnyProductHasNoConnection() {
+        assertThat(connectionsOf("jdbc:oracle:thin:@//db:1521/svc/a^b")).isEmpty(); // library: db\a^b:1521, svc
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -374,7 +380,8 @@ class DataSourceConnectionsTest {
                 "jdbc:h2:file:/data/S3C//ZUSR@shop",
                 "jdbc:sqlite://ZUSR:S3Cx@/data/x.db",
                 "jdbc:mysql://db/sh%6Fp",
-                "jdbc:oracle:thin:@//db:1521/svc S3C"
+                "jdbc:oracle:thin:@//db:1521/svc S3C",
+                "jdbc:oracle:thin:@//db:1521/svc/in st"
             })
     void aNameTheUrlDoesNotSpellOutHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();

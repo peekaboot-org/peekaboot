@@ -58,8 +58,8 @@ public final class DataSourceConnections implements HealthConnectionSource {
         return CredentialFreeJdbcUrls.of(configuredUrl)
                 .map(JdbcUrlParser::tryParse)
                 .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
-                .map(jdbcUrl -> describe(beanName, jdbcUrl))
-                .filter(connection -> namesPlainDatabaseAndInstance(connection, configuredUrl));
+                .filter(jdbcUrl -> namesPlainDatabaseAndInstance(jdbcUrl, configuredUrl))
+                .map(jdbcUrl -> describe(beanName, jdbcUrl));
     }
 
     // the health contract refuses an "&" in a SQL Server URL, where it can only sit inside a value
@@ -67,9 +67,10 @@ public final class DataSourceConnections implements HealthConnectionSource {
         return jdbcUrl.databaseProduct() == DatabaseProduct.SQLSERVER && configuredUrl.indexOf('&') >= 0;
     }
 
-    private static boolean namesPlainDatabaseAndInstance(DataSourceConnection connection, String configuredUrl) {
-        return isAbsentOrPlainName(connection.database(), configuredUrl)
-                && isAbsentOrPlainName(connection.instance(), configuredUrl);
+    // every host's instance: Oracle names one too, which Host.toString prints
+    private static boolean namesPlainDatabaseAndInstance(JdbcUrl jdbcUrl, String configuredUrl) {
+        return isAbsentOrPlainName(jdbcUrl.databaseName(), configuredUrl)
+                && jdbcUrl.hosts().stream().allMatch(host -> isAbsentOrPlainName(host.instanceName(), configuredUrl));
     }
 
     // drivers rewrite names (whitespace, case, decoding), and the cut can reshape a SQLite path
