@@ -67,6 +67,24 @@ class ConfigMapperTest {
                 .anyMatch(p -> p.key().equals("username") && p.value().equals("admin"));
     }
 
+    // A URL parameter inside a property value is judged as a connection param, so a run-together name masks.
+    @Test
+    void mapMasksASecretUrlParameterInsideAPropertyValue() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
+                "application",
+                new ConfigPropsResponse.ConfigContext(Map.of(
+                        "datasource",
+                        new ConfigPropsResponse.ConfigBean(
+                                "spring.datasource",
+                                Map.of("url", "jdbc:postgresql://db/shop?sslpassword=S3Cx&sslmode=require"))))));
+
+        ConfigInfo result = mapper.map(configprops, false);
+
+        assertThat(result.groups().get(0).properties())
+                .extracting(Property::key, Property::value)
+                .containsExactly(tuple("url", "jdbc:postgresql://db/shop?sslpassword=******&sslmode=require"));
+    }
+
     @Test
     void mapHandlesNullInput() {
         ConfigInfo result = mapper.map(null, false);

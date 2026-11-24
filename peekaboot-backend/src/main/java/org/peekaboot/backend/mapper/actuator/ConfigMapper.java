@@ -16,7 +16,7 @@ public class ConfigMapper {
     private final TreeMasker treeMasker;
 
     public ConfigMapper(MaskingEngine maskingEngine) {
-        this.treeMasker = new TreeMasker(maskingEngine);
+        this.treeMasker = TreeMasker.forProperties(maskingEngine);
     }
 
     public ConfigInfo map(ConfigPropsResponse configprops, boolean unmask) {

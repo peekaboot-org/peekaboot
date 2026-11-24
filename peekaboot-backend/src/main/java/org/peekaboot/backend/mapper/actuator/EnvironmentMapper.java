@@ -42,7 +42,7 @@ public class EnvironmentMapper {
             String key = entry.getKey();
             EnvResponse.PropertyValueDescriptor pv = entry.getValue();
             String value = pv.value() != null ? pv.value().toString() : null;
-            result.add(new Property(key, maskingEngine.mask(key, value, unmask)));
+            result.add(new Property(key, maskingEngine.maskProperty(key, value, unmask)));
         }
         return result;
     }

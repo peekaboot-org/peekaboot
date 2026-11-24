@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
  * Masks an arbitrary JSON-shaped tree (nested Map/List/scalar, the shape Jackson produces
@@ -16,7 +17,9 @@ import java.util.Map;
  * {@link MaskingEngine#mask(String, String)}'s whole-value-replace rule to a tree, e.g. a
  * {@code connectionParams.password} entry shaped {@code {value, source}} becomes the single
  * string {@code "******"}. An innocuous key recurses into Maps/Lists and runs the
- * value-pattern rules on String leaves via {@link MaskingEngine#maskValue(String)}.
+ * value-pattern rules on String leaves via {@link MaskingEngine#maskValue(String)}, or via
+ * {@link MaskingEngine#maskPropertyValue(String)} for a tree of Spring property values
+ * ({@link #forProperties(MaskingEngine)}).
  *
  * <p>A nested key is judged by its dotted path from the root ({@code session.cookie}), not
  * by its last segment, so the whole-key rules keep meaning the entire key; list elements
@@ -25,12 +28,23 @@ import java.util.Map;
 public final class TreeMasker {
 
     private final MaskingEngine maskingEngine;
+    private final UnaryOperator<String> leafMasker;
 
     public TreeMasker(MaskingEngine maskingEngine) {
-        this.maskingEngine = maskingEngine;
+        this(maskingEngine, maskingEngine::maskValue);
     }
 
-    /** Bypasses masking entirely when {@code unmask} is true (see {@link MaskingEngine#mask(String, String, boolean)}). */
+    private TreeMasker(MaskingEngine maskingEngine, UnaryOperator<String> leafMasker) {
+        this.maskingEngine = maskingEngine;
+        this.leafMasker = leafMasker;
+    }
+
+    /** A masker whose String leaves are Spring property values, such as a {@code @ConfigurationProperties} bean's. */
+    public static TreeMasker forProperties(MaskingEngine maskingEngine) {
+        return new TreeMasker(maskingEngine, maskingEngine::maskPropertyValue);
+    }
+
+    /** Bypasses masking entirely when {@code unmask} is true (see {@link MaskingEngine#maskProperty(String, String, boolean)}). */
     public Object mask(Object node, boolean unmask) {
         return unmask ? node : maskNode(null, node);
     }
@@ -77,7 +91,7 @@ public final class TreeMasker {
             return result;
         }
         if (value instanceof String s) {
-            return maskingEngine.maskValue(s);
+            return leafMasker.apply(s);
         }
         return value;
     }

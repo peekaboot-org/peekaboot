@@ -906,6 +906,11 @@ The ones a change is most likely to undo:
   `credential` anywhere masks, since drivers run words together (`sslpassword`,
   `keyVaultProviderClientKey`). Harmless params such as `keyStoreLocation` mask too. Spring
   config keeps whole-token matching, so `passwordless` and `server.ssl.key-store` stay readable.
+- A URL parameter inside a Spring property value, on the Environment and Config tabs, is judged
+  as a connection param too (`MaskingEngine.maskPropertyValue`), so the `sslpassword` in a
+  `spring.datasource.url` masks there as it does on the connection. Everywhere else, a request
+  path, a log line or SQL, a URL parameter keeps whole-token matching so `?keyword=` stays
+  readable, and so does a `-D` option inside a property value.
 - The exact, case-sensitive key `PWD` is exempt. It is the shell's working directory, set
   in every developer's `systemEnvironment`. Lower-case `pwd` still masks, since that is how
   a SQL Server JDBC URL or a login form names a password.

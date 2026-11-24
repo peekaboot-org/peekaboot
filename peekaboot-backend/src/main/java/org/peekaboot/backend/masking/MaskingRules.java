@@ -218,8 +218,9 @@ final class MaskingRules {
             // candidate - group 1 is judged by the key-name rules, and only group 2 (the
             // value) is masked, leaving the parameter name and the rest of the URL intact.
             // The key cannot hold "?", so a run of JDBC placeholders is not rescanned from
-            // every "?".
-            ValuePattern.keyed("Credentials in a URL query", 1, 2, Pattern.compile("[?&;]([^=&;?\\s]++)=([^&;\\s]+)")),
+            // every "?". Whitespace after the separator is not part of the key (";\tpassword=").
+            ValuePattern.urlParameter(
+                    "Credentials in a URL query", 1, 2, Pattern.compile("[?&;]\\s*+([^=&;?\\s]++)=([^&;\\s]+)")),
             // The value of a -Dname=value / --name=value option, as JAVA_TOOL_OPTIONS,
             // JDK_JAVA_OPTIONS and their kin carry it: the property spring.datasource.password
             // is masked by its own key, but not the option string it was set from unless
@@ -248,18 +249,24 @@ final class MaskingRules {
      * (a URL's scheme and trailing "@", for instance) intact. When {@code keyGroup} is
      * above 0 the match counts only if that group, read as a key, is sensitive by the
      * key-name rules - the pattern then finds candidate pairs and the key rules decide.
+     * When {@code keyIsUrlParameter} is true, a property's value judges that key as a JDBC
+     * connection param instead (see {@link MaskingEngine#maskPropertyValue(String)}).
      */
-    record ValuePattern(String name, int maskGroup, int keyGroup, Pattern pattern) {
+    record ValuePattern(String name, int maskGroup, int keyGroup, boolean keyIsUrlParameter, Pattern pattern) {
         ValuePattern(String name, Pattern pattern) {
-            this(name, 0, 0, pattern);
+            this(name, 0, 0, false, pattern);
         }
 
         ValuePattern(String name, int maskGroup, Pattern pattern) {
-            this(name, maskGroup, 0, pattern);
+            this(name, maskGroup, 0, false, pattern);
         }
 
         static ValuePattern keyed(String name, int keyGroup, int maskGroup, Pattern pattern) {
-            return new ValuePattern(name, maskGroup, keyGroup, pattern);
+            return new ValuePattern(name, maskGroup, keyGroup, false, pattern);
+        }
+
+        static ValuePattern urlParameter(String name, int keyGroup, int maskGroup, Pattern pattern) {
+            return new ValuePattern(name, maskGroup, keyGroup, true, pattern);
         }
     }
 }

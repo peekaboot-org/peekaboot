@@ -195,23 +195,40 @@ public final class MaskingEngine {
      * a JDBC URL under {@code spring.datasource.url} - is still caught.
      */
     public String mask(String key, String value) {
+        return masked(key, value, false);
+    }
+
+    /**
+     * Masks a Spring property's {@code value} for its {@code key}, as {@link #mask(String, String)}
+     * does, except that the value rules run as {@link #maskPropertyValue(String)}. Returns
+     * {@code value} verbatim when {@code unmask} is true. The decision is made once upstream
+     * ({@code peekaboot.unmasking.enabled} and the request's {@code unmask} parameter, see
+     * {@code ActuatorInsightsService.insightsFor}) and threaded down; every other caller uses
+     * {@link #mask(String, String)} and always masks.
+     */
+    public String maskProperty(String key, String value, boolean unmask) {
+        return unmask ? value : masked(key, value, true);
+    }
+
+    private String masked(String key, String value, boolean propertyValue) {
         if (value == null) {
             return null;
         }
         if (isSensitiveKey(key)) {
             return MASK_LITERAL;
         }
-        return maskValue(value);
+        return maskValue(value, propertyValue);
     }
 
     /**
-     * Returns {@code value} verbatim when {@code unmask} is true. The decision is made once
-     * upstream ({@code peekaboot.unmasking.enabled} and the request's {@code unmask}
-     * parameter, see {@code ActuatorInsightsService.insightsFor}) and threaded down; every
-     * other caller uses the two-arg overload and always masks.
+     * {@link #maskValue(String)} for a Spring property's value, where a URL parameter's name
+     * is judged as a JDBC connection param ({@link #isSensitiveConnectionParam(String)}): a
+     * {@code spring.datasource.url} carries the same params the connection does, so
+     * "?sslpassword=" masks there as it does on the connection. Every other value, a request
+     * path or a log line, keeps the whole-token key rules, so "?keyword=" stays readable.
      */
-    public String mask(String key, String value, boolean unmask) {
-        return unmask ? value : mask(key, value);
+    public String maskPropertyValue(String value) {
+        return maskValue(value, true);
     }
 
     /**
@@ -259,11 +276,15 @@ public final class MaskingEngine {
      * the value is returned untouched.
      */
     public String maskValue(String value) {
+        return maskValue(value, false);
+    }
+
+    private String maskValue(String value, boolean propertyValue) {
         if (value == null || value.isEmpty()) {
             return value;
         }
 
-        List<int[]> spans = sensitiveSpans(value);
+        List<int[]> spans = sensitiveSpans(value, propertyValue);
         if (spans.isEmpty()) {
             return value;
         }
@@ -301,14 +322,15 @@ public final class MaskingEngine {
      * Every [start, end) span of {@code value} some value rule wants masked. Spans of
      * different rules may overlap; {@link #merged(List)} folds them.
      */
-    private List<int[]> sensitiveSpans(String value) {
+    private static List<int[]> sensitiveSpans(String value, boolean propertyValue) {
         List<int[]> spans = new ArrayList<>();
         for (MaskingRules.ValuePattern rule : MaskingRules.VALUE_PATTERNS) {
             Matcher matcher = rule.pattern().matcher(value);
             while (matcher.find()) {
                 if (rule.keyGroup() > 0
-                        && !MatchableKey.of(matcher.group(rule.keyGroup()))
-                                .anyFormMatches(MaskingEngine::matchesKeyNameRules)) {
+                        && !namesASecret(
+                                MatchableKey.of(matcher.group(rule.keyGroup())),
+                                propertyValue && rule.keyIsUrlParameter())) {
                     continue;
                 }
                 int group = rule.maskGroup();
@@ -320,6 +342,12 @@ public final class MaskingEngine {
             }
         }
         return spans;
+    }
+
+    private static boolean namesASecret(MatchableKey key, boolean asConnectionParam) {
+        return asConnectionParam
+                ? namesAConnectionParamSecret(key)
+                : key.anyFormMatches(MaskingEngine::matchesKeyNameRules);
     }
 
     /**

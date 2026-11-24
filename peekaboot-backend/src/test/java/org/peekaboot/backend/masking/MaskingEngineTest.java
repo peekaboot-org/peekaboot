@@ -1178,25 +1178,77 @@ class MaskingEngineTest {
     }
 
     @Nested
-    class MaskWithUnmaskFlag {
+    class MaskPropertyWithUnmaskFlag {
 
         @Test
-        void maskReturnsValueVerbatimWhenUnmaskIsTrueEvenForASensitiveKey() {
-            String result = engine.mask("database.password", "hunter2", true);
+        void maskPropertyReturnsValueVerbatimWhenUnmaskIsTrueEvenForASensitiveKey() {
+            String result = engine.maskProperty("database.password", "hunter2", true);
 
             assertThat(result).isEqualTo("hunter2");
         }
 
         @Test
-        void maskBehavesLikeTheTwoArgOverloadWhenUnmaskIsFalse() {
-            String result = engine.mask("database.password", "hunter2", false);
+        void maskPropertyMasksASensitiveKeyWhenUnmaskIsFalse() {
+            String result = engine.maskProperty("database.password", "hunter2", false);
 
             assertThat(result).isEqualTo("******");
         }
 
         @Test
-        void maskStillReturnsNullForANullValueWhenUnmaskIsTrue() {
-            assertThat(engine.mask("database.password", null, true)).isNull();
+        void maskPropertyStillReturnsNullForANullValueWhenUnmaskIsTrue() {
+            assertThat(engine.maskProperty("database.password", null, true)).isNull();
+        }
+
+        @Test
+        void maskPropertyReturnsAUrlValueVerbatimWhenUnmaskIsTrue() {
+            String url = "jdbc:postgresql://db/shop?sslpassword=S3Cx";
+
+            assertThat(engine.maskProperty("spring.datasource.url", url, true)).isEqualTo(url);
+        }
+    }
+
+    /**
+     * A URL parameter inside a property value is judged as a JDBC connection param, secret words anywhere in its
+     * name included. Every other value, a request path or a log line, keeps the whole-token key rules.
+     */
+    @Nested
+    class UrlParametersInPropertyValues {
+
+        @ParameterizedTest
+        @CsvSource(
+                delimiter = '|',
+                value = {
+                    "jdbc:postgresql://db/shop?sslpassword=S3Cx&sslmode=require"
+                            + "|jdbc:postgresql://db/shop?sslpassword=******&sslmode=require",
+                    "jdbc:postgresql://db/shop?sslmode=require&sslpa\u017F\u017Fword=S3Cx"
+                            + "|jdbc:postgresql://db/shop?sslmode=require&sslpa\u017F\u017Fword=******",
+                    "jdbc:sqlserver://db:1433;databaseName=shop;keyVaultProviderClientKey=S3Cx"
+                            + "|jdbc:sqlserver://db:1433;databaseName=shop;keyVaultProviderClientKey=******",
+                    "jdbc:postgresql://db/shop?sslmode=require|jdbc:postgresql://db/shop?sslmode=require"
+                })
+        void maskPropertyValueJudgesAUrlParameterAsAConnectionParam(String value, String expected) {
+            assertThat(engine.maskPropertyValue(value)).isEqualTo(expected);
+            assertThat(engine.maskProperty("spring.datasource.url", value, false))
+                    .isEqualTo(expected);
+        }
+
+        @Test
+        void maskValueKeepsWholeTokenRulesForAUrlParameterOutsideAPropertyValue() {
+            assertThat(engine.maskValue("/search?keyword=shoes&passengerCount=2"))
+                    .isEqualTo("/search?keyword=shoes&passengerCount=2");
+        }
+
+        @Test
+        void maskPropertyValueKeepsWholeTokenRulesForACommandLineOptionName() {
+            assertThat(engine.maskPropertyValue("-Dapp.search.keyword=shoes -Dapp.passengers=2"))
+                    .isEqualTo("-Dapp.search.keyword=shoes -Dapp.passengers=2");
+        }
+
+        // Every value: a key led by whitespace is still the key.
+        @ParameterizedTest
+        @ValueSource(strings = {"jdbc:sqlserver://db:1433;\tpassword=S3Cx", "jdbc:sqlserver://db:1433; password=S3Cx"})
+        void maskValueReadsAUrlParameterNamePastLeadingWhitespace(String value) {
+            assertThat(engine.maskValue(value)).endsWith("password=******");
         }
     }
 }
