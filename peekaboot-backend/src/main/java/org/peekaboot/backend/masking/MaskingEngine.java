@@ -3,10 +3,12 @@ package org.peekaboot.backend.masking;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,6 +48,8 @@ public final class MaskingEngine {
     // token rules below, whose static initialisation already tokenizes.
     private static final Pattern CAMEL_CASE_BOUNDARY = Pattern.compile("(?<=[a-z0-9])(?=[A-Z])");
     private static final Pattern KEY_SEPARATORS = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern MARK_AND_FORMAT_CHARACTERS = Pattern.compile("[\\p{M}\\p{Cf}]");
+    private static final Pattern CONTROL_CHARACTERS = Pattern.compile("\\p{Cc}");
 
     private static final List<List<String>> KEY_NAME_TOKEN_RULES = MaskingRules.KEY_NAME_RULES.stream()
             .map(rule -> tokenize(rule, true))
@@ -57,8 +61,8 @@ public final class MaskingEngine {
 
     /**
      * True if {@code key} names something structurally sensitive. Matched
-     * case-insensitively on whole tokens, never substrings, so "passwordless" stays
-     * distinct from "password". The key is tokenized twice (see {@link #tokenize}):
+     * case-insensitively on whole tokens of its {@linkplain MatchableKey matchable forms},
+     * never substrings, so "passwordless" stays distinct from "password". The key is tokenized twice (see {@link #tokenize}):
      * camelCase-aware for "clientSecret", separator-only for an inconsistently cased
      * "CredenTials". Order: exact-spelling exceptions ({@link MaskingRules#KEY_NAME_EXCEPTIONS},
      * "PWD"), then {@link MaskingRules#KEY_NAME_RULES} tokens anywhere in the key, then
@@ -70,7 +74,45 @@ public final class MaskingEngine {
         return key != null
                 && !key.isBlank()
                 && !MaskingRules.KEY_NAME_EXCEPTIONS.contains(key)
-                && matchesKeyNameRules(key);
+                && MatchableKey.of(key).anyFormMatches(MaskingEngine::matchesKeyNameRules);
+    }
+
+    /**
+     * A key in the two forms the rules read. Both are NFKD-decomposed with every mark and
+     * format character removed, so an accent, a variation selector, a joiner, a long s
+     * (U+017F) or a fullwidth letter cannot hide a rule word. They differ in control
+     * characters: {@code separated} reads each as a separator, as "app.my&lt;TAB&gt;password"
+     * always was, and {@code joined} removes it, so "passw&lt;NUL&gt;ord" reads as "password".
+     * Only matching uses them; a shown key keeps its original text.
+     */
+    record MatchableKey(String separated, String joined) {
+
+        static MatchableKey of(String key) {
+            if (isPrintableAscii(key)) {
+                return new MatchableKey(key, key);
+            }
+            String folded = MARK_AND_FORMAT_CHARACTERS
+                    .matcher(Normalizer.normalize(key, Normalizer.Form.NFKD))
+                    .replaceAll("");
+            return new MatchableKey(
+                    CONTROL_CHARACTERS.matcher(folded).replaceAll(" "),
+                    CONTROL_CHARACTERS.matcher(folded).replaceAll(""));
+        }
+
+        /** True if {@code rule} matches either form; a key with no control character is tested once. */
+        boolean anyFormMatches(Predicate<String> rule) {
+            return rule.test(separated) || (!joined.equals(separated) && rule.test(joined));
+        }
+
+        private static boolean isPrintableAscii(String key) {
+            for (int i = 0; i < key.length(); i++) {
+                char c = key.charAt(i);
+                if (c < ' ' || c > '~') {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     /**
@@ -245,7 +287,9 @@ public final class MaskingEngine {
         for (MaskingRules.ValuePattern rule : MaskingRules.VALUE_PATTERNS) {
             Matcher matcher = rule.pattern().matcher(value);
             while (matcher.find()) {
-                if (rule.keyGroup() > 0 && !matchesKeyNameRules(matcher.group(rule.keyGroup()))) {
+                if (rule.keyGroup() > 0
+                        && !MatchableKey.of(matcher.group(rule.keyGroup()))
+                                .anyFormMatches(MaskingEngine::matchesKeyNameRules)) {
                     continue;
                 }
                 int group = rule.maskGroup();

@@ -337,6 +337,63 @@ class MaskingEngineTest {
         }
     }
 
+    /**
+     * A key is matched in NFKD form with its marks and format characters removed, and with each control character
+     * read as a separator or removed, so a long s (U+017F), an accent or an invisible character cannot hide a rule
+     * word. Matching stays whole-token.
+     */
+    @Nested
+    class KeyNormalisation {
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "spring.datasource.pa\u017F\u017Fword",
+                    "SPRING_DATASOURCE_PA\u017F\u017FWORD",
+                    "spring.datasource.passw\u0000ord",
+                    "app.se\u200Bcret",
+                    "spring.datasource.passw\uFE0Ford",
+                    "spring.datasource.passw\u034Ford",
+                    "spring.datasource.pa\u0301ssword",
+                    "spring.datasource.p\u00E1ssword",
+                    "spring.datasource.\uFF50\uFF41\uFF53\uFF53\uFF57\uFF4F\uFF52\uFF44"
+                })
+        void maskHidesAPropertyWhoseKeyHidesARuleWord(String key) {
+            assertThat(engine.mask(key, "S3Cx")).isEqualTo("******");
+        }
+
+        // A control character reads as a separator too, as it did before normalisation: removing it alone glues a
+        // rule word to its neighbour ("mypassword") or, for PWD<NUL>, makes the exempt shell variable's spelling.
+        @ParameterizedTest
+        @ValueSource(strings = {"app.my\tpassword", "spring.datasource.password\tx", "app.token\u0000ize", "PWD\u0000"})
+        void maskHidesAPropertyWhoseControlCharacterSeparatesARuleWord(String key) {
+            assertThat(engine.mask(key, "S3Cx")).isEqualTo("******");
+        }
+
+        @Test
+        void maskValueHidesAUrlParameterWhoseNameHidesARuleWordAndKeepsTheNameAsWritten() {
+            assertThat(engine.maskValue("jdbc:postgresql://db/shop?pa\u017F\u017Fword=S3Cx&user=app"))
+                    .isEqualTo("jdbc:postgresql://db/shop?pa\u017F\u017Fword=******&user=app");
+        }
+
+        @Test
+        void maskValueHidesAUrlParameterWhoseControlCharacterSeparatesARuleWord() {
+            assertThat(engine.maskValue("jdbc:postgresql://db/shop?token\u0000ize=S3Cx&user=app"))
+                    .isEqualTo("jdbc:postgresql://db/shop?token\u0000ize=******&user=app");
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "pa\u017F\u017Fwordle\u017F\u017F",
+                    "app.pass\u200Bwordless.enabled",
+                    "app.pa\u0301sswordless.enabled"
+                })
+        void isSensitiveKeyKeepsPasswordlessReadableAfterNormalisation(String key) {
+            assertThat(engine.isSensitiveKey(key)).isFalse();
+        }
+    }
+
     @Nested
     class ValuePatterns {
 

@@ -893,6 +893,14 @@ value no function changed, so without a host bean Boot masks nothing on this pat
 `MaskingRules` is the data behind `MaskingEngine`, and its Javadoc carries the reasons.
 The ones a change is most likely to undo:
 
+- Every key is matched in two forms, by the key rules and by the URL-parameter rule alike, and a
+  rule that matches either masks. Both are NFKD-decomposed with marks and format characters
+  removed, so `paſſword` (long s), an accented `pássword` and a `password` with a zero-width
+  space or a combining grapheme joiner inside mask. One form reads a control character as a
+  separator, as `app.my<TAB>password` always was; the other removes it, so a NUL inside
+  `password` cannot hide it either. Matching stays whole-token: `paſſwordleſſ` stays readable.
+  The `PWD` exemption below is checked against the key as written, so `PWD` plus a NUL masks.
+  A shown key keeps its original text.
 - The exact, case-sensitive key `PWD` is exempt. It is the shell's working directory, set
   in every developer's `systemEnvironment`. Lower-case `pwd` still masks, since that is how
   a SQL Server JDBC URL or a login form names a password.
