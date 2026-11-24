@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.peekaboot.backend.datasource.ReportingDataSources.reporting;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -185,6 +186,29 @@ class ApplicationReadyListenerTest {
         assertThat(report)
                 .containsPattern(" DB Connection Params: (ssl=true, password=\\*{6}|password=\\*{6}, ssl=true)\n")
                 .doesNotContain("s3cret");
+    }
+
+    /** A hidden database prints as "-", the dashboard's placeholder. */
+    @Test
+    void bannerShowsNoCredentialOfTheJdbcUrl() throws SQLException {
+        String report = banner().metadata(
+                        DataSourceMetadata.read("primary", reporting("jdbc:mysql://ZUSR:S3Cx@db:3306/shop")),
+                        DataSourceMetadata.read("legacy", reporting("jdbc:mysql://db/x;password=S3Cx")))
+                .render(ReadyEvents.webApplication(8083));
+
+        assertThat(report)
+                .doesNotContain("ZUSR")
+                .doesNotContain("S3C")
+                .contains(" DB Connection [legacy]: - on [] (user: app)");
+    }
+
+    @Test
+    void bannerNamesAnOracleInstanceWithItsHost() throws SQLException {
+        String report = banner().metadata(
+                        DataSourceMetadata.read("primary", reporting("jdbc:oracle:thin:@//db:1521/svc/inst")))
+                .render(ReadyEvents.webApplication(8083));
+
+        assertThat(report).contains(" DB Connection [primary]: svc on [db\\inst:1521]");
     }
 
     @Test

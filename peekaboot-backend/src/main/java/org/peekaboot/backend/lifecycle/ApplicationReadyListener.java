@@ -6,6 +6,7 @@ import java.lang.management.MemoryUsage;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
@@ -33,6 +34,9 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     /** How long the banner waits for the databases to answer, all of them together. */
     static final Duration DATABASE_WAIT = Duration.ofSeconds(2);
+
+    // the dashboard's placeholder for the same value
+    private static final String HIDDEN_DATABASE = "-";
 
     private static final Logger log = LoggerFactory.getLogger(ApplicationReadyListener.class);
 
@@ -203,7 +207,10 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                 report,
                 String.format(
                         " DB Connection [%s]: %s on %s (user: %s)",
-                        metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()));
+                        metadata.dataSourceName(),
+                        Objects.requireNonNullElse(metadata.databaseName(), HIDDEN_DATABASE),
+                        metadata.hosts(),
+                        metadata.username()));
         BannerFrame.blankLine(report);
 
         if (!metadata.connectionParams().isEmpty()) {

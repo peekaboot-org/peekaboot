@@ -2,7 +2,9 @@ package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.peekaboot.backend.datasource.ReportingDataSources.reporting;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import net.osslabz.jdbc.DatabaseProduct;
@@ -134,6 +136,23 @@ class DataSourceMapperTest {
                 .contains("\"hosts\":[{\"hostname\":\"db1\",\"port\":5432},{\"hostname\":\"db2\",\"port\":1433}]");
     }
 
+    /** The frontend renders a missing database as "-" and no hosts as unknown. */
+    @Test
+    void aRefusedTargetReachesThePanelWithoutHostOrDatabase() throws SQLException {
+        DataSourceInfo info = mapped("jdbc:sqlserver://db;databaseName={x;password=S3Cy}");
+
+        assertThat(info.hosts()).isEmpty();
+        assertThat(info.databaseName()).isNull();
+    }
+
+    @Test
+    void aUserAndPasswordBeforeTheHostReachThePanelAsNeitherHostNorProperty() throws SQLException {
+        DataSourceInfo info = mapped("jdbc:mysql://ZUSR:S3Cx@db:3306/shop");
+
+        assertThat(info.hosts()).containsExactly(new DataSourceInfo.Host("db", 3306));
+        assertThat(info.properties()).doesNotContainKeys("user", "password");
+    }
+
     @Test
     void returnsRealValueWhenUnmaskIsTrue() {
         DataSourceMetadata metadata = metadata(
@@ -142,6 +161,11 @@ class DataSourceMapperTest {
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null, true);
 
         assertThat(result.get(0).properties()).containsEntry("password", "secret123");
+    }
+
+    private DataSourceInfo mapped(String reportedUrl) throws SQLException {
+        return mapper.map(List.of(DataSourceMetadata.read("ds", reporting(reportedUrl))), null, false)
+                .getFirst();
     }
 
     private static DataSourceMetadata metadata(String name) {
