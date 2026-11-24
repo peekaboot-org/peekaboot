@@ -79,6 +79,15 @@ final class MaskingRules {
             "certificate-private-key");
 
     /**
+     * Words that mask a JDBC connection param wherever they occur in its name, on top of
+     * {@link #KEY_NAME_RULES}: drivers run words together ("sslpassword",
+     * "keyVaultProviderClientKey"), which whole-token matching cannot see. Harmless params
+     * such as "keyStoreLocation" mask too, a cost accepted for a rule no spelling slips past.
+     */
+    static final List<String> CONNECTION_PARAM_SECRET_WORDS =
+            List.of("pass", "pwd", "secret", "token", "key", "credential");
+
+    /**
      * Final key-name tokens that make the key an address rather than a secret:
      * {@code spring.security.oauth2.client.provider.<x>.token-uri} and
      * {@code .authorization-uri} are public endpoints, and among the first properties read

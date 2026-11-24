@@ -901,6 +901,11 @@ The ones a change is most likely to undo:
   `password` cannot hide it either. Matching stays whole-token: `paſſwordleſſ` stays readable.
   The `PWD` exemption below is checked against the key as written, so `PWD` plus a NUL masks.
   A shown key keeps its original text.
+- JDBC connection params, on the dashboard and in the startup banner, take one rule more
+  (`MaskingEngine.isSensitiveConnectionParam`): a key that holds `pass`, `pwd`, `secret`, `token`, `key` or
+  `credential` anywhere masks, since drivers run words together (`sslpassword`,
+  `keyVaultProviderClientKey`). Harmless params such as `keyStoreLocation` mask too. Spring
+  config keeps whole-token matching, so `passwordless` and `server.ssl.key-store` stay readable.
 - The exact, case-sensitive key `PWD` is exempt. It is the shell's working directory, set
   in every developer's `systemEnvironment`. Lower-case `pwd` still masks, since that is how
   a SQL Server JDBC URL or a login form names a password.

@@ -78,6 +78,25 @@ public final class MaskingEngine {
     }
 
     /**
+     * True if {@code key}, a JDBC connection param's name, names a secret: by the key-name
+     * rules, or by holding one of {@link MaskingRules#CONNECTION_PARAM_SECRET_WORDS} anywhere.
+     * The PWD exemption is for the shell's variable, never a param.
+     */
+    public boolean isSensitiveConnectionParam(String key) {
+        return key != null && namesAConnectionParamSecret(MatchableKey.of(key));
+    }
+
+    /**
+     * The secret words are looked for in the joined form only: it holds every word the
+     * separated form does, since removing a separator cannot break a word apart.
+     */
+    private static boolean namesAConnectionParamSecret(MatchableKey key) {
+        String lowerCaseKey = key.joined().toLowerCase(Locale.ROOT);
+        return MaskingRules.CONNECTION_PARAM_SECRET_WORDS.stream().anyMatch(lowerCaseKey::contains)
+                || key.anyFormMatches(MaskingEngine::matchesKeyNameRules);
+    }
+
+    /**
      * A key in the two forms the rules read. Both are NFKD-decomposed with every mark and
      * format character removed, so an accent, a variation selector, a joiner, a long s
      * (U+017F) or a fullwidth letter cannot hide a rule word. They differ in control
