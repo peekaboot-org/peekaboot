@@ -14,21 +14,24 @@ import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 /**
- * Parses a configured JDBC URL only where no host, database or instance it names can hold a user or password.
+ * Parses a JDBC URL, as configured or as its driver reports it, only where no host, database or instance it names
+ * can hold a user or password. The health report, the dashboard's Overview DataSource card and the startup banner
+ * name a target only where this class accepts its URL.
  *
  * <p>A user and password right after the scheme's {@code //} are cut off where the URL holds exactly one
  * {@code @} after it, inside a first host without a {@code \}. No form is kept where the URL holds a
  * character outside ASCII, where any other {@code @} follows that {@code //}, where a property names a user
  * or a secret, or where an opening brace or a {@code %} appears. A URL the parser rejects as its driver would
  * is refused too, as is a SQL Server URL with an {@code &}, a database or instance that is no plain name or
- * file path, and a database, instance or host the configured URL does not spell out ({@code localhost}, the
- * parser's default host, excepted). The health endpoint documents these refusals and asks for the credentials
- * in {@code spring.datasource.username} and {@code spring.datasource.password} instead.
+ * file path, and a database, instance or host the URL does not spell out, as written and once cut
+ * ({@code localhost}, the parser's default host, excepted). The health endpoint documents these refusals and
+ * asks for the credentials in {@code spring.datasource.username} and {@code spring.datasource.password} instead.
  */
 final class CredentialFreeJdbcUrls {
 
     private static final MaskingEngine MASKING = new MaskingEngine();
-    // only the "//" (Oracle: "@//") right after the scheme opens an authority; H2 and SQLite paths hold "//" too
+    // the cut drops the text from this "//" (Oracle: "@//") to its "@"; jdbc:sqlite:// and jdbc:h2:file:// match too,
+    // and the spelled-out check refuses a path the cut reshapes
     private static final Pattern SCHEME = Pattern.compile("[A-Za-z][A-Za-z0-9+.-]*(?::[A-Za-z0-9+.-]+)*:@?//");
     private static final String FIRST_HOST_ENDS = "/,?;#(";
     private static final Pattern PROPERTY_KEY = Pattern.compile("[?;&(,\\s]\\s*([^=?;&(,\\s]+)\\s*=");
@@ -75,7 +78,7 @@ final class CredentialFreeJdbcUrls {
         if (at < 0) {
             return Optional.of(url);
         }
-        // the health contract refuses any other "@" after the "//"
+        // health, the Overview card and the banner refuse any other "@" after the "//"
         boolean onlyAt = url.indexOf('@', at + 1) < 0;
         int firstHostEnd = endOfFirstHost(url, firstHost);
         boolean insideFirstHost = at < firstHostEnd;
@@ -95,12 +98,13 @@ final class CredentialFreeJdbcUrls {
         return url.length();
     }
 
-    // the health contract refuses quoted and percent-encoded values; Connector/J reads "p%61ssword" as "password"
+    // health, the Overview card and the banner refuse quoted and encoded text, since Connector/J reads
+    // "p%61ssword" as "password"
     private static boolean holdsNoQuotedOrEncodedText(String url) {
         return url.indexOf('{') < 0 && url.indexOf('%') < 0;
     }
 
-    // the health contract refuses credentials in the URL; they belong in spring.datasource.username and password
+    // health, the Overview card and the banner refuse URL credentials, which belong in spring.datasource.*
     private static boolean namesNoCredentialProperty(String url) {
         Matcher key = PROPERTY_KEY.matcher(url);
         while (key.find()) {
@@ -116,7 +120,7 @@ final class CredentialFreeJdbcUrls {
         return MASKING.isSensitiveKey(key) || CREDENTIAL_KEY_PARTS.stream().anyMatch(lowerCaseKey::contains);
     }
 
-    // the health contract refuses an "&" in a SQL Server URL, where it can only sit inside a value
+    // health, the Overview card and the banner refuse a SQL Server URL's "&", which can only sit inside a value
     private static boolean isSqlServerWithAmpersand(JdbcUrl parsed, String jdbcUrl) {
         return parsed.databaseProduct() == DatabaseProduct.SQLSERVER && jdbcUrl.indexOf('&') >= 0;
     }
@@ -134,7 +138,7 @@ final class CredentialFreeJdbcUrls {
                 .allMatch(hostname -> DEFAULT_HOSTNAME.equals(hostname) || spelledOut.test(hostname));
     }
 
-    // drivers rewrite names (whitespace, case, decoding), and the cut can reshape a SQLite path
+    // drivers rewrite names (whitespace, case, decoding)
     private static boolean isAbsentOrPlainName(@Nullable String name, Predicate<String> spelledOut) {
         return name == null || (PLAIN_NAME.matcher(name).matches() && spelledOut.test(name));
     }
