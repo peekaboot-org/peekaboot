@@ -2,6 +2,7 @@ package org.peekaboot.backend.datasource;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -59,7 +60,7 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
                 .filter(DataSourceConnections::namesPlainHostsOnly)
                 .map(jdbcUrl -> describe(beanName, jdbcUrl))
-                .filter(DataSourceConnections::namesPlainDatabaseAndInstance);
+                .filter(connection -> namesPlainDatabaseAndInstance(connection, configuredUrl));
     }
 
     // SQL Server splits properties on ";" only, so an "&" sits inside a value the parser splits apart
@@ -73,12 +74,16 @@ public final class DataSourceConnections implements HealthConnectionSource {
                         && PLAIN_HOST.matcher(host.hostname()).matches());
     }
 
-    private static boolean namesPlainDatabaseAndInstance(DataSourceConnection connection) {
-        return isAbsentOrPlainName(connection.database()) && isAbsentOrPlainName(connection.instance());
+    private static boolean namesPlainDatabaseAndInstance(DataSourceConnection connection, String configuredUrl) {
+        return isAbsentOrPlainName(connection.database(), configuredUrl)
+                && isAbsentOrPlainName(connection.instance(), configuredUrl);
     }
 
-    private static boolean isAbsentOrPlainName(@Nullable String name) {
-        return name == null || PLAIN_NAME.matcher(name).matches();
+    // the cut can take text out of a file path, and drivers rewrite names (whitespace, case, decoding)
+    private static boolean isAbsentOrPlainName(@Nullable String name, String configuredUrl) {
+        return name == null
+                || (PLAIN_NAME.matcher(name).matches()
+                        && configuredUrl.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT)));
     }
 
     private static DataSourceConnection describe(String beanName, JdbcUrl jdbcUrl) {

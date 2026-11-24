@@ -354,6 +354,19 @@ class DataSourceConnectionsTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
+                "jdbc:h2:./S3C//ZUSR@db/shop",
+                "jdbc:h2:file:/data/S3C//ZUSR@shop",
+                "jdbc:sqlite://ZUSR:S3Cx@/data/x.db",
+                "jdbc:mysql://db/sh%6Fp",
+                "jdbc:oracle:thin:@//db:1521/svc S3C"
+            })
+    void aNameTheUrlDoesNotSpellOutHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
                 "jdbc:sqlserver://db;databaseName=x;password={a;databaseName=S3Cx;z}",
                 "jdbc:sqlserver://db;databaseName=x;password={;databaseName=S3Cx;}",
                 "jdbc:sqlserver://db;databaseName=x;password={a;instanceName=S3Cx;z}",
