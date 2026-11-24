@@ -102,9 +102,6 @@ public final class DataSourceConnections implements HealthConnectionSource {
             return null;
         }
         List<Host> hosts = jdbcUrl.hosts();
-        if (!hosts.isEmpty() && hosts.getFirst().instanceName() != null) {
-            return hosts.getFirst().instanceName();
-        }
-        return jdbcUrl.getPropertyValue("instanceName");
+        return hosts.isEmpty() ? null : hosts.getFirst().instanceName();
     }
 }
