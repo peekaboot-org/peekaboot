@@ -20,6 +20,8 @@ import org.peekaboot.backend.masking.MaskingEngine;
 final class CredentialFreeJdbcUrls {
 
     private static final MaskingEngine MASKING = new MaskingEngine();
+    // only the "//" (Oracle: "@//") right after the scheme opens an authority; H2 and SQLite paths hold "//" too
+    private static final Pattern SCHEME = Pattern.compile("[A-Za-z][A-Za-z0-9+.-]*(?::[A-Za-z0-9+.-]+)*:@?//");
     private static final String FIRST_HOST_ENDS = "/,?;#(";
     private static final Pattern PROPERTY_KEY = Pattern.compile("[?;&(,\\s]\\s*([^=?;&(,\\s]+)\\s*=");
     // as parts of a key too, so sslpassword, password1 and a lower-case keystoresecret count
@@ -41,11 +43,11 @@ final class CredentialFreeJdbcUrls {
     }
 
     private static Optional<String> withoutUserInfo(String url) {
-        int authority = url.indexOf("//");
-        if (authority < 0) {
+        Matcher scheme = SCHEME.matcher(url);
+        if (!scheme.lookingAt()) {
             return Optional.of(url);
         }
-        int firstHost = authority + 2;
+        int firstHost = scheme.end();
         int at = url.indexOf('@', firstHost);
         if (at < 0) {
             return Optional.of(url);

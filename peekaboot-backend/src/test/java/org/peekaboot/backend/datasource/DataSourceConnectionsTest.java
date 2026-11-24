@@ -93,6 +93,18 @@ class DataSourceConnectionsTest {
                         "dataSource", "MYSQL", List.of(new HealthConnection.Host("localhost", 3306)), "shop", null));
     }
 
+    @Test
+    void aDoubleSlashInAFilePathStartsNoUserInfo() {
+        assertThat(connectionsOf("jdbc:h2:./data//shop;INIT=SET @x=1").get("dataSource"))
+                .isEqualTo(new DataSourceConnection("dataSource", "H2", List.of(), "./data//shop", null));
+    }
+
+    @Test
+    void anAtInAFilePathCutsNothingOutOfIt() {
+        assertThat(connectionsOf("jdbc:h2:./S3C//ZUSR@db/shop;INIT=./S3C//db/shop"))
+                .isEmpty();
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {
