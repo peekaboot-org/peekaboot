@@ -5,17 +5,24 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.osslabz.jdbc.DatabaseProduct;
+import net.osslabz.jdbc.Host;
+import net.osslabz.jdbc.JdbcUrl;
+import net.osslabz.jdbc.JdbcUrlParser;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 /**
- * Prepares a configured JDBC URL for the parser so that no user or password can reach what it reads.
+ * Parses a configured JDBC URL only where no host, database or instance it names can hold a user or password.
  *
  * <p>A user and password right after the scheme's {@code //} are cut off where the URL holds exactly one
  * {@code @} after it, inside a first host without a {@code \}. No form is kept where the URL holds a
  * character outside ASCII, where any other {@code @} follows that {@code //}, where a property names a user
- * or a secret, or where an opening brace or a {@code %} appears. The health endpoint documents these
- * refusals and asks for the credentials in {@code spring.datasource.username} and
- * {@code spring.datasource.password} instead.
+ * or a secret, or where an opening brace or a {@code %} appears. A URL the parser rejects as its driver would
+ * is refused too, as is a SQL Server URL with an {@code &}, a database or instance that is no plain name or
+ * file path, and a database, instance or host the configured URL does not spell out ({@code localhost}, the
+ * parser's default host, excepted). The health endpoint documents these refusals and asks for the credentials
+ * in {@code spring.datasource.username} and {@code spring.datasource.password} instead.
  */
 final class CredentialFreeJdbcUrls {
 
@@ -26,15 +33,23 @@ final class CredentialFreeJdbcUrls {
     private static final Pattern PROPERTY_KEY = Pattern.compile("[?;&(,\\s]\\s*([^=?;&(,\\s]+)\\s*=");
     // as parts of a key too, so sslpassword, password1 and a lower-case keystoresecret count
     private static final List<String> CREDENTIAL_KEY_PARTS = List.of("user", "uid", "pwd", "pass", "secret", "token");
+    // "/" for the file paths of H2, Derby, HSQLDB and SQLite, "~" for H2's home directory; empty where
+    // the URL names no database
+    private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$~/-]*");
+    private static final String DEFAULT_HOSTNAME = "localhost";
 
     private CredentialFreeJdbcUrls() {}
 
-    static Optional<String> of(String configuredUrl) {
+    static Optional<JdbcUrl> parse(String configuredUrl) {
         return Optional.of(configuredUrl)
                 .filter(CredentialFreeJdbcUrls::isAscii)
                 .flatMap(CredentialFreeJdbcUrls::withoutUserInfo)
                 .filter(CredentialFreeJdbcUrls::holdsNoQuotedOrEncodedText)
-                .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty);
+                .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty)
+                .map(JdbcUrlParser::tryParse)
+                .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
+                .filter(jdbcUrl -> namesPlainDatabaseAndInstance(jdbcUrl, configuredUrl))
+                .filter(jdbcUrl -> spellsOutEveryHostname(jdbcUrl, configuredUrl));
     }
 
     // the driver folds a long s (U+017F) to "s", so a key the credential check cannot read may still be one
@@ -92,5 +107,32 @@ final class CredentialFreeJdbcUrls {
     private static boolean namesACredential(String key) {
         String lowerCaseKey = key.toLowerCase(Locale.ROOT);
         return MASKING.isSensitiveKey(key) || CREDENTIAL_KEY_PARTS.stream().anyMatch(lowerCaseKey::contains);
+    }
+
+    // the health contract refuses an "&" in a SQL Server URL, where it can only sit inside a value
+    private static boolean isSqlServerWithAmpersand(JdbcUrl jdbcUrl, String configuredUrl) {
+        return jdbcUrl.databaseProduct() == DatabaseProduct.SQLSERVER && configuredUrl.indexOf('&') >= 0;
+    }
+
+    // every host's instance: Oracle names one too, which Host.toString prints
+    private static boolean namesPlainDatabaseAndInstance(JdbcUrl jdbcUrl, String configuredUrl) {
+        return isAbsentOrPlainName(jdbcUrl.databaseName(), configuredUrl)
+                && jdbcUrl.hosts().stream().allMatch(host -> isAbsentOrPlainName(host.instanceName(), configuredUrl));
+    }
+
+    // ojdbc drops whitespace from a host, so "ZUSR S3Cx" reads as "ZUSRS3Cx"; localhost is the parser's default
+    private static boolean spellsOutEveryHostname(JdbcUrl jdbcUrl, String configuredUrl) {
+        return jdbcUrl.hosts().stream()
+                .map(Host::hostname)
+                .allMatch(hostname -> DEFAULT_HOSTNAME.equals(hostname) || spellsOut(configuredUrl, hostname));
+    }
+
+    // drivers rewrite names (whitespace, case, decoding), and the cut can reshape a SQLite path
+    private static boolean isAbsentOrPlainName(@Nullable String name, String configuredUrl) {
+        return name == null || (PLAIN_NAME.matcher(name).matches() && spellsOut(configuredUrl, name));
+    }
+
+    private static boolean spellsOut(String configuredUrl, String name) {
+        return configuredUrl.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT));
     }
 }
