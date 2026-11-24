@@ -21,14 +21,16 @@ import org.peekaboot.backend.health.HealthConnectionSource;
  * Names each DataSource's target from its configured JDBC URL. Never asks a DataSource for a connection.
  *
  * <p>Only a URL {@link CredentialFreeJdbcUrls} accepts is parsed, and a URL the parser rejects as its driver
- * would gives no connection. Neither does a SQL Server URL with an {@code &}, nor a database or instance that
- * is no plain name or file path or that the URL does not spell out.
+ * would gives no connection. Neither does a SQL Server URL with an {@code &}, a database or instance that is
+ * no plain name or file path or that the URL does not spell out, nor a host other than the default
+ * {@code localhost} that the URL does not spell out.
  */
 public final class DataSourceConnections implements HealthConnectionSource {
 
     // "/" for the file paths of H2, Derby, HSQLDB and SQLite, "~" for H2's home directory; empty where
     // the URL names no database
     private static final Pattern PLAIN_NAME = Pattern.compile("[A-Za-z0-9._$~/-]*");
+    private static final String DEFAULT_HOSTNAME = "localhost";
 
     private final Map<String, DataSource> dataSources;
     private final Function<DataSource, Optional<String>> configuredUrl;
@@ -59,6 +61,7 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 .map(JdbcUrlParser::tryParse)
                 .filter(jdbcUrl -> !isSqlServerWithAmpersand(jdbcUrl, configuredUrl))
                 .filter(jdbcUrl -> namesPlainDatabaseAndInstance(jdbcUrl, configuredUrl))
+                .filter(jdbcUrl -> spellsOutEveryHostname(jdbcUrl, configuredUrl))
                 .map(jdbcUrl -> describe(beanName, jdbcUrl));
     }
 
@@ -73,11 +76,20 @@ public final class DataSourceConnections implements HealthConnectionSource {
                 && jdbcUrl.hosts().stream().allMatch(host -> isAbsentOrPlainName(host.instanceName(), configuredUrl));
     }
 
+    // ojdbc drops whitespace from a host, so "ZUSR S3Cx" reads as "ZUSRS3Cx"; localhost is the parser's default
+    private static boolean spellsOutEveryHostname(JdbcUrl jdbcUrl, String configuredUrl) {
+        return jdbcUrl.hosts().stream()
+                .map(Host::hostname)
+                .allMatch(hostname -> DEFAULT_HOSTNAME.equals(hostname) || spellsOut(configuredUrl, hostname));
+    }
+
     // drivers rewrite names (whitespace, case, decoding), and the cut can reshape a SQLite path
     private static boolean isAbsentOrPlainName(@Nullable String name, String configuredUrl) {
-        return name == null
-                || (PLAIN_NAME.matcher(name).matches()
-                        && configuredUrl.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT)));
+        return name == null || (PLAIN_NAME.matcher(name).matches() && spellsOut(configuredUrl, name));
+    }
+
+    private static boolean spellsOut(String configuredUrl, String name) {
+        return configuredUrl.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT));
     }
 
     private static DataSourceConnection describe(String beanName, JdbcUrl jdbcUrl) {

@@ -381,7 +381,9 @@ class DataSourceConnectionsTest {
                 "jdbc:sqlite://ZUSR:S3Cx@/data/x.db",
                 "jdbc:mysql://db/sh%6Fp",
                 "jdbc:oracle:thin:@//db:1521/svc S3C",
-                "jdbc:oracle:thin:@//db:1521/svc/in st"
+                "jdbc:oracle:thin:@//db:1521/svc/in st",
+                "jdbc:oracle:thin:@ZUSR S3Cx:1521/svc",
+                "jdbc:oracle:thin:@S3C x:1521/svc"
             })
     void aNameTheUrlDoesNotSpellOutHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
