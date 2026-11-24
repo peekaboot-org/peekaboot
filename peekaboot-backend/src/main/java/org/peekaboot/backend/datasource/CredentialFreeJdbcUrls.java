@@ -32,8 +32,7 @@ final class CredentialFreeJdbcUrls {
                 .filter(CredentialFreeJdbcUrls::isAscii)
                 .flatMap(CredentialFreeJdbcUrls::withoutUserInfo)
                 .filter(CredentialFreeJdbcUrls::holdsNoQuotedOrEncodedText)
-                .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty)
-                .filter(CredentialFreeJdbcUrls::endsWithItsDescriptor);
+                .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty);
     }
 
     // the driver matches keys with equalsIgnoreCase, which folds a long s (U+017F) to "s"
@@ -88,26 +87,5 @@ final class CredentialFreeJdbcUrls {
     private static boolean namesACredential(String key) {
         String lowerCaseKey = key.toLowerCase(Locale.ROOT);
         return MASKING.isSensitiveKey(key) || CREDENTIAL_KEY_PARTS.stream().anyMatch(lowerCaseKey::contains);
-    }
-
-    // the parser takes an Oracle descriptor's HOST, PORT and SERVICE_NAME from anywhere in the URL
-    private static boolean endsWithItsDescriptor(String url) {
-        int open = url.indexOf('(');
-        if (open < 0) {
-            return true;
-        }
-        int depth = 0;
-        for (int i = open; i < url.length(); i++) {
-            char c = url.charAt(i);
-            if (c == '(') {
-                depth++;
-            } else if (c == ')') {
-                depth--;
-                if (depth == 0) {
-                    return i == url.length() - 1;
-                }
-            }
-        }
-        return false;
     }
 }
