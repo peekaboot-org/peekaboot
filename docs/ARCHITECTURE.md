@@ -813,25 +813,26 @@ describes only what `CredentialFreeJdbcUrls.parse` accepts. `DataSourceMetadata`
 dashboard's Overview DataSource card and the startup banner, calls the same method on the URL the
 driver reports, so the health report, the Overview card and the banner name a target by the same
 rules. Where the method refuses the URL, the card and the banner show no host, no database and no
-properties. A reported URL the parser rejects uncut, such as a user before a PostgreSQL host, leaves
-that DataSource off both. Otherwise they list the URL's properties, but never those of its authority
+properties. A reported URL the parser rejects, such as a user before a PostgreSQL host, leaves that
+DataSource off both. Otherwise they list the URL's properties, but never those of its authority
 (`PropertySource.AUTHORITY`), which is where a user or password sits, nor those of an Oracle
 descriptor (`PropertySource.DESCRIPTOR`), whose value masking cannot look inside. A port the URL
 leaves out is the driver's default, as the parser reports it.
 
-The jdbc-url-parser rejects what the driver would reject, such as a user before the host for
-PostgreSQL, SQL Server and Oracle, an Oracle descriptor with text after it, or a SQL Server URL with
-a zero port. `parse` adds the rules the parser cannot know, each one because a credential could end
-up in a name it reports:
+`parse` hands the parser the URL as written. The jdbc-url-parser rejects what the driver would
+reject, such as a user right after the `//` for every product but MySQL, an Oracle descriptor with
+text after it, or a SQL Server URL with a zero port. A user and password the driver accepts
+before the host, Connector/J's `user:pw@` or ojdbc's `user/pw@`, come back as authority
+properties, which no path shows. `parse` adds the rules the parser cannot know, each one because a
+credential could end up in a name it reports:
 
 - A URL with a character outside ASCII gets none: mssql-jdbc matches keys with `equalsIgnoreCase`,
   which folds a long s (U+017F) to `s`, so a key the credential check cannot read may still be one.
-- Where the URL holds exactly one `@` after the `//` that follows its scheme (Oracle: `@//`), that
-  `@` comes before the first `/`, `,`, `?`, `;`, `#` or `(`, and that first host holds no `\`,
-  everything from the `//` to the `@` is cut off. A user and password before the first host never
-  reach the parser, and the host is described for every product, PostgreSQL and SQL Server included,
-  whose uncut form the parser rejects. A SQL Server `host\instance` may hold the `@`, so a `\` refuses
-  the cut. Any other `@` after the `//` gives none.
+- After the `//` that follows the scheme (Oracle: `@//`), the only `@` allowed is a single one
+  before the first `/`, `,`, `?`, `;`, `#` or `(`, in a first host without a `\`. Any other gives
+  none, since Connector/J reads the text after a later host's `@`, or after a `host\instance`'s, as
+  a host, so `jdbc:mysql://db1,ZUSR@S3Cx/shop` would name `S3Cx`. A `//` inside an H2 or SQLite path
+  opens no user and password.
 - A property key that names a user or secret (`MaskingEngine.isSensitiveKey`, or a key holding
   `user`, `uid`, `pwd`, `pass`, `secret` or `token`, matched after `?`, `;`, `&`, `(`, `,` or
   whitespace) gives none.
@@ -841,10 +842,9 @@ up in a name it reports:
   inside a value there.
 - A database or instance, of any host, outside `[A-Za-z0-9._$~/-]*` gives none. This catches an
   Oracle URL with parameters after the service name.
-- A database, instance or hostname the URL does not spell out, both as written and with its user
-  and password cut off, gives none. Drivers rewrite names (ojdbc drops whitespace from a host, so
-  `ZUSR S3Cx` reads as `ZUSRS3Cx`), the cut-off text must not vouch for a name, and the cut must not
-  join two parts into one (a SQLite path). The parser's default host `localhost` is exempt.
+- A database, instance or hostname the URL does not spell out gives none. Drivers rewrite names
+  (ojdbc drops whitespace from a host, so `ZUSR S3Cx` reads as `ZUSRS3Cx`). The parser's default
+  host `localhost` is exempt.
 
 A DataSource that throws while being unwrapped, such as a routing DataSource without a default
 target, gets none either.
