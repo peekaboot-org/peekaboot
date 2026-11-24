@@ -214,13 +214,24 @@ final class MaskingRules {
                     Pattern.compile("(?i)jdbc:oracle:thin:([^/@\\s:]++/)([^@\\s]{1,1024}+)@")),
             // Distinct from "Credentials in a URL" above and not subsumed by it: this is the
             // query-parameter shape (scheme://host/db?password=...), the more common of the
-            // two for JDBC; ";" covers SQL Server's property separator. Every pair is a
-            // candidate - group 1 is judged by the key-name rules, and only group 2 (the
-            // value) is masked, leaving the parameter name and the rest of the URL intact.
-            // The key cannot hold "?", so a run of JDBC placeholders is not rescanned from
-            // every "?". Whitespace after the separator is not part of the key (";\tpassword=").
+            // two for JDBC. Every pair is a candidate - group 1 is judged by the key-name
+            // rules, and only group 2 (the value) is masked, leaving the parameter name and the
+            // rest of the URL intact. The key cannot hold "?", so a run of JDBC placeholders is
+            // not rescanned from every "?". Whitespace after the separator is not part of the
+            // key (";\tpassword="). A value runs to the next separator of its own kind, so a
+            // query value may hold ";". The ";" property below is a rule of its own, never an
+            // alternation here: each rule scans the text by itself, so the "password" in
+            // "?user=a;password=" is still found inside the user's value.
             ValuePattern.urlParameter(
-                    "Credentials in a URL query", 1, 2, Pattern.compile("[?&;]\\s*+([^=&;?\\s]++)=([^&;\\s]+)")),
+                    "Credentials in a URL query", 1, 2, Pattern.compile("[?&]\\s*+([^=&;?\\s]++)=([^&\\s]+)")),
+            // SQL Server's and H2's ";name=value" property, whose value may hold "&". A value
+            // opening with "{" runs to its closing "}", with "}}" an escaped brace inside it, as
+            // SQL Server reads it; one whose closing brace is missing masks to the end.
+            ValuePattern.urlParameter(
+                    "Credentials in a connection-string property",
+                    1,
+                    2,
+                    Pattern.compile(";\\s*+([^=&;?\\s]++)=(\\{(?:[^}]++|}})*+(?:}|\\z)|[^;\\s]+)")),
             // The value of a -Dname=value / --name=value option, as JAVA_TOOL_OPTIONS,
             // JDK_JAVA_OPTIONS and their kin carry it: the property spring.datasource.password
             // is masked by its own key, but not the option string it was set from unless

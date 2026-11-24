@@ -42,7 +42,9 @@ class ValuePatternCostTest {
             " a=\"\\\"",
             "-----BEGIN ",
             " --a",
-            "&a");
+            "&a",
+            ";a={",
+            ";a={}}");
 
     @ParameterizedTest(name = "{0} on a run of [{1}]")
     @MethodSource("everyRuleOnEveryRun")

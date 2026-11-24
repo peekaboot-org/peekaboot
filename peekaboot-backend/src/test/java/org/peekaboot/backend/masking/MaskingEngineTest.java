@@ -1208,6 +1208,34 @@ class MaskingEngineTest {
     }
 
     /**
+     * A URL parameter's value runs to the next separator of its own kind: a ";" param's value may hold "&", a "?" or
+     * "&" param's value may hold ";", and a braced ";" value runs to its closing brace, as SQL Server reads it.
+     */
+    @Nested
+    class UrlParameterValueBoundaries {
+
+        @ParameterizedTest
+        @CsvSource(
+                delimiter = '|',
+                value = {
+                    "jdbc:sqlserver://db;password=ab&cd;databaseName=x|jdbc:sqlserver://db;password=******;databaseName=x",
+                    "jdbc:h2:mem:shop;PASSWORD=ab&cd|jdbc:h2:mem:shop;PASSWORD=******",
+                    "jdbc:postgresql://db/shop?password=ab;cd&sslmode=require"
+                            + "|jdbc:postgresql://db/shop?password=******&sslmode=require",
+                    "jdbc:postgresql://db/shop?user=a;password=S3Cx|jdbc:postgresql://db/shop?user=a;password=******",
+                    "GET /x?q=1; token=S3Cx|GET /x?q=1; token=******",
+                    "jdbc:sqlserver://db;password={ab;cd};databaseName=x"
+                            + "|jdbc:sqlserver://db;password=******;databaseName=x",
+                    "jdbc:sqlserver://db;password={ab}};cd&e f};databaseName=x"
+                            + "|jdbc:sqlserver://db;password=******;databaseName=x",
+                    "jdbc:sqlserver://db;password={ab;cd|jdbc:sqlserver://db;password=******"
+                })
+        void maskValueMasksAUrlParameterValueUpToItsOwnSeparator(String value, String expected) {
+            assertThat(engine.maskValue(value)).isEqualTo(expected);
+        }
+    }
+
+    /**
      * A URL parameter inside a property value is judged as a JDBC connection param, secret words anywhere in its
      * name included. Every other value, a request path or a log line, keeps the whole-token key rules.
      */
