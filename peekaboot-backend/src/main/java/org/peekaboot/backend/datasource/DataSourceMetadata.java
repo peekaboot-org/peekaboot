@@ -3,9 +3,11 @@ package org.peekaboot.backend.datasource;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import net.osslabz.jdbc.DatabaseProduct;
@@ -25,7 +27,8 @@ import org.jspecify.annotations.Nullable;
  * @param databaseProduct  what the JDBC URL names, so a MariaDB reached through a
  *                         {@code jdbc:mysql:} URL reports MySQL
  * @param connectionParams the JDBC URL's properties, without the user, password and host attributes of
- *                         its authority
+ *                         its authority and without an Oracle descriptor's; empty where the JDBC URL could
+ *                         hide a user or password in its target
  */
 public record DataSourceMetadata(
         String dataSourceName,
@@ -37,6 +40,10 @@ public record DataSourceMetadata(
         String databaseProductName,
         String databaseProductVersion,
         String driverName) {
+
+    // the authority holds the user and password; masking sees a descriptor's key, never the keys inside it
+    private static final Set<PropertySource> UNSHOWN_SOURCES =
+            EnumSet.of(PropertySource.AUTHORITY, PropertySource.DESCRIPTOR);
 
     public DataSourceMetadata {
         hosts = hosts == null ? List.of() : hosts;
@@ -68,16 +75,17 @@ public record DataSourceMetadata(
                     target.map(JdbcUrl::hosts).orElse(List.of()),
                     target.map(JdbcUrl::databaseName).orElse(null),
                     jdbcUrl.databaseProduct(),
-                    withoutAuthority(jdbcUrl.properties()),
+                    target.isPresent() ? shownParams(jdbcUrl.properties()) : Map.of(),
                     metaData.getDatabaseProductName(),
                     metaData.getDatabaseProductVersion(),
                     metaData.getDriverName());
         }
     }
 
-    private static Map<String, JdbcProperty> withoutAuthority(Map<String, JdbcProperty> properties) {
+    private static Map<String, JdbcProperty> shownParams(Map<String, JdbcProperty> properties) {
         return properties.entrySet().stream()
-                .filter(property -> property.getValue().source() != PropertySource.AUTHORITY)
+                .filter(property ->
+                        !UNSHOWN_SOURCES.contains(property.getValue().source()))
                 .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 }

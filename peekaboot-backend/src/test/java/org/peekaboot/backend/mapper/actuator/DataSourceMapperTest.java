@@ -138,11 +138,12 @@ class DataSourceMapperTest {
 
     /** The frontend renders a missing database as "-" and no hosts as unknown. */
     @Test
-    void aRefusedTargetReachesThePanelWithoutHostOrDatabase() throws SQLException {
+    void aRefusedTargetReachesThePanelWithoutHostDatabaseOrProperties() throws SQLException {
         DataSourceInfo info = mapped("jdbc:sqlserver://db;databaseName={x;password=S3Cy}");
 
         assertThat(info.hosts()).isEmpty();
         assertThat(info.databaseName()).isNull();
+        assertThat(info.properties()).isEmpty();
     }
 
     @Test

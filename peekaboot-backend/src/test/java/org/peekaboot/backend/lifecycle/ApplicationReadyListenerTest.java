@@ -202,6 +202,19 @@ class ApplicationReadyListenerTest {
                 .contains(" DB Connection [legacy]: - on [] (user: app)");
     }
 
+    /** A hidden target loses every param; the DESCRIPTOR filter alone would still print DRIVER_TYPE here. */
+    @Test
+    void bannerPrintsNoConnectionParamsOfAHiddenTarget() throws SQLException {
+        String report = banner().metadata(
+                        DataSourceMetadata.read("primary", reporting("jdbc:oracle:thin:@//db:1521/svc S3Cx")))
+                .render(ReadyEvents.webApplication(8083));
+
+        assertThat(report)
+                .contains(" DB Connection [primary]: - on [] (user: app)")
+                .doesNotContain("DB Connection Params")
+                .doesNotContain("S3C");
+    }
+
     @Test
     void bannerNamesAnOracleInstanceWithItsHost() throws SQLException {
         String report = banner().metadata(

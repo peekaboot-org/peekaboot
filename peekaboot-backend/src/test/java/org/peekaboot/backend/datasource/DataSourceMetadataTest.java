@@ -33,12 +33,16 @@ class DataSourceMetadataTest {
             "jdbc:oracle:thin:@//db:1521/svc/in st",
             "jdbc:oracle:thin:@ZUSR S3Cx:1521/svc");
 
+    private static final String ORACLE_DESCRIPTOR =
+            "jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))";
+
     private static final List<String> URLS_THE_GUARD_DESCRIBES = List.of(
             "jdbc:mysql://ZUSR:S3Cx@db:3306/shop",
             "jdbc:postgresql://pg.internal:5432/thunderlytics",
             "jdbc:mysql://a:3306,b:3307/inv",
             "jdbc:sqlserver://db\\SQLEXPRESS:1433;databaseName=x",
             "jdbc:oracle:thin:@//db:1521/svc/inst",
+            ORACLE_DESCRIPTOR,
             "jdbc:h2:mem:orders");
 
     @Test
@@ -104,6 +108,15 @@ class DataSourceMetadataTest {
         assertThat(m.connectionParams()).doesNotContainKeys("user", "password");
     }
 
+    /** Masking sees only the key DESCRIPTOR, never the keys nested in its value. */
+    @Test
+    void anOracleDescriptorNeverReachesTheConnectionParams() throws SQLException {
+        DataSourceMetadata m = DataSourceMetadata.read("primary", reporting(ORACLE_DESCRIPTOR));
+
+        assertThat(m.connectionParams()).containsKey("DRIVER_TYPE");
+        assertThat(m.connectionParams().values()).noneMatch(p -> p.source() == PropertySource.DESCRIPTOR);
+    }
+
     @ParameterizedTest
     @MethodSource("urlsTheGuardRefuses")
     void aTargetTheGuardRefusesIsHidden(String url) throws SQLException {
@@ -128,10 +141,15 @@ class DataSourceMetadataTest {
                             .toList())
                     .isEqualTo(connection.hosts());
             assertThat(m.databaseName()).isEqualTo(connection.database());
+            // health names only a SQL Server instance; an Oracle one reaches the dashboard through its host
+            if (m.databaseProduct() == DatabaseProduct.SQLSERVER) {
+                assertThat(m.hosts().getFirst().instanceName()).isEqualTo(connection.instance());
+            }
         } else {
             assertThat(health).isNull();
             assertThat(m.hosts()).isEmpty();
             assertThat(m.databaseName()).isNull();
+            assertThat(m.connectionParams()).isEmpty();
         }
     }
 
