@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -49,42 +48,49 @@ class DataSourceConnectionsTest {
     @ParameterizedTest
     @CsvSource({
         "jdbc:mysql://ZUSR:S3Cx@db:3306/shop, MYSQL, db, 3306, shop",
-        "jdbc:postgresql://ZUSR:S3Cx@pg/shop, POSTGRESQL, pg, , shop",
-        "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=shop, SQLSERVER, db, , shop",
-        "jdbc:mysql:// ZUSR:S3Cx@db/shop, MYSQL, db, , shop",
-        "jdbc:mysql://ZUSR:S3C)x@db/shop, MYSQL, db, , shop",
-        "jdbc:mysql://ZUSR:S3C:x@db/shop, MYSQL, db, , shop",
-        "jdbc:postgresql://ZUSR%40corp:S3C%40x@db/shop, POSTGRESQL, db, , shop",
-        "jdbc:mysql://ZUSR:S3C%2Fx%3Fy@db/shop, MYSQL, db, , shop",
-        "jdbc:postgresql://ZUSR@db/shop, POSTGRESQL, db, , shop",
-        "jdbc:mysql://ZUSR@db, MYSQL, db, , ''",
+        "jdbc:postgresql://ZUSR:S3Cx@pg/shop, POSTGRESQL, pg, 5432, shop",
+        "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=shop, SQLSERVER, db, 1433, shop",
+        "jdbc:mysql:// ZUSR:S3Cx@db/shop, MYSQL, db, 3306, shop",
+        "jdbc:mysql://ZUSR:S3C)x@db/shop, MYSQL, db, 3306, shop",
+        "jdbc:mysql://ZUSR:S3C:x@db/shop, MYSQL, db, 3306, shop",
+        "jdbc:postgresql://ZUSR%40corp:S3C%40x@db/shop, POSTGRESQL, db, 5432, shop",
+        "jdbc:mysql://ZUSR:S3C%2Fx%3Fy@db/shop, MYSQL, db, 3306, shop",
+        "jdbc:postgresql://ZUSR@db/shop, POSTGRESQL, db, 5432, shop",
+        "jdbc:mysql://ZUSR@db, MYSQL, db, 3306, ''",
         "jdbc:mysql://ZUSR:S3Cx@[::1]:3306/shop, MYSQL, [::1], 3306, shop",
-        "jdbc:postgresql://ZUSR:S3Cx@[2001:db8::1]/shop, POSTGRESQL, [2001:db8::1], , shop",
+        "jdbc:postgresql://ZUSR:S3Cx@[2001:db8::1]/shop, POSTGRESQL, [2001:db8::1], 5432, shop",
         "jdbc:oracle:thin:@//ZUSR:S3Cx@db:1521/svc, ORACLE, db, 1521, svc"
     })
-    void aUserInfoInsideTheFirstHostIsCutOff(
-            String url, String product, String hostname, @Nullable Integer port, String database) {
+    void aUserInfoInsideTheFirstHostIsCutOff(String url, String product, String hostname, int port, String database) {
         assertThat(connectionsOf(url).get("dataSource"))
                 .isEqualTo(new DataSourceConnection(
                         "dataSource", product, List.of(new HealthConnection.Host(hostname, port)), database, null));
     }
 
-    @Test
-    void aUserInfoBeforeTheFirstOfSeveralHostsIsCutOff() {
-        assertThat(connectionsOf("jdbc:mysql://ZUSR:S3Cx@db1:3306,db2:3307/shop")
-                        .get("dataSource"))
+    @ParameterizedTest
+    @CsvSource({
+        "'jdbc:mysql://ZUSR:S3Cx@db1:3306,db2:3307/shop', db1, 3306, db2, 3307",
+        "'jdbc:mysql://ZUSR:S3Cx@:3306,real:3307/shop', localhost, 3306, real, 3307",
+        "'jdbc:mysql:loadbalance://ZUSR:S3Cx@db1,db2/shop', db1, 3306, db2, 3306"
+    })
+    void aUserInfoBeforeTheFirstOfSeveralHostsIsCutOff(
+            String url, String firstHostname, int firstPort, String secondHostname, int secondPort) {
+        assertThat(connectionsOf(url).get("dataSource"))
                 .isEqualTo(new DataSourceConnection(
                         "dataSource",
                         "MYSQL",
-                        List.of(new HealthConnection.Host("db1", 3306), new HealthConnection.Host("db2", 3307)),
+                        List.of(
+                                new HealthConnection.Host(firstHostname, firstPort),
+                                new HealthConnection.Host(secondHostname, secondPort)),
                         "shop",
                         null));
     }
 
     @Test
-    void aUserInfoBeforeNoHostLeavesNoHosts() {
+    void aUserInfoBeforeNoHostNamesTheDefaultHost() {
         assertThat(connectionsOf("jdbc:mysql://ZUSR:S3Cx@/shop").get("dataSource"))
-                .isEqualTo(new DataSourceConnection("dataSource", "MYSQL", List.of(), "shop", null));
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", "MYSQL", List.of(new HealthConnection.Host("localhost", 3306)), "shop", null));
     }
 
     @ParameterizedTest
@@ -100,9 +106,7 @@ class DataSourceConnectionsTest {
                 "jdbc:mysql://ZUSR:4242/S3C@db/shop",
                 "jdbc:mysql://ZUSR:4242?S3C@db/shop",
                 "jdbc:mysql://ZUSR:S3C@db@evil/shop",
-                "jdbc:mysql://ZUSR:S3Cx@:3306,real:3307/shop",
                 "jdbc:mysql://db1:3306,ZUSR:S3Cx@db2:3307/shop",
-                "jdbc:mysql:loadbalance://ZUSR:S3Cx@db1,db2/shop",
                 "jdbc:mysql://db/shop?user=ZUSR@corp",
                 "jdbc:mysql://db/shop?password=S3C@x",
                 "jdbc:mysql://ZUSR:S3Cx@db/shop?password=S3C@y",
@@ -119,16 +123,16 @@ class DataSourceConnectionsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "jdbc:oracle:thin:ZUSR/S3Cx@db:1521:ORCL",
-                "jdbc:oracle:thin:ZUSR/S3Cx@//db:1521/svc",
-                "jdbc:oracle:thin:ZUSR/S3Cx@db:1521/svc",
-                "jdbc:oracle:thin:ZUSR/S3C//x@db:1521/svc",
-                "jdbc:oracle:thin:\"ZUSR\"/\"S3C@x\"@db:1521/svc"
-            })
-    void anOracleUrlWithAUserAndPasswordHasNoConnection(String url) {
-        assertThat(connectionsOf(url)).isEmpty();
+    @CsvSource({
+        "jdbc:oracle:thin:ZUSR/S3Cx@db:1521:ORCL, ORCL",
+        "jdbc:oracle:thin:ZUSR/S3Cx@//db:1521/svc, svc",
+        "jdbc:oracle:thin:ZUSR/S3Cx@db:1521/svc, svc",
+        "jdbc:oracle:thin:\"ZUSR\"/\"S3C@x\"@db:1521/svc, svc"
+    })
+    void anOracleUserAndPasswordAreLeftOut(String url, String database) {
+        assertThat(connectionsOf(url).get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", "ORACLE", List.of(new HealthConnection.Host("db", 1521)), database, null));
     }
 
     @ParameterizedTest
@@ -265,25 +269,25 @@ class DataSourceConnectionsTest {
 
     @ParameterizedTest
     @CsvSource({
-        "jdbc:postgresql://db/shop?sslmode=require&ApplicationName=shop-app, POSTGRESQL",
-        "jdbc:mysql://db/shop?useSSL=true;serverTimezone=UTC, MYSQL",
-        "jdbc:sqlserver://db;databaseName=shop;encrypt=true;trustServerCertificate=false, SQLSERVER"
+        "jdbc:postgresql://db/shop?sslmode=require&ApplicationName=shop-app, POSTGRESQL, 5432",
+        "jdbc:mysql://db/shop?useSSL=true;serverTimezone=UTC, MYSQL, 3306",
+        "jdbc:sqlserver://db;databaseName=shop;encrypt=true;trustServerCertificate=false, SQLSERVER, 1433"
     })
-    void aUrlWithOtherPropertiesIsDescribed(String url, String product) {
+    void aUrlWithOtherPropertiesIsDescribed(String url, String product, int port) {
         assertThat(connectionsOf(url).get("dataSource"))
                 .isEqualTo(new DataSourceConnection(
-                        "dataSource", product, List.of(new HealthConnection.Host("db", null)), "shop", null));
+                        "dataSource", product, List.of(new HealthConnection.Host("db", port)), "shop", null));
     }
 
     @ParameterizedTest
     @CsvSource({
-        "jdbc:postgresql://db/shop?instanceName=S3Cx, POSTGRESQL, db",
-        "jdbc:mysql://db/shop?instanceName=S3Cx, MYSQL, db"
+        "jdbc:postgresql://db/shop?instanceName=S3Cx, POSTGRESQL, db, 5432",
+        "jdbc:mysql://db/shop?instanceName=S3Cx, MYSQL, db, 3306"
     })
-    void onlyASqlServerUrlNamesAnInstance(String url, String product, String hostname) {
+    void onlyASqlServerUrlNamesAnInstance(String url, String product, String hostname, int port) {
         assertThat(connectionsOf(url).get("dataSource"))
                 .isEqualTo(new DataSourceConnection(
-                        "dataSource", product, List.of(new HealthConnection.Host(hostname, null)), "shop", null));
+                        "dataSource", product, List.of(new HealthConnection.Host(hostname, port)), "shop", null));
     }
 
     @ParameterizedTest
@@ -364,6 +368,13 @@ class DataSourceConnectionsTest {
         assertThat(connectionsOf(url)).isEmpty();
     }
 
+    @Test
+    void namesADatabaseTheDriverSpellsInAnotherCase() {
+        assertThat(connectionsOf("jdbc:hsqldb:hsql://db/Shop").get("dataSource"))
+                .isEqualTo(new DataSourceConnection(
+                        "dataSource", "HSQLDB", List.of(new HealthConnection.Host("db", 9001)), "shop", null));
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -404,9 +415,9 @@ class DataSourceConnectionsTest {
 
     @Test
     void aUrlWithoutADatabaseNamesAnEmptyOne() {
-        assertThat(connectionsOf("jdbc:postgresql://db").get("dataSource"))
+        assertThat(connectionsOf("jdbc:postgresql://db/").get("dataSource"))
                 .isEqualTo(new DataSourceConnection(
-                        "dataSource", "POSTGRESQL", List.of(new HealthConnection.Host("db", null)), "", null));
+                        "dataSource", "POSTGRESQL", List.of(new HealthConnection.Host("db", 5432)), "", null));
     }
 
     @Test
@@ -449,6 +460,17 @@ class DataSourceConnectionsTest {
     @Test
     void anUnparseableUrlHasNoConnection() {
         assertThat(connectionsOf("garbage")).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "jdbc:postgresql://db",
+                "jdbc:SQLSERVER://db;databaseName=shop",
+                "jdbc:oracle:thin:ZUSR/S3C//x@db:1521/svc"
+            })
+    void aUrlTheDriverRejectsHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
     }
 
     @Test

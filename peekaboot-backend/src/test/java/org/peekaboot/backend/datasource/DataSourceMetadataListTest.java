@@ -162,6 +162,22 @@ class DataSourceMetadataListTest {
         }
     }
 
+    /** The parser's message once carried the whole URL, password included, into this WARN line. */
+    @Test
+    void aUrlTheParserRejectsIsReportedWithoutItsText() throws SQLException {
+        DataSource dataSource = ReportingDataSources.reporting("jdbc:db2://ZUSR:S3Cx@db:50000/shop");
+        try (LogCapture capture = LogCapture.attach(DataSourceMetadataList.class)) {
+            DataSourceMetadataList list = new DataSourceMetadataList(Map.of("legacy", dataSource), clock, INLINE);
+            assertThat(list.entries()).isEmpty();
+            assertThat(capture.appender().list)
+                    .singleElement()
+                    .satisfies(
+                            event -> assertThat(event.getFormattedMessage())
+                                    .isEqualTo(
+                                            "Failed to extract metadata from DataSource 'legacy': Unknown or unsupported database type"));
+        }
+    }
+
     /** A driver missing a class or a native library dies with an Error, which must not leave the read in flight for good. */
     @Test
     void anErrorFromTheDriverIsReportedLikeAnyFailure() throws SQLException {
