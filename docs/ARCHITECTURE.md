@@ -809,28 +809,39 @@ gives each direct child the connection of the bean of that name. Deeper levels g
 
 Each `HealthConnectionSource` reads configuration and never opens a connection.
 `DataSourceConnections` takes Hikari's configured URL, unwrapped through `java.sql.Wrapper`, and
-parses only what `CredentialFreeJdbcUrls` accepts. A URL with a character outside ASCII gets no
-connection: mssql-jdbc matches keys with `equalsIgnoreCase`, which folds a long s (U+017F) to `s`.
-Where the URL holds exactly one `@` after its `//`, that `@` comes before the first `/`, `,`, `?`,
-`;`, `#` or `(`, and that first host holds no `\` (a SQL Server `host\instance` may hold the `@`),
-everything from the `//` to the `@` is cut off. After that cut the URL gets no connection where any
-other `@` follows the `//`, where a property key names a user or secret
-(`MaskingEngine.isSensitiveKey`, or a key holding `user`, `uid`, `pwd`, `pass`, `secret` or `token`,
-matched after `?`, `;`, `&`, `(`, `,` or whitespace), where it holds a `{` or a `%`, or where text
-follows an Oracle descriptor. After parsing, a SQL Server URL with an `&` gets none.
+describes only what `CredentialFreeJdbcUrls.parse` accepts. `DataSourceMetadata`, behind the
+dashboard's Overview DataSource card and the startup banner, calls the same method, so all three
+agree on which URLs give a target. The card and the banner also list the URL's properties, but never
+those of its authority (`PropertySource.AUTHORITY`), which is where a user or password sits. A port
+the URL leaves out is the driver's default (3306, 5432, 1433, 1521), as the parser reports it.
 
-The parser splits properties on both `&` and `;` while each driver splits on one, so a value can
-pose as `instanceName`, `databaseName` or `database`. For the other products the parser reads hosts
-and database from the URL before its properties begin (at `?` for pg, MySQL, MariaDB and SQLite, at
-`;` for Derby, at `?` or `;` for H2 and HSQLDB); a `?` or `;` that lands in the database, such as
-`jdbc:postgresql://db/shop;x` or Oracle's Easy Connect parameters, fails the name check, and
-`instance` is read for SQL Server only, so no property value reaches the body. On SQL Server, the
-driver splits on `;` alone, so refusing `&` and `{` leaves the parser splitting exactly as the
-driver does. The key rule, `%` (Connector/J decodes `pass%77ord` to `password`) and the descriptor
-rule (the Oracle parser reads `SERVICE_NAME` and `PORT` from anywhere in the URL) cover what
-remains. As a second line, a host that is no plain host name or IP literal, or a database or
-instance outside `[A-Za-z0-9._$~/-]*`, gives no connection. A DataSource that throws while being
-unwrapped, such as a routing DataSource without a default target, gets none either.
+The jdbc-url-parser rejects what the driver would reject, such as a user before the host for
+PostgreSQL, SQL Server and Oracle, an Oracle descriptor with text after it, or a SQL Server URL with
+a zero port. `parse` adds the rules the parser cannot know, each one because a credential could end
+up in a name it reports:
+
+- A URL with a character outside ASCII gets none: mssql-jdbc matches keys with `equalsIgnoreCase`,
+  which folds a long s (U+017F) to `s`, so a key the credential check cannot read may still be one.
+- Where the URL holds exactly one `@` after the `//` that follows its scheme (Oracle: `@//`), that
+  `@` comes before the first `/`, `,`, `?`, `;`, `#` or `(`, and that first host holds no `\`,
+  everything from the `//` to the `@` is cut off. MySQL, MariaDB and the other products the parser
+  accepts with a user before the host are described that way. A SQL Server `host\instance` may hold
+  the `@`, so a `\` refuses the cut. Any other `@` after the `//` gives none.
+- A property key that names a user or secret (`MaskingEngine.isSensitiveKey`, or a key holding
+  `user`, `uid`, `pwd`, `pass`, `secret` or `token`, matched after `?`, `;`, `&`, `(`, `,` or
+  whitespace) gives none.
+- A `{` or a `%` gives none. Connector/J decodes `pass%77ord` to `password`, and a quoted value
+  hides where a property ends.
+- A SQL Server URL with an `&` gives none. mssql-jdbc splits on `;` alone, and an `&` can only sit
+  inside a value there.
+- A database or instance, of any host, outside `[A-Za-z0-9._$~/-]*` gives none. This catches an
+  Oracle URL with parameters after the service name.
+- A database, instance or hostname the configured URL does not spell out gives none. Drivers rewrite
+  names (ojdbc drops whitespace from a host, so `ZUSR S3Cx` reads as `ZUSRS3Cx`), and the cut can
+  reshape a SQLite path. The parser's default host `localhost` is exempt.
+
+A DataSource that throws while being unwrapped, such as a routing DataSource without a default
+target, gets none either.
 `RedisHealthConnections` reads each `RedisConnectionFactory` bean, keyed by bean name, through a
 `RedisTargetReader` per client library (`LettuceRedisTargetReader`, `JedisRedisTargetReader`), each
 gated on its library. A Lettuce static master/replica factory is reported as its default
