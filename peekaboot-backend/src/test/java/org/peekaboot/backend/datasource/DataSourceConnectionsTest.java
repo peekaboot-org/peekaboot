@@ -47,24 +47,17 @@ class DataSourceConnectionsTest {
 
     @ParameterizedTest
     @CsvSource({
-        "jdbc:mysql://ZUSR:S3Cx@db:3306/shop, MYSQL, db, 3306, shop",
-        "jdbc:postgresql://ZUSR:S3Cx@pg/shop, POSTGRESQL, pg, 5432, shop",
-        "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=shop, SQLSERVER, db, 1433, shop",
-        "jdbc:mysql:// ZUSR:S3Cx@db/shop, MYSQL, db, 3306, shop",
-        "jdbc:mysql://ZUSR:S3C)x@db/shop, MYSQL, db, 3306, shop",
-        "jdbc:mysql://ZUSR:S3C:x@db/shop, MYSQL, db, 3306, shop",
-        "jdbc:postgresql://ZUSR%40corp:S3C%40x@db/shop, POSTGRESQL, db, 5432, shop",
-        "jdbc:mysql://ZUSR:S3C%2Fx%3Fy@db/shop, MYSQL, db, 3306, shop",
-        "jdbc:postgresql://ZUSR@db/shop, POSTGRESQL, db, 5432, shop",
-        "jdbc:mysql://ZUSR@db, MYSQL, db, 3306, ''",
-        "jdbc:mysql://ZUSR:S3Cx@[::1]:3306/shop, MYSQL, [::1], 3306, shop",
-        "jdbc:postgresql://ZUSR:S3Cx@[2001:db8::1]/shop, POSTGRESQL, [2001:db8::1], 5432, shop",
-        "jdbc:oracle:thin:@//ZUSR:S3Cx@db:1521/svc, ORACLE, db, 1521, svc"
+        "jdbc:mysql://ZUSR:S3Cx@db:3306/shop, db, shop",
+        "jdbc:mysql:// ZUSR:S3Cx@db/shop, db, shop",
+        "jdbc:mysql://ZUSR:S3C)x@db/shop, db, shop",
+        "jdbc:mysql://ZUSR:S3C:x@db/shop, db, shop",
+        "jdbc:mysql://ZUSR@db, db, ''",
+        "jdbc:mysql://ZUSR:S3Cx@[::1]:3306/shop, [::1], shop"
     })
-    void aUserInfoInsideTheFirstHostIsCutOff(String url, String product, String hostname, int port, String database) {
+    void aMySqlUserInfoBeforeTheFirstHostIsLeftOut(String url, String hostname, String database) {
         assertThat(connectionsOf(url).get("dataSource"))
                 .isEqualTo(new DataSourceConnection(
-                        "dataSource", product, List.of(new HealthConnection.Host(hostname, port)), database, null));
+                        "dataSource", "MYSQL", List.of(new HealthConnection.Host(hostname, 3306)), database, null));
     }
 
     @ParameterizedTest
@@ -73,7 +66,7 @@ class DataSourceConnectionsTest {
         "'jdbc:mysql://ZUSR:S3Cx@:3306,real:3307/shop', localhost, 3306, real, 3307",
         "'jdbc:mysql:loadbalance://ZUSR:S3Cx@db1,db2/shop', db1, 3306, db2, 3306"
     })
-    void aUserInfoBeforeTheFirstOfSeveralHostsIsCutOff(
+    void aMySqlUserInfoBeforeTheFirstOfSeveralHostsIsLeftOut(
             String url, String firstHostname, int firstPort, String secondHostname, int secondPort) {
         assertThat(connectionsOf(url).get("dataSource"))
                 .isEqualTo(new DataSourceConnection(
@@ -99,12 +92,6 @@ class DataSourceConnectionsTest {
                 .isEqualTo(new DataSourceConnection("dataSource", "H2", List.of(), "./data//shop", null));
     }
 
-    @Test
-    void anAtInAFilePathCutsNothingOutOfIt() {
-        assertThat(connectionsOf("jdbc:h2:./S3C//ZUSR@db/shop;INIT=./S3C//db/shop"))
-                .isEmpty();
-    }
-
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -119,6 +106,8 @@ class DataSourceConnectionsTest {
                 "jdbc:mysql://ZUSR:4242?S3C@db/shop",
                 "jdbc:mysql://ZUSR:S3C@db@evil/shop",
                 "jdbc:mysql://db1:3306,ZUSR:S3Cx@db2:3307/shop",
+                "jdbc:mysql://db1,ZUSR@S3Cx/shop",
+                "jdbc:mysql://ZUSR@db1,ZUSR@S3Cx/shop",
                 "jdbc:mysql://db/shop?user=ZUSR@corp",
                 "jdbc:mysql://db/shop?password=S3C@x",
                 "jdbc:mysql://ZUSR:S3Cx@db/shop?password=S3C@y",
@@ -130,7 +119,7 @@ class DataSourceConnectionsTest {
                 "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=x;password={a;databaseName=S3Cy}",
                 "jdbc:oracle:thin:@//ZUSR:S3Cx@db:1521/svc?password=S3Cy"
             })
-    void aUrlWhoseUserInfoCannotBeCutOffCleanlyHasNoConnection(String url) {
+    void anAtOutsideAFirstHostUserInfoHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
     }
 
@@ -192,9 +181,10 @@ class DataSourceConnectionsTest {
             strings = {
                 "jdbc:mysql://db/shop?pass%77ord=S3Cx",
                 "jdbc:sqlserver://db;databaseName=shop;p%61ssword=a&databaseName=S3Cx",
-                "jdbc:postgresql://db/shop?options=-c%20search_path%3Dshop"
+                "jdbc:postgresql://db/shop?options=-c%20search_path%3Dshop",
+                "jdbc:mysql://ZUSR:S3C%2Fx%3Fy@db/shop"
             })
-    void aUrlWithAPercentEncodingAfterItsHostHasNoConnection(String url) {
+    void aUrlWithAPercentEncodingHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
     }
 
@@ -256,7 +246,7 @@ class DataSourceConnectionsTest {
                 "jdbc:mysql://db\\ZUSR@S3Cx/shop",
                 "jdbc:mysql://ZUSR:S3C\\x@db/shop"
             })
-    void aUserInfoWithABackslashInItsHostIsNotCutOff(String url) {
+    void aUserInfoWithABackslashInItsHostHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
     }
 
@@ -351,7 +341,11 @@ class DataSourceConnectionsTest {
                 "jdbc:mysql://db/x;password=S3Cx",
                 "jdbc:mysql://db/x\\S3Cx",
                 "jdbc:postgresql://db/ZUSR:S3Cx",
-                "jdbc:postgresql://db/S3C%40x"
+                "jdbc:postgresql://db/S3C%40x",
+                "jdbc:h2:./S3C//ZUSR@db/shop",
+                "jdbc:h2:./S3C//ZUSR@db/shop;INIT=./S3C//db/shop",
+                "jdbc:h2:file:/data/S3C//ZUSR@shop",
+                "jdbc:sqlite://ZUSR:S3Cx@/data/x.db"
             })
     void aDatabaseThatIsNoPlainNameHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
@@ -376,15 +370,11 @@ class DataSourceConnectionsTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "jdbc:h2:./S3C//ZUSR@db/shop",
-                "jdbc:h2:file:/data/S3C//ZUSR@shop",
-                "jdbc:sqlite://ZUSR:S3Cx@/data/x.db",
                 "jdbc:mysql://db/sh%6Fp",
                 "jdbc:oracle:thin:@//db:1521/svc S3C",
                 "jdbc:oracle:thin:@//db:1521/svc/in st",
                 "jdbc:oracle:thin:@ZUSR S3Cx:1521/svc",
-                "jdbc:oracle:thin:@S3C x:1521/svc",
-                "jdbc:oracle:thin:@//ZUSR:S3Cx@S3C x:1521/svc"
+                "jdbc:oracle:thin:@S3C x:1521/svc"
             })
     void aNameTheUrlDoesNotSpellOutHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
@@ -407,7 +397,8 @@ class DataSourceConnectionsTest {
                 "jdbc:sqlserver://db;databaseName=x;password={a;databaseName=S3Cx}",
                 "jdbc:sqlserver://db;databaseName={shop;S3Cx}",
                 "jdbc:sqlserver://db;databaseName=shop;password={S3C;x}",
-                "jdbc:sqlserver://db;databaseName=x;applicationName={a;databaseName=S3Cx;z}"
+                "jdbc:sqlserver://db;databaseName=x;applicationName={a;databaseName=S3Cx;z}",
+                "jdbc:mysql://ZUSR:{S3C}@db/shop"
             })
     void aUrlWithABracedValueHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();
@@ -489,7 +480,17 @@ class DataSourceConnectionsTest {
             strings = {
                 "jdbc:postgresql://db",
                 "jdbc:SQLSERVER://db;databaseName=shop",
-                "jdbc:oracle:thin:ZUSR/S3C//x@db:1521/svc"
+                "jdbc:oracle:thin:ZUSR/S3C//x@db:1521/svc",
+                "jdbc:postgresql://ZUSR:S3Cx@pg/shop",
+                "jdbc:postgresql://ZUSR@db/shop",
+                "jdbc:postgresql://ZUSR%40corp:S3C%40x@db/shop",
+                "jdbc:postgresql://ZUSR:S3Cx@[2001:db8::1]/shop",
+                "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=shop",
+                "jdbc:oracle:thin:@//ZUSR:S3Cx@db:1521/svc",
+                "jdbc:mariadb://ZUSR:S3Cx@db/shop",
+                "jdbc:h2:tcp://ZUSR:S3Cx@db/~/shop",
+                "jdbc:hsqldb:hsql://ZUSR:S3Cx@db/shop",
+                "jdbc:derby://ZUSR:S3Cx@db:1527/shop"
             })
     void aUrlTheDriverRejectsHasNoConnection(String url) {
         assertThat(connectionsOf(url)).isEmpty();

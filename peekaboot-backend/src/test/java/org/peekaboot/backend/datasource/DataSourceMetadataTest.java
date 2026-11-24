@@ -1,6 +1,7 @@
 package org.peekaboot.backend.datasource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.peekaboot.backend.datasource.ReportingDataSources.reporting;
 
 import java.sql.SQLException;
@@ -11,6 +12,7 @@ import java.util.stream.Stream;
 import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
+import net.osslabz.jdbc.JdbcUrlParseException;
 import net.osslabz.jdbc.PropertySource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,11 @@ class DataSourceMetadataTest {
             "jdbc:oracle:thin:@//db:1521/svc/inst",
             ORACLE_DESCRIPTOR,
             "jdbc:h2:mem:orders");
+
+    private static final List<String> USER_INFO_URLS_THE_PARSER_REJECTS = List.of(
+            "jdbc:postgresql://ZUSR:S3Cx@pg/shop",
+            "jdbc:sqlserver://ZUSR:S3Cx@db;databaseName=shop",
+            "jdbc:oracle:thin:@//ZUSR:S3Cx@db:1521/svc");
 
     @Test
     void extractsMetadataFromWorkingDataSource() throws SQLException {
@@ -130,10 +137,7 @@ class DataSourceMetadataTest {
     @MethodSource("everyUrlOfTheseTests")
     void theDashboardNamesNoMoreThanTheHealthReport(String url) throws SQLException {
         DataSourceMetadata m = DataSourceMetadata.read("ds", reporting(url));
-        HealthConnection health = new DataSourceConnections(
-                        Map.of("ds", new NeverConnectsDataSource()), dataSource -> Optional.of(url))
-                .connections()
-                .get("ds");
+        HealthConnection health = healthConnectionOf(url);
 
         if (health instanceof DataSourceConnection connection) {
             assertThat(m.hosts().stream()
@@ -153,11 +157,29 @@ class DataSourceMetadataTest {
         }
     }
 
+    @ParameterizedTest
+    @MethodSource("userInfoUrlsTheParserRejects")
+    void neitherTheDashboardNorTheHealthReportNamesAUserInfoTheParserRejects(String url) {
+        assertThatThrownBy(() -> DataSourceMetadata.read("ds", reporting(url)))
+                .isInstanceOf(JdbcUrlParseException.class);
+        assertThat(healthConnectionOf(url)).isNull();
+    }
+
+    private static HealthConnection healthConnectionOf(String url) {
+        return new DataSourceConnections(Map.of("ds", new NeverConnectsDataSource()), dataSource -> Optional.of(url))
+                .connections()
+                .get("ds");
+    }
+
     static Stream<String> urlsTheGuardRefuses() {
         return URLS_THE_GUARD_REFUSES.stream();
     }
 
     static Stream<String> everyUrlOfTheseTests() {
         return Stream.concat(URLS_THE_GUARD_REFUSES.stream(), URLS_THE_GUARD_DESCRIBES.stream());
+    }
+
+    static Stream<String> userInfoUrlsTheParserRejects() {
+        return USER_INFO_URLS_THE_PARSER_REJECTS.stream();
     }
 }

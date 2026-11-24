@@ -18,20 +18,20 @@ import org.peekaboot.backend.masking.MaskingEngine;
  * can hold a user or password. The health report, the dashboard's Overview DataSource card and the startup banner
  * name a target only where this class accepts its URL.
  *
- * <p>A user and password right after the scheme's {@code //} are cut off where the URL holds exactly one
- * {@code @} after it, inside a first host without a {@code \}. No form is kept where the URL holds a
- * character outside ASCII, where any other {@code @} follows that {@code //}, where a property names a user
- * or a secret, or where an opening brace or a {@code %} appears. A URL the parser rejects as its driver would
- * is refused too, as is a SQL Server URL with an {@code &}, a database or instance that is no plain name or
- * file path, and a database, instance or host the URL does not spell out, as written and once cut
- * ({@code localhost}, the parser's default host, excepted). The health endpoint documents these refusals and
- * asks for the credentials in {@code spring.datasource.username} and {@code spring.datasource.password} instead.
+ * <p>The URL is parsed as written. A URL with a user and password before the first host is described only where
+ * the parser, as Connector/J does, reads them there, and they are never shown. The URL is refused where it
+ * holds a character outside ASCII, an {@code @} after the scheme's {@code //} other than the one ending a user
+ * and password in a first host without a {@code \}, a property that names a user or a secret, an opening brace
+ * or a {@code %}. A URL the parser rejects as its driver would is refused too, as is a SQL Server URL with an
+ * {@code &}, a database or instance that is no plain name or file path, and a database, instance or host the URL
+ * does not spell out ({@code localhost}, the parser's default host, excepted). The health endpoint documents
+ * these refusals and asks for the credentials in {@code spring.datasource.username} and
+ * {@code spring.datasource.password} instead.
  */
 final class CredentialFreeJdbcUrls {
 
     private static final MaskingEngine MASKING = new MaskingEngine();
-    // the cut drops the text from this "//" (Oracle: "@//") to its "@"; jdbc:sqlite:// and jdbc:h2:file:// match too,
-    // and the spelled-out check refuses a path the cut reshapes
+    // the "//" (Oracle: "@//") that may open a user and password; a "//" inside an H2 or SQLite path does not
     private static final Pattern SCHEME = Pattern.compile("[A-Za-z][A-Za-z0-9+.-]*(?::[A-Za-z0-9+.-]+)*:@?//");
     private static final String FIRST_HOST_ENDS = "/,?;#(";
     private static final Pattern PROPERTY_KEY = Pattern.compile("[?;&(,\\s]\\s*([^=?;&(,\\s]+)\\s*=");
@@ -47,16 +47,15 @@ final class CredentialFreeJdbcUrls {
     static Optional<JdbcUrl> parse(String jdbcUrl) {
         return Optional.of(jdbcUrl)
                 .filter(CredentialFreeJdbcUrls::isAscii)
-                .flatMap(CredentialFreeJdbcUrls::withoutUserInfo)
+                .filter(CredentialFreeJdbcUrls::holdsNoAtOutsideAFirstHostUserInfo)
                 .filter(CredentialFreeJdbcUrls::holdsNoQuotedOrEncodedText)
                 .filter(CredentialFreeJdbcUrls::namesNoCredentialProperty)
-                .flatMap(cutUrl -> parseNamesItSpellsOut(cutUrl, jdbcUrl));
+                .flatMap(CredentialFreeJdbcUrls::parseNamesItSpellsOut);
     }
 
-    private static Optional<JdbcUrl> parseNamesItSpellsOut(String cutUrl, String jdbcUrl) {
-        // a cut-off user or password must not vouch for a name, nor may the cut join two parts into one
-        Predicate<String> spelledOut = name -> spellsOut(cutUrl, name) && spellsOut(jdbcUrl, name);
-        return Optional.ofNullable(JdbcUrlParser.tryParse(cutUrl))
+    private static Optional<JdbcUrl> parseNamesItSpellsOut(String jdbcUrl) {
+        Predicate<String> spelledOut = name -> spellsOut(jdbcUrl, name);
+        return Optional.ofNullable(JdbcUrlParser.tryParse(jdbcUrl))
                 .filter(parsed -> !isSqlServerWithAmpersand(parsed, jdbcUrl))
                 .filter(parsed -> namesPlainDatabaseAndInstance(parsed, spelledOut))
                 .filter(parsed -> spellsOutEveryHostname(parsed, spelledOut));
@@ -67,26 +66,22 @@ final class CredentialFreeJdbcUrls {
         return url.chars().allMatch(c -> c < 0x80);
     }
 
-    // the parser rejects a user before the host as pgjdbc, mssql-jdbc and ojdbc do, so only a cut URL is described
-    private static Optional<String> withoutUserInfo(String url) {
+    // Connector/J names the text after a later host's "@", or a host\instance's, as a host; it may hold a credential
+    private static boolean holdsNoAtOutsideAFirstHostUserInfo(String url) {
         Matcher scheme = SCHEME.matcher(url);
         if (!scheme.lookingAt()) {
-            return Optional.of(url);
+            return true;
         }
         int firstHost = scheme.end();
         int at = url.indexOf('@', firstHost);
         if (at < 0) {
-            return Optional.of(url);
+            return true;
         }
-        // health, the Overview card and the banner refuse any other "@" after the "//"
         boolean onlyAt = url.indexOf('@', at + 1) < 0;
         int firstHostEnd = endOfFirstHost(url, firstHost);
         boolean insideFirstHost = at < firstHostEnd;
-        // in a SQL Server host\instance the "@" belongs to the instance name
         boolean namesNoInstance = url.substring(firstHost, firstHostEnd).indexOf('\\') < 0;
-        return onlyAt && insideFirstHost && namesNoInstance
-                ? Optional.of(url.substring(0, firstHost) + url.substring(at + 1))
-                : Optional.empty();
+        return onlyAt && insideFirstHost && namesNoInstance;
     }
 
     private static int endOfFirstHost(String url, int firstHost) {
