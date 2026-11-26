@@ -20,8 +20,9 @@ import org.springframework.http.HttpStatus;
  * or a name another site points at this machine, drives it.
  *
  * <p>The rule reads the container's own request. What the container itself rewrote before the
- * servlet API hands it out stays out of sight: under {@code server.forward-headers-strategy=native}
- * the client address is already the one a forwarding header claimed.
+ * servlet API hands it out stays out of sight: under {@code server.request.header.forwarded.strategy=web-server}
+ * (Boot 4.2) or {@code server.forward-headers-strategy=native} (Boot 4.1) the client address is
+ * already the one a forwarding header claimed.
  */
 public final class LoopbackOnlyAccess implements DashboardAccess {
 
