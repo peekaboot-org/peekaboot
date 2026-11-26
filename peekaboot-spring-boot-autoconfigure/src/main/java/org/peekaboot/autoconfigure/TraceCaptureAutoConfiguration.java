@@ -59,7 +59,10 @@ public class TraceCaptureAutoConfiguration {
         @ConditionalOnMissingBean
         LogbackAppenderRegistrar peekabootLogbackAppenderRegistrar(
                 ApplicationContext applicationContext, CaptureEventPublisher capture) {
-            return new LogbackAppenderRegistrar(applicationContext, capture);
+            return new LogbackAppenderRegistrar(
+                    applicationContext,
+                    capture,
+                    TracingMdcKeys.of(applicationContext.getEnvironment(), applicationContext.getClassLoader()));
         }
     }
 }

@@ -36,11 +36,13 @@ class PeekabootLogbackAppenderTest {
         loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         captured = new ArrayList<>();
 
-        appender = new PeekabootLogbackAppender(event -> {
-            if (event instanceof LogCapturedEvent logEvent) {
-                captured.add(logEvent);
-            }
-        });
+        appender = new PeekabootLogbackAppender(
+                event -> {
+                    if (event instanceof LogCapturedEvent logEvent) {
+                        captured.add(logEvent);
+                    }
+                },
+                MdcKeys.DEFAULTS);
         appender.setContext(loggerContext);
         appender.start();
 
@@ -57,6 +59,55 @@ class PeekabootLogbackAppenderTest {
         logger.setAdditive(true);
         appender.stop();
         MDC.clear();
+    }
+
+    @Test
+    @DisplayName("reads the trace and span id under the keys it was given")
+    void readsTheTraceAndSpanIdUnderTheKeysItWasGiven() {
+        PeekabootLogbackAppender renamed = appenderWith(new MdcKeys("tid", "sid"));
+        MDC.put("tid", "abc");
+        MDC.put("sid", "def");
+
+        logger.info("under renamed keys");
+
+        assertThat(captured).singleElement().satisfies(event -> {
+            assertThat(event.traceId()).isEqualTo("abc");
+            assertThat(event.spanId()).isEqualTo("def");
+        });
+        logger.detachAppender(renamed);
+        renamed.stop();
+    }
+
+    @Test
+    @DisplayName("a line carrying only the default keys is untraced under renamed keys")
+    void aLineCarryingOnlyTheDefaultKeysIsUntracedUnderRenamedKeys() {
+        PeekabootLogbackAppender renamed = appenderWith(new MdcKeys("tid", "sid"));
+        MDC.put("traceId", "abc");
+
+        logger.info("under default keys");
+
+        assertThat(captured).singleElement().satisfies(event -> {
+            assertThat(event.traceId()).isNull();
+            assertThat(event.spanId()).isNull();
+        });
+        logger.detachAppender(renamed);
+        renamed.stop();
+    }
+
+    /** Replaces the default appender, so a line reaches {@code captured} once. */
+    private PeekabootLogbackAppender appenderWith(MdcKeys keys) {
+        logger.detachAppender(appender);
+        PeekabootLogbackAppender other = new PeekabootLogbackAppender(
+                event -> {
+                    if (event instanceof LogCapturedEvent logEvent) {
+                        captured.add(logEvent);
+                    }
+                },
+                keys);
+        other.setContext(loggerContext);
+        other.start();
+        logger.addAppender(other);
+        return other;
     }
 
     @Test

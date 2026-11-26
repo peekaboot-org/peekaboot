@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.peekaboot.backend.tracing.capture.MdcKeys;
 import org.peekaboot.backend.tracing.capture.PeekabootLogbackAppender;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -28,12 +29,15 @@ class LogbackAppenderRegistrar implements ApplicationListener<ContextClosedEvent
 
     private final ApplicationContext applicationContext;
     private final ApplicationEventPublisher capture;
+    private final MdcKeys mdcKeys;
     private PeekabootLogbackAppender appender;
 
     /** @param capture what the appender publishes to; the context would hand each line to the application's listeners */
-    LogbackAppenderRegistrar(ApplicationContext applicationContext, ApplicationEventPublisher capture) {
+    LogbackAppenderRegistrar(
+            ApplicationContext applicationContext, ApplicationEventPublisher capture, MdcKeys mdcKeys) {
         this.applicationContext = applicationContext;
         this.capture = capture;
+        this.mdcKeys = mdcKeys;
     }
 
     @PostConstruct
@@ -42,7 +46,7 @@ class LogbackAppenderRegistrar implements ApplicationListener<ContextClosedEvent
             return;
         }
 
-        appender = new PeekabootLogbackAppender(capture);
+        appender = new PeekabootLogbackAppender(capture, mdcKeys);
         appender.setContext(loggerContext);
         appender.start();
 

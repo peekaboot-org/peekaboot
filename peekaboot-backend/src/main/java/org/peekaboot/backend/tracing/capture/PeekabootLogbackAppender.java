@@ -16,7 +16,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Logback appender that captures log events and publishes each as a {@link LogCapturedEvent}.
- * Uses MDC for traceId/spanId correlation since logback events contain frozen MDC state.
+ * Uses MDC, under the {@link MdcKeys} it is given, for traceId/spanId correlation since logback events contain frozen MDC state.
  *
  * <p>Every event Logback delivers is captured, except what {@link SecurityPostureListener} logs:
  * its banner prints the generated dashboard password, which belongs in the application's log and
@@ -31,13 +31,12 @@ import org.springframework.context.ApplicationEventPublisher;
  */
 public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
 
-    private static final String TRACE_ID_KEY = "traceId";
-    private static final String SPAN_ID_KEY = "spanId";
-
     private final ApplicationEventPublisher eventPublisher;
+    private final MdcKeys mdcKeys;
 
-    public PeekabootLogbackAppender(ApplicationEventPublisher eventPublisher) {
+    public PeekabootLogbackAppender(ApplicationEventPublisher eventPublisher, MdcKeys mdcKeys) {
         this.eventPublisher = eventPublisher;
+        this.mdcKeys = mdcKeys;
         setName("peekaboot");
     }
 
@@ -47,8 +46,8 @@ public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggin
             return;
         }
         Map<String, String> mdc = Objects.requireNonNullElse(event.getMDCPropertyMap(), Map.of());
-        String traceId = present(mdc.get(TRACE_ID_KEY));
-        String spanId = traceId != null ? mdc.get(SPAN_ID_KEY) : null;
+        String traceId = present(mdc.get(mdcKeys.traceId()));
+        String spanId = traceId != null ? mdc.get(mdcKeys.spanId()) : null;
         Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
         String level = event.getLevel().toString();
         // Logback formats a null pattern as a null message; every captured line carries one.
