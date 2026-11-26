@@ -232,6 +232,15 @@ final class MaskingRules {
                     1,
                     2,
                     Pattern.compile(";\\s*+([^=&;?\\s]++)=(\\{(?:[^}]++|}})*+(?:}|\\z)|[^;\\s]+)")),
+            // DB2 writes its first property after a ":" that follows the database name
+            // (jdbc:db2://host:50000/db:name=value;), later ones after ";", which the rule above
+            // reads. The prefix is the server form's authority or nothing (the local form), then
+            // the database name. Anchored on the scheme, so ":name=value" elsewhere is left alone.
+            ValuePattern.urlParameter(
+                    "Credentials in a DB2 first property",
+                    1,
+                    2,
+                    Pattern.compile("(?i)jdbc:db2:(?://[^/\\s]*+/)?+[^:;=/\\s]++:([^=;:\\s]++)=([^;\\s]+)")),
             // The value of a -Dname=value / --name=value option, as JAVA_TOOL_OPTIONS,
             // JDK_JAVA_OPTIONS and their kin carry it: the property spring.datasource.password
             // is masked by its own key, but not the option string it was set from unless

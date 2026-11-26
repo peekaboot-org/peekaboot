@@ -1235,6 +1235,35 @@ class MaskingEngineTest {
         }
     }
 
+    /** DB2 writes its first property after a ":" that follows the database name, later ones after ";". */
+    @Nested
+    class Db2FirstProperty {
+
+        @ParameterizedTest
+        @CsvSource(
+                delimiter = '|',
+                value = {
+                    "jdbc:db2://db:50000/shop:password=S3Cx;user=x;|jdbc:db2://db:50000/shop:password=******;user=x;",
+                    "jdbc:db2://db/shop:password=S3Cx;|jdbc:db2://db/shop:password=******;",
+                    "jdbc:db2:shop:password=S3Cx;user=x;|jdbc:db2:shop:password=******;user=x;",
+                    "JDBC:DB2://db/shop:Password=S3Cx;|JDBC:DB2://db/shop:Password=******;",
+                    "jdbc:db2://db/shop:sslKeyStorePassword=S3Cx;|jdbc:db2://db/shop:sslKeyStorePassword=******;",
+                    "jdbc:db2://db/shop:currentSchema=app;|jdbc:db2://db/shop:currentSchema=app;",
+                    "jdbc:db2://db/shop:currentSchema=app;password=S3Cx;"
+                            + "|jdbc:db2://db/shop:currentSchema=app;password=******;",
+                    "a:password=S3Cx|a:password=S3Cx"
+                })
+        void maskValueMasksTheFirstPropertyOfADb2Url(String value, String expected) {
+            assertThat(engine.maskValue(value)).isEqualTo(expected);
+        }
+
+        @Test
+        void maskPropertyMasksTheFirstPropertyOfADb2Url() {
+            assertThat(engine.maskProperty("spring.datasource.url", "jdbc:db2://db:50000/shop:password=S3Cx;", false))
+                    .isEqualTo("jdbc:db2://db:50000/shop:password=******;");
+        }
+    }
+
     /**
      * A URL parameter inside a property value is judged as a JDBC connection param, secret words anywhere in its
      * name included. Every other value, a request path or a log line, keeps the whole-token key rules.
