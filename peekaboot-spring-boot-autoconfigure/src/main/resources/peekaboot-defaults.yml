@@ -25,8 +25,8 @@ management:
 
   metrics:
     observations:
-      # Registers <observation>.active long task timers; the "HTTP in flight" panel reads them
-      # Spring default: false since Boot 4.2 (4.1 registers them always and ignores this key)
+      # Registers <observation>.active long task timers (Boot 4.1 always does and ignores this key)
+      # Spring default: false | We register them because the "HTTP in flight" panel reads them
       include-active-long-task-timer: true
 
   observations:
