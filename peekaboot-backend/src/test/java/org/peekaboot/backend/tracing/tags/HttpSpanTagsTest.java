@@ -8,6 +8,7 @@ import java.util.OptionalInt;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class HttpSpanTagsTest {
 
@@ -116,6 +117,39 @@ class HttpSpanTagsTest {
             })
     void routeIsTheMatchedPattern(String key, String value, String route) {
         assertThat(HttpSpanTags.route(Map.of(key, value))).isEqualTo(route);
+    }
+
+    /** OpenTelemetry's server convention writes a fallback word into http.route where no pattern matched. */
+    @ParameterizedTest
+    @ValueSource(strings = {"NOT_FOUND", "REDIRECTION", "UNKNOWN"})
+    void anOpenTelemetryRouteFallbackIsNoRoute(String fallback) {
+        Map<String, String> tags = Map.of("http.route", fallback, "url.path", "/x");
+
+        assertThat(HttpSpanTags.route(tags)).isNull();
+        assertThat(HttpSpanTags.path(tags)).isEqualTo("/x");
+    }
+
+    @Test
+    void anUnknownStatusCodeIsNoStatus() {
+        Map<String, String> tags = Map.of("http.response.status_code", "UNKNOWN");
+
+        assertThat(HttpSpanTags.statusCode(tags)).isNull();
+        assertThat(HttpSpanTags.isServerError(Span.Kind.SERVER, tags)).isFalse();
+        assertThat(HttpSpanTags.clientErrorStatus(Span.Kind.SERVER, tags)).isEmpty();
+    }
+
+    @Test
+    void anErrorTypeAloneMakesNoServerError() {
+        Map<String, String> tags =
+                Map.of("http.response.status_code", "200", "error.type", "java.lang.IllegalStateException");
+
+        assertThat(HttpSpanTags.isServerError(Span.Kind.SERVER, tags)).isFalse();
+    }
+
+    @Test
+    void aSpanWithOnlyOpenTelemetryHttpKeysDescribesAnHttpRequest() {
+        assertThat(HttpSpanTags.describesHttpRequest(Map.of("http.request.method", "GET", "url.path", "/x")))
+                .isTrue();
     }
 
     @Test
