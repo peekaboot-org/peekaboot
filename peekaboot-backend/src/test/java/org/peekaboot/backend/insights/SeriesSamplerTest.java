@@ -675,6 +675,28 @@ class SeriesSamplerTest {
         assertThat(sampler.sample(10_000)).isEqualTo(5.0);
     }
 
+    /** Under OpenTelemetry conventions the subtract-meter carries the alternative's tag key, not the series' own. */
+    @Test
+    void theSubtractMeterIsMatchedByThePresentCandidatesTags() {
+        Gauge.builder("total", () -> 1000).tag("type", "heap").register(registry);
+        Gauge.builder("free", () -> 400).tag("type", "heap").register(registry);
+        Gauge.builder("free", () -> 50).tag("type", "non_heap").register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                new SeriesDef(
+                        "s",
+                        "S",
+                        "total",
+                        Map.of("area", "heap"),
+                        Stat.VALUE,
+                        "free",
+                        null,
+                        List.of(new MeterAlternative("total", Map.of("type", "heap")))),
+                registry,
+                UnresolvedMeterReport.WARN);
+
+        assertThat(sampler.sample(10_000)).isEqualTo(600.0);
+    }
+
     @Test
     void noPresentCandidateIsReportedAsUnresolved() {
         SeriesSampler sampler = new SeriesSampler(
