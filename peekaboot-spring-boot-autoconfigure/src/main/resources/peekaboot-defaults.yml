@@ -23,6 +23,12 @@ management:
       # Spring default: 0.1 (10%) | We sample all requests for complete trace visibility
       probability: 1.0
 
+  metrics:
+    observations:
+      # Registers <observation>.active long task timers; the "HTTP in flight" panel reads them
+      # Spring default: false since Boot 4.2 (4.1 registers them always and ignores this key)
+      include-active-long-task-timer: true
+
   observations:
     annotations:
       # Enables @Observed, @Timed, @Counted annotations
