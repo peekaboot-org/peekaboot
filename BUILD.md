@@ -148,11 +148,11 @@ sample on a third-party version clash would buy nothing but two permanent exclus
 `./mvnw clean verify` equivalent. It runs unit tests (`test`, `*Test` and `*Tests`) and
 integration tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, with
 the testing-app pom's `peekaboot.it.threads` unless `-Ppeekaboot.it.threads=N` overrides it).
-The testing app adds `otelConventionsIntegrationTest`, the classes that need a JVM of their own,
-and `plainJdbcIntegrationTest`, the SQL and trace classes rerun without the OpenTelemetry JDBC
-module ([TESTING.md](docs/TESTING.md#suites)). It runs the static-analysis gates at the
-same tool versions, reading the same `config/` files, plus the reactor-wide coverage gate
-(`:peekaboot-coverage:coverageGate`, the same 90%/75% floors on merged execution data).
+It runs the static-analysis gates at the same tool versions, reading the same `config/` files,
+plus the reactor-wide coverage gate (`:peekaboot-coverage:coverageGate`, the same 90%/75% floors
+on merged execution data). The testing app adds `otelConventionsIntegrationTest`, the classes
+that need a JVM of their own, and `plainJdbcIntegrationTest`, the SQL and trace classes rerun
+without the OpenTelemetry JDBC module ([TESTING.md](docs/TESTING.md#suites)).
 `./gradlew test` is the fast gate, `./gradlew assemble` just builds the jars.
 
 `buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` plays the role of
