@@ -138,6 +138,7 @@ tasks.check {
 // the pom's defaults (-Ppeekaboot.it.threads=1 serializes for debugging).
 listOf(tasks.named<Test>("integrationTest"), otelConventionsIntegrationTest).forEach {
     it.configure {
+        maxHeapSize = pomProperty("peekaboot.it.max-heap")
         val threads = providers.gradleProperty("peekaboot.it.threads").getOrElse(pomProperty("peekaboot.it.threads"))
         val browser = providers.gradleProperty("peekaboot.it.browser").getOrElse(pomProperty("peekaboot.it.browser"))
         systemProperty("peekaboot.it.browser", browser)

@@ -41,6 +41,8 @@
              own runtime through CPU contention faster than the extra overlap pays back.
              Set to 1 to serialize when diagnosing a flaky test. -->
         <peekaboot.it.threads>2</peekaboot.it.threads>
+        <!-- Post-GC live set ~471 MiB at Spring's 32-context cache ceiling (~13 MB a context); twice that, rounded up to a whole GiB. -->
+        <peekaboot.it.max-heap>1g</peekaboot.it.max-heap>
         <!-- Playwright engine the *IT suite drives: chromium, firefox or webkit. The nightly
              cross-browser workflow runs all three; every other build takes the default. -->
         <peekaboot.it.browser>chromium</peekaboot.it.browser>
@@ -329,7 +331,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <configuration>
-                    <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                    <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar} -Xmx${peekaboot.it.max-heap}</argLine>
                     <forkCount>${peekaboot.it.forks}</forkCount>
                     <excludedGroups>${peekaboot.it.excludedTags}</excludedGroups>
                     <systemPropertyVariables>
