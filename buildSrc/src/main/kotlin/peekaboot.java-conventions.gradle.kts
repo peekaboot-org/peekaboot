@@ -119,17 +119,9 @@ tasks.test {
     include("**/*Test.class", "**/*Tests.class")
 }
 
-val integrationTest = tasks.register<Test>("integrationTest") {
-    description = "Runs the *IT classes (tests that boot a real application)."
-    group = "verification"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
+registerIntegrationTest("integrationTest", "Runs the *IT classes (tests that boot a real application).") {
     include("**/*IT.class")
     shouldRunAfter(tasks.test)
-}
-
-tasks.check {
-    dependsOn(integrationTest)
 }
 
 jacoco {

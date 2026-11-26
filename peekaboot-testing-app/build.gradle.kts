@@ -116,11 +116,10 @@ gitProperties {
 // The tag of the *IT classes the failsafe otel-conventions execution runs in a JVM of their own.
 val otelConventionsTag = pomProperty("peekaboot.it.otel-conventions")
 
-val otelConventionsIntegrationTest = tasks.register<Test>("otelConventionsIntegrationTest") {
-    description = "Runs the *IT classes that need a JVM of their own (OpenTelemetry conventions)."
-    group = "verification"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
+val otelConventionsIntegrationTest = registerIntegrationTest(
+    "otelConventionsIntegrationTest",
+    "Runs the *IT classes that need a JVM of their own (OpenTelemetry conventions).",
+) {
     include("**/*IT.class")
     useJUnitPlatform { includeTags(otelConventionsTag) }
     shouldRunAfter(tasks.named("integrationTest"))
@@ -128,10 +127,6 @@ val otelConventionsIntegrationTest = tasks.register<Test>("otelConventionsIntegr
 
 tasks.named<Test>("integrationTest") {
     useJUnitPlatform { excludeTags(otelConventionsTag) }
-}
-
-tasks.check {
-    dependsOn(otelConventionsIntegrationTest)
 }
 
 // The *IT suite runs concurrent test classes in one JVM; same knobs as the Maven build, with
