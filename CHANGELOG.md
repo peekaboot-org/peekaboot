@@ -1,3 +1,23 @@
+## 1.4.1
+
+### Fixed
+
+- **Masking of DB2 URLs.** DB2 writes a JDBC URL's first property after a `:`, as in
+  `jdbc:db2://db:50000/shop:password=…;`. On the Environment and Config tabs 1.4.0 showed that
+  property's value in clear where its name held a secret word. It is now masked like the
+  properties after `;`.
+- **An Oracle user name no longer shows as the DataSource host.** ojdbc drops whitespace from a
+  host, so in `jdbc:oracle:thin:dbadmin/pw@db admin:1521/svc` it connects to `dbadmin`. 1.4.0
+  accepted that name because the user name spells it, and showed the user name as the host in the
+  health report, on the DataSource card and in the startup banner. Such a URL now gets
+  `connection: null`, and the card and banner hide its target, as for any host name the URL does
+  not write out.
+
+### Dependency upgrades
+
+- **jdbc-url-parser 0.2.1, from 0.2.0.** A parse failure no longer carries a cause whose message
+  repeats text from the URL. Peekaboot never logged that cause; your own code may have.
+
 ## 1.4.0 - 2026-11-24
 
 ### Behaviour changes
