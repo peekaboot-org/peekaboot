@@ -125,13 +125,26 @@ val otelConventionsIntegrationTest = registerIntegrationTest(
     shouldRunAfter(tasks.named("integrationTest"))
 }
 
-tasks.named<Test>("integrationTest") {
-    useJUnitPlatform { excludeTags(otelConventionsTag) }
+// The failsafe plain-jdbc execution: the pom's *.java include patterns, without the OpenTelemetry JDBC module.
+val plainJdbcIntegrationTest = registerIntegrationTest(
+    "plainJdbcIntegrationTest",
+    "Reruns the SQL and trace *IT classes without the OpenTelemetry JDBC module.",
+) {
+    classpath = classpath.filter { !it.name.startsWith("datasource-micrometer-opentelemetry") }
+    include(pomProperty("peekaboot.it.plain-jdbc").split(",").map { it.trim().removeSuffix(".java") + ".class" })
+    systemProperty("peekaboot.it.jdbc-mode", "plain")
+    shouldRunAfter(tasks.named("integrationTest"))
+}
+
+listOf(tasks.named<Test>("integrationTest"), plainJdbcIntegrationTest).forEach {
+    it.configure {
+        useJUnitPlatform { excludeTags(otelConventionsTag) }
+    }
 }
 
 // The *IT suite runs concurrent test classes in one JVM; same knobs as the Maven build, with
 // the pom's defaults (-Ppeekaboot.it.threads=1 serializes for debugging).
-listOf(tasks.named<Test>("integrationTest"), otelConventionsIntegrationTest).forEach {
+listOf(tasks.named<Test>("integrationTest"), otelConventionsIntegrationTest, plainJdbcIntegrationTest).forEach {
     it.configure {
         maxHeapSize = pomProperty("peekaboot.it.max-heap")
         val threads = providers.gradleProperty("peekaboot.it.threads").getOrElse(pomProperty("peekaboot.it.threads"))

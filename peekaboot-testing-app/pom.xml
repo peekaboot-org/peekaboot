@@ -54,6 +54,8 @@
              carries it. Boot's tracing publishes scope events to every context in a JVM, so
              another context's MDC keys would sit beside the renamed ones that class proves. -->
         <peekaboot.it.otel-conventions>otel-conventions</peekaboot.it.otel-conventions>
+        <!-- The SQL and trace *ITs, rerun without the OpenTelemetry JDBC module (failsafe execution plain-jdbc, Gradle plainJdbcIntegrationTest). -->
+        <peekaboot.it.plain-jdbc>**/JdbcObservationModeIT.java, **/OrderTraceCaptureIT.java, **/QueryParameterCaptureIT.java, **/PoolMaintenanceTraceCaptureIT.java, **/MultiDataSourceTraceIT.java, **/OrderStatisticsIT.java, **/TraceSummaryIT.java, **/RequestAndQueryMaskingIT.java, **/DashboardTraceViewIT.java, **/SqlStatementViewIT.java</peekaboot.it.plain-jdbc>
         <!-- A property, not an inline version: the CI workflows key their browser cache on it. -->
         <playwright.version>1.63.0</playwright.version>
         <!-- The JSON Schema validator OpenApiContractIT checks the API's answers with. -->
@@ -370,6 +372,27 @@
                             <summaryFile>${project.build.directory}/failsafe-reports-otel-conventions/failsafe-summary.xml</summaryFile>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>plain-jdbc</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>${peekaboot.it.plain-jdbc}</include>
+                            </includes>
+                            <excludedGroups>${peekaboot.it.otel-conventions},${peekaboot.it.excludedTags}</excludedGroups>
+                            <classpathDependencyExcludes>
+                                <classpathDependencyExclude>net.ttddyy.observation:datasource-micrometer-opentelemetry</classpathDependencyExclude>
+                            </classpathDependencyExcludes>
+                            <systemPropertyVariables>
+                                <peekaboot.it.jdbc-mode>plain</peekaboot.it.jdbc-mode>
+                            </systemPropertyVariables>
+                            <reportsDirectory>${project.build.directory}/failsafe-reports-plain-jdbc</reportsDirectory>
+                            <summaryFile>${project.build.directory}/failsafe-reports-plain-jdbc/failsafe-summary.xml</summaryFile>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <!-- Failsafe merges every execution after a build's first into the summary file it
@@ -379,7 +402,7 @@
                 <artifactId>maven-clean-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>clean-otel-conventions-reports</id>
+                        <id>clean-execution-reports</id>
                         <phase>pre-integration-test</phase>
                         <goals>
                             <goal>clean</goal>
@@ -389,6 +412,9 @@
                             <filesets>
                                 <fileset>
                                     <directory>${project.build.directory}/failsafe-reports-otel-conventions</directory>
+                                </fileset>
+                                <fileset>
+                                    <directory>${project.build.directory}/failsafe-reports-plain-jdbc</directory>
                                 </fileset>
                             </filesets>
                         </configuration>

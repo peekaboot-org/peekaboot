@@ -110,6 +110,17 @@ request's MDC holds `traceId` next to `tid` and the renamed-key tests prove noth
 by tag because `-Dit.test` overrides failsafe's includes and excludes but not its groups: a
 narrow run that names the class beside others still runs each class once, in its own JVM.
 
+The SQL and trace `*IT`s run a second time without `datasource-micrometer-opentelemetry`, the
+JDBC mode of an app that excludes that module from the starter: failsafe execution `plain-jdbc`,
+Gradle task `plainJdbcIntegrationTest`. Both read their classes from the pom property
+`peekaboot.it.plain-jdbc` and set `peekaboot.it.jdbc-mode=plain`. `JdbcObservationModeIT`
+proves the module is really gone; the run keeps the default run's tag exclusions.
+
+`-Dit.test=X` overrides the includes of all three failsafe executions, so a narrow Maven run also
+runs `X` in plain mode, whether or not the plain list names it. A class carrying the
+`otel-conventions` tag still runs only in its own execution. Maven cannot run the plain execution
+alone; Gradle can: `./gradlew :peekaboot-testing-app:plainJdbcIntegrationTest --tests '*.X'`.
+
 ### Testing auto-configuration
 
 Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests, as
