@@ -24,15 +24,16 @@ import org.peekaboot.backend.masking.MaskingEngine;
  * and password in a first host without a {@code \}, a property that names a user or a secret, an opening brace
  * or a {@code %}. A URL the parser rejects as its driver would is refused too, as is a SQL Server URL with an
  * {@code &}, a database or instance that is no plain name or file path, and a database, instance or host the URL
- * does not spell out ({@code localhost}, the parser's default host, excepted). The health endpoint documents
- * these refusals and asks for the credentials in {@code spring.datasource.username} and
- * {@code spring.datasource.password} instead.
+ * does not spell out outside the user and password ({@code localhost}, the parser's default host, excepted).
+ * The health endpoint documents these refusals and asks for the credentials in
+ * {@code spring.datasource.username} and {@code spring.datasource.password} instead.
  */
 final class CredentialFreeJdbcUrls {
 
     private static final MaskingEngine MASKING = new MaskingEngine();
     // the "//" (Oracle: "@//") that may open a user and password; a "//" inside an H2 or SQLite path does not
     private static final Pattern SCHEME = Pattern.compile("[A-Za-z][A-Za-z0-9+.-]*(?::[A-Za-z0-9+.-]+)*:@?//");
+    private static final Pattern ORACLE_THIN = Pattern.compile("(?i)jdbc:oracle:thin:");
     private static final String FIRST_HOST_ENDS = "/,?;#(";
     private static final Pattern PROPERTY_KEY = Pattern.compile("[?;&(,\\s]\\s*([^=?;&(,\\s]+)\\s*=");
     // as parts of a key too, so sslpassword, password1 and a lower-case keystoresecret count
@@ -54,7 +55,8 @@ final class CredentialFreeJdbcUrls {
     }
 
     private static Optional<JdbcUrl> parseNamesItSpellsOut(String jdbcUrl) {
-        Predicate<String> spelledOut = name -> spellsOut(jdbcUrl, name);
+        String outsideLogin = jdbcUrl.substring(endOfLogin(jdbcUrl));
+        Predicate<String> spelledOut = name -> spellsOut(outsideLogin, name);
         return Optional.ofNullable(JdbcUrlParser.tryParse(jdbcUrl))
                 .filter(parsed -> !isSqlServerWithAmpersand(parsed, jdbcUrl))
                 .filter(parsed -> namesPlainDatabaseAndInstance(parsed, spelledOut))
@@ -82,6 +84,20 @@ final class CredentialFreeJdbcUrls {
         boolean insideFirstHost = at < firstHostEnd;
         boolean namesNoInstance = url.substring(firstHost, firstHostEnd).indexOf('\\') < 0;
         return onlyAt && insideFirstHost && namesNoInstance;
+    }
+
+    // up to and including the "@" that ends a user and password; 0 where the URL has none. Oracle's login has no
+    // "//" before it and may hold "/", so it ends at the first "@" there, where the other forms need it in the first
+    // host
+    private static int endOfLogin(String url) {
+        Matcher scheme = SCHEME.matcher(url);
+        if (scheme.lookingAt()) {
+            int at = url.indexOf('@', scheme.end());
+            return at >= 0 && at < endOfFirstHost(url, scheme.end()) ? at + 1 : 0;
+        }
+        Matcher oracle = ORACLE_THIN.matcher(url);
+        int at = oracle.lookingAt() ? url.indexOf('@', oracle.end()) : -1;
+        return at + 1;
     }
 
     private static int endOfFirstHost(String url, int firstHost) {
@@ -126,7 +142,8 @@ final class CredentialFreeJdbcUrls {
                 && jdbcUrl.hosts().stream().allMatch(host -> isAbsentOrPlainName(host.instanceName(), spelledOut));
     }
 
-    // ojdbc drops whitespace from a host, so "ZUSR S3Cx" reads as "ZUSRS3Cx"; localhost is the parser's default
+    // ojdbc drops whitespace from a host, so "ZUSR S3Cx" reads as "ZUSRS3Cx", which the login "ZUSRS3Cx/p@" also
+    // spells; localhost is the parser's default
     private static boolean spellsOutEveryHostname(JdbcUrl jdbcUrl, Predicate<String> spelledOut) {
         return jdbcUrl.hosts().stream()
                 .map(Host::hostname)
@@ -138,7 +155,7 @@ final class CredentialFreeJdbcUrls {
         return name == null || (PLAIN_NAME.matcher(name).matches() && spelledOut.test(name));
     }
 
-    private static boolean spellsOut(String url, String name) {
-        return url.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT));
+    private static boolean spellsOut(String text, String name) {
+        return text.toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT));
     }
 }

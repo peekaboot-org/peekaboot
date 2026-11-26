@@ -843,8 +843,9 @@ credential could end up in a name it reports:
 - A database or instance, of any host, outside `[A-Za-z0-9._$~/-]*` gives none. This catches an
   Oracle URL with parameters after the service name.
 - A database, instance or hostname the URL does not spell out gives none. Drivers rewrite names
-  (ojdbc drops whitespace from a host, so `ZUSR S3Cx` reads as `ZUSRS3Cx`). The parser's default
-  host `localhost` is exempt.
+  (ojdbc drops whitespace from a host, so `ZUSR S3Cx` reads as `ZUSRS3Cx`). The text up to the
+  `@` that ends a user and password does not count as spelling a name out, so the login in
+  `ZUSRS3Cx/p@ZUSR S3Cx` cannot vouch for that host. The parser's default host `localhost` is exempt.
 
 A DataSource that throws while being unwrapped, such as a routing DataSource without a default
 target, gets none either.

@@ -139,6 +139,27 @@ class DataSourceConnectionsTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
+                "jdbc:oracle:thin:ZUSRS3Cx/p@ZUSR S3Cx:1521/svc",
+                "jdbc:oracle:thin:ZUSRS3Cx/p@//ZUSR S3Cx:1521/svc",
+                "jdbc:mysql://ZUSRS3Cx:p@ZUSR S3Cx/shop"
+            })
+    void aHostSpelledOutOnlyInTheLoginPartHasNoConnection(String url) {
+        assertThat(connectionsOf(url)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"jdbc:oracle:thin:scott/tiger@db:1521/svc, 1521", "jdbc:mysql://u:p@db/shop, 3306"})
+    void aHostSpelledOutAfterTheLoginPartIsDescribed(String url, int port) {
+        assertThat(connectionsOf(url).get("dataSource"))
+                .isInstanceOfSatisfying(
+                        DataSourceConnection.class,
+                        connection ->
+                                assertThat(connection.hosts()).containsExactly(new HealthConnection.Host("db", port)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
                 "jdbc:postgresql://db/shop?password=a;instanceName=S3Cx",
                 "jdbc:postgresql://db/shop?user=u&password=a;instanceName=S3Cx",
                 "jdbc:mysql://db/shop?password=a;instanceName=S3Cx",
