@@ -41,7 +41,10 @@
              own runtime through CPU contention faster than the extra overlap pays back.
              Set to 1 to serialize when diagnosing a flaky test. -->
         <peekaboot.it.threads>2</peekaboot.it.threads>
-        <!-- Post-GC live set ~471 MiB at Spring's 32-context cache ceiling (~13 MB a context); twice that, rounded up to a whole GiB. -->
+        <!-- Heap of every *IT JVM, Maven and Gradle alike. Measured 2026-11-26 on Boot 4.2.0 in
+             the shared Gradle integrationTest worker (978 tests, 1g): the live set after a
+             forced full GC (jcmd GC.class_histogram) climbs all run, 466 and 537 MiB a minute
+             apart near the end, 624 MiB 20 s before it, when the heap had committed all 1 GiB. -->
         <peekaboot.it.max-heap>1g</peekaboot.it.max-heap>
         <!-- Playwright engine the *IT suite drives: chromium, firefox or webkit. The nightly
              cross-browser workflow runs all three; every other build takes the default. -->
