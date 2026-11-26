@@ -184,8 +184,8 @@ class BuildVersionLockstepTest {
         testingApp.keySet().retainAll(root.keySet());
 
         assertThat(testingApp)
-                .as("the root pom moved these past the versions spring-boot-starter-parent manages; "
-                        + "a pin dropped from the testing-app hands the plugin back to that parent")
+                .as("these hold the boot-line job on the baseline's versions; a pin dropped from the "
+                        + "testing-app hands the plugin back to the older parent that job switches to")
                 .containsKeys(
                         "maven-install-plugin",
                         "maven-deploy-plugin",
