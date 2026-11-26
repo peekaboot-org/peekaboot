@@ -1,11 +1,14 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -64,6 +67,38 @@ class TraceApiClient {
         String traceId = get(path);
         awaitTrace(traceId, COMPLETE);
         return traceId;
+    }
+
+    /**
+     * Requests {@code path} the way a caller that sends a traceparent does, under a fresh trace id
+     * of the caller's, and returns that id: the one the request's spans are stored under.
+     */
+    String getContinuingACallersTrace(String path) {
+        String callerTraceId = randomHex(16);
+        api.restClient()
+                .get()
+                .uri(path)
+                .header("traceparent", "00-" + callerTraceId + "-" + randomHex(8) + "-01")
+                .retrieve()
+                .toBodilessEntity();
+        return callerTraceId;
+    }
+
+    /**
+     * Fails unless a request to {@code path} leaves no trace. It continues a caller's trace, so the id
+     * its spans would be stored under is known up front, and its skipped server span takes them along.
+     */
+    void assertLeavesNoTrace(String path) {
+        String callerTraceId = getContinuingACallersTrace(path);
+
+        // the request's spans ended before the marker began, so they are stored once the marker's root is
+        awaitTrace(get("/persons"), ROOT_SPAN_EXPORTED);
+        // awaited: the caller has its answer before the server span ends, so that span may follow the marker's root
+        await().atMost(PeekabootApi.ASYNC_TIMEOUT)
+                .untilAsserted(() -> assertThat(api.statusOf("/peekaboot/api/traces/" + callerTraceId)
+                                .value())
+                        .as("the trace of %s, continuing caller trace %s", path, callerTraceId)
+                        .isEqualTo(404));
     }
 
     /** The trace carries an ERROR log whose message is exactly {@code message}. */
@@ -226,6 +261,12 @@ class TraceApiClient {
                 .filter(row -> traceId.equals(traceId(row)))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("trace " + traceId + " is not listed in " + listing));
+    }
+
+    private static String randomHex(int bytes) {
+        byte[] random = new byte[bytes];
+        ThreadLocalRandom.current().nextBytes(random);
+        return HexFormat.of().formatHex(random);
     }
 
     private JsonNode fetchOrNull(String uri) {

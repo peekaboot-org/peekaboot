@@ -12,12 +12,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.RootActionType;
@@ -154,27 +152,11 @@ abstract class ObservationConventionContract extends TestingAppITBase {
         traces.awaitTraceInBucket("errors", traceId);
     }
 
-    /** The probe continues a caller's trace, so the id it would be stored under is known up front. */
     @Test
     void anExcludedPathLeavesNoTrace() {
         assertConventionIsActive();
-        String callerTraceId = HexFormat.of().formatHex(randomBytes(16));
-        String callerSpanId = HexFormat.of().formatHex(randomBytes(8));
 
-        api.restClient()
-                .get()
-                .uri("/actuator/health")
-                .header("traceparent", "00-" + callerTraceId + "-" + callerSpanId + "-01")
-                .retrieve()
-                .toBodilessEntity();
-
-        // the health check's spans ended before the marker began, so they are stored once the marker's root is
-        traces.awaitTrace(traces.get("/persons"), TraceApiClient.ROOT_SPAN_EXPORTED);
-        // awaited: the probe has its answer before its server span ends, so that span may follow the marker's root
-        await().atMost(PeekabootApi.ASYNC_TIMEOUT)
-                .untilAsserted(() -> assertThat(api.statusOf("/peekaboot/api/traces/" + callerTraceId)
-                                .value())
-                        .isEqualTo(404));
+        traces.assertLeavesNoTrace("/actuator/health");
     }
 
     @Test
@@ -301,11 +283,5 @@ abstract class ObservationConventionContract extends TestingAppITBase {
     private static String routeOf(Meter timer) {
         String uri = timer.getId().getTag("uri");
         return uri != null ? uri : timer.getId().getTag("http.route");
-    }
-
-    private static byte[] randomBytes(int length) {
-        byte[] bytes = new byte[length];
-        ThreadLocalRandom.current().nextBytes(bytes);
-        return bytes;
     }
 }

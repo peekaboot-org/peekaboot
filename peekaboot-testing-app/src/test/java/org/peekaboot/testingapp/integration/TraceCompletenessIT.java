@@ -1,16 +1,13 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.HexFormat;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.fixtures.HeldRequestController;
@@ -60,15 +57,7 @@ class TraceCompletenessIT extends TestingAppITBase {
     /** A caller's traceparent makes the inbound request's span the root here, though its parent is never exported. */
     @Test
     void anInboundRequestContinuingACallersTraceIsComplete() {
-        String callerTraceId = HexFormat.of().formatHex(randomBytes(16));
-        String callerSpanId = HexFormat.of().formatHex(randomBytes(8));
-
-        api.restClient()
-                .get()
-                .uri("/persons")
-                .header("traceparent", "00-" + callerTraceId + "-" + callerSpanId + "-01")
-                .retrieve()
-                .toBodilessEntity();
+        String callerTraceId = traces.getContinuingACallersTrace("/persons");
 
         JsonNode trace = traces.awaitTrace(callerTraceId, TraceApiClient.ROOT_SPAN_EXPORTED);
         assertThat(trace.path("summary").path("complete").asBoolean(false)).isTrue();
@@ -82,30 +71,6 @@ class TraceCompletenessIT extends TestingAppITBase {
      */
     @Test
     void anExcludedRequestContinuingACallersTraceLeavesNoTrace() {
-        String callerTraceId = HexFormat.of().formatHex(randomBytes(16));
-        String callerSpanId = HexFormat.of().formatHex(randomBytes(8));
-
-        api.restClient()
-                .get()
-                .uri("/actuator/health")
-                .header("traceparent", "00-" + callerTraceId + "-" + callerSpanId + "-01")
-                .retrieve()
-                .toBodilessEntity();
-
-        // the health check's spans ended before the marker began, so they are stored once the marker's root is
-        String marker = traces.get("/persons");
-        traces.awaitTrace(marker, TraceApiClient.ROOT_SPAN_EXPORTED);
-
-        // awaited: the probe has its answer before its server span ends, so that span may follow the marker's root
-        await().atMost(Duration.ofSeconds(15))
-                .untilAsserted(() -> assertThat(api.statusOf("/peekaboot/api/traces/" + callerTraceId)
-                                .value())
-                        .isEqualTo(404));
-    }
-
-    private static byte[] randomBytes(int length) {
-        byte[] bytes = new byte[length];
-        ThreadLocalRandom.current().nextBytes(bytes);
-        return bytes;
+        traces.assertLeavesNoTrace("/actuator/health");
     }
 }
