@@ -95,6 +95,21 @@ which boots the sample app and drives the real dashboard/toolbar/overlay in a he
 and by Gradle's `check`). `-Dpeekaboot.frontend.lint.skip=true` skips them with the lint;
 `-DskipTests` does not. The Playwright suite covers everything that needs a browser.
 
+`ObservationConventionContract` in the testing app holds the tests an app should pass whichever
+observation conventions it runs: request, route, verdict, linked logs and the HTTP, JVM and CPU
+panels. `MicrometerConventionsIT` and `OpenTelemetryConventionsIT` run it, each in a context of
+its own, because the conventions are fixed at startup and its 4xx and 5xx would land in the
+shared context's problems. Every test first asserts its convention is active. On Boot 4.1,
+which ignores the OpenTelemetry properties, the OpenTelemetry class skips that check.
+
+`OpenTelemetryConventionsIT` also runs in a JVM of its own: failsafe execution
+`otel-conventions`, Gradle task `otelConventionsIntegrationTest`. Both select the JUnit tag the
+pom property `peekaboot.it.otel-conventions` names, and the default runs exclude it. Boot hands
+each tracing scope to the MDC listener of every context in the JVM, so beside other contexts the
+request's MDC holds `traceId` next to `tid` and the renamed-key tests prove nothing. The split is
+by tag because `-Dit.test` overrides failsafe's includes and excludes but not its groups: a
+narrow run that names the class beside others still runs each class once, in its own JVM.
+
 ### Testing auto-configuration
 
 Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests, as

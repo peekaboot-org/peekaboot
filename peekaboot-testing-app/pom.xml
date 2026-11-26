@@ -47,6 +47,11 @@
         <!-- Empty so a chromium run holds nothing back. The per-engine profiles below set it
              to chromium-only, the tag on tests whose subject is Chromium's own behaviour. -->
         <peekaboot.it.excludedTags />
+        <!-- The JUnit tag of the *IT classes that run in a JVM of their own (failsafe execution
+             otel-conventions, Gradle otelConventionsIntegrationTest); OpenTelemetryConventionsIT
+             carries it. Boot's tracing publishes scope events to every context in a JVM, so
+             another context's MDC keys would sit beside the renamed ones that class proves. -->
+        <peekaboot.it.otel-conventions>otel-conventions</peekaboot.it.otel-conventions>
         <!-- A property, not an inline version: the CI workflows key their browser cache on it. -->
         <playwright.version>1.63.0</playwright.version>
         <!-- The JSON Schema validator OpenApiContractIT checks the API's answers with. -->
@@ -342,6 +347,51 @@
                         </configurationParameters>
                     </properties>
                 </configuration>
+                <!-- Split by tag, not by includes: -Dit.test overrides includes and excludes, not groups. -->
+                <executions>
+                    <execution>
+                        <id>default</id>
+                        <configuration>
+                            <!-- an empty entry is dropped, so a chromium run excludes the one tag -->
+                            <excludedGroups>${peekaboot.it.otel-conventions},${peekaboot.it.excludedTags}</excludedGroups>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>otel-conventions</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                        <configuration>
+                            <groups>${peekaboot.it.otel-conventions}</groups>
+                            <reportsDirectory>${project.build.directory}/failsafe-reports-otel-conventions</reportsDirectory>
+                            <summaryFile>${project.build.directory}/failsafe-reports-otel-conventions/failsafe-summary.xml</summaryFile>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Failsafe merges every execution after a build's first into the summary file it
+                 finds, so the previous build's summary would carry its failures into this one. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>clean-otel-conventions-reports</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.directory}/failsafe-reports-otel-conventions</directory>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

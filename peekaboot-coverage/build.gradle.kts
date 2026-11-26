@@ -34,7 +34,8 @@ val mergedExecData = files(contributingModules.map { module ->
 val gatedClassDirs = files(gatedModules.map { "${rootDir}/${it}/build/classes/java/main" })
 val gatedSourceDirs = files(gatedModules.map { "${rootDir}/${it}/src/main/java" })
 
-val testTasks = contributingModules.flatMap { listOf(":$it:test", ":$it:integrationTest") }
+val testTasks = contributingModules.flatMap { listOf(":$it:test", ":$it:integrationTest") } +
+    ":peekaboot-testing-app:otelConventionsIntegrationTest"
 
 val coverageGate = tasks.register<JacocoCoverageVerification>("coverageGate") {
     description = "Enforces the reactor-wide coverage floor on merged execution data."

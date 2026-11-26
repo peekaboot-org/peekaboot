@@ -147,7 +147,9 @@ sample on a third-party version clash would buy nothing but two permanent exclus
 `settings.gradle.kts` includes the modules the root pom lists. `./gradlew build` is the
 `./mvnw clean verify` equivalent. It runs unit tests (`test`, `*Test` and `*Tests`) and
 integration tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, with
-the testing-app pom's `peekaboot.it.threads` unless `-Ppeekaboot.it.threads=N` overrides it). It runs the static-analysis gates at the
+the testing-app pom's `peekaboot.it.threads` unless `-Ppeekaboot.it.threads=N` overrides it).
+The testing app adds `otelConventionsIntegrationTest`, the classes that need a JVM of their own
+([TESTING.md](docs/TESTING.md#suites)). It runs the static-analysis gates at the
 same tool versions, reading the same `config/` files, plus the reactor-wide coverage gate
 (`:peekaboot-coverage:coverageGate`, the same 90%/75% floors on merged execution data).
 `./gradlew test` is the fast gate, `./gradlew assemble` just builds the jars.

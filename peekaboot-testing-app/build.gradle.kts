@@ -113,23 +113,46 @@ gitProperties {
     )
 }
 
+// The tag of the *IT classes the failsafe otel-conventions execution runs in a JVM of their own.
+val otelConventionsTag = pomProperty("peekaboot.it.otel-conventions")
+
+val otelConventionsIntegrationTest = tasks.register<Test>("otelConventionsIntegrationTest") {
+    description = "Runs the *IT classes that need a JVM of their own (OpenTelemetry conventions)."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    include("**/*IT.class")
+    useJUnitPlatform { includeTags(otelConventionsTag) }
+    shouldRunAfter(tasks.named("integrationTest"))
+}
+
+tasks.named<Test>("integrationTest") {
+    useJUnitPlatform { excludeTags(otelConventionsTag) }
+}
+
+tasks.check {
+    dependsOn(otelConventionsIntegrationTest)
+}
+
 // The *IT suite runs concurrent test classes in one JVM; same knobs as the Maven build, with
 // the pom's defaults (-Ppeekaboot.it.threads=1 serializes for debugging).
-tasks.named<Test>("integrationTest") {
-    val threads = providers.gradleProperty("peekaboot.it.threads").getOrElse(pomProperty("peekaboot.it.threads"))
-    val browser = providers.gradleProperty("peekaboot.it.browser").getOrElse(pomProperty("peekaboot.it.browser"))
-    systemProperty("peekaboot.it.browser", browser)
-    // Same split as the Maven per-engine profiles: only Chromium runs the tests whose
-    // subject is Chromium's own behaviour.
-    if (browser != "chromium") {
-        useJUnitPlatform { excludeTags("chromium-only") }
+listOf(tasks.named<Test>("integrationTest"), otelConventionsIntegrationTest).forEach {
+    it.configure {
+        val threads = providers.gradleProperty("peekaboot.it.threads").getOrElse(pomProperty("peekaboot.it.threads"))
+        val browser = providers.gradleProperty("peekaboot.it.browser").getOrElse(pomProperty("peekaboot.it.browser"))
+        systemProperty("peekaboot.it.browser", browser)
+        // Same split as the Maven per-engine profiles: only Chromium runs the tests whose
+        // subject is Chromium's own behaviour.
+        if (browser != "chromium") {
+            useJUnitPlatform { excludeTags("chromium-only") }
+        }
+        systemProperty("junit.jupiter.execution.parallel.enabled", "true")
+        systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
+        systemProperty("junit.jupiter.execution.parallel.mode.classes.default", "concurrent")
+        systemProperty("junit.jupiter.execution.parallel.config.strategy", "fixed")
+        systemProperty("junit.jupiter.execution.parallel.config.fixed.parallelism", threads)
+        systemProperty("junit.jupiter.execution.parallel.config.fixed.max-pool-size", threads)
     }
-    systemProperty("junit.jupiter.execution.parallel.enabled", "true")
-    systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
-    systemProperty("junit.jupiter.execution.parallel.mode.classes.default", "concurrent")
-    systemProperty("junit.jupiter.execution.parallel.config.strategy", "fixed")
-    systemProperty("junit.jupiter.execution.parallel.config.fixed.parallelism", threads)
-    systemProperty("junit.jupiter.execution.parallel.config.fixed.max-pool-size", threads)
 }
 
 // TestImages reads the images the tests start from compose.yml. Declared as an input, or a bump
