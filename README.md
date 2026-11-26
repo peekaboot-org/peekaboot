@@ -121,7 +121,9 @@ Further reading:
 - Java 25 or newer, the current LTS. The build compiles with `release 25` and has no
   toolchain fallback, Peekaboot's collectors run on virtual threads, and nothing below 25 is
   built or tested.
-- Spring Boot 4.1 or 4.2.
+- Spring Boot 4.1 or 4.2. On Gradle with 4.1, import Boot's BOM through the
+  `io.spring.dependency-management` plugin or `enforcedPlatform(...)`. A plain `platform(...)`
+  lets Peekaboot's poms lift Spring Boot to 4.2.0.
 - A servlet web application.
 
 ## Acknowledgements
