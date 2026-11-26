@@ -52,7 +52,10 @@
         <!-- The JUnit tag of the *IT classes that run in a JVM of their own (failsafe execution
              otel-conventions, Gradle otelConventionsIntegrationTest); OpenTelemetryConventionsIT
              carries it. Boot's tracing publishes scope events to every context in a JVM, so
-             another context's MDC keys would sit beside the renamed ones that class proves. -->
+             another context's MDC keys would sit beside the renamed ones that class proves.
+             A tag rather than includes, because -Dit.test overrides failsafe's includes and
+             excludes but not its groups: a narrow run naming the class beside others still
+             runs it in its own JVM. -->
         <peekaboot.it.otel-conventions>otel-conventions</peekaboot.it.otel-conventions>
         <!-- The SQL and trace *ITs, rerun without the OpenTelemetry JDBC module (failsafe execution plain-jdbc, Gradle plainJdbcIntegrationTest). -->
         <peekaboot.it.plain-jdbc>**/JdbcObservationModeIT.java, **/OrderTraceCaptureIT.java, **/QueryParameterCaptureIT.java, **/PoolMaintenanceTraceCaptureIT.java, **/MultiDataSourceTraceIT.java, **/OrderStatisticsIT.java, **/TraceSummaryIT.java, **/RequestAndQueryMaskingIT.java, **/DashboardTraceViewIT.java, **/SqlStatementViewIT.java</peekaboot.it.plain-jdbc>

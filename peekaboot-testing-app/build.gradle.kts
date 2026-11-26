@@ -113,7 +113,7 @@ gitProperties {
     )
 }
 
-// The tag of the *IT classes the failsafe otel-conventions execution runs in a JVM of their own.
+// The *IT classes that run in a JVM of their own; the testing-app pom's peekaboot.it.otel-conventions says why.
 val otelConventionsTag = pomProperty("peekaboot.it.otel-conventions")
 
 val otelConventionsIntegrationTest = registerIntegrationTest(

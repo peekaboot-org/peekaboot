@@ -104,11 +104,8 @@ which ignores the OpenTelemetry properties, the OpenTelemetry class skips that c
 
 `OpenTelemetryConventionsIT` also runs in a JVM of its own: failsafe execution
 `otel-conventions`, Gradle task `otelConventionsIntegrationTest`. Both select the JUnit tag the
-pom property `peekaboot.it.otel-conventions` names, and the default runs exclude it. Boot hands
-each tracing scope to the MDC listener of every context in the JVM, so beside other contexts the
-request's MDC holds `traceId` next to `tid` and the renamed-key tests prove nothing. The split is
-by tag because `-Dit.test` overrides failsafe's includes and excludes but not its groups: a
-narrow run that names the class beside others still runs each class once, in its own JVM.
+testing-app pom's `peekaboot.it.otel-conventions` names, the default runs exclude it, and the
+pom comment on that property says why.
 
 The SQL and trace `*IT`s run a second time without `datasource-micrometer-opentelemetry`, the
 JDBC mode of an app that excludes that module from the starter: failsafe execution `plain-jdbc`,

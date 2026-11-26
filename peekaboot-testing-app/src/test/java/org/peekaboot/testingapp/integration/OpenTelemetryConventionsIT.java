@@ -14,8 +14,7 @@ import tools.jackson.databind.JsonNode;
  * Boot 4.1 ignores all three properties and runs Micrometer's conventions, so there the pre-assertions
  * are skipped and the contract proves only that nothing broke.
  *
- * <p>The tag, the testing-app pom's {@code peekaboot.it.otel-conventions}, runs the class in a JVM of
- * its own: beside another context the request's MDC would also hold that context's {@code traceId}.
+ * <p>The tag runs the class in a JVM of its own; the testing-app pom's {@code peekaboot.it.otel-conventions} says why.
  */
 @Tag("otel-conventions")
 @SpringBootTest(
