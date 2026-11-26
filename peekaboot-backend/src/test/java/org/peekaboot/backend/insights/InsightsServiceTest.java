@@ -155,6 +155,20 @@ class InsightsServiceTest {
         }
     }
 
+    /** OpenTelemetry conventions rename the thread-state meter and spell its states with an underscore. */
+    @Test
+    void theThreadStatesPanelReadsOpenTelemetryThreadCounts() {
+        Gauge.builder("jvm.thread.count", () -> 4)
+                .tag("jvm.thread.state", "timed_waiting")
+                .register(registry);
+        InsightsService threadStates = withUserPanels("classpath:insights/thread-states-on.yml");
+
+        threadStates.collector().tick(10_000);
+
+        assertThat(InsightsCollectors.ticks(threadStates.collector()).values().get("thread-states.timed-waiting"))
+                .containsExactly(4.0);
+    }
+
     /** The service over the bundled panels plus the operator's override at {@code location}. */
     private InsightsService withUserPanels(String location) {
         InsightsProperties properties = new InsightsProperties();

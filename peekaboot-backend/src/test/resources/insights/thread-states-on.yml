@@ -1,0 +1,3 @@
+# The shipped thread-states panel, switched on by id alone.
+panels:
+  - { id: thread-states, enabled: true }

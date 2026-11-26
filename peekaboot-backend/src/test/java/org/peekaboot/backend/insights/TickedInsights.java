@@ -31,6 +31,24 @@ public final class TickedInsights {
         });
     }
 
+    /** Shows {@link ProblemRule#HEAP_NEAR_MAX} from the OpenTelemetry heap meters, with no {@code area} tag. */
+    public static InsightsDataReader withOpenTelemetryHeapNearMax() {
+        return ticked(registry -> {
+            Gauge.builder("jvm.memory.used", () -> 95.0)
+                    .tag("jvm.memory.type", "heap")
+                    .register(registry);
+            Gauge.builder("jvm.memory.limit", () -> 100.0)
+                    .tag("jvm.memory.type", "heap")
+                    .register(registry);
+        });
+    }
+
+    /** Shows {@link ProblemRule#CPU_HIGH} from the process CPU meter OpenTelemetry conventions name. */
+    public static InsightsDataReader withOpenTelemetryCpuHigh() {
+        return ticked(registry ->
+                Gauge.builder("jvm.cpu.recent_utilization", () -> 0.9).register(registry));
+    }
+
     private static InsightsDataReader ticked(Consumer<SimpleMeterRegistry> registerGauges) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         // suppliers, never a weakly held state object: a GC between ticks would turn samples into NaN

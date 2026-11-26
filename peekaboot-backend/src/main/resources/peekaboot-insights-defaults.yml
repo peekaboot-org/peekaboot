@@ -1,6 +1,8 @@
 # Peekaboot insights - default panels and tiles.
 # Applications override by placing their own peekaboot-insights.yml on the
 # classpath root (merged by id) or via peekaboot.insights.config-location.
+# A series reads the first of its meter and its alternatives that is present,
+# so the panels fill under Micrometer and OpenTelemetry observation conventions.
 
 tiles:
   - id: started-at
@@ -28,7 +30,11 @@ panels:
     unit: percent
     order: 10
     series:
-      - { id: process, label: Process, meter: process.cpu.usage }
+      - id: process
+        label: Process
+        meter: process.cpu.usage
+        alternatives:
+          - { meter: jvm.cpu.recent_utilization }
       - { id: system, label: System, meter: system.cpu.usage }
       - { id: gc-overhead, label: GC overhead, meter: jvm.gc.overhead }
 
@@ -39,7 +45,7 @@ panels:
     order: 20
     series:
       - { id: load1m, label: Load 1m, meter: system.load.average.1m }
-      - { id: cores, label: CPU cores, meter: system.cpu.count }
+      - { id: cores, label: CPU cores, meter: system.cpu.count, alternatives: [{ meter: jvm.cpu.count }] }
 
   - id: heap
     title: Heap memory
@@ -47,9 +53,24 @@ panels:
     unit: bytes
     order: 30
     series:
-      - { id: used, label: Used, meter: jvm.memory.used, tags: { area: heap } }
-      - { id: committed, label: Committed, meter: jvm.memory.committed, tags: { area: heap } }
-      - { id: max, label: Max, meter: jvm.memory.max, tags: { area: heap } }
+      - id: used
+        label: Used
+        meter: jvm.memory.used
+        tags: { area: heap }
+        alternatives:
+          - { meter: jvm.memory.used, tags: { jvm.memory.type: heap } }
+      - id: committed
+        label: Committed
+        meter: jvm.memory.committed
+        tags: { area: heap }
+        alternatives:
+          - { meter: jvm.memory.committed, tags: { jvm.memory.type: heap } }
+      - id: max
+        label: Max
+        meter: jvm.memory.max
+        tags: { area: heap }
+        alternatives:
+          - { meter: jvm.memory.limit, tags: { jvm.memory.type: heap } }
 
   - id: nonheap
     title: Non-heap memory
@@ -57,8 +78,18 @@ panels:
     unit: bytes
     order: 40
     series:
-      - { id: used, label: Used, meter: jvm.memory.used, tags: { area: nonheap } }
-      - { id: committed, label: Committed, meter: jvm.memory.committed, tags: { area: nonheap } }
+      - id: used
+        label: Used
+        meter: jvm.memory.used
+        tags: { area: nonheap }
+        alternatives:
+          - { meter: jvm.memory.used, tags: { jvm.memory.type: non_heap } }
+      - id: committed
+        label: Committed
+        meter: jvm.memory.committed
+        tags: { area: nonheap }
+        alternatives:
+          - { meter: jvm.memory.committed, tags: { jvm.memory.type: non_heap } }
 
   - id: gc
     title: Garbage collection
@@ -85,9 +116,26 @@ panels:
     unit: persec
     order: 70
     series:
-      - { id: requests, label: Requests, meter: http.server.requests, stat: rate }
-      - { id: client-errors, label: 4xx, meter: http.server.requests, stat: rate, tags: { outcome: CLIENT_ERROR } }
-      - { id: server-errors, label: 5xx, meter: http.server.requests, stat: rate, tags: { outcome: SERVER_ERROR } }
+      - id: requests
+        label: Requests
+        meter: http.server.requests
+        stat: rate
+        alternatives:
+          - { meter: http.server.request.duration }
+      - id: client-errors
+        label: 4xx
+        meter: http.server.requests
+        stat: rate
+        tags: { outcome: CLIENT_ERROR }
+        alternatives:
+          - { meter: http.server.request.duration, tags: { outcome: CLIENT_ERROR } }
+      - id: server-errors
+        label: 5xx
+        meter: http.server.requests
+        stat: rate
+        tags: { outcome: SERVER_ERROR }
+        alternatives:
+          - { meter: http.server.request.duration, tags: { outcome: SERVER_ERROR } }
 
   - id: http-latency
     title: HTTP latency
@@ -95,8 +143,18 @@ panels:
     unit: millis
     order: 80
     series:
-      - { id: avg, label: Avg, meter: http.server.requests, stat: avg }
-      - { id: max, label: Max, meter: http.server.requests, stat: max }
+      - id: avg
+        label: Avg
+        meter: http.server.requests
+        stat: avg
+        alternatives:
+          - { meter: http.server.request.duration }
+      - id: max
+        label: Max
+        meter: http.server.requests
+        stat: max
+        alternatives:
+          - { meter: http.server.request.duration }
 
   - id: http-active
     title: HTTP in flight
@@ -104,7 +162,11 @@ panels:
     unit: count
     order: 90
     series:
-      - { id: active, label: Active requests, meter: http.server.requests.active }
+      - id: active
+        label: Active requests
+        meter: http.server.requests.active
+        alternatives:
+          - { meter: http.server.request.duration.active }
 
   - id: db-pool
     title: DB pool
@@ -182,12 +244,42 @@ panels:
     order: 170
     enabled: false
     series:
-      - { id: runnable, label: Runnable, meter: jvm.threads.states, tags: { state: runnable } }
-      - { id: blocked, label: Blocked, meter: jvm.threads.states, tags: { state: blocked } }
-      - { id: waiting, label: Waiting, meter: jvm.threads.states, tags: { state: waiting } }
-      - { id: timed-waiting, label: Timed waiting, meter: jvm.threads.states, tags: { state: timed-waiting } }
-      - { id: new, label: New, meter: jvm.threads.states, tags: { state: new } }
-      - { id: terminated, label: Terminated, meter: jvm.threads.states, tags: { state: terminated } }
+      - id: runnable
+        label: Runnable
+        meter: jvm.threads.states
+        tags: { state: runnable }
+        alternatives:
+          - { meter: jvm.thread.count, tags: { jvm.thread.state: runnable } }
+      - id: blocked
+        label: Blocked
+        meter: jvm.threads.states
+        tags: { state: blocked }
+        alternatives:
+          - { meter: jvm.thread.count, tags: { jvm.thread.state: blocked } }
+      - id: waiting
+        label: Waiting
+        meter: jvm.threads.states
+        tags: { state: waiting }
+        alternatives:
+          - { meter: jvm.thread.count, tags: { jvm.thread.state: waiting } }
+      - id: timed-waiting
+        label: Timed waiting
+        meter: jvm.threads.states
+        tags: { state: timed-waiting }
+        alternatives:
+          - { meter: jvm.thread.count, tags: { jvm.thread.state: timed_waiting } }
+      - id: new
+        label: New
+        meter: jvm.threads.states
+        tags: { state: new }
+        alternatives:
+          - { meter: jvm.thread.count, tags: { jvm.thread.state: new } }
+      - id: terminated
+        label: Terminated
+        meter: jvm.threads.states
+        tags: { state: terminated }
+        alternatives:
+          - { meter: jvm.thread.count, tags: { jvm.thread.state: terminated } }
 
   - id: hibernate-activity
     title: Hibernate activity

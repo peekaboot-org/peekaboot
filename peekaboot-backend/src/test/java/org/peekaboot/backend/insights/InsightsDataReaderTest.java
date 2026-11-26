@@ -3,14 +3,21 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
+import static org.junit.jupiter.api.Named.named;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.problem.ApiProblemException;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -150,6 +157,26 @@ class InsightsDataReaderTest {
             assertThat(problem.rule()).isEqualTo(ProblemRule.SERVER_ERRORS);
             assertThat(problem.value()).isCloseTo(100.0, within(1e-9));
         });
+    }
+
+    /** OpenTelemetry conventions rename the JVM and processor meters the rules read. */
+    @ParameterizedTest
+    @MethodSource("openTelemetryNamedMeters")
+    void aProblemRuleFiresFromOpenTelemetryNamedMeters(Supplier<InsightsDataReader> ticked, ProblemRule rule) {
+        assertThat(ticked.get().currentProblems())
+                .extracting(InsightsProblem::rule)
+                .contains(rule);
+    }
+
+    static Stream<Arguments> openTelemetryNamedMeters() {
+        return Stream.of(
+                arguments(
+                        named("heap near max", (Supplier<InsightsDataReader>)
+                                TickedInsights::withOpenTelemetryHeapNearMax),
+                        ProblemRule.HEAP_NEAR_MAX),
+                arguments(
+                        named("cpu high", (Supplier<InsightsDataReader>) TickedInsights::withOpenTelemetryCpuHigh),
+                        ProblemRule.CPU_HIGH));
     }
 
     @Test
