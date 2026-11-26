@@ -144,7 +144,7 @@ class LoopbackOnlyAccessTest {
         MockHttpServletRequest claiming = get("192.168.1.50", "localhost:8080");
         claiming.addHeader("X-Forwarded-For", "127.0.0.1");
 
-        assertThat(access.permits(behindForwardedHeaderFilter(claiming))).isFalse();
+        assertThat(access.permits(behindForwardedHeaderFilter(claiming, false))).isFalse();
     }
 
     @ParameterizedTest
@@ -155,7 +155,7 @@ class LoopbackOnlyAccessTest {
         "Forwarded, for=127.0.0.1",
     })
     void refusesARelayedRequestBehindAForwardedHeaderFilter(String header, String value) throws Exception {
-        assertThat(access.permits(behindForwardedHeaderFilter(local(header, value))))
+        assertThat(access.permits(behindForwardedHeaderFilter(local(header, value), "Forwarded".equals(header))))
                 .isFalse();
     }
 
@@ -165,12 +165,12 @@ class LoopbackOnlyAccessTest {
         MockHttpServletRequest rebound = overHttp2("evil.example");
         rebound.addHeader("X-Forwarded-Host", "localhost");
 
-        assertThat(access.permits(behindForwardedHeaderFilter(rebound))).isFalse();
+        assertThat(access.permits(behindForwardedHeaderFilter(rebound, false))).isFalse();
     }
 
     @Test
     void permitsARelayOfThisMachinesOwnRequestBehindAForwardedHeaderFilter() throws Exception {
-        assertThat(access.permits(behindForwardedHeaderFilter(local("X-Forwarded-For", "127.0.0.1"))))
+        assertThat(access.permits(behindForwardedHeaderFilter(local("X-Forwarded-For", "127.0.0.1"), false)))
                 .isTrue();
     }
 
@@ -243,10 +243,14 @@ class LoopbackOnlyAccessTest {
         return request;
     }
 
-    /** The request as a host with {@code server.forward-headers-strategy=framework} hands it on. */
-    private static HttpServletRequest behindForwardedHeaderFilter(MockHttpServletRequest received) throws Exception {
+    /**
+     * The request as a host with strategy {@code framework} hands it on, under naming {@code rfc-7239} when
+     * {@code rfc7239}, else {@code x-forwarded}.
+     */
+    private static HttpServletRequest behindForwardedHeaderFilter(MockHttpServletRequest received, boolean rfc7239)
+            throws Exception {
         MockFilterChain handedOn = new MockFilterChain();
-        new ForwardedHeaderFilter().doFilter(received, new MockHttpServletResponse(), handedOn);
+        new ForwardedHeaderFilter(rfc7239).doFilter(received, new MockHttpServletResponse(), handedOn);
         HttpServletRequest wrapped = (HttpServletRequest) handedOn.getRequest();
         assertThat(wrapped).isNotSameAs(received);
         return wrapped;
