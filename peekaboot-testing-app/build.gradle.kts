@@ -62,6 +62,11 @@ dependencies {
     testImplementation("com.networknt:json-schema-validator:${pomProperty("json-schema-validator.version")}")
 }
 
+// The pom's liquibase.version override (why: see there); forced, as the enforced Boot platform outranks a constraint.
+configurations.configureEach {
+    resolutionStrategy.force("org.liquibase:liquibase-core:${pomProperty("liquibase.version")}")
+}
+
 // The Maven module's annotationProcessorPaths lists Error Prone alone, so its jar carries no
 // configuration metadata.
 configurations.annotationProcessor {

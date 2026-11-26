@@ -51,6 +51,8 @@
         <playwright.version>1.63.0</playwright.version>
         <!-- The JSON Schema validator OpenApiContractIT checks the API's answers with. -->
         <json-schema-validator.version>3.0.8</json-schema-validator.version>
+        <!-- Liquibase 5.0.4 keeps every migrated Database in ChangeLogHistoryServiceFactory.services, pinning each closed context; drop this with the first release that fixes it. -->
+        <liquibase.version>5.0.3</liquibase.version>
         <!-- Not a published artifact: it exists to host the sample app and its UI tests.
              This module does not inherit peekaboot-parent, so the peekaboot-publish
              profile, and with it central-publishing-maven-plugin, never applies here.
