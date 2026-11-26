@@ -26,12 +26,11 @@ import org.slf4j.event.Level;
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
  * re-resolved on every call: Micrometer registers meters lazily and new tag
- * combinations (e.g. new URIs) can appear at any time. A series reads the first of its
- * own meter and its alternatives that a meter carrying all of that candidate's tag keys
- * makes present; judging keys, not values, keeps a 5xx series on its meter before the first
- * 5xx. A rate divides by the elapsed
- * time its caller passes. The collector passes the time since level 0's last stamped
- * boundary, and the nominal interval for the first sample.
+ * combinations (e.g. new URIs) can appear at any time. Each tick reads the first of the
+ * series' meter and its alternatives that has a meter carrying every one of that
+ * candidate's tag keys, whatever the values, so a 5xx series stays on its meter before the
+ * first 5xx. A rate divides by the elapsed time its caller passes. The collector passes the
+ * time since level 0's last stamped boundary, and the nominal interval for the first sample.
  *
  * <p>Every value is served in the unit its series declares. A time gauge reads in
  * milliseconds. A percent series reads a ratio from 0 to 1, as Micrometer's CPU and GC
