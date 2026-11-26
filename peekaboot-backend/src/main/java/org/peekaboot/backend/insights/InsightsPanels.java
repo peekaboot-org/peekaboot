@@ -138,6 +138,7 @@ final class InsightsPanels {
                 series.tags(),
                 series.stat(),
                 series.subtractMeter(),
-                series.unit() != null ? series.unit() : panel.unit());
+                series.unit() != null ? series.unit() : panel.unit(),
+                series.alternatives());
     }
 }

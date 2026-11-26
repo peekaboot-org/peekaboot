@@ -28,7 +28,7 @@ final class TileTracker {
     TileTracker(List<TileDef> defs, MeterRegistry registry) {
         for (TileDef def : defs) {
             SeriesDef tileSeries =
-                    new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), Stat.VALUE, null, null);
+                    new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), Stat.VALUE, null, null, List.of());
             boolean live = Boolean.TRUE.equals(def.live());
             tiles.put(
                     def.id(), new TileState(new SeriesSampler(tileSeries, registry, UnresolvedMeterReport.NONE), live));

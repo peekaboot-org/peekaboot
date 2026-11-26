@@ -2,8 +2,10 @@ package org.peekaboot.backend.insights.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
@@ -204,6 +206,58 @@ class PanelConfigLoaderTest {
                 .hasMessageContaining("series 'throughput'")
                 .hasMessageContaining("stat 'rate'")
                 .hasMessageContaining("subtract-meter");
+    }
+
+    /** An override written before alternatives existed names one meter and binds unchanged. */
+    @Test
+    void aSeriesWithoutAlternativesLoadsAsBefore() {
+        SeriesDef series = PanelConfigLoader.load(new ClassPathResource("insights/loader-without-alternatives.yml"))
+                .panels()
+                .get(0)
+                .series()
+                .get(0);
+
+        assertThat(series.meter()).isEqualTo("a.meter");
+        assertThat(series.tags()).containsExactly(entry("k", "v"));
+        assertThat(series.alternatives()).isEmpty();
+    }
+
+    @Test
+    void alternativesLoadInOrderWithTheirTags() {
+        SeriesDef series = PanelConfigLoader.load(new ClassPathResource("insights/loader-alternatives.yml"))
+                .panels()
+                .get(0)
+                .series()
+                .get(0);
+
+        assertThat(series.alternatives())
+                .containsExactly(
+                        new MeterAlternative("b.meter", Map.of("k", "w")), new MeterAlternative("c.meter", Map.of()));
+    }
+
+    /** OpenTelemetry tag keys carry dots, and the binder must not read them as nested maps. */
+    @Test
+    void aDottedTagKeyKeepsItsDots() {
+        SeriesDef series = PanelConfigLoader.load(new ClassPathResource("insights/loader-dotted-alternative-tag.yml"))
+                .panels()
+                .get(0)
+                .series()
+                .get(0);
+
+        assertThat(series.alternatives())
+                .singleElement()
+                .extracting(MeterAlternative::tags)
+                .isEqualTo(Map.of("jvm.memory.type", "heap"));
+    }
+
+    @Test
+    void anAlternativeWithoutAMeterIsRejected() {
+        assertThatThrownBy(() ->
+                        PanelConfigLoader.load(new ClassPathResource("insights/loader-alternative-without-meter.yml")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("panel 'heap'")
+                .hasMessageContaining("series 'used'")
+                .hasMessageContaining("alternative without meter");
     }
 
     /** The overview maps tile values by id in a flat map, so a second definition would silently replace the first. */

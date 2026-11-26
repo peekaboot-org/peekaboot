@@ -1,5 +1,6 @@
 package org.peekaboot.backend.insights.config;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -13,11 +14,21 @@ import java.util.Map;
  *                       decision, not an impossibility - rate(A) minus rate(B) is well defined, but
  *                       subtracting the underlying cumulative counts first would trip the negative-delta
  *                       reset guard whenever the subtracted meter grows faster than the primary one
+ * @param alternatives  the meters read, in order, when {@code meter} and {@code tags} are absent; {@code stat},
+ *                       {@code unit} and {@code subtractMeter} apply to whichever is read
  */
 public record SeriesDef(
-        String id, String label, String meter, Map<String, String> tags, Stat stat, String subtractMeter, Unit unit) {
+        String id,
+        String label,
+        String meter,
+        Map<String, String> tags,
+        Stat stat,
+        String subtractMeter,
+        Unit unit,
+        List<MeterAlternative> alternatives) {
 
     public SeriesDef {
         tags = tags == null ? Map.of() : tags;
+        alternatives = alternatives == null ? List.of() : alternatives;
     }
 }

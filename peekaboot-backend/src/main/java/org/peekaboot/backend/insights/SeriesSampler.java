@@ -11,8 +11,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.TimeGauge;
 import io.micrometer.core.instrument.Timer;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.ToDoubleFunction;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.peekaboot.backend.insights.config.MeterAlternative;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Unit;
 import org.slf4j.Logger;
@@ -22,7 +26,10 @@ import org.slf4j.event.Level;
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
  * re-resolved on every call: Micrometer registers meters lazily and new tag
- * combinations (e.g. new URIs) can appear at any time. A rate divides by the elapsed
+ * combinations (e.g. new URIs) can appear at any time. A series reads the first of its
+ * own meter and its alternatives that a meter carrying all of that candidate's tag keys
+ * makes present; judging keys, not values, keeps a 5xx series on its meter before the first
+ * 5xx. A rate divides by the elapsed
  * time its caller passes. The collector passes the time since level 0's last stamped
  * boundary, and the nominal interval for the first sample.
  *
@@ -63,6 +70,8 @@ final class SeriesSampler {
     private static final double PERCENT_PER_RATIO = 100.0;
 
     private final SeriesDef def;
+    private final List<MeterAlternative> candidates;
+    private final String candidateMeters;
     private final MeterRegistry registry;
     private final MeterBaselines counts = new MeterBaselines();
     private final MeterBaselines totals = new MeterBaselines();
@@ -72,19 +81,25 @@ final class SeriesSampler {
 
     SeriesSampler(SeriesDef def, MeterRegistry registry, UnresolvedMeterReport report) {
         this.def = def;
+        this.candidates = Stream.concat(
+                        Stream.of(new MeterAlternative(def.meter(), def.tags())), def.alternatives().stream())
+                .toList();
+        this.candidateMeters = candidates.stream()
+                .map(candidate -> "'" + candidate.meter() + "'")
+                .collect(Collectors.joining(" or "));
         this.registry = registry;
         this.meterOutage = new Outage(
                 report,
-                "Peekaboot insights: series '{}': meter '{}' did not resolve to any meter across {} ticks",
+                "Peekaboot insights: series '{}': meter {} did not resolve to any meter across {} ticks",
                 def.id(),
-                def.meter(),
+                candidateMeters,
                 UNRESOLVED_METER_REPORT_TICKS);
         this.subtractMeterOutage = new Outage(
                 report,
-                "Peekaboot insights: series '{}' (meter '{}'): subtract-meter '{}' did not resolve"
+                "Peekaboot insights: series '{}' (meter {}): subtract-meter '{}' did not resolve"
                         + " to any meter across {} ticks",
                 def.id(),
-                def.meter(),
+                candidateMeters,
                 def.subtractMeter(),
                 UNRESOLVED_METER_REPORT_TICKS);
     }
@@ -112,19 +127,20 @@ final class SeriesSampler {
             return;
         }
         log.warn(
-                "Peekaboot insights: series '{}': reading meter '{}' failed; recording a gap until it reads again",
+                "Peekaboot insights: series '{}': reading meter {} failed; recording a gap until it reads again",
                 def.id(),
-                def.meter(),
+                candidateMeters,
                 failure);
         readFailureReported = true;
     }
 
     private double read(long elapsedMillis) {
-        List<Meter> meters = matching(def.meter());
+        MeterAlternative candidate = presentCandidate();
+        List<Meter> meters = matching(candidate.meter(), candidate.tags());
         meterOutage.track(meters.isEmpty());
         double value =
                 switch (def.stat()) {
-                    case VALUE -> sampleValue(meters);
+                    case VALUE -> sampleValue(meters, candidate.tags());
                     case RATE -> sampleRate(meters, elapsedMillis);
                     case AVG -> sampleAvg(meters);
                     case MAX -> sampleMax(meters);
@@ -132,19 +148,30 @@ final class SeriesSampler {
         return def.unit() == Unit.PERCENT ? value * PERCENT_PER_RATIO : value;
     }
 
-    private List<Meter> matching(String name) {
+    /** The first candidate present in the registry; the series' own meter when none is, so it reports unresolved. */
+    private MeterAlternative presentCandidate() {
+        return candidates.stream()
+                .filter(candidate -> !registry.find(candidate.meter())
+                        .tagKeys(candidate.tags().keySet())
+                        .meters()
+                        .isEmpty())
+                .findFirst()
+                .orElse(candidates.getFirst());
+    }
+
+    private List<Meter> matching(String name, Map<String, String> tags) {
         return registry.find(name).meters().stream()
-                .filter(meter -> def.tags().entrySet().stream()
+                .filter(meter -> tags.entrySet().stream()
                         .allMatch(tag -> tag.getValue().equals(meter.getId().getTag(tag.getKey()))))
                 .toList();
     }
 
-    private double sampleValue(List<Meter> meters) {
+    private double sampleValue(List<Meter> meters, Map<String, String> tags) {
         double value = currentValue(meters);
         if (def.subtractMeter() == null) {
             return value;
         }
-        List<Meter> subtractMeters = matching(def.subtractMeter());
+        List<Meter> subtractMeters = matching(def.subtractMeter(), tags);
         // a series whose own meter is unresolved is reported as such; its subtract-meter on top would be noise
         if (!meters.isEmpty()) {
             subtractMeterOutage.track(subtractMeters.isEmpty());

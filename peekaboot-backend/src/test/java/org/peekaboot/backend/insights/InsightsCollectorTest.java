@@ -307,7 +307,7 @@ class InsightsCollectorTest {
     @Test
     void aSeriesWhoseMeterThrowsLeavesTheOtherSeriesSampled() {
         throwingCounter("test.throwing");
-        SeriesDef throwing = new SeriesDef("f", "F", "test.throwing", Map.of(), Stat.RATE, null, null);
+        SeriesDef throwing = new SeriesDef("f", "F", "test.throwing", Map.of(), Stat.RATE, null, null, List.of());
         InsightsCollector isolating = collector(registry)
                 .levels(levels)
                 .series(value("g", "test.gauge"), throwing)
@@ -656,7 +656,7 @@ class InsightsCollectorTest {
 
     /** One rate series over {@code test.counter}, on the same registry and levels as the fixture collector. */
     private InsightsCollector rateCollector() {
-        SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), Stat.RATE, null, null);
+        SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), Stat.RATE, null, null, List.of());
         return collector(registry).levels(levels).series(rate).build();
     }
 }

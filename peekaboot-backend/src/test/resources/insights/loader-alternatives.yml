@@ -1,0 +1,11 @@
+panels:
+  - id: two
+    title: Two alternatives
+    series:
+      - id: s
+        label: S
+        meter: a.meter
+        tags: { k: v }
+        alternatives:
+          - { meter: b.meter, tags: { k: w } }
+          - { meter: c.meter }

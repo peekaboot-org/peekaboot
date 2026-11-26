@@ -1,0 +1,9 @@
+panels:
+  - id: heap
+    title: Heap memory
+    series:
+      - id: used
+        label: Used
+        meter: jvm.memory.used
+        alternatives:
+          - { tags: { k: v } }

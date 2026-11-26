@@ -14,6 +14,7 @@ import io.micrometer.core.instrument.TimeGauge;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.peekaboot.backend.insights.SeriesSampler.UnresolvedMeterReport;
+import org.peekaboot.backend.insights.config.MeterAlternative;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.insights.config.Unit;
@@ -62,13 +64,13 @@ class SeriesSamplerTest {
     private SeriesSampler rateOverBrokenCounter() {
         brokenCounter("broken");
         return new SeriesSampler(
-                new SeriesDef("r", "R", "broken", Map.of(), Stat.RATE, null, null),
+                new SeriesDef("r", "R", "broken", Map.of(), Stat.RATE, null, null, List.of()),
                 registry,
                 UnresolvedMeterReport.WARN);
     }
 
-    private static SeriesDef def(String meter, Map<String, String> tags, Stat stat) {
-        return new SeriesDef("s", "S", meter, tags, stat, null, null);
+    private static SeriesDef def(String meter, Map<String, String> tags, Stat stat, MeterAlternative... alternatives) {
+        return new SeriesDef("s", "S", meter, tags, stat, null, null, List.of(alternatives));
     }
 
     @Test
@@ -102,7 +104,7 @@ class SeriesSamplerTest {
     void aPercentSeriesServesItsRatioMeterAsAPercentage() {
         Gauge.builder("process.cpu.usage", () -> 0.42).register(registry);
         SeriesSampler sampler = new SeriesSampler(
-                new SeriesDef("s", "S", "process.cpu.usage", Map.of(), Stat.VALUE, null, Unit.PERCENT),
+                new SeriesDef("s", "S", "process.cpu.usage", Map.of(), Stat.VALUE, null, Unit.PERCENT, List.of()),
                 registry,
                 UnresolvedMeterReport.WARN);
 
@@ -113,7 +115,7 @@ class SeriesSamplerTest {
     void aSeriesInAnyOtherUnitServesItsMeterAsRead() {
         Gauge.builder("ratio", () -> 0.42).register(registry);
         SeriesSampler sampler = new SeriesSampler(
-                new SeriesDef("s", "S", "ratio", Map.of(), Stat.VALUE, null, Unit.COUNT),
+                new SeriesDef("s", "S", "ratio", Map.of(), Stat.VALUE, null, Unit.COUNT, List.of()),
                 registry,
                 UnresolvedMeterReport.WARN);
 
@@ -217,7 +219,8 @@ class SeriesSamplerTest {
     void subtractMeterComputesDifference() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
         Gauge.builder("disk.free", () -> 400).register(registry);
-        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
+        SeriesDef diff =
+                new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null, List.of());
         SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
         assertThat(sampler.sample(10_000)).isEqualTo(600.0);
     }
@@ -226,7 +229,8 @@ class SeriesSamplerTest {
     @Test
     void unresolvedSubtractMeterIsNotLoggedBeforeTheWarningThreshold() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
-        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free.typo", null);
+        SeriesDef diff =
+                new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free.typo", null, List.of());
         SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
@@ -240,7 +244,8 @@ class SeriesSamplerTest {
     @Test
     void unresolvedSubtractMeterIsLoggedOnceAfterTheWarningThresholdNotPerSample() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
-        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free.typo", null);
+        SeriesDef diff =
+                new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free.typo", null, List.of());
         SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
@@ -261,7 +266,8 @@ class SeriesSamplerTest {
     /** A series whose own meter never resolved is already reported as such; warning about its subtract-meter too would be noise. */
     @Test
     void unresolvedSubtractMeterIsNotLoggedWhileThePrimaryMeterIsAlsoUnresolved() {
-        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
+        SeriesDef diff =
+                new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null, List.of());
         SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
@@ -321,9 +327,11 @@ class SeriesSamplerTest {
     /** Shipped panels name meters an application may simply not have (no DataSource, no request yet): not worth a warning. */
     @Test
     void aShippedSeriesReportsBothOutagesAtDebug() {
-        SeriesDef primaryMissing = new SeriesDef("a", "A", "hikaricp.connections", Map.of(), Stat.VALUE, null, null);
+        SeriesDef primaryMissing =
+                new SeriesDef("a", "A", "hikaricp.connections", Map.of(), Stat.VALUE, null, null, List.of());
         Gauge.builder("disk.total", () -> 1000).register(registry);
-        SeriesDef subtractMissing = new SeriesDef("b", "B", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
+        SeriesDef subtractMissing =
+                new SeriesDef("b", "B", "disk.total", Map.of(), Stat.VALUE, "disk.free", null, List.of());
         SeriesSampler primary = new SeriesSampler(primaryMissing, registry, UnresolvedMeterReport.DEBUG);
         SeriesSampler subtract = new SeriesSampler(subtractMissing, registry, UnresolvedMeterReport.DEBUG);
 
@@ -364,7 +372,8 @@ class SeriesSamplerTest {
     @Test
     void subtractMeterRegisteredAfterConstructionStopsBeingUnresolved() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
-        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
+        SeriesDef diff =
+                new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null, List.of());
         SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
@@ -381,7 +390,8 @@ class SeriesSamplerTest {
     @Test
     void unresolvedSubtractMeterIsLoggedAgainAfterItResolvedInBetween() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
-        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null);
+        SeriesDef diff =
+                new SeriesDef("used", "Used", "disk.total", Map.of(), Stat.VALUE, "disk.free", null, List.of());
         SeriesSampler sampler = new SeriesSampler(diff, registry, UnresolvedMeterReport.WARN);
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
@@ -594,6 +604,143 @@ class SeriesSamplerTest {
             assertThat(sampler.sample(10_000)).isEqualTo(3.0); // 30 in 10s
 
             assertThat(capture.appender().list).hasSize(1);
+        }
+    }
+
+    @Test
+    void aSeriesReadsTheFirstPresentAlternative() {
+        Gauge.builder("b", () -> 7).register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                def("a", Map.of(), Stat.VALUE, new MeterAlternative("b", Map.of())),
+                registry,
+                UnresolvedMeterReport.WARN);
+
+        assertThat(sampler.sample(10_000)).isEqualTo(7.0);
+    }
+
+    @Test
+    void theFirstPresentCandidateWinsOverALaterOne() {
+        Counter a = registry.counter("a");
+        Counter b = registry.counter("b");
+        SeriesSampler sampler = new SeriesSampler(
+                def("a", Map.of(), Stat.RATE, new MeterAlternative("b", Map.of())),
+                registry,
+                UnresolvedMeterReport.WARN);
+        sampler.sample(10_000); // baseline
+        a.increment(20);
+        b.increment(300);
+
+        assertThat(sampler.sample(10_000)).isCloseTo(2.0, within(1e-9)); // a's 20 in 10s
+    }
+
+    /** Micrometer registers the 5xx timer on the first 5xx, and until then the series must not move to another name. */
+    @Test
+    void aTagValueMatchingNothingYetStaysOnThePresentCandidate() {
+        Timer.builder("a").tag("outcome", "SUCCESS").register(registry);
+        Timer otherName = Timer.builder("b").tag("outcome", "SERVER_ERROR").register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                def(
+                        "a",
+                        Map.of("outcome", "SERVER_ERROR"),
+                        Stat.RATE,
+                        new MeterAlternative("b", Map.of("outcome", "SERVER_ERROR"))),
+                registry,
+                UnresolvedMeterReport.WARN);
+        SeriesSampler control = new SeriesSampler(
+                def("a", Map.of("outcome", "SERVER_ERROR"), Stat.RATE), registry, UnresolvedMeterReport.NONE);
+
+        assertReadsAlike(sampler, control);
+        otherName.record(Duration.ofMillis(5));
+        assertReadsAlike(sampler, control);
+        Timer.builder("a").tag("outcome", "SERVER_ERROR").register(registry).record(Duration.ofMillis(5));
+        double firstServerErrors = control.sample(10_000);
+        assertThat(firstServerErrors).isCloseTo(0.1, within(1e-9));
+        assertThat(sampler.sample(10_000)).isEqualTo(firstServerErrors);
+    }
+
+    private static void assertReadsAlike(SeriesSampler sampler, SeriesSampler control) {
+        // a gap is a reading too, and AssertJ's equality refuses NaN == NaN
+        assertThat(sampler.sample(10_000)).usingComparator(Double::compare).isEqualTo(control.sample(10_000));
+    }
+
+    /** Under OpenTelemetry conventions the heap meters keep their name and carry a different tag key. */
+    @Test
+    void aCandidateWhoseTagKeyNoMeterCarriesIsSkipped() {
+        Gauge.builder("m", () -> 5).tag("other", "heap").register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                def("m", Map.of("area", "heap"), Stat.VALUE, new MeterAlternative("m", Map.of("other", "heap"))),
+                registry,
+                UnresolvedMeterReport.WARN);
+
+        assertThat(sampler.sample(10_000)).isEqualTo(5.0);
+    }
+
+    @Test
+    void noPresentCandidateIsReportedAsUnresolved() {
+        SeriesSampler sampler = new SeriesSampler(
+                def("a", Map.of(), Stat.VALUE, new MeterAlternative("b", Map.of())),
+                registry,
+                UnresolvedMeterReport.WARN);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            sampler.sample(10_000);
+            sampler.sample(10_000);
+            assertThat(capture.appender().list).isEmpty();
+            sampler.sample(10_000); // 3rd consecutive unresolved tick: threshold reached
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: series 's': meter 'a' or 'b' did not resolve to any meter"
+                                + " across 3 ticks");
+            });
+        }
+    }
+
+    @Test
+    void aFailedReadNamesEveryCandidate() {
+        brokenCounter("b");
+        SeriesSampler sampler = new SeriesSampler(
+                def("a", Map.of(), Stat.RATE, new MeterAlternative("b", Map.of())),
+                registry,
+                UnresolvedMeterReport.WARN);
+        failing.set(true);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(sampler.sample(10_000)).isNaN();
+
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getFormattedMessage())
+                    .containsExactly("Peekaboot insights: series 's': reading meter 'a' or 'b' failed; recording a"
+                            + " gap until it reads again");
+        }
+    }
+
+    @Test
+    void anUnresolvedSubtractMeterNamesEveryCandidate() {
+        Gauge.builder("b", () -> 1000).register(registry);
+        SeriesSampler sampler = new SeriesSampler(
+                new SeriesDef(
+                        "s",
+                        "S",
+                        "a",
+                        Map.of(),
+                        Stat.VALUE,
+                        "free",
+                        null,
+                        List.of(new MeterAlternative("b", Map.of()))),
+                registry,
+                UnresolvedMeterReport.WARN);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            for (int tick = 0; tick < 3; tick++) {
+                assertThat(sampler.sample(10_000)).isNaN();
+            }
+
+            assertThat(capture.appender().list)
+                    .extracting(event -> event.getFormattedMessage())
+                    .containsExactly("Peekaboot insights: series 's' (meter 'a' or 'b'): subtract-meter 'free' did"
+                            + " not resolve to any meter across 3 ticks");
         }
     }
 }

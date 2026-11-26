@@ -1,0 +1,5 @@
+panels:
+  - id: one
+    title: One meter
+    series:
+      - { id: s, label: S, meter: a.meter, tags: { k: v } }

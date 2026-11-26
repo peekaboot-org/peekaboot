@@ -231,6 +231,12 @@ still costs a lookup per tick. A meter whose function throws costs its own serie
 WARN per outage. Rates are measured per meter (`MeterBaselines`): a function counter or function
 timer first seen after the first sample starts from its first reading, a counter or timer that
 counts its own events from 0.
+
+A series may name `alternatives`, meters it reads when its own is absent, such as the
+OpenTelemetry name of a Micrometer meter. Each tick reads the first candidate with a meter that
+carries every one of the candidate's tag keys, whatever the values, so a 5xx series stays on
+`http.server.requests` before the first 5xx.
+
 Once a meter or subtract-meter has stayed unresolved for three ticks, `SeriesSampler` logs it,
 once per outage: at WARN for a series the operator's panel file wrote, at DEBUG for one exactly
 as shipped, since an application may lack a shipped meter. Tiles log no unresolved meter.

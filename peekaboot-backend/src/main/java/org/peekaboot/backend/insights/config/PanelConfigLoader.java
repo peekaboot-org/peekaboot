@@ -118,6 +118,9 @@ public final class PanelConfigLoader {
         for (SeriesDef series : panel.series()) {
             require(series.meter() != null, "panel '" + panel.id() + "': series without meter");
             require(
+                    series.alternatives().stream().allMatch(alternative -> alternative.meter() != null),
+                    "panel '" + panel.id() + "': series '" + series.id() + "': alternative without meter");
+            require(
                     series.subtractMeter() == null || series.stat() == Stat.VALUE,
                     "panel '" + panel.id() + "': series '" + series.id() + "': subtract-meter is not supported"
                             + " for stat '" + series.stat().wireName() + "'");
@@ -155,7 +158,8 @@ public final class PanelConfigLoader {
                                         s.tags(),
                                         s.stat() == null ? Stat.VALUE : s.stat(),
                                         s.subtractMeter(),
-                                        s.unit()))
+                                        s.unit(),
+                                        s.alternatives()))
                                 .toList()))
                 .toList();
         return new PanelsFile(panels, file.tiles());
