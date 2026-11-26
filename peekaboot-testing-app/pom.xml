@@ -267,7 +267,7 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>versions-maven-plugin</artifactId>
-                    <version>2.22.0</version>
+                    <version>2.23.0</version>
                 </plugin>
                 <!-- Pinned with the root pom, which has moved these six past the versions
                      spring-boot-starter-parent manages. Dependabot bumps both poms in one
