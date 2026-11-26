@@ -542,6 +542,12 @@ On `dev` and on every `dependabot/*` branch a third job, `gradle-build`, validat
 wrapper and runs `./gradlew build` next to the Maven job. See [Lockstep](#lockstep). The
 reasons behind each job's steps are in the [workflow](.github/workflows/build-on-push.yml).
 
+Every push also runs `boot-line`, one leg per entry in its matrix, today `boot-4.1`. It
+installs nothing of its own: `prepare-build` installs the reactor built on the 4.2 baseline,
+the jars users get, and the leg switches only the testing app's parent to the newest 4.1.x and
+runs that module's `verify`, gates skipped. When Boot 4.3 ships, the matrix moves to `['4.2']`.
+[TESTING.md](docs/TESTING.md#running) has the commands to run the leg locally.
+
 ### `draft-release-notes.yml`
 
 Pushes to `dev`, and a dispatch on `dev` after each Dependabot merge (see

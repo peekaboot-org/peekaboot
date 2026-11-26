@@ -602,6 +602,25 @@ thread and engine flags. What a test author needs on top of it:
 - The website's screenshots come from `ScreenshotCapture`. Its command, and what it may and may
   not reveal, are in
   [`peekaboot-testing-app/README.md`](../peekaboot-testing-app/README.md#screenshot-capture-screenshotcapture).
+- The `boot-4.1` CI leg (see [`BUILD.md`](../BUILD.md#build-on-pushyml)) runs the testing app on
+  Boot 4.1. Reproduce it in a separate clone, because the second command rewrites the tracked
+  testing-app pom. The repository flags keep the reactor's jars out of `~/.m2` and read
+  everything else from it:
+
+  ```bash
+  ./mvnw -B -pl peekaboot-testing-app -am install -Dmaven.test.skip=true \
+    -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true \
+    -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Dpeekaboot.frontend.lint.skip=true \
+    -Dmaven.repo.local=$PWD/target/boot-line-m2 -Dmaven.repo.local.tail=$HOME/.m2/repository
+  ./mvnw -B -f peekaboot-testing-app/pom.xml versions:update-parent \
+    -DparentVersion='[4.1.0,4.1.999]' -DallowDowngrade=true -DgenerateBackupPoms=false \
+    -Dmaven.repo.local=$PWD/target/boot-line-m2 -Dmaven.repo.local.tail=$HOME/.m2/repository
+  ./mvnw -B -f peekaboot-testing-app/pom.xml verify \
+    -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true \
+    -Dmaven.repo.local=$PWD/target/boot-line-m2 -Dmaven.repo.local.tail=$HOME/.m2/repository
+  ```
+
+  `git checkout -- peekaboot-testing-app/pom.xml` puts the 4.2 parent back.
 
 ## Counting tests
 Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`

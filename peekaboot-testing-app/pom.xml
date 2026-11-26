@@ -257,6 +257,15 @@
                     <artifactId>exec-maven-plugin</artifactId>
                     <version>3.6.4</version>
                 </plugin>
+                <!-- Not bound to any phase: build-on-push's boot-line job invokes
+                     versions:update-parent ad hoc. Pinned rather than left to
+                     spring-boot-starter-parent, which moves it with every Boot release,
+                     because the job's version range was verified on this release. -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>2.22.0</version>
+                </plugin>
                 <!-- Pinned with the root pom, which has moved these six past the versions
                      spring-boot-starter-parent manages. Dependabot bumps both poms in one
                      pull request, so the reactor keeps running one version of each. -->

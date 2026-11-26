@@ -183,3 +183,56 @@ jobs:
 
       - name: gradle-build
         run: ./gradlew --no-daemon build
+
+  # The jars built on the 4.2 baseline, which is what users get, run on an older supported
+  # Boot line: compiling Peekaboot against 4.1 would test a combination nobody ships. When
+  # Boot 4.3 ships, the matrix moves to ['4.2']. The leg builds the testing app alone (-f), so
+  # BuildVersionLockstepTest, in the autoconfigure module, never sees the switched parent; the
+  # build-on-push job keeps enforcing it.
+  boot-line:
+    name: boot-${{ matrix.boot-line }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        boot-line: ['4.1']
+
+    env:
+      BOOT_LINE: ${{ matrix.boot-line }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs the reactor built on the 4.2 baseline, which is what users get.
+      - name: prepare-build
+        uses: ./.github/actions/prepare-build
+
+      # The upper bound is .999 rather than the next minor, whose pre-releases sort below it
+      # and would be picked. The guard exists because without allowDowngrade the plugin leaves
+      # the pom untouched and still succeeds.
+      - name: switch-boot-line
+        run: |
+          ./mvnw --batch-mode -f peekaboot-testing-app/pom.xml versions:update-parent \
+            -DparentVersion="[${BOOT_LINE}.0,${BOOT_LINE}.999]" -DallowDowngrade=true \
+            -DgenerateBackupPoms=false
+          parent="$(awk '/<parent>/,/<\/parent>/' peekaboot-testing-app/pom.xml)"
+          if ! grep -qF "<version>${BOOT_LINE}." <<< "$parent"; then
+            echo "::error::the testing app's parent is not on Boot ${BOOT_LINE}:"
+            echo "$parent"
+            exit 1
+          fi
+          echo "Boot ${BOOT_LINE} leg: spring-boot-starter-parent $(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' <<< "$parent")" >> "$GITHUB_STEP_SUMMARY"
+
+      # The gates ran on the baseline; this leg proves runtime compatibility, on Chromium only.
+      - name: testing-app-verify
+        run: >
+          ./mvnw --batch-mode -f peekaboot-testing-app/pom.xml verify
+          -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true
