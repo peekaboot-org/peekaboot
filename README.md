@@ -121,7 +121,7 @@ Further reading:
 - Java 25 or newer, the current LTS. The build compiles with `release 25` and has no
   toolchain fallback, Peekaboot's collectors run on virtual threads, and nothing below 25 is
   built or tested.
-- Spring Boot 4.1.
+- Spring Boot 4.1 or 4.2.
 - A servlet web application.
 
 ## Acknowledgements
