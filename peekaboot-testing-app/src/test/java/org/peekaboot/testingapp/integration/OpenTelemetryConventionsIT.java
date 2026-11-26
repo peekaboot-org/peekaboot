@@ -50,7 +50,7 @@ class OpenTelemetryConventionsIT extends ObservationConventionContract {
                 .valueStream()
                 .map(JsonNode::asString)
                 .toList();
-        assertThat(mdcKeys).contains(TRACE_ID_KEY, SPAN_ID_KEY).doesNotContain("traceId");
+        assertThat(mdcKeys).contains(TRACE_ID_KEY, SPAN_ID_KEY).doesNotContain("traceId", "spanId");
     }
 
     @Override
