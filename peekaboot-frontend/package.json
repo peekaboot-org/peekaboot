@@ -16,7 +16,7 @@
     "globals": "17.14.0",
     "html-validate": "11.21.1",
     "stylelint": "17.16.0",
-    "stylelint-config-recommended": "18.0.0",
+    "stylelint-config-recommended": "19.1.0",
     "stylelint-value-no-unknown-custom-properties": "6.1.1"
   },
   "allowScripts": {
