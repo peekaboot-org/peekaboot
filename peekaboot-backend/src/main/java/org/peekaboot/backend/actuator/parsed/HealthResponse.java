@@ -1,6 +1,7 @@
 package org.peekaboot.backend.actuator.parsed;
 
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The descriptor {@code HealthEndpoint.health()} returns: the aggregate {@code status} at
@@ -19,7 +20,10 @@ public record HealthResponse(String status, Map<String, ComponentDescriptor> com
      * {@code components} instead.
      */
     public record ComponentDescriptor(
-            String status, Map<String, Object> details, Map<String, ComponentDescriptor> components) {
+            String status,
+            @Nullable Long durationMs,
+            Map<String, Object> details,
+            Map<String, ComponentDescriptor> components) {
 
         public ComponentDescriptor {
             details = Absent.orEmpty(details);

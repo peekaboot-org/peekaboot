@@ -206,6 +206,22 @@ class ActuatorResponseParserTest {
         assertThat(response.health().components().get("ping").components()).isEmpty();
     }
 
+    @Test
+    void bindsAComponentsDurationBesideItsStatus() {
+        ActuatorParsedData response = parser.parse(Map.of(
+                "health",
+                Map.of(
+                        "status",
+                        "UP",
+                        "components",
+                        Map.of(
+                                "db", Map.of("status", "UP", "durationMs", 12),
+                                "ping", Map.of("status", "UP")))));
+
+        assertThat(response.health().components().get("db").durationMs()).isEqualTo(12L);
+        assertThat(response.health().components().get("ping").durationMs()).isNull();
+    }
+
     /** The records declare only what the mappers read; whatever else an endpoint sends is dropped, not fatal. */
     @Test
     void ignoresPropertiesTheRecordsDoNotDeclare() {

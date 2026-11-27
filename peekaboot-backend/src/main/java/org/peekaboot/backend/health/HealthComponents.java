@@ -70,6 +70,10 @@ public final class HealthComponents {
                 .components()
                 .forEach((name, child) -> children.put(name, component(child, childConnections.get(name), Map.of())));
         return new HealthReport.Component(
-                descriptor.status(), masker.maskMap(descriptor.details(), false), children, connection);
+                descriptor.status(),
+                descriptor.durationMs(),
+                masker.maskMap(descriptor.details(), false),
+                children,
+                connection);
     }
 }

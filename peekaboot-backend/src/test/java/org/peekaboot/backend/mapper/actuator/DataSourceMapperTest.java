@@ -42,8 +42,8 @@ class DataSourceMapperTest {
     void aggregatesHealthStatus() {
         DataSourceMetadata metadata = metadata("primaryDS");
 
-        HealthResponse health =
-                new HealthResponse("UP", Map.of("db", new HealthResponse.ComponentDescriptor("UP", Map.of(), null)));
+        HealthResponse health = new HealthResponse(
+                "UP", Map.of("db", new HealthResponse.ComponentDescriptor("UP", null, Map.of(), null)));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), health, false);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
@@ -63,9 +63,12 @@ class DataSourceMapperTest {
                         new HealthResponse.ComponentDescriptor(
                                 "DOWN",
                                 null,
+                                null,
                                 Map.of(
-                                        "primary", new HealthResponse.ComponentDescriptor("UP", Map.of(), null),
-                                        "reporting", new HealthResponse.ComponentDescriptor("DOWN", Map.of(), null)))));
+                                        "primary", new HealthResponse.ComponentDescriptor("UP", null, Map.of(), null),
+                                        "reporting",
+                                                new HealthResponse.ComponentDescriptor(
+                                                        "DOWN", null, Map.of(), null)))));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata("primary"), metadata("reporting")), health, false);
 
@@ -84,7 +87,10 @@ class DataSourceMapperTest {
                         new HealthResponse.ComponentDescriptor(
                                 "UP",
                                 null,
-                                Map.of("primary", new HealthResponse.ComponentDescriptor("UP", Map.of(), null)))));
+                                null,
+                                Map.of(
+                                        "primary",
+                                        new HealthResponse.ComponentDescriptor("UP", null, Map.of(), null)))));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata("other")), health, false);
 

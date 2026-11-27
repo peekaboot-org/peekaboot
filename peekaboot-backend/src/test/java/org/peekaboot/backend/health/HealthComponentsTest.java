@@ -41,6 +41,29 @@ class HealthComponentsTest {
     }
 
     @Test
+    void carriesEachComponentsDurationAtEveryLevel() {
+        HealthResponse health = response(Map.of(
+                "db",
+                new ComponentDescriptor(
+                        "UP",
+                        40L,
+                        Map.of(),
+                        Map.of("primary", new ComponentDescriptor("UP", 40L, Map.of(), Map.of())))));
+
+        HealthReport.Component db = components().of(health).get("db");
+
+        assertThat(db.durationMs()).isEqualTo(40L);
+        assertThat(db.components().get("primary").durationMs()).isEqualTo(40L);
+    }
+
+    @Test
+    void anUntimedComponentHasNoDuration() {
+        HealthResponse health = response(Map.of("ping", indicator("UP")));
+
+        assertThat(components().of(health).get("ping").durationMs()).isNull();
+    }
+
+    @Test
     void keepsTheActuatorsOrder() {
         Map<String, ComponentDescriptor> ordered = new LinkedHashMap<>();
         ordered.put("zeta", indicator("UP"));
@@ -150,7 +173,7 @@ class HealthComponentsTest {
     void masksDetailsAsTheDashboardDoes() {
         Map<String, Object> details =
                 Map.of("error", "java.net.ConnectException: redis://cache:s3cret@cache.internal:6379", "password", "x");
-        HealthResponse health = response(Map.of("redis", new ComponentDescriptor("DOWN", details, Map.of())));
+        HealthResponse health = response(Map.of("redis", new ComponentDescriptor("DOWN", null, details, Map.of())));
 
         Map<String, Object> masked = components().of(health).get("redis").details();
 
@@ -169,7 +192,7 @@ class HealthComponentsTest {
                         "DOWN",
                         Map.of(
                                 "dataSource",
-                                new ComponentDescriptor("DOWN", details, Map.of()),
+                                new ComponentDescriptor("DOWN", null, details, Map.of()),
                                 "inventory",
                                 indicator("UP")))));
 
@@ -210,10 +233,10 @@ class HealthComponentsTest {
     }
 
     private static ComponentDescriptor indicator(String status) {
-        return new ComponentDescriptor(status, Map.of(), Map.of());
+        return new ComponentDescriptor(status, null, Map.of(), Map.of());
     }
 
     private static ComponentDescriptor composite(String status, Map<String, ComponentDescriptor> children) {
-        return new ComponentDescriptor(status, Map.of(), children);
+        return new ComponentDescriptor(status, null, Map.of(), children);
     }
 }

@@ -30,7 +30,10 @@ class RuntimeMapperTest {
                 Map.of(
                         "diskSpace",
                         new HealthResponse.ComponentDescriptor(
-                                "UP", Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"), null)));
+                                "UP",
+                                null,
+                                Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"),
+                                null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).usedPercent()).isEqualTo(60.0);
@@ -77,7 +80,8 @@ class RuntimeMapperTest {
                 "UP",
                 Map.of(
                         "diskSpace",
-                        new HealthResponse.ComponentDescriptor("UP", Map.of("total", 1000L, "free", 500L), null)));
+                        new HealthResponse.ComponentDescriptor(
+                                "UP", null, Map.of("total", 1000L, "free", 500L), null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).path()).isEqualTo("/");
@@ -102,7 +106,7 @@ class RuntimeMapperTest {
                 Map.of(
                         "diskSpace",
                         new HealthResponse.ComponentDescriptor(
-                                "UP", Map.of("total", 0L, "free", 0L, "path", "/"), null)));
+                                "UP", null, Map.of("total", 0L, "free", 0L, "path", "/"), null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).isEmpty();
     }
@@ -150,7 +154,7 @@ class RuntimeMapperTest {
                 Map.of(
                         "diskSpace",
                         new HealthResponse.ComponentDescriptor(
-                                "UP", Map.of("total", "500 GB", "free", "200 GB", "path", "/"), null)));
+                                "UP", null, Map.of("total", "500 GB", "free", "200 GB", "path", "/"), null)));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).isEmpty();
     }

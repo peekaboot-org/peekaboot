@@ -1877,9 +1877,14 @@
         "type": "object",
         "description": "One health contributor.",
         "additionalProperties": false,
-        "required": ["status", "details", "components", "connection"],
+        "required": ["status", "durationMs", "details", "components", "connection"],
         "properties": {
           "status": {"type": "string", "description": "The contributor's status, verbatim: `UP`, `DOWN`, `OUT_OF_SERVICE`, `UNKNOWN` or one the application defines."},
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How long the check took, in milliseconds. For a check still running at `peekaboot.health.timeout`, how long it had run by then. A composite's is its slowest child's. `null` where the application replaced Boot's health beans and Peekaboot read its `HealthEndpoint` as a whole."
+          },
           "details": {
             "type": "object",
             "additionalProperties": {"description": "Any JSON value, masked as a tree."},

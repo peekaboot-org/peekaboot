@@ -8,8 +8,8 @@ import org.peekaboot.backend.insights.InsightsProblem;
 
 /**
  * The application's health as {@code GET /api/health} serves it. The components nest as
- * {@code /actuator/health} nests them, and every node always carries all four keys: {@code status},
- * {@code details}, {@code components} and {@code connection}.
+ * {@code /actuator/health} nests them, and every node always carries all five keys: {@code status},
+ * {@code durationMs}, {@code details}, {@code components} and {@code connection}.
  *
  * @param windowMs the span of level 0, which {@code problems}, {@code traces} and {@code failures} cover
  * @param traces {@code null} while tracing is off
@@ -25,12 +25,15 @@ public record HealthReport(
     /**
      * One health contributor.
      *
+     * @param durationMs how long the check took; for one that missed the deadline, how long it had run by
+     *     then; a composite's slowest child's; {@code null} where Peekaboot did not time the checks
      * @param details empty for a composite
      * @param components empty for an indicator
      * @param connection {@code null} for a component Peekaboot cannot describe
      */
     public record Component(
             String status,
+            @Nullable Long durationMs,
             Map<String, Object> details,
             Map<String, Component> components,
             @Nullable HealthConnection connection) {}
