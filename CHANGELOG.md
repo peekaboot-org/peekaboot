@@ -22,6 +22,15 @@
   meter across 3 ticks`. An entry without a `title`, which only switches or moves a bundled panel,
   is unaffected. Copy the bundled series' `alternatives` from `peekaboot-insights-defaults.yml`
   into your override.
+- **The Queries tab names each query's database by its JDBC URL.** A query's label and its
+  `dbSystem` in `GET /peekaboot/api/traces/{traceId}` now hold the product the DataSource's JDBC
+  URL names, such as `H2`, `POSTGRESQL` or `MYSQL`, as the Overview DataSource card and the
+  health endpoint's `product` do. 1.4.1 served `postgresql`, `mysql`, `mariadb` and
+  `microsoft.sql_server`, `other_sql` for H2 and every other database, and without
+  `datasource-micrometer-opentelemetry` the pool name or the connection's catalog. A URL that
+  names no product Peekaboot knows keeps the old value. While Peekaboot is enabled, the query
+  spans your app exports also carry the product as `peekaboot.db.product`. Nothing to do unless
+  something you run parses `dbSystem`.
 
 ### New
 
