@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import java.util.List;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -52,9 +53,22 @@ public final class LogCapture implements AutoCloseable {
         return new LogCapture(logger, appender, previousAdditive, previousLevel);
     }
 
-    /** The captured events; asserted on as {@code capture.appender().list}. */
+    /**
+     * The captured events; asserted on as {@code capture.appender().list} once nothing else can
+     * log to it. Where another thread may still log, read {@link #events()} instead.
+     */
     public ListAppender<ILoggingEvent> appender() {
         return appender;
+    }
+
+    /**
+     * A copy of the events captured so far, safe while other threads log. Logback appends under
+     * the appender's monitor, so the copy is taken under it too.
+     */
+    public List<ILoggingEvent> events() {
+        synchronized (appender) {
+            return List.copyOf(appender.list);
+        }
     }
 
     @Override

@@ -38,4 +38,11 @@
         <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
     </Match>
 
+    <!-- LogCapture.events() locks the appender it hands out on purpose: logback appends under
+         that monitor (AppenderBase.doAppend), so no other lock makes the copy safe. -->
+    <Match>
+        <Class name="org.peekaboot.testsupport.LogCapture"/>
+        <Bug pattern="USO_UNSAFE_ACCESSIBLE_OBJECT_SYNCHRONIZATION"/>
+    </Match>
+
 </FindBugsFilter>
