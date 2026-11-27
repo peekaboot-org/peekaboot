@@ -31,9 +31,29 @@
   names no product Peekaboot knows keeps the old value. While Peekaboot is enabled, the query
   spans your app exports also carry the product as `peekaboot.db.product`. Nothing to do unless
   something you run parses `dbSystem`.
+- **`/peekaboot/api/health` answers within `peekaboot.health.timeout`, default `10s`.** Every
+  health check now runs at once. One still running at the deadline reads `DOWN` with
+  `error: "Timed out after 10s"`, so the report answers `503`. The check is not interrupted:
+  Peekaboot logs a WARN when it misses the deadline and another with its answer and duration when
+  it ends. The Health section of the dashboard reads the same. A monitor with a shorter timeout
+  than `10s` should get a lower `peekaboot.health.timeout`.
+- **A health check that throws reads `DOWN` with an `error` detail.** 1.4.1 failed the whole
+  report.
+- **A replaced `HealthEndpoint` bean no longer answers for Peekaboot's health report.** In 1.4.1
+  an application that declared its own `HealthEndpoint` bean saw that bean's answer on the
+  dashboard and at `/peekaboot/api/health`. Both now list the checks Boot registered, answered
+  within `peekaboot.health.timeout`. The replacement is read only where Boot's health registry
+  or groups bean is missing, and then without a deadline. Declare a check of your own as a
+  `HealthIndicator` bean to have it in the report.
+- **Peekaboot's endpoints and schemas are gone from your OpenAPI document.** In an application with
+  springdoc, `/v3/api-docs` no longer lists Peekaboot's own endpoints or the schemas only they use,
+  while Peekaboot is enabled. A client generated from that document loses them. Your own
+  controllers are unaffected.
 
 ### New
 
+- **Every health component carries `durationMs`.** Each component of `/peekaboot/api/health`
+  reports how long its check took, in milliseconds. A composite reports its slowest child's time.
 - **Spring Boot 4.2.** Peekaboot runs on Spring Boot 4.1 and 4.2, where 1.4.1 supported 4.1 only.
 - **OpenTelemetry semantic conventions.** With `management.observations.conventions=open-telemetry`
   on Boot 4.2, traces keep each HTTP request's route and status. HTTP throughput, HTTP latency,
