@@ -996,7 +996,10 @@
         "required": ["spanId", "dbSystem", "dataSourceName", "durationMs", "rowCount", "statement"],
         "properties": {
           "spanId": {"type": "string"},
-          "dbSystem": {"type": ["string", "null"]},
+          "dbSystem": {
+            "type": ["string", "null"],
+            "description": "The product the query's JDBC URL names, as a constant such as `H2` or `POSTGRESQL`. Where that is unknown, the database system or DataSource name the instrumentation tagged."
+          },
           "dataSourceName": {"type": ["string", "null"]},
           "durationMs": {"type": "integer", "format": "int64"},
           "rowCount": {"type": ["integer", "null"], "format": "int64"},

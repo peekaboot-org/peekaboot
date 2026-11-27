@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import net.ttddyy.observation.tracing.QueryContext;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.query.QueryDatabaseProductObservationFilter;
 import org.peekaboot.backend.tracing.query.QueryParameterObservationFilter;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -18,10 +19,11 @@ class QueryParameterAutoConfigurationTest {
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
-    void registersTheFilterWithDatasourceMicrometerPresent() {
+    void registersTheFiltersWithDatasourceMicrometerPresent() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(QueryParameterObservationFilter.class);
+            assertThat(context).hasSingleBean(QueryDatabaseProductObservationFilter.class);
         });
     }
 
@@ -32,7 +34,9 @@ class QueryParameterAutoConfigurationTest {
                 .withClassLoader(new FilteredClassLoader(QueryContext.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(QueryParameterObservationFilter.class);
+                    assertThat(context)
+                            .doesNotHaveBean(QueryParameterObservationFilter.class)
+                            .doesNotHaveBean(QueryDatabaseProductObservationFilter.class);
                 });
     }
 
@@ -40,7 +44,9 @@ class QueryParameterAutoConfigurationTest {
     void staysAwayWhenPeekabootIsDisabled() {
         contextRunner
                 .withPropertyValues("peekaboot.enabled=false")
-                .run(context -> assertThat(context).doesNotHaveBean(QueryParameterObservationFilter.class));
+                .run(context -> assertThat(context)
+                        .doesNotHaveBean(QueryParameterObservationFilter.class)
+                        .doesNotHaveBean(QueryDatabaseProductObservationFilter.class));
     }
 
     /** Without tracing there is no store for the tag to reach, and no reason to put values on a span. */
@@ -48,7 +54,9 @@ class QueryParameterAutoConfigurationTest {
     void staysAwayWhenTracingIsDisabled() {
         contextRunner
                 .withPropertyValues("peekaboot.tracing.enabled=false")
-                .run(context -> assertThat(context).doesNotHaveBean(QueryParameterObservationFilter.class));
+                .run(context -> assertThat(context)
+                        .doesNotHaveBean(QueryParameterObservationFilter.class)
+                        .doesNotHaveBean(QueryDatabaseProductObservationFilter.class));
     }
 
     /**
@@ -62,7 +70,9 @@ class QueryParameterAutoConfigurationTest {
                 .withPropertyValues("peekaboot.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(QueryParameterObservationFilter.class);
+                    assertThat(context)
+                            .doesNotHaveBean(QueryParameterObservationFilter.class)
+                            .doesNotHaveBean(QueryDatabaseProductObservationFilter.class);
                 });
     }
 
@@ -73,7 +83,9 @@ class QueryParameterAutoConfigurationTest {
                 .withPropertyValues("peekaboot.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(QueryParameterObservationFilter.class);
+                    assertThat(context)
+                            .doesNotHaveBean(QueryParameterObservationFilter.class)
+                            .doesNotHaveBean(QueryDatabaseProductObservationFilter.class);
                 });
     }
 }

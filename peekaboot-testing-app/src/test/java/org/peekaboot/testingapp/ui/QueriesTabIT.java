@@ -178,8 +178,9 @@ class QueriesTabIT extends TraceOverlayTestBase {
                 const statement = {text: 'SELECT 1', formatted: null, parameters: []};
                 const container = document.createElement('div');
                 m.render(container, {data: {queries: [
-                    {statement, durationMs: 1, dbSystem: 'postgresql', dataSourceName: 'orders-db'},
-                    {statement, durationMs: 1, dbSystem: 'h2'},
+                    {statement, durationMs: 1, dbSystem: 'H2', dataSourceName: 'orders-db'},
+                    {statement, durationMs: 1, dbSystem: 'MYSQL', dataSourceName: 'inventory-db'},
+                    {statement, durationMs: 1, dbSystem: 'H2'},
                     {statement, durationMs: 1, dbSystem: 'inventory-db', dataSourceName: 'inventory-db'},
                     {statement, durationMs: 1, dbSystem: 'h2', dataSourceName: 'H2'}
                 ]}});
@@ -187,7 +188,9 @@ class QueriesTabIT extends TraceOverlayTestBase {
             })()
             """);
 
-        assertThat(labels).isEqualTo(List.of("1. POSTGRESQL · orders-db", "2. H2", "3. INVENTORY-DB", "4. H2"));
+        assertThat(labels)
+                .isEqualTo(
+                        List.of("1. H2 · orders-db", "2. MYSQL · inventory-db", "3. H2", "4. INVENTORY-DB", "5. H2"));
     }
 
     /** From a second up a query's duration is a decimal figure, so it takes the dashboard's decimal mark. */

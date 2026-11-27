@@ -211,7 +211,7 @@ class TraceInsightsServiceDetailTest extends TraceInsightsServiceTestBase {
         TraceResource result = service.getTrace("trace1").orElseThrow();
         assertThat(result.data().queries()).hasSize(1);
         assertThat(result.data().queries().get(0).spanId()).isEqualTo("span-db-trace1");
-        assertThat(result.data().queries().get(0).dbSystem()).isEqualTo("postgresql");
+        assertThat(result.data().queries().get(0).dbSystem()).isEqualTo("POSTGRESQL");
         assertThat(result.data().queries().get(0).durationMs()).isEqualTo(50L);
     }
 
@@ -324,7 +324,13 @@ class TraceInsightsServiceDetailTest extends TraceInsightsServiceTestBase {
                 .named("SELECT users")
                 .kind(Span.Kind.CLIENT)
                 .at(10, 50)
-                .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"));
+                .tags(Map.of(
+                        "peekaboot.db.product",
+                        "POSTGRESQL",
+                        "db.system",
+                        "postgresql",
+                        "db.statement",
+                        "SELECT * FROM users WHERE id = ?"));
     }
 
     private void addTraceWithDbSpan(String traceId, long totalDurationMs) {

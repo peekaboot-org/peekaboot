@@ -21,6 +21,17 @@ final class TraceQueries {
         return names;
     }
 
+    /** The database system, as served, of every query that ran on {@code dataSourceName}. */
+    static List<String> systemsOn(JsonNode trace, String dataSourceName) {
+        List<String> systems = new ArrayList<>();
+        trace.path("data").path("queries").forEach(query -> {
+            if (dataSourceName.equals(query.path("dataSourceName").asString(""))) {
+                systems.add(query.path("dbSystem").asString(""));
+            }
+        });
+        return systems;
+    }
+
     /** The statement text, as served, of every query that ran on {@code dataSourceName}. */
     static List<String> statementsOn(JsonNode trace, String dataSourceName) {
         List<String> statements = new ArrayList<>();

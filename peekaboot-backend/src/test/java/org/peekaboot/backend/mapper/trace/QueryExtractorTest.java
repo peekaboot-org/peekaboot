@@ -273,6 +273,27 @@ class QueryExtractorTest {
         assertThat(queries.get(0).dbSystem()).isEqualTo("primary_db");
     }
 
+    /** datasource-micrometer's OpenTelemetry convention calls H2 {@code other_sql}; Peekaboot's own product names it. */
+    @Test
+    void extractNamesPeekabootsOwnDatabaseProductAsTheSystem() {
+        var querySpan = query("span1")
+                .tags(Map.of(
+                        "db.query.text", "SELECT 1",
+                        "peekaboot.db.product", "H2",
+                        "db.system.name", "other_sql",
+                        "jdbc.datasource.pool", "orders-db",
+                        "jdbc.datasource.name", "catalog-uuid"))
+                .order(10)
+                .build();
+
+        List<QueryInfo> queries = extract(TraceDatas.of("trace1", querySpan));
+
+        assertThat(queries).singleElement().satisfies(query -> {
+            assertThat(query.dbSystem()).isEqualTo("H2");
+            assertThat(query.dataSourceName()).isEqualTo("orders-db");
+        });
+    }
+
     /** Two DataSources on one engine share a system; the name is what tells their queries apart. */
     @Test
     void extractCarriesTheDataSourceNameBesideTheSystem() {

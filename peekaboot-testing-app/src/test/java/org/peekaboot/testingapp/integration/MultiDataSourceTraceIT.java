@@ -34,7 +34,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The inventory on a real MySQL beside the orders on H2: a trace that touches both shows
- * queries from both, each labelled with its own pool name. Only the second DataSource gets a
+ * queries from both, each labelled with its own pool name and database product. Only the second DataSource gets a
  * container, since what is under test is that it stays apart from the primary.
  */
 @StartsContainers
@@ -80,6 +80,10 @@ class MultiDataSourceTraceIT {
             JsonNode trace = traces.awaitTrace(traces.get("/orders"), TraceApiClient.ROOT_SPAN_EXPORTED);
 
             assertThat(TraceQueries.dataSourceNames(trace)).contains("orders-db", "inventory-db");
+            assertThat(TraceQueries.systemsOn(trace, "orders-db")).isNotEmpty().containsOnly("H2");
+            assertThat(TraceQueries.systemsOn(trace, "inventory-db"))
+                    .isNotEmpty()
+                    .containsOnly("MYSQL");
             assertThat(TraceQueries.statementsOn(trace, "orders-db"))
                     .anySatisfy(sql -> assertThat(sql).contains("from customer_order"));
             assertThat(TraceQueries.statementsOn(trace, "inventory-db"))

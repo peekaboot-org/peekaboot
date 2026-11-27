@@ -135,6 +135,20 @@ class DbSpansTest {
         assertThat(DbSpans.system(Map.of("db.query.text", "SELECT 1"))).isNull();
     }
 
+    /** Peekaboot's own product names the engines the OpenTelemetry convention calls {@code other_sql}. */
+    @Test
+    void systemPrefersPeekabootsOwnProductOverEveryInstrumentationTag() {
+        assertThat(DbSpans.system(Map.of(
+                        "peekaboot.db.product", "H2",
+                        "db.system.name", "other_sql",
+                        "db.system", "other_sql",
+                        "jdbc.datasource.name", "ordersdb",
+                        "peer.service", "orders_db")))
+                .isEqualTo("H2");
+        assertThat(DbSpans.system(Map.of("peekaboot.db.product", "H2", "jdbc.datasource.name", "ordersdb")))
+                .isEqualTo("H2");
+    }
+
     @Test
     void systemIsNullWithoutATagMap() {
         assertThat(DbSpans.system(null)).isNull();

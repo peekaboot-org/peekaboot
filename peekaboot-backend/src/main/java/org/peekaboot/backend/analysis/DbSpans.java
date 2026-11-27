@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.tracing.event.SpanData;
+import org.peekaboot.backend.tracing.tags.DatabaseProductTag;
 import org.peekaboot.backend.tracing.tags.QueryParameterTags;
 import org.peekaboot.backend.tracing.tags.Tags;
 
@@ -120,16 +121,17 @@ public final class DbSpans {
     }
 
     /**
-     * The database a query span names, with the same priority as {@link #sql}: the current
-     * OpenTelemetry {@code db.system.name} ahead of its superseded spelling {@code db.system},
-     * then datasource-proxy's datasource name or peer service. Null when nothing named one, as
-     * without a tag map.
+     * The database a query span names: Peekaboot's own {@link DatabaseProductTag#KEY} first, then
+     * with the same priority as {@link #sql} the current OpenTelemetry {@code db.system.name}
+     * ahead of its superseded spelling {@code db.system}, then datasource-proxy's datasource name
+     * or peer service. Null when nothing named one, as without a tag map.
      */
     public static @Nullable String system(@Nullable Map<String, String> tags) {
         if (tags == null) {
             return null;
         }
-        return Tags.first(tags, "db.system.name", "db.system", "jdbc.datasource.name", "peer.service");
+        return Tags.first(
+                tags, DatabaseProductTag.KEY, "db.system.name", "db.system", "jdbc.datasource.name", "peer.service");
     }
 
     /**

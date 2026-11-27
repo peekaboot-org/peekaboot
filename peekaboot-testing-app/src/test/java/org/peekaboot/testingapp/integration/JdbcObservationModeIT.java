@@ -30,8 +30,6 @@ class JdbcObservationModeIT extends TestingAppITBase {
 
     private static final String PLAIN_STATEMENT_TAG = "jdbc.query[0]";
 
-    private static final String PLAIN_DATA_SOURCE_TAG = "jdbc.datasource.name";
-
     @Autowired
     private TraceStore traceStore;
 
@@ -71,20 +69,18 @@ class JdbcObservationModeIT extends TestingAppITBase {
     }
 
     /**
-     * datasource-micrometer's OpenTelemetry module names PostgreSQL, MySQL, MariaDB and SQL Server
-     * and calls every other database {@code other_sql}. Plain mode tags no system, so the label
-     * falls back to the DataSource name it tags: the Hikari pool's, or, where datasource-proxy
-     * hides the pool, the connection's catalog.
+     * Peekaboot names the product from the connection's JDBC URL in either mode. Without that,
+     * datasource-micrometer's OpenTelemetry module calls H2 {@code other_sql} and plain mode
+     * falls back to the pool's name or the connection's catalog.
      */
     @Test
-    void aQueryNamesItsDatabaseSystem() {
+    void aQueryOnH2IsLabelledH2InEitherMode() {
         String traceId = traces.get("/persons");
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(queriesOf(trace))
-                .allSatisfy(query -> assertThat(query.path("dbSystem").asString(""))
-                        .isNotEmpty()
-                        .isEqualTo(PLAIN ? storedTags(traceId, query).get(PLAIN_DATA_SOURCE_TAG) : "other_sql"));
+                .allSatisfy(
+                        query -> assertThat(query.path("dbSystem").asString("")).isEqualTo("H2"));
     }
 
     private static List<JsonNode> queriesOf(JsonNode trace) {

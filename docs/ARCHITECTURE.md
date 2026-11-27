@@ -2201,8 +2201,20 @@ datasource-proxy result-set span's `jdbc.row-count` tag is served parsed as `Spa
 creation order, and both mappers read that one pairing through `TraceQueries`.
 
 The Spans tab therefore reads facts the backend decided instead of
-re-deriving them from tag and span names. `DbSpans.system` mirrors this priority for
-`db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`.
+re-deriving them from tag and span names. `DbSpans.system` reads Peekaboot's own
+`peekaboot.db.product` first, then mirrors this priority for `db.system.name` / `db.system` /
+`jdbc.datasource.name` / `peer.service`.
+
+`QueryDatabaseProductObservationFilter` adds `peekaboot.db.product` to every datasource-micrometer
+query: the `DatabaseProduct` constant (`H2`, `POSTGRESQL`) that `JdbcUrlParser.detectDatabaseProduct`
+reads off `QueryContext.getUrl()`. datasource-micrometer fills that URL from the metadata of the
+connection the query ran on, with or without its OpenTelemetry module, so no connection is opened
+for it. The label therefore matches the DataSource card's `databaseProduct` and the health
+endpoint's `product`. The OpenTelemetry module names only PostgreSQL, MySQL, MariaDB and SQL Server
+and calls every other database `other_sql`, and plain mode tags no system at all. A URL that names
+no known product gets no tag, and the priority above applies. The key is high-cardinality
+because `DefaultMeterObservationHandler` copies low-cardinality keys onto the application's own
+`jdbc.query` timer.
 
 `QueryInfo.dataSourceName` tells two DataSources on one engine apart in the Queries tab
 (`POSTGRESQL · orders-db`). It is the Hikari pool name (`jdbc.datasource.pool`), else
