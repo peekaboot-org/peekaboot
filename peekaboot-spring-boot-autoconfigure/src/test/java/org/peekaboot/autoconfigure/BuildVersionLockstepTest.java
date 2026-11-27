@@ -43,9 +43,8 @@ import org.w3c.dom.Node;
  * {@code dev} and on Dependabot branches.
  *
  * <p>A value with no pom property behind it is written on both sides instead: the
- * static-analysis tool versions spelled inside plugin configuration, the slf4j-api override, the
- * library versions both builds declare inline, and the frontend gate's install command. Each is
- * guarded here by comparing the two declarations, which fails the Maven build every branch runs.
+ * static-analysis tool versions spelled inside plugin configuration, the library versions both
+ * builds declare inline, and the frontend gate's install command. Each is guarded here by comparing the two declarations, which fails the Maven build every branch runs.
  *
  * <p>The testing-app pom does not inherit {@code peekaboot-parent}, so it repeats the build
  * instant, the JaCoCo, PMD and Surefire versions, the Java level, the Spring Boot line, the
@@ -313,12 +312,6 @@ class BuildVersionLockstepTest {
                         "<artifactId>cron-utils</artifactId>\\s*<version>([^<]+)</version>",
                         backendScript,
                         "cron-utils:([^\"]+)\""),
-                row(
-                        "slf4j-api",
-                        pom,
-                        "<artifactId>slf4j-api</artifactId>\\s*<version>([^<]+)</version>",
-                        conventions,
-                        "slf4j-api:([^\"]+)\""),
                 // A Gradle side that drifted back to npm's default `install` would stay green while
                 // resolving outside the lockfile, and could lint on different tool versions than CI.
                 row(

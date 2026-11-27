@@ -81,11 +81,6 @@ dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     "mockitoAgent"(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
-    // peekaboot-parent's slf4j-api override, so both builds resolve the version Maven's
-    // require-upper-bound-deps settles on.
-    constraints {
-        api("org.slf4j:slf4j-api:2.0.20")
-    }
     errorprone("com.google.errorprone:error_prone_core:2.50.0")
     // Reactor-wide like the Maven parent's annotationProcessorPaths, so a
     // @ConfigurationProperties class in any module ships its metadata from both builds.

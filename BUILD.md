@@ -120,8 +120,7 @@ proves two things: the sample app builds on Boot's own plugin defaults (`-parame
 `@..@` resource filtering), and it leans on nothing in `peekaboot-parent`'s build config.
 It proves nothing about consuming the published artifact. Inside the reactor the starter
 resolves from the reactor under either parent, and both parents manage dependencies
-through the same `spring-boot-dependencies` BOM, so dependency resolution matches apart from
-the parent's slf4j-api override (see [the dependency check](#the-dependency-check)). A
+through the same `spring-boot-dependencies` BOM, so dependency resolution matches. A
 real consume-as-a-user check would build outside the reactor against an installed jar,
 and nothing here does that.
 
@@ -169,8 +168,7 @@ of them. Gradle has no counterpart to a Maven parent, so what the
 Maven module's `spring-boot-starter-parent` proves (see [The reactor](#the-reactor)) has
 no Gradle equivalent; the module shares the conventions. It adds the Boot BOM as an enforced
 platform, so its transitives settle at the BOM's versions, as `spring-boot-starter-parent`
-settles them in Maven, and the dependency-management plugin in a default Gradle host. The
-enforced versions also override the conventions' slf4j-api constraint there.
+settles them in Maven, and the dependency-management plugin in a default Gradle host.
 
 ### Lockstep
 
@@ -193,8 +191,7 @@ settings, or if a Gradle script pins a build instant of its own.
 
 A value with no pom property behind it is written on both sides and has to change on both:
 Error Prone, palantir, Checkstyle, SpotBugs and Spotless, all spelled inside plugin
-configuration, the root pom's slf4j-api override (a constraint in the convention plugin),
-jdbc-url-parser, cron-utils, the testing-app's springdoc, datasource-proxy and axe-core, and
+configuration, jdbc-url-parser, cron-utils, the testing-app's springdoc, datasource-proxy and axe-core, and
 the frontend gate's `npm ci`. `BuildVersionLockstepTest` compares SpotBugs and Spotless
 through a mapping, because one side names a plugin whose version is not the tool's. It
 compares every other pair as written.
@@ -345,8 +342,7 @@ inherits the parent. It fails when Maven's nearest-wins resolution settles a tra
 *below* the version one of its dependents asked for. That is the shape that reaches a
 consumer as a `NoSuchMethodError`, and a BOM import makes it easy to introduce. The
 published modules are clean. The reactor's violations, springdoc's swagger chain wanting a
-newer Jackson than the Boot BOM pins and jdbc-url-parser a newer slf4j-api, live in the
-sample app. It does not inherit the parent and resolves what a Boot host resolves.
+newer Jackson than the Boot BOM pins, live in the sample app. It does not inherit the parent and resolves what a Boot host resolves.
 `peekaboot-coverage` skips the rule for the same reason: its dependencies exist to force
 build order, so they drag the sample app's closure in with them.
 
