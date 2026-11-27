@@ -260,7 +260,7 @@ class PeekabootLifecycleAutoConfigurationTest {
                             .doesNotContain("No database configured"));
 
             // awaited: the banner stops waiting for a read after two seconds, and the read warns when it ends
-            await().untilAsserted(() -> assertThat(capture.appender().list)
+            await().untilAsserted(() -> assertThat(capture.events())
                     .singleElement()
                     .satisfies(event -> {
                         assertThat(event.getLevel()).isEqualTo(Level.WARN);

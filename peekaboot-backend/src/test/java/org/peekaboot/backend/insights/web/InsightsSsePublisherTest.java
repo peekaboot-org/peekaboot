@@ -404,7 +404,7 @@ class InsightsSsePublisherTest {
                     .alias("the thread keeps running after a step threw")
                     .untilAsserted(
                             () -> assertThat(response.getContentAsString()).contains("\"epochMs\":2000"));
-            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+            assertThat(logs.events()).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage()).isEqualTo("Insights SSE dispatch step failed; continuing");
             });
@@ -491,7 +491,7 @@ class InsightsSsePublisherTest {
             await().atMost(Duration.ofSeconds(3))
                     .alias("the wedged peer is dropped on lane overflow")
                     .until(() -> publisher.subscriberCount() == 0);
-            assertThat(logs.appender().list).anySatisfy(event -> {
+            assertThat(logs.events()).anySatisfy(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage()).contains("stopped reading");
             });
@@ -529,7 +529,7 @@ class InsightsSsePublisherTest {
             await().atMost(Duration.ofSeconds(3))
                     .alias("the stream is completed once the write returns")
                     .until(() -> stream.result() == null);
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .as("the drop, and nothing about ending the stream")
                     .singleElement()
                     .satisfies(event -> {
@@ -579,7 +579,7 @@ class InsightsSsePublisherTest {
             assertThat(response.getContentAsString())
                     .as("the heartbeat that was in flight, and none of the lane's")
                     .isEqualTo(":hb\n\n");
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .as("the drop, and nothing about ending the stream")
                     .singleElement()
                     .satisfies(event -> {
@@ -623,7 +623,7 @@ class InsightsSsePublisherTest {
             assertThat(interruptedWhileCompleting.get(3, TimeUnit.SECONDS))
                     .as("the sender's interrupt flag while it completes the stream")
                     .isFalse();
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .as("the drop, and nothing about ending the stream")
                     .singleElement()
                     .satisfies(event -> {
@@ -674,7 +674,7 @@ class InsightsSsePublisherTest {
             assertThat(uncaught.fromTheSenderThread())
                     .as("nothing escapes the sender thread")
                     .isEmpty();
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
                     .as("a refused completion is no louder than the drop that led to it")
                     .isEmpty();
@@ -703,7 +703,7 @@ class InsightsSsePublisherTest {
             overflowTheLaneOf(subscriber);
 
             assertThat(stream.result()).as("a completed stream").isNull();
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .as("the drop, and nothing about ending the stream")
                     .singleElement()
                     .satisfies(event -> assertThat(event.getFormattedMessage()).contains("stopped reading"));
@@ -725,7 +725,7 @@ class InsightsSsePublisherTest {
         try (LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
             assertThatCode(() -> overflowTheLaneOf(subscriber)).doesNotThrowAnyException();
 
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
                     .as("a refused completion is no louder than the drop that led to it")
                     .isEmpty();
@@ -752,8 +752,8 @@ class InsightsSsePublisherTest {
 
             // the send - and with it the failure - happens on the subscriber's sender thread
             await().atMost(Duration.ofSeconds(3))
-                    .untilAsserted(() -> assertThat(logs.appender().list).hasSize(1));
-            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                    .untilAsserted(() -> assertThat(logs.events()).hasSize(1));
+            assertThat(logs.events()).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo(
@@ -791,7 +791,7 @@ class InsightsSsePublisherTest {
             assertThat(uncaught.fromTheSenderThread())
                     .as("nothing escapes the sender thread")
                     .isEmpty();
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
                     .as("a refused completion is no louder than the send failure that led to it")
                     .isEmpty();
@@ -830,7 +830,7 @@ class InsightsSsePublisherTest {
             assertThat(uncaught.fromTheSenderThread())
                     .as("nothing escapes the sender thread")
                     .isEmpty();
-            assertThat(logs.appender().list)
+            assertThat(logs.events())
                     .filteredOn(event -> event.getLevel() == Level.WARN)
                     .singleElement()
                     .satisfies(event -> {
@@ -875,7 +875,7 @@ class InsightsSsePublisherTest {
             assertThat(publisher.subscriberCount())
                     .as("the wedged idle peer is dropped on lane overflow")
                     .isZero();
-            assertThat(logs.appender().list).anySatisfy(event -> {
+            assertThat(logs.events()).anySatisfy(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage()).contains("stopped reading");
             });
@@ -941,7 +941,7 @@ class InsightsSsePublisherTest {
     }
 
     private static List<ILoggingEvent> alreadyGone(LogCapture logs) {
-        return logs.appender().list.stream()
+        return logs.events().stream()
                 .filter(event -> event.getFormattedMessage().contains("had already gone"))
                 .toList();
     }
@@ -1136,7 +1136,7 @@ class InsightsSsePublisherTest {
     }
 
     private static long overflowWarnings(LogCapture logs) {
-        return logs.appender().list.stream()
+        return logs.events().stream()
                 .filter(event -> event.getFormattedMessage().contains("dispatch queue full"))
                 .count();
     }
