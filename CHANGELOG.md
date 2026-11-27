@@ -1,3 +1,51 @@
+## 1.5.0
+
+### Upgrading from 1.4.1
+
+- **Gradle builds on Spring Boot 4.1 have to enforce Boot's BOM.** Peekaboot's poms now manage
+  Spring Boot 4.2.0. A Gradle build on 4.1 that imports Boot's BOM with a plain `platform(...)`
+  lets them lift Spring Boot to 4.2.0. Maven builds that take Boot's parent or BOM keep their
+  version. To stay on 4.1, import Boot's BOM through the `io.spring.dependency-management` plugin
+  or `enforcedPlatform(...)`.
+- **Peekaboot turns Boot's active long-task timers on.** While Peekaboot is enabled in a servlet
+  application it sets `management.metrics.observations.include-active-long-task-timer: true`.
+  Spring Boot 4.2 defaults it to `false`, which left the "HTTP in flight" Insights panel empty.
+  Every observation now registers an `<observation>.active` long-task timer, such as
+  `http.server.requests.active`, in your `MeterRegistry`, and your metrics exporters send it.
+  Boot 4.1 always registers them and ignores the property. To drop them, set the property to
+  `false`; your value wins, and "HTTP in flight" stays empty.
+- **An Insights override that rewrites a bundled series gets no OpenTelemetry meter.** A panel in
+  your `peekaboot-insights.yml` that repeats a bundled id with a `title` replaces the bundled panel
+  whole, so its series lack the `alternatives` the bundled ones now carry (see New). Under
+  `management.observations.conventions=open-telemetry` such a series stays empty and logs a WARN
+  like `Peekaboot insights: series 'heap.used': meter 'jvm.memory.used' did not resolve to any
+  meter across 3 ticks`. An entry without a `title`, which only switches or moves a bundled panel,
+  is unaffected. Copy the bundled series' `alternatives` from `peekaboot-insights-defaults.yml`
+  into your override.
+
+### New
+
+- **Spring Boot 4.2.** Peekaboot runs on Spring Boot 4.1 and 4.2, where 1.4.1 supported 4.1 only.
+- **OpenTelemetry semantic conventions.** With `management.observations.conventions=open-telemetry`
+  on Boot 4.2, traces keep each HTTP request's route and status. HTTP throughput, HTTP latency,
+  HTTP in flight, Heap memory and Non-heap memory in Insights fill from the OpenTelemetry meters,
+  and so do the Process series of CPU usage, the CPU cores series of System load and, when
+  switched on, Thread states. 1.4.1 left them empty under these conventions.
+- **Renamed MDC keys keep logs linked.** On Boot 4.2 Peekaboot reads
+  `management.tracing.mdc.trace-id-key` and `management.tracing.mdc.span-id-key`, so a log line
+  stays linked to its trace when your app renames the keys. 1.4.1 read only `traceId` and
+  `spanId` and listed such lines as untraced. On Boot 4.1 the keys stay `traceId` and `spanId`.
+- **An Insights series can name `alternatives`.** In `peekaboot-insights.yml` a series may list
+  meters to read when its own is absent, each a `meter` with optional `tags`, as in
+  `alternatives: [{ meter: jvm.memory.used, tags: { jvm.memory.type: heap } }]`. Each tick the
+  series reads the first of its `meter` and its alternatives that the registry has a meter for,
+  with that candidate's tag keys. `stat`, `unit` and `subtract-meter` apply to whichever is read.
+
+### Dependency upgrades
+
+- **Spring Boot 4.2.0, from 4.1.1.** Peekaboot's poms manage it. The Spring Boot version you run
+  still comes from your own parent or BOM, apart from the Gradle case under Upgrading from 1.4.1.
+
 ## 1.4.1 - 2026-11-26
 
 ### Fixed
