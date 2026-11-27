@@ -65,4 +65,27 @@ class PeekabootPropertiesTest {
                 .rootCause()
                 .hasMessage("peekaboot.storage.traces.max-journal-size must be positive (0B configured)");
     }
+
+    @Test
+    void theHealthReportWaitsTenSecondsByDefault() {
+        assertThat(new PeekabootProperties().getHealth().getTimeout()).isEqualTo(Duration.ofSeconds(10));
+    }
+
+    @Test
+    void bindsTheHealthTimeout() {
+        assertThat(bind("health.timeout", "200ms").getHealth().getTimeout()).isEqualTo(Duration.ofMillis(200));
+    }
+
+    /** A deadline of nothing would report every check DOWN, so it fails at binding. */
+    @Test
+    void refusesANonPositiveHealthTimeout() {
+        assertThatThrownBy(() -> bind("health.timeout", "0s"))
+                .isInstanceOf(BindException.class)
+                .rootCause()
+                .hasMessage("peekaboot.health.timeout must be positive (PT0S configured)");
+        assertThatThrownBy(() -> bind("health.timeout", "-1s"))
+                .isInstanceOf(BindException.class)
+                .rootCause()
+                .hasMessage("peekaboot.health.timeout must be positive (PT-1S configured)");
+    }
 }

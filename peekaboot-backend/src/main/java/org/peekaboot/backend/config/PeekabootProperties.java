@@ -418,5 +418,24 @@ public class PeekabootProperties {
         public void setFailOnProblems(boolean failOnProblems) {
             this.failOnProblems = failOnProblems;
         }
+
+        /**
+         * How long the health report waits for the application's health checks. A check still
+         * running then reads DOWN and is left to finish, and its answer is logged.
+         */
+        private Duration timeout = Duration.ofSeconds(10);
+
+        public Duration getTimeout() {
+            return timeout;
+        }
+
+        /** Rejected unless positive while binding, since a deadline of nothing would report every check DOWN. */
+        public void setTimeout(Duration timeout) {
+            if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+                throw new IllegalArgumentException(
+                        "peekaboot.health.timeout must be positive (" + timeout + " configured)");
+            }
+            this.timeout = timeout;
+        }
     }
 }
