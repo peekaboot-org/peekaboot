@@ -52,7 +52,7 @@ commit_parsers = [
     { message = '^perf', group = "<!-- 03 -->Performance" },
     # Bumps of what a release puts on a user's classpath. Every other dependency bump is build
     # tooling. RuntimeDependencyAllowListTest fails when a published module outgrows this list.
-    { message = '^build\(deps(-dev)?\): .*\b(the spring-boot group|spring-boot-dependencies|datasource-micrometer|jdbc-url-parser|cron-utils)\b', group = "<!-- 04 -->Dependency upgrades" },
+    { message = '^build\(deps(-dev)?\): .*\b(the spring-boot group|spring-boot-dependencies|datasource-micrometer|springdoc|jdbc-url-parser|cron-utils)\b', group = "<!-- 04 -->Dependency upgrades" },
     { message = '^revert', group = "<!-- 05 -->Reverts" },
     { message = '^docs', group = "<!-- 06 -->Documentation" },
     { message = '^refactor', group = "<!-- 07 -->Internal changes" },

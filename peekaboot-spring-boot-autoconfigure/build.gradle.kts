@@ -5,6 +5,7 @@ plugins {
 description = "Peekaboot Auto-configuration - Spring Boot auto-configuration"
 
 val datasourceMicrometerVersion = pomProperty("datasource-micrometer.version")
+val springdocVersion = pomProperty("springdoc.version")
 
 dependencies {
     api(project(":peekaboot-backend"))
@@ -33,6 +34,8 @@ dependencies {
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
+    // SpringDocUtils, to keep Peekaboot's controllers out of the host's OpenAPI document
+    compileOnly("org.springdoc:springdoc-openapi-starter-common:$springdocVersion")
     // the connection factories for the Redis target in the health report; javac needs both
     // client libraries to read their factories
     compileOnly("org.springframework.data:spring-data-redis")
@@ -61,6 +64,7 @@ dependencies {
     // database metadata path against an auto-configured DataSource
     testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
     testImplementation("com.h2database:h2")
+    testImplementation("org.springdoc:springdoc-openapi-starter-common:$springdocVersion")
     // QueryParameterAutoConfigurationTest proves the class condition with and without QueryContext
     testImplementation("net.ttddyy.observation:datasource-micrometer:$datasourceMicrometerVersion")
 }

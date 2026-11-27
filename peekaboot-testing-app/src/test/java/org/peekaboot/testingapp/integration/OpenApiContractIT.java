@@ -335,10 +335,17 @@ class OpenApiContractIT extends TestingAppITBase {
         }
     }
 
-    /** The application documents its own API with springdoc, which reads Peekaboot's controllers too. */
     @Test
-    void theApplicationsOwnApiDocsStillRender() {
+    void theApplicationsOwnApiDocsDescribeTheApplicationAlone() {
         assertThat(api.statusOf("/v3/api-docs")).isEqualTo(HttpStatus.OK);
+        JsonNode hostDocument = api.getJson("/v3/api-docs");
+
+        assertThat(hostDocument.path("paths").propertyNames())
+                .contains("/api/orders/{id}/report")
+                .noneMatch(path -> path.startsWith("/peekaboot"));
+        assertThat(hostDocument.path("components").path("schemas").propertyNames())
+                .doesNotContainAnyElementsOf(
+                        contract.document().path("components").path("schemas").propertyNames());
     }
 
     private List<String> parameterNames(String pathTemplate, String in) {

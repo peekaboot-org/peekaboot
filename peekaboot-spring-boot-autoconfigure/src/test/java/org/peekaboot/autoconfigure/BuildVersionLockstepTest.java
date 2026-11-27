@@ -129,6 +129,15 @@ class BuildVersionLockstepTest {
 
     @Test
     @Timeout(10)
+    void testingAppRunsTheSpringdocTheAutoConfigurationCompilesAgainst() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/springdoc.version",
+                "/project/dependencies/dependency[artifactId='springdoc-openapi-starter-webmvc-ui']/version",
+                "the OpenAPI contract tests run the testing-app's springdoc against the root pom's compile-only copy");
+    }
+
+    @Test
+    @Timeout(10)
     void testingAppCompilesAtTheRootPomsJavaLevel() throws IOException {
         assertTestingAppMatchesRoot(
                 "/project/properties/peekaboot.java.version",

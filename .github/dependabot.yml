@@ -25,6 +25,11 @@ updates:
       spring-boot:
         patterns:
           - "org.springframework.boot:*"
+      # Two artifacts in two places: the root property (starter-common) and the testing-app's
+      # webmvc-ui, which BuildVersionLockstepTest holds to the same version.
+      springdoc:
+        patterns:
+          - "org.springdoc:*"
     ignore:
       # Its WebKit 27.2 reports a CSP violation for every <select>: https://bugs.webkit.org/show_bug.cgi?id=327212
       - dependency-name: "com.microsoft.playwright:playwright"

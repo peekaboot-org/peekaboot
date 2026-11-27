@@ -178,8 +178,8 @@ module's pom, a module's own properties over the root pom's. Scripts read one wi
 `pomProperty("...")` from `buildSrc/src/main/kotlin/PomProperties.kt`; `buildSrc`, a build of
 its own, reads `spring-boot.version` for the Boot plugin directly. So datasource-micrometer,
 the coverage floors, the Node pin, Playwright, the JSON Schema validator and the IT defaults
-each live in one pom. The Spring Boot line, JaCoCo, PMD, Surefire, the compiler release level
-and the build instant live in two, the root's and the testing-app's, and
+each live in one pom. The Spring Boot line, springdoc, JaCoCo, PMD, Surefire, the compiler
+release level and the build instant live in two, the root's and the testing-app's, and
 `BuildVersionLockstepTest` holds the two equal. Mockito's agent jar takes its version from the
 Boot BOM, as Maven does.
 
@@ -914,7 +914,7 @@ numbers must stay zero-padded to two digits, because git-cliff sorts group names
 An unpadded `<!-- 10 -->` would sort ahead of `<!-- 2 -->`.
 
 "Dependency upgrades" lists only bumps of what a release puts on a user's classpath: the
-Spring Boot line, datasource-micrometer, jdbc-url-parser and cron-utils. The `04` parser names
+Spring Boot line, datasource-micrometer, springdoc, jdbc-url-parser and cron-utils. The `04` parser names
 them in an allow-list. Every other `build(deps)` commit lands in "Build, CI and chores", which
 covers Maven and Gradle plugins, wrappers, GitHub Actions and test libraries. Dependabot's
 `deps-dev` scope cannot draw that line, because it labels many plugin and action bumps `deps`.

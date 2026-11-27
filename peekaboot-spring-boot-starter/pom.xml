@@ -109,6 +109,7 @@
                                         <exclude>io.lettuce:lettuce-core</exclude>
                                         <exclude>redis.clients:jedis</exclude>
                                         <exclude>org.springframework.boot:spring-boot-mail</exclude>
+                                        <exclude>org.springdoc:springdoc-openapi-starter-common</exclude>
                                     </excludes>
                                     <message>The starter must not hand a consumer a servlet stack, a web server, a connection pool, an ORM, a migration tool or a Redis or mail client: peekaboot marks those dependencies &lt;optional&gt; so the host application supplies them and the auto-configuration conditions stay meaningful. One of them now reaches the starter transitively - look for an &lt;optional&gt; flag lost in peekaboot-backend or peekaboot-spring-boot-autoconfigure.</message>
                                 </bannedDependencies>

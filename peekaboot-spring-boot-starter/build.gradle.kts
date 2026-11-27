@@ -42,6 +42,7 @@ val bannedFromConsumers = setOf(
     "io.lettuce:lettuce-core",
     "redis.clients:jedis",
     "org.springframework.boot:spring-boot-mail",
+    "org.springdoc:springdoc-openapi-starter-common",
 )
 
 val checkOptionalDependencyContract = tasks.register("checkOptionalDependencyContract") {
