@@ -64,7 +64,7 @@
       "get": {
         "operationId": "getHealth",
         "summary": "Reports the application's health with each component's target, Peekaboot's current problems and its recent failures.",
-        "description": "The status code follows the health status the way `/actuator/health` maps it, `management.endpoint.health.status.http-mapping` included. With `peekaboot.health.fail-on-problems=true` a current problem of severity `error` also answers `503`, and `status` still reads as the actuator reports it. A health check that hangs takes as long as its own timeout.",
+        "description": "The status code follows the health status the way `/actuator/health` maps it, `management.endpoint.health.status.http-mapping` included. With `peekaboot.health.fail-on-problems=true` a current problem of severity `error` also answers `503`, and `status` still reads as the actuator reports it. Every health check runs at once; one still running at `peekaboot.health.timeout` (default `10s`) reads `DOWN` with `error: Timed out after <timeout>`, so the report answers within that time.",
         "responses": {
           "200": {
             "description": "Health is up, or in any other status the mapping answers with `200`.",
@@ -1883,7 +1883,7 @@
           "durationMs": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "How long the check took, in milliseconds. For a check still running at `peekaboot.health.timeout`, how long it had run by then. A composite's is its slowest child's. `null` where the application replaced Boot's health beans and Peekaboot read its `HealthEndpoint` as a whole."
+            "description": "How long the check took, in milliseconds. For a check still running at `peekaboot.health.timeout`, how long it had run by then. A composite's is its slowest child's. `null` where Boot's health registry or groups bean is missing and Peekaboot read the `HealthEndpoint` bean as a whole."
           },
           "details": {
             "type": "object",

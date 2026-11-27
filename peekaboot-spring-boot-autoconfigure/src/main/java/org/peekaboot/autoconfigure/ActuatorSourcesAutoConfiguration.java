@@ -1,11 +1,13 @@
 package org.peekaboot.autoconfigure;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import liquibase.integration.spring.SpringLiquibase;
 import org.flywaydb.core.Flyway;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
+import org.peekaboot.backend.config.PeekabootProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.SpringBootVersion;
@@ -19,8 +21,14 @@ import org.springframework.boot.actuate.scheduling.ScheduledTasksEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.flyway.actuate.endpoint.FlywayEndpoint;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
+import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointProperties;
+import org.springframework.boot.health.contributor.HealthContributors;
+import org.springframework.boot.health.registry.HealthContributorRegistry;
+import org.springframework.boot.health.registry.ReactiveHealthContributorRegistry;
 import org.springframework.boot.liquibase.actuate.endpoint.LiquibaseEndpoint;
 import org.springframework.boot.logging.LoggerGroups;
 import org.springframework.boot.logging.LoggingSystem;
@@ -51,7 +59,7 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
  * <p>The endpoint objects are deliberately not beans: a second bean carrying
  * {@code @Endpoint(id = "env")} makes the application's own {@code EndpointDiscoverer} fail
  * at startup with a duplicate-id error. They are built inside the supplier, per read, which
- * also keeps every {@link ObjectProvider} lookup at read time - so this auto-configuration
+ * also keeps their {@link ObjectProvider} lookups at read time - so this auto-configuration
  * needs no ordering relationship with Boot's endpoint auto-configurations and no
  * {@code @ConditionalOnBean} guards.
  *
@@ -74,22 +82,6 @@ public class ActuatorSourcesAutoConfiguration {
             versions.put("bootVersion", SpringBootVersion.getVersion());
             versions.put("frameworkVersion", SpringVersion.getVersion());
             return versions;
-        });
-    }
-
-    /**
-     * The application's own {@link HealthEndpoint} bean, not one Peekaboot builds: it has no
-     * value-visibility gate, and {@link HealthEndpoint#health()} already ignores
-     * {@code management.endpoint.health.show-details}, which belongs to the application's
-     * public {@code /actuator/health}. Building one would mean duplicating the contributor
-     * registry and the group configuration for nothing.
-     */
-    @Bean
-    @ConditionalOnMissingBean(name = "peekabootHealthInsightsSource")
-    public InsightsSource peekabootHealthInsightsSource(ObjectProvider<HealthEndpoint> healthEndpoint) {
-        return new InsightsSource(ActuatorParsedData.HEALTH, () -> {
-            HealthEndpoint endpoint = healthEndpoint.getIfAvailable();
-            return endpoint == null ? null : endpoint.health();
         });
     }
 
@@ -144,6 +136,54 @@ public class ActuatorSourcesAutoConfiguration {
         return new InsightsSource(
                 ActuatorParsedData.SCHEDULEDTASKS,
                 () -> new ScheduledTasksEndpoint(holders.orderedStream().toList()).scheduledTasks());
+    }
+
+    /** Nested because the walk's collaborators would push this class past its fan-out limit. */
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(PeekabootProperties.class)
+    static class HealthSourceConfiguration {
+
+        /**
+         * Walks Boot's health registry and primary group itself, since Boot evaluates contributors
+         * one after another with no timeout: every check runs at once, and one still running at
+         * {@code peekaboot.health.timeout} reads DOWN. The {@link HealthEndpoint} bean only gates
+         * the source; where the registry or the groups bean is missing, the source reads
+         * {@link HealthEndpoint#health()} instead, without a deadline.
+         */
+        @Bean
+        @ConditionalOnMissingBean(name = "peekabootHealthInsightsSource")
+        InsightsSource peekabootHealthInsightsSource(
+                ObjectProvider<HealthEndpoint> healthEndpoint,
+                ObjectProvider<HealthContributorRegistry> registry,
+                ObjectProvider<ReactiveHealthContributorRegistry> reactiveRegistry,
+                ObjectProvider<HealthEndpointGroups> groups,
+                ObjectProvider<HealthEndpointProperties> healthEndpointProperties,
+                PeekabootProperties properties) {
+            HealthEndpointProperties endpointProperties = healthEndpointProperties.getIfAvailable();
+            Duration slowThreshold = endpointProperties == null
+                    ? null
+                    : endpointProperties.getLogging().getSlowIndicatorThreshold();
+            // one walk per bean: it holds the checks in flight
+            HealthWalk walk = new HealthWalk(
+                    HealthCheckRuns.onVirtualThreads(properties.getHealth().getTimeout(), slowThreshold));
+            return new InsightsSource(ActuatorParsedData.HEALTH, () -> {
+                HealthEndpoint endpoint = healthEndpoint.getIfAvailable();
+                if (endpoint == null) {
+                    return null;
+                }
+                HealthContributorRegistry contributors = registry.getIfAvailable();
+                HealthEndpointGroups endpointGroups = groups.getIfAvailable();
+                if (contributors == null || endpointGroups == null) {
+                    return endpoint.health();
+                }
+                ReactiveHealthContributorRegistry reactive = reactiveRegistry.getIfAvailable();
+                return walk.read(
+                        reactive == null
+                                ? contributors
+                                : HealthContributors.of(contributors, reactive.asHealthContributors()),
+                        endpointGroups.getPrimary());
+            });
+        }
     }
 
     /**

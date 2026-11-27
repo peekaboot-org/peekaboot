@@ -1,9 +1,14 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
@@ -19,6 +24,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.actuator.InsightsSource;
+import org.peekaboot.backend.actuator.parsed.HealthResponse;
+import org.peekaboot.backend.actuator.parsed.HealthResponse.ComponentDescriptor;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.actuate.autoconfigure.info.InfoContributorAutoConfiguration;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesBeanDescriptor;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesDescriptor;
@@ -38,10 +46,14 @@ import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
 import org.springframework.boot.health.actuate.endpoint.HttpCodeStatusMapper;
 import org.springframework.boot.health.actuate.endpoint.IndicatedHealthDescriptor;
 import org.springframework.boot.health.actuate.endpoint.StatusAggregator;
+import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointProperties;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.boot.health.contributor.ReactiveHealthIndicator;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.health.registry.DefaultHealthContributorRegistry;
+import org.springframework.boot.health.registry.DefaultReactiveHealthContributorRegistry;
+import org.springframework.boot.health.registry.HealthContributorRegistry;
 import org.springframework.boot.liquibase.actuate.endpoint.LiquibaseEndpoint.ChangeSetDescriptor;
 import org.springframework.boot.liquibase.actuate.endpoint.LiquibaseEndpoint.LiquibaseBeansDescriptor;
 import org.springframework.boot.logging.LoggingSystem;
@@ -49,14 +61,19 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
+import reactor.core.publisher.Mono;
 
 class ActuatorSourcesAutoConfigurationTest {
 
     // java.util.logging is out of logback's reach; the strong reference keeps the level from being collected.
     private static final Logger LIQUIBASE_LOGGER = Logger.getLogger("liquibase");
+
+    private static final HealthIndicator H2_UP =
+            () -> Health.up().withDetail("database", "H2").build();
 
     private static Level liquibaseLevel;
 
@@ -113,13 +130,110 @@ class ActuatorSourcesAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void healthSourceWalksTheRegistryAndTimesEachCheck() {
+        contextRunner
+                .withUserConfiguration(HealthBeansConfig.class)
+                .withBean("db", HealthIndicator.class, () -> H2_UP)
+                .run(context -> assertThat(read(context, "health"))
+                        .isInstanceOfSatisfying(HealthResponse.class, health -> {
+                            assertThat(health.status()).isEqualTo("UP");
+                            ComponentDescriptor db = health.components().get("db");
+                            assertThat(db.details()).containsEntry("database", "H2");
+                            assertThat(db.durationMs()).isNotNull();
+                        }));
+    }
+
+    @Test
+    void healthSourceBoundsAHungCheckByTheConfiguredTimeout() {
+        CountDownLatch release = new CountDownLatch(1);
+        contextRunner
+                .withUserConfiguration(HealthBeansConfig.class)
+                .withBean("hung", HealthIndicator.class, () -> () -> upOnceReleased(release))
+                .withPropertyValues("peekaboot.health.timeout=50ms")
+                .run(context -> {
+                    LogCapture log = LogCapture.attach(HealthCheckRuns.class);
+                    try {
+                        assertThat(read(context, "health")).isInstanceOfSatisfying(HealthResponse.class, health -> {
+                            assertThat(health.status()).isEqualTo("DOWN");
+                            ComponentDescriptor hung = health.components().get("hung");
+                            assertThat(hung.status()).isEqualTo("DOWN");
+                            assertThat(hung.details()).isEqualTo(Map.of("error", "Timed out after 50ms"));
+                        });
+                        assertThat(messages(log))
+                                .containsExactly("Peekaboot health: 'hung' did not answer within 50ms; reported DOWN");
+                    } finally {
+                        release.countDown();
+                        try {
+                            // a check that never went late logs nothing more, and the failure above stays visible
+                            await().atMost(Duration.ofSeconds(5)).until(() -> {
+                                List<String> lines = messages(log);
+                                return lines.isEmpty()
+                                        || lines.getLast().startsWith("Peekaboot health: 'hung' answered UP after ");
+                            });
+                        } finally {
+                            log.close();
+                        }
+                    }
+                });
+    }
+
+    @Test
+    void healthSourceReadsReactiveContributorsToo() {
+        contextRunner
+                .withUserConfiguration(HealthBeansConfig.class)
+                .withBean("db", HealthIndicator.class, () -> H2_UP)
+                .withBean(DefaultReactiveHealthContributorRegistry.class, () -> {
+                    DefaultReactiveHealthContributorRegistry reactive = new DefaultReactiveHealthContributorRegistry();
+                    reactive.registerContributor("redis", (ReactiveHealthIndicator)
+                            () -> Mono.just(Health.up().build()));
+                    return reactive;
+                })
+                .run(context -> assertThat(read(context, "health"))
+                        .isInstanceOfSatisfying(
+                                HealthResponse.class,
+                                health -> assertThat(health.components())
+                                        .containsOnlyKeys("db", "redis")
+                                        .extractingByKey("redis")
+                                        .extracting(ComponentDescriptor::status)
+                                        .isEqualTo("UP")));
+    }
+
+    /** The walk bypasses Boot's own evaluation, and with it Boot's slow-indicator WARN. */
+    @Test
+    void healthSourceHonoursBootsSlowIndicatorThreshold() {
+        contextRunner
+                .withUserConfiguration(HealthBeansConfig.class)
+                .withBean("db", HealthIndicator.class, () -> H2_UP)
+                .withPropertyValues("management.endpoint.health.logging.slow-indicator-threshold=0ms")
+                .run(context -> {
+                    try (LogCapture log = LogCapture.attach(HealthCheckRuns.class)) {
+                        read(context, "health");
+
+                        assertThat(messages(log))
+                                .singleElement()
+                                .asString()
+                                .matches("Health contributor \\S+ \\(db\\) took \\d+ms to respond");
+                    }
+                });
+    }
+
+    @Test
+    void healthSourceReadsNullWithTheRegistryButNoEndpoint() {
+        contextRunner
+                .withUserConfiguration(HealthRegistryConfig.class)
+                .withBean("db", HealthIndicator.class, () -> H2_UP)
+                .run(context -> assertThat(read(context, "health")).isNull());
+    }
+
     /**
      * Answers like Spring's default group does for an anonymous caller of
      * {@code /actuator/health}: neither components nor details. A descriptor that still
-     * carries them can only have come from the endpoint bean's own {@code health()}.
+     * carries them can only have come from the endpoint bean's own {@code health()}. With no
+     * registry and no groups bean to walk, the source reads the endpoint bean, without a deadline.
      */
     @Test
-    void healthSourceReadsTheEndpointBeanWithComponentsAndDetails() {
+    void withoutBootsHealthBeansTheSourceReadsTheEndpointBean() {
         contextRunner.withUserConfiguration(HealthEndpointConfig.class).run(context -> {
             Object descriptor = read(context, "health");
 
@@ -362,6 +476,34 @@ class ActuatorSourcesAutoConfigurationTest {
         }
     }
 
+    /** The health beans Boot's auto-configuration provides, each indicator bean registered under its name. */
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(HealthEndpointProperties.class)
+    static class HealthRegistryConfig {
+
+        @Bean
+        DefaultHealthContributorRegistry healthContributorRegistry(ApplicationContext context) {
+            DefaultHealthContributorRegistry registry = new DefaultHealthContributorRegistry();
+            context.getBeansOfType(HealthIndicator.class).forEach(registry::registerContributor);
+            return registry;
+        }
+
+        @Bean
+        HealthEndpointGroups healthEndpointGroups() {
+            return HealthEndpointGroups.of(new HidingGroup(), Map.of());
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @Import(HealthRegistryConfig.class)
+    static class HealthBeansConfig {
+
+        @Bean
+        HealthEndpoint healthEndpoint(HealthContributorRegistry registry, HealthEndpointGroups groups) {
+            return new HealthEndpoint(registry, null, groups, null);
+        }
+    }
+
     private static final class HidingGroup implements HealthEndpointGroup {
 
         @Override
@@ -393,6 +535,20 @@ class ActuatorSourcesAutoConfigurationTest {
         public AdditionalHealthEndpointPath getAdditionalPath() {
             return null;
         }
+    }
+
+    /** Bounded, so a source without a deadline fails the test instead of hanging it. */
+    private static Health upOnceReleased(CountDownLatch release) {
+        try {
+            release.await(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return Health.up().build();
+    }
+
+    private static List<String> messages(LogCapture log) {
+        return log.events().stream().map(ILoggingEvent::getFormattedMessage).toList();
     }
 
     private static MapAssert<String, Object> info(ApplicationContext context) {

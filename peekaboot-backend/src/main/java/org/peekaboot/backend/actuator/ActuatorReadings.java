@@ -15,11 +15,12 @@ import org.slf4j.LoggerFactory;
  * {@code ActuatorSourcesAutoConfiguration} and called directly. Nothing here discovers the
  * application's endpoint beans, so no {@code management.endpoint.*} setting decides what the
  * dashboard may read or whether a value arrives masked - {@code MaskingEngine} alone does.
- * Health is the one endpoint whose bean is borrowed rather than built, because it carries no
- * value-visibility gate of its own. Borrowing still leaves one lever: {@code
- * management.endpoint.health.access=none} is resolved before the bean exists, so it removes
- * the bean and the source then contributes no entry, same as an absent Flyway or logging
- * system.
+ * Health is the one reading Peekaboot neither builds nor calls through an endpoint: it borrows
+ * the application's health contributor registry and groups and walks them itself, and calls the
+ * {@code HealthEndpoint} bean only where those are missing. That bean still gates the source:
+ * {@code management.endpoint.health.access=none} is resolved before the bean exists, so it
+ * removes the bean and the source then contributes no entry, same as an absent Flyway or
+ * logging system.
  */
 public final class ActuatorReadings {
 

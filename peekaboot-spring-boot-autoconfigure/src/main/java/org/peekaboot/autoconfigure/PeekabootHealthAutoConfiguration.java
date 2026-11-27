@@ -31,8 +31,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * The health report: {@code GET /api/health}.
  *
- * <p>Peekaboot adds no timeout of its own: a health check that hangs holds the report for as
- * long as the check takes.
+ * <p>The report answers within {@code peekaboot.health.timeout}: the health source runs every
+ * check at once and reports one still running at the deadline DOWN.
  *
  * <p>Every collaborator is read through an {@link ObjectProvider} at bean creation, so no
  * ordering relationship with the auto-configurations that provide them is needed.

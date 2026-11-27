@@ -796,6 +796,25 @@ status mapping, and `HealthConnectionSourcesConfiguration`, which imports
 HikariCP, Redis and mail classes are named by string in those class conditions, so the endpoint
 works where any of them is absent.
 
+The application's health comes from the `health` source, which reads Boot's
+`HealthContributorRegistry`, merged with the reactive registry, for the primary
+`HealthEndpointGroup`. `HealthWalk` mirrors `HealthEndpointSupport` but starts every check before
+it waits for any, since Boot evaluates contributors one after another with no timeout. A check
+still running at `peekaboot.health.timeout` (default `10s`) reads `DOWN` with
+`error: Timed out after <timeout>`, and every component carries `durationMs`.
+
+`HealthCheckRuns` runs each check on a `peekaboot-health-check` virtual thread inside
+`PeekabootProbe`, which keeps it out of the application's traces and meters. Runs are
+single-flight per contributor path: a request that finds a check in flight waits on it, so a hung
+check holds one thread however often the report is read. A late check is never interrupted, since
+that would close a socket it may have borrowed from the application. It logs a WARN at the
+deadline and another when it answers. The walk bypasses Boot's evaluation, so it logs Boot's
+slow-indicator WARN itself, against `management.endpoint.health.logging.slow-indicator-threshold`.
+
+The `HealthEndpoint` bean only gates the source. Without a `HealthContributorRegistry` or
+`HealthEndpointGroups` bean the source falls back to `HealthEndpoint.health()`, with no deadline.
+While both exist, an application that replaced the `HealthEndpoint` bean is bypassed.
+
 The status code is the application's own for the health status. `HealthStatusCodes` bridges the
 `HttpCodeStatusMapper` of the primary health group, so
 `management.endpoint.health.status.http-mapping` and an application's mapper bean reach it.
@@ -867,12 +886,13 @@ cannot hold itself at `503` through its own request.
 Peekaboot never calls `/actuator/*` over HTTP. `ActuatorReadings` holds a list of
 `InsightsSource` beans, one per source id (the constants on `ActuatorParsedData`), each a record
 pairing that id with a `Supplier`. Seven of them read an endpoint object
-`ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
-`HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is no endpoint
-at all. The health endpoint (see *Health Endpoint*) reads the same `health` source. There is no
-discovery step. A source that reads `null` contributes no entry, which is
-how an endpoint whose backing bean is absent (a Flyway bean, a `SpringLiquibase` bean, the
-`HealthEndpoint` bean, a `LoggingSystem` bean) reports that it has nothing rather than failing.
+`ActuatorSourcesAutoConfiguration` constructs; `health` walks the application's health
+contributors, gated on its `HealthEndpoint` bean, and `spring` reads
+`SpringBootVersion`/`SpringVersion` and is no endpoint at all. The health endpoint (see
+*Health Endpoint*) reads the same `health` source. There is no discovery step. A source that
+reads `null` contributes no entry, which is how an endpoint whose backing bean is absent (a
+Flyway bean, a `SpringLiquibase` bean, the `HealthEndpoint` bean, a `LoggingSystem` bean)
+reports that it has nothing rather than failing.
 
 The `info` endpoint object is built over the application's `InfoContributor` beans plus four
 contributors Peekaboot constructs for itself (`InfoReading`): env, java, os and process. None is a
@@ -945,15 +965,17 @@ is built inside its supplier, once per read, which also keeps this
 auto-configuration free of any ordering dependency on Boot's endpoint
 auto-configurations.
 
-Health is the one endpoint whose bean is borrowed from the application rather
-than built. `HealthEndpoint.health()` already ignores
+Health is the one endpoint Peekaboot neither builds nor reads through an
+endpoint object. It borrows the application's health beans: the contributor
+registry, the reactive registry and the primary group, with the `HealthEndpoint`
+bean as the gate. It walks them itself so every check runs against a deadline
+(see *Health Endpoint*), and falls back to `HealthEndpoint.health()` where the
+registry or the groups bean is missing. Neither path reads
 `management.endpoint.health.show-details`, a setting that belongs to the
-application's own public `/actuator/health`, so building a separate instance
-would only duplicate the contributor registry and the group configuration for
-nothing. The dashboard therefore has full health while `/actuator/health` keeps
-answering anonymous callers with the aggregate status only.
-`ActuatorResponseParser` accordingly parses the bare `HealthDescriptor` shape
-(`status`, `components`, `groups`), not a `WebEndpointResponse` wrapper. A
+application's own public `/actuator/health`. The dashboard therefore has full
+health while `/actuator/health` keeps answering anonymous callers with the
+aggregate status only. `ActuatorResponseParser` accordingly parses the bare
+health shape (`status`, `components`), not a `WebEndpointResponse` wrapper. A
 composite contributor (Spring's `db` as soon as there are two DataSources, or any
 custom composite) nests its children under a further `components` map.
 `HealthMapper` flattens them to `db/<name>` for the dashboard's single list, and
@@ -1418,10 +1440,11 @@ all overridable by an app's own `application.yml`:
   developer is still looking at the page.
 
 `peekaboot-defaults.yml` carries no `management.endpoint.*` property. Peekaboot builds its
-endpoint instances itself and borrows only the health bean (see
-*In-Process Actuator Invocation*), so none of the application's exposure, access, `show-values`
+endpoint instances itself and borrows only the application's health beans: the `HealthEndpoint`
+bean as the gate, the contributor registry, the reactive registry and the groups (see
+*In-Process Actuator Invocation*). So none of the application's exposure, access, `show-values`
 or `roles` settings decide what the dashboard sees, and Peekaboot has no reason to touch them.
-`management.endpoint.health.access=none` still removes the borrowed bean.
+`management.endpoint.health.access=none` still removes the borrowed beans.
 
 `peekaboot-defaults.yml`'s `management.tracing.*` and `management.observations.*` defaults
 configure trace sampling and `@Observed` support. Neither decides value visibility. The file sets
@@ -2386,7 +2409,7 @@ Test categories, each module's suite and how to test an auto-configuration are i
 2. **Micrometer-based**: Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
 3. **Capture stays off the application's events**: the exporter, the appender and the request filter publish to `CaptureEventPublisher`, which calls `TraceStoreEventListener` directly. An application's listeners never hear a captured span, line or request, the event-listener instrumentation never spans one, and an async multicaster cannot reorder them. From Spring's event bus the store's listener takes `ApplicationReadyEvent` and the appender's registrar `ContextClosedEvent`, nothing else
 4. **Bucketed storage**: three insertion-ordered maps, each capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so a qualifying trace outlives its own eviction from All. `max-traces` is at least 1; `max-error-traces` and `max-slow-traces` may be 0, which lists no trace in that bucket while the trace still says it failed or ran slow. A value below the floor fails the binding and stops startup. [Traces](https://www.peekaboot.org/docs/traces/#the-three-buckets) has the bucket sizing and the slow-trace threshold, [HTTP API](https://www.peekaboot.org/docs/api/#trace-list) the `bucket=all|errors|slow` filter
-5. **Actuator not web-exposed**: all data read in-process from endpoint instances Peekaboot constructs itself, except `HealthEndpoint`, which is borrowed from the application; `PeekabootEndpointExposureOutcomeContributor` makes only that borrowed bean available without `management.endpoints.web.exposure` (see *In-Process Actuator Invocation*)
+5. **Actuator not web-exposed**: all data read in-process from endpoint instances Peekaboot constructs itself, except health, which is read from the application's own health beans (the `HealthEndpoint` bean as the gate, the contributor registry, the reactive registry and the groups); `PeekabootEndpointExposureOutcomeContributor` makes only the health endpoint available without `management.endpoints.web.exposure`, which is what creates those beans (see *In-Process Actuator Invocation*)
 6. **Plain bounded maps for storage**: memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library. `max-logs-per-trace` may be 0: a trace then keeps no line, counts each as dropped, and an ERROR line still files it in Errors
 7. **Shadow DOM**: the toolbar cannot interfere with the host application
 8. **Lowest-priority defaults**: applications can always override Peekaboot settings
