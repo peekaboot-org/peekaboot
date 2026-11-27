@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Requests.get;
 
 import io.micrometer.observation.Observation;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.server.observation.ServerRequestObservationContext;
@@ -74,5 +75,20 @@ class PeekabootRequestObservationPredicateTest {
 
     private static ServerRequestObservationContext serverContext(MockHttpServletRequest request) {
         return new ServerRequestObservationContext(request, new MockHttpServletResponse());
+    }
+
+    /** Health checks run on threads of their own, where no dashboard request is bound. */
+    @Test
+    void rejectsEveryObservationStartedInsideAProbe() {
+        AtomicBoolean kept = new AtomicBoolean(true);
+        PeekabootProbe.run(() -> kept.set(predicate.test("jdbc.query", new Observation.Context())));
+        assertThat(kept).isFalse();
+    }
+
+    @Test
+    void aProbeEndsWithItsRun() {
+        PeekabootProbe.run(() -> {});
+        assertThat(PeekabootProbe.isRunning()).isFalse();
+        assertThat(predicate.test("jdbc.query", new Observation.Context())).isTrue();
     }
 }
