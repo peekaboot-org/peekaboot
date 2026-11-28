@@ -288,7 +288,10 @@ readonly GREEN_BUILD="$HERE/../require-green-build.sh"
 readonly SHA="1111111111111111111111111111111111111111"
 readonly WAIT="wait for the build to finish or dispatch build-on-push on dev, then release again"
 mkdir "$WORK/bin"
-printf '#!/usr/bin/env bash\ncat "$RUNS"\n' > "$WORK/bin/gh"
+cat > "$WORK/bin/gh" << 'GH'
+#!/usr/bin/env bash
+cat "$RUNS"
+GH
 chmod +x "$WORK/bin/gh"
 
 green_build() {
