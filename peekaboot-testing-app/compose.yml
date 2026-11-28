@@ -8,7 +8,7 @@ services:
     ports:
       - '5432'
   mysql:
-    image: 'mysql:9.7.4'
+    image: 'mysql:26.7.0'
     environment:
       - 'MYSQL_DATABASE=inventory'
       - 'MYSQL_USER=inventory'
