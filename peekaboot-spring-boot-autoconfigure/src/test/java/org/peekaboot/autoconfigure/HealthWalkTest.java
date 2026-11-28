@@ -2,7 +2,6 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -15,10 +14,13 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.actuator.parsed.HealthResponse.ComponentDescriptor;
 import org.peekaboot.testsupport.LogCapture;
@@ -241,41 +243,39 @@ class HealthWalkTest {
                 .allSatisfy(check -> assertThat(check.status()).isEqualTo("UP"));
     }
 
+    // a read that took a fresh deadline per check would wait out the whole timeout in real time
     @Test
+    @Timeout(5)
     void allChecksOfOneReadShareOneDeadline() {
-        Duration oneSecond = Duration.ofSeconds(1);
-        CountDownLatch release = new CountDownLatch(1);
-        register("first", () -> upOnceReleased(release));
-        register("second", () -> upOnceReleased(release));
+        List<Runnable> held = new ArrayList<>();
+        register("first", up());
+        register("second", up());
+        AtomicBoolean deadlineTaken = new AtomicBoolean();
+        // the deadline is the first reading once both checks are held; every later one is past it
+        LongSupplier clock = () -> {
+            if (held.size() == 2 && deadlineTaken.compareAndSet(false, true)) {
+                return 0;
+            }
+            return deadlineTaken.get() ? TEN_SECONDS.toNanos() + 1 : 0;
+        };
 
         try (LogCapture log = LogCapture.attach(HealthCheckRuns.class)) {
-            HealthResponse response;
-            try {
-                response = new HealthWalk(HealthCheckRuns.onVirtualThreads(oneSecond, null))
-                        .read(registry, new Group(member -> true, StatusAggregator.getDefault()));
-            } finally {
-                release.countDown();
-            }
+            HealthResponse response = new HealthWalk(new HealthCheckRuns(TEN_SECONDS, null, held::add, clock))
+                    .read(registry, new Group(member -> true, StatusAggregator.getDefault()));
+            held.forEach(Runnable::run);
 
             assertThat(response.components().values()).hasSize(2).allSatisfy(check -> {
                 assertThat(check.status()).isEqualTo("DOWN");
-                assertThat(check.durationMs()).isLessThan(2 * oneSecond.toMillis());
+                assertThat(check.details()).isEqualTo(Map.of("error", "Timed out after 10s"));
+                assertThat(check.durationMs()).isEqualTo(TEN_SECONDS.toMillis());
             });
-            await().atMost(TEN_SECONDS).until(() -> log.events().size() == 4);
-            List<ILoggingEvent> lines = log.events();
-            List<String> messages =
-                    lines.stream().map(ILoggingEvent::getFormattedMessage).toList();
-            assertThat(lines).extracting(ILoggingEvent::getLevel).containsOnly(Level.WARN);
-            assertThat(messages.subList(0, 2))
+            assertThat(log.appender().list)
+                    .extracting(ILoggingEvent::getLevel, ILoggingEvent::getFormattedMessage)
                     .containsExactly(
-                            "Peekaboot health: 'first' did not answer within 1s; reported DOWN",
-                            "Peekaboot health: 'second' did not answer within 1s; reported DOWN");
-            assertThat(messages.subList(2, 4))
-                    .satisfiesExactlyInAnyOrder(
-                            message ->
-                                    assertThat(message).matches("Peekaboot health: 'first' answered UP after \\d+ms"),
-                            message ->
-                                    assertThat(message).matches("Peekaboot health: 'second' answered UP after \\d+ms"));
+                            tuple(Level.WARN, "Peekaboot health: 'first' did not answer within 10s; reported DOWN"),
+                            tuple(Level.WARN, "Peekaboot health: 'second' did not answer within 10s; reported DOWN"),
+                            tuple(Level.WARN, "Peekaboot health: 'first' answered UP after 10000ms"),
+                            tuple(Level.WARN, "Peekaboot health: 'second' answered UP after 10000ms"));
         }
     }
 
@@ -335,16 +335,6 @@ class HealthWalkTest {
             Thread.currentThread().interrupt();
             return Health.down().build();
         }
-    }
-
-    /** Bounded, so a read that never times out fails the test instead of hanging it. */
-    private static Health upOnceReleased(CountDownLatch release) {
-        try {
-            release.await(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        return Health.up().build();
     }
 
     private static HealthIndicator up() {
