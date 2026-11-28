@@ -21,11 +21,12 @@ function buildSpanNames(trace) {
 function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
     const spanId = log.spanId || '';
 
+    const spanName = spanNames.get(spanId) || spanId;
     const nameButton = button({
         className: 'pk-unbutton pk-log__span',
-        text: spanNames.get(spanId) || spanId,
+        text: spanName,
         title: spanId,
-        attrs: {'data-span-id': spanId, 'aria-label': `Filter logs to span ${spanId}`}
+        attrs: {'data-span-id': spanId, 'aria-label': `Filter logs to span ${spanName}`}
     });
     nameButton.addEventListener('click', () => {
         if (spanId) onFilterToSpan(spanId);

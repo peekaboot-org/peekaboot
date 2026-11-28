@@ -38,6 +38,8 @@ export function copyableId(value, {label, truncate = false} = {}) {
         attrs: {'data-pk-copy': id, 'aria-label': `Copy ${label || ''} ${id}`}
     },
     label ? el('span', {className: 'pk-copy__label', text: label}) : null,
+    // Flex items drop this space on screen; it keeps the label and value two words in the name.
+    label ? ' ' : null,
     el('span', {className: 'pk-copy__value', text: id}),
     el('span', {className: 'pk-copy__icon', text: COPY_ICON, attrs: {'aria-hidden': 'true'}}));
 }
