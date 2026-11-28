@@ -76,6 +76,13 @@
   series reads the first of its `meter` and its alternatives that the registry has a meter for,
   with that candidate's tag keys. `stat`, `unit` and `subtract-meter` apply to whichever is read.
 
+### Fixed
+
+- **Screen reader names match what the control shows.** Speech-input users could not activate
+  three controls by the text on them. The dev toolbar's button now reads its request summary
+  before `Open request trace details`. A span button on the Logs tab is named by its span name,
+  where 1.4.1 read out the span id. A copy button's label and value are separate words.
+
 ### Dependency upgrades
 
 - **Spring Boot 4.2.0, from 4.1.1.** Peekaboot's poms manage it. The Spring Boot version you run
