@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 60
 
     permissions:
+      actions: read
       contents: write
 
     steps:
@@ -80,6 +81,13 @@ jobs:
             echo "::error::main is not an ancestor of dev, so it cannot fast-forward to the release"
             exit 1
           fi
+
+      # The push build runs the gates and the Boot 4.1 and Gradle jobs, which release:prepare
+      # does not. preflight has just proved HEAD is dev's head, so this is the commit released.
+      - name: require-green-build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/release/require-green-build.sh "$(git rev-parse HEAD)"
 
       # No cache: what is signed and published is built from nothing an earlier run left
       # behind. No server and no key either: release:prepare has nothing to authenticate with.

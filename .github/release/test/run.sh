@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# Checks publish-refs.sh against fixture repositories, so the order in which a release
+# Checks publish-refs.sh against fixture repositories, and require-green-build.sh against a gh
+# that answers from a file, so the order in which a release
 # becomes public is pinned before a release depends on it. Every case starts from a fresh
 # origin, a runner clone that holds a prepared release, and a contributor clone on the base.
 #
-# Needs `git` on PATH.
+# Needs `git` and `jq` on PATH.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -280,3 +281,46 @@ echo "checking an unknown mode or a missing version prints the usage"
 expect_usage
 expect_usage tag
 expect_usage publish "$VERSION"
+
+# gh itself is out of reach of a test, so a stand-in prints what the file RUNS holds, and the
+# query is checked once against the real gh by hand.
+readonly GREEN_BUILD="$HERE/../require-green-build.sh"
+readonly SHA="1111111111111111111111111111111111111111"
+readonly WAIT="wait for the build to finish or dispatch build-on-push on dev, then release again"
+mkdir "$WORK/bin"
+printf '#!/usr/bin/env bash\ncat "$RUNS"\n' > "$WORK/bin/gh"
+chmod +x "$WORK/bin/gh"
+
+green_build() {
+    RUNS="$WORK/runs.json" PATH="$WORK/bin:$PATH" "$GREEN_BUILD" "$SHA"
+}
+
+expect_green_build_refused() {
+    local message="$1"
+    if green_build > "$WORK/out" 2> "$WORK/err"; then
+        echo "require-green-build.sh passed where it has to refuse" >&2
+        exit 1
+    fi
+    diff -u <(echo "$message") "$WORK/err"
+}
+
+echo "checking a successful build passes"
+echo '[{"status":"completed","conclusion":"success","url":"u"}]' > "$WORK/runs.json"
+green_build > "$WORK/out"
+diff -u <(echo "build-on-push is green for $SHA") "$WORK/out"
+
+echo "checking a commit without a build is refused"
+echo '[]' > "$WORK/runs.json"
+expect_green_build_refused "::error::no build-on-push run for $SHA; $WAIT"
+
+echo "checking a build still running is refused"
+echo '[{"status":"in_progress","conclusion":"","url":"u"}]' > "$WORK/runs.json"
+expect_green_build_refused "::error::the build-on-push run for $SHA has not finished (u); $WAIT"
+
+echo "checking a failed build is refused"
+echo '[{"status":"completed","conclusion":"failure","url":"u"}]' > "$WORK/runs.json"
+expect_green_build_refused "::error::the build-on-push run for $SHA ended failure (u); fix dev and wait for a green build"
+
+echo "checking the newest run decides"
+echo '[{"status":"completed","conclusion":"failure","url":"new"},{"status":"completed","conclusion":"success","url":"old"}]' > "$WORK/runs.json"
+expect_green_build_refused "::error::the build-on-push run for $SHA ended failure (new); fix dev and wait for a green build"
