@@ -29,14 +29,20 @@
   `microsoft.sql_server`, `other_sql` for H2 and every other database, and without
   `datasource-micrometer-opentelemetry` the pool name or the connection's catalog. A URL that
   names no product Peekaboot knows keeps the old value. While Peekaboot is enabled, the query
-  spans your app exports also carry the product as `peekaboot.db.product`. Nothing to do unless
-  something you run parses `dbSystem`.
+  spans your app exports also carry the product as `peekaboot.db.product`, a key your `jdbc.query`
+  timer does not get. Nothing to do unless something you run parses `dbSystem`.
 - **`/peekaboot/api/health` answers within `peekaboot.health.timeout`, default `10s`.** Every
   health check now runs at once. One still running at the deadline reads `DOWN` with
   `error: "Timed out after 10s"`, so the report answers `503`. The check is not interrupted:
   Peekaboot logs a WARN when it misses the deadline and another with its answer and duration when
   it ends. The Health section of the dashboard reads the same. A monitor with a shorter timeout
   than `10s` should get a lower `peekaboot.health.timeout`.
+- **Health checks no longer run on the request thread.** 1.4.1 ran them one after another on the
+  request thread. Now they run at the same time, each on its own virtual thread. A custom
+  `HealthIndicator` no longer sees that thread's `SecurityContext`, MDC or request-scoped beans,
+  and several database checks can hold pool connections at once. A check that relies on either
+  throws, or reads differently, in Peekaboot's report than it does in `/actuator/health`. Inject
+  what the check needs as beans, and size the pool for the checks that run together.
 - **A health check that throws reads `DOWN` with an `error` detail.** 1.4.1 failed the whole
   report.
 - **A replaced `HealthEndpoint` bean no longer answers for Peekaboot's health report.** In 1.4.1
