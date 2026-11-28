@@ -46,7 +46,7 @@
              bump both in one pull request. -->
         <pmd.version>7.28.0</pmd.version>
         <!-- A property, so the Gradle build reads it instead of spelling a second copy. -->
-        <errorprone.version>2.50.0</errorprone.version>
+        <errorprone.version>2.53.0</errorprone.version>
         <checkstyle.version>14.3.0</checkstyle.version>
         <!-- surefire and failsafe ship as one release. -->
         <surefire.version>3.6.1</surefire.version>
