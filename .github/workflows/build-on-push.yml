@@ -236,3 +236,33 @@ jobs:
         run: >
           ./mvnw --batch-mode -f peekaboot-testing-app/pom.xml verify
           -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true
+
+      # The same app on the same line through Gradle, whose build has no parent to switch:
+      # peekaboot.boot.version swaps the Boot BOM the testing app resolves. The guard fails when
+      # a Boot jar resolves off the line, because the substitution would otherwise go unnoticed.
+      - name: gradle-switch-boot-line
+        run: |
+          boot_version="$(curl --fail --silent --show-error \
+            https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-dependencies/maven-metadata.xml \
+            | grep -oE "<version>${BOOT_LINE}\.[0-9]+</version>" | sed -E 's:</?version>::g' | sort -V | tail -1)"
+          if [ -z "$boot_version" ]; then
+            echo "::error::no Boot ${BOOT_LINE} release on Maven Central"
+            exit 1
+          fi
+          echo "BOOT_VERSION=${boot_version}" >> "$GITHUB_ENV"
+          ./gradlew --no-daemon -Ppeekaboot.boot.version="$boot_version" \
+            :peekaboot-testing-app:dependencies --configuration runtimeClasspath > "$RUNNER_TEMP/dependencies.txt"
+          resolved="$(sed -E 's/(org\.springframework\.boot:[^ :]+):[0-9][^ ]* -> /\1:/' "$RUNNER_TEMP/dependencies.txt" \
+            | grep -oE 'org\.springframework\.boot:[^ :]+:[0-9][^ ]*' | sort -u)"
+          if ! grep -qF "org.springframework.boot:spring-boot:${BOOT_LINE}." <<< "$resolved" \
+              || grep -vF ":${BOOT_LINE}." <<< "$resolved"; then
+            echo "::error::the testing app's Gradle classpath is not on Boot ${BOOT_LINE}"
+            exit 1
+          fi
+          echo "Boot ${BOOT_LINE} leg: Gradle resolves spring-boot ${boot_version}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: gradle-testing-app-tests
+        run: >
+          ./gradlew --no-daemon -Ppeekaboot.boot.version="$BOOT_VERSION"
+          :peekaboot-testing-app:test :peekaboot-testing-app:integrationTest
+          :peekaboot-testing-app:otelConventionsIntegrationTest :peekaboot-testing-app:plainJdbcIntegrationTest
