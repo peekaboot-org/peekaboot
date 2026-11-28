@@ -67,6 +67,17 @@ configurations.configureEach {
     resolutionStrategy.force("org.liquibase:liquibase-core:${pomProperty("liquibase.version")}")
 }
 
+// The boot-line CI job runs the app on an older Boot line than the one the starter is built on.
+providers.gradleProperty("peekaboot.boot.version").orNull?.let { bootVersion ->
+    configurations.configureEach {
+        resolutionStrategy.eachDependency {
+            if (requested.group == "org.springframework.boot" && requested.name == "spring-boot-dependencies") {
+                useVersion(bootVersion)
+            }
+        }
+    }
+}
+
 // The Maven module's annotationProcessorPaths lists Error Prone alone, so its jar carries no
 // configuration metadata.
 configurations.annotationProcessor {
