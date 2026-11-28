@@ -298,12 +298,6 @@ class BuildVersionLockstepTest {
                         appScript,
                         "axe-core:playwright:([^\"]+)\""),
                 row(
-                        "springdoc",
-                        appPom,
-                        "<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>\\s*<version>([^<]+)</version>",
-                        appScript,
-                        "springdoc-openapi-starter-webmvc-ui:([^\"]+)\""),
-                row(
                         "datasource-proxy",
                         appPom,
                         "<artifactId>datasource-proxy-spring-boot-starter</artifactId>\\s*<version>([^<]+)</version>",
