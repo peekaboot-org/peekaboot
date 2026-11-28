@@ -27,6 +27,8 @@
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <pmd.version>7.28.0</pmd.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
+        <errorprone.version>2.50.0</errorprone.version>
+        <!-- duplicated from peekaboot-parent (different parent pom) -->
         <surefire.version>3.6.1</surefire.version>
         <jacocoArgLine />
         <!-- The *IT suite parallelizes INSIDE one JVM (threads, below) rather than
@@ -452,7 +454,7 @@
                         <path>
                             <groupId>com.google.errorprone</groupId>
                             <artifactId>error_prone_core</artifactId>
-                            <version>2.50.0</version>
+                            <version>${errorprone.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

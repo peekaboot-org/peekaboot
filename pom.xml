@@ -45,6 +45,8 @@
         <!-- pmd-java fails against a different pmd-core; one property makes Dependabot
              bump both in one pull request. -->
         <pmd.version>7.28.0</pmd.version>
+        <!-- A property, so the Gradle build reads it instead of spelling a second copy. -->
+        <errorprone.version>2.50.0</errorprone.version>
         <!-- surefire and failsafe ship as one release. -->
         <surefire.version>3.6.1</surefire.version>
 
@@ -396,7 +398,7 @@
                         <path>
                             <groupId>com.google.errorprone</groupId>
                             <artifactId>error_prone_core</artifactId>
-                            <version>2.50.0</version>
+                            <version>${errorprone.version}</version>
                         </path>
                         <path>
                             <groupId>org.springframework.boot</groupId>

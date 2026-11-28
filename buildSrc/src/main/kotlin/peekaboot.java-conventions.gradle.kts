@@ -81,7 +81,7 @@ dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     "mockitoAgent"(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
-    errorprone("com.google.errorprone:error_prone_core:2.50.0")
+    errorprone("com.google.errorprone:error_prone_core:${pomProperty("errorprone.version")}")
     // Reactor-wide like the Maven parent's annotationProcessorPaths, so a
     // @ConfigurationProperties class in any module ships its metadata from both builds.
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")

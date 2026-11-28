@@ -171,15 +171,13 @@ class BuildVersionLockstepTest {
     @Timeout(10)
     void testingAppCompilesWithTheRootPomsErrorProneSetup() throws IOException {
         String configuration = "/project/build/plugins/plugin[artifactId='maven-compiler-plugin']/configuration";
-        String errorProneVersion =
-                configuration + "/annotationProcessorPaths/path[artifactId='error_prone_core']/version";
         assertTestingAppDeclaresAsRoot(
                 configuration + "/compilerArgs",
                 "these arguments load Error Prone and fail the build on its findings; "
                         + "the testing-app copy moves by hand");
         assertTestingAppMatchesRoot(
-                errorProneVersion,
-                errorProneVersion,
+                "/project/properties/errorprone.version",
+                "/project/properties/errorprone.version",
                 "another Error Prone release reports other findings; the testing-app copy moves by hand");
     }
 
@@ -273,12 +271,6 @@ class BuildVersionLockstepTest {
         Path backendPom = root.resolve("peekaboot-backend/pom.xml");
         Path backendScript = root.resolve("peekaboot-backend/build.gradle.kts");
         return Stream.of(
-                row(
-                        "Error Prone",
-                        pom,
-                        "<artifactId>error_prone_core</artifactId>\\s*<version>([^<]+)</version>",
-                        conventions,
-                        "error_prone_core:([^\"]+)\""),
                 row(
                         "palantir-java-format",
                         pom,
