@@ -261,6 +261,15 @@ class HealthCheckRunsTest {
     }
 
     @Test
+    void aTimeoutTooLargeForNanosWaitsInsteadOfFailing() {
+        HealthCheckRuns runs = runs(Duration.ofSeconds(Long.MAX_VALUE), null, inline);
+
+        HealthCheckRuns.Result result = startAndAwait(runs, up);
+
+        assertThat(result.health()).isEqualTo(Health.up().build());
+    }
+
+    @Test
     void aLateAnswerIsLoggedNotKept() {
         HealthCheckRuns runs = runs(TEN_SECONDS, null, holding);
 

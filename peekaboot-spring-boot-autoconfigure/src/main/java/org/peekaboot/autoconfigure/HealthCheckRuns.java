@@ -82,7 +82,16 @@ public final class HealthCheckRuns {
 
     /** The instant, on the ticker, by which every check of one request must have answered. */
     long deadline() {
-        return ticker.getAsLong() + timeout.toNanos();
+        return ticker.getAsLong() + timeoutNanos();
+    }
+
+    // a timeout beyond what a long holds in nanoseconds is as good as none
+    private long timeoutNanos() {
+        try {
+            return timeout.toNanos();
+        } catch (ArithmeticException tooLarge) {
+            return Long.MAX_VALUE;
+        }
     }
 
     /** The run's answer, or DOWN timed out if it has none by {@code deadline}. */
