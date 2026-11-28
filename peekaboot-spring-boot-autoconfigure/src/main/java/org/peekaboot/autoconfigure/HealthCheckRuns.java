@@ -93,6 +93,7 @@ public final class HealthCheckRuns {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return interrupted(run);
         }
         return timedOut(run);
     }
@@ -146,6 +147,20 @@ public final class HealthCheckRuns {
         }
         // last: whoever the latch wakes also sees the run removed and its line logged
         run.finished.countDown();
+    }
+
+    // not a miss of the deadline, so the run is not marked late and nothing is logged
+    private Result interrupted(Run run) {
+        long now = ticker.getAsLong();
+        synchronized (run) {
+            if (run.done) {
+                return run.answer();
+            }
+        }
+        Health down = Health.down()
+                .withDetail("error", "Interrupted while waiting for the check")
+                .build();
+        return new Result(down, NANOSECONDS.toMillis(now - run.startNanos));
     }
 
     private Result timedOut(Run run) {

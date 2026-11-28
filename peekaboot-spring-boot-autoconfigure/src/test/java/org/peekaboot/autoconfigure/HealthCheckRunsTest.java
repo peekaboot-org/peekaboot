@@ -221,6 +221,46 @@ class HealthCheckRunsTest {
     }
 
     @Test
+    void anInterruptedReadReportsItselfNotATimeoutAndKeepsTheInterrupt() {
+        HealthCheckRuns runs = runs(TEN_SECONDS, null, holding);
+        HealthCheckRuns.Run run = runs.start("db", up);
+        long deadline = runs.deadline();
+        ticker.set(Duration.ofMillis(40).toNanos());
+
+        Thread.currentThread().interrupt();
+        HealthCheckRuns.Result result;
+        boolean interruptKept;
+        try {
+            result = runs.await(run, deadline);
+        } finally {
+            interruptKept = Thread.interrupted();
+        }
+        held.getFirst().run();
+
+        assertThat(interruptKept).isTrue();
+        assertThat(result.health()).isNotNull();
+        assertThat(result.health().getStatus()).isEqualTo(Status.DOWN);
+        assertThat(result.health().getDetails()).isEqualTo(Map.of("error", "Interrupted while waiting for the check"));
+        assertThat(result.durationMs()).isEqualTo(40);
+    }
+
+    @Test
+    void anInterruptedReadStillReportsACheckThatHadAnswered() {
+        HealthCheckRuns runs = runs(TEN_SECONDS, null, inline);
+        HealthCheckRuns.Run run = runs.start("db", up);
+
+        Thread.currentThread().interrupt();
+        HealthCheckRuns.Result result;
+        try {
+            result = runs.await(run, runs.deadline());
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertThat(result.health()).isEqualTo(Health.up().build());
+    }
+
+    @Test
     void aLateAnswerIsLoggedNotKept() {
         HealthCheckRuns runs = runs(TEN_SECONDS, null, holding);
 
