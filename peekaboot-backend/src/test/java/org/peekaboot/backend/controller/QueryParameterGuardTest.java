@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestContextHolder;
 
 /** Real Spring MVC dispatch through the guard, over a controller that binds each kind of argument Peekaboot's controllers do. */
 class QueryParameterGuardTest {
@@ -29,6 +31,12 @@ class QueryParameterGuardTest {
             .addInterceptors(new QueryParameterGuard())
             .setControllerAdvice(new ApiProblemHandler())
             .build();
+
+    /** MockMvc leaves its request bound to the thread when a perform throws. */
+    @AfterEach
+    void forgetTheRequest() {
+        RequestContextHolder.resetRequestAttributes();
+    }
 
     record FixtureParameters(
             @Nullable String alpha, @Nullable String beta) {}
