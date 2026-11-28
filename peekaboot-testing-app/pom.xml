@@ -25,7 +25,7 @@
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <jacoco.version>0.8.16</jacoco.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
-        <pmd.version>7.28.0</pmd.version>
+        <pmd.version>7.29.0</pmd.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <errorprone.version>2.50.0</errorprone.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
