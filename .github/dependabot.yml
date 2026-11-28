@@ -55,6 +55,13 @@ updates:
       interval: "daily"
     cooldown:
       default-days: 7
+    # The config package's peer range names one stylelint major, so a bump of either alone
+    # fails npm's dependency resolution.
+    groups:
+      stylelint:
+        patterns:
+          - "stylelint"
+          - "stylelint-config-*"
   # The ITs start the MySQL, Redis and go-httpbin images from this file
   # (integration/TestImages), so a bump of those is tested on its own pull request. Nothing
   # in the build starts Postgres. The auto-merge workflow does not list this ecosystem.
