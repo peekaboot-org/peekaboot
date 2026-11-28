@@ -29,6 +29,8 @@
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <errorprone.version>2.50.0</errorprone.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
+        <checkstyle.version>14.3.0</checkstyle.version>
+        <!-- duplicated from peekaboot-parent (different parent pom) -->
         <surefire.version>3.6.1</surefire.version>
         <jacocoArgLine />
         <!-- The *IT suite parallelizes INSIDE one JVM (threads, below) rather than
@@ -537,7 +539,7 @@
                     <dependency>
                         <groupId>com.puppycrawl.tools</groupId>
                         <artifactId>checkstyle</artifactId>
-                        <version>14.3.0</version>
+                        <version>${checkstyle.version}</version>
                     </dependency>
                 </dependencies>
                 <configuration>

@@ -146,6 +146,15 @@ class BuildVersionLockstepTest {
                         + "the testing-app's java.version is its copy and moves by hand");
     }
 
+    @Test
+    @Timeout(10)
+    void testingAppPinsTheSameCheckstyleVersionAsTheRootPom() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/checkstyle.version",
+                "/project/properties/checkstyle.version",
+                "both poms run the one Checkstyle ruleset; a different release can flag different code");
+    }
+
     @ParameterizedTest(name = "{0}")
     @ValueSource(
             strings = {
@@ -277,12 +286,6 @@ class BuildVersionLockstepTest {
                         "<palantirJavaFormat>\\s*<version>([^<]+)</version>",
                         conventions,
                         "palantirJavaFormat\\(\"([^\"]+)\"\\)"),
-                row(
-                        "Checkstyle",
-                        pom,
-                        "<artifactId>checkstyle</artifactId>\\s*<version>([^<]+)</version>",
-                        conventions,
-                        "checkstyle \\{\\s*toolVersion = \"([^\"]+)\""),
                 row(
                         "axe-core",
                         appPom,
