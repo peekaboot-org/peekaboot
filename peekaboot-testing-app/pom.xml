@@ -29,7 +29,7 @@
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <errorprone.version>2.50.0</errorprone.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
-        <checkstyle.version>14.3.0</checkstyle.version>
+        <checkstyle.version>14.4.0</checkstyle.version>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <surefire.version>3.6.1</surefire.version>
         <jacocoArgLine />
